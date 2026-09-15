@@ -70,7 +70,7 @@ impl Projects {
 
     pub fn link_campaigns(&mut self, ids: &[String]) -> Result<(), String> {
         if self.data.active_project_ids.is_empty() {
-            return Err("Select at least one local project.".into());
+            return Err("Select a local project.".into());
         }
         let mut data = self.data.clone();
         for project in &mut data.projects {
@@ -111,39 +111,39 @@ impl Projects {
     }
 
     pub fn selector(&mut self, ui: &mut egui::Ui) {
-        ui.menu_button(
-            format!("Projects ({})", self.data.active_project_ids.len()),
-            |ui| {
-                ui.label("Select any number of projects");
-                if self.data.projects.is_empty() {
-                    ui.label("Add projects in Settings.");
-                }
-                for project in self.data.projects.clone() {
-                    let mut selected = self.data.active_project_ids.contains(&project.id);
-                    if ui
-                        .add_enabled(
-                            self.writable,
-                            egui::Checkbox::new(&mut selected, &project.name),
-                        )
-                        .changed()
-                    {
-                        self.select(project.id, selected);
+        let current = self.data.active_project_ids.first().copied();
+        let mut selected = current;
+        let label = self
+            .data
+            .projects
+            .iter()
+            .find(|p| Some(p.id) == current)
+            .map(|p| p.name.as_str())
+            .unwrap_or("Select project");
+        ui.add_enabled_ui(self.writable, |ui| {
+            egui::ComboBox::from_id_salt("active_project")
+                .selected_text(label)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut selected, None, "No project");
+                    for project in &self.data.projects {
+                        ui.selectable_value(&mut selected, Some(project.id), &project.name);
                     }
-                }
-                if let Some(error) = &self.error {
-                    ui.colored_label(egui::Color32::LIGHT_RED, error);
-                }
-            },
-        );
+                });
+        });
+        if selected != current {
+            self.select(selected);
+        }
+        if let Some(error) = &self.error {
+            ui.colored_label(egui::Color32::LIGHT_RED, error);
+        }
     }
 
-    fn select(&mut self, id: Uuid, selected: bool) {
+    fn select(&mut self, id: Option<Uuid>) {
         let mut data = self.data.clone();
-        data.active_project_ids.retain(|active| *active != id);
-        if selected {
-            data.active_project_ids.push(id);
+        data.active_project_ids = id.into_iter().collect();
+        if let Err(error) = self.persist(data) {
+            self.error = Some(error);
         }
-        self.save(data);
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
@@ -162,9 +162,14 @@ impl Projects {
             for project in self.data.projects.clone() {
                 ui.group(|ui| {
                     ui.horizontal(|ui| {
-                        let mut selected = self.data.active_project_ids.contains(&project.id);
-                        if ui.checkbox(&mut selected, &project.name).changed() {
-                            self.select(project.id, selected);
+                        if ui
+                            .selectable_label(
+                                self.data.active_project_ids.contains(&project.id),
+                                &project.name,
+                            )
+                            .clicked()
+                        {
+                            self.select(Some(project.id));
                         }
                         if ui.button("Edit").clicked() {
                             self.editing = Some(project.id);
@@ -222,7 +227,7 @@ impl Projects {
                                 path,
                                 dndbeyond_campaign_ids: Vec::new(),
                             });
-                            data.active_project_ids.push(id);
+                            data.active_project_ids = vec![id];
                         }
                         self.save(data);
                     }
@@ -240,7 +245,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn multiple_selections_and_campaign_links_round_trip_independently() {
+    fn switching_projects_keeps_campaign_links_independent() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
         let mut store = Store::at(path.clone());
@@ -264,15 +269,19 @@ mod tests {
             path: String::new(),
             error: None,
         };
-        projects.select(first, true);
-        projects.select(second, true);
-        assert_eq!(projects.active_projects().len(), 2);
+        projects.select(Some(first));
+        projects
+            .link_campaigns(&["12".into(), "34".into()])
+            .unwrap();
+        projects.select(Some(second));
+        assert_eq!(projects.active_projects().len(), 1);
+        assert_eq!(projects.active_projects()[0].id, second);
         projects
             .link_campaigns(&["12".into(), "34".into()])
             .unwrap();
         projects.link_campaigns(&["12".into()]).unwrap();
         projects.unlink_campaign(first, "12").unwrap();
-        projects.select(first, false);
+
         let data = Store::at(path.clone()).load().unwrap();
         assert_eq!(data.active_project_ids, vec![second]);
         assert_eq!(data.projects[0].dndbeyond_campaign_ids, vec!["34"]);
@@ -282,7 +291,7 @@ mod tests {
         let keys = saved["projects"][0].as_object().unwrap();
         assert_eq!(keys.len(), 4); // Local id, name, path, and campaign IDs only.
         assert!(keys.contains_key("dndbeyond_campaign_ids"));
-        projects.select(second, false);
+        projects.select(None);
         assert!(projects.link_campaigns(&["56".into()]).is_err());
     }
 }

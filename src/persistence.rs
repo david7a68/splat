@@ -134,11 +134,14 @@ impl Store {
     pub fn load(&mut self) -> Result<UserData, String> {
         self.loaded = false;
         let bytes = self.read()?;
-        let data: UserData = match &bytes {
+        let mut data: UserData = match &bytes {
             Some(bytes) => decode(bytes)?,
             None => UserData::default(),
         };
         data.validate()?;
+        // Older builds allowed multiple selections. Keep the first selected
+        // project, preserving all project records and campaign links.
+        data.active_project_ids.truncate(1);
         self.baseline = bytes;
         self.loaded = true;
         Ok(data)
@@ -149,6 +152,9 @@ impl Store {
             return Err("Reload a valid settings file before saving changes.".into());
         }
         data.validate()?;
+        if data.active_project_ids.len() > 1 {
+            return Err("Select only one active project.".into());
+        }
         if self.read()? != self.baseline {
             return Err("Settings changed outside this window. Reload them before saving.".into());
         }
@@ -191,6 +197,19 @@ mod tests {
         assert!(saved.get("active_project_id").is_none());
         assert_eq!(saved["active_project_ids"], serde_json::json!([id]));
         assert!(data.projects[0].dndbeyond_campaign_ids.is_empty());
+    }
+
+    #[test]
+    fn old_multiple_selection_loads_first_without_losing_projects() {
+        let dir = tempfile::tempdir().unwrap();
+        let ids = [Uuid::new_v4(), Uuid::new_v4()];
+        let path = dir.path().join("settings.json");
+        let data = serde_json::json!({"version":2,"active_project_ids":ids,"projects":ids.map(|id| serde_json::json!({"id":id,"name":"Project","path":dir.path(),"dndbeyond_campaign_ids":["12"]}))});
+        std::fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+        let loaded = Store::at(path).load().unwrap();
+        assert_eq!(loaded.active_project_ids, vec![ids[0]]);
+        assert_eq!(loaded.projects.len(), 2);
+        assert_eq!(loaded.projects[1].dndbeyond_campaign_ids, vec!["12"]);
     }
 
     #[test]

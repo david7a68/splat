@@ -66,7 +66,7 @@ a successful live login requires a real cookie entered in the application.
 Settings stores the project list at `$XDG_CONFIG_HOME/splat/settings.json`, or
 `~/.config/splat/settings.json` when XDG_CONFIG_HOME is not set on Linux.
 Project entries contain a UUID v4, display name, and absolute folder path.
-`active_project_ids` contains the selected projects' UUIDs. Renaming or relocating
+`active_project_ids` contains at most one UUID, for the active project. Renaming or relocating
 a project keeps its UUID. The JSON schema is version 2. Version 1 single-project selection migrates in memory
 and is saved in the new format on the next edit.
 
@@ -83,9 +83,11 @@ Session cookies and access tokens are never written to this JSON file.
 
 ## Campaign links
 
-The sidebar **Projects** menu supports multiple selections, including none.
+The sidebar project dropdown selects one active project, or **No project**.
+Older settings with multiple selections keep the first selected project; all
+project records and campaign links are preserved.
 Open **D&D Beyond campaigns**, select **Refresh campaigns**, then select campaigns
-and link them to the selected local projects. Each project can link to multiple
+and link them to the selected local project. Each project can link to multiple
 campaigns. Linking adds missing IDs; it does not remove existing links. Use
 **Unlink** under a project to remove an individual association.
 

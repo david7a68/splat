@@ -156,7 +156,7 @@ impl Campaigns {
         ui.label("Campaign details stay in memory. Only campaign IDs linked to local projects are saved.");
         let active = projects.active_projects();
         if active.is_empty() {
-            ui.label("Select local projects from the Projects menu before linking campaigns.");
+            ui.label("Select a local project from the dropdown before linking campaigns.");
         }
         if session.is_none() {
             ui.label("Connect to D&D Beyond in Settings to load campaigns.");
@@ -211,10 +211,7 @@ impl Campaigns {
             if ui
                 .add_enabled(
                     !active.is_empty() && !self.selected.is_empty(),
-                    egui::Button::new(format!(
-                        "Link selected campaigns to {} selected project(s)",
-                        active.len()
-                    )),
+                    egui::Button::new("Link selected campaigns to this project"),
                 )
                 .clicked()
             {
