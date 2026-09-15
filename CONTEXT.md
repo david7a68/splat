@@ -14,3 +14,10 @@ a local campaign can have one such link or remain unlinked.
 
 **Active campaign**:
 The one local campaign currently selected by the user.
+
+**Shared library**:
+Reusable creatures and encounter templates available across campaigns.
+
+**Campaign copy**:
+An independent copy of a shared creature or encounter template used by one
+campaign. Changing the copy does not change the shared original.
