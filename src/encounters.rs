@@ -376,6 +376,22 @@ impl Encounters {
         )?;
         Ok(run)
     }
+    pub fn tick_sync(
+        &mut self,
+        ctx: &egui::Context,
+        session: Option<crate::auth::Session>,
+        epoch: u64,
+        active: Option<&Campaign>,
+    ) {
+        if let Some(run) = &mut self.run {
+            run.tick_sync(
+                ctx,
+                session,
+                epoch,
+                active.and_then(|c| c.dndbeyond_campaign_id.as_deref()),
+            );
+        }
+    }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         ui.visuals_mut().override_text_color = Some(egui::Color32::from_gray(215));
         ui.visuals_mut().weak_text_color = Some(egui::Color32::from_gray(165));

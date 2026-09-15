@@ -38,6 +38,8 @@ pub(crate) struct Participant {
     pub successes: u8,
     pub failures: u8,
     pub notes: String,
+    #[serde(default)]
+    pub combat_values: BTreeMap<String, serde_json::Value>,
 }
 fn stat(entry: &Entry, name: &str) -> Option<i64> {
     let stat = entry.fields.get("splat_stats")?.get(name)?;
@@ -118,6 +120,7 @@ impl Participant {
             successes: counter("successes"),
             failures: counter("failures"),
             notes: String::new(),
+            combat_values: BTreeMap::new(),
             definition: Arc::new(entry),
             initial,
         })
@@ -160,6 +163,8 @@ pub(crate) struct Run {
     error: Option<String>,
     confirm_close: bool,
     setup_details: String,
+    syncs: BTreeMap<usize, crate::combat_sync::CombatSync>,
+    sync_shadows: BTreeMap<usize, SheetShadow>,
 }
 #[derive(Clone)]
 enum Command {
@@ -238,6 +243,8 @@ impl Run {
             error: None,
             confirm_close: false,
             setup_details,
+            syncs: BTreeMap::new(),
+            sync_shadows: BTreeMap::new(),
         })
     }
     fn current(&self) -> Option<usize> {
@@ -650,7 +657,14 @@ impl Run {
             {
                 self.undo();
             }
-            if ui.button("Save and close run").clicked() {
+            if ui
+                .add_enabled(
+                    !self.syncs.values().any(|s| s.enabled && (s.busy() || s.dirty())),
+                    egui::Button::new("Save and close run"),
+                )
+                .on_hover_text("Wait for pending sync changes, resolve conflicts, or disable combat sync before closing.")
+                .clicked()
+            {
                 match self.save() {
                     Ok(()) => self.confirm_close = true,
                     Err(e) => self.error = Some(e),
@@ -758,6 +772,9 @@ impl Run {
                 });
             });
             if !p.notes.is_empty() { ui.label(&p.notes); }
+            if p.definition.fields.contains_key("splat_external") {
+                ui.collapsing("D&D Beyond combat sync", |ui| self.syncs.entry(index).or_default().show(ui));
+            }
             ui.collapsing("Creature details (starting snapshot)", |ui| {
                 markdown_view::show(ui, &p.definition.body);
                 ui.collapsing("Structured stats and starting state", |ui| {
@@ -800,6 +817,181 @@ fn mode_label(mode: i8) -> &'static str {
         -1 => "Disadvantage / surprised",
         1 => "Advantage",
         _ => "Normal roll",
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct SheetShadow {
+    hp: Option<i64>,
+    temp: i64,
+    successes: u8,
+    failures: u8,
+    conditions: Vec<String>,
+}
+impl SheetShadow {
+    fn of(p: &Participant) -> Self {
+        Self {
+            hp: p.hp,
+            temp: p.temporary_hp,
+            successes: p.successes,
+            failures: p.failures,
+            conditions: p.conditions.clone(),
+        }
+    }
+}
+fn remote_identity(p: &Participant) -> Option<(String, String)> {
+    let external = p.definition.fields.get("splat_external")?;
+    if external.get("provider").and_then(Value::as_str) != Some("dndbeyond") {
+        return None;
+    }
+    Some((
+        external.get("campaign_id")?.as_str()?.into(),
+        external.get("character_id")?.as_str()?.into(),
+    ))
+}
+fn recognized_condition(text: &str) -> Option<(u64, serde_json::Value)> {
+    for (id, name) in crate::combat_sync::CONDITIONS {
+        if text.eq_ignore_ascii_case(name) {
+            return Some((
+                id,
+                if id == 4 {
+                    1.into()
+                } else {
+                    serde_json::Value::Null
+                },
+            ));
+        }
+        if id == 4
+            && let Some(level) = text
+                .strip_prefix("Exhaustion (")
+                .and_then(|s| s.strip_suffix(')'))
+                .and_then(|s| s.parse::<u64>().ok())
+                .filter(|n| (1..=6).contains(n))
+        {
+            return Some((id, level.into()));
+        }
+    }
+    None
+}
+impl Run {
+    pub fn tick_sync(
+        &mut self,
+        ctx: &egui::Context,
+        session: Option<crate::auth::Session>,
+        epoch: u64,
+        linked: Option<&str>,
+    ) {
+        let mut identities = std::collections::BTreeSet::new();
+        let mut changes = Vec::new();
+        let mut external_change = false;
+        for (index, sync) in &mut self.syncs {
+            let p = &mut self.state.participants[*index];
+            let Some((campaign, id)) = remote_identity(p) else {
+                continue;
+            };
+            if linked != Some(campaign.as_str()) {
+                sync.stop();
+                sync.error = Some(
+                    "Link this campaign to the character's D&D Beyond campaign to sync.".into(),
+                );
+                continue;
+            }
+            if sync.enabled && !identities.insert(id.clone()) {
+                sync.stop();
+                sync.error = Some("Another participant is already syncing this character.".into());
+                continue;
+            }
+            let before = SheetShadow::of(p);
+            if sync.ready()
+                && let Some(shadow) = self.sync_shadows.get(index)
+            {
+                if let Some(mut hp) = sync.values().get("hp").cloned() {
+                    if before.hp != shadow.hp
+                        && let (Some(current), Some(max)) = (before.hp, sync.max_hp())
+                    {
+                        hp["removedHitPoints"] = (max - current).into();
+                    }
+                    if before.temp != shadow.temp {
+                        hp["temporaryHitPoints"] = before.temp.into();
+                    }
+                    sync.set_group("hp", hp);
+                }
+                if before.successes != shadow.successes || before.failures != shadow.failures {
+                    sync.set_group("death",serde_json::json!({"successCount":before.successes,"failCount":before.failures}));
+                }
+                if before.conditions != shadow.conditions
+                    && let Some(mut conditions) = sync.values().get("conditions").cloned()
+                {
+                    if let Some(values) = conditions.as_object_mut() {
+                        for (id, _) in crate::combat_sync::CONDITIONS {
+                            values.remove(&id.to_string());
+                        }
+                        for condition in &before.conditions {
+                            if let Some((id, level)) = recognized_condition(condition) {
+                                values.insert(id.to_string(), level);
+                            }
+                        }
+                    }
+                    sync.set_group("conditions", conditions);
+                }
+            }
+            sync.tick(ctx, session.clone(), epoch, &campaign, &id);
+            if sync.ready() {
+                if let Some(max) = sync.max_hp()
+                    && let Some(hp) = sync.values().get("hp")
+                {
+                    p.max_hp = Some(max);
+                    p.hp = Some((max - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0));
+                    p.temporary_hp = hp["temporaryHitPoints"].as_i64().unwrap_or(0);
+                }
+                if let Some(death) = sync.values().get("death") {
+                    p.successes = death["successCount"].as_u64().unwrap_or(0).min(3) as u8;
+                    p.failures = death["failCount"].as_u64().unwrap_or(0).min(3) as u8;
+                }
+                if let Some(conditions) = sync
+                    .values()
+                    .get("conditions")
+                    .and_then(serde_json::Value::as_object)
+                {
+                    p.conditions.retain(|c| recognized_condition(c).is_none());
+                    for (id, name) in crate::combat_sync::CONDITIONS {
+                        if let Some(level) = conditions.get(&id.to_string()) {
+                            p.conditions.push(if id == 4 {
+                                format!("Exhaustion ({})", level.as_u64().unwrap_or(1))
+                            } else {
+                                name.into()
+                            });
+                        }
+                    }
+                }
+                if sync.updated && before != SheetShadow::of(p) {
+                    external_change = true;
+                }
+                if before != SheetShadow::of(p) || p.combat_values != *sync.values() {
+                    p.combat_values = sync.values().clone();
+                    changes.push(p.name.clone());
+                }
+                self.sync_shadows.insert(*index, SheetShadow::of(p));
+                sync.updated = false;
+            } else {
+                self.sync_shadows.remove(index);
+            }
+        }
+        if !changes.is_empty() {
+            self.state.log.push(format!(
+                "Combat sheet values updated: {}. See sync status for confirmation or conflicts.",
+                changes.join(", ")
+            ));
+            if external_change {
+                self.history.clear();
+            }
+            self.dirty = true;
+            if self.storage.is_some()
+                && let Err(e) = self.save()
+            {
+                self.error = Some(e);
+            }
+        }
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -933,6 +1125,8 @@ impl Run {
             outcome: "Undecided".into(),
             error: None,
             confirm_close: false,
+            syncs: BTreeMap::new(),
+            sync_shadows: BTreeMap::new(),
         })
     }
     pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<(PathBuf, String)>, String> {

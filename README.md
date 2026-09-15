@@ -39,7 +39,7 @@ search and related views but is not a complete indexing or filesystem exclusion.
 Build artifacts stay in the code repository's ignored `target/` directory.
 
 Keep D&D Beyond session cookies and tokens outside Git. Authentication is available
-in Settings; read-only character sheets are available in Campaign → Party. Characters now have persistent local copies in the shared creature schema.
+in Settings; character sheets with optional combat sync are available in Campaign → Party. Characters now have persistent local copies in the shared creature schema.
 The encounter builder uses these local character copies. Manual DM runs are available. Automatic combat resolution and simulation integration remain later work.
 
 ## D&D Beyond connection
@@ -63,7 +63,7 @@ cookie. If removal fails, Splat reports it and lets you retry. It does not
 invalidate the browser session. Network and keyring operations run in a worker;
 credential writes and removals run in order.
 
-This is an internal D&D Beyond endpoint, not a supported public API. The read-only Party viewer fetches and caches character sheets. Campaign details are fetched into memory, with linked names cached in settings. Authentication tests use a local mock server;
+This is an internal D&D Beyond endpoint, not a supported public API. The Party viewer fetches and caches character sheets. Campaign details are fetched into memory, with linked names cached in settings. Authentication tests use a local mock server;
 a successful live login requires a real cookie entered in the application.
 
 ## User settings and campaigns
@@ -228,3 +228,28 @@ available; use disadvantage for surprise. Ties use the campaign's roster-order
 setting or the DM/player ordering controls. NPC status can be changed before
 combat begins. Run folder settings use `splat_run_storage.directory`; initiative
 is a campaign-local rule selected through `splat_rule_choices`.
+
+### D&D Beyond combat sync
+
+Enable **Combat stats · two-way sync** in Party, or **D&D Beyond combat sync**
+for a linked player in a DM run. Each connection first reads the live sheet.
+Saved runs do not automatically push old values. The session must have edit
+permission for the character.
+
+Sync covers current and temporary HP, death saves, official conditions,
+ordinary and pact spell slots spent, and supported action/spell limited uses.
+Concentration, custom effects, inventory charges, initiative, and notes stay local.
+Changes are sent after a short pause; incoming values are checked every 15 seconds.
+Each write is followed by a read to verify the result. Conflicts keep local edits
+visible and offer a choice of local or remote values. Unconfirmed changes are not
+retried without review. The service has no verified atomic compare-and-set API,
+so another client can still change values between a read and a write.
+
+Incoming health or condition changes clear the run's undo history. Wait for sync
+or disable it before closing a run with pending changes. Disabling sync cancels
+queued work but cannot recall a request already sent. Party sync stops when its
+view closes; run sync remains active while that run is open.
+
+Transport and conflict handling are tested with simulated responses. Live writes
+have not been verified with an authenticated D&D Beyond character. Endpoint
+sources and limits are recorded in [the research notes](docs/research/dndbeyond-combat-writes.md).

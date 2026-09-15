@@ -23,3 +23,13 @@ the HP and current-turn changes. No template or source creature was changed.
 
 The ignored `create_screenshot_fixture` test can create fresh sample settings:
 set `SPLAT_UI_FIXTURE` to a temporary directory and run that test explicitly.
+
+Combat sync review (700 × 600 component preview, synthetic data, no transport):
+- `combat-sync-conflict.png`: pending HP edit, readable local/remote comparison,
+  and both conflict choices visible.
+- `combat-sync-conditions.png`: all official condition controls wrap within the
+  available width; other groups remain reachable below them.
+
+The review replaced raw provider field names in conflict details with HP totals,
+death save counts, condition names, and spent resource counts. Screenshots use the
+actual combat sync component in a temporary preview; no preview hook ships in the app.
