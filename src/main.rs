@@ -1,6 +1,7 @@
 pub mod auth;
 mod campaign_content;
 mod campaigns;
+mod combat_sync;
 mod content_workspace;
 mod copy_dialog;
 mod credentials;
@@ -187,6 +188,8 @@ impl eframe::App for Splat {
             session.is_some(),
             self.workspace == Workspace::Campaign && self.tab == Tab::Party,
         );
+        self.encounters
+            .tick_sync(ctx, session.clone(), epoch, active.as_ref());
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.copy_dialog.is_some() {
                 ui.disable();

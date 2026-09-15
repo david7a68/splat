@@ -13,6 +13,7 @@ The content editor, campaign content loader, and basic encounter roster editor a
 The encounter editor saves local templates with direct creature references and HP overrides;
 manual DM runs now save independent state, initiative, HP, conditions, and a combat log
 in the configurable campaign run folder. Campaign-selected NPC initiative is implemented.
+Optional bidirectional combat sync is available in Party and linked run participants.
 Shared party bindings, automatic combat resolution, and the full simulator remain later work.
 
 Read these current contracts in order:

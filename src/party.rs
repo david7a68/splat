@@ -1,4 +1,4 @@
-//! Read-only character viewer over locally cached creature records.
+//! Character viewer with optional combat synchronization.
 use crate::{auth::Session, party_sync::Reader};
 use eframe::egui;
 use serde_json::Value;
@@ -9,6 +9,8 @@ pub struct Party {
     reader: Reader,
     page: usize,
     search: String,
+    combat: crate::combat_sync::CombatSync,
+    epoch: u64,
 }
 impl Party {
     pub fn sync(
@@ -19,6 +21,10 @@ impl Party {
         connected: bool,
         visible: bool,
     ) {
+        self.epoch = epoch;
+        if !visible || !connected {
+            self.combat.stop();
+        }
         self.reader.sync(ctx, epoch, campaign, connected, visible);
     }
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
@@ -28,7 +34,7 @@ impl Party {
         self.reader.tick(session.clone(), ui.ctx());
         ui.horizontal(|ui| {
             ui.heading("Party");
-            ui.weak("D&D Beyond · Read only");
+            ui.weak("D&D Beyond · Combat sync available");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .add_enabled(
@@ -102,7 +108,35 @@ impl Party {
             ui.colored_label(egui::Color32::LIGHT_RED, error);
             ui.label("The previous local copy was kept; it may be out of date.");
         }
-        let Some(record) = self.reader.sheets.get(id) else {
+        if let Some(record) = self.reader.sheets.get(id) {
+            self.combat.tick(
+                ui.ctx(),
+                session.clone(),
+                self.epoch,
+                &record.source.campaign_id,
+                id,
+            );
+        }
+        if self.combat.updated {
+            if let Some(record) = self.combat.record().cloned() {
+                if let Some(scope) = self.reader.local_scope()
+                    && let Err(error) = Cache::user().and_then(|cache| cache.save(scope, &record))
+                {
+                    self.reader.warning = Some(error);
+                }
+                if let Some(path) = self.reader.campaign_path()
+                    && let Err(error) = record.save_campaign_copy(path)
+                {
+                    self.reader.warning = Some(error);
+                }
+                self.reader.sheets.insert(id.clone(), record);
+            }
+            self.combat.updated = false;
+        }
+        egui::CollapsingHeader::new("Combat stats · two-way sync")
+            .id_salt("party_combat_sync")
+            .show(ui, |ui| self.combat.show(ui));
+        let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) else {
             ui.label(if self.reader.loading() {
                 "Waiting for this character’s sheet."
             } else {
