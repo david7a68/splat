@@ -1,0 +1,29 @@
+---
+splat_schema: 1
+splat_id: "ff978c05-487c-5185-884e-4ba01aa909c9"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/magic_item/potions_of_healing"
+splat_name: "Potions of Healing"
+splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [236], "executable": false}
+---
+
+# Potions of Healing
+
+<!-- SRD page 236 -->
+
+Potion, Rarity Varies\
+You regain Hit Points when you drink this potion.\
+The number of Hit Points depends on the potion’s\
+rarity, as shown in the table below.\
+Whatever its potency, the potion’s red liquid glim-\
+mers when agitated.\
+Potion HP Regained Rarity\
+Potion of Healing 2d4 + 2 Common\
+Potion of Healing 4d4 + 4 Uncommon\
+(greater)\
+Potion of Healing 8d4 + 8 Rare\
+(superior)\
+Potion of Healing 10d4 + 20 Very Rare\
+(supreme)\
+
+Original layout: [[../pages/236|page 236]].

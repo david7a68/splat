@@ -1,0 +1,53 @@
+---
+splat_schema: 1
+splat_id: "e916d962-b311-5377-a2e0-215604a0848a"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/magic_item/staff_of_thunder_and_lightning"
+splat_name: "Staff of Thunder and Lightning"
+splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [247, 248], "executable": false}
+---
+
+# Staff of Thunder and Lightning
+
+<!-- SRD page 247 -->
+
+Staff, Very Rare (Requires Attunement)\
+This staff can be wielded as a magic Quarterstaff\
+that grants a +2 bonus to attack rolls and damage\
+rolls made with it. It also has the following addi-\
+tional properties. Once one of these properties is\
+used, it can’t be used again until the next dawn.\
+Lightning. When you hit with a melee attack\
+using the staff, you can cause the target to take an\
+extra 2d6 Lightning damage (no action required).\
+Thunder. When you hit with a melee attack using\
+the staff, you can cause the staff to emit a crack of\
+thunder audible out to 300 feet (no action required).\
+The target you hit must succeed on a DC 17 Consti-\
+tution saving throw or have the Stunned condition\
+until the end of your next turn.\
+
+<!-- SRD page 248 -->
+
+Thunder and Lightning. Immediately after you\
+hit with a melee attack using the staff, you can take\
+a Bonus Action to use the Lightning and Thunder\
+properties (see above) at the same time. Doing so\
+doesn’t expend the daily use of those properties,\
+only the use of this one.\
+Lightning Strike. You can take a Magic action to\
+cause a bolt of lightning to leap from the staff’s tip\
+in a Line that is 5 feet wide and 120 feet long. Each\
+creature in that Line makes a DC 17 Dexterity sav-\
+ing throw, taking 9d6 Lightning damage on a failed\
+save or half as much damage on a successful one.\
+Thunderclap. You can take a Magic action to\
+cause the staff to produce a thunderclap audible out\
+to 600 feet. Every creature within a 60-foot Emana-\
+tion originating from you makes a DC 17 Constitu-\
+tion saving throw. On a failed save, a creature takes\
+2d6 Thunder damage and has the Deafened condi-\
+tion for 1 minute. On a successful save, a creature\
+takes half as much damage only.\
+
+Original layout: [[../pages/247|page 247]], [[../pages/248|page 248]].

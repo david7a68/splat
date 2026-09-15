@@ -1,0 +1,34 @@
+---
+splat_schema: 1
+splat_id: "4f0e502f-777e-5b85-b371-b3f029eda38a"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/spell/irresistible_dance"
+splat_name: "Irresistible Dance"
+splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [143], "executable": false}
+---
+
+# Irresistible Dance
+
+<!-- SRD page 143 -->
+
+Level 6 Enchantment (Bard, Wizard)\
+Casting Time: Action\
+Range: 30 feet\
+Components: V\
+Duration: Concentration, up to 1 minute\
+One creature that you can see within range must\
+make a Wisdom saving throw. On a successful save,\
+the target dances comically until the end of its next\
+turn, during which it must spend all its movement\
+to dance in place.\
+On a failed save, the target has the Charmed con-\
+dition for the duration. While Charmed, the target\
+dances comically, must use all its movement to\
+dance in place, and has Disadvantage on Dexterity\
+saving throws and attack rolls, and other creatures\
+have Advantage on attack rolls against it. On each\
+of its turns, the target can take an action to collect\
+itself and repeat the save, ending the spell on itself\
+on a success.\
+
+Original layout: [[../pages/143|page 143]].

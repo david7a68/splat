@@ -29,13 +29,17 @@ It selects Nix Mesa for EGL so the app also starts on non-NixOS hosts.
 
 Code lives in `~/Projects/splat`. The vault link is
 `~/Documents/vault/D20 D&D/00-09 System/09 Tools/splat`.
-Campaign data remains in the vault; data loading is not implemented yet.
+Campaign data remains in the vault. A read-only content verifier and the complete
+[built-in SRD 5.2.1 source package](docs/srd-import.md) are available; campaign
+content loading in the UI is not implemented yet.
 
 The link is listed in Obsidian's excluded files. This reduces visibility in
 search and related views but is not a complete indexing or filesystem exclusion.
 Build artifacts stay in the code repository's ignored `target/` directory.
 
-Keep D&D Beyond session cookies and tokens outside Git. Authentication is available in Settings; data sync is not implemented. Simulations will use local snapshots of character data.
+Keep D&D Beyond session cookies and tokens outside Git. Authentication is available
+in Settings; character data sync is not implemented. Future simulations will use
+live character inputs held in memory, without saved character snapshots.
 
 ## D&D Beyond connection
 

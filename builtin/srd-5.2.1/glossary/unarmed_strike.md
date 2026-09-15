@@ -1,0 +1,43 @@
+---
+splat_schema: 1
+splat_id: "21edecfa-298c-58a6-92ba-0901d143dd87"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/glossary/unarmed_strike"
+splat_name: "Unarmed Strike"
+splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [190], "executable": false}
+---
+
+# Unarmed Strike
+
+<!-- SRD page 190 -->
+
+Instead of using a weapon to make a melee attack,\
+you can use a punch, kick, headbutt, or similar\
+forceful blow. In game terms, this is an Unarmed\
+Strike—a melee attack that involves you using your\
+body to damage, grapple, or shove a target within 5\
+feet of you.\
+Whenever you use your Unarmed Strike, choose\
+one of the following options for its effect.\
+Damage. You make an attack roll against the\
+target. Your bonus to the roll equals your Strength\
+modifier plus your Proficiency Bonus. On a hit, the\
+target takes Bludgeoning damage equal to 1 plus\
+your Strength modifier.\
+Grapple. The target must succeed on a Strength\
+or Dexterity saving throw (it chooses which), or it\
+has the Grappled condition. The DC for the saving\
+throw and any escape attempts equals 8 plus your\
+Strength modifier and Proficiency Bonus. This grap-\
+ple is possible only if the target is no more than one\
+size larger than you and if you have a hand free to\
+grab it. See also “Grappling.”\
+Shove. The target must succeed on a Strength or\
+Dexterity saving throw (it chooses which), or you ei-\
+ther push it 5 feet away or cause it to have the Prone\
+condition. The DC for the saving throw equals 8 plus\
+your Strength modifier and Proficiency Bonus. This\
+shove is possible only if the target is no more than\
+one size larger than you.\
+
+Original layout: [[../pages/190|page 190]].

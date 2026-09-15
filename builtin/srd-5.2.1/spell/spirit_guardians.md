@@ -1,0 +1,40 @@
+---
+splat_schema: 1
+splat_id: "57494c7d-1685-5d2a-a0f5-9d15f5bc2c47"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/spell/spirit_guardians"
+splat_name: "Spirit Guardians"
+splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [164, 165], "executable": false}
+---
+
+# Spirit Guardians
+
+<!-- SRD page 164 -->
+
+Level 3 Conjuration (Cleric)\
+Casting Time: Action\
+Range: Self\
+Components: V, S, M (a prayer scroll)\
+Duration: Concentration, up to 10 minutes\
+Protective spirits flit around you in a 15-foot Ema-\
+nation for the duration. If you are good or neutral,\
+their spectral form appears angelic or fey (your\
+choice). If you are evil, they appear fiendish.\
+When you cast this spell, you can designate crea-\
+tures to be unaffected by it. Any other creature’s\
+Speed is halved in the Emanation, and whenever the\
+Emanation enters a creature’s space and whenever\
+
+<!-- SRD page 165 -->
+
+a creature enters the Emanation or ends its turn\
+there, the creature must make a Wisdom saving\
+throw. On a failed save, the creature takes 3d8 Ra-\
+diant damage (if you are good or neutral) or 3d8 Ne-\
+crotic damage (if you are evil). On a successful save,\
+the creature takes half as much damage. A creature\
+makes this save only once per turn.\
+Using a Higher-Level Spell Slot. The damage in-\
+creases by 1d8 for each spell slot level above 3.\
+
+Original layout: [[../pages/164|page 164]], [[../pages/165|page 165]].

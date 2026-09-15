@@ -1,0 +1,41 @@
+---
+splat_schema: 1
+splat_id: "aa3552c3-d7a3-5d72-9247-ab8aeb7f6fb5"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/creature/spy"
+splat_name: "Spy"
+splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [329], "executable": false}
+---
+
+# Spy
+
+<!-- SRD page 329 -->
+
+Medium or Small Humanoid, Neutral\
+AC 12 Initiative +4 (14)\
+HP 27 (6d8)\
+Speed 30 ft., Climb 30 ft.\
+MOD SAVE MOD SAVE MOD SAVE\
+Str 10 +0 +0 Dex 15 +2 +2 Con 10 +0 +0\
+Int 12 +1 +1 Wis 14 +2 +2 Cha 16 +3 +3\
+Skills Deception +5, Insight +4, Investigation +5,\
+Perception +6, Sleight of Hand +4, Stealth +6\
+Gear Hand Crossbow, Shortsword, Thieves’ Tools\
+Senses Passive Perception 16\
+Languages Common plus one other language\
+CR 1 (XP 200; PB +2)\
+
+### Actions
+
+Shortsword. Melee Attack Roll: +4, reach 5 ft. Hit: 5\
+(1d6 + 2) Piercing damage plus 7 (2d6) Poison damage.\
+Hand Crossbow. Ranged Attack Roll: +4, range 30/120\
+ft. Hit: 5 (1d6 + 2) Piercing damage plus 7 (2d6) Poi-\
+son damage.\
+
+### Bonus Actions
+
+Cunning Action. The spy takes the Dash, Disengage, or\
+Hide action.\
+
+Original layout: [[../pages/329|page 329]].

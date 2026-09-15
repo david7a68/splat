@@ -1,0 +1,37 @@
+---
+splat_schema: 1
+splat_id: "8be5d0e4-744e-53ac-85f1-e6e98016eb5e"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/spell/speak_with_plants"
+splat_name: "Speak with Plants"
+splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [164], "executable": false}
+---
+
+# Speak with Plants
+
+<!-- SRD page 164 -->
+
+Level 3 Transmutation (Bard, Druid, Ranger)\
+Casting Time: Action\
+Range: Self\
+Components: V, S\
+Duration: 10 minutes\
+You imbue plants in an immobile 30-foot Emanation\
+with limited sentience and animation, giving them\
+the ability to communicate with you and follow your\
+simple commands. You can question plants about\
+events in the spell’s area within the past day, gain-\
+ing information about creatures that have passed,\
+weather, and other circumstances.\
+You can also turn Difficult Terrain caused by plant\
+growth (such as thickets and undergrowth) into\
+ordinary terrain that lasts for the duration. Or you\
+can turn ordinary terrain where plants are present\
+into Difficult Terrain that lasts for the duration.\
+The spell doesn’t enable plants to uproot them-\
+selves and move about, but they can move their\
+branches, tendrils, and stalks for you.\
+If a Plant creature is in the area, you can commu-\
+nicate with it as if you shared a common language.\
+
+Original layout: [[../pages/164|page 164]].

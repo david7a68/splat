@@ -1,7 +1,7 @@
 # Content schema draft
 
-Status: reviewable design, not an implemented format. The user authorized this
-draft and delegated routine field choices. `splat_schema: 1` below is the proposed
+Status: reviewable design with a partial [read-only verifier](../srd-import.md).
+The user authorized this draft and delegated routine field choices. `splat_schema: 1` below is the proposed
 content version, separate from the app's existing settings schema.
 
 The remaining field contracts are now complete for the agreed scope:
@@ -16,8 +16,8 @@ The [2024 action-resolution contract](action-resolution.md) governs timing and
 cost outcomes; its source-specific rules supersede generic interpretations here.
 Earlier design documents record decisions; this document and the example notes
 specify the candidate field shapes where earlier examples were illustrative.
-Nothing here registers a package, changes campaign settings, or implements Rust
-models. Files under `examples/` are documentation artifacts.
+These design files do not register a package or change campaign settings.
+Files under `examples/` remain documentation artifacts and reader fixtures.
 
 ## Boundaries and identities
 
@@ -48,7 +48,8 @@ Optional fields are `splat_key`, `splat_sources` (attribution records with title
 locator and optional URL), and `splat_origin` (an optional entry reference).
 Entry kinds used here are `package`, `campaign`, `creature`, `item`, `spell`,
 `container`, `encounter`, `rule`, `rule_group`, `effect`, `strategy`, `sequence`,
-and `seed`. A creature can represent
+`seed`, and source-only `reference` notes as specified in the
+[import contract](../srd-import.md). A creature can represent
 a PC or monster; encounter membership and zero-HP policy are separate concerns.
 
 An entry reference is exactly one of `{id: UUID}` or `{key: namespace:local_key}`,

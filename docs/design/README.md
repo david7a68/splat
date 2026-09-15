@@ -1,8 +1,9 @@
 # Splat data design
 
 The candidate schema for the agreed scope is complete and ready for review.
-No data-model implementation, app configuration changes, commits or pushes are
-included in this design work.
+The design is committed. A [read-only verifier and SRD source import](../srd-import.md)
+now exercise part of the format. The simulator, content editor and campaign
+content loader remain unimplemented.
 
 Read these current contracts in order:
 
@@ -41,6 +42,7 @@ block the affected use even if the note parses.
 | rule_group | `splat_rule_group` | Required/optional dependency metadata |
 | strategy | `splat_strategy` | Registered policy parameters and declared priorities |
 | seed | `splat_seed` | Common metadata; no runtime state or log |
+| reference | `splat_reference`, with `executable: false` | Source excerpts; see [import contract](../srd-import.md) |
 
 Optional does not mean unnecessary to execute: a creature without a required
 save stat is an editable draft but cannot resolve that save. Draft validity,

@@ -1,0 +1,36 @@
+---
+splat_schema: 1
+splat_id: "40499ff8-8e2a-597f-8c0c-ba9adc7973d5"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/creature/giant_lizard"
+splat_name: "Giant Lizard"
+splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [352], "executable": false}
+---
+
+# Giant Lizard
+
+<!-- SRD page 352 -->
+
+Large Beast, Unaligned\
+AC 12  Initiative +1 (11)\
+HP 19 (3d10 + 3)\
+Speed 40 ft., Climb 40 ft.\
+MOD SAVE MOD SAVE MOD SAVE\
+Str 15 +2 +2 Dex 12 +1 +3 Con 13 +1 +1\
+Int 2 −4 −4 Wis 10 +0 +0 Cha 5 −3 −3\
+Senses Darkvision 60 ft.; Passive Perception 10\
+Languages None\
+CR 1/4 (XP 50; PB +2)\
+
+### Traits
+
+Spider Climb. The lizard can climb difficult surfaces,\
+including along ceilings, without needing to make an\
+ability check.\
+
+### Actions
+
+Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8 + 2)\
+Piercing damage.\
+
+Original layout: [[../pages/352|page 352]].

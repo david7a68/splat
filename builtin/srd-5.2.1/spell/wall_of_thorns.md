@@ -1,0 +1,43 @@
+---
+splat_schema: 1
+splat_id: "2cfa5859-9ed5-59e9-b7f0-11520306f1d6"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/spell/wall_of_thorns"
+splat_name: "Wall of Thorns"
+splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [173], "executable": false}
+---
+
+# Wall of Thorns
+
+<!-- SRD page 173 -->
+
+Level 6 Conjuration (Druid)\
+Casting Time: Action\
+Range: 120 feet\
+Components: V, S, M (a handful of thorns)\
+Duration: Concentration, up to 10 minutes\
+You create a wall of tangled brush bristling with\
+needle-sharp thorns. The wall appears within range\
+on a solid surface and lasts for the duration. You\
+choose to make the wall up to 60 feet long, 10 feet\
+high, and 5 feet thick or a circle that has a 20-foot\
+diameter and is up to 20 feet high and 5 feet thick.\
+The wall blocks line of sight.\
+When the wall appears, each creature in its area\
+makes a Dexterity saving throw, taking 7d8 Pierc-\
+ing damage on a failed save or half as much damage\
+on a successful one.\
+A creature can move through the wall, albeit\
+slowly and painfully. For every 1 foot a creature\
+moves through the wall, it must spend 4 feet of\
+movement. Furthermore, the first time a creature\
+enters a space in the wall on a turn or ends its turn\
+there, the creature makes a Dexterity saving throw,\
+taking 7d8 Slashing damage on a failed save or half\
+as much damage on a successful one. A creature\
+makes this save only once per turn.\
+Using a Higher-Level Spell Slot. Both types of\
+damage increase by 1d8 for each spell slot level\
+above 6.\
+
+Original layout: [[../pages/173|page 173]].

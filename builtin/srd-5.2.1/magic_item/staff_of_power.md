@@ -1,0 +1,59 @@
+---
+splat_schema: 1
+splat_id: "4c15e848-f73b-5e71-8d50-c05ec31a1b7e"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/magic_item/staff_of_power"
+splat_name: "Staff of Power"
+splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [245, 246], "executable": false}
+---
+
+# Staff of Power
+
+<!-- SRD page 245 -->
+
+Staff, Very Rare (Requires Attunement by a Sorcerer,\
+Warlock, or Wizard)\
+This staff has 20 charges and can be wielded as a\
+magic Quarterstaff that grants a +2 bonus to attack\
+rolls and damage rolls made with it. While hold-\
+ing it, you gain a +2 bonus to Armor Class, saving\
+throws, and spell attack rolls.\
+Spells. While holding the staff, you can cast one of\
+the spells on the following table from it, using your\
+spell save DC. The table indicates how many charges\
+you must expend to cast the spell.\
+
+<!-- SRD page 246 -->
+
+Charge\
+Spell Cost\
+Cone of Cold 5\
+Fireball (level 5 version) 5\
+Globe of Invulnerability 6\
+Hold Monster 5\
+Levitate 2\
+Lightning Bolt (level 5 version) 5\
+Magic Missile 1\
+Ray of Enfeeblement 1\
+Wall of Force 5\
+Regaining Charges. The staff regains 2d8 + 4\
+expended charges daily at dawn. If you expend the\
+last charge, roll 1d20. On a 1, the staff retains its +2\
+bonus to attack rolls and damage rolls but loses all\
+other properties. On a 20, the staff regains 1d8 + 2\
+charges.\
+Retributive Strike. You can take a Magic action to\
+break the staff over your knee or against a solid sur-\
+face. The staff is destroyed and releases its magic in\
+an explosion that fills a 30-foot Emanation originat-\
+ing from itself. You have a 50 percent chance to in-\
+stantly travel to a random plane of existence, avoid-\
+ing the explosion. If you fail to avoid the effect, you\
+take Force damage equal to 16 times the number\
+of charges in the staff. Each other creature in the\
+area makes a DC 17 Dexterity saving throw. On a\
+failed save, a creature takes Force damage equal to\
+4 times the number of charges in the staff. On a suc-\
+cessful save, a creature takes half as much damage.\
+
+Original layout: [[../pages/245|page 245]], [[../pages/246|page 246]].

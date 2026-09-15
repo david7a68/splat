@@ -1,0 +1,52 @@
+---
+splat_schema: 1
+splat_id: "cf9a32e9-110e-53cf-8411-e9f509a06528"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/creature/troll"
+splat_name: "Troll"
+splat_reference: {"source": "SRD 5.2.1", "category": "creature", "pages": [333], "executable": false}
+---
+
+# Troll
+
+<!-- SRD page 333 -->
+
+Large Giant, Chaotic Evil\
+AC 15 Initiative +1 (11)\
+HP 94 (9d10 + 45)\
+Speed 30 ft.\
+MOD SAVE MOD SAVE MOD SAVE\
+Str 18 +4 +4 Dex 13 +1 +1 Con 20 +5 +5\
+Int 7 −2 −2 Wis 9 −1 −1 Cha 7 −2 −2\
+Skills Perception +5\
+Senses Darkvision 60 ft.; Passive Perception 15\
+Languages Giant\
+CR 5 (XP 1,800; PB +3)\
+
+### Traits
+
+Loathsome Limbs (4/Day). If the troll ends any turn\
+Bloodied and took 15+ Slashing damage during that\
+turn, one of the troll’s limbs is severed, falls into the\
+troll’s space, and becomes a Troll Limb. The limb acts\
+immediately after the troll’s turn. The troll has 1 Exhaus-\
+tion level for each missing limb, and it grows replace-\
+ment limbs the next time it regains Hit Points.\
+Regeneration. The troll regains 15 Hit Points at the start\
+of each of its turns. If the troll takes Acid or Fire dam-\
+age, this trait doesn’t function on the troll’s next turn.\
+The troll dies only if it starts its turn with 0 Hit Points\
+and doesn’t regenerate.\
+
+### Actions
+
+Multiattack. The troll makes three Rend attacks.\
+Rend. Melee Attack Roll: +7, reach 10 ft. Hit: 11 (2d6\
++ 4) Slashing damage.\
+
+### Bonus Actions
+
+Charge. The troll moves up to half its Speed straight\
+toward an enemy it can see.\
+
+Original layout: [[../pages/333|page 333]].

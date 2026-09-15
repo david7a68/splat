@@ -1,0 +1,33 @@
+---
+splat_schema: 1
+splat_id: "a20b514f-6eea-51ea-99c8-08036f40e85e"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/spell/blade_barrier"
+splat_name: "Blade Barrier"
+splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [113], "executable": false}
+---
+
+# Blade Barrier
+
+<!-- SRD page 113 -->
+
+Level 6 Evocation (Cleric)\
+Casting Time: Action\
+Range: 90 feet\
+Components: V, S\
+Duration: Concentration, up to 10 minutes\
+You create a wall of whirling blades made of magical\
+energy. The wall appears within range and lasts for\
+the duration. You make a straight wall up to 100\
+feet long, 20 feet high, and 5 feet thick, or a ringed\
+wall up to 60 feet in diameter, 20 feet high, and 5\
+feet thick. The wall provides Three-Quarters Cover,\
+and its space is Difficult Terrain.\
+Any creature in the wall’s space makes a Dexter-\
+ity saving throw, taking 6d10 Force damage on a\
+failed save or half as much damage on a successful\
+one. A creature also makes that save if it enters the\
+wall’s space or ends it turn there. A creature makes\
+that save only once per turn.\
+
+Original layout: [[../pages/113|page 113]].

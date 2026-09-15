@@ -1,0 +1,91 @@
+---
+splat_schema: 1
+splat_id: "a22f9d51-2e34-513c-a629-762a07e5f772"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/magic_item/rod_of_lordly_might"
+splat_name: "Rod of Lordly Might"
+splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [241, 242], "executable": false}
+---
+
+# Rod of Lordly Might
+
+<!-- SRD page 241 -->
+
+Rod, Legendary (Requires Attunement)\
+This rod has a flanged head, and it functions as a\
+magic Mace that grants a +3 bonus to attack rolls\
+and damage rolls made with it. The rod has proper-\
+ties associated with six different buttons that are\
+set in a row along the haft. It has three other prop-\
+erties as well, detailed below.\
+Buttons. You can press one of the following but-\
+tons as a Bonus Action; a button’s effect lasts until\
+you push a different button or until you push the\
+same button again, which causes the rod to revert\
+to its normal form:\
+Button 1. A fiery blade sprouts from the end op-\
+posite the rod’s flanged head. The flames shed\
+Bright Light in a 40-foot radius and Dim Light for\
+an additional 40 feet, and the blade functions as\
+a magic Longsword or Shortsword (your choice)\
+that deals an extra 2d6 Fire damage on a hit.\
+Button 2. The rod’s flanged head folds down and\
+two crescent-shaped blades spring out, trans-\
+forming the rod into a magic Battleaxe that grants\
+a +3 bonus to attack rolls and damage rolls made\
+with it.\
+Button 3. The rod’s flanged head folds down, a\
+spear point springs from the rod’s tip, and the\
+rod’s handle lengthens into a 6-foot haft, trans-\
+forming the rod into a magic Spear that grants a\
++3 bonus to attack rolls and damage rolls made\
+with it.\
+Button 4. The rod transforms into a climbing pole\
+up to 50 feet long (you specify the length), though\
+the rod’s buttons remain within your reach. In\
+surfaces as hard as granite, a spike at the bot-\
+tom and three hooks at the top anchor the pole.\
+Horizontal bars 3 inches long fold out from the\
+sides, 1 foot apart, forming a ladder. The pole can\
+bear up to 4,000 pounds. More weight or lack of\
+solid anchoring causes the rod to revert to its\
+normal form.\
+Button 5. The rod transforms into a handheld\
+battering ram and grants its user a +10 bonus\
+to Strength (Athletics) checks made to break\
+through doors, barricades, and other barriers.\
+Button 6. The rod assumes or remains in its nor-\
+mal form and indicates magnetic north. (Nothing\
+happens if this function of the rod is used in a\
+
+<!-- SRD page 242 -->
+
+location that has no magnetic north.) The rod also\
+gives you knowledge of your approximate depth\
+beneath the ground or your height above it.\
+Drain Life. When you hit a creature with a melee\
+attack using the rod, you can force the target to\
+make a DC 17 Constitution saving throw. On a failed\
+save, the target takes an extra 4d6 Necrotic dam-\
+age, and you regain a number of Hit Points equal to\
+half that Necrotic damage. Once used, this property\
+can’t be used again until the next dawn.\
+Paralyze. When you hit a creature with a melee\
+attack using the rod, you can force the target to\
+make a DC 17 Constitution saving throw. On a failed\
+save, the target has the Paralyzed condition for 1\
+minute. The target repeats the save at the end of\
+each of its turns, ending the effect on a success.\
+Once used, this property can’t be used again until\
+the next dawn.\
+Terrify. While holding the rod, you can take a\
+Magic action to force each creature you can see\
+within 30 feet of yourself to make a DC 17 Wisdom\
+saving throw. On a failed save, a target has the\
+Frightened condition for 1 minute. A Frightened\
+target repeats the save at the end of each of its\
+turns, ending the effect on itself on a success. Once\
+used, this property can’t be used again until the\
+next dawn.\
+
+Original layout: [[../pages/241|page 241]], [[../pages/242|page 242]].

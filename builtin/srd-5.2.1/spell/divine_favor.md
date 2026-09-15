@@ -1,0 +1,22 @@
+---
+splat_schema: 1
+splat_id: "c1599261-6901-530d-9b17-f364621b8a63"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/spell/divine_favor"
+splat_name: "Divine Favor"
+splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [125], "executable": false}
+---
+
+# Divine Favor
+
+<!-- SRD page 125 -->
+
+Level 1 Transmutation (Paladin)\
+Casting Time: Bonus Action\
+Range: Self\
+Components: V, S\
+Duration: 1 minute\
+Until the spell ends, your attacks with weapons deal\
+an extra 1d4 Radiant damage on a hit.\
+
+Original layout: [[../pages/125|page 125]].

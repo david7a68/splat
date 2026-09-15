@@ -1,0 +1,27 @@
+---
+splat_schema: 1
+splat_id: "2485a3f3-4003-5152-9d1f-37207e43339e"
+splat_kind: "reference"
+splat_key: "dnd2024:reference/spell/bless"
+splat_name: "Bless"
+splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [113], "executable": false}
+---
+
+# Bless
+
+<!-- SRD page 113 -->
+
+Level 1 Enchantment (Cleric, Paladin)\
+Casting Time: Action\
+Range: 30 feet\
+Components: V, S, M (a Holy Symbol worth 5+ GP)\
+Duration: Concentration, up to 1 minute\
+You bless up to three creatures within range. When-\
+ever a target makes an attack roll or a saving throw\
+before the spell ends, the target adds 1d4 to the at-\
+tack roll or save.\
+Using a Higher-Level Spell Slot. You can target\
+one additional creature for each spell slot level\
+above 1.\
+
+Original layout: [[../pages/113|page 113]].
