@@ -10,68 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 202
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/combat_encounters_step_1_choose_a_difficulty
-  parameters:
-    difficulty_choice:
-    - low
-    - moderate
-    - high
-    low_difficulty_guideline:
-      monster_count: 1
-      party_size: 4
-      monster_cr: character_level
-      binding_rule: false
-  implementation: dnd2024:rules_combat_encounters_step_1_choose_a_difficulty
-splat_contracts:
-- id: dnd2024:rules_combat_encounters_step_1_choose_a_difficulty
-  inputs:
-    party:
-      type: participant_list
-      required: true
-    choice:
-      type: choice
-      required: true
-  outputs:
-  - encounter_difficulty
-  events: []
-  capabilities:
-  - encounter_design
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 202
-  engine_gaps: &id001
-  - dnd2024:rules_combat_encounters_step_1_choose_a_difficulty
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: 9ceecd6861f171c1f674a5c854f3f6d7b636f03f88115b2afafa25dbbcd34598
-  parent_name: Combat Encounters
-  line_span:
-    first: 10266
-    count: 21
-splat_clauses:
-- key: source_rules
-  text: '# Step 1: Choose a Difficulty Three categories describe the range of encounter difficulty: Low
-    Difficulty. An encounter of low difficulty is likely to have one or two scary moments for the players,
-    but their characters should emerge victorious with no casualties. One or more of them might need to
-    use healing resources, however. As a rough guideline, a single monster generally presents a low-difficulty
-    challenge for a party of four characters whose level equals the monster’s Challenge Rating. Moderate
-    Difficulty. Absent healing and other resources, an encounter of moderate difficulty could go badly
-    for the adventurers. Weaker characters might get taken out of the fight, and there’s a slim chance
-    that one or more characters might die. High Difficulty. A high-difficulty encounter could be lethal
-    for one or more characters. To survive it, the characters will need smart tactics, quick thinking,
-    and maybe even a little luck.'
-  sha256: d95783ee1d64496a9faa07d2b4658fb5f9124eea87ac5161942b011dd2bc30ba
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Step 1: Choose a Difficulty
+
+## Source text
 
 <!-- SRD page 202 -->
 
@@ -95,3 +38,31 @@ High Difficulty. A high-difficulty encounter could\
 be lethal for one or more characters. To survive\
 it, the characters will need smart tactics, quick\
 thinking, and maybe even a little luck.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/combat_encounters_step_1_choose_a_difficulty ` |
+| ` implementation ` | ` dnd2024:rules_combat_encounters_step_1_choose_a_difficulty ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` difficulty_choice ` | ` ["low", "moderate", "high"] ` |
+
+#### Low difficulty guideline
+
+<!-- splat:values path=splat_rule/parameters/low_difficulty_guideline -->
+
+| Field | Value |
+| --- | --- |
+| ` monster_count ` | ` 1 ` |
+| ` party_size ` | ` 4 ` |
+| ` monster_cr ` | ` character_level ` |
+| ` binding_rule ` | ` false ` |

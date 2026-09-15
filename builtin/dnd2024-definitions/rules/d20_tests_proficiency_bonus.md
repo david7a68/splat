@@ -10,63 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 6
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/d20_tests_proficiency_bonus
-  parameters:
-    proficiency_bonus:
-      applies_when:
-        all:
-        - gm_relevant_skill_or_tool
-        - actor_has_proficiency
-      any_alternative_skill_suffices: true
-      times: 1
-  implementation: dnd2024:rules_d20_tests_proficiency_bonus
-splat_contracts:
-- id: dnd2024:rules_d20_tests_proficiency_bonus
-  inputs:
-    actor:
-      type: participant
-      required: true
-    test:
-      type: resolution
-      required: true
-  outputs:
-  - test_modifiers
-  - test_result
-  events: []
-  capabilities:
-  - d20_tests
-  - proficiency
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 6
-  engine_gaps: &id001
-  - dnd2024:rules_d20_tests_proficiency_bonus
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: 670d32716f728b6018f2cfbb247d74c2b1377f794343db2932ea68b57b965850
-  parent_name: D20 Tests
-  line_span:
-    first: 166
-    count: 10
-splat_clauses:
-- key: source_rules
-  text: '# Proficiency Bonus Add your Proficiency Bonus to an ability check when the GM determines that
-    a skill or tool proficiency is relevant to the check and you have that proficiency. For example, if
-    a rule refers to a Strength (Acrobatics or Athletics) check, you can add your Proficiency Bonus to
-    the check if you have proficiency in the Acrobatics or Athletics skill. See “Proficiency” later in
-    “Playing the Game” for more information about skill and tool proficiencies.'
-  sha256: 1a5635e89d9e1a5c62c3311b7e53310c552c05d75f6dd6632513bc90b22022f6
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Proficiency Bonus
+
+## Source text
 
 <!-- SRD page 6 -->
 
@@ -79,3 +27,27 @@ add your Proficiency Bonus to the check if you have\
 proficiency in the Acrobatics or Athletics skill. See\
 “Proficiency” later in “Playing the Game” for more\
 information about skill and tool proficiencies.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/d20_tests_proficiency_bonus ` |
+| ` implementation ` | ` dnd2024:rules_d20_tests_proficiency_bonus ` |
+
+### Parameters
+
+#### Proficiency bonus
+
+<!-- splat:yaml path=splat_rule/parameters/proficiency_bonus -->
+
+```yaml
+applies_when:
+  all:
+  - gm_relevant_skill_or_tool
+  - actor_has_proficiency
+any_alternative_skill_suffices: true
+times: 1
+```

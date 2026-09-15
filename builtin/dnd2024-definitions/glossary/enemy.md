@@ -10,61 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 181
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/enemy
-  parameters:
-    predicate:
-      any:
-      - fights_against_subject
-      - actively_works_to_harm_subject
-      - rule_designated_enemy
-      - gm_designated_enemy
-    gm_designation:
-      chooser: gm
-      options:
-      - true
-      - false
-  implementation: dnd2024:glossary_enemy
-splat_contracts:
-- id: dnd2024:glossary_enemy
-  inputs:
-    subject:
-      type: participant
-      required: true
-    other:
-      type: participant
-      required: true
-    relationship:
-      type: choice
-      required: true
-  outputs:
-  - is_enemy
-  events: []
-  capabilities:
-  - relationships
-splat_conversion:
-  status: specified
-  category: glossary
-  source_sha256: 454e10ecf2caaeba46dcf4f4000ea40d351bf80d4335ffa40f5e048827cff42f
-  source_path: builtin/srd-5.2.1/glossary/enemy.md
-  pages:
-  - 181
-  engine_gaps: &id001
-  - dnd2024:glossary_enemy
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: 75b5851e61635f8606253fe28c20961c4375e82f56ea4a7ddafbe02b63403eaf
-splat_clauses:
-- key: source_rules
-  text: '# Enemy A creature is your enemy if it fights against you in combat, actively works to harm you,
-    or is designated as your enemy by the rules or GM.'
-  sha256: 7ad681401a91d8604e7fe4ed81a2fe0f8aea5a9799700c0570febad5784c30a5
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Enemy
+
+## Source text
 
 <!-- SRD page 181 -->
 
@@ -73,3 +23,31 @@ combat, actively works to harm you, or is desig-\
 nated as your enemy by the rules or GM.\
 
 Original layout: [[../../srd-5.2.1/pages/181|page 181]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/enemy ` |
+| ` implementation ` | ` dnd2024:glossary_enemy ` |
+
+### Parameters
+
+#### Predicate
+
+<!-- splat:values path=splat_rule/parameters/predicate -->
+
+| Field | Value |
+| --- | --- |
+| ` any ` | ` ["fights_against_subject", "actively_works_to_harm_subject", "rule_designated_enemy", "gm_designated_enemy"] ` |
+
+#### Gm designation
+
+<!-- splat:values path=splat_rule/parameters/gm_designation -->
+
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` gm ` |
+| ` options ` | ` [true, false] ` |

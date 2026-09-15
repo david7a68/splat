@@ -10,55 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 184
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/lightly_obscured
-  parameters:
-    check:
-      ability: wisdom
-      skill: perception
-      requires_sight: true
-    target_in_lightly_obscured_space: true
-    roll_mode: disadvantage
-  implementation: dnd2024:glossary_lightly_obscured
-splat_contracts:
-- id: dnd2024:glossary_lightly_obscured
-  inputs:
-    subject:
-      type: participant
-      required: true
-    target_location:
-      type: location
-      required: true
-  outputs:
-  - roll_mode
-  events:
-  - ability_check.pending
-  capabilities:
-  - visibility
-  - checks
-splat_conversion:
-  status: specified
-  category: glossary
-  source_sha256: 14c538eeb80cceead83510b5c589335804adbbb01c1f816fdaa58d4d37abcfa2
-  source_path: builtin/srd-5.2.1/glossary/lightly_obscured.md
-  pages:
-  - 184
-  engine_gaps: &id001
-  - dnd2024:glossary_lightly_obscured
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: b3ef88d47c1e3738e690a8f005319c8917e871c1e0388bf90a1a5c0852cc8b5f
-splat_clauses:
-- key: source_rules
-  text: '# Lightly Obscured You have Disadvantage on Wisdom (Perception) checks to see something in a
-    Lightly Obscured space. See also “Dim Light” and “Playing the Game” (“Exploration”).'
-  sha256: e38d38d81cfcd0c834f8423ce538217ddbd0bb1d28e3957342b69dd9daf1c5d5
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Lightly Obscured
+
+## Source text
 
 <!-- SRD page 184 -->
 
@@ -68,3 +24,31 @@ space. See also “Dim Light” and “Playing the Game”\
 (“Exploration”).\
 
 Original layout: [[../../srd-5.2.1/pages/184|page 184]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/lightly_obscured ` |
+| ` implementation ` | ` dnd2024:glossary_lightly_obscured ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` target_in_lightly_obscured_space ` | ` true ` |
+| ` roll_mode ` | ` disadvantage ` |
+
+#### Check
+
+<!-- splat:values path=splat_rule/parameters/check -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` wisdom ` |
+| ` skill ` | ` perception ` |
+| ` requires_sight ` | ` true ` |

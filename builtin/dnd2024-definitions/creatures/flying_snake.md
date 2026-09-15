@@ -10,176 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 348
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: tiny
-  type: monstrosity
-  alignment: Unaligned
-  movement_text: 30 ft., Fly 60 ft., Swim 30 ft.
-  senses_text: Blindsight 10 ft.; Passive Perception 11
-  languages_text: None
-  cr_text: 1/8 (XP 25; PB +2)
-  hit_points_text: 5 (2d4)
-splat_stats:
-  strength:
-    value: 4
-  save_strength:
-    value: -3
-  dexterity:
-    value: 15
-  save_dexterity:
-    value: 2
-  constitution:
-    value: 11
-  save_constitution:
-    value: 0
-  intelligence:
-    value: 2
-  save_intelligence:
-    value: -4
-  wisdom:
-    value: 12
-  save_wisdom:
-    value: 1
-  charisma:
-    value: 5
-  save_charisma:
-    value: -3
-  armor_class:
-    value: 14
-  max_hp:
-    value: 5
-  initiative:
-    value: 2
-  speed:
-    value: 30
-    unit: ft
-  fly_speed:
-    value: 60
-    unit: ft
-  swim_speed:
-    value: 30
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/flying_snake
-  implementation: dnd2024:creature_flying_snake
-  parameters:
-    senses:
-    - sense: blindsight
-      range_ft: 10
-    passive_perception: 11
-    languages:
-      speak: true
-      known: []
-    features:
-      flyby:
-        economy: passive
-        op: opportunity_attack.suppress
-        trigger: actor.leaves_enemy_reach
-        movement_modes:
-        - fly
-      bite:
-        economy: action
-        op: attack
-        modes:
-        - melee
-        attack_bonus: 4
-        target:
-          kind: creature_or_object
-          count: 1
-        reach_ft: 5
-        hit:
-        - op: damage
-          components:
-          - type: piercing
-            amount:
-              constant: 1
-            average: 1
-          - type: poison
-            amount:
-              dice:
-                count: 2
-                sides: 4
-              add: 0
-            average: 5
-    damage_resolution:
-      choice:
-      - printed_average
-      - roll_expression
-      chooser: controller
-      exclusive: true
-    spatial_resolution:
-      provider: caller
-      required_facts:
-      - distance
-      - area_membership
-      - visibility
-      - occupancy
-      - movement_path
-      validate_against_typed_constraints: true
-splat_contracts:
-- id: dnd2024:creature_flying_snake
-  inputs:
-    actor:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    choices:
-      required: false
-      type: choice
-    scene:
-      required: false
-      type: resolution
-    event:
-      required: false
-      type: event
-  outputs:
-  - effects
-  - roll_requests
-  - state_changes
-  events:
-  - actor.leaves_enemy_reach
-  - creature.feature_requested
-  capabilities:
-  - action_economy
-  - attack_resolution
-  - creature_rules
-  - damage
-  - effects
-  - spatial_constraints
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: d153c55a4682282b0f4ce08af4a64c03c2d52ce214480f13883e63536d519532
-  source_path: builtin/srd-5.2.1/creature/flying_snake.md
-  pages:
-  - 348
-  engine_gaps: &id001
-  - dnd2024:creature_flying_snake
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/creatures_3.md
-  specification_sha256: 9dd156ae913580304954670bb4a8df71c1c66bd169e68a81a85264544c422fa9
-splat_clauses:
-- key: source_rules
-  text: '# Flying Snake Tiny Monstrosity, Unaligned AC 14 Initiative +2 (12) HP 5 (2d4) Speed 30 ft.,
-    Fly 60 ft., Swim 30 ft. MOD SAVE MOD SAVE MOD SAVE Str 4 -3 -3 Dex 15 +2 +2 Con11 +0 +0 Int 2 -4 -4
-    Wis 12 +1 +1 Cha 5 -3 -3 Senses Blindsight 10 ft.; Passive Perception 11 Languages None CR 1/8 (XP
-    25; PB +2) ### Traits Flyby. The snake doesn’t provoke an Opportunity Attack when it flies out of
-    an enemy’s reach. ### Actions Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage plus
-    5 (2d4) Poison damage.'
-  sha256: e66008a7759019fe63718f9e419e5c3bafa1728e5884e70a1b824cd328a2afb6
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Flying Snake
+
+## Source text
 
 <!-- SRD page 348 -->
 
@@ -205,3 +40,149 @@ Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing\
 damage plus 5 (2d4) Poison damage.\
 
 Original layout: [[../../srd-5.2.1/pages/348|page 348]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` tiny ` |
+| ` type ` | ` monstrosity ` |
+| ` alignment ` | ` Unaligned ` |
+| ` movement_text ` | ` 30 ft., Fly 60 ft., Swim 30 ft. ` |
+| ` senses_text ` | ` Blindsight 10 ft.; Passive Perception 11 ` |
+| ` languages_text ` | ` None ` |
+| ` cr_text ` | ` 1/8 (XP 25; PB +2) ` |
+| ` hit_points_text ` | ` 5 (2d4) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 4 ` | ` -3 ` |
+| ` Dexterity ` | ` 15 ` | ` 2 ` |
+| ` Constitution ` | ` 11 ` | ` 0 ` |
+| ` Intelligence ` | ` 2 ` | ` -4 ` |
+| ` Wisdom ` | ` 12 ` | ` 1 ` |
+| ` Charisma ` | ` 5 ` | ` -3 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 14 ` |  |
+| ` max_hp ` | ` 5 ` |  |
+| ` initiative ` | ` 2 ` |  |
+| ` speed ` | ` 30 ` | ` ft ` |
+| ` fly_speed ` | ` 60 ` | ` ft ` |
+| ` swim_speed ` | ` 30 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/flying_snake ` |
+| ` implementation ` | ` dnd2024:creature_flying_snake ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` passive_perception ` | ` 11 ` |
+
+#### Senses
+
+<!-- splat:rows path=splat_rule/parameters/senses -->
+
+| Row | sense | range_ft |
+| --- | --- | --- |
+| ` 0 ` | ` blindsight ` | ` 10 ` |
+
+#### Languages
+
+<!-- splat:yaml path=splat_rule/parameters/languages -->
+
+```yaml
+speak: true
+known: []
+```
+
+#### Features
+
+##### Flyby
+
+<!-- splat:values path=splat_rule/parameters/features/flyby -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` passive ` |
+| ` op ` | ` opportunity_attack.suppress ` |
+| ` trigger ` | ` actor.leaves_enemy_reach ` |
+| ` movement_modes ` | ` ["fly"] ` |
+
+##### Bite
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+
+```yaml
+economy: action
+op: attack
+modes:
+- melee
+attack_bonus: 4
+target:
+  kind: creature_or_object
+  count: 1
+reach_ft: 5
+hit:
+- op: damage
+  components:
+  - type: piercing
+    amount:
+      constant: 1
+    average: 1
+  - type: poison
+    amount:
+      dice:
+        count: 2
+        sides: 4
+      add: 0
+    average: 5
+```
+
+#### Damage resolution
+
+<!-- splat:values path=splat_rule/parameters/damage_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` choice ` | ` ["printed_average", "roll_expression"] ` |
+| ` chooser ` | ` controller ` |
+| ` exclusive ` | ` true ` |
+
+#### Spatial resolution
+
+<!-- splat:values path=splat_rule/parameters/spatial_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` provider ` | ` caller ` |
+| ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
+| ` validate_against_typed_constraints ` | ` true ` |

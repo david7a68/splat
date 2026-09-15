@@ -10,113 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 145
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 0
-  school: conjuration
-  classes:
-  - bard
-  - sorcerer
-  - warlock
-  - wizard
-  components:
-  - verbal
-  - somatic
-  concentration: false
-  duration: 1 minute
-  casting_time: Action
-  ritual: false
-  range:
-    feet: 30
-splat_rule:
-  mechanic: dnd2024:spells/mage_hand
-  implementation: dnd2024:spell_mage_hand
-  parameters:
-    spell_lifetime:
-      concentration: false
-      maximum_seconds: 60
-    hand:
-      spectral: true
-      floating: true
-      initial_point: caster_choice
-      range_feet: 30
-    end_conditions:
-    - distance_from_caster_greater_than_30_feet
-    - caster_casts_mage_hand_again
-    manipulation:
-      at_cast: true
-      later_economy: magic_action
-      later_timing: caster_turn
-      options:
-      - manipulate_object
-      - open_unlocked_door
-      - open_unlocked_container
-      - stow_in_open_container
-      - retrieve_from_open_container
-      - pour_vial_contents
-    movement:
-      as_part_of_later_control_action: true
-      distance_feet_max: 30
-    limits:
-      attack: false
-      activate_magic_item: false
-      carried_weight_pounds_max: 10
-splat_contracts:
-- id: dnd2024:spell_mage_hand
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    origin:
-      type: location
-      required: true
-    manipulation:
-      type: choice
-      required: true
-    object:
-      required: false
-      type: object
-  outputs:
-  - effects
-  - objects
-  events:
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - world_objects
-  - inventory
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: c853de17acb399e7da8f33b98c15dc119477f09f28ce8a147f645cfe1686c531
-  source_path: builtin/srd-5.2.1/spell/mage_hand.md
-  pages:
-  - 145
-  engine_gaps: &id001
-  - dnd2024:spell_mage_hand
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_4.md
-  specification_sha256: 644f47d792ffaf1ec68f30d170fe1185d2b6c7e320be6cec9e61f414122b9209
-splat_clauses:
-- key: source_rules
-  text: '# Mage Hand Conjuration Cantrip (Bard, Sorcerer, Warlock, Wizard) Casting Time: Action Range:
-    30 feet Components: V, S Duration: 1 minute A spectral, floating hand appears at a point you choose
-    within range. The hand lasts for the duration. The hand vanishes if it is ever more than 30 feet away
-    from you or if you cast this spell again. When you cast the spell, you can use the hand to manipulate
-    an object, open an unlocked door or container, stow or retrieve an item from an open container, or
-    pour the contents out of a vial. As a Magic action on your later turns, you can control the hand thus
-    again. As part of that action, you can move the hand up to 30 feet. The hand can’t attack, activate
-    magic items, or carry more than 10 pounds.'
-  sha256: abc25e3cc1276dca35ba23712f24043821ac0dfc09b6563cc090474e3d9d4134
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Mage Hand
+
+## Source text
 
 <!-- SRD page 145 -->
 
@@ -140,3 +38,93 @@ The hand can’t attack, activate magic items, or\
 carry more than 10 pounds.\
 
 Original layout: [[../../srd-5.2.1/pages/145|page 145]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 0 ` |
+| ` school ` | ` conjuration ` |
+| ` classes ` | ` ["bard", "sorcerer", "warlock", "wizard"] ` |
+| ` components ` | ` ["verbal", "somatic"] ` |
+| ` concentration ` | ` false ` |
+| ` duration ` | ` 1 minute ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 30 ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/mage_hand ` |
+| ` implementation ` | ` dnd2024:spell_mage_hand ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` end_conditions ` | ` ["distance_from_caster_greater_than_30_feet", "caster_casts_mage_hand_again"] ` |
+
+#### Spell lifetime
+
+<!-- splat:values path=splat_rule/parameters/spell_lifetime -->
+
+| Field | Value |
+| --- | --- |
+| ` concentration ` | ` false ` |
+| ` maximum_seconds ` | ` 60 ` |
+
+#### Hand
+
+<!-- splat:values path=splat_rule/parameters/hand -->
+
+| Field | Value |
+| --- | --- |
+| ` spectral ` | ` true ` |
+| ` floating ` | ` true ` |
+| ` initial_point ` | ` caster_choice ` |
+| ` range_feet ` | ` 30 ` |
+
+#### Manipulation
+
+<!-- splat:values path=splat_rule/parameters/manipulation -->
+
+| Field | Value |
+| --- | --- |
+| ` at_cast ` | ` true ` |
+| ` later_economy ` | ` magic_action ` |
+| ` later_timing ` | ` caster_turn ` |
+| ` options ` | ` ["manipulate_object", "open_unlocked_door", "open_unlocked_container", "stow_in_open_container", "retrieve_from_open_container", "pour_vial_contents"] ` |
+
+#### Movement
+
+<!-- splat:values path=splat_rule/parameters/movement -->
+
+| Field | Value |
+| --- | --- |
+| ` as_part_of_later_control_action ` | ` true ` |
+| ` distance_feet_max ` | ` 30 ` |
+
+#### Limits
+
+<!-- splat:values path=splat_rule/parameters/limits -->
+
+| Field | Value |
+| --- | --- |
+| ` attack ` | ` false ` |
+| ` activate_magic_item ` | ` false ` |
+| ` carried_weight_pounds_max ` | ` 10 ` |

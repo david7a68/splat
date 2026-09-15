@@ -10,68 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 59
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:class_features/ranger_level_3_ranger_subclass
-  parameters:
-    subclass_choice:
-      count: 1
-      class: ranger
-    feature_grant_policy:
-      class_level_at_least_feature_level: true
-      events:
-      - subclass.selected
-      - character.level_gained
-      persistent: true
-    class_scope:
-      class: ranger
-      minimum_level: 3
-  implementation: dnd2024:class_features_ranger_level_3_ranger_subclass
-splat_contracts:
-- id: dnd2024:class_features_ranger_level_3_ranger_subclass
-  inputs:
-    actor:
-      type: participant
-      required: true
-    selection:
-      required: false
-      type: choice
-  outputs:
-  - subclass
-  - feature_grants
-  events:
-  - subclass.selected
-  - character.level_gained
-  capabilities:
-  - character_features
-splat_conversion:
-  status: specified
-  category: class_feature
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 59
-  engine_gaps: &id001
-  - dnd2024:class_features_ranger_level_3_ranger_subclass
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_2.md
-  specification_sha256: ee190ce164796d3d676b726d3ab4b0a89038055680838781b9d31191ec2ee714
-  parent_name: Ranger
-  line_span:
-    first: 4952
-    count: 7
-splat_clauses:
-- key: source_rules
-  text: '# Level 3: Ranger Subclass You gain a Ranger subclass of your choice. The Hunter subclass is
-    detailed after this class’s description. A subclass is a specialization that grants you features at
-    certain Ranger levels. For the rest of your career, you gain each of your subclass’s features that
-    are of your Ranger level or lower.'
-  sha256: 2f02eda70c02aa2da050b85c6119b80f45bd778e188394eaf1472b49abc09ac6
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Level 3: Ranger Subclass
+
+## Source text
 
 <!-- SRD page 59 -->
 
@@ -81,3 +24,42 @@ scription. A subclass is a specialization that grants\
 you features at certain Ranger levels. For the rest\
 of your career, you gain each of your subclass’s fea-\
 tures that are of your Ranger level or lower.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:class_features/ranger_level_3_ranger_subclass ` |
+| ` implementation ` | ` dnd2024:class_features_ranger_level_3_ranger_subclass ` |
+
+### Parameters
+
+#### Subclass choice
+
+<!-- splat:values path=splat_rule/parameters/subclass_choice -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` class ` | ` ranger ` |
+
+#### Feature grant policy
+
+<!-- splat:values path=splat_rule/parameters/feature_grant_policy -->
+
+| Field | Value |
+| --- | --- |
+| ` class_level_at_least_feature_level ` | ` true ` |
+| ` events ` | ` ["subclass.selected", "character.level_gained"] ` |
+| ` persistent ` | ` true ` |
+
+#### Class scope
+
+<!-- splat:values path=splat_rule/parameters/class_scope -->
+
+| Field | Value |
+| --- | --- |
+| ` class ` | ` ranger ` |
+| ` minimum_level ` | ` 3 ` |

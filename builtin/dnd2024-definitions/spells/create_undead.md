@@ -10,174 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 121
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 6
-  school: necromancy
-  classes:
-  - cleric
-  - warlock
-  - wizard
-  components:
-  - verbal
-  - somatic
-  - material
-  concentration: false
-  duration: Instantaneous
-  casting_time: 1 minute
-  ritual: false
-  range:
-    feet: 10
-  material:
-    description: one 150+ GP black onyx stone for each corpse
-    consumed: false
-splat_rule:
-  mechanic: dnd2024:spells/create_undead
-  implementation: dnd2024:spell_create_undead
-  parameters:
-    requires:
-      time: night
-    modes:
-    - animate
-    - reassert_control
-    targets:
-      animate:
-        kind: corpse
-        former_type: humanoid
-        sizes:
-        - medium
-        - small
-        within_spell_range: true
-      reassert_control:
-        kind: creature_animated_by_this_spell
-        control_not_expired: true
-        within_spell_range: true
-    slot_options:
-      '6':
-      - kind: ghoul
-        maximum: 3
-      '7':
-      - kind: ghoul
-        maximum: 4
-      '8':
-      - kind: ghoul
-        maximum: 5
-      - kinds:
-        - ghast
-        - wight
-        maximum: 2
-      '9':
-      - kind: ghoul
-        maximum: 6
-      - kinds:
-        - ghast
-        - wight
-        maximum: 3
-      - kind: mummy
-        maximum: 2
-    control:
-      duration_hours: 24
-      renew_duration_hours: 24
-      expiry: stop_obeying_orders
-      command:
-        cost: bonus_action
-        event: caster_turn
-        range_feet: 120
-        communication: mental
-        multiple_targets_same_command: true
-        choices:
-        - next_turn_action_and_movement
-        - general_task
-        persists_until: task_complete
-      no_command:
-        action: dodge
-        movement: avoid_harm_only
-    stat_blocks:
-      ghoul:
-        key: dnd2024:creatures/ghoul
-      ghast:
-        key: dnd2024:creatures/ghast
-      wight:
-        key: dnd2024:creatures/wight
-      mummy:
-        key: dnd2024:creatures/mummy
-splat_contracts:
-- id: dnd2024:spell_create_undead
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    targets:
-      type: participant_list
-      required: true
-    locations:
-      required: false
-      type: location_list
-    campaign:
-      required: false
-      type: campaign
-    choices:
-      required: false
-      type: choice
-    items:
-      required: false
-      type: item_list
-  outputs:
-  - effects
-  - participants
-  - items
-  events:
-  - spell.cast_completed
-  - rest.completed
-  - movement.completed
-  - time.elapsed
-  capabilities:
-  - spellcasting
-  - effects
-  - spatial_relationships
-  - participant_lifecycle
-  - inventory
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: 536e13662c32e24f5f4a6d137e9efd85f4253af4d2e24e9153a6427f293e9cd6
-  source_path: builtin/srd-5.2.1/spell/create_undead.md
-  pages:
-  - 121
-  engine_gaps: &id001
-  - dnd2024:spell_create_undead
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_3.md
-  specification_sha256: 1688dec0394fe25426a527e3e155cea808e7f3c383e003921fe9b7949f4335ff
-splat_clauses:
-- key: source_rules
-  text: '# Create Undead Level 6 Necromancy (Cleric, Warlock, Wizard) Casting Time: 1 minute Range: 10
-    feet Components: V, S, M (one 150+ GP black onyx stone for each corpse) Duration: Instantaneous You
-    can cast this spell only at night. Choose up to three corpses of Medium or Small Humanoids within
-    range. Each one becomes a Ghoul under your control (see “Monsters” for its stat block). As a Bonus
-    Action on each of your turns, you can mentally command any creature you animated with this spell if
-    the creature is within 120 feet of you (if you control multiple creatures, you can command any of
-    them at the same time, issuing the same command to them). You decide what action the creature will
-    take and where it will move on its next turn, or you can issue a general command, such as to guard
-    a particular place. If you issue no commands, the creature takes the Dodge action and moves only to
-    avoid harm. Once given an order, the creature continues to follow the order until its task is complete.
-    The creature is under your control for 24 hours, after which it stops obeying any command you’ve given
-    it. To maintain control of the creature for another 24 hours, you must cast this spell on the creature
-    before the current 24-hour period ends. This use of the spell reasserts your control over up to three
-    creatures you have animated with this spell rather than animating new ones. Using a Higher-Level Spell
-    Slot. If you use a level 7 spell slot, you can animate or reassert control over four Ghouls. If you
-    use a level 8 spell slot, you can animate or reassert control over five Ghouls or two Ghasts or Wights.
-    If you use a level 9 spell slot, you can animate or reassert control over six Ghouls, three Ghasts
-    or Wights, or two Mummies. See “Monsters” for these stat blocks.'
-  sha256: 12bbf976f1baea7347bfd480df0cfb505948a7fad5501fb56016ce0f8f4e56ed
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Create Undead
+
+## Source text
 
 <!-- SRD page 121 -->
 
@@ -221,3 +58,145 @@ Ghouls, three Ghasts or Wights, or two Mummies.\
 See “Monsters” for these stat blocks.\
 
 Original layout: [[../../srd-5.2.1/pages/121|page 121]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 6 ` |
+| ` school ` | ` necromancy ` |
+| ` classes ` | ` ["cleric", "warlock", "wizard"] ` |
+| ` components ` | ` ["verbal", "somatic", "material"] ` |
+| ` concentration ` | ` false ` |
+| ` duration ` | ` Instantaneous ` |
+| ` casting_time ` | ` 1 minute ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 10 ` |
+
+### Material
+
+<!-- splat:values path=splat_spell/material -->
+
+| Field | Value |
+| --- | --- |
+| ` description ` | ` one 150+ GP black onyx stone for each corpse ` |
+| ` consumed ` | ` false ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/create_undead ` |
+| ` implementation ` | ` dnd2024:spell_create_undead ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` modes ` | ` ["animate", "reassert_control"] ` |
+
+#### Requires
+
+<!-- splat:values path=splat_rule/parameters/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` time ` | ` night ` |
+
+#### Targets
+
+<!-- splat:yaml path=splat_rule/parameters/targets -->
+
+```yaml
+animate:
+  kind: corpse
+  former_type: humanoid
+  sizes:
+  - medium
+  - small
+  within_spell_range: true
+reassert_control:
+  kind: creature_animated_by_this_spell
+  control_not_expired: true
+  within_spell_range: true
+```
+
+#### Slot options
+
+<!-- splat:yaml path=splat_rule/parameters/slot_options -->
+
+```yaml
+'6':
+- kind: ghoul
+  maximum: 3
+'7':
+- kind: ghoul
+  maximum: 4
+'8':
+- kind: ghoul
+  maximum: 5
+- kinds:
+  - ghast
+  - wight
+  maximum: 2
+'9':
+- kind: ghoul
+  maximum: 6
+- kinds:
+  - ghast
+  - wight
+  maximum: 3
+- kind: mummy
+  maximum: 2
+```
+
+#### Control
+
+<!-- splat:yaml path=splat_rule/parameters/control -->
+
+```yaml
+duration_hours: 24
+renew_duration_hours: 24
+expiry: stop_obeying_orders
+command:
+  cost: bonus_action
+  event: caster_turn
+  range_feet: 120
+  communication: mental
+  multiple_targets_same_command: true
+  choices:
+  - next_turn_action_and_movement
+  - general_task
+  persists_until: task_complete
+no_command:
+  action: dodge
+  movement: avoid_harm_only
+```
+
+#### Stat blocks
+
+<!-- splat:yaml path=splat_rule/parameters/stat_blocks -->
+
+```yaml
+ghoul:
+  key: dnd2024:creatures/ghoul
+ghast:
+  key: dnd2024:creatures/ghast
+wight:
+  key: dnd2024:creatures/wight
+mummy:
+  key: dnd2024:creatures/mummy
+```

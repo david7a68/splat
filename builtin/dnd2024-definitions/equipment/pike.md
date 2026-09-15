@@ -10,132 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 91
   url: https://www.dndbeyond.com/srd
-splat_item:
-  damage:
-    expression: 1d10
-    type: piercing
-  properties_text: Heavy, Reach, Two-Handed
-  mastery: push
-  weapon_category: martial melee
-  price:
-    value: 5
-    unit: gp
-  mass:
-    value: 18.0
-    unit: lb
-  category: weapon
-splat_rule:
-  mechanic: dnd2024:equipment/pike
-  implementation: dnd2024:equipment_pike
-  parameters:
-    weapon_category: martial_melee
-    damage:
-      expression: 1d10
-      type: piercing
-      amount:
-        dice:
-          count: 1
-          sides: 10
-        bonus: 0
-    properties:
-    - id: heavy
-      rule:
-        key: dnd2024:rules/weapons_heavy
-      required_ability: strength
-      minimum_score: 13
-      below_minimum_attack_mode: disadvantage
-    - id: reach
-      rule:
-        key: dnd2024:rules/weapons_reach
-      reach_bonus_ft: 5
-      applies_to:
-      - attacks
-      - opportunity_attack_reach
-    - id: two_handed
-      rule:
-        key: dnd2024:rules/weapons_two_handed
-      hands_to_attack: 2
-    attack:
-      proficiency_bonus_if_proficient: true
-      base_ability: strength
-      normal_hit_damage_ability_modifier: attack_ability_modifier
-    mastery:
-      property: push
-      rule:
-        key: dnd2024:rules/weapons_push
-      requires_weapon_mastery_feature_for_this_weapon: true
-      automatic_from_weapon_proficiency: false
-      parameters:
-        trigger: hit_creature
-        optional: true
-        maximum_target_size: large
-        push_maximum_ft: 10
-        direction: straight_away_from_attacker
-    application:
-      actor: equipper
-      item: equipped_instance
-      inactive_if_not_equipped: true
-splat_contracts:
-- id: dnd2024:equipment_pike
-  inputs:
-    actor:
-      type: participant
-      required: true
-    item:
-      type: item_instance
-      required: true
-    target:
-      required: false
-      type: participant
-    event:
-      type: event
-      required: true
-    choices:
-      required: false
-      type: choice
-  outputs:
-  - attack_options
-  - attack_modifiers
-  - damage
-  - mastery_effects
-  - ammunition_updates
-  events:
-  - attack.pending
-  - attack.hit
-  - attack.miss
-  - damage.resolved
-  - combat.ended
-  capabilities:
-  - weapon_properties
-  - weapon_mastery
-  - attacks
-  - effects
-  - ammunition
-splat_conversion:
-  status: specified
-  category: equipment
-  source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
-  source_path: builtin/srd-5.2.1/source.txt
-  pages:
-  - 91
-  engine_gaps: &id001
-  - dnd2024:equipment_pike
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/equipment_tables.md
-  specification_sha256: 12c46bdec6ee41f02666bf24d44cff5ad9105c658302fb1400662b6a0991b21b
-splat_clauses:
-- key: source_rules
-  text: '# Pike Source table, SRD 5.2.1 page 91. { "damage": { "expression": "1d10", "type": "piercing"
-    }, "properties_text": "Heavy, Reach, Two-Handed", "mastery": "push", "weapon_category": "martial melee",
-    "price": { "value": 5, "unit": "gp" }, "mass": { "value": 18.0, "unit": "lb" }, "category": "weapon"
-    }'
-  sha256: cda144b4f10a870c0b82332419fe59a2acd5d347ceb1e4c361a9b7bc05f6e8f8
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Pike
+
+## Source text
 
 Source table, SRD 5.2.1 page 91.
 
@@ -157,3 +36,144 @@ Source table, SRD 5.2.1 page 91.
   },
   "category": "weapon"
 }
+
+## Item
+
+<!-- splat:values path=splat_item -->
+
+| Field | Value |
+| --- | --- |
+| ` properties_text ` | ` Heavy, Reach, Two-Handed ` |
+| ` mastery ` | ` push ` |
+| ` weapon_category ` | ` martial melee ` |
+| ` category ` | ` weapon ` |
+
+### Damage
+
+<!-- splat:values path=splat_item/damage -->
+
+| Field | Value |
+| --- | --- |
+| ` expression ` | ` 1d10 ` |
+| ` type ` | ` piercing ` |
+
+### Price
+
+<!-- splat:values path=splat_item/price -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 5 ` |
+| ` unit ` | ` gp ` |
+
+### Mass
+
+<!-- splat:values path=splat_item/mass -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 18.0 ` |
+| ` unit ` | ` lb ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:equipment/pike ` |
+| ` implementation ` | ` dnd2024:equipment_pike ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` weapon_category ` | ` martial_melee ` |
+
+#### Damage
+
+<!-- splat:yaml path=splat_rule/parameters/damage -->
+
+```yaml
+expression: 1d10
+type: piercing
+amount:
+  dice:
+    count: 1
+    sides: 10
+  bonus: 0
+```
+
+#### Properties
+
+<!-- splat:rows path=splat_rule/parameters/properties -->
+
+| Row | id | required_ability | minimum_score | below_minimum_attack_mode | reach_bonus_ft | applies_to | hands_to_attack |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ` 0 ` | ` heavy ` | ` strength ` | ` 13 ` | ` disadvantage ` |  |  |  |
+| ` 1 ` | ` reach ` |  |  |  | ` 5 ` | ` ["attacks", "opportunity_attack_reach"] ` |  |
+| ` 2 ` | ` two_handed ` |  |  |  |  |  | ` 2 ` |
+
+##### Rule
+
+<!-- splat:values path=splat_rule/parameters/properties/0/rule -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:rules/weapons_heavy ` |
+
+##### Rule
+
+<!-- splat:values path=splat_rule/parameters/properties/1/rule -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:rules/weapons_reach ` |
+
+##### Rule
+
+<!-- splat:values path=splat_rule/parameters/properties/2/rule -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:rules/weapons_two_handed ` |
+
+#### Attack
+
+<!-- splat:values path=splat_rule/parameters/attack -->
+
+| Field | Value |
+| --- | --- |
+| ` proficiency_bonus_if_proficient ` | ` true ` |
+| ` base_ability ` | ` strength ` |
+| ` normal_hit_damage_ability_modifier ` | ` attack_ability_modifier ` |
+
+#### Mastery
+
+<!-- splat:yaml path=splat_rule/parameters/mastery -->
+
+```yaml
+property: push
+rule:
+  key: dnd2024:rules/weapons_push
+requires_weapon_mastery_feature_for_this_weapon: true
+automatic_from_weapon_proficiency: false
+parameters:
+  trigger: hit_creature
+  optional: true
+  maximum_target_size: large
+  push_maximum_ft: 10
+  direction: straight_away_from_attacker
+```
+
+#### Application
+
+<!-- splat:values path=splat_rule/parameters/application -->
+
+| Field | Value |
+| --- | --- |
+| ` actor ` | ` equipper ` |
+| ` item ` | ` equipped_instance ` |
+| ` inactive_if_not_equipped ` | ` true ` |

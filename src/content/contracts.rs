@@ -141,7 +141,6 @@ pub struct RegisteredContract {
     pub research_path: String,
     pub citations: Vec<String>,
     pub implemented: bool,
-    pub specification: Json,
     pub specification_sha256: String,
     pub schema: Shape,
 }
@@ -178,7 +177,7 @@ impl RegisteredContract {
         }
         let fields = specification(entry)?;
         self.schema.validate(&fields, &self.definition)?;
-        if fields != self.specification || fingerprint(&fields)? != self.specification_sha256 {
+        if fingerprint(&fields)? != self.specification_sha256 {
             return Err(format!(
                 "Contract specification mismatch: {}",
                 self.definition

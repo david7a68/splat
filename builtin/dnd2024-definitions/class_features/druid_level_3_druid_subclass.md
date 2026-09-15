@@ -10,66 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 43
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:class_features/druid_level_3_druid_subclass
-  parameters:
-    subclass_choice:
-      count: 1
-      class: druid
-      srd_options:
-      - key: dnd2024:subclasses/druid_circle_of_the_land
-    grant_features:
-      from: selected_subclass
-      when_required_class_level_lte_current: true
-      reevaluate_on_class_level_gain: true
-  implementation: dnd2024:class_features_druid_level_3_druid_subclass
-splat_contracts:
-- id: dnd2024:class_features_druid_level_3_druid_subclass
-  inputs:
-    actor:
-      type: participant
-      required: true
-    selections:
-      required: false
-      type: choice
-  outputs:
-  - feature_state
-  - choices
-  events:
-  - character.feature_gained
-  - character.level_gained
-  capabilities:
-  - character_choices
-  - class_progression
-splat_conversion:
-  status: specified
-  category: class_feature
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 43
-  engine_gaps: &id001
-  - dnd2024:class_features_druid_level_3_druid_subclass
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_1.md
-  specification_sha256: 30921eb8a303afa0d1f4408c13d952fdbfd605b1ca14d75e2a3c5b3ffa8230af
-  parent_name: Druid
-  line_span:
-    first: 3571
-    count: 7
-splat_clauses:
-- key: source_rules
-  text: '# Level 3: Druid Subclass You gain a Druid subclass of your choice. The Circle of the Land subclass
-    is detailed after this class’s description. A subclass is a specialization that grants you features
-    at certain Druid levels. For the rest of your career, you gain each of your subclass’s features that
-    are of your Druid level or lower.'
-  sha256: 35eebc5296807a33843f6c482c2a24d7cfd73de63d58026b7b3d8b578cda5976
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Level 3: Druid Subclass
+
+## Source text
 
 <!-- SRD page 43 -->
 
@@ -79,3 +24,35 @@ scription. A subclass is a specialization that grants\
 you features at certain Druid levels. For the rest of\
 your career, you gain each of your subclass’s fea-\
 tures that are of your Druid level or lower.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:class_features/druid_level_3_druid_subclass ` |
+| ` implementation ` | ` dnd2024:class_features_druid_level_3_druid_subclass ` |
+
+### Parameters
+
+#### Subclass choice
+
+<!-- splat:yaml path=splat_rule/parameters/subclass_choice -->
+
+```yaml
+count: 1
+class: druid
+srd_options:
+- key: dnd2024:subclasses/druid_circle_of_the_land
+```
+
+#### Grant features
+
+<!-- splat:values path=splat_rule/parameters/grant_features -->
+
+| Field | Value |
+| --- | --- |
+| ` from ` | ` selected_subclass ` |
+| ` when_required_class_level_lte_current ` | ` true ` |
+| ` reevaluate_on_class_level_gain ` | ` true ` |

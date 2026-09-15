@@ -10,30 +10,26 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 46
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/druid_druid_subclass
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 46
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: 085eeccad3d2dc66e10e6d137f8dbad6cd2759938d561874bd488a47c2a14f93
-  parent_name: Druid
-  line_span:
-    first: 3787
-    count: 1
-splat_clauses:
-- key: source_rules
-  text: '# Druid Subclass:'
-  sha256: 8e91d093e77518e22d90dad48f2f6a911706530377e70a28142cf8ce943e1f41
-  status: informational
 ---
 
 # Druid Subclass:
+
+## Source text
+
+
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/druid_druid_subclass ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

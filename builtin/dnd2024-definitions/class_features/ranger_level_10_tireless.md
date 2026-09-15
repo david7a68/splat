@@ -10,81 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 59
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:class_features/ranger_level_10_tireless
-  parameters:
-    temporary_hit_points:
-      action: magic
-      amount:
-        op: max
-        args:
-        - 1
-        - op: add
-          args:
-          - dice:
-              count: 1
-              sides: 8
-          - stat: abilities.wisdom.modifier
-      uses:
-        maximum:
-          op: max
-          args:
-          - 1
-          - stat: abilities.wisdom.modifier
-        recover:
-          event: rest.long_rest_completed
-          amount: all
-    short_rest:
-      exhaustion_reduction: 1
-      minimum_exhaustion: 0
-  implementation: dnd2024:class_features_ranger_level_10_tireless
-splat_contracts:
-- id: dnd2024:class_features_ranger_level_10_tireless
-  inputs:
-    actor:
-      type: participant
-      required: true
-  outputs:
-  - feature_state
-  - resource_changes
-  events:
-  - action.magic
-  - rest.short_rest_completed
-  capabilities:
-  - temporary_hit_points
-  - resources
-  - exhaustion
-splat_conversion:
-  status: specified
-  category: class_feature
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 59
-  engine_gaps: &id001
-  - dnd2024:class_features_ranger_level_10_tireless
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_1.md
-  specification_sha256: f2681c2a656a1d46bc131b1b8c7c706e30d5e7fb9c01306ba8983b0e147ecda0
-  parent_name: Ranger
-  line_span:
-    first: 4975
-    count: 13
-splat_clauses:
-- key: source_rules
-  text: '# Level 10: Tireless Primal forces now help fuel you on your journeys, granting you the following
-    benefits. Temporary Hit Points. As a Magic action, you can give yourself a number of Temporary Hit
-    Points equal to 1d8 plus your Wisdom modifier (minimum of 1). You can use this action a number of
-    times equal to your Wisdom modifier (minimum of once), and you regain all expended uses when you finish
-    a Long Rest. Decrease Exhaustion. Whenever you finish a Short Rest, your Exhaustion level, if any,
-    decreases by 1.'
-  sha256: 14d355fc5479d88c07522177415ebff9dc88efcf16ff667c23d41f0013afb415
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Level 10: Tireless
+
+## Source text
 
 <!-- SRD page 59 -->
 
@@ -100,3 +30,50 @@ Long Rest.\
 Decrease Exhaustion. Whenever you finish a\
 Short Rest, your Exhaustion level, if any, decreases\
 by 1.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:class_features/ranger_level_10_tireless ` |
+| ` implementation ` | ` dnd2024:class_features_ranger_level_10_tireless ` |
+
+### Parameters
+
+#### Temporary hit points
+
+<!-- splat:yaml path=splat_rule/parameters/temporary_hit_points -->
+
+```yaml
+action: magic
+amount:
+  op: max
+  args:
+  - 1
+  - op: add
+    args:
+    - dice:
+        count: 1
+        sides: 8
+    - stat: abilities.wisdom.modifier
+uses:
+  maximum:
+    op: max
+    args:
+    - 1
+    - stat: abilities.wisdom.modifier
+  recover:
+    event: rest.long_rest_completed
+    amount: all
+```
+
+#### Short rest
+
+<!-- splat:values path=splat_rule/parameters/short_rest -->
+
+| Field | Value |
+| --- | --- |
+| ` exhaustion_reduction ` | ` 1 ` |
+| ` minimum_exhaustion ` | ` 0 ` |

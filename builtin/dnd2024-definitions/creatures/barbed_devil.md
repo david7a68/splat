@@ -10,326 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 262
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: medium
-  type: fiend
-  alignment: Lawful Evil
-  tags_text: (Devil)
-  movement_text: 30 ft., Climb 30 ft.
-  skills_text: Deception +5, Insight +5, Perception +8
-  resistances_text: Cold
-  immunities_text: Fire, Poison; Poisoned
-  senses_text: Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 18
-  languages_text: Infernal; telepathy 120 ft.
-  cr_text: 5 (XP 1,800; PB +3)
-  hit_points_text: 110 (13d8 + 52)
-splat_stats:
-  strength:
-    value: 16
-  save_strength:
-    value: 6
-  dexterity:
-    value: 17
-  save_dexterity:
-    value: 3
-  constitution:
-    value: 18
-  save_constitution:
-    value: 7
-  intelligence:
-    value: 12
-  save_intelligence:
-    value: 1
-  wisdom:
-    value: 14
-  save_wisdom:
-    value: 5
-  charisma:
-    value: 14
-  save_charisma:
-    value: 5
-  armor_class:
-    value: 15
-  max_hp:
-    value: 110
-  initiative:
-    value: 3
-  speed:
-    value: 30
-    unit: ft
-  climb_speed:
-    value: 30
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/barbed_devil
-  implementation: dnd2024:creature_barbed_devil
-  parameters:
-    features:
-      magic_resistance:
-        economy: passive
-        advantage:
-          roll: saving_throw
-          against:
-          - spell
-          - magical_effect
-      claws:
-        economy: action
-        op: attack
-        attack_modes:
-        - melee
-        attack_bonus: 6
-        targets:
-          count: 1
-        hit:
-        - op: damage
-          average: 10
-          amount:
-            dice:
-              count: 2
-              sides: 6
-            add: 3
-          damage_type: piercing
-        - op: if
-          test:
-            target_kind: creature
-            target_size_max: large
-          then:
-          - op: condition
-            condition: grappled
-            escape_dc: 13
-            source: self
-            appendages:
-              kind: claw
-              available: 2
-              used: 2
-        reach_feet: 5
-      tail:
-        economy: action
-        op: attack
-        attack_modes:
-        - melee
-        attack_bonus: 6
-        targets:
-          count: 1
-        hit:
-        - op: damage
-          average: 14
-          amount:
-            dice:
-              count: 2
-              sides: 10
-            add: 3
-          damage_type: slashing
-        reach_feet: 10
-      hurl_flame:
-        economy: action
-        op: attack
-        attack_modes:
-        - ranged
-        attack_bonus: 5
-        targets:
-          count: 1
-        hit:
-        - op: damage
-          average: 17
-          amount:
-            dice:
-              count: 5
-              sides: 6
-            add: 0
-          damage_type: fire
-        - op: if
-          test:
-            target_kind: object
-            flammable: true
-            worn: false
-            carried: false
-          then:
-          - op: ignite
-        range_feet: 150
-      multiattack:
-        economy: action
-        op: choose_sequence
-        choices:
-        - - op: use_feature
-            feature: claws
-            count: 1
-          - op: use_feature
-            feature: tail
-            count: 1
-        - - op: use_feature
-            feature: hurl_flame
-            count: 2
-      diabolical_restoration:
-        economy: passive
-        resource:
-          capacity: 1
-          recovery:
-          - long_rest
-          cost: 1
-        trigger: self.died
-        requires:
-          death_plane_not: nine_hells
-        op: revive
-        new_body: true
-        old_body: disappears
-        delay:
-          seconds: 0
-        hit_points: maximum
-        destination:
-          plane: nine_hells
-          location_choice: gm
-      barbed_hide:
-        economy: passive
-        trigger: self.turn.start
-        targets:
-          kind: creature
-          relation_any:
-          - grappled_by_self
-          - grappling_self
-          count: all
-        effects:
-        - op: damage
-          average: 5
-          amount:
-            dice:
-              count: 1
-              sides: 10
-            add: 0
-          damage_type: piercing
-    skill_totals:
-      deception: 5
-      insight: 5
-      perception: 8
-    defenses:
-      resistances:
-        damage_types:
-        - cold
-      immunities:
-        damage_types:
-        - fire
-        - poison
-        conditions:
-        - poisoned
-    senses:
-      passive_perception: 18
-      special:
-      - sense: darkvision
-        range_feet: 120
-        magical_darkness_unimpeded: true
-    communication:
-      speaks:
-      - infernal
-      understands:
-      - infernal
-      telepathy:
-        range_feet: 120
-    stat_block_conventions:
-      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
-      save_dc: supplied_total
-      damage_mode_choice:
-      - fixed_average
-      - rolled_dice
-      condition_source: self
-      multiattack_child_economy_cost: 0
-      multiattack_child_resource_costs_retained: true
-      spellcasting:
-        default_level: spell_minimum
-        spell_slots_expended: false
-        required_materials: available
-        casting_time_at_least_one_minute:
-          uses_normal_casting_duration: true
-          magic_action_each_turn: true
-          concentration_required: true
-      geometry_assumptions:
-        chooser: gm
-        supplies:
-        - range
-        - visibility
-        - line_of_sight
-        - area_membership
-        - reachable_locations
-        - unoccupied_locations
-        - terrain
-        - plane
-        - form_appearance
-splat_contracts:
-- id: dnd2024:creature_barbed_devil
-  inputs:
-    self:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    feature:
-      type: choice
-      required: true
-    event:
-      required: false
-      type: event
-    choices:
-      required: false
-      type: choice
-    resolution:
-      required: false
-      type: resolution
-    campaign:
-      required: false
-      type: campaign
-  outputs:
-  - resolved_feature
-  - effects
-  - resource_changes
-  events:
-  - self.died
-  - self.turn.start
-  capabilities:
-  - action_economy
-  - creature_rules
-  - dice
-  - effects
-  - grappling
-  - resources
-  - targeting
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: e0234b167e18b365821fb783fec40e1e6d68e90bec785e195540338ea4b5674a
-  source_path: builtin/srd-5.2.1/creature/barbed_devil.md
-  pages:
-  - 262
-  engine_gaps: &id001
-  - dnd2024:creature_barbed_devil
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/creatures_2.md
-  specification_sha256: ac81ae4868bcdc18045b36971a11ec70ee5e36a9f9f276369bfc67d86a254c23
-splat_clauses:
-- key: source_rules
-  text: '# Barbed Devil Medium Fiend (Devil), Lawful Evil AC 15 Initiative +3 (13) HP 110 (13d8 + 52)
-    Speed 30 ft., Climb 30 ft. MOD SAVE MOD SAVE MOD SAVE Str 16 +3 +6 Dex 17 +3 +3 Con 18 +4 +7 Int 12
-    +1 +1 Wis 14 +2 +5 Cha 14 +2 +5 Skills Deception +5, Insight +5, Perception +8 Resistances Cold Immunities
-    Fire, Poison; Poisoned Senses Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception
-    18 Languages Infernal; telepathy 120 ft. CR 5 (XP 1,800; PB +3) ### Traits Barbed Hide. At the start
-    of each of its turns, the devil deals 5 (1d10) Piercing damage to any creature it is grappling or
-    any creature grappling it. Diabolical Restoration. If the devil dies outside the Nine Hells, its body
-    disappears in sulfurous smoke, and it gains a new body instantly, reviving with all its Hit Points
-    somewhere in the Nine Hells. Magic Resistance. The devil has Advantage on saving throws against spells
-    and other magical effects. ### Actions Multiattack. The devil makes one Claws attack and one Tail
-    attack, or it makes two Hurl Flame attacks. Claws. Melee Attack Roll: +6, reach 5 ft. Hit: 10 (2d6
-    + 3) Piercing damage. If the target is a Large or smaller creature, it has the Grappled condition
-    (escape DC 13) from both claws. Tail. Melee Attack Roll: +6, reach 10 ft. Hit: 14 (2d10 + 3) Slashing
-    damage. Hurl Flame. Ranged Attack Roll: +5, range 150 ft. Hit: 17 (5d6) Fire damage. If the target
-    is a flammable object that isn’t being worn or carried, it starts burning.'
-  sha256: ce0e62b0bacc1b76068d0c626265120ab122a2bc5db772b9a4f2b98b96a9ec70
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Barbed Devil
+
+## Source text
 
 <!-- SRD page 262 -->
 
@@ -375,3 +60,339 @@ Hurl Flame. Ranged Attack Roll: +5, range 150 ft. Hit:\
 that isn’t being worn or carried, it starts burning.\
 
 Original layout: [[../../srd-5.2.1/pages/262|page 262]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` medium ` |
+| ` type ` | ` fiend ` |
+| ` alignment ` | ` Lawful Evil ` |
+| ` tags_text ` | ` (Devil) ` |
+| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
+| ` skills_text ` | ` Deception +5, Insight +5, Perception +8 ` |
+| ` resistances_text ` | ` Cold ` |
+| ` immunities_text ` | ` Fire, Poison; Poisoned ` |
+| ` senses_text ` | ` Darkvision 120 ft. (unimpeded by magical Darkness); Passive Perception 18 ` |
+| ` languages_text ` | ` Infernal; telepathy 120 ft. ` |
+| ` cr_text ` | ` 5 (XP 1,800; PB +3) ` |
+| ` hit_points_text ` | ` 110 (13d8 + 52) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 16 ` | ` 6 ` |
+| ` Dexterity ` | ` 17 ` | ` 3 ` |
+| ` Constitution ` | ` 18 ` | ` 7 ` |
+| ` Intelligence ` | ` 12 ` | ` 1 ` |
+| ` Wisdom ` | ` 14 ` | ` 5 ` |
+| ` Charisma ` | ` 14 ` | ` 5 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 15 ` |  |
+| ` max_hp ` | ` 110 ` |  |
+| ` initiative ` | ` 3 ` |  |
+| ` speed ` | ` 30 ` | ` ft ` |
+| ` climb_speed ` | ` 30 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/barbed_devil ` |
+| ` implementation ` | ` dnd2024:creature_barbed_devil ` |
+
+### Parameters
+
+#### Features
+
+##### Magic resistance
+
+<!-- splat:yaml path=splat_rule/parameters/features/magic_resistance -->
+
+```yaml
+economy: passive
+advantage:
+  roll: saving_throw
+  against:
+  - spell
+  - magical_effect
+```
+
+##### Claws
+
+<!-- splat:yaml path=splat_rule/parameters/features/claws -->
+
+```yaml
+economy: action
+op: attack
+attack_modes:
+- melee
+attack_bonus: 6
+targets:
+  count: 1
+hit:
+- op: damage
+  average: 10
+  amount:
+    dice:
+      count: 2
+      sides: 6
+    add: 3
+  damage_type: piercing
+- op: if
+  test:
+    target_kind: creature
+    target_size_max: large
+  then:
+  - op: condition
+    condition: grappled
+    escape_dc: 13
+    source: self
+    appendages:
+      kind: claw
+      available: 2
+      used: 2
+reach_feet: 5
+```
+
+##### Tail
+
+<!-- splat:yaml path=splat_rule/parameters/features/tail -->
+
+```yaml
+economy: action
+op: attack
+attack_modes:
+- melee
+attack_bonus: 6
+targets:
+  count: 1
+hit:
+- op: damage
+  average: 14
+  amount:
+    dice:
+      count: 2
+      sides: 10
+    add: 3
+  damage_type: slashing
+reach_feet: 10
+```
+
+##### Hurl flame
+
+<!-- splat:yaml path=splat_rule/parameters/features/hurl_flame -->
+
+```yaml
+economy: action
+op: attack
+attack_modes:
+- ranged
+attack_bonus: 5
+targets:
+  count: 1
+hit:
+- op: damage
+  average: 17
+  amount:
+    dice:
+      count: 5
+      sides: 6
+    add: 0
+  damage_type: fire
+- op: if
+  test:
+    target_kind: object
+    flammable: true
+    worn: false
+    carried: false
+  then:
+  - op: ignite
+range_feet: 150
+```
+
+##### Multiattack
+
+<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+
+```yaml
+economy: action
+op: choose_sequence
+choices:
+- - op: use_feature
+    feature: claws
+    count: 1
+  - op: use_feature
+    feature: tail
+    count: 1
+- - op: use_feature
+    feature: hurl_flame
+    count: 2
+```
+
+##### Diabolical restoration
+
+<!-- splat:yaml path=splat_rule/parameters/features/diabolical_restoration -->
+
+```yaml
+economy: passive
+resource:
+  capacity: 1
+  recovery:
+  - long_rest
+  cost: 1
+trigger: self.died
+requires:
+  death_plane_not: nine_hells
+op: revive
+new_body: true
+old_body: disappears
+delay:
+  seconds: 0
+hit_points: maximum
+destination:
+  plane: nine_hells
+  location_choice: gm
+```
+
+##### Barbed hide
+
+<!-- splat:yaml path=splat_rule/parameters/features/barbed_hide -->
+
+```yaml
+economy: passive
+trigger: self.turn.start
+targets:
+  kind: creature
+  relation_any:
+  - grappled_by_self
+  - grappling_self
+  count: all
+effects:
+- op: damage
+  average: 5
+  amount:
+    dice:
+      count: 1
+      sides: 10
+    add: 0
+  damage_type: piercing
+```
+
+#### Skill totals
+
+<!-- splat:values path=splat_rule/parameters/skill_totals -->
+
+| Field | Value |
+| --- | --- |
+| ` deception ` | ` 5 ` |
+| ` insight ` | ` 5 ` |
+| ` perception ` | ` 8 ` |
+
+#### Defenses
+
+##### Resistances
+
+<!-- splat:values path=splat_rule/parameters/defenses/resistances -->
+
+| Field | Value |
+| --- | --- |
+| ` damage_types ` | ` ["cold"] ` |
+
+##### Immunities
+
+<!-- splat:values path=splat_rule/parameters/defenses/immunities -->
+
+| Field | Value |
+| --- | --- |
+| ` damage_types ` | ` ["fire", "poison"] ` |
+| ` conditions ` | ` ["poisoned"] ` |
+
+#### Senses
+
+<!-- splat:values path=splat_rule/parameters/senses -->
+
+| Field | Value |
+| --- | --- |
+| ` passive_perception ` | ` 18 ` |
+
+##### Special
+
+<!-- splat:rows path=splat_rule/parameters/senses/special -->
+
+| Row | sense | range_feet | magical_darkness_unimpeded |
+| --- | --- | --- | --- |
+| ` 0 ` | ` darkvision ` | ` 120 ` | ` true ` |
+
+#### Communication
+
+<!-- splat:values path=splat_rule/parameters/communication -->
+
+| Field | Value |
+| --- | --- |
+| ` speaks ` | ` ["infernal"] ` |
+| ` understands ` | ` ["infernal"] ` |
+
+##### Telepathy
+
+<!-- splat:values path=splat_rule/parameters/communication/telepathy -->
+
+| Field | Value |
+| --- | --- |
+| ` range_feet ` | ` 120 ` |
+
+#### Stat block conventions
+
+<!-- splat:yaml path=splat_rule/parameters/stat_block_conventions -->
+
+```yaml
+attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+save_dc: supplied_total
+damage_mode_choice:
+- fixed_average
+- rolled_dice
+condition_source: self
+multiattack_child_economy_cost: 0
+multiattack_child_resource_costs_retained: true
+spellcasting:
+  default_level: spell_minimum
+  spell_slots_expended: false
+  required_materials: available
+  casting_time_at_least_one_minute:
+    uses_normal_casting_duration: true
+    magic_action_each_turn: true
+    concentration_required: true
+geometry_assumptions:
+  chooser: gm
+  supplies:
+  - range
+  - visibility
+  - line_of_sight
+  - area_membership
+  - reachable_locations
+  - unoccupied_locations
+  - terrain
+  - plane
+  - form_appearance
+```

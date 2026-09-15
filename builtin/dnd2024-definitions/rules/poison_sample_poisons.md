@@ -10,35 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 197
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/poison_sample_poisons
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 197
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: 478a835330254f75f488d2e308ff4d3e8b192928031bd22775f51ba9bbb04d45
-  parent_name: Poison
-  line_span:
-    first: 9819
-    count: 6
-splat_clauses:
-- key: source_rules
-  text: '# Sample Poisons Example poisons are detailed here in alphabetical order. Each poison’s description
-    includes the suggested price for a single dose of the poison, its type (contact, ingested, inhaled,
-    or injury), and a description of the poison’s debilitating effects.'
-  sha256: a5990f6b3482c7b223362f1f9558060c09b545ecb10c95a9242f8ca7a58d1680
-  status: informational
 ---
 
 # Sample Poisons
+
+## Source text
 
 <!-- SRD page 197 -->
 
@@ -47,3 +23,19 @@ order. Each poison’s description includes the sug-\
 gested price for a single dose of the poison, its type\
 (contact, ingested, inhaled, or injury), and a descrip-\
 tion of the poison’s debilitating effects.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/poison_sample_poisons ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

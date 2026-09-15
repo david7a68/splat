@@ -10,75 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 190
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/truesight
-  parameters:
-    range: feature_specified
-    see_in_darkness:
-    - normal
-    - magical
-    see_invisible:
-    - creatures
-    - objects
-    visual_illusions:
-      appearance: transparent
-      saves: automatic_success
-    magical_transformations:
-      discern_true_form: true
-      requires_seeing_target: true
-      target_types:
-      - creature
-      - object
-    see_into_plane: ethereal
-  implementation: dnd2024:glossary_truesight
-splat_contracts:
-- id: dnd2024:glossary_truesight
-  inputs:
-    subject:
-      type: participant
-      required: true
-    target:
-      type: object
-      required: true
-    range_feet:
-      type: number
-      required: true
-  outputs:
-  - enhanced_vision
-  - save_result
-  events:
-  - saving_throw.pending
-  capabilities:
-  - senses
-  - illusions
-  - checks
-splat_conversion:
-  status: specified
-  category: glossary
-  source_sha256: d00741f08208b000bc40fd60a93edce79b0e489f78791449ed94f1afeea7c6a1
-  source_path: builtin/srd-5.2.1/glossary/truesight.md
-  pages:
-  - 190
-  engine_gaps: &id001
-  - dnd2024:glossary_truesight
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: 3131058424b07862819b127286ec29c55280ce2907fe3e8b23c00bc00526758e
-splat_clauses:
-- key: source_rules
-  text: '# Truesight If you have Truesight, your vision is enhanced within a specified range. Within that
-    range, your vision pierces through the following: Darkness. You can see in normal and magical Darkness.
-    Invisibility. You see creatures and objects that have the Invisible condition. Visual Illusions. Visual
-    illusions appear transparent to you, and you automatically succeed on saving throws against them.
-    Transformations. You discern the true form of any creature or object you see that has been transformed
-    by magic. Ethereal Plane. You see into the Ethereal Plane.'
-  sha256: 6152a9a7ed266346e2de434754bfe7b571b55451196902d25beb17d511eb6557
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Truesight
+
+## Source text
 
 <!-- SRD page 190 -->
 
@@ -98,3 +34,42 @@ formed by magic.\
 Ethereal Plane. You see into the Ethereal Plane.\
 
 Original layout: [[../../srd-5.2.1/pages/190|page 190]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/truesight ` |
+| ` implementation ` | ` dnd2024:glossary_truesight ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` range ` | ` feature_specified ` |
+| ` see_in_darkness ` | ` ["normal", "magical"] ` |
+| ` see_invisible ` | ` ["creatures", "objects"] ` |
+| ` see_into_plane ` | ` ethereal ` |
+
+#### Visual illusions
+
+<!-- splat:values path=splat_rule/parameters/visual_illusions -->
+
+| Field | Value |
+| --- | --- |
+| ` appearance ` | ` transparent ` |
+| ` saves ` | ` automatic_success ` |
+
+#### Magical transformations
+
+<!-- splat:values path=splat_rule/parameters/magical_transformations -->
+
+| Field | Value |
+| --- | --- |
+| ` discern_true_form ` | ` true ` |
+| ` requires_seeing_target ` | ` true ` |
+| ` target_types ` | ` ["creature", "object"] ` |

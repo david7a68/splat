@@ -10,49 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 178
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/cantrip
-  parameters:
-    spell_level: 0
-    spell_slot_expended: false
-  implementation: dnd2024:glossary_cantrip
-splat_contracts:
-- id: dnd2024:glossary_cantrip
-  inputs:
-    caster:
-      type: participant
-      required: true
-    spell:
-      type: definition
-      required: true
-  outputs:
-  - slot_cost
-  events:
-  - spell.cast_pending
-  capabilities:
-  - spellcasting
-splat_conversion:
-  status: specified
-  category: glossary
-  source_sha256: 8af93e7c8444407c55684ea57b5de4b33c463673dc1809076c6b5c07e5925f18
-  source_path: builtin/srd-5.2.1/glossary/cantrip.md
-  pages:
-  - 178
-  engine_gaps: &id001
-  - dnd2024:glossary_cantrip
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: 480374fb5629fde04774585ab840b68bac833b0126418e0341490967bf8323bf
-splat_clauses:
-- key: source_rules
-  text: '# Cantrip A cantrip is a level 0 spell, which is cast without a spell slot. See also “Spells.”'
-  sha256: a14d97c1f742448858390bc526df9da378c815baf1739369efbc362749ba0ceb
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Cantrip
+
+## Source text
 
 <!-- SRD page 178 -->
 
@@ -60,3 +22,21 @@ A cantrip is a level 0 spell, which is cast without a\
 spell slot. See also “Spells.”\
 
 Original layout: [[../../srd-5.2.1/pages/178|page 178]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/cantrip ` |
+| ` implementation ` | ` dnd2024:glossary_cantrip ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` spell_level ` | ` 0 ` |
+| ` spell_slot_expended ` | ` false ` |

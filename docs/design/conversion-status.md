@@ -1,12 +1,15 @@
 # Definition conversion and rule contracts
 
-These schema-1 fields distinguish completed authoring, informational source,
+The [Markdown layout](markdown-layout.md) defines body tables, local YAML blocks
+and the single-authority rule. These schema-1 fields distinguish completed authoring, informational source,
 and unavailable engine behavior. See the [SRD report](../srd-definitions.md)
 for the source inventory and current results.
 
 ## Conversion metadata
 
-`splat_conversion` is a closed mapping:
+`splat_conversion` is a closed in-memory mapping. Generated catalogue notes
+store these fields once in `coverage.json`; catalogue loading attaches them
+for verification:
 
 | Field | Meaning |
 | --- | --- |
@@ -29,11 +32,10 @@ required implementations. It is reserved for headings, vocabulary and advice
 without mechanical behavior. The engine-gap set equals
 `splat_requires_mechanics`; each declared implementation must occur in it.
 
-`splat_clauses` records `{key, text, sha256, status}`. Local keys are unique;
-status is `needs_semantic_conversion`, `contract_specified`, or `informational`.
-Unresolved clauses must occur in the conversion-gap list. Source prose is not
-executed. The catalogue retains one whole-source accounting clause per entry;
-typed contract parameters, not that prose field, carry the converted behavior.
+Legacy `splat_clauses` records `{key, text, sha256, status}` remain readable and
+validated when present. Generated notes omit this duplicated source text. The
+source excerpt appears once in the body; the inventory binds its file hash to
+the pinned source. Typed fields carry behavior, never source prose.
 
 ## Typed rule interfaces
 
@@ -43,7 +45,8 @@ owns the source's ordering and state transitions. Its parameters must encode
 the behavior, including exceptions and choices. A script, source-text wrapper
 or arbitrary foreign-system formula is not an adapter.
 
-`splat_contracts` declares interfaces with exactly these fields:
+`splat_contracts` is attached from the generated registry during catalogue
+loading. Its interfaces have exactly these fields:
 
 - `id`: registered implementation name.
 - `inputs`: names mapped to `{type, required}`. Types include participants,
@@ -61,8 +64,8 @@ Hydra heads and item spell storage are not forced into one generic effect map.
 Geometry, source-authorized GM decisions and narrow unresolved source cases use
 explicit inputs with stated scope and constraints, never silent defaults.
 
-The generated registry retains each interface, its specification and a closed
-structural schema. Object fields are exact, arrays declare their permitted
+Registry format 2 retains each interface, a specification fingerprint and a
+closed structural schema. The specification itself lives in the note body. Object fields are exact, arrays declare their permitted
 record shapes, and primitive types are checked. An independent fingerprint
 binds the built-in definition to its reviewed specification. The registry
 always records `implemented: false`; content cannot register executable code.

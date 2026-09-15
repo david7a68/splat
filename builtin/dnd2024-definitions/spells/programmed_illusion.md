@@ -10,144 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 156
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 6
-  school: illusion
-  classes:
-  - bard
-  - wizard
-  components:
-  - verbal
-  - somatic
-  - material
-  concentration: false
-  duration: Until dispelled
-  casting_time: Action
-  ritual: false
-  range:
-    feet: 120
-  material:
-    description: jade dust worth 25+ GP
-    consumed: false
-splat_rule:
-  mechanic: dnd2024:spells/programmed_illusion
-  implementation: dnd2024:spell_programmed_illusion
-  parameters:
-    spell_lifetime:
-      concentration: false
-      until: dispelled_or_source_specific_end
-    illusion:
-      kinds:
-      - object
-      - creature
-      - visible_phenomenon
-      range_feet: 120
-      maximum_cube_side_feet: 30
-      initial_state: imperceptible
-      visual_behavior: caster_script_at_cast
-      sounds: caster_script_at_cast
-      performance_seconds_max: 300
-    trigger:
-      chooser: caster
-      timing: cast
-      modalities:
-      - visual
-      - audible
-      maximum_distance_from_area_feet: 30
-      condition_resolution: supplied_trigger_predicate
-    cycle:
-      on_trigger: perform_script
-      after_performance:
-        disappear: true
-        dormant_seconds: 600
-      after_dormancy: triggerable_again
-    physical_interaction:
-      objects_pass_through: true
-      reveals_illusion: true
-    examination:
-      economy: study_action
-      check:
-        ability: intelligence
-        skill: investigation
-        dc: spell_save_dc
-      success: discern_illusion
-    discerned:
-      image: see_through
-      noise: hollow
-    spatial_resolution:
-      source: supplied_world_geometry
-      unknown_facts: require_resolution
-      infer_unprovided_geometry: false
-splat_contracts:
-- id: dnd2024:spell_programmed_illusion
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    origin:
-      type: location
-      required: true
-    script:
-      type: choice
-      required: true
-    trigger:
-      type: choice
-      required: true
-    save_dc:
-      type: integer
-      required: true
-    spatial_facts:
-      required: false
-      type: resolution
-  outputs:
-  - effects
-  events:
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - illusions
-  - areas
-  - tests
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: 66e3168476f7fedadd077d75f15a11fc63263737506c2d1a34bbb5df730a5f63
-  source_path: builtin/srd-5.2.1/spell/programmed_illusion.md
-  pages:
-  - 156
-  engine_gaps: &id001
-  - dnd2024:spell_programmed_illusion
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_4.md
-  specification_sha256: 8e762b95bfa7f261530103b6b293b977fa64612040b993a825c48a382147d47a
-splat_clauses:
-- key: source_rules
-  text: '# Programmed Illusion Level 6 Illusion (Bard, Wizard) Casting Time: Action Range: 120 feet Components:
-    V, S, M (jade dust worth 25+ GP) Duration: Until dispelled You create an illusion of an object, a
-    creature, or some other visible phenomenon within range that activates when a specific trigger occurs.
-    The illusion is imperceptible until then. It must be no larger than a 30-foot Cube, and you decide
-    when you cast the spell how the illusion behaves and what sounds it makes. This scripted performance
-    can last up to 5 minutes. When the trigger you specify occurs, the illusion springs into existence
-    and performs in the manner you described. Once the illusion finishes performing, it disappears and
-    remains dormant for 10 minutes, after which the illusion can be activated again. The trigger can be
-    as general or as detailed as you like, though it must be based on visual or audible phenomena that
-    occur within 30 feet of the area. For example, you could create an illusion of yourself to appear
-    and warn off others who attempt to open a trapped door. Physical interaction with the image reveals
-    it to be illusory, since things can pass through it. A creature that takes the Study action to examine
-    the image can determine that it is an illusion with a successful Intelligence (Investigation) check
-    against your spell save DC. If a creature discerns the illusion for what it is, the creature can see
-    through the image, and any noise it makes sounds hollow to the creature.'
-  sha256: 78fcd384cf022956dd118f7c8965ad505096877ebaa962baaf0a1ae5c5349e50
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Programmed Illusion
+
+## Source text
 
 <!-- SRD page 156 -->
 
@@ -186,3 +53,134 @@ image, and any noise it makes sounds hollow to the\
 creature.\
 
 Original layout: [[../../srd-5.2.1/pages/156|page 156]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 6 ` |
+| ` school ` | ` illusion ` |
+| ` classes ` | ` ["bard", "wizard"] ` |
+| ` components ` | ` ["verbal", "somatic", "material"] ` |
+| ` concentration ` | ` false ` |
+| ` duration ` | ` Until dispelled ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 120 ` |
+
+### Material
+
+<!-- splat:values path=splat_spell/material -->
+
+| Field | Value |
+| --- | --- |
+| ` description ` | ` jade dust worth 25+ GP ` |
+| ` consumed ` | ` false ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/programmed_illusion ` |
+| ` implementation ` | ` dnd2024:spell_programmed_illusion ` |
+
+### Parameters
+
+#### Spell lifetime
+
+<!-- splat:values path=splat_rule/parameters/spell_lifetime -->
+
+| Field | Value |
+| --- | --- |
+| ` concentration ` | ` false ` |
+| ` until ` | ` dispelled_or_source_specific_end ` |
+
+#### Illusion
+
+<!-- splat:values path=splat_rule/parameters/illusion -->
+
+| Field | Value |
+| --- | --- |
+| ` kinds ` | ` ["object", "creature", "visible_phenomenon"] ` |
+| ` range_feet ` | ` 120 ` |
+| ` maximum_cube_side_feet ` | ` 30 ` |
+| ` initial_state ` | ` imperceptible ` |
+| ` visual_behavior ` | ` caster_script_at_cast ` |
+| ` sounds ` | ` caster_script_at_cast ` |
+| ` performance_seconds_max ` | ` 300 ` |
+
+#### Trigger
+
+<!-- splat:values path=splat_rule/parameters/trigger -->
+
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` caster ` |
+| ` timing ` | ` cast ` |
+| ` modalities ` | ` ["visual", "audible"] ` |
+| ` maximum_distance_from_area_feet ` | ` 30 ` |
+| ` condition_resolution ` | ` supplied_trigger_predicate ` |
+
+#### Cycle
+
+<!-- splat:yaml path=splat_rule/parameters/cycle -->
+
+```yaml
+on_trigger: perform_script
+after_performance:
+  disappear: true
+  dormant_seconds: 600
+after_dormancy: triggerable_again
+```
+
+#### Physical interaction
+
+<!-- splat:values path=splat_rule/parameters/physical_interaction -->
+
+| Field | Value |
+| --- | --- |
+| ` objects_pass_through ` | ` true ` |
+| ` reveals_illusion ` | ` true ` |
+
+#### Examination
+
+<!-- splat:yaml path=splat_rule/parameters/examination -->
+
+```yaml
+economy: study_action
+check:
+  ability: intelligence
+  skill: investigation
+  dc: spell_save_dc
+success: discern_illusion
+```
+
+#### Discerned
+
+<!-- splat:values path=splat_rule/parameters/discerned -->
+
+| Field | Value |
+| --- | --- |
+| ` image ` | ` see_through ` |
+| ` noise ` | ` hollow ` |
+
+#### Spatial resolution
+
+<!-- splat:values path=splat_rule/parameters/spatial_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` source ` | ` supplied_world_geometry ` |
+| ` unknown_facts ` | ` require_resolution ` |
+| ` infer_unprovided_geometry ` | ` false ` |

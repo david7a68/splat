@@ -10,30 +10,26 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 192
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/gameplay_toolbox
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 192
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: 7756bfc342ed4c6e5f08f0981f305f0a1cb88b5fca2b2aa178abca2ad22dbca0
-  parent_name: Gameplay Toolbox
-  line_span:
-    first: 9325
-    count: 1
-splat_clauses:
-- key: source_rules
-  text: '# Gameplay Toolbox'
-  sha256: 201b2087c605777a94d852ad636d8e7515547e7afd11f54e84146e6df8cda852
-  status: informational
 ---
 
 # Gameplay Toolbox
+
+## Source text
+
+
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/gameplay_toolbox ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

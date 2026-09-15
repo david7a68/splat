@@ -10,169 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 199, 200
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/traps_fire_casting_statue
-  parameters:
-    classification: deadly
-    base_levels:
-      min: 1
-      max: 4
-    triggers:
-    - pressure_plate_first_entry_on_turn
-    - turn_started_on_pressure_plate
-    duration: instantaneous
-    reset: next_turn_start
-    area:
-      shape: cone
-      length_ft: 15
-      origin: statue
-    save:
-      ability: dexterity
-      dc: 15
-    damage:
-      dice:
-        count: 2
-        sides: 10
-      average: 11
-      type: fire
-    success_damage: half_round_down
-    detect_magic:
-      aura: evocation
-      location: statue
-    examine_statue:
-      action: search
-      distance_max_ft: 5
-      ability: wisdom
-      skill: perception
-      dc: 10
-      success: reveal_glyph
-    decipher_glyph:
-      requires_glyph_found: true
-      action: study
-      ability: intelligence
-      skill: arcana
-      dc: 15
-      success: identify_fire_symbol
-    disarm_glyph:
-      requires_glyph_found: true
-      action_cost: 1
-      tool: sharp
-      operation: deface_glyph
-      result: trap_disarmed
-    examine_floor:
-      action: search
-      ability: wisdom
-      skill: perception
-      dc: 15
-      success: reveal_pressure_plate
-    block_pressure_plate:
-      object_choice:
-      - iron_spike
-      - similar_wedge
-      result: triggering_prevented
-    optional_level_scaling:
-    - levels:
-        min: 5
-        max: 10
-      damage:
-        dice:
-          count: 4
-          sides: 10
-        average: 22
-      cone_length_ft: 30
-    - levels:
-        min: 11
-        max: 16
-      damage:
-        dice:
-          count: 10
-          sides: 10
-        average: 55
-      cone_length_ft: 60
-    - levels:
-        min: 17
-        max: 20
-      damage:
-        dice:
-          count: 18
-          sides: 10
-        average: 99
-      cone_length_ft: 120
-  implementation: dnd2024:rules_traps_fire_casting_statue
-splat_contracts:
-- id: dnd2024:rules_traps_fire_casting_statue
-  inputs:
-    trap:
-      type: object
-      required: true
-    targets:
-      type: participant_list
-      required: true
-    interaction:
-      type: resolution
-      required: true
-    level_band:
-      type: choice
-      required: true
-  outputs:
-  - damage
-  - trap_state
-  - discovery
-  events:
-  - movement.entered
-  - turn.started
-  - action.search
-  - action.study
-  - action.disarm
-  capabilities:
-  - traps
-  - geometry
-  - damage
-  - checks
-  - saving_throws
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 199
-  - 200
-  engine_gaps: &id001
-  - dnd2024:rules_traps_fire_casting_statue
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: 0986e9d498d9a681f900f372e04d33d4f0c8d974b1b04663f7172b6e6aedceb8
-  parent_name: Traps
-  line_span:
-    first: 10034
-    count: 37
-splat_clauses:
-- key: source_rules
-  text: '# Fire-Casting Statue Deadly Trap (Levels 1–4) Trigger: A creature moves onto a pressure plate
-    Duration: Instantaneous, and the trap resets at the start of the next turn When a creature moves onto
-    this trap’s pressure plate for the first time on a turn or starts its turn there, a nearby statue
-    exhales a 15-foot Cone of magical flame. The statue can look like anything, such as a dragon or a
-    wizard. Each creature in the Cone must succeed on a DC 15 Dexterity saving throw, taking 11 (2d10)
-    Fire damage on a failed save or half as much damage on a successful one. Detect and Disarm. A Detect
-    Magic spell reveals an aura of Evocation magic around the statue. As a Search action, a creature within
-    5 feet of the statue can examine it and make a DC 10 Wisdom (Perception) check, detecting a tiny glyph
-    on the statue on a successful check. Once the glyph is found, a character can take a Study action
-    to examine it and make a DC 15 Intelligence (Arcana) check, ascertaining that the glyph means “fire”
-    on a successful check. As an action, a character can use a sharp tool to deface the glyph, which disarms
-    the trap. As a Search action, a creature can examine the section of floor that forms the pressure
-    plate and make a DC 15 Wisdom (Perception) check, detecting the pressure plate on a successful check.
-    Wedging an Iron Spike or similar object under the pressure plate prevents the trap from triggering.
-    At Higher Levels. You can scale the trap for higher levels by increasing the damage and the area of
-    effect, as shown in the following table. Levels Fire Damage Area of Effect 5–10 22 (4d10) 30-foot
-    Cone 11–16 55 (10d10) 60-foot Cone 17–20 99 (18d10) 120-foot Cone'
-  sha256: 65258ae83a0f6c4521231ee69110410ec339323682b4efddc2da1e7d2be85156
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Fire-Casting Statue
+
+## Source text
 
 <!-- SRD page 199 -->
 
@@ -215,3 +57,202 @@ Levels Fire Damage Area of Effect\
 5–10 22 (4d10) 30-foot Cone\
 11–16 55 (10d10) 60-foot Cone\
 17–20 99 (18d10) 120-foot Cone\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/traps_fire_casting_statue ` |
+| ` implementation ` | ` dnd2024:rules_traps_fire_casting_statue ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` classification ` | ` deadly ` |
+| ` triggers ` | ` ["pressure_plate_first_entry_on_turn", "turn_started_on_pressure_plate"] ` |
+| ` duration ` | ` instantaneous ` |
+| ` reset ` | ` next_turn_start ` |
+| ` success_damage ` | ` half_round_down ` |
+
+#### Base levels
+
+<!-- splat:values path=splat_rule/parameters/base_levels -->
+
+| Field | Value |
+| --- | --- |
+| ` min ` | ` 1 ` |
+| ` max ` | ` 4 ` |
+
+#### Area
+
+<!-- splat:values path=splat_rule/parameters/area -->
+
+| Field | Value |
+| --- | --- |
+| ` shape ` | ` cone ` |
+| ` length_ft ` | ` 15 ` |
+| ` origin ` | ` statue ` |
+
+#### Save
+
+<!-- splat:values path=splat_rule/parameters/save -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` dexterity ` |
+| ` dc ` | ` 15 ` |
+
+#### Damage
+
+<!-- splat:yaml path=splat_rule/parameters/damage -->
+
+```yaml
+dice:
+  count: 2
+  sides: 10
+average: 11
+type: fire
+```
+
+#### Detect magic
+
+<!-- splat:values path=splat_rule/parameters/detect_magic -->
+
+| Field | Value |
+| --- | --- |
+| ` aura ` | ` evocation ` |
+| ` location ` | ` statue ` |
+
+#### Examine statue
+
+<!-- splat:values path=splat_rule/parameters/examine_statue -->
+
+| Field | Value |
+| --- | --- |
+| ` action ` | ` search ` |
+| ` distance_max_ft ` | ` 5 ` |
+| ` ability ` | ` wisdom ` |
+| ` skill ` | ` perception ` |
+| ` dc ` | ` 10 ` |
+| ` success ` | ` reveal_glyph ` |
+
+#### Decipher glyph
+
+<!-- splat:values path=splat_rule/parameters/decipher_glyph -->
+
+| Field | Value |
+| --- | --- |
+| ` requires_glyph_found ` | ` true ` |
+| ` action ` | ` study ` |
+| ` ability ` | ` intelligence ` |
+| ` skill ` | ` arcana ` |
+| ` dc ` | ` 15 ` |
+| ` success ` | ` identify_fire_symbol ` |
+
+#### Disarm glyph
+
+<!-- splat:values path=splat_rule/parameters/disarm_glyph -->
+
+| Field | Value |
+| --- | --- |
+| ` requires_glyph_found ` | ` true ` |
+| ` action_cost ` | ` 1 ` |
+| ` tool ` | ` sharp ` |
+| ` operation ` | ` deface_glyph ` |
+| ` result ` | ` trap_disarmed ` |
+
+#### Examine floor
+
+<!-- splat:values path=splat_rule/parameters/examine_floor -->
+
+| Field | Value |
+| --- | --- |
+| ` action ` | ` search ` |
+| ` ability ` | ` wisdom ` |
+| ` skill ` | ` perception ` |
+| ` dc ` | ` 15 ` |
+| ` success ` | ` reveal_pressure_plate ` |
+
+#### Block pressure plate
+
+<!-- splat:values path=splat_rule/parameters/block_pressure_plate -->
+
+| Field | Value |
+| --- | --- |
+| ` object_choice ` | ` ["iron_spike", "similar_wedge"] ` |
+| ` result ` | ` triggering_prevented ` |
+
+#### Optional level scaling
+
+<!-- splat:rows path=splat_rule/parameters/optional_level_scaling -->
+
+| Row | cone_length_ft |
+| --- | --- |
+| ` 0 ` | ` 30 ` |
+| ` 1 ` | ` 60 ` |
+| ` 2 ` | ` 120 ` |
+
+##### Levels
+
+<!-- splat:values path=splat_rule/parameters/optional_level_scaling/0/levels -->
+
+| Field | Value |
+| --- | --- |
+| ` min ` | ` 5 ` |
+| ` max ` | ` 10 ` |
+
+##### Damage
+
+<!-- splat:yaml path=splat_rule/parameters/optional_level_scaling/0/damage -->
+
+```yaml
+dice:
+  count: 4
+  sides: 10
+average: 22
+```
+
+##### Levels
+
+<!-- splat:values path=splat_rule/parameters/optional_level_scaling/1/levels -->
+
+| Field | Value |
+| --- | --- |
+| ` min ` | ` 11 ` |
+| ` max ` | ` 16 ` |
+
+##### Damage
+
+<!-- splat:yaml path=splat_rule/parameters/optional_level_scaling/1/damage -->
+
+```yaml
+dice:
+  count: 10
+  sides: 10
+average: 55
+```
+
+##### Levels
+
+<!-- splat:values path=splat_rule/parameters/optional_level_scaling/2/levels -->
+
+| Field | Value |
+| --- | --- |
+| ` min ` | ` 17 ` |
+| ` max ` | ` 20 ` |
+
+##### Damage
+
+<!-- splat:yaml path=splat_rule/parameters/optional_level_scaling/2/damage -->
+
+```yaml
+dice:
+  count: 18
+  sides: 10
+average: 99
+```

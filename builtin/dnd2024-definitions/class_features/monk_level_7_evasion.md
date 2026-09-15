@@ -10,65 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 51
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:class_features/monk_level_7_evasion
-  parameters:
-    when:
-      saving_throw_ability: dexterity
-      normal_success_damage_multiplier: 0.5
-      incapacitated: false
-    damage_multipliers:
-      success: 0
-      failure: 0.5
-  implementation: dnd2024:class_features_monk_level_7_evasion
-splat_contracts:
-- id: dnd2024:class_features_monk_level_7_evasion
-  inputs:
-    actor:
-      type: participant
-      required: true
-    trigger:
-      required: false
-      type: event
-    targets:
-      required: false
-      type: participant_list
-  outputs:
-  - feature_state
-  - damage
-  events:
-  - saving_throw.resolved
-  capabilities:
-  - damage
-  - saving_throws
-splat_conversion:
-  status: specified
-  category: class_feature
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 51
-  engine_gaps: &id001
-  - dnd2024:class_features_monk_level_7_evasion
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_1.md
-  specification_sha256: 1f1a2d557dc9655fff00bff83cb1b138bcae10ca881c27b2beb8b63740807fbf
-  parent_name: Monk
-  line_span:
-    first: 4287
-    count: 7
-splat_clauses:
-- key: source_rules
-  text: '# Level 7: Evasion When you’re subjected to an effect that allows you to make a Dexterity saving
-    throw to take only half damage, you instead take no damage if you succeed on the saving throw and
-    only half damage if you fail. You don’t benefit from this feature if you have the Incapacitated condition.'
-  sha256: 9277966c09550e180872a353488a7e9b5c490a6f2dc1f42f062c654999b3906e
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Level 7: Evasion
+
+## Source text
 
 <!-- SRD page 51 -->
 
@@ -78,3 +24,33 @@ damage, you instead take no damage if you succeed\
 on the saving throw and only half damage if you fail.\
 You don’t benefit from this feature if you have the\
 Incapacitated condition.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:class_features/monk_level_7_evasion ` |
+| ` implementation ` | ` dnd2024:class_features_monk_level_7_evasion ` |
+
+### Parameters
+
+#### When
+
+<!-- splat:values path=splat_rule/parameters/when -->
+
+| Field | Value |
+| --- | --- |
+| ` saving_throw_ability ` | ` dexterity ` |
+| ` normal_success_damage_multiplier ` | ` 0.5 ` |
+| ` incapacitated ` | ` false ` |
+
+#### Damage multipliers
+
+<!-- splat:values path=splat_rule/parameters/damage_multipliers -->
+
+| Field | Value |
+| --- | --- |
+| ` success ` | ` 0 ` |
+| ` failure ` | ` 0.5 ` |

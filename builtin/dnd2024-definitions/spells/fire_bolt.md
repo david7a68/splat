@@ -10,109 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 132
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 0
-  school: evocation
-  classes:
-  - sorcerer
-  - wizard
-  components:
-  - verbal
-  - somatic
-  concentration: false
-  duration: Instantaneous
-  casting_time: Action
-  ritual: false
-  range:
-    feet: 120
-splat_rule:
-  mechanic: dnd2024:spells/fire_bolt
-  implementation: dnd2024:spell_fire_bolt
-  parameters:
-    targets:
-      kind: creature_or_object
-      within_spell_range: true
-    attack:
-      kind: ranged_spell
-      hit:
-        damage:
-          dice:
-            count:
-              by_caster_level:
-              - minimum: 1
-                count: 1
-              - minimum: 5
-                count: 2
-              - minimum: 11
-                count: 3
-              - minimum: 17
-                count: 4
-            sides: 10
-            add: 0
-          type: fire
-        ignite_if:
-          target_flammable: true
-          target_worn: false
-          target_carried: false
-splat_contracts:
-- id: dnd2024:spell_fire_bolt
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    targets:
-      type: participant_list
-      required: true
-    objects:
-      required: false
-      type: object_list
-    caster_level:
-      type: integer
-      required: true
-    choices:
-      required: false
-      type: choice
-  outputs:
-  - effects
-  - damage
-  - attacks
-  events:
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - dice
-  - damage
-  - attacks
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: aee0d03ad30634fa063b39cc83068f9808928c485dc42ef2fedf40c3c0225380
-  source_path: builtin/srd-5.2.1/spell/fire_bolt.md
-  pages:
-  - 132
-  engine_gaps: &id001
-  - dnd2024:spell_fire_bolt
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_3.md
-  specification_sha256: 129536b987a96435138deb6ad79c9297364787af270c8e92dd83f77c94d201d3
-splat_clauses:
-- key: source_rules
-  text: '# Fire Bolt Evocation Cantrip (Sorcerer, Wizard) Casting Time: Action Range: 120 feet Components:
-    V, S Duration: Instantaneous You hurl a mote of fire at a creature or an object within range. Make
-    a ranged spell attack against the target. On a hit, the target takes 1d10 Fire damage. A flammable
-    object hit by this spell starts burning if it isn’t being worn or carried. Cantrip Upgrade. The damage
-    increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).'
-  sha256: 9fc7adf0b1f1a8847e27645ef45dd5bcc072f4edb0ea140c96ae2a0c62bceeee
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Fire Bolt
+
+## Source text
 
 <!-- SRD page 132 -->
 
@@ -131,3 +33,74 @@ when you reach levels 5 (2d10), 11 (3d10), and 17\
 (4d10).\
 
 Original layout: [[../../srd-5.2.1/pages/132|page 132]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 0 ` |
+| ` school ` | ` evocation ` |
+| ` classes ` | ` ["sorcerer", "wizard"] ` |
+| ` components ` | ` ["verbal", "somatic"] ` |
+| ` concentration ` | ` false ` |
+| ` duration ` | ` Instantaneous ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 120 ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/fire_bolt ` |
+| ` implementation ` | ` dnd2024:spell_fire_bolt ` |
+
+### Parameters
+
+#### Targets
+
+<!-- splat:values path=splat_rule/parameters/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature_or_object ` |
+| ` within_spell_range ` | ` true ` |
+
+#### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/attack -->
+
+```yaml
+kind: ranged_spell
+hit:
+  damage:
+    dice:
+      count:
+        by_caster_level:
+        - minimum: 1
+          count: 1
+        - minimum: 5
+          count: 2
+        - minimum: 11
+          count: 3
+        - minimum: 17
+          count: 4
+      sides: 10
+      add: 0
+    type: fire
+  ignite_if:
+    target_flammable: true
+    target_worn: false
+    target_carried: false
+```

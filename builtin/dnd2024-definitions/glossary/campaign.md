@@ -10,29 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 178
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/campaign
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: glossary
-  source_sha256: 636181497a4fd02257882f6e1aec07f2f6fe4e10762e0adf9332685c4741f375
-  source_path: builtin/srd-5.2.1/glossary/campaign.md
-  pages:
-  - 178
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: c06e85d17fbde8bd6313b53abd4b86fad549970a4e81a45830f89dbc95b3facd
-splat_clauses:
-- key: source_rules
-  text: '# Campaign A campaign is a series of adventures. See also “Adventure.”'
-  sha256: f8913f6eb94b266e062127b31df58ad96dff5664bb5958197c5488b9b9463a4e
-  status: informational
 ---
 
 # Campaign
+
+## Source text
 
 <!-- SRD page 178 -->
 
@@ -40,3 +22,19 @@ A campaign is a series of adventures. See also\
 “Adventure.”\
 
 Original layout: [[../../srd-5.2.1/pages/178|page 178]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/campaign ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

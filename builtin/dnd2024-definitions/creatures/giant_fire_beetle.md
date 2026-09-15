@@ -10,167 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 351
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: small
-  type: beast
-  alignment: Unaligned
-  movement_text: 30 ft., Climb 30 ft.
-  resistances_text: Fire
-  senses_text: Blindsight 30 ft.; Passive Perception 8
-  languages_text: None
-  cr_text: 0 (XP 10; PB +2)
-  hit_points_text: 4 (1d6 + 1)
-splat_stats:
-  strength:
-    value: 8
-  save_strength:
-    value: -1
-  dexterity:
-    value: 10
-  save_dexterity:
-    value: 0
-  constitution:
-    value: 12
-  save_constitution:
-    value: 1
-  intelligence:
-    value: 1
-  save_intelligence:
-    value: -5
-  wisdom:
-    value: 7
-  save_wisdom:
-    value: -2
-  charisma:
-    value: 3
-  save_charisma:
-    value: -4
-  armor_class:
-    value: 13
-  max_hp:
-    value: 4
-  initiative:
-    value: 0
-  speed:
-    value: 30
-    unit: ft
-  climb_speed:
-    value: 30
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/giant_fire_beetle
-  implementation: dnd2024:creature_giant_fire_beetle
-  parameters:
-    damage_resistances:
-    - fire
-    senses:
-    - sense: blindsight
-      range_ft: 30
-    passive_perception: 8
-    languages:
-      speak: true
-      known: []
-    features:
-      illumination:
-        economy: passive
-        op: light.emit
-        bright_radius_ft: 10
-        dim_additional_ft: 10
-      bite:
-        economy: action
-        op: attack
-        modes:
-        - melee
-        attack_bonus: 1
-        target:
-          kind: creature_or_object
-          count: 1
-        reach_ft: 5
-        hit:
-        - op: damage
-          components:
-          - type: fire
-            amount:
-              constant: 1
-            average: 1
-    damage_resolution:
-      choice:
-      - printed_average
-      - roll_expression
-      chooser: controller
-      exclusive: true
-    spatial_resolution:
-      provider: caller
-      required_facts:
-      - distance
-      - area_membership
-      - visibility
-      - occupancy
-      - movement_path
-      validate_against_typed_constraints: true
-splat_contracts:
-- id: dnd2024:creature_giant_fire_beetle
-  inputs:
-    actor:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    choices:
-      required: false
-      type: choice
-    scene:
-      required: false
-      type: resolution
-    event:
-      required: false
-      type: event
-  outputs:
-  - effects
-  - roll_requests
-  - state_changes
-  events:
-  - creature.feature_requested
-  capabilities:
-  - action_economy
-  - attack_resolution
-  - creature_rules
-  - damage
-  - effects
-  - spatial_constraints
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: 973cb6f874eb5f5f7d8854f5bfa8eccc3988b12cb2d7b57d6e9a5770ef0873f2
-  source_path: builtin/srd-5.2.1/creature/giant_fire_beetle.md
-  pages:
-  - 351
-  engine_gaps: &id001
-  - dnd2024:creature_giant_fire_beetle
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/creatures_3.md
-  specification_sha256: c07286cb396d6f0e472aedb26a3d3291f75bde1b6a6956d69264026c604973b8
-splat_clauses:
-- key: source_rules
-  text: '# Giant Fire Beetle Small Beast, Unaligned AC 13 Initiative +0 (10) HP 4 (1d6 + 1) Speed 30 ft.,
-    Climb 30 ft. MOD SAVE MOD SAVE MOD SAVE Str 8 -1 -1 Dex 10 +0 +0 Con 12 +1 +1 Int 1 -5 -5 Wis 7 -2
-    -2 Cha 3 -4 -4 Resistances Fire Senses Blindsight 30 ft.; Passive Perception 8 Languages None CR 0
-    (XP 10; PB +2) ### Traits Illumination. The beetle sheds Bright Light in a 10-foot radius and Dim
-    Light for an additional 10 feet. ### Actions Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Fire
-    damage.'
-  sha256: 0d0a3f34a30dc58f5a1d48f97ee2eff5d3de9fb3d5e0e79fd72e860d3103fad1
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Giant Fire Beetle
+
+## Source text
 
 <!-- SRD page 351 -->
 
@@ -196,3 +40,143 @@ radius and Dim Light for an additional 10 feet.\
 Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Fire damage.\
 
 Original layout: [[../../srd-5.2.1/pages/351|page 351]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` small ` |
+| ` type ` | ` beast ` |
+| ` alignment ` | ` Unaligned ` |
+| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
+| ` resistances_text ` | ` Fire ` |
+| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 8 ` |
+| ` languages_text ` | ` None ` |
+| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
+| ` hit_points_text ` | ` 4 (1d6 + 1) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 8 ` | ` -1 ` |
+| ` Dexterity ` | ` 10 ` | ` 0 ` |
+| ` Constitution ` | ` 12 ` | ` 1 ` |
+| ` Intelligence ` | ` 1 ` | ` -5 ` |
+| ` Wisdom ` | ` 7 ` | ` -2 ` |
+| ` Charisma ` | ` 3 ` | ` -4 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 13 ` |  |
+| ` max_hp ` | ` 4 ` |  |
+| ` initiative ` | ` 0 ` |  |
+| ` speed ` | ` 30 ` | ` ft ` |
+| ` climb_speed ` | ` 30 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/giant_fire_beetle ` |
+| ` implementation ` | ` dnd2024:creature_giant_fire_beetle ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` damage_resistances ` | ` ["fire"] ` |
+| ` passive_perception ` | ` 8 ` |
+
+#### Senses
+
+<!-- splat:rows path=splat_rule/parameters/senses -->
+
+| Row | sense | range_ft |
+| --- | --- | --- |
+| ` 0 ` | ` blindsight ` | ` 30 ` |
+
+#### Languages
+
+<!-- splat:yaml path=splat_rule/parameters/languages -->
+
+```yaml
+speak: true
+known: []
+```
+
+#### Features
+
+##### Illumination
+
+<!-- splat:values path=splat_rule/parameters/features/illumination -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` passive ` |
+| ` op ` | ` light.emit ` |
+| ` bright_radius_ft ` | ` 10 ` |
+| ` dim_additional_ft ` | ` 10 ` |
+
+##### Bite
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+
+```yaml
+economy: action
+op: attack
+modes:
+- melee
+attack_bonus: 1
+target:
+  kind: creature_or_object
+  count: 1
+reach_ft: 5
+hit:
+- op: damage
+  components:
+  - type: fire
+    amount:
+      constant: 1
+    average: 1
+```
+
+#### Damage resolution
+
+<!-- splat:values path=splat_rule/parameters/damage_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` choice ` | ` ["printed_average", "roll_expression"] ` |
+| ` chooser ` | ` controller ` |
+| ` exclusive ` | ` true ` |
+
+#### Spatial resolution
+
+<!-- splat:values path=splat_rule/parameters/spatial_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` provider ` | ` caller ` |
+| ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
+| ` validate_against_typed_constraints ` | ` true ` |

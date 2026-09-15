@@ -10,62 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 15
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/combat_range
-  parameters:
-    single_range:
-      maximum: listed_range
-    two_ranges:
-      within_normal: normal_roll
-      beyond_normal_through_long: disadvantage
-      beyond_long: prohibited
-  implementation: dnd2024:rules_combat_range
-splat_contracts:
-- id: dnd2024:rules_combat_range
-  inputs:
-    attack:
-      type: resolution
-      required: true
-    distance:
-      type: number
-      required: true
-  outputs:
-  - attack_eligibility
-  - roll_modifiers
-  events: []
-  capabilities:
-  - attacks
-  - geometry
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 15
-  engine_gaps: &id001
-  - dnd2024:rules_combat_range
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: f52ee8273dda10bcbbef3619cb1c751befc4bb84aa40071dc9f22129c5332519
-  parent_name: Combat
-  line_span:
-    first: 1012
-    count: 11
-splat_clauses:
-- key: source_rules
-  text: '# Range You can make ranged attacks only against targets within a specified range. If a ranged
-    attack, such as one made with a spell, has a single range, you can’t attack a target beyond this range.
-    Some ranged attacks, such as those made with a Longbow, have two ranges. The smaller number is the
-    normal range, and the larger number is the long range. Your attack roll has Disadvantage when your
-    target is beyond normal range, and you can’t attack a target beyond long range.'
-  sha256: 55085275fa8e68f3537d36114ab99fb0a70f8d1dd0db16aa2d7fb5970779d9fa
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Range
+
+## Source text
 
 <!-- SRD page 15 -->
 
@@ -79,3 +28,32 @@ the normal range, and the larger number is the long\
 range. Your attack roll has Disadvantage when your\
 target is beyond normal range, and you can’t attack\
 a target beyond long range.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/combat_range ` |
+| ` implementation ` | ` dnd2024:rules_combat_range ` |
+
+### Parameters
+
+#### Single range
+
+<!-- splat:values path=splat_rule/parameters/single_range -->
+
+| Field | Value |
+| --- | --- |
+| ` maximum ` | ` listed_range ` |
+
+#### Two ranges
+
+<!-- splat:values path=splat_rule/parameters/two_ranges -->
+
+| Field | Value |
+| --- | --- |
+| ` within_normal ` | ` normal_roll ` |
+| ` beyond_normal_through_long ` | ` disadvantage ` |
+| ` beyond_long ` | ` prohibited ` |

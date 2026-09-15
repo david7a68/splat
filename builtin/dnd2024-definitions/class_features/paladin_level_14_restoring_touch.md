@@ -10,72 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 55
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:class_features/paladin_level_14_restoring_touch
-  parameters:
-    during: lay_on_hands
-    remove_conditions_choice:
-      options:
-      - blinded
-      - charmed
-      - deafened
-      - frightened
-      - paralyzed
-      - stunned
-      maximum: all_present
-    pool_cost_per_condition: 5
-    cost_points_also_heal: false
-  implementation: dnd2024:class_features_paladin_level_14_restoring_touch
-splat_contracts:
-- id: dnd2024:class_features_paladin_level_14_restoring_touch
-  inputs:
-    actor:
-      type: participant
-      required: true
-    trigger:
-      required: false
-      type: event
-    targets:
-      required: false
-      type: participant_list
-  outputs:
-  - feature_state
-  - resource_changes
-  - conditions
-  events:
-  - lay_on_hands.used
-  capabilities:
-  - conditions
-  - resources
-splat_conversion:
-  status: specified
-  category: class_feature
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 55
-  engine_gaps: &id001
-  - dnd2024:class_features_paladin_level_14_restoring_touch
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_1.md
-  specification_sha256: fa19cf43f93349494a87688f2a580cf2043c6cb40be31b3ad07f0fdb25e92191
-  parent_name: Paladin
-  line_span:
-    first: 4647
-    count: 9
-splat_clauses:
-- key: source_rules
-  text: '# Level 14: Restoring Touch When you use Lay On Hands on a creature, you can also remove one
-    or more of the following conditions from the creature: Blinded, Charmed, Deafened, Frightened, Paralyzed,
-    or Stunned. You must expend 5 Hit Points from the healing pool of Lay On Hands for each of these conditions
-    you remove; those points don’t also restore Hit Points to the creature.'
-  sha256: 583655b076fcd25a5fa005357dead451134b870d0fc045a45b3f719366bac0be
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Level 14: Restoring Touch
+
+## Source text
 
 <!-- SRD page 55 -->
 
@@ -87,3 +26,31 @@ pend 5 Hit Points from the healing pool of Lay On\
 Hands for each of these conditions you remove;\
 those points don’t also restore Hit Points to the\
 creature.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:class_features/paladin_level_14_restoring_touch ` |
+| ` implementation ` | ` dnd2024:class_features_paladin_level_14_restoring_touch ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` during ` | ` lay_on_hands ` |
+| ` pool_cost_per_condition ` | ` 5 ` |
+| ` cost_points_also_heal ` | ` false ` |
+
+#### Remove conditions choice
+
+<!-- splat:values path=splat_rule/parameters/remove_conditions_choice -->
+
+| Field | Value |
+| --- | --- |
+| ` options ` | ` ["blinded", "charmed", "deafened", "frightened", "paralyzed", "stunned"] ` |
+| ` maximum ` | ` all_present ` |

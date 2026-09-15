@@ -10,78 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 101
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/mounts_and_vehicles_passengers
-  parameters:
-    passenger_sizes:
-    - small
-    - medium
-    hammock_capacity: vehicle_table_passengers
-    private_capacity:
-      op: floor
-      args:
-      - op: divide
-        args:
-        - variable: vehicle_table_passengers
-        - 5
-    typical_daily_prices:
-      hammock:
-        currency: sp
-        amount: 5
-      small_private_cabin:
-        currency: gp
-        amount: 2
-    price_override:
-      actor: gm
-      scope: ship
-  implementation: dnd2024:rule_mounts_and_vehicles_passengers
-splat_contracts:
-- id: dnd2024:rule_mounts_and_vehicles_passengers
-  inputs:
-    actor:
-      type: participant
-      required: true
-    context:
-      type: resolution
-      required: true
-    vehicle_table_passengers:
-      type: number
-      required: true
-  outputs:
-  - vehicle_capacity
-  events: []
-  capabilities:
-  - vehicles
-  - economy
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 101
-  engine_gaps: &id001
-  - dnd2024:rule_mounts_and_vehicles_passengers
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: a01e46f2cbd8567142e14d0307940f12af380d80437c59c201a9061a4142a57b
-  parent_name: Mounts and Vehicles
-  line_span:
-    first: 8760
-    count: 8
-splat_clauses:
-- key: source_rules
-  text: '# Passengers The table lists the number of Small and Medium passengers the ship can accommodate
-    using hammocks. A ship outfitted with private accommodations can carry one-fifth as many passengers.
-    A passenger usually pays 5 SP per day for a hammock, but prices can vary from ship to ship. A small
-    private cabin usually costs 2 GP per day.'
-  sha256: ab8959a7b7e70c70c243c28b37f0c41c85839c7614ad0f56c619db8793093911
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Passengers
+
+## Source text
 
 <!-- SRD page 101 -->
 
@@ -92,3 +25,56 @@ tions can carry one-fifth as many passengers. A pas-\
 senger usually pays 5 SP per day for a hammock, but\
 prices can vary from ship to ship. A small private\
 cabin usually costs 2 GP per day.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/mounts_and_vehicles_passengers ` |
+| ` implementation ` | ` dnd2024:rule_mounts_and_vehicles_passengers ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` passenger_sizes ` | ` ["small", "medium"] ` |
+| ` hammock_capacity ` | ` vehicle_table_passengers ` |
+
+#### Private capacity
+
+<!-- splat:yaml path=splat_rule/parameters/private_capacity -->
+
+```yaml
+op: floor
+args:
+- op: divide
+  args:
+  - variable: vehicle_table_passengers
+  - 5
+```
+
+#### Typical daily prices
+
+<!-- splat:yaml path=splat_rule/parameters/typical_daily_prices -->
+
+```yaml
+hammock:
+  currency: sp
+  amount: 5
+small_private_cabin:
+  currency: gp
+  amount: 2
+```
+
+#### Price override
+
+<!-- splat:values path=splat_rule/parameters/price_override -->
+
+| Field | Value |
+| --- | --- |
+| ` actor ` | ` gm ` |
+| ` scope ` | ` ship ` |

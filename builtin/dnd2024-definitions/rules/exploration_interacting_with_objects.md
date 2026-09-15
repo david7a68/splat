@@ -10,37 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 11, 12
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/exploration_interacting_with_objects
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 11
-  - 12
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: d1b6cc388ae458b1a6d8a8d86200837881f5f918867027307e316b3d5b376cc0
-  parent_name: Exploration
-  line_span:
-    first: 660
-    count: 7
-splat_clauses:
-- key: source_rules
-  text: '# Interacting with Objects Interacting with objects is often simple to resolve. The player tells
-    the GM that their character is doing something, such as moving a lever or opening a door, and the
-    GM describes what happens. Sometimes, however, rules govern what you can do with an object, as detailed
-    in the following sections.'
-  sha256: 15613af31c54e35733f23180b01df045181cff8d3d84b9d5de643de853753d4b
-  status: informational
 ---
 
 # Interacting with Objects
+
+## Source text
 
 <!-- SRD page 11 -->
 
@@ -53,3 +27,19 @@ ing something, such as moving a lever or opening\
 a door, and the GM describes what happens. Some-\
 times, however, rules govern what you can do with\
 an object, as detailed in the following sections.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/exploration_interacting_with_objects ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

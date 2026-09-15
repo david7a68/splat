@@ -10,259 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 166
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 5
-  school: conjuration
-  classes:
-  - wizard
-  components:
-  - verbal
-  - somatic
-  - material
-  concentration: true
-  duration: Concentration, up to 1 hour
-  casting_time: Action
-  ritual: false
-  range:
-    feet: 60
-  material:
-    description: an object with the image of a dragon engraved on it worth 500+ GP
-    consumed: false
-splat_rule:
-  mechanic: dnd2024:spells/summon_dragon
-  implementation: dnd2024:spell_summon_dragon
-  parameters:
-    summon:
-      definition:
-        key: dnd2024:creatures/draconic_spirit
-      initial_space: visible_unoccupied_in_range
-      ally_to:
-      - caster
-      - caster_allies
-      disappear_on:
-      - hp_zero
-      - spell_end
-    control:
-      initiative: caster_count
-      turn: immediately_after_caster
-      verbal_commands: true
-      command_cost: none
-      no_command:
-        action: dodge
-        movement: avoid_danger
-    spirit:
-      size: large
-      type: dragon
-      alignment: neutral
-      ac:
-        op: add
-        args:
-        - 14
-        - binding: cast_level
-      hp:
-        op: add
-        args:
-        - 50
-        - op: multiply
-          args:
-          - 10
-          - op: subtract
-            args:
-            - binding: cast_level
-            - 5
-      speeds_feet:
-        walk: 30
-        fly: 60
-        swim: 30
-      abilities:
-        strength: 19
-        dexterity: 14
-        constitution: 17
-        intelligence: 10
-        wisdom: 14
-        charisma: 14
-      save_modifiers:
-        strength: 4
-        dexterity: 2
-        constitution: 3
-        intelligence: 0
-        wisdom: 2
-        charisma: 2
-      resistances:
-      - acid
-      - cold
-      - fire
-      - lightning
-      - poison
-      condition_immunities:
-      - charmed
-      - frightened
-      - poisoned
-      senses_feet:
-        blindsight: 30
-        darkvision: 60
-      passive_perception: 12
-      languages:
-      - draconic
-      understands: caster_languages
-      cr: none
-      xp: 0
-      proficiency_bonus:
-        stat:
-          of: caster
-          key: proficiency_bonus
-    shared_resistance:
-      choice_at_summon: one_spirit_resistance
-      beneficiary: caster
-      duration: spell
-    actions:
-      multiattack:
-        rend_count:
-          op: floor
-          args:
-          - op: multiply
-            args:
-            - binding: cast_level
-            - numerator: 1
-              denominator: 2
-        also_breath_weapon: true
-      rend:
-        kind: melee_attack
-        attack_bonus:
-          binding: spell_attack_modifier
-        reach_feet: 10
-        damage:
-          amount:
-            dice:
-              count: 1
-              sides: 6
-              add:
-                op: add
-                args:
-                - 4
-                - binding: cast_level
-          type: piercing
-      breath_weapon:
-        area:
-          shape: cone
-          length_feet: 30
-        damage_type_choice_at_cast: one_spirit_resistance
-        save:
-          ability: dexterity
-          dc:
-            binding: save_dc
-          failure:
-            damage:
-              amount:
-                dice:
-                  count: 2
-                  sides: 6
-                  add: 0
-              type: chosen
-          success:
-            damage_fraction:
-              numerator: 1
-              denominator: 2
-splat_contracts:
-- id: dnd2024:spell_summon_dragon
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    save_dc:
-      type: integer
-      required: true
-    spell_attack_modifier:
-      type: integer
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    locations:
-      required: false
-      type: location_list
-    choices:
-      required: false
-      type: choice
-    resolution:
-      required: false
-      type: resolution
-    campaign:
-      required: false
-      type: campaign
-  outputs:
-  - summoned_spirit
-  - shared_resistance
-  - commands
-  - attacks
-  - saves
-  - damage
-  events:
-  - spell.cast_completed
-  - effect.ended
-  capabilities:
-  - spellcasting
-  - effects
-  - damage
-  - saving_throws
-  - attacks
-  - conditions
-  - spatial_areas
-  - movement
-  - perception
-  - inventory
-  - summoning
-  - choices
-  - time
-  - knowledge
-  - relationships
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: a41e9e25e62e8f9b90805716154b3e983d586d4407aa94e68ef1e0061fd222be
-  source_path: builtin/srd-5.2.1/spell/summon_dragon.md
-  pages:
-  - 166
-  engine_gaps: &id001
-  - dnd2024:spell_summon_dragon
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_1.md
-  specification_sha256: b9f2b59fa86f1ef583ae7609681f0482caac088b99d383bb3243c326e438ee6a
-splat_clauses:
-- key: source_rules
-  text: '# Summon Dragon Level 5 Conjuration (Wizard) Casting Time: Action Range: 60 feet Components:
-    V, S, M (an object with the image of a dragon engraved on it worth 500+ GP) Duration: Concentration,
-    up to 1 hour You call forth a Dragon spirit. It manifests in an unoccupied space that you can see
-    within range and uses the Draconic Spirit stat block. The creature disappears when it drops to 0 Hit
-    Points or when the spell ends. The creature is an ally to you and your allies. In combat, the creature
-    shares your Initiative count, but it takes its turn immediately after yours. It obeys your verbal
-    commands (no action required by you). If you don’t issue any, it takes the Dodge action and uses its
-    movement to avoid danger. Using a Higher-Level Spell Slot. Use the spell slot’s level for the spell’s
-    level in the stat block. ### Draconic Spirit Large Dragon, Neutral AC 14 + the spell’s level HP 50
-    + 10 for each spell level above 5 Speed 30 ft., Fly 60 ft., Swim 30 ft. MOD SAVE MOD SAVE MOD SAVE
-    Str 19 +4 +4 Dex 14 +2 +2 Con17 +3 +3 Int 10 +0 +0 Wis 14 +2 +2 Cha 14 +2 +2 Resistances Acid, Cold,
-    Fire, Lightning, Poison Immunities Charmed, Frightened, Poisoned Senses Blindsight 30 ft., Darkvision
-    60 ft.; Passive Perception 12 Languages Draconic, understands the languages you know CR None (XP 0;
-    PB equals your Proficiency Bonus) ### Traits Shared Resistances. When you summon the spirit, choose
-    one of its Resistances. You have Resistance to the chosen damage type until the spell ends. ### Actions
-    Multiattack. The spirit makes a number of Rend attacks equal to half the spell’s level (round down),
-    and it uses Breath Weapon. Rend. Melee Attack Roll: Bonus equals your spell attack modifier, reach
-    10 feet. Hit: 1d6 + 4 + the spell’s level Piercing damage. Breath Weapon. Dexterity Saving Throw:
-    DC equals your spell save DC, each creature in a 30-foot Cone. Failure: 2d6 damage of a type this
-    spirit has Resistance to (your choice when you cast the spell). Success: Half damage.'
-  sha256: bcc88f552bed07f81671e4c374ade08d6245c84eac98c9a3d7934d3406c37602
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Summon Dragon
+
+## Source text
 
 <!-- SRD page 166 -->
 
@@ -323,3 +75,207 @@ to (your choice when you cast the spell). Success:\
 Half damage.\
 
 Original layout: [[../../srd-5.2.1/pages/166|page 166]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 5 ` |
+| ` school ` | ` conjuration ` |
+| ` classes ` | ` ["wizard"] ` |
+| ` components ` | ` ["verbal", "somatic", "material"] ` |
+| ` concentration ` | ` true ` |
+| ` duration ` | ` Concentration, up to 1 hour ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 60 ` |
+
+### Material
+
+<!-- splat:values path=splat_spell/material -->
+
+| Field | Value |
+| --- | --- |
+| ` description ` | ` an object with the image of a dragon engraved on it worth 500+ GP ` |
+| ` consumed ` | ` false ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/summon_dragon ` |
+| ` implementation ` | ` dnd2024:spell_summon_dragon ` |
+
+### Parameters
+
+#### Summon
+
+<!-- splat:yaml path=splat_rule/parameters/summon -->
+
+```yaml
+definition:
+  key: dnd2024:creatures/draconic_spirit
+initial_space: visible_unoccupied_in_range
+ally_to:
+- caster
+- caster_allies
+disappear_on:
+- hp_zero
+- spell_end
+```
+
+#### Control
+
+<!-- splat:yaml path=splat_rule/parameters/control -->
+
+```yaml
+initiative: caster_count
+turn: immediately_after_caster
+verbal_commands: true
+command_cost: none
+no_command:
+  action: dodge
+  movement: avoid_danger
+```
+
+#### Spirit
+
+<!-- splat:yaml path=splat_rule/parameters/spirit -->
+
+```yaml
+size: large
+type: dragon
+alignment: neutral
+ac:
+  op: add
+  args:
+  - 14
+  - binding: cast_level
+hp:
+  op: add
+  args:
+  - 50
+  - op: multiply
+    args:
+    - 10
+    - op: subtract
+      args:
+      - binding: cast_level
+      - 5
+speeds_feet:
+  walk: 30
+  fly: 60
+  swim: 30
+abilities:
+  strength: 19
+  dexterity: 14
+  constitution: 17
+  intelligence: 10
+  wisdom: 14
+  charisma: 14
+save_modifiers:
+  strength: 4
+  dexterity: 2
+  constitution: 3
+  intelligence: 0
+  wisdom: 2
+  charisma: 2
+resistances:
+- acid
+- cold
+- fire
+- lightning
+- poison
+condition_immunities:
+- charmed
+- frightened
+- poisoned
+senses_feet:
+  blindsight: 30
+  darkvision: 60
+passive_perception: 12
+languages:
+- draconic
+understands: caster_languages
+cr: none
+xp: 0
+proficiency_bonus:
+  stat:
+    of: caster
+    key: proficiency_bonus
+```
+
+#### Shared resistance
+
+<!-- splat:values path=splat_rule/parameters/shared_resistance -->
+
+| Field | Value |
+| --- | --- |
+| ` choice_at_summon ` | ` one_spirit_resistance ` |
+| ` beneficiary ` | ` caster ` |
+| ` duration ` | ` spell ` |
+
+#### Actions
+
+<!-- splat:yaml path=splat_rule/parameters/actions -->
+
+```yaml
+multiattack:
+  rend_count:
+    op: floor
+    args:
+    - op: multiply
+      args:
+      - binding: cast_level
+      - numerator: 1
+        denominator: 2
+  also_breath_weapon: true
+rend:
+  kind: melee_attack
+  attack_bonus:
+    binding: spell_attack_modifier
+  reach_feet: 10
+  damage:
+    amount:
+      dice:
+        count: 1
+        sides: 6
+        add:
+          op: add
+          args:
+          - 4
+          - binding: cast_level
+    type: piercing
+breath_weapon:
+  area:
+    shape: cone
+    length_feet: 30
+  damage_type_choice_at_cast: one_spirit_resistance
+  save:
+    ability: dexterity
+    dc:
+      binding: save_dc
+    failure:
+      damage:
+        amount:
+          dice:
+            count: 2
+            sides: 6
+            add: 0
+        type: chosen
+    success:
+      damage_fraction:
+        numerator: 1
+        denominator: 2
+```

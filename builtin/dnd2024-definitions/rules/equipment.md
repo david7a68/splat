@@ -10,30 +10,26 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 89
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/equipment
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 89
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: 0a1b5700347ec5d9701e3bef779284e8d0950e7d11264cba97c8e1aa915c3b71
-  parent_name: Equipment
-  line_span:
-    first: 7640
-    count: 1
-splat_clauses:
-- key: source_rules
-  text: '# Equipment'
-  sha256: 05b7ac040239e5c95d115f1074310aba35c657ce6a0de7676f5d514b8ae6b3f9
-  status: informational
 ---
 
 # Equipment
+
+## Source text
+
+
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/equipment ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

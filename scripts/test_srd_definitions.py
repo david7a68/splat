@@ -144,4 +144,35 @@ class CompletedContractTests(unittest.TestCase):
         self.assertTrue(creation['unlisted_mineral_duration']['no_automatic_default'])
         self.assertEqual(creation['unlisted_mineral_duration']['required_input'],'material_duration_resolution')
 
+
+
+class MarkdownLayoutTests(unittest.TestCase):
+    def test_cells_preserve_yaml_types_and_markdown_punctuation(self):
+        from markdown_content import cell
+        from srd_contracts import UniqueLoader
+        import re
+        for value in ['true', 'null', '007', 'yes', '', ' text ', 'a|b', 'a\\|b',
+                      '`code`', 'line\nbreak', 'a\\b', 'é', 0, -2, False, None,
+                      ['one', 'two'], [], {}]:
+            with self.subTest(value=value):
+                encoded = cell(value)
+                fence = re.match(r'`+', encoded)[0]
+                payload = encoded[len(fence)+1:-len(fence)-1]
+                self.assertEqual(yaml.load(payload, Loader=UniqueLoader), value)
+                self.assertNotIn('|', payload)
+                self.assertNotIn('\n', payload)
+
+    def test_notes_have_one_body_specification_and_no_embedded_reports(self):
+        from markdown_content import IDENTITY, REPORT_FIELDS
+        report = json.loads((OUTPUT/'coverage.json').read_text())
+        for record in report['entries']:
+            meta, body = load_note(OUTPUT/record['path'])
+            self.assertLessEqual(meta.keys(), IDENTITY)
+            self.assertFalse(meta.keys() & REPORT_FIELDS)
+            self.assertIn('## Source text', body)
+            self.assertNotIn('splat_clauses', body)
+        registry = json.loads((OUTPUT/'contracts.json').read_text())
+        self.assertEqual(registry['format'], 2)
+        self.assertTrue(all('specification' not in c for c in registry['contracts']))
+
 if __name__=='__main__':unittest.main()

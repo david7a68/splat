@@ -9,6 +9,7 @@ use uuid::Uuid;
 pub mod builtin;
 pub mod contracts;
 pub mod definitions;
+mod markdown;
 
 #[cfg(test)]
 mod tests;
@@ -108,7 +109,7 @@ impl Entry {
             .ok_or("Unclosed YAML frontmatter")?;
         let value: Value =
             serde_yaml_ng::from_str(&rest[..end]).map_err(|e| format!("Invalid YAML: {e}"))?;
-        let fields = value
+        let mut fields = value
             .as_mapping()
             .ok_or("Frontmatter must be a mapping")?
             .clone();
@@ -155,6 +156,7 @@ impl Entry {
             None => None,
         };
         let body = rest.get(end + 5..).unwrap_or("").to_owned();
+        markdown::read(&body, &mut fields)?;
         let (inventory, inventory_containers) = inventory(&body)?;
         let entry = Self {
             path: path.into(),

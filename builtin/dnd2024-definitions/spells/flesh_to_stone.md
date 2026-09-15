@@ -10,136 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 133
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 6
-  school: transmutation
-  classes:
-  - druid
-  - sorcerer
-  - wizard
-  components:
-  - verbal
-  - somatic
-  - material
-  concentration: true
-  duration: Concentration, up to 1 minute
-  casting_time: Action
-  ritual: false
-  range:
-    feet: 60
-  material:
-    description: a cockatrice feather
-    consumed: false
-splat_rule:
-  mechanic: dnd2024:spells/flesh_to_stone
-  implementation: dnd2024:spell_flesh_to_stone
-  parameters:
-    targeting:
-      kind: creature
-      count: 1
-      visible: true
-      within_range: true
-    initial_save:
-      ability: constitution
-      automatic_success_types:
-      - construct
-      failure:
-        condition: restrained
-        duration: spell_duration
-      success:
-        speed: 0
-        until: caster_next_turn_start
-    progression:
-      event: restrained_target.turn_ended
-      save_ability: constitution
-      counters:
-        scope: saves_against_this_spell
-        initial_failure_counts:
-          type: choice
-          chooser: table
-          options:
-          - true
-          - false
-          source_scope: saves_against_this_spell
-        consecutive_required: false
-        success_threshold: 3
-        failure_threshold: 3
-      on_success_threshold: end_spell
-      on_failure_threshold:
-        form: stone
-        condition: petrified
-        duration: spell_duration
-    full_concentration_duration:
-      condition: petrified
-      duration: until_removed
-      removal:
-      - greater_restoration
-      - similar_magic
-    spell_lifetime:
-      concentration: true
-      maximum:
-        value: 1
-        unit: minute
-splat_contracts:
-- id: dnd2024:spell_flesh_to_stone
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    targets:
-      type: participant_list
-      required: true
-    save_dc:
-      type: integer
-      required: true
-    choices:
-      type: choice
-      required: true
-  outputs:
-  - effects
-  events:
-  - spell.cast_completed
-  - turn.ended
-  - effect.ended
-  capabilities:
-  - spellcasting
-  - effects
-  - conditions
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: 4ae4269f6d1650016fc295ea93056a357ab30417d7648f3bd5ab536ab0cf1f84
-  source_path: builtin/srd-5.2.1/spell/flesh_to_stone.md
-  pages:
-  - 133
-  engine_gaps: &id001
-  - dnd2024:spell_flesh_to_stone
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_2.md
-  specification_sha256: a609a9bb2d29f6360f74005a2c34224c020a805de193403d81c3da6aa93fa1ce
-splat_clauses:
-- key: source_rules
-  text: '# Flesh to Stone Level 6 Transmutation (Druid, Sorcerer, Wizard) Casting Time: Action Range:
-    60 feet Components: V, S, M (a cockatrice feather) Duration: Concentration, up to 1 minute You attempt
-    to turn one creature that you can see within range into stone. The target makes a Constitution saving
-    throw. On a failed save, it has the Restrained condition for the duration. On a successful save, its
-    Speed is 0 until the start of your next turn. Constructs automatically succeed on the save. A Restrained
-    target makes another Constitution saving throw at the end of each of its turns. If it successfully
-    saves against this spell three times, the spell ends. If it fails its saves three times, it is turned
-    to stone and has the Petrified condition for the duration. The successes and failures needn’t be consecutive;
-    keep track of both until the target collects three of a kind. If you maintain your Concentration on
-    this spell for the entire possible duration, the target is Petrified until the condition is ended
-    by Greater Restoration or similar magic.'
-  sha256: b9fd5f6bc9497ff2910550adeb0df224f5e14e153cbf9ab3c6bed31856423556
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Flesh to Stone
+
+## Source text
 
 <!-- SRD page 133 -->
 
@@ -168,3 +43,120 @@ fied until the condition is ended by Greater Resto-\
 ration or similar magic.\
 
 Original layout: [[../../srd-5.2.1/pages/133|page 133]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 6 ` |
+| ` school ` | ` transmutation ` |
+| ` classes ` | ` ["druid", "sorcerer", "wizard"] ` |
+| ` components ` | ` ["verbal", "somatic", "material"] ` |
+| ` concentration ` | ` true ` |
+| ` duration ` | ` Concentration, up to 1 minute ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 60 ` |
+
+### Material
+
+<!-- splat:values path=splat_spell/material -->
+
+| Field | Value |
+| --- | --- |
+| ` description ` | ` a cockatrice feather ` |
+| ` consumed ` | ` false ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/flesh_to_stone ` |
+| ` implementation ` | ` dnd2024:spell_flesh_to_stone ` |
+
+### Parameters
+
+#### Targeting
+
+<!-- splat:values path=splat_rule/parameters/targeting -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` count ` | ` 1 ` |
+| ` visible ` | ` true ` |
+| ` within_range ` | ` true ` |
+
+#### Initial save
+
+<!-- splat:yaml path=splat_rule/parameters/initial_save -->
+
+```yaml
+ability: constitution
+automatic_success_types:
+- construct
+failure:
+  condition: restrained
+  duration: spell_duration
+success:
+  speed: 0
+  until: caster_next_turn_start
+```
+
+#### Progression
+
+<!-- splat:yaml path=splat_rule/parameters/progression -->
+
+```yaml
+event: restrained_target.turn_ended
+save_ability: constitution
+counters:
+  scope: saves_against_this_spell
+  initial_failure_counts:
+    type: choice
+    chooser: table
+    options:
+    - true
+    - false
+    source_scope: saves_against_this_spell
+  consecutive_required: false
+  success_threshold: 3
+  failure_threshold: 3
+on_success_threshold: end_spell
+on_failure_threshold:
+  form: stone
+  condition: petrified
+  duration: spell_duration
+```
+
+#### Full concentration duration
+
+<!-- splat:values path=splat_rule/parameters/full_concentration_duration -->
+
+| Field | Value |
+| --- | --- |
+| ` condition ` | ` petrified ` |
+| ` duration ` | ` until_removed ` |
+| ` removal ` | ` ["greater_restoration", "similar_magic"] ` |
+
+#### Spell lifetime
+
+<!-- splat:yaml path=splat_rule/parameters/spell_lifetime -->
+
+```yaml
+concentration: true
+maximum:
+  value: 1
+  unit: minute
+```

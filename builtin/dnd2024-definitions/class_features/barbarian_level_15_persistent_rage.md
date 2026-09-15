@@ -10,75 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 30
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:class_features/barbarian_level_15_persistent_rage
-  parameters:
-    initiative_recovery:
-      optional: true
-      resource: rage
-      amount: all_expended
-      uses:
-        maximum: 1
-        recover:
-          event: rest.long_rest_completed
-          amount: all
-    rage_override:
-      duration:
-        minutes: 10
-      requires_round_extension: false
-      early_end_conditions:
-      - unconscious
-      early_end_armor: heavy
-      replaces_incapacitated_end_trigger: true
-  implementation: dnd2024:class_features_barbarian_level_15_persistent_rage
-splat_contracts:
-- id: dnd2024:class_features_barbarian_level_15_persistent_rage
-  inputs:
-    actor:
-      type: participant
-      required: true
-  outputs:
-  - feature_state
-  - resource_changes
-  events:
-  - initiative.rolled
-  - rage.entered
-  - condition.applied
-  - equipment.donned
-  capabilities:
-  - resources
-  - effects
-  - rage
-splat_conversion:
-  status: specified
-  category: class_feature
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 30
-  engine_gaps: &id001
-  - dnd2024:class_features_barbarian_level_15_persistent_rage
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_1.md
-  specification_sha256: c5b5f68a913c212a4939654fad81593b12dff389c5108eba0974541095199219
-  parent_name: Barbarian
-  line_span:
-    first: 2425
-    count: 10
-splat_clauses:
-- key: source_rules
-  text: '# Level 15: Persistent Rage When you roll Initiative, you can regain all expended uses of Rage.
-    After you regain uses of Rage in this way, you can’t do so again until you finish a Long Rest. In
-    addition, your Rage is so fierce that it now lasts for 10 minutes without you needing to do anything
-    to extend it from round to round. Your Rage ends early if you have the Unconscious condition (not
-    just the Incapacitated condition) or don Heavy armor.'
-  sha256: 3df7cd5b6ac3913642aa4802633c377816c31839d726dd156049055a23428bcc
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Level 15: Persistent Rage
+
+## Source text
 
 <!-- SRD page 30 -->
 
@@ -91,3 +27,43 @@ for 10 minutes without you needing to do anything\
 to extend it from round to round. Your Rage ends\
 early if you have the Unconscious condition (not just\
 the Incapacitated condition) or don Heavy armor.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:class_features/barbarian_level_15_persistent_rage ` |
+| ` implementation ` | ` dnd2024:class_features_barbarian_level_15_persistent_rage ` |
+
+### Parameters
+
+#### Initiative recovery
+
+<!-- splat:yaml path=splat_rule/parameters/initiative_recovery -->
+
+```yaml
+optional: true
+resource: rage
+amount: all_expended
+uses:
+  maximum: 1
+  recover:
+    event: rest.long_rest_completed
+    amount: all
+```
+
+#### Rage override
+
+<!-- splat:yaml path=splat_rule/parameters/rage_override -->
+
+```yaml
+duration:
+  minutes: 10
+requires_round_extension: false
+early_end_conditions:
+- unconscious
+early_end_armor: heavy
+replaces_incapacitated_end_trigger: true
+```

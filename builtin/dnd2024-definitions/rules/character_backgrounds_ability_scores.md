@@ -10,59 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 83
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/character_backgrounds_ability_scores
-  parameters:
-    eligible_abilities: background_three_abilities
-    allocation_choices:
-    - - 2
-      - 1
-      - 0
-    - - 1
-      - 1
-      - 1
-    permutation_allowed: true
-    ability_score_max_after_increase: 20
-  implementation: dnd2024:rules_character_backgrounds_ability_scores
-splat_contracts:
-- id: dnd2024:rules_character_backgrounds_ability_scores
-  inputs:
-    subject:
-      type: participant
-      required: true
-  outputs:
-  - ability_score_increases
-  events: []
-  capabilities:
-  - character_creation
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 83
-  engine_gaps: &id001
-  - dnd2024:rules_character_backgrounds_ability_scores
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: 5d183d1b2a356661272e5ce5c4aec116af79c3c5a7f6e4d321606e95978d5db9
-  parent_name: Character Backgrounds
-  line_span:
-    first: 7067
-    count: 5
-splat_clauses:
-- key: source_rules
-  text: '# Ability Scores A background lists three of your character’s ability scores. Increase one by
-    2 and another one by 1, or increase all three by 1. None of these increases can raise a score above
-    20.'
-  sha256: eef172bfa04a98721d387a0b62eca7864cf4f10b1b5f763e5da3b99e49a0332e
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Ability Scores
+
+## Source text
 
 <!-- SRD page 83 -->
 
@@ -70,3 +22,35 @@ A background lists three of your character’s ability\
 scores. Increase one by 2 and another one by 1, or\
 increase all three by 1. None of these increases can\
 raise a score above 20.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/character_backgrounds_ability_scores ` |
+| ` implementation ` | ` dnd2024:rules_character_backgrounds_ability_scores ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` eligible_abilities ` | ` background_three_abilities ` |
+| ` permutation_allowed ` | ` true ` |
+| ` ability_score_max_after_increase ` | ` 20 ` |
+
+#### Allocation choices
+
+<!-- splat:yaml path=splat_rule/parameters/allocation_choices -->
+
+```yaml
+- - 2
+  - 1
+  - 0
+- - 1
+  - 1
+  - 1
+```

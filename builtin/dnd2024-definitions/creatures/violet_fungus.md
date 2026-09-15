@@ -10,172 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 286
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: medium
-  type: plant
-  alignment: Unaligned
-  movement_text: 5 ft.
-  immunities_text: Blinded, Charmed, Deafened, Frightened
-  senses_text: Blindsight 30 ft.; Passive Perception 6
-  languages_text: None
-  cr_text: 1/4 (XP 50; PB +2)
-  hit_points_text: 18 (4d8)
-splat_stats:
-  strength:
-    value: 3
-  save_strength:
-    value: -4
-  dexterity:
-    value: 1
-  save_dexterity:
-    value: -5
-  constitution:
-    value: 10
-  save_constitution:
-    value: 0
-  intelligence:
-    value: 1
-  save_intelligence:
-    value: -5
-  wisdom:
-    value: 3
-  save_wisdom:
-    value: -4
-  charisma:
-    value: 1
-  save_charisma:
-    value: -5
-  armor_class:
-    value: 5
-  max_hp:
-    value: 18
-  initiative:
-    value: -5
-  speed:
-    value: 5
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/violet_fungus
-  implementation: dnd2024:creature_violet_fungus
-  parameters:
-    damage_immunities: []
-    condition_immunities:
-    - blinded
-    - charmed
-    - deafened
-    - frightened
-    senses:
-    - sense: blindsight
-      range_ft: 30
-    passive_perception: 6
-    languages:
-      speak: true
-      known: []
-    features:
-      rotting_touch:
-        economy: action
-        op: attack
-        modes:
-        - melee
-        attack_bonus: 2
-        target:
-          kind: creature_or_object
-          count: 1
-        reach_ft: 10
-        hit:
-        - op: damage
-          components:
-          - type: necrotic
-            amount:
-              dice:
-                count: 1
-                sides: 8
-              add: 0
-            average: 4
-      multiattack:
-        economy: action
-        op: multiattack
-        sequence:
-        - count: 2
-          feature: rotting_touch
-    damage_resolution:
-      choice:
-      - printed_average
-      - roll_expression
-      chooser: controller
-      exclusive: true
-    spatial_resolution:
-      provider: caller
-      required_facts:
-      - distance
-      - area_membership
-      - visibility
-      - occupancy
-      - movement_path
-      validate_against_typed_constraints: true
-splat_contracts:
-- id: dnd2024:creature_violet_fungus
-  inputs:
-    actor:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    choices:
-      required: false
-      type: choice
-    scene:
-      required: false
-      type: resolution
-    event:
-      required: false
-      type: event
-  outputs:
-  - effects
-  - roll_requests
-  - state_changes
-  events:
-  - creature.feature_requested
-  capabilities:
-  - action_economy
-  - attack_resolution
-  - creature_rules
-  - damage
-  - effects
-  - spatial_constraints
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: d92fb0e84f95b1946ffc9d5c781a15736dca96c0fcc96f23c58984c8d0f20008
-  source_path: builtin/srd-5.2.1/creature/violet_fungus.md
-  pages:
-  - 286
-  engine_gaps: &id001
-  - dnd2024:creature_violet_fungus
-  conversion_gaps: []
-  execution_profiles:
-  - dnd2024:creatures/violet_fungus
-  research_path: docs/research/srd-conversion/creatures_3.md
-  specification_sha256: 2a9be711728a8ec79bb8cc3d9b8fd0a48ac781728ace3aef6c141b8992abf97d
-splat_clauses:
-- key: source_rules
-  text: '# Violet Fungus Medium Plant, Unaligned AC 5 Initiative -5 (5) HP 18 (4d8) Speed 5 ft. MOD SAVE
-    MOD SAVE MOD SAVE Str 3 -4 -4 Dex 1 -5 -5 Con 10 +0 +0 Int 1 -5 -5 Wis 3 -4 -4 Cha 1 -5 -5 Immunities
-    Blinded, Charmed, Deafened, Frightened Senses Blindsight 30 ft.; Passive Perception 6 Languages None
-    CR 1/4 (XP 50; PB +2) ### Actions Multiattack. The fungus makes two Rotting Touch attacks. Rotting
-    Touch. Melee Attack Roll: +2, reach 10 ft. Hit: 4 (1d8) Necrotic damage.'
-  sha256: 6a82cadc48ffd6622a037eefc7f859e4f2b99fe5fdd35000b2275f4c04cafb98
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Violet Fungus
+
+## Source text
 
 <!-- SRD page 286 -->
 
@@ -199,3 +38,154 @@ Rotting Touch. Melee Attack Roll: +2, reach 10 ft. Hit:\
 4 (1d8) Necrotic damage.\
 
 Original layout: [[../../srd-5.2.1/pages/286|page 286]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` medium ` |
+| ` type ` | ` plant ` |
+| ` alignment ` | ` Unaligned ` |
+| ` movement_text ` | ` 5 ft. ` |
+| ` immunities_text ` | ` Blinded, Charmed, Deafened, Frightened ` |
+| ` senses_text ` | ` Blindsight 30 ft.; Passive Perception 6 ` |
+| ` languages_text ` | ` None ` |
+| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
+| ` hit_points_text ` | ` 18 (4d8) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 3 ` | ` -4 ` |
+| ` Dexterity ` | ` 1 ` | ` -5 ` |
+| ` Constitution ` | ` 10 ` | ` 0 ` |
+| ` Intelligence ` | ` 1 ` | ` -5 ` |
+| ` Wisdom ` | ` 3 ` | ` -4 ` |
+| ` Charisma ` | ` 1 ` | ` -5 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 5 ` |  |
+| ` max_hp ` | ` 18 ` |  |
+| ` initiative ` | ` -5 ` |  |
+| ` speed ` | ` 5 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/violet_fungus ` |
+| ` implementation ` | ` dnd2024:creature_violet_fungus ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` condition_immunities ` | ` ["blinded", "charmed", "deafened", "frightened"] ` |
+| ` passive_perception ` | ` 6 ` |
+
+#### Damage immunities
+
+<!-- splat:yaml path=splat_rule/parameters/damage_immunities -->
+
+```yaml
+[]
+```
+
+#### Senses
+
+<!-- splat:rows path=splat_rule/parameters/senses -->
+
+| Row | sense | range_ft |
+| --- | --- | --- |
+| ` 0 ` | ` blindsight ` | ` 30 ` |
+
+#### Languages
+
+<!-- splat:yaml path=splat_rule/parameters/languages -->
+
+```yaml
+speak: true
+known: []
+```
+
+#### Features
+
+##### Rotting touch
+
+<!-- splat:yaml path=splat_rule/parameters/features/rotting_touch -->
+
+```yaml
+economy: action
+op: attack
+modes:
+- melee
+attack_bonus: 2
+target:
+  kind: creature_or_object
+  count: 1
+reach_ft: 10
+hit:
+- op: damage
+  components:
+  - type: necrotic
+    amount:
+      dice:
+        count: 1
+        sides: 8
+      add: 0
+    average: 4
+```
+
+##### Multiattack
+
+<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+
+```yaml
+economy: action
+op: multiattack
+sequence:
+- count: 2
+  feature: rotting_touch
+```
+
+#### Damage resolution
+
+<!-- splat:values path=splat_rule/parameters/damage_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` choice ` | ` ["printed_average", "roll_expression"] ` |
+| ` chooser ` | ` controller ` |
+| ` exclusive ` | ` true ` |
+
+#### Spatial resolution
+
+<!-- splat:values path=splat_rule/parameters/spatial_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` provider ` | ` caller ` |
+| ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
+| ` validate_against_typed_constraints ` | ` true ` |

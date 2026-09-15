@@ -10,106 +10,193 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 53
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/paladin_paladin_class_features
-  parameters:
-    class:
-      key: dnd2024:classes/paladin
-    grant_when_class_level_reached:
-    - level: 10
-      feature:
-        key: dnd2024:class_features/paladin_level_10_aura_of_courage
-    - level: 11
-      feature:
-        key: dnd2024:class_features/paladin_level_11_radiant_strikes
-    - level: 14
-      feature:
-        key: dnd2024:class_features/paladin_level_14_restoring_touch
-    - level: 18
-      feature:
-        key: dnd2024:class_features/paladin_level_18_aura_expansion
-    - level: 19
-      feature:
-        key: dnd2024:class_features/paladin_level_19_epic_boon
-    - level: 1
-      feature:
-        key: dnd2024:class_features/paladin_level_1_lay_on_hands
-    - level: 1
-      feature:
-        key: dnd2024:class_features/paladin_level_1_spellcasting
-    - level: 1
-      feature:
-        key: dnd2024:class_features/paladin_level_1_weapon_mastery
-    - level: 2
-      feature:
-        key: dnd2024:class_features/paladin_level_2_fighting_style
-    - level: 2
-      feature:
-        key: dnd2024:class_features/paladin_level_2_paladin_s_smite
-    - level: 3
-      feature:
-        key: dnd2024:class_features/paladin_level_3_channel_divinity
-    - level: 3
-      feature:
-        key: dnd2024:class_features/paladin_level_3_paladin_subclass
-    - level: 4
-      feature:
-        key: dnd2024:class_features/paladin_level_4_ability_score_improvement
-    - level: 5
-      feature:
-        key: dnd2024:class_features/paladin_level_5_extra_attack
-    - level: 5
-      feature:
-        key: dnd2024:class_features/paladin_level_5_faithful_steed
-    - level: 6
-      feature:
-        key: dnd2024:class_features/paladin_level_6_aura_of_protection
-    - level: 9
-      feature:
-        key: dnd2024:class_features/paladin_level_9_abjure_foes
-  implementation: dnd2024:rules_paladin_paladin_class_features
-splat_contracts:
-- id: dnd2024:rules_paladin_paladin_class_features
-  inputs:
-    subject:
-      type: participant
-      required: true
-  outputs:
-  - class_features
-  events: []
-  capabilities:
-  - character_features
-  - level_advancement
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 53
-  engine_gaps: &id001
-  - dnd2024:rules_paladin_paladin_class_features
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: 3576d1ed80f64d4a2b6bab43e4704d86083e6772d8ac31491b007dea89e655de
-  parent_name: Paladin
-  line_span:
-    first: 4452
-    count: 4
-splat_clauses:
-- key: source_rules
-  text: '# Paladin Class Features As a Paladin, you gain the following class features when you reach the
-    specified Paladin levels. These features are listed in the Paladin Features table.'
-  sha256: 013fccc0b3505ebaf996d4cf4a7638ff8ef46c1a171db337bd10ca594b1786bf
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Paladin Class Features
+
+## Source text
 
 <!-- SRD page 53 -->
 
 As a Paladin, you gain the following class features\
 when you reach the specified Paladin levels. These\
 features are listed in the Paladin Features table.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/paladin_paladin_class_features ` |
+| ` implementation ` | ` dnd2024:rules_paladin_paladin_class_features ` |
+
+### Parameters
+
+#### Class
+
+<!-- splat:values path=splat_rule/parameters/class -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:classes/paladin ` |
+
+#### Grant when class level reached
+
+<!-- splat:rows path=splat_rule/parameters/grant_when_class_level_reached -->
+
+| Row | level |
+| --- | --- |
+| ` 0 ` | ` 10 ` |
+| ` 1 ` | ` 11 ` |
+| ` 2 ` | ` 14 ` |
+| ` 3 ` | ` 18 ` |
+| ` 4 ` | ` 19 ` |
+| ` 5 ` | ` 1 ` |
+| ` 6 ` | ` 1 ` |
+| ` 7 ` | ` 1 ` |
+| ` 8 ` | ` 2 ` |
+| ` 9 ` | ` 2 ` |
+| ` 10 ` | ` 3 ` |
+| ` 11 ` | ` 3 ` |
+| ` 12 ` | ` 4 ` |
+| ` 13 ` | ` 5 ` |
+| ` 14 ` | ` 5 ` |
+| ` 15 ` | ` 6 ` |
+| ` 16 ` | ` 9 ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/0/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_10_aura_of_courage ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/1/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_11_radiant_strikes ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/2/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_14_restoring_touch ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/3/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_18_aura_expansion ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/4/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_19_epic_boon ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/5/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_1_lay_on_hands ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/6/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_1_spellcasting ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/7/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_1_weapon_mastery ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/8/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_2_fighting_style ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/9/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_2_paladin_s_smite ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/10/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_3_channel_divinity ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/11/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_3_paladin_subclass ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/12/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_4_ability_score_improvement ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/13/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_5_extra_attack ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/14/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_5_faithful_steed ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/15/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_6_aura_of_protection ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/16/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/paladin_level_9_abjure_foes ` |

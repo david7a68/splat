@@ -10,92 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 216
   url: https://www.dndbeyond.com/srd
-splat_item:
-  category: wondrous_item
-  rarity: legendary
-  equipment:
-    attunement: required
-splat_rule:
-  mechanic: dnd2024:items/crystal_ball_of_mind_reading
-  implementation: dnd2024:item_crystal_ball_of_mind_reading
-  parameters:
-    equipped: touching
-    spells:
-    - spell:
-        key: dnd2024:spells/scrying
-      save_dc: 17
-      usage: at_will
-    - spell:
-        key: dnd2024:spells/detect_thoughts
-      save_dc: 17
-      targets:
-        visible_to_actor: true
-        maximum_distance_from_scrying_sensor_ft: 30
-      concentration: false
-      ends_on: linked_scrying_ends
-      usage: at_will
-    attunement_required: true
-splat_contracts:
-- id: dnd2024:item_crystal_ball_of_mind_reading
-  inputs:
-    actor:
-      type: participant
-      required: true
-    item:
-      type: item_instance
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    destination:
-      required: false
-      type: location
-    selection:
-      required: false
-      type: choice
-    context:
-      required: false
-      type: resolution
-  outputs:
-  - effects
-  - item_state_changes
-  events:
-  - spell.cast_pending
-  - spell.ended
-  - item.attunement_completed
-  - item.attunement_ended
-  capabilities:
-  - item_effects
-  - item_spellcasting
-splat_conversion:
-  status: specified
-  category: magic_item
-  source_sha256: 6c13018d67656afe5431f9257d648e91e32296057600ca2ee8653b4981570a76
-  source_path: builtin/srd-5.2.1/magic_item/crystal_ball_of_mind_reading.md
-  pages:
-  - 216
-  engine_gaps: &id001
-  - dnd2024:item_crystal_ball_of_mind_reading
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/items_3.md
-  specification_sha256: e9b7bf7becefede566fd8c325b18e3627fb5aaa4d33b82bedd621d0924845957
-splat_clauses:
-- key: source_rules
-  text: '# Crystal Ball of Mind Reading Wondrous Item, Legendary (Requires Attunement) While touching
-    this crystal orb, you can cast Scrying (save DC 17) with it. In addition, you can cast Detect Thoughts
-    (save DC 17) targeting creatures you can see within 30 feet of the spell’s sensor. You don’t need
-    to concentrate on this Detect Thoughts spell to maintain it during its duration, but it ends if the
-    Scrying spell ends.'
-  sha256: bfdd620d4d535f8a96c1fb957afc57e5da9e0eb9d6d78858fb7cc9289524e19f
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Crystal Ball of Mind Reading
+
+## Source text
 
 <!-- SRD page 216 -->
 
@@ -109,3 +28,72 @@ to maintain it during its duration, but it ends if the\
 Scrying spell ends.\
 
 Original layout: [[../../srd-5.2.1/pages/216|page 216]].
+
+## Item
+
+<!-- splat:values path=splat_item -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` wondrous_item ` |
+| ` rarity ` | ` legendary ` |
+
+### Equipment
+
+<!-- splat:values path=splat_item/equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` attunement ` | ` required ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:items/crystal_ball_of_mind_reading ` |
+| ` implementation ` | ` dnd2024:item_crystal_ball_of_mind_reading ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` equipped ` | ` touching ` |
+| ` attunement_required ` | ` true ` |
+
+#### Spells
+
+<!-- splat:rows path=splat_rule/parameters/spells -->
+
+| Row | save_dc | usage | concentration | ends_on |
+| --- | --- | --- | --- | --- |
+| ` 0 ` | ` 17 ` | ` at_will ` |  |  |
+| ` 1 ` | ` 17 ` | ` at_will ` | ` false ` | ` linked_scrying_ends ` |
+
+##### Spell
+
+<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:spells/scrying ` |
+
+##### Spell
+
+<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:spells/detect_thoughts ` |
+
+##### Targets
+
+<!-- splat:values path=splat_rule/parameters/spells/1/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` visible_to_actor ` | ` true ` |
+| ` maximum_distance_from_scrying_sensor_ft ` | ` 30 ` |

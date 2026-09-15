@@ -73,12 +73,11 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
         return Ok(None);
     };
     let meta: Conversion = serde_yaml_ng::from_value(value.clone()).map_err(|e| e.to_string())?;
-    let clauses: Vec<Clause> = serde_yaml_ng::from_value(
-        field(&entry.fields, "splat_clauses")
-            .ok_or("Conversion requires source clauses")?
-            .clone(),
-    )
-    .map_err(|e| e.to_string())?;
+    let clauses: Vec<Clause> = field(&entry.fields, "splat_clauses")
+        .map(|value| serde_yaml_ng::from_value(value.clone()))
+        .transpose()
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
     if meta.pages.is_empty() || meta.pages.iter().any(|p| !(1..=364).contains(p)) {
         return Err("Conversion has invalid SRD pages".into());
     }
@@ -86,8 +85,8 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
     {
         return Err("Conversion requires SHA256 provenance".into());
     }
-    if meta.source_path.is_empty() || meta.category.is_empty() || clauses.is_empty() {
-        return Err("Conversion requires source, category and clauses".into());
+    if meta.source_path.is_empty() || meta.category.is_empty() {
+        return Err("Conversion requires source and category".into());
     }
     let mut keys = BTreeSet::new();
     for clause in &clauses {
@@ -189,7 +188,79 @@ pub fn entries() -> Result<Vec<Entry>, String> {
     let mut result = Vec::new();
     walk(&DEFINITIONS, &mut result)?;
     result.sort_by(|a, b| a.key.cmp(&b.key));
+    attach_reports(
+        &mut result,
+        DEFINITIONS
+            .get_file("coverage.json")
+            .and_then(|f| f.contents_utf8())
+            .ok_or("Missing coverage")?,
+        DEFINITIONS
+            .get_file("contracts.json")
+            .and_then(|f| f.contents_utf8())
+            .ok_or("Missing contracts")?,
+    )?;
     Ok(result)
+}
+
+/// Reports are generated package data, not editable note properties.
+/// Attach only after checking identity and the mechanical fingerprint.
+fn attach_reports(entries: &mut [Entry], coverage: &str, contracts: &str) -> Result<(), String> {
+    let coverage: serde_json::Value = serde_json::from_str(coverage).map_err(|e| e.to_string())?;
+    let registry: super::contracts::Registry =
+        serde_json::from_str(contracts).map_err(|e| e.to_string())?;
+    if registry.format != 2 {
+        return Err("Unsupported contract registry".into());
+    }
+    let records = coverage["entries"]
+        .as_array()
+        .ok_or("Missing coverage entries")?;
+    let interfaces: BTreeMap<_, _> = registry
+        .contracts
+        .iter()
+        .map(|c| (c.definition.as_str(), c))
+        .collect();
+    let mut records_by_key = BTreeMap::new();
+    for record in records {
+        let key = record["key"].as_str().ok_or("Missing coverage key")?;
+        if records_by_key.insert(key, record).is_some() {
+            return Err("Duplicate coverage key".into());
+        }
+    }
+    if interfaces.len() != registry.contracts.len() {
+        return Err("Duplicate contract definition".into());
+    }
+    for entry in entries {
+        let record = entry
+            .key
+            .as_deref()
+            .and_then(|key| records_by_key.get(key))
+            .ok_or("Definition missing coverage record")?;
+        if record["id"] != entry.id.to_string() {
+            return Err("Report identity mismatch".into());
+        }
+        let mut metadata = record.as_object().ok_or("Invalid coverage record")?.clone();
+        for key in ["key", "id", "path", "source", "sha256"] {
+            metadata.remove(key);
+        }
+        if field(&entry.fields, "splat_conversion").is_some()
+            || field(&entry.fields, "splat_contracts").is_some()
+        {
+            return Err("Note duplicates generated report metadata".into());
+        }
+        entry.fields.insert(
+            serde_yaml_ng::Value::String("splat_conversion".into()),
+            serde_yaml_ng::to_value(metadata).map_err(|e| e.to_string())?,
+        );
+        if let Some(contract) = entry.key.as_deref().and_then(|key| interfaces.get(key)) {
+            entry.fields.insert(
+                serde_yaml_ng::Value::String("splat_contracts".into()),
+                serde_yaml_ng::to_value(vec![contract.interface()]).map_err(|e| e.to_string())?,
+            );
+            contract.validate(entry)?;
+        }
+        conversion(entry)?;
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -249,7 +320,7 @@ pub fn verify() -> CatalogueReport {
                 .ok_or("Missing contract registry")?,
         )
         .map_err(|e| e.to_string())?;
-        if registry.format != 1 {
+        if registry.format != 2 {
             return Err("Unsupported contract registry".into());
         }
         let mut contract_definitions = BTreeMap::new();
@@ -446,18 +517,16 @@ mod tests {
             .find(|e| e.key.as_deref() == Some("dnd2024:spells/fireball"))
             .unwrap();
         let original = entry.clone();
-        entry
-            .fields
-            .get_mut(Value::String("splat_clauses".into()))
-            .unwrap()
-            .as_sequence_mut()
-            .unwrap()[0]
-            .as_mapping_mut()
-            .unwrap()
-            .insert(
-                Value::String("status".into()),
-                Value::String("needs_semantic_conversion".into()),
-            );
+        entry.fields.insert(
+            Value::String("splat_clauses".into()),
+            serde_yaml_ng::to_value(vec![Clause {
+                key: "source_rules".into(),
+                text: "A rule".into(),
+                sha256: hash("A rule"),
+                status: ClauseStatus::NeedsSemanticConversion,
+            }])
+            .unwrap(),
+        );
         let meta = entry
             .fields
             .get_mut(Value::String("splat_conversion".into()))
@@ -489,18 +558,19 @@ mod tests {
     }
 
     #[test]
-    fn editing_source_clause_requires_a_new_fingerprint() {
-        let mut entry = entries().unwrap().remove(0);
-        let clauses = entry
-            .fields
-            .get_mut(Value::String("splat_clauses".into()))
+    fn editing_body_mechanics_requires_a_new_fingerprint() {
+        let mut entry = entries()
             .unwrap()
-            .as_sequence_mut()
+            .into_iter()
+            .find(|e| e.name == "Fireball")
             .unwrap();
-        clauses[0].as_mapping_mut().unwrap().insert(
-            Value::String("text".into()),
-            Value::String("The target also dies.".into()),
-        );
+        entry
+            .fields
+            .get_mut(Value::String("splat_spell".into()))
+            .unwrap()
+            .as_mapping_mut()
+            .unwrap()
+            .insert(Value::String("level".into()), Value::Number(9.into()));
         assert!(conversion(&entry).unwrap_err().contains("fingerprint"));
     }
 

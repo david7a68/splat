@@ -10,312 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 274
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: large
-  type: aberration
-  alignment: Chaotic Neutral
-  movement_text: 10 ft., Fly 40 ft.
-  skills_text: Stealth +5
-  immunities_text: Frightened
-  senses_text: Darkvision 120 ft.; Passive Perception 12
-  languages_text: Deep Speech, Undercommon
-  cr_text: 8 (XP 3,900; PB +3)
-  hit_points_text: 91 (14d10 + 14)
-splat_stats:
-  strength:
-    value: 17
-  save_strength:
-    value: 3
-  dexterity:
-    value: 15
-  save_dexterity:
-    value: 2
-  constitution:
-    value: 12
-  save_constitution:
-    value: 1
-  intelligence:
-    value: 13
-  save_intelligence:
-    value: 1
-  wisdom:
-    value: 14
-  save_wisdom:
-    value: 2
-  charisma:
-    value: 7
-  save_charisma:
-    value: -2
-  armor_class:
-    value: 14
-  max_hp:
-    value: 91
-  initiative:
-    value: 5
-  speed:
-    value: 10
-    unit: ft
-  fly_speed:
-    value: 40
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/cloaker
-  implementation: dnd2024:creature_cloaker
-  parameters:
-    features:
-      light_sensitivity:
-        economy: passive
-        disadvantage:
-          rolls:
-          - attack
-          when: self_in_bright_light
-      attach:
-        economy: action
-        op: attack
-        attack_modes:
-        - melee
-        attack_bonus: 6
-        targets:
-          count: 1
-        hit:
-        - op: damage
-          average: 13
-          amount:
-            dice:
-              count: 3
-              sides: 6
-            add: 3
-          damage_type: piercing
-        - op: if
-          test:
-            target_kind: creature
-            target_size_max: large
-          then:
-          - op: attach
-            effects_on_target:
-            - op: condition
-              condition: blinded
-            self_attack_restriction:
-              feature: attach
-              targets: attached_target_only
-            damage_taken:
-              self_fraction:
-                numerator: 1
-                denominator: 2
-                round: down
-              attached_target_damage: same_amount_as_self
-            detach_options:
-            - actor: self
-              movement_cost_feet: 5
-            - actor: target_or_creature_within_5_feet
-              economy: action
-              check:
-                ability: strength
-                skill: athletics
-                dc: 14
-              success: detach
-        reach_feet: 5
-      tail:
-        economy: action
-        op: attack
-        attack_modes:
-        - melee
-        attack_bonus: 6
-        targets:
-          count: 1
-        hit:
-        - op: damage
-          average: 8
-          amount:
-            dice:
-              count: 1
-              sides: 10
-            add: 3
-          damage_type: slashing
-        reach_feet: 10
-      multiattack:
-        economy: action
-        op: sequence
-        steps:
-        - op: use_feature
-          feature: attach
-          count: 1
-        - op: use_feature
-          feature: tail
-          count: 2
-      phantasms:
-        economy: bonus_action
-        resource:
-          capacity: 1
-          recovery:
-          - short_rest
-          - long_rest
-          cost: 1
-        op: cast_spell
-        spell:
-          key: dnd2024:spells/mirror_image
-        ability: wisdom
-        components_waived:
-        - verbal
-        - somatic
-        - material
-        ends_early:
-          events:
-          - self.turn.start
-          - self.turn.end
-          when: self_in_bright_light
-        cast_level: spell_minimum
-      moan:
-        economy: bonus_action
-        op: save
-        ability: wisdom
-        dc: 13
-        targets:
-          kind: creature
-          count: all
-          area:
-            shape: emanation
-            size_feet: 60
-            origin: self
-        failure:
-        - op: condition
-          condition: frightened
-          ends:
-            event: turn.end
-            participant: self
-            occurrence: next
-        success:
-        - op: feature_immunity
-          source: self
-          feature: moan
-          duration:
-            hours: 24
-    skill_totals:
-      stealth: 5
-    defenses:
-      immunities:
-        conditions:
-        - frightened
-    senses:
-      passive_perception: 12
-      special:
-      - sense: darkvision
-        range_feet: 120
-    communication:
-      speaks:
-      - deep_speech
-      - undercommon
-      understands:
-      - deep_speech
-      - undercommon
-    stat_block_conventions:
-      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
-      save_dc: supplied_total
-      damage_mode_choice:
-      - fixed_average
-      - rolled_dice
-      condition_source: self
-      multiattack_child_economy_cost: 0
-      multiattack_child_resource_costs_retained: true
-      spellcasting:
-        default_level: spell_minimum
-        spell_slots_expended: false
-        required_materials: available
-        casting_time_at_least_one_minute:
-          uses_normal_casting_duration: true
-          magic_action_each_turn: true
-          concentration_required: true
-      geometry_assumptions:
-        chooser: gm
-        supplies:
-        - range
-        - visibility
-        - line_of_sight
-        - area_membership
-        - reachable_locations
-        - unoccupied_locations
-        - terrain
-        - plane
-        - form_appearance
-splat_contracts:
-- id: dnd2024:creature_cloaker
-  inputs:
-    self:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    feature:
-      type: choice
-      required: true
-    event:
-      required: false
-      type: event
-    choices:
-      required: false
-      type: choice
-    resolution:
-      required: false
-      type: resolution
-    campaign:
-      required: false
-      type: campaign
-  outputs:
-  - resolved_feature
-  - effects
-  - resource_changes
-  events:
-  - turn.end
-  capabilities:
-  - action_economy
-  - creature_rules
-  - dice
-  - effects
-  - resources
-  - spellcasting
-  - targeting
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: eaf065466d59b11241c0e39821869220a753058dc695ba48995f5dc4ff355ef5
-  source_path: builtin/srd-5.2.1/creature/cloaker.md
-  pages:
-  - 274
-  engine_gaps: &id001
-  - dnd2024:creature_cloaker
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/creatures_2.md
-  specification_sha256: b0a29bfab8a77d8bbf3ac7142e91e906e7862dd2a3e4461452dacaecdf1d03bb
-splat_clauses:
-- key: source_rules
-  text: '# Cloaker Large Aberration, Chaotic Neutral AC 14 Initiative +5 (15) HP 91 (14d10 + 14) Speed
-    10 ft., Fly 40 ft. MOD SAVE MOD SAVE MOD SAVE Str 17 +3 +3 Dex 15 +2 +2 Con 12 +1 +1 Int 13 +1 +1
-    Wis 14 +2 +2 Cha 7 -2 -2 Skills Stealth +5 Immunities Frightened Senses Darkvision 120 ft.; Passive
-    Perception 12 Languages Deep Speech, Undercommon CR 8 (XP 3,900; PB +3) ### Traits Light Sensitivity.
-    While in Bright Light, the cloaker has Disadvantage on attack rolls. ### Actions Multiattack. The
-    cloaker makes one Attach attack and two Tail attacks. Attach. Melee Attack Roll: +6, reach 5 ft. Hit:
-    13 (3d6 + 3) Piercing damage. If the target is a Large or smaller creature, the cloaker attaches to
-    it. While the cloaker is attached, the target has the Blinded condition, and the cloaker can’t make
-    Attach attacks against other targets. In addition, the cloaker halves the damage it takes (round down),
-    and the target takes the same amount of damage. The cloaker can detach itself by spending 5 feet of
-    movement. The target or a creature within 5 feet of it can take an action to try to detach the cloaker,
-    doing so by succeeding on a DC 14 Strength (Athletics) check. Tail. Melee Attack Roll: +6, reach 10
-    ft. Hit: 8 (1d10 + 3) Slashing damage. ### Bonus Actions Moan. Wisdom Saving Throw: DC 13, each creature
-    in a 60-foot Emanation originating from the cloaker. Failure: The target has the Frightened condition
-    until the end of the cloaker’s next turn. Success: The target is immune to this cloaker’s Moan for
-    the next 24 hours. Phantasms (Recharge after a Short or Long Rest). The cloaker casts the Mirror Image
-    spell, requiring no spell components and using Wisdom as the spellcasting ability. The spell ends
-    early if the cloaker starts or ends its turn in Bright Light.'
-  sha256: a36dfff5cc787cfd89300ed6f6c6610fe64e73021775bf9d237227e84741088b
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Cloaker
+
+## Source text
 
 <!-- SRD page 274 -->
 
@@ -370,3 +69,307 @@ ity. The spell ends early if the cloaker starts or ends its\
 turn in Bright Light.\
 
 Original layout: [[../../srd-5.2.1/pages/274|page 274]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` large ` |
+| ` type ` | ` aberration ` |
+| ` alignment ` | ` Chaotic Neutral ` |
+| ` movement_text ` | ` 10 ft., Fly 40 ft. ` |
+| ` skills_text ` | ` Stealth +5 ` |
+| ` immunities_text ` | ` Frightened ` |
+| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 12 ` |
+| ` languages_text ` | ` Deep Speech, Undercommon ` |
+| ` cr_text ` | ` 8 (XP 3,900; PB +3) ` |
+| ` hit_points_text ` | ` 91 (14d10 + 14) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 17 ` | ` 3 ` |
+| ` Dexterity ` | ` 15 ` | ` 2 ` |
+| ` Constitution ` | ` 12 ` | ` 1 ` |
+| ` Intelligence ` | ` 13 ` | ` 1 ` |
+| ` Wisdom ` | ` 14 ` | ` 2 ` |
+| ` Charisma ` | ` 7 ` | ` -2 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 14 ` |  |
+| ` max_hp ` | ` 91 ` |  |
+| ` initiative ` | ` 5 ` |  |
+| ` speed ` | ` 10 ` | ` ft ` |
+| ` fly_speed ` | ` 40 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/cloaker ` |
+| ` implementation ` | ` dnd2024:creature_cloaker ` |
+
+### Parameters
+
+#### Features
+
+##### Light sensitivity
+
+<!-- splat:yaml path=splat_rule/parameters/features/light_sensitivity -->
+
+```yaml
+economy: passive
+disadvantage:
+  rolls:
+  - attack
+  when: self_in_bright_light
+```
+
+##### Attach
+
+<!-- splat:yaml path=splat_rule/parameters/features/attach -->
+
+```yaml
+economy: action
+op: attack
+attack_modes:
+- melee
+attack_bonus: 6
+targets:
+  count: 1
+hit:
+- op: damage
+  average: 13
+  amount:
+    dice:
+      count: 3
+      sides: 6
+    add: 3
+  damage_type: piercing
+- op: if
+  test:
+    target_kind: creature
+    target_size_max: large
+  then:
+  - op: attach
+    effects_on_target:
+    - op: condition
+      condition: blinded
+    self_attack_restriction:
+      feature: attach
+      targets: attached_target_only
+    damage_taken:
+      self_fraction:
+        numerator: 1
+        denominator: 2
+        round: down
+      attached_target_damage: same_amount_as_self
+    detach_options:
+    - actor: self
+      movement_cost_feet: 5
+    - actor: target_or_creature_within_5_feet
+      economy: action
+      check:
+        ability: strength
+        skill: athletics
+        dc: 14
+      success: detach
+reach_feet: 5
+```
+
+##### Tail
+
+<!-- splat:yaml path=splat_rule/parameters/features/tail -->
+
+```yaml
+economy: action
+op: attack
+attack_modes:
+- melee
+attack_bonus: 6
+targets:
+  count: 1
+hit:
+- op: damage
+  average: 8
+  amount:
+    dice:
+      count: 1
+      sides: 10
+    add: 3
+  damage_type: slashing
+reach_feet: 10
+```
+
+##### Multiattack
+
+<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+
+```yaml
+economy: action
+op: sequence
+steps:
+- op: use_feature
+  feature: attach
+  count: 1
+- op: use_feature
+  feature: tail
+  count: 2
+```
+
+##### Phantasms
+
+<!-- splat:yaml path=splat_rule/parameters/features/phantasms -->
+
+```yaml
+economy: bonus_action
+resource:
+  capacity: 1
+  recovery:
+  - short_rest
+  - long_rest
+  cost: 1
+op: cast_spell
+spell:
+  key: dnd2024:spells/mirror_image
+ability: wisdom
+components_waived:
+- verbal
+- somatic
+- material
+ends_early:
+  events:
+  - self.turn.start
+  - self.turn.end
+  when: self_in_bright_light
+cast_level: spell_minimum
+```
+
+##### Moan
+
+<!-- splat:yaml path=splat_rule/parameters/features/moan -->
+
+```yaml
+economy: bonus_action
+op: save
+ability: wisdom
+dc: 13
+targets:
+  kind: creature
+  count: all
+  area:
+    shape: emanation
+    size_feet: 60
+    origin: self
+failure:
+- op: condition
+  condition: frightened
+  ends:
+    event: turn.end
+    participant: self
+    occurrence: next
+success:
+- op: feature_immunity
+  source: self
+  feature: moan
+  duration:
+    hours: 24
+```
+
+#### Skill totals
+
+<!-- splat:values path=splat_rule/parameters/skill_totals -->
+
+| Field | Value |
+| --- | --- |
+| ` stealth ` | ` 5 ` |
+
+#### Defenses
+
+##### Immunities
+
+<!-- splat:values path=splat_rule/parameters/defenses/immunities -->
+
+| Field | Value |
+| --- | --- |
+| ` conditions ` | ` ["frightened"] ` |
+
+#### Senses
+
+<!-- splat:values path=splat_rule/parameters/senses -->
+
+| Field | Value |
+| --- | --- |
+| ` passive_perception ` | ` 12 ` |
+
+##### Special
+
+<!-- splat:rows path=splat_rule/parameters/senses/special -->
+
+| Row | sense | range_feet |
+| --- | --- | --- |
+| ` 0 ` | ` darkvision ` | ` 120 ` |
+
+#### Communication
+
+<!-- splat:values path=splat_rule/parameters/communication -->
+
+| Field | Value |
+| --- | --- |
+| ` speaks ` | ` ["deep_speech", "undercommon"] ` |
+| ` understands ` | ` ["deep_speech", "undercommon"] ` |
+
+#### Stat block conventions
+
+<!-- splat:yaml path=splat_rule/parameters/stat_block_conventions -->
+
+```yaml
+attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+save_dc: supplied_total
+damage_mode_choice:
+- fixed_average
+- rolled_dice
+condition_source: self
+multiattack_child_economy_cost: 0
+multiattack_child_resource_costs_retained: true
+spellcasting:
+  default_level: spell_minimum
+  spell_slots_expended: false
+  required_materials: available
+  casting_time_at_least_one_minute:
+    uses_normal_casting_duration: true
+    magic_action_each_turn: true
+    concentration_required: true
+geometry_assumptions:
+  chooser: gm
+  supplies:
+  - range
+  - visibility
+  - line_of_sight
+  - area_membership
+  - reachable_locations
+  - unoccupied_locations
+  - terrain
+  - plane
+  - form_appearance
+```

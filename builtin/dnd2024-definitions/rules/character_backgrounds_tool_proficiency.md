@@ -10,53 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 83
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/character_backgrounds_tool_proficiency
-  parameters:
-    grant_count: 1
-    source: background_definition
-    selection:
-    - fixed_tool
-    - choose_artisans_tool
-  implementation: dnd2024:rules_character_backgrounds_tool_proficiency
-splat_contracts:
-- id: dnd2024:rules_character_backgrounds_tool_proficiency
-  inputs:
-    subject:
-      type: participant
-      required: true
-  outputs:
-  - tool_proficiency
-  events: []
-  capabilities:
-  - character_creation
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 83
-  engine_gaps: &id001
-  - dnd2024:rules_character_backgrounds_tool_proficiency
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: f5d6ecac19a238bb37ffa7db67bdd87c3a9a082472fd60a75f351b0f7c0a273b
-  parent_name: Character Backgrounds
-  line_span:
-    first: 7078
-    count: 5
-splat_clauses:
-- key: source_rules
-  text: '# Tool Proficiency Each background gives a character proficiency with one tool—either a specific
-    tool or one chosen from the Artisan’s Tools category. Tools are detailed in “Equipment.”'
-  sha256: 1ded9a14381a74fb87a01bb2ecd674a8a877d08818990c352fab2f1e2ceb0352
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Tool Proficiency
+
+## Source text
 
 <!-- SRD page 83 -->
 
@@ -64,3 +22,22 @@ Each background gives a character proficiency with\
 one tool—either a specific tool or one chosen from\
 the Artisan’s Tools category. Tools are detailed in\
 “Equipment.”\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/character_backgrounds_tool_proficiency ` |
+| ` implementation ` | ` dnd2024:rules_character_backgrounds_tool_proficiency ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` grant_count ` | ` 1 ` |
+| ` source ` | ` background_definition ` |
+| ` selection ` | ` ["fixed_tool", "choose_artisans_tool"] ` |

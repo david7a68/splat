@@ -10,30 +10,26 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 87
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/feats
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 87
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: 48241e573440f64484cdb18eb2b85dbb2083ac5dfb98f0a172bc3731f064ba35
-  parent_name: Feats
-  line_span:
-    first: 7450
-    count: 1
-splat_clauses:
-- key: source_rules
-  text: '# Feats'
-  sha256: f0911a3b58653454ae8d5c544b1fab1d7b8e42b9117354ce4b925e9549e7c36b
-  status: informational
 ---
 
 # Feats
+
+## Source text
+
+
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/feats ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

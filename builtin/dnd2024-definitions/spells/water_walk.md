@@ -10,117 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 173, 174
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 3
-  school: transmutation
-  classes:
-  - cleric
-  - druid
-  - ranger
-  - sorcerer
-  components:
-  - verbal
-  - somatic
-  - material
-  concentration: false
-  duration: 1 hour
-  casting_time: Action or Ritual
-  ritual: true
-  range:
-    feet: 30
-  material:
-    description: a piece of cork
-    consumed: false
-splat_rule:
-  mechanic: dnd2024:spells/water_walk
-  implementation: dnd2024:spell_water_walk
-  parameters:
-    spell_lifetime:
-      concentration: false
-      maximum_seconds: 3600
-    targets:
-      kind: creature
-      willing: true
-      chooser: caster
-      maximum_count: 10
-      range_feet: 30
-    movement:
-      surface_types:
-      - any_liquid
-      - water
-      - acid
-      - mud
-      - snow
-      - quicksand
-      - lava
-      treat_surface_as: harmless_solid_ground
-      lava_heat_damage: still_possible
-    cross_surface:
-      directions:
-      - surface_to_liquid
-      - liquid_to_surface
-      economy: bonus_action
-    falling_into_liquid:
-      passes_through_surface: true
-      enters_liquid: true
-      bonus_action_required: false
-    spatial_resolution:
-      source: supplied_world_geometry
-      unknown_facts: require_resolution
-      infer_unprovided_geometry: false
-splat_contracts:
-- id: dnd2024:spell_water_walk
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    targets:
-      type: participant_list
-      required: true
-    spatial_facts:
-      required: false
-      type: resolution
-  outputs:
-  - effects
-  events:
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - movement
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: 79dbf99132536bd8f8c26634626abb2aa79ed375d3065e4559853bc3a5c89b3a
-  source_path: builtin/srd-5.2.1/spell/water_walk.md
-  pages:
-  - 173
-  - 174
-  engine_gaps: &id001
-  - dnd2024:spell_water_walk
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_4.md
-  specification_sha256: f025b223dbeed13936bb1e9642961fd188727c62726cd5b64ee9ac590b698a0c
-splat_clauses:
-- key: source_rules
-  text: '# Water Walk Level 3 Transmutation (Cleric, Druid, Ranger, Sorcerer) Casting Time: Action or
-    Ritual Range: 30 feet Components: V, S, M (a piece of cork) Duration: 1 hour This spell grants the
-    ability to move across any liquid surface—such as water, acid, mud, snow, quicksand, or lava—as if
-    it were harmless solid ground (creatures crossing molten lava can still take damage from the heat).
-    Up to ten willing creatures of your choice within range gain this ability for the duration. An affected
-    target must take a Bonus Action to pass from the liquid’s surface into the liquid itself and vice
-    versa, but if the target falls into the liquid, the target passes through the surface into the liquid
-    below.'
-  sha256: 0cece24ff19da6c134ab0af1fd40cee1d2f85bfb9f76ef98756e9b444e4ecdfb
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Water Walk
+
+## Source text
 
 <!-- SRD page 173 -->
 
@@ -145,3 +39,106 @@ the target passes through the surface into the liquid\
 below.\
 
 Original layout: [[../../srd-5.2.1/pages/173|page 173]], [[../../srd-5.2.1/pages/174|page 174]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 3 ` |
+| ` school ` | ` transmutation ` |
+| ` classes ` | ` ["cleric", "druid", "ranger", "sorcerer"] ` |
+| ` components ` | ` ["verbal", "somatic", "material"] ` |
+| ` concentration ` | ` false ` |
+| ` duration ` | ` 1 hour ` |
+| ` casting_time ` | ` Action or Ritual ` |
+| ` ritual ` | ` true ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 30 ` |
+
+### Material
+
+<!-- splat:values path=splat_spell/material -->
+
+| Field | Value |
+| --- | --- |
+| ` description ` | ` a piece of cork ` |
+| ` consumed ` | ` false ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/water_walk ` |
+| ` implementation ` | ` dnd2024:spell_water_walk ` |
+
+### Parameters
+
+#### Spell lifetime
+
+<!-- splat:values path=splat_rule/parameters/spell_lifetime -->
+
+| Field | Value |
+| --- | --- |
+| ` concentration ` | ` false ` |
+| ` maximum_seconds ` | ` 3600 ` |
+
+#### Targets
+
+<!-- splat:values path=splat_rule/parameters/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` willing ` | ` true ` |
+| ` chooser ` | ` caster ` |
+| ` maximum_count ` | ` 10 ` |
+| ` range_feet ` | ` 30 ` |
+
+#### Movement
+
+<!-- splat:values path=splat_rule/parameters/movement -->
+
+| Field | Value |
+| --- | --- |
+| ` surface_types ` | ` ["any_liquid", "water", "acid", "mud", "snow", "quicksand", "lava"] ` |
+| ` treat_surface_as ` | ` harmless_solid_ground ` |
+| ` lava_heat_damage ` | ` still_possible ` |
+
+#### Cross surface
+
+<!-- splat:values path=splat_rule/parameters/cross_surface -->
+
+| Field | Value |
+| --- | --- |
+| ` directions ` | ` ["surface_to_liquid", "liquid_to_surface"] ` |
+| ` economy ` | ` bonus_action ` |
+
+#### Falling into liquid
+
+<!-- splat:values path=splat_rule/parameters/falling_into_liquid -->
+
+| Field | Value |
+| --- | --- |
+| ` passes_through_surface ` | ` true ` |
+| ` enters_liquid ` | ` true ` |
+| ` bonus_action_required ` | ` false ` |
+
+#### Spatial resolution
+
+<!-- splat:values path=splat_rule/parameters/spatial_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` source ` | ` supplied_world_geometry ` |
+| ` unknown_facts ` | ` require_resolution ` |
+| ` infer_unprovided_geometry ` | ` false ` |

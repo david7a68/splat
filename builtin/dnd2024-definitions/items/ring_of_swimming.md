@@ -10,79 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 239
   url: https://www.dndbeyond.com/srd
-splat_item:
-  category: ring
-  rarity: uncommon
-  equipment:
-    attunement: none
-splat_rule:
-  mechanic: dnd2024:items/ring_of_swimming
-  implementation: dnd2024:item_ring_of_swimming
-  parameters:
-    equipment_state: worn_on_finger_or_similar_digit
-    swim_speed_ft: 40
-    attunement:
-      required: false
-    common_rules:
-    - key: dnd2024:rules/magic_item_categories_rings
-splat_contracts:
-- id: dnd2024:item_ring_of_swimming
-  inputs:
-    actor:
-      type: participant
-      required: true
-    source_item:
-      type: item_instance
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    locations:
-      required: false
-      type: location_list
-    choice:
-      required: false
-      type: choice
-    event:
-      required: false
-      type: event
-    campaign:
-      required: false
-      type: campaign
-  outputs:
-  - item_state
-  - effects
-  - resolutions
-  events:
-  - equipment.changed
-  capabilities:
-  - inventory
-  - effects
-splat_conversion:
-  status: specified
-  category: magic_item
-  source_sha256: 30071db96f2cc3088431df00b9a3c2eed4ddd0535b60e53226afb702cb147909
-  source_path: builtin/srd-5.2.1/magic_item/ring_of_swimming.md
-  pages:
-  - 239
-  engine_gaps: &id001
-  - dnd2024:item_ring_of_swimming
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/items_2.md
-  specification_sha256: 8f9c1bb57fec539f31b28bde89b0feb1ccbb5cc1bff8e96ccb4696dd574e44ed
-splat_clauses:
-- key: source_rules
-  text: '# Ring of Swimming Ring, Uncommon You have a Swim Speed of 40 feet while wearing this ring.'
-  sha256: 3b8e410aa3a9858ca2d34fc334b4ed09780f136539d6169f3f67a362599d14f3
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Ring of Swimming
+
+## Source text
 
 <!-- SRD page 239 -->
 
@@ -91,3 +23,54 @@ You have a Swim Speed of 40 feet while wearing this\
 ring.\
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]].
+
+## Item
+
+<!-- splat:values path=splat_item -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` ring ` |
+| ` rarity ` | ` uncommon ` |
+
+### Equipment
+
+<!-- splat:values path=splat_item/equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` attunement ` | ` none ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:items/ring_of_swimming ` |
+| ` implementation ` | ` dnd2024:item_ring_of_swimming ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` equipment_state ` | ` worn_on_finger_or_similar_digit ` |
+| ` swim_speed_ft ` | ` 40 ` |
+
+#### Attunement
+
+<!-- splat:values path=splat_rule/parameters/attunement -->
+
+| Field | Value |
+| --- | --- |
+| ` required ` | ` false ` |
+
+#### Common rules
+
+<!-- splat:rows path=splat_rule/parameters/common_rules -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:rules/magic_item_categories_rings ` |

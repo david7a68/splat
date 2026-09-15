@@ -10,136 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 156, 157
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 7
-  school: illusion
-  classes:
-  - bard
-  - wizard
-  components:
-  - verbal
-  - somatic
-  - material
-  concentration: true
-  duration: Concentration, up to 1 day
-  casting_time: Action
-  ritual: false
-  range:
-    mode: 500 miles
-  material:
-    description: a statuette of yourself worth 5+ GP
-    consumed: false
-splat_rule:
-  mechanic: dnd2024:spells/project_image
-  implementation: dnd2024:spell_project_image
-  parameters:
-    image:
-      appearance_and_voice: caster
-      location: previously_seen_within_range
-      obstacles_ignored: true
-      intangible: true
-      any_damage: disappear_and_end_spell
-    senses:
-      sight_origin: image
-      hearing_origin: image
-    control:
-      action: magic
-      move_feet: 60
-      choices:
-      - gesture
-      - speech
-      - behavior
-      perfect_mannerism_mimicry: true
-    discern:
-      physical_interaction: automatic
-      study:
-        ability: intelligence
-        skill: investigation
-        dc:
-          binding: save_dc
-      after_discern:
-        see_through: true
-        sound: hollow
-splat_contracts:
-- id: dnd2024:spell_project_image
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    save_dc:
-      type: integer
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    locations:
-      required: false
-      type: location_list
-    choices:
-      required: false
-      type: choice
-    resolution:
-      required: false
-      type: resolution
-    campaign:
-      required: false
-      type: campaign
-  outputs:
-  - image
-  - perception
-  - discernment_results
-  events:
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - damage
-  - saving_throws
-  - movement
-  - perception
-  - choices
-  - relationships
-  - checks
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: 521104e9fd711860d80cb2183623754f8615aa85c9aea4a20ac3086d32ccf7fb
-  source_path: builtin/srd-5.2.1/spell/project_image.md
-  pages:
-  - 156
-  - 157
-  engine_gaps: &id001
-  - dnd2024:spell_project_image
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_1.md
-  specification_sha256: ea8510cdae8524afeb5043a014089a5d74783adaa4c11554a8a98249bad4b4fc
-splat_clauses:
-- key: source_rules
-  text: '# Project Image Level 7 Illusion (Bard, Wizard) Casting Time: Action Range: 500 miles Components:
-    V, S, M (a statuette of yourself worth 5+ GP) Duration: Concentration, up to 1 day You create an illusory
-    copy of yourself that lasts for the duration. The copy can appear at any location within range that
-    you have seen before, regardless of intervening obstacles. The illusion looks and sounds like you,
-    but it is intangible. If the illusion takes any damage, it disappears, and the spell ends. You can
-    see through the illusion’s eyes and hear through its ears as if you were in its space. As a Magic
-    action, you can move it up to 60 feet and make it gesture, speak, and behave in whatever way you choose.
-    It mimics your mannerisms perfectly. Physical interaction with the image reveals it to be illusory,
-    since things can pass through it. A creature that takes the Study action to examine the image can
-    determine that it is an illusion with a successful Intelligence (Investigation) check against your
-    spell save DC. If a creature discerns the illusion for what it is, the creature can see through the
-    image, and any noise it makes sounds hollow to the creature.'
-  sha256: 6efebc0cb4fa7ca025ef3ef57c7f2614ca677fb43d750b2cd6bb3cf119fb41f0
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Project Image
+
+## Source text
 
 <!-- SRD page 156 -->
 
@@ -174,3 +49,94 @@ image, and any noise it makes sounds hollow to the\
 creature.\
 
 Original layout: [[../../srd-5.2.1/pages/156|page 156]], [[../../srd-5.2.1/pages/157|page 157]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 7 ` |
+| ` school ` | ` illusion ` |
+| ` classes ` | ` ["bard", "wizard"] ` |
+| ` components ` | ` ["verbal", "somatic", "material"] ` |
+| ` concentration ` | ` true ` |
+| ` duration ` | ` Concentration, up to 1 day ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` mode ` | ` 500 miles ` |
+
+### Material
+
+<!-- splat:values path=splat_spell/material -->
+
+| Field | Value |
+| --- | --- |
+| ` description ` | ` a statuette of yourself worth 5+ GP ` |
+| ` consumed ` | ` false ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/project_image ` |
+| ` implementation ` | ` dnd2024:spell_project_image ` |
+
+### Parameters
+
+#### Image
+
+<!-- splat:values path=splat_rule/parameters/image -->
+
+| Field | Value |
+| --- | --- |
+| ` appearance_and_voice ` | ` caster ` |
+| ` location ` | ` previously_seen_within_range ` |
+| ` obstacles_ignored ` | ` true ` |
+| ` intangible ` | ` true ` |
+| ` any_damage ` | ` disappear_and_end_spell ` |
+
+#### Senses
+
+<!-- splat:values path=splat_rule/parameters/senses -->
+
+| Field | Value |
+| --- | --- |
+| ` sight_origin ` | ` image ` |
+| ` hearing_origin ` | ` image ` |
+
+#### Control
+
+<!-- splat:values path=splat_rule/parameters/control -->
+
+| Field | Value |
+| --- | --- |
+| ` action ` | ` magic ` |
+| ` move_feet ` | ` 60 ` |
+| ` choices ` | ` ["gesture", "speech", "behavior"] ` |
+| ` perfect_mannerism_mimicry ` | ` true ` |
+
+#### Discern
+
+<!-- splat:yaml path=splat_rule/parameters/discern -->
+
+```yaml
+physical_interaction: automatic
+study:
+  ability: intelligence
+  skill: investigation
+  dc:
+    binding: save_dc
+after_discern:
+  see_through: true
+  sound: hollow
+```

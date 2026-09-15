@@ -10,120 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 131
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 3
-  school: evocation
-  classes:
-  - sorcerer
-  - wizard
-  components:
-  - verbal
-  - somatic
-  - material
-  concentration: false
-  duration: Instantaneous
-  casting_time: Action
-  ritual: false
-  range:
-    feet: 150
-  material:
-    description: a ball of bat guano and sulfur
-    consumed: false
-splat_rule:
-  mechanic: dnd2024:spells/fireball
-  implementation: dnd2024:spell_fireball
-  parameters:
-    targeting:
-      kind: creatures_in_area
-      origin: chosen_point_in_range
-      shape: sphere
-      radius_feet: 20
-    save:
-      ability: dexterity
-      failure:
-        damage:
-          dice: 8d6
-          type: fire
-      success:
-        damage_fraction:
-          numerator: 1
-          denominator: 2
-    objects:
-      within_area: true
-      flammable: true
-      worn: false
-      carried: false
-      effect: burning
-    slot_scaling:
-      above: 3
-      damage_per_level: 1d6
-    spell_lifetime:
-      concentration: false
-      maximum:
-        kind: instantaneous
-splat_contracts:
-- id: dnd2024:spell_fireball
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    targets:
-      type: participant_list
-      required: true
-    locations:
-      type: location_list
-      required: true
-    objects:
-      required: false
-      type: object_list
-    save_dc:
-      type: integer
-      required: true
-    choices:
-      type: choice
-      required: true
-  outputs:
-  - effects
-  - damage_results
-  - locations
-  events:
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - damage
-  - spatial_effects
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: 24522a2ced446ba58386ce3bbab775849f7a08042e506b05808626a1dfc03482
-  source_path: builtin/srd-5.2.1/spell/fireball.md
-  pages:
-  - 131
-  engine_gaps: &id001
-  - dnd2024:spell_fireball
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_2.md
-  specification_sha256: 69a7047b283d3312b665563ca7d824fed508cf6dbe8f241b43b3a3aca5ac0b45
-splat_clauses:
-- key: source_rules
-  text: '# Fireball Level 3 Evocation (Sorcerer, Wizard) Casting Time: Action Range: 150 feet Components:
-    V, S, M (a ball of bat guano and sulfur) Duration: Instantaneous A bright streak flashes from you
-    to a point you choose within range and then blossoms with a low roar into a fiery explosion. Each
-    creature in a 20-foot-radius Sphere centered on that point makes a Dexterity saving throw, taking
-    8d6 Fire damage on a failed save or half as much damage on a successful one. Flammable objects in
-    the area that aren’t being worn or carried start burning. Using a Higher-Level Spell Slot. The damage
-    increases by 1d6 for each spell slot level above 3.'
-  sha256: 212161038e4f73074bb34c2e57e30e75628238e6c9280b06f5693ad0036075b1
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Fireball
+
+## Source text
 
 <!-- SRD page 131 -->
 
@@ -145,3 +36,104 @@ Using a Higher-Level Spell Slot. The damage in-\
 creases by 1d6 for each spell slot level above 3.\
 
 Original layout: [[../../srd-5.2.1/pages/131|page 131]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 3 ` |
+| ` school ` | ` evocation ` |
+| ` classes ` | ` ["sorcerer", "wizard"] ` |
+| ` components ` | ` ["verbal", "somatic", "material"] ` |
+| ` concentration ` | ` false ` |
+| ` duration ` | ` Instantaneous ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 150 ` |
+
+### Material
+
+<!-- splat:values path=splat_spell/material -->
+
+| Field | Value |
+| --- | --- |
+| ` description ` | ` a ball of bat guano and sulfur ` |
+| ` consumed ` | ` false ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/fireball ` |
+| ` implementation ` | ` dnd2024:spell_fireball ` |
+
+### Parameters
+
+#### Targeting
+
+<!-- splat:values path=splat_rule/parameters/targeting -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creatures_in_area ` |
+| ` origin ` | ` chosen_point_in_range ` |
+| ` shape ` | ` sphere ` |
+| ` radius_feet ` | ` 20 ` |
+
+#### Save
+
+<!-- splat:yaml path=splat_rule/parameters/save -->
+
+```yaml
+ability: dexterity
+failure:
+  damage:
+    dice: 8d6
+    type: fire
+success:
+  damage_fraction:
+    numerator: 1
+    denominator: 2
+```
+
+#### Objects
+
+<!-- splat:values path=splat_rule/parameters/objects -->
+
+| Field | Value |
+| --- | --- |
+| ` within_area ` | ` true ` |
+| ` flammable ` | ` true ` |
+| ` worn ` | ` false ` |
+| ` carried ` | ` false ` |
+| ` effect ` | ` burning ` |
+
+#### Slot scaling
+
+<!-- splat:values path=splat_rule/parameters/slot_scaling -->
+
+| Field | Value |
+| --- | --- |
+| ` above ` | ` 3 ` |
+| ` damage_per_level ` | ` 1d6 ` |
+
+#### Spell lifetime
+
+<!-- splat:yaml path=splat_rule/parameters/spell_lifetime -->
+
+```yaml
+concentration: false
+maximum:
+  kind: instantaneous
+```

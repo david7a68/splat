@@ -74,3 +74,6 @@ The [conversion status contract](conversion-status.md) and
 [whole-SRD catalogue report](../srd-definitions.md) record the later authorized
 conversion work. They distinguish incomplete conversion from unavailable engine
 support; neither is treated as an executable rule.
+
+[Markdown layout](markdown-layout.md) defines editable tables and local YAML blocks,
+with identity in frontmatter and generated verification records in package reports.

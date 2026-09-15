@@ -10,60 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 33
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:class_features/bard_level_20_words_of_creation
-  parameters:
-    always_prepared:
-    - key: dnd2024:spells/power_word_heal
-    - key: dnd2024:spells/power_word_kill
-    when_casting_these_spells:
-      optional_additional_creature_targets: 1
-      additional_target_within_feet_of_first: 10
-  implementation: dnd2024:class_features_bard_level_20_words_of_creation
-splat_contracts:
-- id: dnd2024:class_features_bard_level_20_words_of_creation
-  inputs:
-    actor:
-      type: participant
-      required: true
-  outputs:
-  - feature_state
-  - spell_grants
-  events:
-  - character.feature_gained
-  - spell.cast_pending
-  capabilities:
-  - spellcasting
-  - targeting
-splat_conversion:
-  status: specified
-  category: class_feature
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 33
-  engine_gaps: &id001
-  - dnd2024:class_features_bard_level_20_words_of_creation
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_1.md
-  specification_sha256: 782aebab52ac021dd9f7229025aa004ba1c820c43cc19e9bf785f2a4899d40a0
-  parent_name: Bard
-  line_span:
-    first: 2706
-    count: 7
-splat_clauses:
-- key: source_rules
-  text: '# Level 20: Words of Creation You have mastered two of the Words of Creation: the words of life
-    and death. You therefore always have the Power Word Heal and Power Word Kill spells prepared. When
-    you cast either spell, you can target a second creature with it if that creature is within 10 feet
-    of the first target.'
-  sha256: 891e688f6f88cd73180f2f3276a13e747558ff5eccb0ca4fe362bc628c1c68e6
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Level 20: Words of Creation
+
+## Source text
 
 <!-- SRD page 33 -->
 
@@ -73,3 +24,32 @@ have the Power Word Heal and Power Word Kill\
 spells prepared. When you cast either spell, you can\
 target a second creature with it if that creature is\
 within 10 feet of the first target.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:class_features/bard_level_20_words_of_creation ` |
+| ` implementation ` | ` dnd2024:class_features_bard_level_20_words_of_creation ` |
+
+### Parameters
+
+#### Always prepared
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/power_word_heal ` |
+| ` 1 ` | ` dnd2024:spells/power_word_kill ` |
+
+#### When casting these spells
+
+<!-- splat:values path=splat_rule/parameters/when_casting_these_spells -->
+
+| Field | Value |
+| --- | --- |
+| ` optional_additional_creature_targets ` | ` 1 ` |
+| ` additional_target_within_feet_of_first ` | ` 10 ` |

@@ -10,55 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 177
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/attack_roll
-  parameters:
-    test_kind: attack_roll
-    base_rule:
-      key: dnd2024:glossary/d20_test
-    sources:
-    - weapon
-    - unarmed_strike
-    - spell
-  implementation: dnd2024:glossary_attack_roll
-splat_contracts:
-- id: dnd2024:glossary_attack_roll
-  inputs:
-    subject:
-      type: participant
-      required: true
-    attack:
-      type: definition
-      required: true
-  outputs:
-  - check_definition
-  events: []
-  capabilities:
-  - attacks
-  - checks
-splat_conversion:
-  status: specified
-  category: glossary
-  source_sha256: 7574f990b05d8932b96388f9ddce6fedad29ceaaeea54f1cf68ae368bb376cf4
-  source_path: builtin/srd-5.2.1/glossary/attack_roll.md
-  pages:
-  - 177
-  engine_gaps: &id001
-  - dnd2024:glossary_attack_roll
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: 1b809c18440adad2e4c9b392886e99dfae484567e2a03b80365faf2ab7d1f122
-splat_clauses:
-- key: source_rules
-  text: '# Attack Roll An attack roll is a D20 Test that represents making an attack with a weapon, an
-    Unarmed Strike, or a spell. See also “Playing the Game” (“D20 Tests”).'
-  sha256: 8ef60a07e2267dd8a6a50adce392b8dd66a84e573cc95adec5173b9bddd2694b
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Attack Roll
+
+## Source text
 
 <!-- SRD page 177 -->
 
@@ -67,3 +23,29 @@ an attack with a weapon, an Unarmed Strike, or a\
 spell. See also “Playing the Game” (“D20 Tests”).\
 
 Original layout: [[../../srd-5.2.1/pages/177|page 177]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/attack_roll ` |
+| ` implementation ` | ` dnd2024:glossary_attack_roll ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` test_kind ` | ` attack_roll ` |
+| ` sources ` | ` ["weapon", "unarmed_strike", "spell"] ` |
+
+#### Base rule
+
+<!-- splat:values path=splat_rule/parameters/base_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:glossary/d20_test ` |

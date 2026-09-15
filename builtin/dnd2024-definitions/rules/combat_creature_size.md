@@ -10,78 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 14
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/combat_creature_size
-  parameters:
-    sizes:
-    - size: tiny
-      space_width_feet: 2.5
-      occupied_squares: 0.25
-    - size: small
-      space_width_feet: 5
-      occupied_squares: 1
-    - size: medium
-      space_width_feet: 5
-      occupied_squares: 1
-    - size: large
-      space_width_feet: 10
-      occupied_squares: 4
-    - size: huge
-      space_width_feet: 15
-      occupied_squares: 9
-    - size: gargantuan
-      space_width_feet: 20
-      occupied_squares: 16
-    player_size_source: species
-    monster_size_source: stat_block
-  implementation: dnd2024:rule_combat_creature_size
-splat_contracts:
-- id: dnd2024:rule_combat_creature_size
-  inputs:
-    actor:
-      type: participant
-      required: true
-    context:
-      type: resolution
-      required: true
-  outputs:
-  - spaces
-  events: []
-  capabilities:
-  - geometry
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 14
-  engine_gaps: &id001
-  - dnd2024:rule_combat_creature_size
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: 5d4cd7ea2239df42b706690a9be4500b929c34d3616086fd72f19d7ac293584c
-  parent_name: Combat
-  line_span:
-    first: 919
-    count: 19
-splat_clauses:
-- key: source_rules
-  text: '# Creature Size A creature belongs to a size category, which determines the width of the square
-    space the creature occupies on a map, as shown on the Creature Size and Space table. That table lists
-    the sizes from smallest (Tiny) to largest (Gargantuan). A creature’s space is the area that it effectively
-    controls in combat and the area it needs to fight effectively. A character’s size is determined by
-    species, and a monster’s size is specified in the monster’s stat block. Creature Size and Space Size
-    Space (Feet) Space (Squares) Tiny 2½ by 2½ feet 4 per square Small 5 by 5 feet 1 square Medium 5 by
-    5 feet 1 square Large 10 by 10 feet 4 squares (2 by 2) Huge 15 by 15 feet 9 squares (3 by 3) Gargantuan
-    20 by 20 feet 16 squares (4 by 4)'
-  sha256: 654625f6588dfa9a5f5730ba7d4a0bb9e3904e789ccaa8fc77ecfd7fbdcb205a
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Creature Size
+
+## Source text
 
 <!-- SRD page 14 -->
 
@@ -103,3 +36,34 @@ Medium 5 by 5 feet 1 square\
 Large 10 by 10 feet 4 squares (2 by 2)\
 Huge 15 by 15 feet 9 squares (3 by 3)\
 Gargantuan 20 by 20 feet 16 squares (4 by 4)\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/combat_creature_size ` |
+| ` implementation ` | ` dnd2024:rule_combat_creature_size ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` player_size_source ` | ` species ` |
+| ` monster_size_source ` | ` stat_block ` |
+
+#### Sizes
+
+<!-- splat:rows path=splat_rule/parameters/sizes -->
+
+| Row | size | space_width_feet | occupied_squares |
+| --- | --- | --- | --- |
+| ` 0 ` | ` tiny ` | ` 2.5 ` | ` 0.25 ` |
+| ` 1 ` | ` small ` | ` 5 ` | ` 1 ` |
+| ` 2 ` | ` medium ` | ` 5 ` | ` 1 ` |
+| ` 3 ` | ` large ` | ` 10 ` | ` 4 ` |
+| ` 4 ` | ` huge ` | ` 15 ` | ` 9 ` |
+| ` 5 ` | ` gargantuan ` | ` 20 ` | ` 16 ` |

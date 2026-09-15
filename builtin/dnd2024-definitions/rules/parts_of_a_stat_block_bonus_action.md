@@ -10,67 +10,39 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 257
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/parts_of_a_stat_block_bonus_action
-  parameters:
-    bonus_action_options: stat_block_bonus_actions
-    rules:
-      key: dnd2024:rules/actions_bonus_actions
-  implementation: dnd2024:rules_parts_of_a_stat_block_bonus_action
-splat_contracts:
-- id: dnd2024:rules_parts_of_a_stat_block_bonus_action
-  inputs:
-    actor:
-      type: participant
-      required: true
-    targets:
-      type: participant_list
-      required: true
-    event:
-      type: event
-      required: true
-    choice:
-      type: choice
-      required: true
-  outputs:
-  - action_options
-  - effects
-  - resource_updates
-  events: []
-  capabilities:
-  - action_economy
-  - movement
-  - combat
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 257
-  engine_gaps: &id001
-  - dnd2024:rules_parts_of_a_stat_block_bonus_action
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: 87df1492c5167fc5a133d4ea6102d0f36824260a54e02d70a8de113a3025e691
-  parent_name: Parts of a Stat Block
-  line_span:
-    first: 11197
-    count: 4
-splat_clauses:
-- key: source_rules
-  text: '# Bonus Action If a monster has Bonus Action options, they are listed in this section. See “Playing
-    the Game” for details on Bonus Actions.'
-  sha256: 288540880915d9c6cbcdbd52a7379e747cbef3da492bb1922f84662aec1e8636
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Bonus Action
+
+## Source text
 
 <!-- SRD page 257 -->
 
 If a monster has Bonus Action options, they are\
 listed in this section. See “Playing the Game” for de-\
 tails on Bonus Actions.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/parts_of_a_stat_block_bonus_action ` |
+| ` implementation ` | ` dnd2024:rules_parts_of_a_stat_block_bonus_action ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` bonus_action_options ` | ` stat_block_bonus_actions ` |
+
+#### Rules
+
+<!-- splat:values path=splat_rule/parameters/rules -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:rules/actions_bonus_actions ` |

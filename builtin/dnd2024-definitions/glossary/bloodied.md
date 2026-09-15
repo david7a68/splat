@@ -10,52 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 177
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/bloodied
-  parameters:
-    predicate:
-      op: less_or_equal
-      args:
-      - var: current_hit_points
-      - op: divide
-        args:
-        - var: hit_point_maximum
-        - 2
-  implementation: dnd2024:glossary_bloodied
-splat_contracts:
-- id: dnd2024:glossary_bloodied
-  inputs:
-    subject:
-      type: participant
-      required: true
-  outputs:
-  - is_bloodied
-  events:
-  - hit_points.changed
-  capabilities:
-  - hit_points
-splat_conversion:
-  status: specified
-  category: glossary
-  source_sha256: a680adb5125cda37134f2452ecb841c9792aa36fa984b4cadbfccb29f2e534b4
-  source_path: builtin/srd-5.2.1/glossary/bloodied.md
-  pages:
-  - 177
-  engine_gaps: &id001
-  - dnd2024:glossary_bloodied
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: 663690ad4cbdcc42890bba50c125e583a33fb688ba9ebc032105b7f3a6e9e90e
-splat_clauses:
-- key: source_rules
-  text: '# Bloodied A creature is Bloodied while it has half its Hit Points or fewer remaining.'
-  sha256: cebd4d110e43809c36756d468f590bc443b96cafffe5ad79b96d722dc8b92326
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Bloodied
+
+## Source text
 
 <!-- SRD page 177 -->
 
@@ -63,3 +22,28 @@ A creature is Bloodied while it has half its Hit Points\
 or fewer remaining.\
 
 Original layout: [[../../srd-5.2.1/pages/177|page 177]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/bloodied ` |
+| ` implementation ` | ` dnd2024:glossary_bloodied ` |
+
+### Parameters
+
+#### Predicate
+
+<!-- splat:yaml path=splat_rule/parameters/predicate -->
+
+```yaml
+op: less_or_equal
+args:
+- var: current_hit_points
+- op: divide
+  args:
+  - var: hit_point_maximum
+  - 2
+```

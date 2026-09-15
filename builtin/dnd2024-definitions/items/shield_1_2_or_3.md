@@ -10,90 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 243
   url: https://www.dndbeyond.com/srd
-splat_item:
-  category: armor
-  rarity: uncommon
-  equipment:
-    attunement: none
-splat_rule:
-  mechanic: dnd2024:items/shield_1_2_or_3
-  implementation: dnd2024:item_shield_1_2_or_3
-  parameters:
-    equipment_state: held
-    variants:
-    - rarity: uncommon
-      ac_bonus: 1
-      additional_to_normal_shield_bonus: true
-    - rarity: rare
-      ac_bonus: 2
-      additional_to_normal_shield_bonus: true
-    - rarity: very_rare
-      ac_bonus: 3
-      additional_to_normal_shield_bonus: true
-    attunement:
-      required: false
-    common_rules:
-    - key: dnd2024:rules/magic_item_categories_armor
-splat_contracts:
-- id: dnd2024:item_shield_1_2_or_3
-  inputs:
-    actor:
-      type: participant
-      required: true
-    source_item:
-      type: item_instance
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    locations:
-      required: false
-      type: location_list
-    choice:
-      required: false
-      type: choice
-    event:
-      required: false
-      type: event
-    campaign:
-      required: false
-      type: campaign
-  outputs:
-  - item_state
-  - effects
-  - resolutions
-  events:
-  - equipment.changed
-  capabilities:
-  - inventory
-  - effects
-splat_conversion:
-  status: specified
-  category: magic_item
-  source_sha256: 99a855a25aef7e21b6d52c16bbc6b28fe35857593459eb63c7a3c3e2cf83334a
-  source_path: builtin/srd-5.2.1/magic_item/shield_1_2_or_3.md
-  pages:
-  - 243
-  engine_gaps: &id001
-  - dnd2024:item_shield_1_2_or_3
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/items_2.md
-  specification_sha256: 4cb653df727ec054eef90df686d35435bd1af00fc6b30e645ca7c80391ca0d1b
-splat_clauses:
-- key: source_rules
-  text: '# Shield, +1, +2, or +3 Armor (Shield), Uncommon (+1), Rare (+2), or Very Rare (+3) While holding
-    this Shield, you have a bonus to Armor Class determined by the Shield’s rarity, in addition to the
-    Shield’s normal bonus to AC.'
-  sha256: bddc31f270347f70cc11ba2039dd02c10d83351351357357db3d8ddfee9bbcad
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Shield, +1, +2, or +3
+
+## Source text
 
 <!-- SRD page 243 -->
 
@@ -104,3 +25,63 @@ mor Class determined by the Shield’s rarity, in addi-\
 tion to the Shield’s normal bonus to AC.\
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
+
+## Item
+
+<!-- splat:values path=splat_item -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` armor ` |
+| ` rarity ` | ` uncommon ` |
+
+### Equipment
+
+<!-- splat:values path=splat_item/equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` attunement ` | ` none ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:items/shield_1_2_or_3 ` |
+| ` implementation ` | ` dnd2024:item_shield_1_2_or_3 ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` equipment_state ` | ` held ` |
+
+#### Variants
+
+<!-- splat:rows path=splat_rule/parameters/variants -->
+
+| Row | rarity | ac_bonus | additional_to_normal_shield_bonus |
+| --- | --- | --- | --- |
+| ` 0 ` | ` uncommon ` | ` 1 ` | ` true ` |
+| ` 1 ` | ` rare ` | ` 2 ` | ` true ` |
+| ` 2 ` | ` very_rare ` | ` 3 ` | ` true ` |
+
+#### Attunement
+
+<!-- splat:values path=splat_rule/parameters/attunement -->
+
+| Field | Value |
+| --- | --- |
+| ` required ` | ` false ` |
+
+#### Common rules
+
+<!-- splat:rows path=splat_rule/parameters/common_rules -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:rules/magic_item_categories_armor ` |

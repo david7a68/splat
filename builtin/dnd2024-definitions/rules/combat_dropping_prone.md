@@ -10,56 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 14
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/combat_dropping_prone
-  parameters:
-    timing: own_turn
-    requires_speed_greater_than: 0
-    condition: prone
-    action_cost: 0
-    movement_cost: 0
-    optional: true
-  implementation: dnd2024:rules_combat_dropping_prone
-splat_contracts:
-- id: dnd2024:rules_combat_dropping_prone
-  inputs:
-    subject:
-      type: participant
-      required: true
-  outputs:
-  - effects
-  events:
-  - condition.voluntarily_applied
-  capabilities:
-  - movement
-  - conditions
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 14
-  engine_gaps: &id001
-  - dnd2024:rules_combat_dropping_prone
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: f717977a6e6dfe955585945bb50889742edaa27a9588df14412bcf0346855e92
-  parent_name: Combat
-  line_span:
-    first: 914
-    count: 5
-splat_clauses:
-- key: source_rules
-  text: '# Dropping Prone On your turn, you can give yourself the Prone condition (see “Rules Glossary”)
-    without using an action or any of your Speed, but you can’t do so if your Speed is 0.'
-  sha256: a2194ae068c05837cb8e2667fe0ff20a128280f5b839382d460bd47cadd95715
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Dropping Prone
+
+## Source text
 
 <!-- SRD page 14 -->
 
@@ -67,3 +22,25 @@ On your turn, you can give yourself the Prone condi-\
 tion (see “Rules Glossary”) without using an action\
 or any of your Speed, but you can’t do so if your\
 Speed is 0.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/combat_dropping_prone ` |
+| ` implementation ` | ` dnd2024:rules_combat_dropping_prone ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` timing ` | ` own_turn ` |
+| ` requires_speed_greater_than ` | ` 0 ` |
+| ` condition ` | ` prone ` |
+| ` action_cost ` | ` 0 ` |
+| ` movement_cost ` | ` 0 ` |
+| ` optional ` | ` true ` |

@@ -10,146 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 77
   url: https://www.dndbeyond.com/srd
-splat_rule_group:
-  category: class
-splat_rule:
-  mechanic: dnd2024:classes/wizard
-  implementation: dnd2024:classes_wizard
-  parameters:
-    class: wizard
-    primary_abilities:
-    - intelligence
-    hit_point_die:
-      count_per_class_level: 1
-      sides: 6
-    first_class_traits:
-      save_proficiencies:
-      - intelligence
-      - wisdom
-      skill_proficiencies:
-        count: 2
-        choices:
-        - arcana
-        - history
-        - insight
-        - investigation
-        - medicine
-        - nature
-        - religion
-      weapon_proficiencies:
-        simple: true
-      armor_training: []
-    starting_equipment:
-      choose: 1
-      options:
-        equipment:
-          items:
-          - definition:
-              key: dnd2024:equipment/dagger
-            quantity: 2
-          - definition:
-              key: dnd2024:equipment/arcane_focus_varies
-            quantity: 1
-            variant: quarterstaff
-          - definition:
-              key: dnd2024:equipment/robe_1_gp
-            quantity: 1
-          - definition:
-              key: dnd2024:equipment/scholar_s_pack_40_gp
-            quantity: 1
-          currency:
-            gp: 5
-          additional_items:
-          - kind: spellbook
-            quantity: 1
-        currency:
-          currency:
-            gp: 55
-    progression:
-      key: dnd2024:tables/wizard_progression
-    feature_grants:
-    - minimum_class_level: 18
-      definition:
-        key: dnd2024:class_features/wizard_level_18_spell_mastery
-    - minimum_class_level: 19
-      definition:
-        key: dnd2024:class_features/wizard_level_19_epic_boon
-    - minimum_class_level: 1
-      definition:
-        key: dnd2024:class_features/wizard_level_1_arcane_recovery
-    - minimum_class_level: 1
-      definition:
-        key: dnd2024:class_features/wizard_level_1_ritual_adept
-    - minimum_class_level: 1
-      definition:
-        key: dnd2024:class_features/wizard_level_1_spellcasting
-    - minimum_class_level: 20
-      definition:
-        key: dnd2024:class_features/wizard_level_20_signature_spells
-    - minimum_class_level: 2
-      definition:
-        key: dnd2024:class_features/wizard_level_2_scholar
-    - minimum_class_level: 3
-      definition:
-        key: dnd2024:class_features/wizard_level_3_wizard_subclass
-    - minimum_class_level: 4
-      definition:
-        key: dnd2024:class_features/wizard_level_4_ability_score_improvement
-    - minimum_class_level: 5
-      definition:
-        key: dnd2024:class_features/wizard_level_5_memorize_spell
-splat_contracts:
-- id: dnd2024:classes_wizard
-  inputs:
-    actor:
-      type: participant
-      required: true
-    selection:
-      required: false
-      type: choice
-  outputs:
-  - class_traits
-  - equipment_choices
-  - progression
-  - feature_grants
-  events:
-  - character.class_selected
-  - character.level_gained
-  capabilities:
-  - character_features
-  - spellcasting
-  - proficiencies
-  - d20_tests
-  - equipment
-splat_conversion:
-  status: specified
-  category: class
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 77
-  engine_gaps: &id001
-  - dnd2024:classes_wizard
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_2.md
-  specification_sha256: 02f4648e3a94a96a45da890bedbff79659afab3c57c0233ca3c7c35df4099865
-  line_span:
-    first: 6529
-    count: 15
-splat_clauses:
-- key: source_rules
-  text: '# Wizard Core Wizard Traits Primary Ability Intelligence Hit Point Die D6 per Wizard level Saving
-    Throw Intelligence and Wisdom Proficiencies Skill Proficiencies Choose 2: Arcana, History, Insight,
-    Investigation, Medicine, Nature, or Religion Weapon Proficiencies Simple weapons Armor Training None
-    Starting Equipment Choose A or B: (A) 2 Daggers, Arcane Focus (Quarterstaff), Robe, Spellbook, Scholar’s
-    Pack, and 5 GP; or (B) 55 GP'
-  sha256: 4f591ca3a223a298d30574cd303ba24a2d716ecb73f3782401324c18a8a88231
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Wizard
+
+## Source text
 
 <!-- SRD page 77 -->
 
@@ -167,3 +32,198 @@ Starting Equipment Choose A or B: (A) 2 Daggers,\
 Arcane Focus (Quarterstaff),\
 Robe, Spellbook, Scholar’s\
 Pack, and 5 GP; or (B) 55 GP\
+
+## Rule group
+
+<!-- splat:values path=splat_rule_group -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` class ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:classes/wizard ` |
+| ` implementation ` | ` dnd2024:classes_wizard ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` class ` | ` wizard ` |
+| ` primary_abilities ` | ` ["intelligence"] ` |
+
+#### Hit point die
+
+<!-- splat:values path=splat_rule/parameters/hit_point_die -->
+
+| Field | Value |
+| --- | --- |
+| ` count_per_class_level ` | ` 1 ` |
+| ` sides ` | ` 6 ` |
+
+#### First class traits
+
+<!-- splat:yaml path=splat_rule/parameters/first_class_traits -->
+
+```yaml
+save_proficiencies:
+- intelligence
+- wisdom
+skill_proficiencies:
+  count: 2
+  choices:
+  - arcana
+  - history
+  - insight
+  - investigation
+  - medicine
+  - nature
+  - religion
+weapon_proficiencies:
+  simple: true
+armor_training: []
+```
+
+#### Starting equipment
+
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+
+```yaml
+choose: 1
+options:
+  equipment:
+    items:
+    - definition:
+        key: dnd2024:equipment/dagger
+      quantity: 2
+    - definition:
+        key: dnd2024:equipment/arcane_focus_varies
+      quantity: 1
+      variant: quarterstaff
+    - definition:
+        key: dnd2024:equipment/robe_1_gp
+      quantity: 1
+    - definition:
+        key: dnd2024:equipment/scholar_s_pack_40_gp
+      quantity: 1
+    currency:
+      gp: 5
+    additional_items:
+    - kind: spellbook
+      quantity: 1
+  currency:
+    currency:
+      gp: 55
+```
+
+#### Progression
+
+<!-- splat:values path=splat_rule/parameters/progression -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:tables/wizard_progression ` |
+
+#### Feature grants
+
+<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+
+| Row | minimum_class_level |
+| --- | --- |
+| ` 0 ` | ` 18 ` |
+| ` 1 ` | ` 19 ` |
+| ` 2 ` | ` 1 ` |
+| ` 3 ` | ` 1 ` |
+| ` 4 ` | ` 1 ` |
+| ` 5 ` | ` 20 ` |
+| ` 6 ` | ` 2 ` |
+| ` 7 ` | ` 3 ` |
+| ` 8 ` | ` 4 ` |
+| ` 9 ` | ` 5 ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_18_spell_mastery ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_19_epic_boon ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_1_arcane_recovery ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_1_ritual_adept ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_1_spellcasting ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/5/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_20_signature_spells ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/6/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_2_scholar ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/7/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_3_wizard_subclass ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/8/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_4_ability_score_improvement ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/9/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/wizard_level_5_memorize_spell ` |

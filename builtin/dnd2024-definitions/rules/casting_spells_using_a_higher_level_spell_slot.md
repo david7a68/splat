@@ -10,65 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 104, 105
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/casting_spells_using_a_higher_level_spell_slot
-  parameters:
-    cast_level: expended_slot_level
-    upcast_effects: spell_specified_only
-  implementation: dnd2024:rules_casting_spells_using_a_higher_level_spell_slot
-splat_contracts:
-- id: dnd2024:rules_casting_spells_using_a_higher_level_spell_slot
-  inputs:
-    caster:
-      type: participant
-      required: true
-    spell:
-      type: definition
-      required: true
-    event:
-      type: event
-      required: true
-    choice:
-      type: choice
-      required: true
-  outputs:
-  - spell_state
-  - casting_requirements
-  events: []
-  capabilities:
-  - spellcasting
-  - concentration
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 104
-  - 105
-  engine_gaps: &id001
-  - dnd2024:rules_casting_spells_using_a_higher_level_spell_slot
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: a4b7b38e88cd5f71352fc55f750e521a39c0723b40fc8ce8aa416e9370576531
-  parent_name: Casting Spells
-  line_span:
-    first: 9117
-    count: 10
-splat_clauses:
-- key: source_rules
-  text: '# Using a Higher-Level Spell Slot When a spellcaster casts a spell using a slot that is of a
-    higher level than the spell, the spell takes on the higher level for that casting. For instance, if
-    a Wizard casts Magic Missile using a level 2 slot, that Magic Missile is level 2. Effectively, the
-    spell expands to fill the slot it is put into. Some spells, such as Magic Missile and Cure Wounds,
-    have more powerful effects when cast at a higher level, as detailed in a spell’s description.'
-  sha256: 70ac8750d6b5b508a824748b33bc6151efe620cdd719a16df0c8b3f4c066855c
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Using a Higher-Level Spell Slot
+
+## Source text
 
 <!-- SRD page 104 -->
 
@@ -84,3 +30,21 @@ to fill the slot it is put into.\
 Some spells, such as Magic Missile and Cure\
 Wounds, have more powerful effects when cast at a\
 higher level, as detailed in a spell’s description.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/casting_spells_using_a_higher_level_spell_slot ` |
+| ` implementation ` | ` dnd2024:rules_casting_spells_using_a_higher_level_spell_slot ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` cast_level ` | ` expended_slot_level ` |
+| ` upcast_effects ` | ` spell_specified_only ` |

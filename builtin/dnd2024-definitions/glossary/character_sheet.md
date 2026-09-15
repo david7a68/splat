@@ -10,30 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 178
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/character_sheet
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: glossary
-  source_sha256: 4b3ddd48e2b708bfe241afaff9b37326f577e78e8ce919b1743c053a53a561b4
-  source_path: builtin/srd-5.2.1/glossary/character_sheet.md
-  pages:
-  - 178
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: 16091833d7c7823fc949c6ae2cc9f1caf6c9b0a6a09f9d92758d7dfba67ad0aa
-splat_clauses:
-- key: source_rules
-  text: '# Character Sheet A character sheet is a paper or digital record that you use to track your character’s
-    information. See also “Character Creation.”'
-  sha256: 577ee36f28d119647d4d391dccc27ff80ce7f981a3c4e3996b6b5d54a9ad1709
-  status: informational
 ---
 
 # Character Sheet
+
+## Source text
 
 <!-- SRD page 178 -->
 
@@ -42,3 +23,19 @@ you use to track your character’s information. See\
 also “Character Creation.”\
 
 Original layout: [[../../srd-5.2.1/pages/178|page 178]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/character_sheet ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

@@ -10,80 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 35
   url: https://www.dndbeyond.com/srd
-splat_rule_group:
-  category: subclass
-splat_rule:
-  mechanic: dnd2024:subclasses/bard_college_of_lore
-  implementation: dnd2024:subclasses_bard_college_of_lore
-  parameters:
-    class: bard
-    minimum_class_level: 3
-    feature_grants:
-    - class_level: 14
-      definition:
-        key: dnd2024:class_features/college_of_lore_level_14_peerless_skill
-    - class_level: 3
-      definition:
-        key: dnd2024:class_features/college_of_lore_level_3_bonus_proficiencies
-    - class_level: 3
-      definition:
-        key: dnd2024:class_features/college_of_lore_level_3_cutting_words
-    - class_level: 6
-      definition:
-        key: dnd2024:class_features/college_of_lore_level_6_magical_discoveries
-    grant_eligible_features:
-      'on':
-      - subclass.selected
-      - character.level_gained
-      comparison: class_level_at_least_threshold
-      persistent: true
-splat_contracts:
-- id: dnd2024:subclasses_bard_college_of_lore
-  inputs:
-    actor:
-      type: participant
-      required: true
-    selection:
-      required: false
-      type: choice
-  outputs:
-  - feature_grants
-  events:
-  - subclass.selected
-  - character.level_gained
-  capabilities:
-  - character_features
-  - proficiencies
-splat_conversion:
-  status: specified
-  category: subclass
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 35
-  engine_gaps: &id001
-  - dnd2024:subclasses_bard_college_of_lore
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_2.md
-  specification_sha256: 0e12f88aadd8b136b28ae4f4b6db6111ed3583d22e37b05eb23f223ba80a9e1a
-  parent_name: Bard
-  line_span:
-    first: 2872
-    count: 10
-splat_clauses:
-- key: source_rules
-  text: '# College of Lore Plumb the Depths of Magical Knowledge Bards of the College of Lore collect
-    spells and secrets from diverse sources, such as scholarly tomes, mystical rites, and peasant tales.
-    The college’s members gather in libraries and universities to share their lore with one another. They
-    also meet at festivals or affairs of state, where they can expose corruption, unravel lies, and poke
-    fun at self-important figures of authority.'
-  sha256: 534df38a0b7afb91b49baabe7eceadc584a0cd976a017b35ed707219b71bfc93
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # College of Lore
+
+## Source text
 
 <!-- SRD page 35 -->
 
@@ -96,3 +27,82 @@ their lore with one another. They also meet at festi-\
 vals or affairs of state, where they can expose cor-\
 ruption, unravel lies, and poke fun at self-important\
 figures of authority.\
+
+## Rule group
+
+<!-- splat:values path=splat_rule_group -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` subclass ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:subclasses/bard_college_of_lore ` |
+| ` implementation ` | ` dnd2024:subclasses_bard_college_of_lore ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` class ` | ` bard ` |
+| ` minimum_class_level ` | ` 3 ` |
+
+#### Feature grants
+
+<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+
+| Row | class_level |
+| --- | --- |
+| ` 0 ` | ` 14 ` |
+| ` 1 ` | ` 3 ` |
+| ` 2 ` | ` 3 ` |
+| ` 3 ` | ` 6 ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/college_of_lore_level_14_peerless_skill ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/college_of_lore_level_3_bonus_proficiencies ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/college_of_lore_level_3_cutting_words ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/college_of_lore_level_6_magical_discoveries ` |
+
+#### Grant eligible features
+
+<!-- splat:values path=splat_rule/parameters/grant_eligible_features -->
+
+| Field | Value |
+| --- | --- |
+| ` "on" ` | ` ["subclass.selected", "character.level_gained"] ` |
+| ` comparison ` | ` class_level_at_least_threshold ` |
+| ` persistent ` | ` true ` |

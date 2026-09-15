@@ -10,156 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 360
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: large
-  type: beast
-  alignment: Unaligned
-  movement_text: 60 ft.
-  senses_text: Passive Perception 10
-  languages_text: None
-  cr_text: 1/4 (XP 50; PB +2)
-  hit_points_text: 13 (2d10 + 2)
-splat_stats:
-  strength:
-    value: 16
-  save_strength:
-    value: 3
-  dexterity:
-    value: 13
-  save_dexterity:
-    value: 1
-  constitution:
-    value: 12
-  save_constitution:
-    value: 1
-  intelligence:
-    value: 2
-  save_intelligence:
-    value: -4
-  wisdom:
-    value: 11
-  save_wisdom:
-    value: 0
-  charisma:
-    value: 7
-  save_charisma:
-    value: -2
-  armor_class:
-    value: 11
-  max_hp:
-    value: 13
-  initiative:
-    value: 1
-  speed:
-    value: 60
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/riding_horse
-  implementation: dnd2024:creature_riding_horse
-  parameters:
-    senses: []
-    passive_perception: 10
-    languages:
-      speak: true
-      known: []
-    features:
-      hooves:
-        economy: action
-        op: attack
-        modes:
-        - melee
-        attack_bonus: 5
-        target:
-          kind: creature_or_object
-          count: 1
-        reach_ft: 5
-        hit:
-        - op: damage
-          components:
-          - type: bludgeoning
-            amount:
-              dice:
-                count: 1
-                sides: 8
-              add: 3
-            average: 7
-    damage_resolution:
-      choice:
-      - printed_average
-      - roll_expression
-      chooser: controller
-      exclusive: true
-    spatial_resolution:
-      provider: caller
-      required_facts:
-      - distance
-      - area_membership
-      - visibility
-      - occupancy
-      - movement_path
-      validate_against_typed_constraints: true
-splat_contracts:
-- id: dnd2024:creature_riding_horse
-  inputs:
-    actor:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    choices:
-      required: false
-      type: choice
-    scene:
-      required: false
-      type: resolution
-    event:
-      required: false
-      type: event
-  outputs:
-  - effects
-  - roll_requests
-  - state_changes
-  events:
-  - creature.feature_requested
-  capabilities:
-  - action_economy
-  - attack_resolution
-  - creature_rules
-  - damage
-  - effects
-  - spatial_constraints
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: 3b51e11ee51dd41e69f1b9834214a47c9d8f6d00a16c10301771ef4c2b05a7be
-  source_path: builtin/srd-5.2.1/creature/riding_horse.md
-  pages:
-  - 360
-  engine_gaps: &id001
-  - dnd2024:creature_riding_horse
-  conversion_gaps: []
-  execution_profiles:
-  - dnd2024:creatures/riding_horse
-  research_path: docs/research/srd-conversion/creatures_3.md
-  specification_sha256: ae064e9d30dfb6d921efe50ec685bfa46c5b9fcc68616e321f1b153079cdcdef
-splat_clauses:
-- key: source_rules
-  text: '# Riding Horse Large Beast, Unaligned AC 11 Initiative +1 (11) HP 13 (2d10 + 2) Speed 60 ft.
-    MOD SAVE MOD SAVE MOD SAVE Str 16 +3 +3 Dex 13 +1 +1 Con 12 +1 +1 Int 2 -4 -4 Wis 11 +0 +0 Cha 7 -2
-    -2 Senses Passive Perception 10 Languages None CR 1/4 (XP 50; PB +2) ### Actions Hooves. Melee Attack
-    Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Bludgeoning damage.'
-  sha256: 4805176002eea6e2ee4c2a92b10ceb5a9af2318fff8f08df0b14ef831233fa9c
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Riding Horse
+
+## Source text
 
 <!-- SRD page 360 -->
 
@@ -180,3 +35,132 @@ Hooves. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8\
 + 3) Bludgeoning damage.\
 
 Original layout: [[../../srd-5.2.1/pages/360|page 360]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` large ` |
+| ` type ` | ` beast ` |
+| ` alignment ` | ` Unaligned ` |
+| ` movement_text ` | ` 60 ft. ` |
+| ` senses_text ` | ` Passive Perception 10 ` |
+| ` languages_text ` | ` None ` |
+| ` cr_text ` | ` 1/4 (XP 50; PB +2) ` |
+| ` hit_points_text ` | ` 13 (2d10 + 2) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 16 ` | ` 3 ` |
+| ` Dexterity ` | ` 13 ` | ` 1 ` |
+| ` Constitution ` | ` 12 ` | ` 1 ` |
+| ` Intelligence ` | ` 2 ` | ` -4 ` |
+| ` Wisdom ` | ` 11 ` | ` 0 ` |
+| ` Charisma ` | ` 7 ` | ` -2 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 11 ` |  |
+| ` max_hp ` | ` 13 ` |  |
+| ` initiative ` | ` 1 ` |  |
+| ` speed ` | ` 60 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/riding_horse ` |
+| ` implementation ` | ` dnd2024:creature_riding_horse ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` passive_perception ` | ` 10 ` |
+
+#### Senses
+
+<!-- splat:yaml path=splat_rule/parameters/senses -->
+
+```yaml
+[]
+```
+
+#### Languages
+
+<!-- splat:yaml path=splat_rule/parameters/languages -->
+
+```yaml
+speak: true
+known: []
+```
+
+#### Features
+
+##### Hooves
+
+<!-- splat:yaml path=splat_rule/parameters/features/hooves -->
+
+```yaml
+economy: action
+op: attack
+modes:
+- melee
+attack_bonus: 5
+target:
+  kind: creature_or_object
+  count: 1
+reach_ft: 5
+hit:
+- op: damage
+  components:
+  - type: bludgeoning
+    amount:
+      dice:
+        count: 1
+        sides: 8
+      add: 3
+    average: 7
+```
+
+#### Damage resolution
+
+<!-- splat:values path=splat_rule/parameters/damage_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` choice ` | ` ["printed_average", "roll_expression"] ` |
+| ` chooser ` | ` controller ` |
+| ` exclusive ` | ` true ` |
+
+#### Spatial resolution
+
+<!-- splat:values path=splat_rule/parameters/spatial_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` provider ` | ` caller ` |
+| ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
+| ` validate_against_typed_constraints ` | ` true ` |

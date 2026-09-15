@@ -10,113 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 97
   url: https://www.dndbeyond.com/srd
-splat_item:
-  category: adventuring_gear
-  equipment:
-    attunement: none
-  price:
-    value: 39
-    unit: gp
-  mass:
-    value: 39.0
-    unit: lb
-splat_rule:
-  mechanic: dnd2024:equipment/diplomat_s_pack_39_gp
-  implementation: dnd2024:equipment_diplomat_s_pack_39_gp
-  parameters:
-    contents:
-    - item:
-        key: dnd2024:equipment/chest_5_gp
-      quantity: 1
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/clothes_fine_15_gp
-      quantity: 1
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/ink_10_gp
-      quantity: 1
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/ink_pen_2_cp
-      quantity: 5
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/lamp_5_sp
-      quantity: 1
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/case_map_or_scroll_1_gp
-      quantity: 2
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/oil_1_sp
-      quantity: 4
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/paper_2_sp
-      quantity: 5
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/parchment_1_sp
-      quantity: 5
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/perfume_5_gp
-      quantity: 1
-      unit: purchase_unit
-    - item:
-        key: dnd2024:equipment/tinderbox_5_sp
-      quantity: 1
-      unit: purchase_unit
-    grant_contents_on_acquisition: true
-    mass:
-      value: 39.0
-      unit: lb
-    grant_idempotency: once_per_acquired_pack_instance
-splat_contracts:
-- id: dnd2024:equipment_diplomat_s_pack_39_gp
-  inputs:
-    actor:
-      type: participant
-      required: true
-    item:
-      type: item_instance
-      required: true
-  outputs:
-  - inventory_grants
-  events:
-  - item.acquired
-  capabilities:
-  - inventory
-  - item_bundles
-splat_conversion:
-  status: specified
-  category: equipment
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 97
-  engine_gaps: &id001
-  - dnd2024:equipment_diplomat_s_pack_39_gp
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/equipment_tables.md
-  specification_sha256: a04b7e5fa7e5e6ea9f1734bd46f31738b749ac0964b7b31cd768cd0eec13eea1
-  line_span:
-    first: 8378
-    count: 5
-splat_clauses:
-- key: source_rules
-  text: '# Diplomat’s Pack (39 GP) A Diplomat’s Pack contains the following items: Chest, Fine Clothes,
-    Ink, 5 Ink Pens, Lamp, 2 Map or Scroll Cases, 4 flasks of Oil, 5 sheets of Paper, 5 sheets of Parchment,
-    Perfume, and Tinderbox.'
-  sha256: 3f1c7947f62e17ed9acc90577ade8388996c9e6152a8d86fe39a2662be165f44
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Diplomat’s Pack (39 GP)
+
+## Source text
 
 <!-- SRD page 97 -->
 
@@ -124,3 +22,170 @@ A Diplomat’s Pack contains the following items:\
 Chest, Fine Clothes, Ink, 5 Ink Pens, Lamp, 2 Map\
 or Scroll Cases, 4 flasks of Oil, 5 sheets of Paper, 5\
 sheets of Parchment, Perfume, and Tinderbox.\
+
+## Item
+
+<!-- splat:values path=splat_item -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` adventuring_gear ` |
+
+### Equipment
+
+<!-- splat:values path=splat_item/equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` attunement ` | ` none ` |
+
+### Price
+
+<!-- splat:values path=splat_item/price -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 39 ` |
+| ` unit ` | ` gp ` |
+
+### Mass
+
+<!-- splat:values path=splat_item/mass -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 39.0 ` |
+| ` unit ` | ` lb ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:equipment/diplomat_s_pack_39_gp ` |
+| ` implementation ` | ` dnd2024:equipment_diplomat_s_pack_39_gp ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` grant_contents_on_acquisition ` | ` true ` |
+| ` grant_idempotency ` | ` once_per_acquired_pack_instance ` |
+
+#### Contents
+
+<!-- splat:rows path=splat_rule/parameters/contents -->
+
+| Row | quantity | unit |
+| --- | --- | --- |
+| ` 0 ` | ` 1 ` | ` purchase_unit ` |
+| ` 1 ` | ` 1 ` | ` purchase_unit ` |
+| ` 2 ` | ` 1 ` | ` purchase_unit ` |
+| ` 3 ` | ` 5 ` | ` purchase_unit ` |
+| ` 4 ` | ` 1 ` | ` purchase_unit ` |
+| ` 5 ` | ` 2 ` | ` purchase_unit ` |
+| ` 6 ` | ` 4 ` | ` purchase_unit ` |
+| ` 7 ` | ` 5 ` | ` purchase_unit ` |
+| ` 8 ` | ` 5 ` | ` purchase_unit ` |
+| ` 9 ` | ` 1 ` | ` purchase_unit ` |
+| ` 10 ` | ` 1 ` | ` purchase_unit ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/0/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/chest_5_gp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/1/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/clothes_fine_15_gp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/2/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/ink_10_gp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/3/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/ink_pen_2_cp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/4/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/lamp_5_sp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/5/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/case_map_or_scroll_1_gp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/6/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/oil_1_sp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/7/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/paper_2_sp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/8/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/parchment_1_sp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/9/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/perfume_5_gp ` |
+
+##### Item
+
+<!-- splat:values path=splat_rule/parameters/contents/10/item -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:equipment/tinderbox_5_sp ` |
+
+#### Mass
+
+<!-- splat:values path=splat_rule/parameters/mass -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 39.0 ` |
+| ` unit ` | ` lb ` |

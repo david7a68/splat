@@ -10,205 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 343
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: large
-  type: dragon
-  alignment: Unaligned
-  movement_text: 30 ft., Fly 80 ft.
-  skills_text: Perception +4
-  senses_text: Darkvision 120 ft.; Passive Perception 14
-  languages_text: None
-  cr_text: 6 (XP 2,300; PB +3)
-  hit_points_text: 127 (15d10 + 45)
-splat_stats:
-  strength:
-    value: 19
-  save_strength:
-    value: 4
-  dexterity:
-    value: 10
-  save_dexterity:
-    value: 0
-  constitution:
-    value: 16
-  save_constitution:
-    value: 3
-  intelligence:
-    value: 5
-  save_intelligence:
-    value: -3
-  wisdom:
-    value: 12
-  save_wisdom:
-    value: 1
-  charisma:
-    value: 6
-  save_charisma:
-    value: -2
-  armor_class:
-    value: 14
-  max_hp:
-    value: 127
-  initiative:
-    value: 0
-  speed:
-    value: 30
-    unit: ft
-  fly_speed:
-    value: 80
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/wyvern
-  implementation: dnd2024:creature_wyvern
-  parameters:
-    skill_totals:
-      perception: 4
-    senses:
-    - sense: darkvision
-      range_ft: 120
-    passive_perception: 14
-    languages:
-      speak: true
-      known: []
-    features:
-      bite:
-        economy: action
-        op: attack
-        modes:
-        - melee
-        attack_bonus: 7
-        target:
-          kind: creature_or_object
-          count: 1
-        reach_ft: 5
-        hit:
-        - op: damage
-          components:
-          - type: piercing
-            amount:
-              dice:
-                count: 2
-                sides: 8
-              add: 4
-            average: 13
-      sting:
-        economy: action
-        op: attack
-        modes:
-        - melee
-        attack_bonus: 7
-        target:
-          kind: creature_or_object
-          count: 1
-        reach_ft: 10
-        hit:
-        - op: damage
-          components:
-          - type: piercing
-            amount:
-              dice:
-                count: 2
-                sides: 6
-              add: 4
-            average: 11
-          - type: poison
-            amount:
-              dice:
-                count: 7
-                sides: 6
-              add: 0
-            average: 24
-        - op: condition.apply
-          condition: poisoned
-          duration:
-            until: actor.next_turn_start
-      multiattack:
-        economy: action
-        op: multiattack
-        sequence:
-        - count: 1
-          feature: bite
-        - count: 1
-          feature: sting
-    damage_resolution:
-      choice:
-      - printed_average
-      - roll_expression
-      chooser: controller
-      exclusive: true
-    spatial_resolution:
-      provider: caller
-      required_facts:
-      - distance
-      - area_membership
-      - visibility
-      - occupancy
-      - movement_path
-      validate_against_typed_constraints: true
-splat_contracts:
-- id: dnd2024:creature_wyvern
-  inputs:
-    actor:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    choices:
-      required: false
-      type: choice
-    scene:
-      required: false
-      type: resolution
-    event:
-      required: false
-      type: event
-  outputs:
-  - effects
-  - roll_requests
-  - state_changes
-  events:
-  - creature.feature_requested
-  capabilities:
-  - action_economy
-  - attack_resolution
-  - creature_rules
-  - damage
-  - effects
-  - spatial_constraints
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: ba1f0deef116ea8b4c5a98571fd485f14b142633a6618b2a49854ae57c34e643
-  source_path: builtin/srd-5.2.1/creature/wyvern.md
-  pages:
-  - 343
-  engine_gaps: &id001
-  - dnd2024:creature_wyvern
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/creatures_3.md
-  specification_sha256: 393a4a930fb3b23292a90f9821b2b6f552b41d8a652fd16c256268251ec9bb4b
-splat_clauses:
-- key: source_rules
-  text: '# Wyvern Large Dragon, Unaligned AC 14 Initiative +0 (10) HP 127 (15d10 + 45) Speed 30 ft., Fly
-    80 ft. MOD SAVE MOD SAVE MOD SAVE Str 19 +4 +4 Dex 10 +0 +0 Con 16 +3 +3 Int 5 -3 -3 Wis 12 +1 +1
-    Cha 6 -2 -2 Skills Perception +4 Senses Darkvision 120 ft.; Passive Perception 14 Languages None CR
-    6 (XP 2,300; PB +3) ### Actions Multiattack. The wyvern makes one Bite attack and one Sting attack.
-    Bite. Melee Attack Roll: +7, reach 5 ft. Hit: 13 (2d8 + 4) Piercing damage. Sting. Melee Attack Roll:
-    +7, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage plus 24 (7d6) Poison damage, and the target has
-    the Poisoned condition until the start of the wyvern’s next turn.'
-  sha256: 2800237e4b6d4aff051d7ac3248d6a843eda561704e57cd13cf830fa0f6e436c
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Wyvern
+
+## Source text
 
 <!-- SRD page 343 -->
 
@@ -236,3 +42,193 @@ the target has the Poisoned condition until the start of\
 the wyvern’s next turn.\
 
 Original layout: [[../../srd-5.2.1/pages/343|page 343]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` large ` |
+| ` type ` | ` dragon ` |
+| ` alignment ` | ` Unaligned ` |
+| ` movement_text ` | ` 30 ft., Fly 80 ft. ` |
+| ` skills_text ` | ` Perception +4 ` |
+| ` senses_text ` | ` Darkvision 120 ft.; Passive Perception 14 ` |
+| ` languages_text ` | ` None ` |
+| ` cr_text ` | ` 6 (XP 2,300; PB +3) ` |
+| ` hit_points_text ` | ` 127 (15d10 + 45) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 19 ` | ` 4 ` |
+| ` Dexterity ` | ` 10 ` | ` 0 ` |
+| ` Constitution ` | ` 16 ` | ` 3 ` |
+| ` Intelligence ` | ` 5 ` | ` -3 ` |
+| ` Wisdom ` | ` 12 ` | ` 1 ` |
+| ` Charisma ` | ` 6 ` | ` -2 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 14 ` |  |
+| ` max_hp ` | ` 127 ` |  |
+| ` initiative ` | ` 0 ` |  |
+| ` speed ` | ` 30 ` | ` ft ` |
+| ` fly_speed ` | ` 80 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/wyvern ` |
+| ` implementation ` | ` dnd2024:creature_wyvern ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` passive_perception ` | ` 14 ` |
+
+#### Skill totals
+
+<!-- splat:values path=splat_rule/parameters/skill_totals -->
+
+| Field | Value |
+| --- | --- |
+| ` perception ` | ` 4 ` |
+
+#### Senses
+
+<!-- splat:rows path=splat_rule/parameters/senses -->
+
+| Row | sense | range_ft |
+| --- | --- | --- |
+| ` 0 ` | ` darkvision ` | ` 120 ` |
+
+#### Languages
+
+<!-- splat:yaml path=splat_rule/parameters/languages -->
+
+```yaml
+speak: true
+known: []
+```
+
+#### Features
+
+##### Bite
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+
+```yaml
+economy: action
+op: attack
+modes:
+- melee
+attack_bonus: 7
+target:
+  kind: creature_or_object
+  count: 1
+reach_ft: 5
+hit:
+- op: damage
+  components:
+  - type: piercing
+    amount:
+      dice:
+        count: 2
+        sides: 8
+      add: 4
+    average: 13
+```
+
+##### Sting
+
+<!-- splat:yaml path=splat_rule/parameters/features/sting -->
+
+```yaml
+economy: action
+op: attack
+modes:
+- melee
+attack_bonus: 7
+target:
+  kind: creature_or_object
+  count: 1
+reach_ft: 10
+hit:
+- op: damage
+  components:
+  - type: piercing
+    amount:
+      dice:
+        count: 2
+        sides: 6
+      add: 4
+    average: 11
+  - type: poison
+    amount:
+      dice:
+        count: 7
+        sides: 6
+      add: 0
+    average: 24
+- op: condition.apply
+  condition: poisoned
+  duration:
+    until: actor.next_turn_start
+```
+
+##### Multiattack
+
+<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+
+```yaml
+economy: action
+op: multiattack
+sequence:
+- count: 1
+  feature: bite
+- count: 1
+  feature: sting
+```
+
+#### Damage resolution
+
+<!-- splat:values path=splat_rule/parameters/damage_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` choice ` | ` ["printed_average", "roll_expression"] ` |
+| ` chooser ` | ` controller ` |
+| ` exclusive ` | ` true ` |
+
+#### Spatial resolution
+
+<!-- splat:values path=splat_rule/parameters/spatial_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` provider ` | ` caller ` |
+| ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
+| ` validate_against_typed_constraints ` | ` true ` |

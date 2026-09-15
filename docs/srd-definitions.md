@@ -21,13 +21,15 @@ outside this pass. The existing 32 bounded execution profiles still run.
 The [coverage inventory](../builtin/dnd2024-definitions/coverage.json) records
 source hashes, definition identities, status, execution profiles and source
 adjudications. The [contract registry](../builtin/dnd2024-definitions/contracts.json)
-records typed interfaces, closed parameter shapes, exact specifications,
-references, citations and missing engine capabilities.
+records typed interfaces, closed parameter shapes, specification fingerprints,
+references, citations and missing engine capabilities. The specifications live
+once in the note bodies.
 
 ## What was converted
 
 Each rule-bearing note now contains a source-specific registered rule contract
-with explicit parameters. These include targets, save and attack outcomes,
+with explicit parameters in [marked tables and local YAML blocks](design/markdown-layout.md).
+Frontmatter holds identity and source citations. These parameters include targets, save and attack outcomes,
 scaling, choices, traits, conditions, durations, resources, recovery, forms,
 spell grants, equipment effects, inventory capacities, restrictions and exceptions.
 Keeping the source prose alone no longer qualifies a note as specified.
@@ -71,8 +73,8 @@ both as independent library copies correctly reports duplicate identities.
 There is one `dnd2024` package owner; no second namespace manifest was added.
 
 The compiler rejects unavailable catalogue contracts before action execution.
-The reader checks declaration types, specification fingerprints and conversion
-status. Built-in verification also checks the registry's closed parameter
+Catalogue loading checks report declaration types, specification fingerprints
+and conversion status. Standalone note reading checks the resolved body data. Built-in verification also checks the registry's closed parameter
 shapes, implementation names, provenance, all references and source coverage.
 Changing a content declaration cannot register engine code or grant execution.
 

@@ -232,3 +232,106 @@ fn allows_missing_optional_dependencies_and_ignores_non_splat_metadata() {
     );
     assert!(validate(&[entry]).errors.is_empty());
 }
+
+#[test]
+fn body_tables_and_blocks_reconstruct_data_independent_of_headings_and_order() {
+    let body = r#"
+# My layout
+<!-- splat:yaml path=splat_rule/parameters/rows/1/effect -->
+
+```yaml
+on_hit: {damage: 8d6, type: fire}
+```
+
+<!-- splat:rows path=splat_rule/parameters/rows -->
+
+| Row | level | label |
+| --- | --- | --- |
+| 1 | 2 | `"two\|three"` |
+| 0 | 1 | `"true"` |
+
+## Renamed
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| mechanic | test:rule |
+| implementation | test:adapter |
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| Intelligence | 6 | +2 |
+| Strength | 18 | |
+"#;
+    let entry = parse("body", "rule", "", body);
+    let expected: Value = serde_yaml_ng::from_str(
+        r#"
+splat_rule:
+  mechanic: test:rule
+  implementation: test:adapter
+  parameters:
+    rows:
+    - {level: 1, label: 'true'}
+    - {level: 2, label: 'two|three', effect: {on_hit: {damage: 8d6, type: fire}}}
+splat_stats:
+  intelligence: {value: 6}
+  save_intelligence: {value: 2}
+  strength: {value: 18}
+"#,
+    )
+    .unwrap();
+    for (key, value) in expected.as_mapping().unwrap() {
+        assert_eq!(entry.fields.get(key), Some(value));
+    }
+    assert!(
+        crate::execution::model::compile(&entry)
+            .unwrap_err()
+            .contains("test:adapter")
+    );
+    assert_eq!(entry.body, body);
+}
+
+#[test]
+fn body_data_rejects_conflicts_malformed_tables_and_dangling_markers() {
+    for body in [
+        "<!-- splat:yaml path=splat_item -->\n\n```yaml\n{}\n```",
+        "<!-- splat:yaml path=splat_stats -->\n\n```yaml\nstrength: {value: 1, value: 2}\n```",
+        "<!-- splat:yaml path=splat_stats -->\n\n```yaml\nstrength: {value: 1}\n",
+        "<!-- splat:values path=splat_stats -->\n\nIntervening text\n\n| Field | Value |\n|---|---|\n| strength | 1 |",
+        "<!-- splat:values path=splat_stats -->\n\n| Field | Value |\n|---|---|\n| strength | 1 | discarded |",
+        "<!-- splat:values path=splat_stats -->\n\n| Field | Value |\n|---|---|\n| strength |",
+        "<!-- splat:values path=splat_stats -->\n\n| Field | Value |\n|---|---|\n| strength | 1 |\n| strength | 2 |",
+        "<!-- splat:rows path=splat_rule/parameters/rows -->\n\n| Row | value |\n|---|---|\n| 1 | 3 |",
+        "<!-- splat:values path=splat_stats -->",
+        "<!-- splat:values path=splat_name -->\n\n| Field | Value |\n|---|---|\n| label | changed |",
+        "<!-- splat:unknown path=splat_stats -->\n",
+    ] {
+        assert!(
+            Entry::parse("invalid", &note("invalid", "item", "splat_item: {}", body)).is_err(),
+            "Accepted: {body}"
+        );
+    }
+    let conflict = "<!-- splat:yaml path=splat_stats/strength -->\n\n```yaml\nvalue: 1\n```\n\n<!-- splat:values path=splat_stats/strength -->\n\n| Field | Value |\n|---|---|\n| value | 2 |\n";
+    assert!(
+        Entry::parse(
+            "conflict",
+            &note("conflict", "item", "splat_item: {}", conflict)
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn unmarked_examples_are_not_interpreted_as_data() {
+    let body = "```markdown\n<!-- splat:yaml path=splat_item -->\n```\n\n```yaml\nsplat_item: {changed: true}\n```\n\n| Field | Value |\n|---|---|\n| ignored | true |\n";
+    let entry = parse("example", "item", "splat_item: {}", body);
+    assert!(
+        field(&entry.fields, "splat_item")
+            .unwrap()
+            .as_mapping()
+            .unwrap()
+            .is_empty()
+    );
+}

@@ -10,127 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 142
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 1
-  school: illusion
-  classes:
-  - bard
-  - warlock
-  - wizard
-  components:
-  - somatic
-  - material
-  concentration: false
-  duration: 10 days
-  casting_time: 1 minute or Ritual
-  ritual: true
-  range:
-    mode: touch
-  material:
-    description: ink worth 10+ GP, which the spell consumes
-    consumed: true
-splat_rule:
-  mechanic: dnd2024:spells/illusory_script
-  implementation: dnd2024:spell_illusory_script
-  parameters:
-    spell_lifetime:
-      concentration: false
-      maximum_seconds: 864000
-    target:
-      kind: writing_surface
-      suitable_for_writing: true
-      touch: true
-    message:
-      real_meaning: caster_authored
-      real_handwriting: caster
-    authorized_readers:
-      caster: true
-      additional_creatures:
-        chooser: caster
-        timing: cast
-    unauthorized_display_choice:
-      chooser: caster
-      options:
-      - unintelligible_script
-      - alternative_text
-    unintelligible_script:
-      appearance_choices:
-      - unknown_script
-      - magical_script
-      readable: false
-    alternative_text:
-      meaning: caster_choice
-      handwriting: caster_choice
-      language:
-        chooser: caster
-        constraint: known_to_caster
-    truesight:
-      can_read_hidden_message: true
-    on_dispel:
-      remove:
-      - original_script
-      - illusion
-splat_contracts:
-- id: dnd2024:spell_illusory_script
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    surface:
-      type: object
-      required: true
-    authorized_readers:
-      type: participant_list
-      required: true
-    real_message:
-      type: text
-      required: true
-    illusory_display:
-      type: choice
-      required: true
-  outputs:
-  - effects
-  events:
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - illusions
-  - memory
-  - inventory
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: fe364cddefde63760aeec37e92f95faae0d03af8760f826d62e5b4b952d528c5
-  source_path: builtin/srd-5.2.1/spell/illusory_script.md
-  pages:
-  - 142
-  engine_gaps: &id001
-  - dnd2024:spell_illusory_script
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_4.md
-  specification_sha256: 3df6891c7a112221c830cf3960004dd8139fb80f2793ebc64c02b538abb6722f
-splat_clauses:
-- key: source_rules
-  text: '# Illusory Script Level 1 Illusion (Bard, Warlock, Wizard) Casting Time: 1 minute or Ritual Range:
-    Touch Components: S, M (ink worth 10+ GP, which the spell consumes) Duration: 10 days You write on
-    parchment, paper, or another suitable material and imbue it with an illusion that lasts for the duration.
-    To you and any creatures you designate when you cast the spell, the writing appears normal, seems
-    to be written in your hand, and conveys whatever meaning you intended when you wrote the text. To
-    all others, the writing appears as if it were written in an unknown or magical script that is unintelligible.
-    Alternatively, the illusion can alter the meaning, handwriting, and language of the text, though the
-    language must be one you know. If the spell is dispelled, the original script and the illusion both
-    disappear. A creature that has Truesight can read the hidden message.'
-  sha256: 53e1da148b1cfd030e17de5f4b8dc2d6a8cb5afb32ebc1832c0531c563bcce04
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Illusory Script
+
+## Source text
 
 <!-- SRD page 142 -->
 
@@ -157,3 +41,131 @@ A creature that has Truesight can read the hidden\
 message.\
 
 Original layout: [[../../srd-5.2.1/pages/142|page 142]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 1 ` |
+| ` school ` | ` illusion ` |
+| ` classes ` | ` ["bard", "warlock", "wizard"] ` |
+| ` components ` | ` ["somatic", "material"] ` |
+| ` concentration ` | ` false ` |
+| ` duration ` | ` 10 days ` |
+| ` casting_time ` | ` 1 minute or Ritual ` |
+| ` ritual ` | ` true ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` mode ` | ` touch ` |
+
+### Material
+
+<!-- splat:values path=splat_spell/material -->
+
+| Field | Value |
+| --- | --- |
+| ` description ` | ` ink worth 10+ GP, which the spell consumes ` |
+| ` consumed ` | ` true ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/illusory_script ` |
+| ` implementation ` | ` dnd2024:spell_illusory_script ` |
+
+### Parameters
+
+#### Spell lifetime
+
+<!-- splat:values path=splat_rule/parameters/spell_lifetime -->
+
+| Field | Value |
+| --- | --- |
+| ` concentration ` | ` false ` |
+| ` maximum_seconds ` | ` 864000 ` |
+
+#### Target
+
+<!-- splat:values path=splat_rule/parameters/target -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` writing_surface ` |
+| ` suitable_for_writing ` | ` true ` |
+| ` touch ` | ` true ` |
+
+#### Message
+
+<!-- splat:values path=splat_rule/parameters/message -->
+
+| Field | Value |
+| --- | --- |
+| ` real_meaning ` | ` caster_authored ` |
+| ` real_handwriting ` | ` caster ` |
+
+#### Authorized readers
+
+<!-- splat:yaml path=splat_rule/parameters/authorized_readers -->
+
+```yaml
+caster: true
+additional_creatures:
+  chooser: caster
+  timing: cast
+```
+
+#### Unauthorized display choice
+
+<!-- splat:values path=splat_rule/parameters/unauthorized_display_choice -->
+
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` caster ` |
+| ` options ` | ` ["unintelligible_script", "alternative_text"] ` |
+
+#### Unintelligible script
+
+<!-- splat:values path=splat_rule/parameters/unintelligible_script -->
+
+| Field | Value |
+| --- | --- |
+| ` appearance_choices ` | ` ["unknown_script", "magical_script"] ` |
+| ` readable ` | ` false ` |
+
+#### Alternative text
+
+<!-- splat:yaml path=splat_rule/parameters/alternative_text -->
+
+```yaml
+meaning: caster_choice
+handwriting: caster_choice
+language:
+  chooser: caster
+  constraint: known_to_caster
+```
+
+#### Truesight
+
+<!-- splat:values path=splat_rule/parameters/truesight -->
+
+| Field | Value |
+| --- | --- |
+| ` can_read_hidden_message ` | ` true ` |
+
+#### On dispel
+
+<!-- splat:values path=splat_rule/parameters/on_dispel -->
+
+| Field | Value |
+| --- | --- |
+| ` remove ` | ` ["original_script", "illusion"] ` |

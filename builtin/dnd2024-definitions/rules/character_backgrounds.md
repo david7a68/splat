@@ -10,34 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 83
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/character_backgrounds
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 83
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: a76f8988e67c14211f32e829e9c55479d76ebf569dadb85cfd3d6ed3a6b86595
-  parent_name: Character Backgrounds
-  line_span:
-    first: 7060
-    count: 5
-splat_clauses:
-- key: source_rules
-  text: '# Character Backgrounds Your character’s background is a collection of characteristics that represent
-    the place and occupation that were most formative before your character embarked on a life of adventure.'
-  sha256: 601602a789aa847c1b259265e2a979cdca50280a4b653ecb202e569bc676b611
-  status: informational
 ---
 
 # Character Backgrounds
+
+## Source text
 
 <!-- SRD page 83 -->
 
@@ -45,3 +22,19 @@ Your character’s background is a collection of char-\
 acteristics that represent the place and occupation\
 that were most formative before your character em-\
 barked on a life of adventure.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/character_backgrounds ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

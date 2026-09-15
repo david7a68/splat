@@ -10,191 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 42, 43
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:class_features/druid_level_2_wild_shape
-  parameters:
-    action: bonus_action
-    resource:
-      id: wild_shape
-      initial_maximum: 2
-      maximum_by_class_level:
-        '2': 2
-        '6': 3
-        '17': 4
-      recover:
-      - event: rest.short_rest_completed
-        amount: 1
-      - event: rest.long_rest_completed
-        amount: all_expended
-    cost: 1
-    form_choice:
-      from: known_beast_forms
-      known_count_by_druid_level:
-        '2': 4
-        '4': 6
-        '8': 8
-      maximum_challenge_rating_by_druid_level:
-        '2': 0.25
-        '4': 0.5
-        '8': 1
-      fly_speed_allowed_minimum_druid_level: 8
-      replace:
-        event: rest.long_rest_completed
-        maximum: 1
-        must_remain_eligible: true
-      other_source_beasts:
-        choice_authority: game_master
-        type: allow_source
-        required: true
-    duration:
-      hours:
-        op: divide
-        args:
-        - stat: classes.druid.level
-        - 2
-    ends_on:
-    - wild_shape.used_again
-    - condition.incapacitated
-    - death
-    end_voluntarily:
-      action: bonus_action
-    temporary_hit_points:
-      stat: classes.druid.level
-    statistics:
-      replace_with: beast_stat_block
-      retain:
-      - personality
-      - memories
-      - speech
-      - creature_type
-      - hit_points
-      - hit_point_dice
-      - intelligence
-      - wisdom
-      - charisma
-      - class_features
-      - languages
-      - feats
-      proficiencies:
-        retain:
-        - skills
-        - saving_throws
-        use_own_proficiency_bonus: true
-        gain_beast_proficiencies: true
-        modifier_rule: higher_of_own_and_beast
-    spellcasting:
-      can_cast: false
-      concentration_preserved: true
-      existing_spells_unaffected: true
-    objects:
-      handling_depends_on: form_limbs
-      equipment_choice_per_item:
-      - drop_in_space
-      - merge
-      - wear
-      wearing_eligibility:
-        authority: game_master
-        decision_type: boolean
-        criteria:
-        - size
-        - shape
-      equipment_resizes: false
-      unwearable_choices:
-      - drop_in_space
-      - merge
-      merged_equipment_effects_active: false
-      worn_equipment_effects_active: true
-  implementation: dnd2024:class_features_druid_level_2_wild_shape
-splat_contracts:
-- id: dnd2024:class_features_druid_level_2_wild_shape
-  inputs:
-    actor:
-      type: participant
-      required: true
-    selections:
-      required: false
-      type: choice
-    form:
-      type: definition
-      required: true
-    equipment_decisions:
-      type: choice
-      required: true
-  outputs:
-  - feature_state
-  - choices
-  - resource_changes
-  - spell_grants
-  events:
-  - action.bonus
-  - rest.short_rest_completed
-  - rest.long_rest_completed
-  - condition.applied
-  - death
-  - character.class_level_gained
-  capabilities:
-  - shapechanging
-  - character_choices
-  - resources
-  - equipment
-  - spellcasting
-splat_conversion:
-  status: specified
-  category: class_feature
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 42
-  - 43
-  engine_gaps: &id001
-  - dnd2024:class_features_druid_level_2_wild_shape
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_1.md
-  specification_sha256: 985a6fa5d6d3d78be9e0bc37df09cba2f558fcc6be37cb1be3ff9aa24376f254
-  parent_name: Druid
-  line_span:
-    first: 3494
-    count: 70
-splat_clauses:
-- key: source_rules
-  text: '# Level 2: Wild Shape The power of nature allows you to assume the form of an animal. As a Bonus
-    Action, you shape-shift into a Beast form that you have learned for this feature (see “Known Forms”
-    below). You stay in that form for a number of hours equal to half your Druid level or until you use
-    Wild Shape again, have the Incapacitated condition, or die. You can also leave the form early as a
-    Bonus Action. Number of Uses. You can use Wild Shape twice. You regain one expended use when you finish
-    a Short Rest, and you regain all expended uses when you finish a Long Rest. You gain additional uses
-    when you reach certain Druid levels, as shown in the Wild Shape column of the Druid Features table.
-    Known Forms. You know four Beast forms for this feature, chosen from among Beast stat blocks that
-    have a maximum Challenge Rating of 1/4 and that lack a Fly Speed (see “Animals” in “Monsters” for
-    stat block options). The Rat, Riding Horse, Spider, and Wolf are recommended. Whenever you finish
-    a Long Rest, you can replace one of your known forms with another eligible form. When you reach certain
-    Druid levels, your number of known forms and the maximum Challenge Rating for those forms increases,
-    as shown in the Beast Shapes table. In addition, starting at level 8, you can adopt a form that has
-    a Fly Speed. When choosing known forms, you may look in other sources for eligible Beasts if the Game
-    Master permits you to do so. Beast Shapes Druid Known Max Fly Level Forms CR Speed 2 4 1/4 No 4 6
-    1/2 No 8 8 1 Yes Rules While Shape-Shifted. While in a form, you retain your personality, memories,
-    and ability to speak, and the following rules apply: Temporary Hit Points. When you assume a Wild
-    Shape form, you gain a number of Temporary Hit Points equal to your Druid level. Game Statistics.
-    Your game statistics are replaced by the Beast’s stat block, but you retain your creature type; Hit
-    Points; Hit Point Dice; Intelligence, Wisdom, and Charisma scores; class features; languages; and
-    feats. You also retain your skill and saving throw proficiencies and use your Proficiency Bonus for
-    them, in addition to gaining the proficiencies of the creature. If a skill or saving throw modifier
-    in the Beast’s stat block is higher than yours, use the one in the stat block. No Spellcasting. You
-    can’t cast spells, but shapeshifting doesn’t break your Concentration or otherwise interfere with
-    a spell you’ve already cast. Objects. Your ability to handle objects is determined by the form’s limbs
-    rather than your own. In addition, you choose whether your equipment falls in your space, merges into
-    your new form, or is worn by it. Worn equipment functions as normal, but the GM decides whether it’s
-    practical for the new form to wear a piece of equipment based on the creature’s size and shape. Your
-    equipment doesn’t change size or shape to match the new form, and any equipment that the new form
-    can’t wear must either fall to the ground or merge with the form. Equipment that merges with the form
-    has no effect while you’re in that form.'
-  sha256: 33e236ecac7a9a06de6208b981fc2225256125110c4fbbf66d6a22ec467b5faa
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Level 2: Wild Shape
+
+## Source text
 
 <!-- SRD page 42 -->
 
@@ -270,3 +90,155 @@ form, and any equipment that the new form can’t\
 wear must either fall to the ground or merge with\
 the form. Equipment that merges with the form\
 has no effect while you’re in that form.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:class_features/druid_level_2_wild_shape ` |
+| ` implementation ` | ` dnd2024:class_features_druid_level_2_wild_shape ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` action ` | ` bonus_action ` |
+| ` cost ` | ` 1 ` |
+| ` ends_on ` | ` ["wild_shape.used_again", "condition.incapacitated", "death"] ` |
+
+#### Resource
+
+<!-- splat:yaml path=splat_rule/parameters/resource -->
+
+```yaml
+id: wild_shape
+initial_maximum: 2
+maximum_by_class_level:
+  '2': 2
+  '6': 3
+  '17': 4
+recover:
+- event: rest.short_rest_completed
+  amount: 1
+- event: rest.long_rest_completed
+  amount: all_expended
+```
+
+#### Form choice
+
+<!-- splat:yaml path=splat_rule/parameters/form_choice -->
+
+```yaml
+from: known_beast_forms
+known_count_by_druid_level:
+  '2': 4
+  '4': 6
+  '8': 8
+maximum_challenge_rating_by_druid_level:
+  '2': 0.25
+  '4': 0.5
+  '8': 1
+fly_speed_allowed_minimum_druid_level: 8
+replace:
+  event: rest.long_rest_completed
+  maximum: 1
+  must_remain_eligible: true
+other_source_beasts:
+  choice_authority: game_master
+  type: allow_source
+  required: true
+```
+
+#### Duration
+
+<!-- splat:yaml path=splat_rule/parameters/duration -->
+
+```yaml
+hours:
+  op: divide
+  args:
+  - stat: classes.druid.level
+  - 2
+```
+
+#### End voluntarily
+
+<!-- splat:values path=splat_rule/parameters/end_voluntarily -->
+
+| Field | Value |
+| --- | --- |
+| ` action ` | ` bonus_action ` |
+
+#### Temporary hit points
+
+<!-- splat:values path=splat_rule/parameters/temporary_hit_points -->
+
+| Field | Value |
+| --- | --- |
+| ` stat ` | ` classes.druid.level ` |
+
+#### Statistics
+
+<!-- splat:yaml path=splat_rule/parameters/statistics -->
+
+```yaml
+replace_with: beast_stat_block
+retain:
+- personality
+- memories
+- speech
+- creature_type
+- hit_points
+- hit_point_dice
+- intelligence
+- wisdom
+- charisma
+- class_features
+- languages
+- feats
+proficiencies:
+  retain:
+  - skills
+  - saving_throws
+  use_own_proficiency_bonus: true
+  gain_beast_proficiencies: true
+  modifier_rule: higher_of_own_and_beast
+```
+
+#### Spellcasting
+
+<!-- splat:values path=splat_rule/parameters/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` can_cast ` | ` false ` |
+| ` concentration_preserved ` | ` true ` |
+| ` existing_spells_unaffected ` | ` true ` |
+
+#### Objects
+
+<!-- splat:yaml path=splat_rule/parameters/objects -->
+
+```yaml
+handling_depends_on: form_limbs
+equipment_choice_per_item:
+- drop_in_space
+- merge
+- wear
+wearing_eligibility:
+  authority: game_master
+  decision_type: boolean
+  criteria:
+  - size
+  - shape
+equipment_resizes: false
+unwearable_choices:
+- drop_in_space
+- merge
+merged_equipment_effects_active: false
+worn_equipment_effects_active: true
+```

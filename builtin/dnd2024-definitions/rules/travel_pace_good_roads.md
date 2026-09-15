@@ -10,60 +10,33 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 192
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/travel_pace_good_roads
-  parameters:
-    good_road_maximum_pace_step_increase: 1
-    pace_order:
-    - slow
-    - normal
-    - fast
-    cap: fast
-  implementation: dnd2024:rule_travel_pace_good_roads
-splat_contracts:
-- id: dnd2024:rule_travel_pace_good_roads
-  inputs:
-    actor:
-      type: participant
-      required: true
-    context:
-      type: resolution
-      required: true
-  outputs:
-  - travel_rates
-  events: []
-  capabilities:
-  - travel
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 192
-  engine_gaps: &id001
-  - dnd2024:rule_travel_pace_good_roads
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: a53903bcee2ee8bb9324e38dd071c6732e283909ae943e08c7d14a74c58a1add
-  parent_name: Travel Pace
-  line_span:
-    first: 9334
-    count: 4
-splat_clauses:
-- key: source_rules
-  text: '# Good Roads The presence of a good road increases the group’s maximum pace by one step (from
-    Slow to Normal or from Normal to Fast).'
-  sha256: 06c0e15bfe0d6b457ce4aa7b0c84e0fd2c2b1679af42df89b78df9185e9b6164
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Good Roads
+
+## Source text
 
 <!-- SRD page 192 -->
 
 The presence of a good road increases the group’s\
 maximum pace by one step (from Slow to Normal or\
 from Normal to Fast).\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/travel_pace_good_roads ` |
+| ` implementation ` | ` dnd2024:rule_travel_pace_good_roads ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` good_road_maximum_pace_step_increase ` | ` 1 ` |
+| ` pace_order ` | ` ["slow", "normal", "fast"] ` |
+| ` cap ` | ` fast ` |

@@ -10,68 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 206
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/activating_a_magic_item_command_word
-  parameters:
-    command_word_modes:
-    - spoken
-    - signed
-    spoken:
-      audible_required: true
-      sound_suppression_prevents_activation: true
-  implementation: dnd2024:rules_activating_a_magic_item_command_word
-splat_contracts:
-- id: dnd2024:rules_activating_a_magic_item_command_word
-  inputs:
-    actor:
-      type: participant
-      required: true
-    item:
-      type: item_instance
-      required: true
-    choice:
-      type: choice
-      required: true
-    event:
-      required: false
-      type: event
-  outputs:
-  - item_updates
-  - cost
-  - effects
-  events: []
-  capabilities:
-  - items
-  - attunement
-  - crafting
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 206
-  engine_gaps: &id001
-  - dnd2024:rules_activating_a_magic_item_command_word
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: 8657194695cfa0798b443333ab380dd6b4b9168d647ee4b6101566660f3c9e9b
-  parent_name: Activating a Magic Item
-  line_span:
-    first: 10598
-    count: 6
-splat_clauses:
-- key: source_rules
-  text: '# Command Word A command word is a word or short phrase that must be spoken or signed for an
-    item to work. Spoken command words must be audible and fail to work in areas where all sound is suppressed,
-    as in the area of the Silence spell.'
-  sha256: 4e394f023febd797f4973097ab6418c33830dac5486841714fbe56f813ac60f7
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Command Word
+
+## Source text
 
 <!-- SRD page 206 -->
 
@@ -80,3 +23,29 @@ must be spoken or signed for an item to work. Spo-\
 ken command words must be audible and fail to\
 work in areas where all sound is suppressed, as in\
 the area of the Silence spell.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/activating_a_magic_item_command_word ` |
+| ` implementation ` | ` dnd2024:rules_activating_a_magic_item_command_word ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` command_word_modes ` | ` ["spoken", "signed"] ` |
+
+#### Spoken
+
+<!-- splat:values path=splat_rule/parameters/spoken -->
+
+| Field | Value |
+| --- | --- |
+| ` audible_required ` | ` true ` |
+| ` sound_suppression_prevents_activation ` | ` true ` |

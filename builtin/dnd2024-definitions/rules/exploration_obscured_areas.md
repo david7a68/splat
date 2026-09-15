@@ -10,59 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 11
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/exploration_obscured_areas
-  parameters:
-    lightly_obscured:
-      sight_based_wisdom_perception: disadvantage
-    heavily_obscured:
-      opaque: true
-      condition_when_attempting_to_see_inside: blinded
-  implementation: dnd2024:rule_exploration_obscured_areas
-splat_contracts:
-- id: dnd2024:rule_exploration_obscured_areas
-  inputs:
-    actor:
-      type: participant
-      required: true
-    context:
-      type: resolution
-      required: true
-  outputs:
-  - perception_modifiers
-  events: []
-  capabilities:
-  - senses
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 11
-  engine_gaps: &id001
-  - dnd2024:rule_exploration_obscured_areas
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: 7e438faa365bf5e9e140d7cefb68f1c76603226dda4e5af3ca358061f8460acf
-  parent_name: Exploration
-  line_span:
-    first: 619
-    count: 10
-splat_clauses:
-- key: source_rules
-  text: '# Obscured Areas An area might be Lightly or Heavily Obscured. In a Lightly Obscured area—such
-    as an area with Dim Light, patchy fog, or moderate foliage—you have Disadvantage on Wisdom (Perception)
-    checks that rely on sight. A Heavily Obscured area—such as an area with Darkness, heavy fog, or dense
-    foliage—is opaque. You have the Blinded condition (see “Rules Glossary”) when trying to see something
-    there.'
-  sha256: 7039f1e5b247643430bb2d2e0999b1058b1c72cb58605ea0d33f2387cd9ed692
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Obscured Areas
+
+## Source text
 
 <!-- SRD page 11 -->
 
@@ -75,3 +27,31 @@ A Heavily Obscured area—such as an area with\
 Darkness, heavy fog, or dense foliage—is opaque.\
 You have the Blinded condition (see “Rules Glos-\
 sary”) when trying to see something there.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/exploration_obscured_areas ` |
+| ` implementation ` | ` dnd2024:rule_exploration_obscured_areas ` |
+
+### Parameters
+
+#### Lightly obscured
+
+<!-- splat:values path=splat_rule/parameters/lightly_obscured -->
+
+| Field | Value |
+| --- | --- |
+| ` sight_based_wisdom_perception ` | ` disadvantage ` |
+
+#### Heavily obscured
+
+<!-- splat:values path=splat_rule/parameters/heavily_obscured -->
+
+| Field | Value |
+| --- | --- |
+| ` opaque ` | ` true ` |
+| ` condition_when_attempting_to_see_inside ` | ` blinded ` |

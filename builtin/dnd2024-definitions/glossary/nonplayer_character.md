@@ -10,30 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 185
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:glossary/nonplayer_character
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: glossary
-  source_sha256: cde31ed6373067ed5d932f3cab76e61c7b13bea165c084afd229bcc12e7e7c7a
-  source_path: builtin/srd-5.2.1/glossary/nonplayer_character.md
-  pages:
-  - 185
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/glossary.md
-  specification_sha256: dc8dd301d5b09f0d81b7b9180f62b722dfc6eb2758100c5f95176c70eae80c25
-splat_clauses:
-- key: source_rules
-  text: '# Nonplayer Character A nonplayer character (NPC) is a monster that has a personal name and a
-    distinct personality. See also “Monster.”'
-  sha256: c2c5d43215ee8dc51dd59aa73fdcb6a65c7cdc1f126b957fe775acc939413c7e
-  status: informational
 ---
 
 # Nonplayer Character
+
+## Source text
 
 <!-- SRD page 185 -->
 
@@ -42,3 +23,19 @@ a personal name and a distinct personality. See also\
 “Monster.”\
 
 Original layout: [[../../srd-5.2.1/pages/185|page 185]].
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:glossary/nonplayer_character ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

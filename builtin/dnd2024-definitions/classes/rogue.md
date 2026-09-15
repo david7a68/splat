@@ -10,188 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 61
   url: https://www.dndbeyond.com/srd
-splat_rule_group:
-  category: class
-splat_rule:
-  mechanic: dnd2024:classes/rogue
-  implementation: dnd2024:classes_rogue
-  parameters:
-    class: rogue
-    primary_abilities:
-    - dexterity
-    hit_point_die:
-      count_per_class_level: 1
-      sides: 8
-    first_class_traits:
-      save_proficiencies:
-      - dexterity
-      - intelligence
-      skill_proficiencies:
-        count: 4
-        choices:
-        - acrobatics
-        - athletics
-        - deception
-        - insight
-        - intimidation
-        - investigation
-        - perception
-        - persuasion
-        - sleight_of_hand
-        - stealth
-      weapon_proficiencies:
-        simple: true
-        martial_required_property_any:
-        - finesse
-        - light
-      armor_training:
-      - light
-      tool_proficiencies:
-      - key: dnd2024:equipment/other_tools_thieves_tools_25_gp
-    starting_equipment:
-      choose: 1
-      options:
-        equipment:
-          items:
-          - definition:
-              key: dnd2024:equipment/leather_armor
-            quantity: 1
-          - definition:
-              key: dnd2024:equipment/dagger
-            quantity: 2
-          - definition:
-              key: dnd2024:equipment/shortsword
-            quantity: 1
-          - definition:
-              key: dnd2024:equipment/shortbow
-            quantity: 1
-          - definition:
-              key: dnd2024:equipment/ammunition_varies
-            quantity: 20
-            variant: arrows
-          - definition:
-              key: dnd2024:equipment/quiver_1_gp
-            quantity: 1
-          - definition:
-              key: dnd2024:equipment/other_tools_thieves_tools_25_gp
-            quantity: 1
-          - definition:
-              key: dnd2024:equipment/burglar_s_pack_16_gp
-            quantity: 1
-          currency:
-            gp: 8
-        currency:
-          currency:
-            gp: 100
-    progression:
-      key: dnd2024:tables/rogue_progression
-    feature_grants:
-    - minimum_class_level: 11
-      definition:
-        key: dnd2024:class_features/rogue_level_11_improved_cunning_strike
-    - minimum_class_level: 14
-      definition:
-        key: dnd2024:class_features/rogue_level_14_devious_strikes
-    - minimum_class_level: 15
-      definition:
-        key: dnd2024:class_features/rogue_level_15_slippery_mind
-    - minimum_class_level: 18
-      definition:
-        key: dnd2024:class_features/rogue_level_18_elusive
-    - minimum_class_level: 19
-      definition:
-        key: dnd2024:class_features/rogue_level_19_epic_boon
-    - minimum_class_level: 1
-      definition:
-        key: dnd2024:class_features/rogue_level_1_expertise
-    - minimum_class_level: 1
-      definition:
-        key: dnd2024:class_features/rogue_level_1_sneak_attack
-    - minimum_class_level: 1
-      definition:
-        key: dnd2024:class_features/rogue_level_1_thieves_cant
-    - minimum_class_level: 1
-      definition:
-        key: dnd2024:class_features/rogue_level_1_weapon_mastery
-    - minimum_class_level: 20
-      definition:
-        key: dnd2024:class_features/rogue_level_20_stroke_of_luck
-    - minimum_class_level: 2
-      definition:
-        key: dnd2024:class_features/rogue_level_2_cunning_action
-    - minimum_class_level: 3
-      definition:
-        key: dnd2024:class_features/rogue_level_3_rogue_subclass
-    - minimum_class_level: 3
-      definition:
-        key: dnd2024:class_features/rogue_level_3_steady_aim
-    - minimum_class_level: 4
-      definition:
-        key: dnd2024:class_features/rogue_level_4_ability_score_improvement
-    - minimum_class_level: 5
-      definition:
-        key: dnd2024:class_features/rogue_level_5_cunning_strike
-    - minimum_class_level: 5
-      definition:
-        key: dnd2024:class_features/rogue_level_5_uncanny_dodge
-    - minimum_class_level: 7
-      definition:
-        key: dnd2024:class_features/rogue_level_7_evasion
-    - minimum_class_level: 7
-      definition:
-        key: dnd2024:class_features/rogue_level_7_reliable_talent
-splat_contracts:
-- id: dnd2024:classes_rogue
-  inputs:
-    actor:
-      type: participant
-      required: true
-    selection:
-      required: false
-      type: choice
-  outputs:
-  - class_traits
-  - equipment_choices
-  - progression
-  - feature_grants
-  events:
-  - character.class_selected
-  - character.level_gained
-  capabilities:
-  - character_features
-  - proficiencies
-  - d20_tests
-  - equipment
-splat_conversion:
-  status: specified
-  category: class
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 61
-  engine_gaps: &id001
-  - dnd2024:classes_rogue
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_2.md
-  specification_sha256: 9d24e73e4dcac02673b62e4290360d8dae4930a75c235fcd3e221fb7afd7ad14
-  line_span:
-    first: 5127
-    count: 21
-splat_clauses:
-- key: source_rules
-  text: '# Rogue Core Rogue Traits Primary Ability Dexterity Hit Point Die D8 per Rogue level Saving Throw
-    Dexterity and Intelligence Proficiencies Skill Proficiencies Choose 4: Acrobatics, Athletics, Deception,
-    Insight, Intimidation, Investigation, Perception, Persuasion, Sleight of Hand, or Stealth Weapon Proficiencies
-    Simple weapons and Martial weapons that have the Finesse or Light property Tool Proficiencies Thieves’
-    Tools Armor Training Light armor Starting Equipment Choose A or B: (A) Leather Armor, 2 Daggers, Short
-    sword, Shortbow, 20 Arrows, Quiver, Thieves’ Tools, Burglar’s Pack, and 8 GP; or (B) 100 GP'
-  sha256: f28bbde5a83ca4bde9b8384a0ac5605eeb9510866e977bafb8bb4fafae6ce994
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Rogue
+
+## Source text
 
 <!-- SRD page 61 -->
 
@@ -215,3 +38,288 @@ mor, 2 Daggers, Short sword,\
 Shortbow, 20 Arrows, Quiver,\
 Thieves’ Tools, Burglar’s Pack,\
 and 8 GP; or (B) 100 GP\
+
+## Rule group
+
+<!-- splat:values path=splat_rule_group -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` class ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:classes/rogue ` |
+| ` implementation ` | ` dnd2024:classes_rogue ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` class ` | ` rogue ` |
+| ` primary_abilities ` | ` ["dexterity"] ` |
+
+#### Hit point die
+
+<!-- splat:values path=splat_rule/parameters/hit_point_die -->
+
+| Field | Value |
+| --- | --- |
+| ` count_per_class_level ` | ` 1 ` |
+| ` sides ` | ` 8 ` |
+
+#### First class traits
+
+<!-- splat:yaml path=splat_rule/parameters/first_class_traits -->
+
+```yaml
+save_proficiencies:
+- dexterity
+- intelligence
+skill_proficiencies:
+  count: 4
+  choices:
+  - acrobatics
+  - athletics
+  - deception
+  - insight
+  - intimidation
+  - investigation
+  - perception
+  - persuasion
+  - sleight_of_hand
+  - stealth
+weapon_proficiencies:
+  simple: true
+  martial_required_property_any:
+  - finesse
+  - light
+armor_training:
+- light
+tool_proficiencies:
+- key: dnd2024:equipment/other_tools_thieves_tools_25_gp
+```
+
+#### Starting equipment
+
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+
+```yaml
+choose: 1
+options:
+  equipment:
+    items:
+    - definition:
+        key: dnd2024:equipment/leather_armor
+      quantity: 1
+    - definition:
+        key: dnd2024:equipment/dagger
+      quantity: 2
+    - definition:
+        key: dnd2024:equipment/shortsword
+      quantity: 1
+    - definition:
+        key: dnd2024:equipment/shortbow
+      quantity: 1
+    - definition:
+        key: dnd2024:equipment/ammunition_varies
+      quantity: 20
+      variant: arrows
+    - definition:
+        key: dnd2024:equipment/quiver_1_gp
+      quantity: 1
+    - definition:
+        key: dnd2024:equipment/other_tools_thieves_tools_25_gp
+      quantity: 1
+    - definition:
+        key: dnd2024:equipment/burglar_s_pack_16_gp
+      quantity: 1
+    currency:
+      gp: 8
+  currency:
+    currency:
+      gp: 100
+```
+
+#### Progression
+
+<!-- splat:values path=splat_rule/parameters/progression -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:tables/rogue_progression ` |
+
+#### Feature grants
+
+<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+
+| Row | minimum_class_level |
+| --- | --- |
+| ` 0 ` | ` 11 ` |
+| ` 1 ` | ` 14 ` |
+| ` 2 ` | ` 15 ` |
+| ` 3 ` | ` 18 ` |
+| ` 4 ` | ` 19 ` |
+| ` 5 ` | ` 1 ` |
+| ` 6 ` | ` 1 ` |
+| ` 7 ` | ` 1 ` |
+| ` 8 ` | ` 1 ` |
+| ` 9 ` | ` 20 ` |
+| ` 10 ` | ` 2 ` |
+| ` 11 ` | ` 3 ` |
+| ` 12 ` | ` 3 ` |
+| ` 13 ` | ` 4 ` |
+| ` 14 ` | ` 5 ` |
+| ` 15 ` | ` 5 ` |
+| ` 16 ` | ` 7 ` |
+| ` 17 ` | ` 7 ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_11_improved_cunning_strike ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_14_devious_strikes ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_15_slippery_mind ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_18_elusive ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_19_epic_boon ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/5/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_1_expertise ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/6/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_1_sneak_attack ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/7/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_1_thieves_cant ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/8/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_1_weapon_mastery ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/9/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_20_stroke_of_luck ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/10/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_2_cunning_action ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/11/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_3_rogue_subclass ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/12/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_3_steady_aim ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/13/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_4_ability_score_improvement ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/14/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_5_cunning_strike ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/15/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_5_uncanny_dodge ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/16/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_7_evasion ` |
+
+##### Definition
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/17/definition -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/rogue_level_7_reliable_talent ` |

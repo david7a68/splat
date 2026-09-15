@@ -10,30 +10,26 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 94
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/tools_other_tools
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 94
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: 95c066389f54fd6383aa798f9e85a655d88920d289c74ffe9f0fdd94553f4a21
-  parent_name: Tools
-  line_span:
-    first: 8101
-    count: 1
-splat_clauses:
-- key: source_rules
-  text: '# Other Tools'
-  sha256: 2acaefda84d8a8736f470e8499ae64e559c4406c794f1cfec5f9e9d3b6c8a287
-  status: informational
 ---
 
 # Other Tools
+
+## Source text
+
+
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/tools_other_tools ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

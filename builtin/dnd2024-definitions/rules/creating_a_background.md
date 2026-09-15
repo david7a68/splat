@@ -10,37 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 192
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/creating_a_background
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 192
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: 6fa1745f61de9936afdd62fe8e2f88d0d6c0064bc7155200c3afefca707dfbf6
-  parent_name: Creating a Background
-  line_span:
-    first: 9381
-    count: 11
-splat_clauses:
-- key: source_rules
-  text: '# Creating a Background A character’s background represents what the character did prior to becoming
-    an adventurer. Creating a unique background or customizing an existing one can reflect the particular
-    theme of your campaign or elements of your world. You can also create a background to help a player
-    craft the story they have in mind for their character. This section describes, step by step, how you
-    can create backgrounds tailored for your world and the heroes in it.'
-  sha256: 9b99c66c2ef014a8f14bb5ed821b50abc635ebb0be4610a2ce198a1d53cf9b9a
-  status: informational
 ---
 
 # Creating a Background
+
+## Source text
 
 <!-- SRD page 192 -->
 
@@ -54,3 +28,19 @@ have in mind for their character.\
 This section describes, step by step, how you can\
 create backgrounds tailored for your world and the\
 heroes in it.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/creating_a_background ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```

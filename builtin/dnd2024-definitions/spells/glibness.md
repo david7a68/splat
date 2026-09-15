@@ -10,86 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 136
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 8
-  school: enchantment
-  classes:
-  - bard
-  - warlock
-  components:
-  - verbal
-  concentration: false
-  duration: 1 hour
-  casting_time: Action
-  ritual: false
-  range:
-    mode: self
-splat_rule:
-  mechanic: dnd2024:spells/glibness
-  implementation: dnd2024:spell_glibness
-  parameters:
-    spell_lifetime:
-      concentration: false
-      maximum_seconds: 3600
-    target: caster
-    roll_replacement:
-      event: check.rolled
-      ability: charisma
-      optional: true
-      chooser: caster
-      replace: die_result
-      value: 15
-    truth_detection:
-      source_kind: magic
-      actual_statement_truth: any
-      reported_truth: truthful
-splat_contracts:
-- id: dnd2024:spell_glibness
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    replace_roll:
-      required: false
-      type: boolean
-  outputs:
-  - effects
-  - information
-  events:
-  - check.rolled
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - information
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: c2cbebe1be93017cb7657f11fce757d889648f41ecb027da5e774d6012c1395b
-  source_path: builtin/srd-5.2.1/spell/glibness.md
-  pages:
-  - 136
-  engine_gaps: &id001
-  - dnd2024:spell_glibness
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_4.md
-  specification_sha256: fd6ae9fd2589f3dd983a1e1ddac7d32ca823d0801623eb6614fe90c09f50eb23
-splat_clauses:
-- key: source_rules
-  text: '# Glibness Level 8 Enchantment (Bard, Warlock) Casting Time: Action Range: Self Components: V
-    Duration: 1 hour Until the spell ends, when you make a Charisma check, you can replace the number
-    you roll with a 15. Additionally, no matter what you say, magic that would determine if you are telling
-    the truth indicates that you are being truthful.'
-  sha256: ff0876100c558611570fc55ca9851e794570148dd0d044a9ddef68f3a0695c96
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Glibness
+
+## Source text
 
 <!-- SRD page 136 -->
 
@@ -105,3 +30,75 @@ would determine if you are telling the truth indi-\
 cates that you are being truthful.\
 
 Original layout: [[../../srd-5.2.1/pages/136|page 136]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 8 ` |
+| ` school ` | ` enchantment ` |
+| ` classes ` | ` ["bard", "warlock"] ` |
+| ` components ` | ` ["verbal"] ` |
+| ` concentration ` | ` false ` |
+| ` duration ` | ` 1 hour ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` mode ` | ` self ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/glibness ` |
+| ` implementation ` | ` dnd2024:spell_glibness ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` target ` | ` caster ` |
+
+#### Spell lifetime
+
+<!-- splat:values path=splat_rule/parameters/spell_lifetime -->
+
+| Field | Value |
+| --- | --- |
+| ` concentration ` | ` false ` |
+| ` maximum_seconds ` | ` 3600 ` |
+
+#### Roll replacement
+
+<!-- splat:values path=splat_rule/parameters/roll_replacement -->
+
+| Field | Value |
+| --- | --- |
+| ` event ` | ` check.rolled ` |
+| ` ability ` | ` charisma ` |
+| ` optional ` | ` true ` |
+| ` chooser ` | ` caster ` |
+| ` replace ` | ` die_result ` |
+| ` value ` | ` 15 ` |
+
+#### Truth detection
+
+<!-- splat:values path=splat_rule/parameters/truth_detection -->
+
+| Field | Value |
+| --- | --- |
+| ` source_kind ` | ` magic ` |
+| ` actual_statement_truth ` | ` any ` |
+| ` reported_truth ` | ` truthful ` |

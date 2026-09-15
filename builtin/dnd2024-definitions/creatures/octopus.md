@@ -10,213 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 357, 358
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: small
-  type: beast
-  alignment: Unaligned
-  movement_text: 5 ft., Swim 30 ft.
-  skills_text: Perception +2, Stealth +6
-  senses_text: Darkvision 30 ft.; Passive Perception 12
-  languages_text: None
-  cr_text: 0 (XP 10; PB +2)
-  hit_points_text: 3 (1d6)
-splat_stats:
-  strength:
-    value: 4
-  save_strength:
-    value: -3
-  dexterity:
-    value: 15
-  save_dexterity:
-    value: 2
-  constitution:
-    value: 11
-  save_constitution:
-    value: 0
-  intelligence:
-    value: 3
-  save_intelligence:
-    value: -4
-  wisdom:
-    value: 10
-  save_wisdom:
-    value: 0
-  charisma:
-    value: 4
-  save_charisma:
-    value: -3
-  armor_class:
-    value: 12
-  max_hp:
-    value: 3
-  initiative:
-    value: 2
-  speed:
-    value: 5
-    unit: ft
-  swim_speed:
-    value: 30
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/octopus
-  implementation: dnd2024:creature_octopus
-  parameters:
-    features:
-      compression:
-        economy: trait
-        operation: passive_rule
-        minimum_gap_inches: 1
-        extra_movement_cost: 0
-      water_breathing:
-        economy: trait
-        operation: passive_rule
-        breathing:
-        - water
-      tentacles:
-        economy: action
-        operation: attack
-        attack:
-          mode: melee
-          targets:
-            count: 1
-            kind: creature_or_object
-          supplied_attack_total: 4
-          reach_ft: 5
-        hit:
-          damage:
-          - average: 1
-            roll:
-              constant: 1
-            type: bludgeoning
-      ink_cloud:
-        economy: reaction
-        resource:
-          kind: daily
-          uses: 1
-          recovery: long_rest
-        operation: sequence
-        trigger: creature.turn_end
-        requires:
-          self_underwater: true
-          triggering_creature_within_ft: 5
-        effects:
-        - operation: create_area
-          area:
-            shape: cube
-            size_ft: 5
-            center: self
-          obscurement: heavy
-          duration_seconds: 60
-          ends_on:
-          - strong_current
-          - similar_dispersal_effect
-        - operation: move
-          maximum_ft:
-            multiply:
-            - stat: swim_speed
-            - 1
-    skill_totals:
-      perception: 2
-      stealth: 6
-    senses:
-      darkvision: 30
-      passive_perception: 12
-    languages:
-      speaks: []
-      understands: []
-    resolution_conventions:
-      distance_unit: foot
-      duration_unit: second
-      damage_roll_mode:
-        choice:
-        - listed_average
-        - roll_dice
-        chooser: gm
-      supplied_totals: before_additional_effect_modifiers
-      multiattack_nested_economy_cost: 0
-      nested_feature_resource_cost: normal
-      spell_level_unless_specified: lowest_possible
-      spell_upcast_without_permission: false
-      spell_casting_time_at_least_one_minute: normal_casting_procedure
-      geometry:
-        input: adjudication
-        assumptions:
-        - range_and_visibility_verified
-        - area_membership_verified
-        - path_and_destination_legal
-      unlisted_success_branch: no_effect
-      unlisted_duration: until_removed_by_applicable_rule
-splat_contracts:
-- id: dnd2024:creature_octopus
-  inputs:
-    actor:
-      type: participant
-      required: true
-    feature:
-      required: false
-      type: choice
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    destination:
-      required: false
-      type: location
-    adjudication:
-      required: false
-      type: resolution
-    trigger:
-      required: false
-      type: event
-  outputs:
-  - effects
-  events:
-  - creature.feature_requested
-  - turn.ended
-  - rest.completed
-  capabilities:
-  - creature_features
-  - action_economy
-  - attacks
-  - damage
-  - spatial_queries
-  - limited_resources
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: ba6a1adaa4e94d975915cee5c89af5609ca275089040ff49ae65b5969f63b4d3
-  source_path: builtin/srd-5.2.1/creature/octopus.md
-  pages:
-  - 357
-  - 358
-  engine_gaps: &id001
-  - dnd2024:creature_octopus
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/creatures_1.md
-  specification_sha256: 73ad51033b46028954eb5702177b06cf7d141874da546178805f04083fee40f0
-splat_clauses:
-- key: source_rules
-  text: '# Octopus Small Beast, Unaligned AC 12 Initiative +2 (12) HP 3 (1d6) Speed 5 ft., Swim 30 ft.
-    MOD SAVE MOD SAVE MOD SAVE Str 4 -3 -3 Dex 15 +2 +2 Con 11 +0 +0 Int 3 -4 -4 Wis 10 +0 +0 Cha 4 -3
-    -3 Skills Perception +2, Stealth +6 Senses Darkvision 30 ft.; Passive Perception 12 Languages None
-    CR 0 (XP 10; PB +2) ### Traits Compression. The octopus can move through a space as narrow as 1 inch
-    without expending extra movement to do so. Water Breathing. The octopus can breathe only underwater.
-    ### Actions Tentacles. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Bludgeoning damage. ### Reactions
-    Ink Cloud (1/Day). Trigger: A creature ends its turn within 5 feet of the octopus while underwater.
-    Response: The octopus releases ink that fills a 5-foot Cube centered on itself, and the octopus moves
-    up to its Swim Speed. The Cube is Heavily Obscured for 1 minute or until a strong current or similar
-    effect disperses the ink.'
-  sha256: b124dcacb96a9de6429d49f0e367f7f4e1daa1b1f8ff93021c94de1c6d9f64be
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Octopus
+
+## Source text
 
 <!-- SRD page 357 -->
 
@@ -259,3 +57,196 @@ minute or until a strong current or similar effect dis-\
 perses the ink.\
 
 Original layout: [[../../srd-5.2.1/pages/357|page 357]], [[../../srd-5.2.1/pages/358|page 358]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` small ` |
+| ` type ` | ` beast ` |
+| ` alignment ` | ` Unaligned ` |
+| ` movement_text ` | ` 5 ft., Swim 30 ft. ` |
+| ` skills_text ` | ` Perception +2, Stealth +6 ` |
+| ` senses_text ` | ` Darkvision 30 ft.; Passive Perception 12 ` |
+| ` languages_text ` | ` None ` |
+| ` cr_text ` | ` 0 (XP 10; PB +2) ` |
+| ` hit_points_text ` | ` 3 (1d6) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 4 ` | ` -3 ` |
+| ` Dexterity ` | ` 15 ` | ` 2 ` |
+| ` Constitution ` | ` 11 ` | ` 0 ` |
+| ` Intelligence ` | ` 3 ` | ` -4 ` |
+| ` Wisdom ` | ` 10 ` | ` 0 ` |
+| ` Charisma ` | ` 4 ` | ` -3 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 12 ` |  |
+| ` max_hp ` | ` 3 ` |  |
+| ` initiative ` | ` 2 ` |  |
+| ` speed ` | ` 5 ` | ` ft ` |
+| ` swim_speed ` | ` 30 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/octopus ` |
+| ` implementation ` | ` dnd2024:creature_octopus ` |
+
+### Parameters
+
+#### Features
+
+##### Compression
+
+<!-- splat:values path=splat_rule/parameters/features/compression -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` trait ` |
+| ` operation ` | ` passive_rule ` |
+| ` minimum_gap_inches ` | ` 1 ` |
+| ` extra_movement_cost ` | ` 0 ` |
+
+##### Water breathing
+
+<!-- splat:values path=splat_rule/parameters/features/water_breathing -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` trait ` |
+| ` operation ` | ` passive_rule ` |
+| ` breathing ` | ` ["water"] ` |
+
+##### Tentacles
+
+<!-- splat:yaml path=splat_rule/parameters/features/tentacles -->
+
+```yaml
+economy: action
+operation: attack
+attack:
+  mode: melee
+  targets:
+    count: 1
+    kind: creature_or_object
+  supplied_attack_total: 4
+  reach_ft: 5
+hit:
+  damage:
+  - average: 1
+    roll:
+      constant: 1
+    type: bludgeoning
+```
+
+##### Ink cloud
+
+<!-- splat:yaml path=splat_rule/parameters/features/ink_cloud -->
+
+```yaml
+economy: reaction
+resource:
+  kind: daily
+  uses: 1
+  recovery: long_rest
+operation: sequence
+trigger: creature.turn_end
+requires:
+  self_underwater: true
+  triggering_creature_within_ft: 5
+effects:
+- operation: create_area
+  area:
+    shape: cube
+    size_ft: 5
+    center: self
+  obscurement: heavy
+  duration_seconds: 60
+  ends_on:
+  - strong_current
+  - similar_dispersal_effect
+- operation: move
+  maximum_ft:
+    multiply:
+    - stat: swim_speed
+    - 1
+```
+
+#### Skill totals
+
+<!-- splat:values path=splat_rule/parameters/skill_totals -->
+
+| Field | Value |
+| --- | --- |
+| ` perception ` | ` 2 ` |
+| ` stealth ` | ` 6 ` |
+
+#### Senses
+
+<!-- splat:values path=splat_rule/parameters/senses -->
+
+| Field | Value |
+| --- | --- |
+| ` darkvision ` | ` 30 ` |
+| ` passive_perception ` | ` 12 ` |
+
+#### Languages
+
+<!-- splat:yaml path=splat_rule/parameters/languages -->
+
+```yaml
+speaks: []
+understands: []
+```
+
+#### Resolution conventions
+
+<!-- splat:yaml path=splat_rule/parameters/resolution_conventions -->
+
+```yaml
+distance_unit: foot
+duration_unit: second
+damage_roll_mode:
+  choice:
+  - listed_average
+  - roll_dice
+  chooser: gm
+supplied_totals: before_additional_effect_modifiers
+multiattack_nested_economy_cost: 0
+nested_feature_resource_cost: normal
+spell_level_unless_specified: lowest_possible
+spell_upcast_without_permission: false
+spell_casting_time_at_least_one_minute: normal_casting_procedure
+geometry:
+  input: adjudication
+  assumptions:
+  - range_and_visibility_verified
+  - area_membership_verified
+  - path_and_destination_legal
+unlisted_success_branch: no_effect
+unlisted_duration: until_removed_by_applicable_rule
+```

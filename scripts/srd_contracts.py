@@ -208,7 +208,6 @@ def contract_record(key, spec, fields):
         'research_path': spec['research_path'],
         'citations': spec['citations'],
         'implemented': False,
-        'specification': data,
         'specification_sha256': fingerprint(data),
         'schema': json_shape(data),
     }

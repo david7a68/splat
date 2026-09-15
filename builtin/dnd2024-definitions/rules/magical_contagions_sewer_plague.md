@@ -10,97 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 194
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/magical_contagions_sewer_plague
-  parameters:
-    kind: magical_contagion
-    infection:
-      target_type: humanoid
-      exposure:
-      - wounded_by_infected_carrier
-      - contact_contaminated_filth_or_offal
-      save:
-        ability: constitution
-        dc: 11
-      on_failure: infected
-      onset:
-        dice:
-          count: 1
-          sides: 4
-        unit: day
-    onset_effect:
-      exhaustion_gain: 1
-    while_exhaustion_positive:
-      hit_die_healing_multiplier: 0.5
-      long_rest_restores_hp: false
-      long_rest_reduces_exhaustion: false
-    recovery:
-      timing: daily_dawn
-      save:
-        ability: constitution
-        dc: 11
-      failure:
-        exhaustion_gain: 1
-      success:
-        exhaustion_reduce: 1
-        end_contagion_if_exhaustion_zero: true
-  implementation: dnd2024:rules_magical_contagions_sewer_plague
-splat_contracts:
-- id: dnd2024:rules_magical_contagions_sewer_plague
-  inputs:
-    subject:
-      type: participant
-      required: true
-  outputs:
-  - effects
-  events:
-  - contagion.exposure
-  - contagion.onset
-  - dawn
-  - rest.long_finished
-  - hit_die.spent
-  capabilities:
-  - contagions
-  - exhaustion
-  - healing
-  - saving_throws
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 194
-  engine_gaps: &id001
-  - dnd2024:rules_magical_contagions_sewer_plague
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_1.md
-  specification_sha256: a57aa09f304814aeaa6fa41e86c4deb6f35c19196017f00db319b27104c18833
-  parent_name: Magical Contagions
-  line_span:
-    first: 9559
-    count: 27
-splat_clauses:
-- key: source_rules
-  text: '# Sewer Plague Magical Contagion Fouled potions and alchemical waste can give rise to Sewer Plague,
-    which incubates in sewers and refuse heaps and is sometimes transmitted by creatures that dwell in
-    such areas, including otyughs and rats. Any Humanoid that is wounded by a creature that carries the
-    contagion or that comes into contact with contaminated filth or offal must succeed on a DC 11 Constitution
-    saving throw or become infected with Sewer Plague. A creature suffers the following effects 1d4 days
-    after infection: Fatigue. The creature gains 1 Exhaustion level. Weakness. While the creature has
-    any Exhaustion levels, it regains only half the normal number of Hit Points from spending Hit Point
-    Dice. Restlessness. While the creature has any Exhaustion levels, finishing a Long Rest neither restores
-    lost Hit Points nor reduces the creature’s Exhaustion level. Fighting the Contagion. Daily at dawn,
-    an infected creature makes a DC 11 Constitution saving throw. On a failed save, the creature gains
-    1 Exhaustion level as its fatigue worsens. On a successful save, the creature’s Exhaustion level decreases
-    by 1. If the creature’s Exhaustion level is reduced to 0, the contagion ends on the creature.'
-  sha256: c6d5dd7f4a6f53bab0d09baa61b2b4f65e26022dae571a01ef70ea1c65e2959d
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Sewer Plague
+
+## Source text
 
 <!-- SRD page 194 -->
 
@@ -130,3 +44,74 @@ haustion level as its fatigue worsens. On a success-\
 ful save, the creature’s Exhaustion level decreases\
 by 1. If the creature’s Exhaustion level is reduced to\
 0, the contagion ends on the creature.\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/magical_contagions_sewer_plague ` |
+| ` implementation ` | ` dnd2024:rules_magical_contagions_sewer_plague ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` magical_contagion ` |
+
+#### Infection
+
+<!-- splat:yaml path=splat_rule/parameters/infection -->
+
+```yaml
+target_type: humanoid
+exposure:
+- wounded_by_infected_carrier
+- contact_contaminated_filth_or_offal
+save:
+  ability: constitution
+  dc: 11
+on_failure: infected
+onset:
+  dice:
+    count: 1
+    sides: 4
+  unit: day
+```
+
+#### Onset effect
+
+<!-- splat:values path=splat_rule/parameters/onset_effect -->
+
+| Field | Value |
+| --- | --- |
+| ` exhaustion_gain ` | ` 1 ` |
+
+#### While exhaustion positive
+
+<!-- splat:values path=splat_rule/parameters/while_exhaustion_positive -->
+
+| Field | Value |
+| --- | --- |
+| ` hit_die_healing_multiplier ` | ` 0.5 ` |
+| ` long_rest_restores_hp ` | ` false ` |
+| ` long_rest_reduces_exhaustion ` | ` false ` |
+
+#### Recovery
+
+<!-- splat:yaml path=splat_rule/parameters/recovery -->
+
+```yaml
+timing: daily_dawn
+save:
+  ability: constitution
+  dc: 11
+failure:
+  exhaustion_gain: 1
+success:
+  exhaustion_reduce: 1
+  end_contagion_if_exhaustion_zero: true
+```

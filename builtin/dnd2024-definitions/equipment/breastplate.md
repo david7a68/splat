@@ -10,103 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 92
   url: https://www.dndbeyond.com/srd
-splat_item:
-  armor:
-    category: medium armor
-    stealth_disadvantage: false
-    base_ac: 14
-    add_dexterity_modifier: true
-    dexterity_modifier_max: 2
-  price:
-    value: 400
-    unit: gp
-  mass:
-    value: 20.0
-    unit: lb
-  category: armor
-splat_rule:
-  mechanic: dnd2024:equipment/breastplate
-  implementation: dnd2024:equipment_breastplate
-  parameters:
-    armor:
-      category: medium armor
-      stealth_disadvantage: false
-      base_ac: 14
-      add_dexterity_modifier: true
-      dexterity_modifier_max: 2
-    while_equipped: true
-    maximum_simultaneous_same_category: 1
-    equip:
-      don:
-        value: 5
-        unit: minute
-      doff:
-        value: 1
-        unit: minute
-    training:
-      without_training:
-        d20_test_disadvantage_abilities:
-        - strength
-        - dexterity
-        can_cast_spells: false
-    stacking_group: body_armor
-    application:
-      actor: equipper
-      item: equipped_instance
-      inactive_if_not_equipped: true
-splat_contracts:
-- id: dnd2024:equipment_breastplate
-  inputs:
-    actor:
-      type: participant
-      required: true
-    item:
-      type: item_instance
-      required: true
-    event:
-      type: event
-      required: true
-  outputs:
-  - armor_class
-  - equipment_constraints
-  - roll_modifiers
-  - speed_modifiers
-  - spellcasting_eligibility
-  events:
-  - item.equipped
-  - item.unequipped
-  - ability_check.pending
-  - spell.cast_pending
-  capabilities:
-  - equipment
-  - armor_class
-  - roll_modifiers
-  - speed_modifiers
-  - spellcasting_eligibility
-splat_conversion:
-  status: specified
-  category: equipment
-  source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
-  source_path: builtin/srd-5.2.1/source.txt
-  pages:
-  - 92
-  engine_gaps: &id001
-  - dnd2024:equipment_breastplate
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/equipment_tables.md
-  specification_sha256: ef35399e3cdfb1ea41865b873d8dc4570d45d4491ee2f2849c165faea3c1f6e3
-splat_clauses:
-- key: source_rules
-  text: '# Breastplate Source table, SRD 5.2.1 page 92. { "armor": { "category": "medium armor", "stealth_disadvantage":
-    false, "base_ac": 14, "add_dexterity_modifier": true, "dexterity_modifier_max": 2 }, "price": { "value":
-    400, "unit": "gp" }, "mass": { "value": 20.0, "unit": "lb" }, "category": "armor" }'
-  sha256: c3cb7b260e092a8e1114722ecf1c9dc3daeee0e539dbe702924dc2fd3260f168
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Breastplate
+
+## Source text
 
 Source table, SRD 5.2.1 page 92.
 
@@ -128,3 +36,107 @@ Source table, SRD 5.2.1 page 92.
   },
   "category": "armor"
 }
+
+## Item
+
+<!-- splat:values path=splat_item -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` armor ` |
+
+### Armor
+
+<!-- splat:values path=splat_item/armor -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` medium armor ` |
+| ` stealth_disadvantage ` | ` false ` |
+| ` base_ac ` | ` 14 ` |
+| ` add_dexterity_modifier ` | ` true ` |
+| ` dexterity_modifier_max ` | ` 2 ` |
+
+### Price
+
+<!-- splat:values path=splat_item/price -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 400 ` |
+| ` unit ` | ` gp ` |
+
+### Mass
+
+<!-- splat:values path=splat_item/mass -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 20.0 ` |
+| ` unit ` | ` lb ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:equipment/breastplate ` |
+| ` implementation ` | ` dnd2024:equipment_breastplate ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` while_equipped ` | ` true ` |
+| ` maximum_simultaneous_same_category ` | ` 1 ` |
+| ` stacking_group ` | ` body_armor ` |
+
+#### Armor
+
+<!-- splat:values path=splat_rule/parameters/armor -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` medium armor ` |
+| ` stealth_disadvantage ` | ` false ` |
+| ` base_ac ` | ` 14 ` |
+| ` add_dexterity_modifier ` | ` true ` |
+| ` dexterity_modifier_max ` | ` 2 ` |
+
+#### Equip
+
+<!-- splat:yaml path=splat_rule/parameters/equip -->
+
+```yaml
+don:
+  value: 5
+  unit: minute
+doff:
+  value: 1
+  unit: minute
+```
+
+#### Training
+
+<!-- splat:yaml path=splat_rule/parameters/training -->
+
+```yaml
+without_training:
+  d20_test_disadvantage_abilities:
+  - strength
+  - dexterity
+  can_cast_spells: false
+```
+
+#### Application
+
+<!-- splat:values path=splat_rule/parameters/application -->
+
+| Field | Value |
+| --- | --- |
+| ` actor ` | ` equipper ` |
+| ` item ` | ` equipped_instance ` |
+| ` inactive_if_not_equipped ` | ` true ` |

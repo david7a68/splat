@@ -19,10 +19,10 @@ import yaml
 from convert_srd import SOURCE, MANUAL, NAMESPACE, ABILITIES, load_note, clean, slug
 from import_srd import positioned_lines, render, PDF_SHA256, ATTRIBUTION, SECTIONS
 from srd_contracts import read_research, merge_fields, contract_record, fingerprint
+from markdown_content import render_note
 
 OUTPUT = Path('builtin/dnd2024-definitions')
 CONTRACTS = Path('scripts/srd_inputs/contracts.yaml')
-DUMP = getattr(yaml, 'CSafeDumper', yaml.SafeDumper)
 SCHOOLS = 'Abjuration Conjuration Divination Enchantment Evocation Illusion Necromancy Transmutation'.split()
 CLASSES = 'Barbarian Bard Cleric Druid Fighter Monk Paladin Ranger Rogue Sorcerer Warlock Wizard'.split()
 
@@ -262,13 +262,6 @@ def progression_tables():
                    'fields':{'splat_rule':{'mechanic':'dnd2024:class_progression','parameters':{'class':name.lower(),'rows':rows}}}}
 
 
-def clauses(body):
-    # Preserve all source text as one explicit unresolved obligation. Numerical
-    # extraction does not consume riders, exceptions or source tables.
-    text=clean(body)
-    return [{'key':'source_rules','text':text,'sha256':digest(text.encode()),'status':'needs_semantic_conversion'}]
-
-
 def generate(lines, require_complete=True):
     researched = read_research()
     registry = []
@@ -300,13 +293,11 @@ def generate(lines, require_complete=True):
         except ValueError as error:
             fields={'splat_'+kind:{}};errors.append(str(error))
         fields.update(source.get('fields',{}))
-        obligations=clauses(source['body'])
         status='partial';required=[]
         if key in contracts:
             spec=contracts[key]
             if spec['source_sha256'] != source['source_sha256']: raise ValueError('Reviewed contract source changed: '+key)
             fields.update(spec['fields'])
-            obligations=[{'key':'source_rules','text':obligations[0]['text'],'sha256':obligations[0]['sha256'],'status':'contract_specified'}]
             required=spec['requires'];status='specified'
         if key in researched:
             spec = researched[key]
@@ -320,11 +311,9 @@ def generate(lines, require_complete=True):
             fields = merge_fields(base_fields, spec.get('fields', {}))
             status = spec['disposition']
             required = spec.get('requires', [])
-            obligations[0]['status'] = 'contract_specified' if status == 'specified' else 'informational'
             if status == 'specified':
                 record = contract_record(key, spec, fields)
                 registry.append(record)
-                fields['splat_contracts'] = [spec['contract']]
             if errors:
                 raise ValueError('Source extraction remains incomplete: '+key+' '+str(errors))
         else:
@@ -340,11 +329,11 @@ def generate(lines, require_complete=True):
         if 'line_span' in source:conversion['line_span']=source['line_span']
         front={'splat_schema':1,'splat_id':ident,'splat_kind':kind,'splat_key':key,'splat_name':name,
                'splat_origin':{'key':origin},'splat_sources':[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,source['pages'])),'url':'https://www.dndbeyond.com/srd'}],
-               **fields,'splat_conversion':conversion,'splat_clauses':obligations}
+               **fields}
         if required:front['splat_requires_mechanics']=required
         path=folder+'/'+s+'.md'
         body=source['body'].strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')
-        outputs[path]='---\n'+yaml.dump(front,Dumper=DUMP,sort_keys=False,allow_unicode=True,width=100)+'---\n\n'+body+'\n'
+        outputs[path]=render_note(front, body)
         records.append({'key':key,'id':ident,'path':path,'source':origin,**conversion,'sha256':digest(outputs[path].encode())})
     extra = researched.keys() - keys
     if extra: raise ValueError('Research names unknown definitions: '+', '.join(sorted(extra)))
@@ -364,7 +353,7 @@ def generate(lines, require_complete=True):
             'executable_full_definitions':0,'executable_profiles':sum(len(v) for v in proof.values())},
             'adjudications':adjudications['cases'],
             'engine_contracts':sorted({g for r in records for g in r['engine_gaps']}),'entries':records,'pages':page_inventory}
-    outputs['contracts.json']=json.dumps({'format':1,'contracts':registry},ensure_ascii=False,indent=2)+'\n'
+    outputs['contracts.json']=json.dumps({'format':2,'contracts':registry},ensure_ascii=False,indent=2)+'\n'
     outputs['coverage.json']=json.dumps(report,ensure_ascii=False,indent=2)+'\n'
     outputs['LICENSE.txt']=ATTRIBUTION+'\n\nExtracted and converted into typed rule specifications by Splat. Unimplemented engine contracts do not execute.\n'
     return outputs,report

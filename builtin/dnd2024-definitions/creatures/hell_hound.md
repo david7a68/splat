@@ -10,234 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 297
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: medium
-  type: fiend
-  alignment: Lawful Evil
-  movement_text: 50 ft.
-  skills_text: Perception +5
-  immunities_text: Fire
-  senses_text: Darkvision 60 ft.; Passive Perception 15
-  languages_text: Understands Infernal but can’t speak
-  cr_text: 3 (XP 700; PB +2)
-  hit_points_text: 58 (9d8 + 18)
-splat_stats:
-  strength:
-    value: 17
-  save_strength:
-    value: 3
-  dexterity:
-    value: 12
-  save_dexterity:
-    value: 1
-  constitution:
-    value: 14
-  save_constitution:
-    value: 2
-  intelligence:
-    value: 6
-  save_intelligence:
-    value: -2
-  wisdom:
-    value: 13
-  save_wisdom:
-    value: 1
-  charisma:
-    value: 6
-  save_charisma:
-    value: -2
-  armor_class:
-    value: 15
-  max_hp:
-    value: 58
-  initiative:
-    value: 1
-  speed:
-    value: 50
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/hell_hound
-  implementation: dnd2024:creature_hell_hound
-  parameters:
-    skill_totals:
-      perception: 5
-    damage_immunities:
-    - fire
-    condition_immunities: []
-    senses:
-    - sense: darkvision
-      range_ft: 60
-    passive_perception: 15
-    languages:
-      speak: false
-      known:
-      - infernal
-    features:
-      pack_tactics:
-        economy: passive
-        op: roll.advantage
-        rolls:
-        - attack
-        target_kind: creature
-        when:
-          ally_within_target_ft: 5
-          ally_excluded_conditions:
-          - incapacitated
-      bite:
-        economy: action
-        op: attack
-        modes:
-        - melee
-        attack_bonus: 5
-        target:
-          kind: creature_or_object
-          count: 1
-        reach_ft: 5
-        hit:
-        - op: damage
-          components:
-          - type: piercing
-            amount:
-              dice:
-                count: 1
-                sides: 8
-              add: 3
-            average: 7
-          - type: fire
-            amount:
-              dice:
-                count: 1
-                sides: 6
-              add: 0
-            average: 3
-      fire_breath:
-        economy: action
-        op: saving_throw
-        ability: dexterity
-        dc: 12
-        targets:
-          kind: creature
-          count: all
-          area:
-            shape: cone
-            origin: actor
-            size_ft: 15
-        failure:
-        - op: damage
-          components:
-          - type: fire
-            amount:
-              dice:
-                count: 5
-                sides: 6
-              add: 0
-            average: 17
-        success:
-        - op: damage
-          from: failure_damage
-          multiplier: 0.5
-          round: down
-        recharge:
-          die_sides: 6
-          success_min: 5
-          success_max: 6
-          check_event: actor.turn_start
-          maximum_uses: 1
-          initial_uses: 1
-          also_recovers_after:
-          - short_rest
-          - long_rest
-      multiattack:
-        economy: action
-        op: multiattack
-        sequence:
-        - count: 2
-          feature: bite
-    damage_resolution:
-      choice:
-      - printed_average
-      - roll_expression
-      chooser: controller
-      exclusive: true
-    spatial_resolution:
-      provider: caller
-      required_facts:
-      - distance
-      - area_membership
-      - visibility
-      - occupancy
-      - movement_path
-      validate_against_typed_constraints: true
-splat_contracts:
-- id: dnd2024:creature_hell_hound
-  inputs:
-    actor:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    objects:
-      required: false
-      type: object_list
-    choices:
-      required: false
-      type: choice
-    scene:
-      required: false
-      type: resolution
-    event:
-      required: false
-      type: event
-  outputs:
-  - effects
-  - roll_requests
-  - state_changes
-  events:
-  - actor.turn_start
-  - creature.feature_requested
-  capabilities:
-  - action_economy
-  - attack_resolution
-  - creature_rules
-  - damage
-  - effects
-  - resources
-  - rest_recovery
-  - saving_throws
-  - spatial_constraints
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: f3d97e860453ec92db3d3bd80a55a031291ff1f0f4f1ebd229015dcf334f31d8
-  source_path: builtin/srd-5.2.1/creature/hell_hound.md
-  pages:
-  - 297
-  engine_gaps: &id001
-  - dnd2024:creature_hell_hound
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/creatures_3.md
-  specification_sha256: 52cbc743e6fcf5d5386e36b6b74fa028005654808491e8dba980842d71d4f51c
-splat_clauses:
-- key: source_rules
-  text: '# Hell Hound Medium Fiend, Lawful Evil AC 15 Initiative +1 (11) HP 58 (9d8 + 18) Speed 50 ft.
-    MOD SAVE MOD SAVE MOD SAVE Str 17 +3 +3 Dex 12 +1 +1 Con 14 +2 +2 Int 6 -2 -2 Wis 13 +1 +1 Cha 6 -2
-    -2 Skills Perception +5 Immunities Fire Senses Darkvision 60 ft.; Passive Perception 15 Languages
-    Understands Infernal but can’t speak CR 3 (XP 700; PB +2) ### Traits Pack Tactics. The hound has Advantage
-    on an attack roll against a creature if at least one of the hound’s allies is within 5 feet of the
-    creature and the ally doesn’t have the Incapacitated condition. ### Actions Multiattack. The hound
-    makes two Bite attacks. Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage
-    plus 3 (1d6) Fire damage. Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 12, each creature
-    in a 15-foot Cone. Failure: 17 (5d6) Fire damage. Success: Half damage.'
-  sha256: 510da9ab01366ccc5434348b9dadba25a4e593d864eb7d342f67a4a6cec31dbd
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Hell Hound
+
+## Source text
 
 <!-- SRD page 297 -->
 
@@ -271,3 +48,229 @@ DC 12, each creature in a 15-foot Cone. Failure: 17\
 (5d6) Fire damage. Success: Half damage.\
 
 Original layout: [[../../srd-5.2.1/pages/297|page 297]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` medium ` |
+| ` type ` | ` fiend ` |
+| ` alignment ` | ` Lawful Evil ` |
+| ` movement_text ` | ` 50 ft. ` |
+| ` skills_text ` | ` Perception +5 ` |
+| ` immunities_text ` | ` Fire ` |
+| ` senses_text ` | ` Darkvision 60 ft.; Passive Perception 15 ` |
+| ` languages_text ` | ` Understands Infernal but can’t speak ` |
+| ` cr_text ` | ` 3 (XP 700; PB +2) ` |
+| ` hit_points_text ` | ` 58 (9d8 + 18) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 17 ` | ` 3 ` |
+| ` Dexterity ` | ` 12 ` | ` 1 ` |
+| ` Constitution ` | ` 14 ` | ` 2 ` |
+| ` Intelligence ` | ` 6 ` | ` -2 ` |
+| ` Wisdom ` | ` 13 ` | ` 1 ` |
+| ` Charisma ` | ` 6 ` | ` -2 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 15 ` |  |
+| ` max_hp ` | ` 58 ` |  |
+| ` initiative ` | ` 1 ` |  |
+| ` speed ` | ` 50 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/hell_hound ` |
+| ` implementation ` | ` dnd2024:creature_hell_hound ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` damage_immunities ` | ` ["fire"] ` |
+| ` passive_perception ` | ` 15 ` |
+
+#### Skill totals
+
+<!-- splat:values path=splat_rule/parameters/skill_totals -->
+
+| Field | Value |
+| --- | --- |
+| ` perception ` | ` 5 ` |
+
+#### Condition immunities
+
+<!-- splat:yaml path=splat_rule/parameters/condition_immunities -->
+
+```yaml
+[]
+```
+
+#### Senses
+
+<!-- splat:rows path=splat_rule/parameters/senses -->
+
+| Row | sense | range_ft |
+| --- | --- | --- |
+| ` 0 ` | ` darkvision ` | ` 60 ` |
+
+#### Languages
+
+<!-- splat:values path=splat_rule/parameters/languages -->
+
+| Field | Value |
+| --- | --- |
+| ` speak ` | ` false ` |
+| ` known ` | ` ["infernal"] ` |
+
+#### Features
+
+##### Pack tactics
+
+<!-- splat:yaml path=splat_rule/parameters/features/pack_tactics -->
+
+```yaml
+economy: passive
+op: roll.advantage
+rolls:
+- attack
+target_kind: creature
+when:
+  ally_within_target_ft: 5
+  ally_excluded_conditions:
+  - incapacitated
+```
+
+##### Bite
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+
+```yaml
+economy: action
+op: attack
+modes:
+- melee
+attack_bonus: 5
+target:
+  kind: creature_or_object
+  count: 1
+reach_ft: 5
+hit:
+- op: damage
+  components:
+  - type: piercing
+    amount:
+      dice:
+        count: 1
+        sides: 8
+      add: 3
+    average: 7
+  - type: fire
+    amount:
+      dice:
+        count: 1
+        sides: 6
+      add: 0
+    average: 3
+```
+
+##### Fire breath
+
+<!-- splat:yaml path=splat_rule/parameters/features/fire_breath -->
+
+```yaml
+economy: action
+op: saving_throw
+ability: dexterity
+dc: 12
+targets:
+  kind: creature
+  count: all
+  area:
+    shape: cone
+    origin: actor
+    size_ft: 15
+failure:
+- op: damage
+  components:
+  - type: fire
+    amount:
+      dice:
+        count: 5
+        sides: 6
+      add: 0
+    average: 17
+success:
+- op: damage
+  from: failure_damage
+  multiplier: 0.5
+  round: down
+recharge:
+  die_sides: 6
+  success_min: 5
+  success_max: 6
+  check_event: actor.turn_start
+  maximum_uses: 1
+  initial_uses: 1
+  also_recovers_after:
+  - short_rest
+  - long_rest
+```
+
+##### Multiattack
+
+<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+
+```yaml
+economy: action
+op: multiattack
+sequence:
+- count: 2
+  feature: bite
+```
+
+#### Damage resolution
+
+<!-- splat:values path=splat_rule/parameters/damage_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` choice ` | ` ["printed_average", "roll_expression"] ` |
+| ` chooser ` | ` controller ` |
+| ` exclusive ` | ` true ` |
+
+#### Spatial resolution
+
+<!-- splat:values path=splat_rule/parameters/spatial_resolution -->
+
+| Field | Value |
+| --- | --- |
+| ` provider ` | ` caller ` |
+| ` required_facts ` | ` ["distance", "area_membership", "visibility", "occupancy", "movement_path"] ` |
+| ` validate_against_typed_constraints ` | ` true ` |

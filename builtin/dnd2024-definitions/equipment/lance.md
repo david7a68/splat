@@ -10,143 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 91
   url: https://www.dndbeyond.com/srd
-splat_item:
-  damage:
-    expression: 1d10
-    type: piercing
-  properties_text: Heavy, Reach, Two-Handed (unless mounted)
-  mastery: topple
-  weapon_category: martial melee
-  price:
-    value: 10
-    unit: gp
-  mass:
-    value: 6.0
-    unit: lb
-  category: weapon
-splat_rule:
-  mechanic: dnd2024:equipment/lance
-  implementation: dnd2024:equipment_lance
-  parameters:
-    weapon_category: martial_melee
-    damage:
-      expression: 1d10
-      type: piercing
-      amount:
-        dice:
-          count: 1
-          sides: 10
-        bonus: 0
-    properties:
-    - id: heavy
-      rule:
-        key: dnd2024:rules/weapons_heavy
-      required_ability: strength
-      minimum_score: 13
-      below_minimum_attack_mode: disadvantage
-    - id: reach
-      rule:
-        key: dnd2024:rules/weapons_reach
-      reach_bonus_ft: 5
-      applies_to:
-      - attacks
-      - opportunity_attack_reach
-    - id: two_handed
-      rule:
-        key: dnd2024:rules/weapons_two_handed
-      hands_to_attack: 2
-      exception:
-        if: mounted
-        hands_to_attack: 1
-    attack:
-      proficiency_bonus_if_proficient: true
-      base_ability: strength
-      normal_hit_damage_ability_modifier: attack_ability_modifier
-    mastery:
-      property: topple
-      rule:
-        key: dnd2024:rules/weapons_topple
-      requires_weapon_mastery_feature_for_this_weapon: true
-      automatic_from_weapon_proficiency: false
-      parameters:
-        trigger: hit_creature
-        optional: true
-        save:
-          ability: constitution
-          dc:
-            op: add
-            operands:
-            - 8
-            - stat: attack_ability_modifier
-            - stat: proficiency_bonus
-          failure:
-            condition: prone
-          success: no_effect
-    application:
-      actor: equipper
-      item: equipped_instance
-      inactive_if_not_equipped: true
-splat_contracts:
-- id: dnd2024:equipment_lance
-  inputs:
-    actor:
-      type: participant
-      required: true
-    item:
-      type: item_instance
-      required: true
-    target:
-      required: false
-      type: participant
-    event:
-      type: event
-      required: true
-    choices:
-      required: false
-      type: choice
-  outputs:
-  - attack_options
-  - attack_modifiers
-  - damage
-  - mastery_effects
-  - ammunition_updates
-  events:
-  - attack.pending
-  - attack.hit
-  - attack.miss
-  - damage.resolved
-  - combat.ended
-  capabilities:
-  - weapon_properties
-  - weapon_mastery
-  - attacks
-  - effects
-  - ammunition
-splat_conversion:
-  status: specified
-  category: equipment
-  source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
-  source_path: builtin/srd-5.2.1/source.txt
-  pages:
-  - 91
-  engine_gaps: &id001
-  - dnd2024:equipment_lance
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/equipment_tables.md
-  specification_sha256: 6ccaacef05effc93f62f76f6c59ed1e62d539b950378550496896966ff776299
-splat_clauses:
-- key: source_rules
-  text: '# Lance Source table, SRD 5.2.1 page 91. { "damage": { "expression": "1d10", "type": "piercing"
-    }, "properties_text": "Heavy, Reach, Two-Handed (unless mounted)", "mastery": "topple", "weapon_category":
-    "martial melee", "price": { "value": 10, "unit": "gp" }, "mass": { "value": 6.0, "unit": "lb" }, "category":
-    "weapon" }'
-  sha256: afc75d9ddcd43088873b82d96778c7cf99ad2a7e8b9b8f34c32262121cf6a483
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Lance
+
+## Source text
 
 Source table, SRD 5.2.1 page 91.
 
@@ -168,3 +36,161 @@ Source table, SRD 5.2.1 page 91.
   },
   "category": "weapon"
 }
+
+## Item
+
+<!-- splat:values path=splat_item -->
+
+| Field | Value |
+| --- | --- |
+| ` properties_text ` | ` Heavy, Reach, Two-Handed (unless mounted) ` |
+| ` mastery ` | ` topple ` |
+| ` weapon_category ` | ` martial melee ` |
+| ` category ` | ` weapon ` |
+
+### Damage
+
+<!-- splat:values path=splat_item/damage -->
+
+| Field | Value |
+| --- | --- |
+| ` expression ` | ` 1d10 ` |
+| ` type ` | ` piercing ` |
+
+### Price
+
+<!-- splat:values path=splat_item/price -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 10 ` |
+| ` unit ` | ` gp ` |
+
+### Mass
+
+<!-- splat:values path=splat_item/mass -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 6.0 ` |
+| ` unit ` | ` lb ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:equipment/lance ` |
+| ` implementation ` | ` dnd2024:equipment_lance ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` weapon_category ` | ` martial_melee ` |
+
+#### Damage
+
+<!-- splat:yaml path=splat_rule/parameters/damage -->
+
+```yaml
+expression: 1d10
+type: piercing
+amount:
+  dice:
+    count: 1
+    sides: 10
+  bonus: 0
+```
+
+#### Properties
+
+<!-- splat:rows path=splat_rule/parameters/properties -->
+
+| Row | id | required_ability | minimum_score | below_minimum_attack_mode | reach_bonus_ft | applies_to | hands_to_attack |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ` 0 ` | ` heavy ` | ` strength ` | ` 13 ` | ` disadvantage ` |  |  |  |
+| ` 1 ` | ` reach ` |  |  |  | ` 5 ` | ` ["attacks", "opportunity_attack_reach"] ` |  |
+| ` 2 ` | ` two_handed ` |  |  |  |  |  | ` 2 ` |
+
+##### Rule
+
+<!-- splat:values path=splat_rule/parameters/properties/0/rule -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:rules/weapons_heavy ` |
+
+##### Rule
+
+<!-- splat:values path=splat_rule/parameters/properties/1/rule -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:rules/weapons_reach ` |
+
+##### Rule
+
+<!-- splat:values path=splat_rule/parameters/properties/2/rule -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:rules/weapons_two_handed ` |
+
+##### Exception
+
+<!-- splat:values path=splat_rule/parameters/properties/2/exception -->
+
+| Field | Value |
+| --- | --- |
+| ` if ` | ` mounted ` |
+| ` hands_to_attack ` | ` 1 ` |
+
+#### Attack
+
+<!-- splat:values path=splat_rule/parameters/attack -->
+
+| Field | Value |
+| --- | --- |
+| ` proficiency_bonus_if_proficient ` | ` true ` |
+| ` base_ability ` | ` strength ` |
+| ` normal_hit_damage_ability_modifier ` | ` attack_ability_modifier ` |
+
+#### Mastery
+
+<!-- splat:yaml path=splat_rule/parameters/mastery -->
+
+```yaml
+property: topple
+rule:
+  key: dnd2024:rules/weapons_topple
+requires_weapon_mastery_feature_for_this_weapon: true
+automatic_from_weapon_proficiency: false
+parameters:
+  trigger: hit_creature
+  optional: true
+  save:
+    ability: constitution
+    dc:
+      op: add
+      operands:
+      - 8
+      - stat: attack_ability_modifier
+      - stat: proficiency_bonus
+    failure:
+      condition: prone
+    success: no_effect
+```
+
+#### Application
+
+<!-- splat:values path=splat_rule/parameters/application -->
+
+| Field | Value |
+| --- | --- |
+| ` actor ` | ` equipper ` |
+| ` item ` | ` equipped_instance ` |
+| ` inactive_if_not_equipped ` | ` true ` |

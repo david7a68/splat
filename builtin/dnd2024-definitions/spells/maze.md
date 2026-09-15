@@ -10,96 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 148
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 8
-  school: conjuration
-  classes:
-  - wizard
-  components:
-  - verbal
-  - somatic
-  concentration: true
-  duration: Concentration, up to 10 minutes
-  casting_time: Action
-  ritual: false
-  range:
-    feet: 60
-splat_rule:
-  mechanic: dnd2024:spells/maze
-  implementation: dnd2024:spell_maze
-  parameters:
-    spell_lifetime:
-      concentration: true
-      maximum_seconds: 600
-    target:
-      kind: creature
-      visible: true
-      range_feet: 60
-    banish:
-      destination: labyrinthine_demiplane
-      initial_save: false
-    escape:
-      economy: study_action
-      check:
-        ability: intelligence
-        skill: investigation
-        dc: 20
-      success:
-        escape: true
-        end_spell: true
-    on_spell_end:
-      return: original_space
-      occupied_fallback: nearest_unoccupied_space
-splat_contracts:
-- id: dnd2024:spell_maze
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    target:
-      type: participant
-      required: true
-  outputs:
-  - effects
-  - transports
-  events:
-  - concentration.ended
-  - spell.cast_completed
-  capabilities:
-  - spellcasting
-  - effects
-  - planar_travel
-  - concentration
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: 5560faae6c298e42ca6d70dfe4ef1a43ea0efa3043a022b890d52c70f6e3e7f0
-  source_path: builtin/srd-5.2.1/spell/maze.md
-  pages:
-  - 148
-  engine_gaps: &id001
-  - dnd2024:spell_maze
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_4.md
-  specification_sha256: b1686f4ed7abbf6cd459cb0b18598cce3277aacdb1a9c79e3302f68830b23094
-splat_clauses:
-- key: source_rules
-  text: '# Maze Level 8 Conjuration (Wizard) Casting Time: Action Range: 60 feet Components: V, S Duration:
-    Concentration, up to 10 minutes You banish a creature that you can see within range into a labyrinthine
-    demiplane. The target remains there for the duration or until it escapes the maze. The target can
-    take a Study action to try to escape. When it does so, it makes a DC 20 Intelligence (Investigation)
-    check. If it succeeds, it escapes, and the spell ends. When the spell ends, the target reappears in
-    the space it left or, if that space is occupied, in the nearest unoccupied space.'
-  sha256: e871ac4be81993006da2ef841102d052e15f34957c9f2bd63593f84d6624b4f0
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Maze
+
+## Source text
 
 <!-- SRD page 148 -->
 
@@ -120,3 +35,89 @@ space it left or, if that space is occupied, in the near-\
 est unoccupied space.\
 
 Original layout: [[../../srd-5.2.1/pages/148|page 148]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 8 ` |
+| ` school ` | ` conjuration ` |
+| ` classes ` | ` ["wizard"] ` |
+| ` components ` | ` ["verbal", "somatic"] ` |
+| ` concentration ` | ` true ` |
+| ` duration ` | ` Concentration, up to 10 minutes ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 60 ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/maze ` |
+| ` implementation ` | ` dnd2024:spell_maze ` |
+
+### Parameters
+
+#### Spell lifetime
+
+<!-- splat:values path=splat_rule/parameters/spell_lifetime -->
+
+| Field | Value |
+| --- | --- |
+| ` concentration ` | ` true ` |
+| ` maximum_seconds ` | ` 600 ` |
+
+#### Target
+
+<!-- splat:values path=splat_rule/parameters/target -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` visible ` | ` true ` |
+| ` range_feet ` | ` 60 ` |
+
+#### Banish
+
+<!-- splat:values path=splat_rule/parameters/banish -->
+
+| Field | Value |
+| --- | --- |
+| ` destination ` | ` labyrinthine_demiplane ` |
+| ` initial_save ` | ` false ` |
+
+#### Escape
+
+<!-- splat:yaml path=splat_rule/parameters/escape -->
+
+```yaml
+economy: study_action
+check:
+  ability: intelligence
+  skill: investigation
+  dc: 20
+success:
+  escape: true
+  end_spell: true
+```
+
+#### On spell end
+
+<!-- splat:values path=splat_rule/parameters/on_spell_end -->
+
+| Field | Value |
+| --- | --- |
+| ` return ` | ` original_space ` |
+| ` occupied_fallback ` | ` nearest_unoccupied_space ` |

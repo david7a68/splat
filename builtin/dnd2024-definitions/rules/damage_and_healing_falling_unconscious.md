@@ -10,60 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 17
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/damage_and_healing_falling_unconscious
-  parameters:
-    apply_definitions:
-    - key: dnd2024:glossary/unconscious_condition
-    - key: dnd2024:glossary/death_saving_throw
-    when:
-      hit_points: 0
-      instant_death: false
-    unconscious_until: any_hit_points_regained
-  implementation: dnd2024:rule_damage_and_healing_falling_unconscious
-splat_contracts:
-- id: dnd2024:rule_damage_and_healing_falling_unconscious
-  inputs:
-    actor:
-      type: participant
-      required: true
-    context:
-      type: resolution
-      required: true
-  outputs:
-  - resolution
-  events: []
-  capabilities:
-  - conditions
-  - death_saves
-splat_conversion:
-  status: specified
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 17
-  engine_gaps: &id001
-  - dnd2024:rule_damage_and_healing_falling_unconscious
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_2.md
-  specification_sha256: 2607557ee1d47425c08d91cf615f018a16650cfc9b910ff26e30245ed4d07a88
-  parent_name: Damage and Healing
-  line_span:
-    first: 1250
-    count: 5
-splat_clauses:
-- key: source_rules
-  text: '# Falling Unconscious If you reach 0 Hit Points and don’t die instantly, you have the Unconscious
-    condition (see “Rules Glossary”) until you regain any Hit Points, and you now face making Death Saving
-    Throws (see below).'
-  sha256: dd09f5e46034426dbeb83a953718a0158db6f5f00b1595118dfbce43185f82f1
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Falling Unconscious
+
+## Source text
 
 <!-- SRD page 17 -->
 
@@ -71,3 +22,38 @@ If you reach 0 Hit Points and don’t die instantly, you\
 have the Unconscious condition (see “Rules Glos-\
 sary”) until you regain any Hit Points, and you now\
 face making Death Saving Throws (see below).\
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/damage_and_healing_falling_unconscious ` |
+| ` implementation ` | ` dnd2024:rule_damage_and_healing_falling_unconscious ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` unconscious_until ` | ` any_hit_points_regained ` |
+
+#### Apply definitions
+
+<!-- splat:rows path=splat_rule/parameters/apply_definitions -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:glossary/unconscious_condition ` |
+| ` 1 ` | ` dnd2024:glossary/death_saving_throw ` |
+
+#### When
+
+<!-- splat:values path=splat_rule/parameters/when -->
+
+| Field | Value |
+| --- | --- |
+| ` hit_points ` | ` 0 ` |
+| ` instant_death ` | ` false ` |

@@ -10,78 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 64
   url: https://www.dndbeyond.com/srd
-splat_rule_group:
-  category: subclass
-  members:
-  - key: dnd2024:class_features/thief_level_13_use_magic_device
-  - key: dnd2024:class_features/thief_level_17_thief_s_reflexes
-  - key: dnd2024:class_features/thief_level_3_fast_hands
-  - key: dnd2024:class_features/thief_level_3_second_story_work
-  - key: dnd2024:class_features/thief_level_9_supreme_sneak
-splat_rule:
-  mechanic: dnd2024:subclasses/rogue_rogue_subclass_thief
-  implementation: dnd2024:subclasses_rogue_rogue_subclass_thief
-  parameters:
-    class: rogue
-    subclass: thief
-    feature_grants:
-    - feature:
-        key: dnd2024:class_features/thief_level_13_use_magic_device
-      minimum_class_level: 13
-    - feature:
-        key: dnd2024:class_features/thief_level_17_thief_s_reflexes
-      minimum_class_level: 17
-    - feature:
-        key: dnd2024:class_features/thief_level_3_fast_hands
-      minimum_class_level: 3
-    - feature:
-        key: dnd2024:class_features/thief_level_3_second_story_work
-      minimum_class_level: 3
-    - feature:
-        key: dnd2024:class_features/thief_level_9_supreme_sneak
-      minimum_class_level: 9
-splat_contracts:
-- id: dnd2024:subclasses_rogue_rogue_subclass_thief
-  inputs:
-    actor:
-      type: participant
-      required: true
-  outputs:
-  - feature_state
-  events:
-  - character.subclass_selected
-  - character.class_level_gained
-  capabilities:
-  - class_progression
-splat_conversion:
-  status: specified
-  category: subclass
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 64
-  engine_gaps: &id001
-  - dnd2024:subclasses_rogue_rogue_subclass_thief
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/character_options_1.md
-  specification_sha256: 6dbc41a923b97a00f8c8c1c371d1c6d6247228dc169cfe16affb84de2ac1ba76
-  parent_name: Rogue
-  line_span:
-    first: 5351
-    count: 7
-splat_clauses:
-- key: source_rules
-  text: '# Rogue Subclass: Thief Hunt for Treasure as a Classic Adventurer A mix of burglar, treasure
-    hunter, and explorer, you are the epitome of an adventurer. In addition to improving your agility
-    and stealth, you gain abilities useful for delving into ruins and getting maximum benefit from the
-    magic items you find there.'
-  sha256: 944d7b5d7b03d0f759614ed12b9536c1ec603114ccf3fed46d74c95c8ff045bb
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Rogue Subclass: Thief
+
+## Source text
 
 <!-- SRD page 64 -->
 
@@ -91,3 +24,93 @@ are the epitome of an adventurer. In addition to im-\
 proving your agility and stealth, you gain abilities\
 useful for delving into ruins and getting maximum\
 benefit from the magic items you find there.\
+
+## Rule group
+
+<!-- splat:values path=splat_rule_group -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` subclass ` |
+
+### Members
+
+<!-- splat:rows path=splat_rule_group/members -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:class_features/thief_level_13_use_magic_device ` |
+| ` 1 ` | ` dnd2024:class_features/thief_level_17_thief_s_reflexes ` |
+| ` 2 ` | ` dnd2024:class_features/thief_level_3_fast_hands ` |
+| ` 3 ` | ` dnd2024:class_features/thief_level_3_second_story_work ` |
+| ` 4 ` | ` dnd2024:class_features/thief_level_9_supreme_sneak ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:subclasses/rogue_rogue_subclass_thief ` |
+| ` implementation ` | ` dnd2024:subclasses_rogue_rogue_subclass_thief ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` class ` | ` rogue ` |
+| ` subclass ` | ` thief ` |
+
+#### Feature grants
+
+<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+
+| Row | minimum_class_level |
+| --- | --- |
+| ` 0 ` | ` 13 ` |
+| ` 1 ` | ` 17 ` |
+| ` 2 ` | ` 3 ` |
+| ` 3 ` | ` 3 ` |
+| ` 4 ` | ` 9 ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/thief_level_13_use_magic_device ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/thief_level_17_thief_s_reflexes ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/thief_level_3_fast_hands ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/thief_level_3_second_story_work ` |
+
+##### Feature
+
+<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:class_features/thief_level_9_supreme_sneak ` |

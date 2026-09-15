@@ -10,246 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 329
   url: https://www.dndbeyond.com/srd
-splat_creature:
-  size: medium
-  type: humanoid
-  alignment: Neutral
-  size_options_text: Medium or Small
-  movement_text: 30 ft., Climb 30 ft.
-  skills_text: Deception +5, Insight +4, Investigation +5, Perception +6, Sleight of Hand +4, Stealth
-    +6
-  gear_text: Hand Crossbow, Shortsword, Thieves’ Tools
-  senses_text: Passive Perception 16
-  languages_text: Common plus one other language
-  cr_text: 1 (XP 200; PB +2)
-  hit_points_text: 27 (6d8)
-splat_stats:
-  strength:
-    value: 10
-  save_strength:
-    value: 0
-  dexterity:
-    value: 15
-  save_dexterity:
-    value: 2
-  constitution:
-    value: 10
-  save_constitution:
-    value: 0
-  intelligence:
-    value: 12
-  save_intelligence:
-    value: 1
-  wisdom:
-    value: 14
-  save_wisdom:
-    value: 2
-  charisma:
-    value: 16
-  save_charisma:
-    value: 3
-  armor_class:
-    value: 12
-  max_hp:
-    value: 27
-  initiative:
-    value: 4
-  speed:
-    value: 30
-    unit: ft
-  climb_speed:
-    value: 30
-    unit: ft
-splat_health:
-  zero_hp: dnd2024:monster
-splat_rule:
-  mechanic: dnd2024:creatures/spy
-  implementation: dnd2024:creature_spy
-  parameters:
-    features:
-      shortsword:
-        economy: action
-        op: attack
-        attack_modes:
-        - melee
-        attack_bonus: 4
-        targets:
-          count: 1
-        hit:
-        - op: damage
-          average: 5
-          amount:
-            dice:
-              count: 1
-              sides: 6
-            add: 2
-          damage_type: piercing
-        - op: damage
-          average: 7
-          amount:
-            dice:
-              count: 2
-              sides: 6
-            add: 0
-          damage_type: poison
-        reach_feet: 5
-      hand_crossbow:
-        economy: action
-        op: attack
-        attack_modes:
-        - ranged
-        attack_bonus: 4
-        targets:
-          count: 1
-        hit:
-        - op: damage
-          average: 5
-          amount:
-            dice:
-              count: 1
-              sides: 6
-            add: 2
-          damage_type: piercing
-        - op: damage
-          average: 7
-          amount:
-            dice:
-              count: 2
-              sides: 6
-            add: 0
-          damage_type: poison
-        range_feet: 30
-        long_range_feet: 120
-      cunning_action:
-        economy: bonus_action
-        op: take_action
-        choice:
-        - dash
-        - disengage
-        - hide
-    skill_totals:
-      deception: 5
-      insight: 4
-      investigation: 5
-      perception: 6
-      sleight_of_hand: 4
-      stealth: 6
-    defenses: {}
-    senses:
-      passive_perception: 16
-      special: []
-    gear:
-    - item_name: Hand Crossbow
-      quantity: 1
-    - item_name: Shortsword
-      quantity: 1
-    - item_name: Thieves’ Tools
-      quantity: 1
-    communication:
-      speaks:
-      - common
-      understands:
-      - common
-      additional_languages:
-        count: 1
-        chooser: gm
-        distinct_from_known: true
-        can_speak: true
-        can_understand: true
-    stat_block_conventions:
-      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
-      save_dc: supplied_total
-      damage_mode_choice:
-      - fixed_average
-      - rolled_dice
-      condition_source: self
-      multiattack_child_economy_cost: 0
-      multiattack_child_resource_costs_retained: true
-      spellcasting:
-        default_level: spell_minimum
-        spell_slots_expended: false
-        required_materials: available
-        casting_time_at_least_one_minute:
-          uses_normal_casting_duration: true
-          magic_action_each_turn: true
-          concentration_required: true
-      geometry_assumptions:
-        chooser: gm
-        supplies:
-        - range
-        - visibility
-        - line_of_sight
-        - area_membership
-        - reachable_locations
-        - unoccupied_locations
-        - terrain
-        - plane
-        - form_appearance
-splat_contracts:
-- id: dnd2024:creature_spy
-  inputs:
-    self:
-      type: participant
-      required: true
-    targets:
-      required: false
-      type: participant_list
-    feature:
-      type: choice
-      required: true
-    event:
-      required: false
-      type: event
-    choices:
-      required: false
-      type: choice
-    resolution:
-      required: false
-      type: resolution
-    campaign:
-      required: false
-      type: campaign
-  outputs:
-  - resolved_feature
-  - effects
-  - resource_changes
-  events: []
-  capabilities:
-  - action_economy
-  - creature_rules
-  - dice
-  - effects
-  - resources
-  - targeting
-splat_conversion:
-  status: specified
-  category: creature
-  source_sha256: cddd216cc9d8ae3e9e2dbe5ac6fa64bcf8b2ab852e7523f63f05a8c9ac3598c3
-  source_path: builtin/srd-5.2.1/creature/spy.md
-  pages:
-  - 329
-  engine_gaps: &id001
-  - dnd2024:creature_spy
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/creatures_2.md
-  specification_sha256: 75fdd3c86ecdf98672c22ae2c6b70fd47f7385ebb90e1ba7401125b0830d6d10
-splat_clauses:
-- key: source_rules
-  text: '# Spy Medium or Small Humanoid, Neutral AC 12 Initiative +4 (14) HP 27 (6d8) Speed 30 ft., Climb
-    30 ft. MOD SAVE MOD SAVE MOD SAVE Str 10 +0 +0 Dex 15 +2 +2 Con 10 +0 +0 Int 12 +1 +1 Wis 14 +2 +2
-    Cha 16 +3 +3 Skills Deception +5, Insight +4, Investigation +5, Perception +6, Sleight of Hand +4,
-    Stealth +6 Gear Hand Crossbow, Shortsword, Thieves’ Tools Senses Passive Perception 16 Languages Common
-    plus one other language CR 1 (XP 200; PB +2) ### Actions Shortsword. Melee Attack Roll: +4, reach
-    5 ft. Hit: 5 (1d6 + 2) Piercing damage plus 7 (2d6) Poison damage. Hand Crossbow. Ranged Attack Roll:
-    +4, range 30/120 ft. Hit: 5 (1d6 + 2) Piercing damage plus 7 (2d6) Poison damage. ### Bonus Actions
-    Cunning Action. The spy takes the Dash, Disengage, or Hide action.'
-  sha256: 17ce044354f08b722e4d142c9c4892df08c6012decc9d2a90b4ecb97b762d423
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Spy
+
+## Source text
 
 <!-- SRD page 329 -->
 
@@ -281,3 +46,245 @@ Cunning Action. The spy takes the Dash, Disengage, or\
 Hide action.\
 
 Original layout: [[../../srd-5.2.1/pages/329|page 329]].
+
+## Creature
+
+<!-- splat:values path=splat_creature -->
+
+| Field | Value |
+| --- | --- |
+| ` size ` | ` medium ` |
+| ` type ` | ` humanoid ` |
+| ` alignment ` | ` Neutral ` |
+| ` size_options_text ` | ` Medium or Small ` |
+| ` movement_text ` | ` 30 ft., Climb 30 ft. ` |
+| ` skills_text ` | ` Deception +5, Insight +4, Investigation +5, Perception +6, Sleight of Hand +4, Stealth +6 ` |
+| ` gear_text ` | ` Hand Crossbow, Shortsword, Thieves’ Tools ` |
+| ` senses_text ` | ` Passive Perception 16 ` |
+| ` languages_text ` | ` Common plus one other language ` |
+| ` cr_text ` | ` 1 (XP 200; PB +2) ` |
+| ` hit_points_text ` | ` 27 (6d8) ` |
+
+## Abilities
+
+<!-- splat:abilities path=splat_stats -->
+
+| Ability | Score | Save override |
+| --- | --- | --- |
+| ` Strength ` | ` 10 ` | ` 0 ` |
+| ` Dexterity ` | ` 15 ` | ` 2 ` |
+| ` Constitution ` | ` 10 ` | ` 0 ` |
+| ` Intelligence ` | ` 12 ` | ` 1 ` |
+| ` Wisdom ` | ` 14 ` | ` 2 ` |
+| ` Charisma ` | ` 16 ` | ` 3 ` |
+
+## Stats
+
+<!-- splat:map path=splat_stats -->
+
+| Key | value | unit |
+| --- | --- | --- |
+| ` armor_class ` | ` 12 ` |  |
+| ` max_hp ` | ` 27 ` |  |
+| ` initiative ` | ` 4 ` |  |
+| ` speed ` | ` 30 ` | ` ft ` |
+| ` climb_speed ` | ` 30 ` | ` ft ` |
+
+## Health
+
+<!-- splat:values path=splat_health -->
+
+| Field | Value |
+| --- | --- |
+| ` zero_hp ` | ` dnd2024:monster ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:creatures/spy ` |
+| ` implementation ` | ` dnd2024:creature_spy ` |
+
+### Parameters
+
+#### Features
+
+##### Shortsword
+
+<!-- splat:yaml path=splat_rule/parameters/features/shortsword -->
+
+```yaml
+economy: action
+op: attack
+attack_modes:
+- melee
+attack_bonus: 4
+targets:
+  count: 1
+hit:
+- op: damage
+  average: 5
+  amount:
+    dice:
+      count: 1
+      sides: 6
+    add: 2
+  damage_type: piercing
+- op: damage
+  average: 7
+  amount:
+    dice:
+      count: 2
+      sides: 6
+    add: 0
+  damage_type: poison
+reach_feet: 5
+```
+
+##### Hand crossbow
+
+<!-- splat:yaml path=splat_rule/parameters/features/hand_crossbow -->
+
+```yaml
+economy: action
+op: attack
+attack_modes:
+- ranged
+attack_bonus: 4
+targets:
+  count: 1
+hit:
+- op: damage
+  average: 5
+  amount:
+    dice:
+      count: 1
+      sides: 6
+    add: 2
+  damage_type: piercing
+- op: damage
+  average: 7
+  amount:
+    dice:
+      count: 2
+      sides: 6
+    add: 0
+  damage_type: poison
+range_feet: 30
+long_range_feet: 120
+```
+
+##### Cunning action
+
+<!-- splat:values path=splat_rule/parameters/features/cunning_action -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` take_action ` |
+| ` choice ` | ` ["dash", "disengage", "hide"] ` |
+
+#### Skill totals
+
+<!-- splat:values path=splat_rule/parameters/skill_totals -->
+
+| Field | Value |
+| --- | --- |
+| ` deception ` | ` 5 ` |
+| ` insight ` | ` 4 ` |
+| ` investigation ` | ` 5 ` |
+| ` perception ` | ` 6 ` |
+| ` sleight_of_hand ` | ` 4 ` |
+| ` stealth ` | ` 6 ` |
+
+#### Defenses
+
+<!-- splat:yaml path=splat_rule/parameters/defenses -->
+
+```yaml
+{}
+```
+
+#### Senses
+
+<!-- splat:values path=splat_rule/parameters/senses -->
+
+| Field | Value |
+| --- | --- |
+| ` passive_perception ` | ` 16 ` |
+
+##### Special
+
+<!-- splat:yaml path=splat_rule/parameters/senses/special -->
+
+```yaml
+[]
+```
+
+#### Gear
+
+<!-- splat:rows path=splat_rule/parameters/gear -->
+
+| Row | item_name | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` Hand Crossbow ` | ` 1 ` |
+| ` 1 ` | ` Shortsword ` | ` 1 ` |
+| ` 2 ` | ` Thieves’ Tools ` | ` 1 ` |
+
+#### Communication
+
+<!-- splat:values path=splat_rule/parameters/communication -->
+
+| Field | Value |
+| --- | --- |
+| ` speaks ` | ` ["common"] ` |
+| ` understands ` | ` ["common"] ` |
+
+##### Additional languages
+
+<!-- splat:values path=splat_rule/parameters/communication/additional_languages -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` chooser ` | ` gm ` |
+| ` distinct_from_known ` | ` true ` |
+| ` can_speak ` | ` true ` |
+| ` can_understand ` | ` true ` |
+
+#### Stat block conventions
+
+<!-- splat:yaml path=splat_rule/parameters/stat_block_conventions -->
+
+```yaml
+attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+save_dc: supplied_total
+damage_mode_choice:
+- fixed_average
+- rolled_dice
+condition_source: self
+multiattack_child_economy_cost: 0
+multiattack_child_resource_costs_retained: true
+spellcasting:
+  default_level: spell_minimum
+  spell_slots_expended: false
+  required_materials: available
+  casting_time_at_least_one_minute:
+    uses_normal_casting_duration: true
+    magic_action_each_turn: true
+    concentration_required: true
+geometry_assumptions:
+  chooser: gm
+  supplies:
+  - range
+  - visibility
+  - line_of_sight
+  - area_membership
+  - reachable_locations
+  - unoccupied_locations
+  - terrain
+  - plane
+  - form_appearance
+```

@@ -10,223 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 108, 109
   url: https://www.dndbeyond.com/srd
-splat_spell:
-  level: 5
-  school: transmutation
-  classes:
-  - bard
-  - sorcerer
-  - wizard
-  components:
-  - verbal
-  - somatic
-  concentration: true
-  duration: Concentration, up to 1 minute
-  casting_time: Action
-  ritual: false
-  range:
-    feet: 120
-splat_rule:
-  mechanic: dnd2024:spells/animate_objects
-  implementation: dnd2024:spell_animate_objects
-  parameters:
-    targeting:
-      kind: objects
-      magical: false
-      worn: false
-      carried: false
-      fixed_to_surface: false
-      excluded_sizes:
-      - gargantuan
-      selection_budget:
-        stat: spellcasting_ability_modifier
-      costs:
-        tiny: 1
-        small: 1
-        medium: 1
-        large: 2
-        huge: 3
-    animation:
-      creature_type: construct
-      alignment: unaligned
-      sprouts_legs: true
-      ally_of:
-      - caster
-      - caster_allies
-      duration:
-        until_any:
-        - spell_ends
-        - zero_hit_points
-      initiative:
-        same_count_as: caster
-        turn_order: immediately_after_caster
-      control:
-        economy: bonus_action
-        channel: mental
-        range_feet: 500
-        targets: any_subset
-        shared_command: true
-        no_command:
-          action: dodge
-          movement: avoid_harm_only
-      reversion_at_zero_hp:
-        form: original_object
-        excess_damage: carries_over
-      stats:
-        ac: 15
-        hp_by_size:
-          tiny: 10
-          small: 10
-          medium: 10
-          large: 20
-          huge: 40
-        speed_feet: 30
-        abilities:
-          strength: 16
-          dexterity: 10
-          constitution: 10
-          intelligence: 3
-          wisdom: 3
-          charisma: 1
-        saving_throw_modifiers:
-          strength: 3
-          dexterity: 0
-          constitution: 0
-          intelligence: -4
-          wisdom: -4
-          charisma: -5
-        damage_immunities:
-        - poison
-        - psychic
-        condition_immunities:
-        - charmed
-        - exhaustion
-        - frightened
-        - paralyzed
-        - poisoned
-        blindsight_feet: 30
-        passive_perception: 6
-        understands_languages: caster_known
-        challenge_rating: null
-        xp: 0
-        proficiency_bonus:
-          stat: caster_proficiency_bonus
-      slam:
-        economy: action
-        attack:
-          kind: melee
-          modifier: caster_spell_attack_modifier
-          reach_feet: 5
-        damage_type: force
-        damage_by_size:
-          medium_or_smaller:
-            dice: 1d4
-            add: 3
-            extra_dice_per_slot_above_5: 1d4
-          large:
-            dice: 2d6
-            add:
-              op: add
-              args:
-              - 3
-              - stat: caster_spellcasting_ability_modifier
-            extra_dice_per_slot_above_5: 1d6
-          huge:
-            dice: 2d12
-            add:
-              op: add
-              args:
-              - 3
-              - stat: caster_spellcasting_ability_modifier
-            extra_dice_per_slot_above_5: 1d12
-    spell_lifetime:
-      concentration: true
-      maximum:
-        value: 1
-        unit: minute
-splat_contracts:
-- id: dnd2024:spell_animate_objects
-  inputs:
-    caster:
-      type: participant
-      required: true
-    cast_level:
-      type: integer
-      required: true
-    locations:
-      type: location_list
-      required: true
-    objects:
-      type: object_list
-      required: true
-    forms:
-      type: definition_list
-      required: true
-  outputs:
-  - effects
-  - damage_results
-  - participants
-  - locations
-  events:
-  - spell.cast_completed
-  - health.changed
-  - effect.ended
-  capabilities:
-  - spellcasting
-  - effects
-  - damage
-  - attacks
-  - conditions
-  - spatial_effects
-  - participant_lifecycle
-  - forms
-  - perception
-  - controlled_participants
-splat_conversion:
-  status: specified
-  category: spell
-  source_sha256: d70dd02fbc86a3ea3cd72a4c11361e1225fc5bf4220091a35e0e8c8d3545ca29
-  source_path: builtin/srd-5.2.1/spell/animate_objects.md
-  pages:
-  - 108
-  - 109
-  engine_gaps: &id001
-  - dnd2024:spell_animate_objects
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/spells_2.md
-  specification_sha256: aa6f752790024204ff8877b411ef5a46831b8494546aafa59cbddedbbac2b503
-splat_clauses:
-- key: source_rules
-  text: '# Animate Objects Level 5 Transmutation (Bard, Sorcerer, Wizard) Casting Time: Action Range:
-    120 feet Components: V, S Duration: Concentration, up to 1 minute Objects animate at your command.
-    Choose a number of nonmagical objects within range that aren’t being worn or carried, aren’t fixed
-    to a surface, and aren’t Gargantuan. The maximum number of objects is equal to your spellcasting ability
-    modifier; for this number, a Medium or smaller target counts as one object, a Large target counts
-    as two, and a Huge target counts as three. Each target animates, sprouts legs, and becomes a Construct
-    that uses the Animated Object stat block; this creature is under your control until the spell ends
-    or until it is reduced to 0 Hit Points. Each creature you make with this spell is an ally to you and
-    your allies. In combat, it shares your Initiative count and takes its turn immediately after yours.
-    Until the spell ends, you can take a Bonus Action to mentally command any creature you made with this
-    spell if the creature is within 500 feet of you (if you control multiple creatures, you can command
-    any of them at the same time, issuing the same command to each one). If you issue no commands, the
-    creature takes the Dodge action and moves only to avoid harm. When the creature drops to 0 Hit Points,
-    it reverts to its object form, and any remaining damage carries over to that form. Using a Higher-Level
-    Spell Slot. The creature’s Slam damage increases by 1d4 (Medium or smaller), 1d6 (Large), or 1d12
-    (Huge) for each spell slot level above 5. ### Animated Object Huge or Smaller Construct, Unaligned
-    AC 15 HP 10 (Medium or smaller), 20 (Large), 40 (Huge) Speed 30 ft. MOD SAVE MOD SAVE MOD SAVE Str
-    16 +3 +3 Dex 10 +0 +0 Con10 +0 +0 Int 3 -4 -4 Wis 3 -4 -4 Cha 1 -5 -5 Immunities Poison, Psychic;
-    Charmed, Exhaustion, Frightened, Paralyzed, Poisoned Senses Blindsight 30 ft.; Passive Perception
-    6 Languages Understands the languages you know CR None (XP 0; PB equals your Proficiency Bonus) ###
-    Actions Slam. Melee Attack Roll: Bonus equals your spell attack modifier, reach 5 ft. Hit: Force damage
-    equal to 1d4 + 3 (Medium or smaller), 2d6 + 3 + your spellcasting ability modifier (Large), or 2d12
-    + 3 + your spellcasting ability modifier (Huge).'
-  sha256: 27af994d787f4af62e1d974acb4d798c0fe9f57248af39948daa022a27676410
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Animate Objects
+
+## Source text
 
 <!-- SRD page 108 -->
 
@@ -292,3 +80,169 @@ ability modifier (Large), or 2d12 + 3 + your spellcasting\
 ability modifier (Huge).\
 
 Original layout: [[../../srd-5.2.1/pages/108|page 108]], [[../../srd-5.2.1/pages/109|page 109]].
+
+## Spell
+
+<!-- splat:values path=splat_spell -->
+
+| Field | Value |
+| --- | --- |
+| ` level ` | ` 5 ` |
+| ` school ` | ` transmutation ` |
+| ` classes ` | ` ["bard", "sorcerer", "wizard"] ` |
+| ` components ` | ` ["verbal", "somatic"] ` |
+| ` concentration ` | ` true ` |
+| ` duration ` | ` Concentration, up to 1 minute ` |
+| ` casting_time ` | ` Action ` |
+| ` ritual ` | ` false ` |
+
+### Range
+
+<!-- splat:values path=splat_spell/range -->
+
+| Field | Value |
+| --- | --- |
+| ` feet ` | ` 120 ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:spells/animate_objects ` |
+| ` implementation ` | ` dnd2024:spell_animate_objects ` |
+
+### Parameters
+
+#### Targeting
+
+<!-- splat:yaml path=splat_rule/parameters/targeting -->
+
+```yaml
+kind: objects
+magical: false
+worn: false
+carried: false
+fixed_to_surface: false
+excluded_sizes:
+- gargantuan
+selection_budget:
+  stat: spellcasting_ability_modifier
+costs:
+  tiny: 1
+  small: 1
+  medium: 1
+  large: 2
+  huge: 3
+```
+
+#### Animation
+
+<!-- splat:yaml path=splat_rule/parameters/animation -->
+
+```yaml
+creature_type: construct
+alignment: unaligned
+sprouts_legs: true
+ally_of:
+- caster
+- caster_allies
+duration:
+  until_any:
+  - spell_ends
+  - zero_hit_points
+initiative:
+  same_count_as: caster
+  turn_order: immediately_after_caster
+control:
+  economy: bonus_action
+  channel: mental
+  range_feet: 500
+  targets: any_subset
+  shared_command: true
+  no_command:
+    action: dodge
+    movement: avoid_harm_only
+reversion_at_zero_hp:
+  form: original_object
+  excess_damage: carries_over
+stats:
+  ac: 15
+  hp_by_size:
+    tiny: 10
+    small: 10
+    medium: 10
+    large: 20
+    huge: 40
+  speed_feet: 30
+  abilities:
+    strength: 16
+    dexterity: 10
+    constitution: 10
+    intelligence: 3
+    wisdom: 3
+    charisma: 1
+  saving_throw_modifiers:
+    strength: 3
+    dexterity: 0
+    constitution: 0
+    intelligence: -4
+    wisdom: -4
+    charisma: -5
+  damage_immunities:
+  - poison
+  - psychic
+  condition_immunities:
+  - charmed
+  - exhaustion
+  - frightened
+  - paralyzed
+  - poisoned
+  blindsight_feet: 30
+  passive_perception: 6
+  understands_languages: caster_known
+  challenge_rating: null
+  xp: 0
+  proficiency_bonus:
+    stat: caster_proficiency_bonus
+slam:
+  economy: action
+  attack:
+    kind: melee
+    modifier: caster_spell_attack_modifier
+    reach_feet: 5
+  damage_type: force
+  damage_by_size:
+    medium_or_smaller:
+      dice: 1d4
+      add: 3
+      extra_dice_per_slot_above_5: 1d4
+    large:
+      dice: 2d6
+      add:
+        op: add
+        args:
+        - 3
+        - stat: caster_spellcasting_ability_modifier
+      extra_dice_per_slot_above_5: 1d6
+    huge:
+      dice: 2d12
+      add:
+        op: add
+        args:
+        - 3
+        - stat: caster_spellcasting_ability_modifier
+      extra_dice_per_slot_above_5: 1d12
+```
+
+#### Spell lifetime
+
+<!-- splat:yaml path=splat_rule/parameters/spell_lifetime -->
+
+```yaml
+concentration: true
+maximum:
+  value: 1
+  unit: minute
+```

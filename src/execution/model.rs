@@ -241,6 +241,13 @@ pub fn compile(entry: &Entry) -> Result<Definition, String> {
             meta.conversion_gaps, meta.engine_gaps
         ));
     }
+    if let Some(rule) = read::<serde_yaml_ng::Mapping>(entry, "splat_rule")?
+        && let Some(implementation) = rule.get(Value::String("implementation".into()))
+    {
+        return Err(format!(
+            "Definition is not executable: unavailable rule adapter {implementation:?}"
+        ));
+    }
     let allowed = [
         "splat_schema",
         "splat_id",

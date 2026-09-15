@@ -10,70 +10,11 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 251
   url: https://www.dndbeyond.com/srd
-splat_item:
-  category: wand
-  rarity: uncommon
-  equipment:
-    attunement: none
-splat_rule:
-  mechanic: dnd2024:items/wand_of_the_war_mage_1_2_or_3
-  implementation: dnd2024:item_wand_of_the_war_mage_1_2_or_3
-  parameters:
-    equipment_state: held
-    variants:
-    - rarity: uncommon
-      spell_attack_bonus: 1
-    - rarity: rare
-      spell_attack_bonus: 2
-    - rarity: very_rare
-      spell_attack_bonus: 3
-    spell_attacks:
-      ignore_cover:
-      - half
-    attunement:
-      required: true
-      eligibility:
-        spellcaster: true
-splat_contracts:
-- id: dnd2024:item_wand_of_the_war_mage_1_2_or_3
-  inputs:
-    user:
-      type: participant
-      required: true
-    item:
-      type: item_instance
-      required: true
-  outputs:
-  - modifiers
-  events:
-  - equipment.state_changed
-  capabilities:
-  - equipment
-  - derived_statistics
-splat_conversion:
-  status: specified
-  category: magic_item
-  source_sha256: f0c9874fa6aecbc1bf9febbfd779f1633faa8838547ebcdeed54ab673ae3c38a
-  source_path: builtin/srd-5.2.1/magic_item/wand_of_the_war_mage_1_2_or_3.md
-  pages:
-  - 251
-  engine_gaps: &id001
-  - dnd2024:item_wand_of_the_war_mage_1_2_or_3
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/items_1.md
-  specification_sha256: e990663a3a18af47aaa937fb9e19453ef1f79bee4d3f6990c2fd911d6eff710f
-splat_clauses:
-- key: source_rules
-  text: '# Wand of the War Mage, +1, +2, or +3 Wand, Uncommon (+1), Rare (+2), or Very Rare (+3) (Requires
-    Attunement by a Spellcaster) While holding this wand, you gain a bonus to spell attack rolls determined
-    by the wand’s rarity. In addition, you ignore Half Cover when making a spell attack roll.'
-  sha256: 021b430d821e79e13f41300edca532763c7b58bb108ad4167414a0a376e55f08
-  status: contract_specified
-splat_requires_mechanics: *id001
 ---
 
 # Wand of the War Mage, +1, +2, or +3
+
+## Source text
 
 <!-- SRD page 251 -->
 
@@ -85,3 +26,65 @@ dition, you ignore Half Cover when making a spell\
 attack roll.\
 
 Original layout: [[../../srd-5.2.1/pages/251|page 251]].
+
+## Item
+
+<!-- splat:values path=splat_item -->
+
+| Field | Value |
+| --- | --- |
+| ` category ` | ` wand ` |
+| ` rarity ` | ` uncommon ` |
+
+### Equipment
+
+<!-- splat:values path=splat_item/equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` attunement ` | ` none ` |
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:items/wand_of_the_war_mage_1_2_or_3 ` |
+| ` implementation ` | ` dnd2024:item_wand_of_the_war_mage_1_2_or_3 ` |
+
+### Parameters
+
+<!-- splat:values path=splat_rule/parameters -->
+
+| Field | Value |
+| --- | --- |
+| ` equipment_state ` | ` held ` |
+
+#### Variants
+
+<!-- splat:rows path=splat_rule/parameters/variants -->
+
+| Row | rarity | spell_attack_bonus |
+| --- | --- | --- |
+| ` 0 ` | ` uncommon ` | ` 1 ` |
+| ` 1 ` | ` rare ` | ` 2 ` |
+| ` 2 ` | ` very_rare ` | ` 3 ` |
+
+#### Spell attacks
+
+<!-- splat:values path=splat_rule/parameters/spell_attacks -->
+
+| Field | Value |
+| --- | --- |
+| ` ignore_cover ` | ` ["half"] ` |
+
+#### Attunement
+
+<!-- splat:yaml path=splat_rule/parameters/attunement -->
+
+```yaml
+required: true
+eligibility:
+  spellcaster: true
+```

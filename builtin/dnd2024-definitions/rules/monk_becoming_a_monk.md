@@ -10,30 +10,26 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 49
   url: https://www.dndbeyond.com/srd
-splat_rule:
-  mechanic: dnd2024:rules/monk_becoming_a_monk
-  parameters: {}
-splat_conversion:
-  status: informational
-  category: rule
-  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
-  source_path: builtin/srd-5.2.1/source.pdf
-  pages:
-  - 49
-  engine_gaps: []
-  conversion_gaps: []
-  execution_profiles: []
-  research_path: docs/research/srd-conversion/other_rules_3.md
-  specification_sha256: 7162b4245fd928ad583a5eda474d1384d76e89b9edd108166657fbc1afcddda9
-  parent_name: Monk
-  line_span:
-    first: 4110
-    count: 1
-splat_clauses:
-- key: source_rules
-  text: '# Becoming a Monk …'
-  sha256: 5fa2bedbc78d67216af5ad06f58a70bf9d1a2371dd0634da5a7058f5080eea5b
-  status: informational
 ---
 
 # Becoming a Monk …
+
+## Source text
+
+
+
+## Rule
+
+<!-- splat:values path=splat_rule -->
+
+| Field | Value |
+| --- | --- |
+| ` mechanic ` | ` dnd2024:rules/monk_becoming_a_monk ` |
+
+### Parameters
+
+<!-- splat:yaml path=splat_rule/parameters -->
+
+```yaml
+{}
+```
