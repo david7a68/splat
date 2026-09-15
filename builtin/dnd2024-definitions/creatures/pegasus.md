@@ -102,33 +102,60 @@ Original layout: [[../../srd-5.2.1/pages/313|page 313]].
 
 ##### Hooves
 
-<!-- splat:yaml path=splat_rule/parameters/features/hooves -->
+<!-- splat:values path=splat_rule/parameters/features/hooves -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/hooves/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 6
-  reach_ft: 5
-hit:
-  damage:
-  - average: 7
-    roll:
-      count: 1
-      sides: 6
-      modifier: 4
-    type: bludgeoning
-  - average: 5
-    roll:
-      count: 2
-      sides: 4
-      modifier: 0
-    type: radiant
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 6
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/hooves/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 7 ` | ` 1 ` | ` 6 ` | ` 4 ` | ` Bludgeoning ` |
+| ` row_2 ` | ` 5 ` | ` 2 ` | ` 4 ` | ` 0 ` | ` Radiant ` |
 
 #### Skill totals
 

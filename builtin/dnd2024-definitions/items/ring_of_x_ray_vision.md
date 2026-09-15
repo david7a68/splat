@@ -72,29 +72,52 @@ Original layout: [[../../srd-5.2.1/pages/239|page 239]], [[../../srd-5.2.1/pages
 
 #### Activate
 
-<!-- splat:yaml path=splat_rule/parameters/activate -->
+<!-- splat:values path=splat_rule/parameters/activate -->
 
-```yaml
-action: magic
-duration:
-  amount: 1
-  unit: minute
-range_ft: 30
-objects_appear_transparent: true
-light_passes_through_for_user_vision: true
-penetration_limits:
-- material: stone
-  thickness_inches: 12
-- material: common_metal
-  thickness_inches: 1
-- material: wood
-  thickness_inches: 36
-- material: dirt
-  thickness_inches: 36
-blocked_by:
-- thicker_substances
-- any_sheet_of_lead
-```
+| Field | Value |
+| --- | --- |
+| ` action ` | ` magic ` |
+| ` range_ft ` | ` 30 ` |
+| ` objects_appear_transparent ` | ` true ` |
+| ` light_passes_through_for_user_vision ` | ` true ` |
+| ` blocked_by ` | ` ["thicker_substances", "any_sheet_of_lead"] ` |
+
+##### Duration
+
+<!-- splat:values path=splat_rule/parameters/activate/duration -->
+
+| Field | Value |
+| --- | --- |
+| ` amount ` | ` 1 ` |
+| ` unit ` | ` minute ` |
+
+##### Penetration limits
+
+<!-- splat:table
+path: splat_rule/parameters/activate/penetration_limits
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Material:
+    path: material
+    type: symbol
+  Thickness inches:
+    path: thickness_inches
+    type: integer
+-->
+
+| Key | Material | Thickness inches |
+| --- | --- | --- |
+| ` row_1 ` | ` Stone ` | ` 12 ` |
+| ` row_2 ` | ` Common metal ` | ` 1 ` |
+| ` row_3 ` | ` Wood ` | ` 36 ` |
+| ` row_4 ` | ` Dirt ` | ` 36 ` |
 
 #### Additional uses before long rest
 

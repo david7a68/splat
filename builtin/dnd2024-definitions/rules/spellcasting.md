@@ -53,14 +53,37 @@ Cantrip Village, town, or city 30 GP\
 
 #### Service costs
 
-<!-- splat:rows path=splat_rule/parameters/service_costs -->
+<!-- splat:table
+path: splat_rule/parameters/service_costs
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+columns:
+  Key:
+    type: key
+  Spell levels:
+    path: spell_levels
+    type: yaml
+  Settlements:
+    path: settlements
+    type: yaml
+  Cost gp:
+    path: cost_gp
+    type: integer
+-->
 
-| Row | spell_levels | settlements | cost_gp |
+| Key | Spell levels | Settlements | Cost gp |
 | --- | --- | --- | --- |
-| ` 0 ` | ` [0, 0] ` | ` ["village", "town", "city"] ` | ` 30 ` |
-| ` 1 ` | ` [1, 1] ` | ` ["village", "town", "city"] ` | ` 50 ` |
-| ` 2 ` | ` [2, 2] ` | ` ["village", "town", "city"] ` | ` 200 ` |
-| ` 3 ` | ` [3, 3] ` | ` ["town", "city"] ` | ` 300 ` |
-| ` 4 ` | ` [4, 5] ` | ` ["town", "city"] ` | ` 2000 ` |
-| ` 5 ` | ` [6, 8] ` | ` ["city"] ` | ` 20000 ` |
-| ` 6 ` | ` [9, 9] ` | ` ["city"] ` | ` 100000 ` |
+| ` row_1 ` | ` [0, 0] ` | ` ["village", "town", "city"] ` | ` 30 ` |
+| ` row_2 ` | ` [1, 1] ` | ` ["village", "town", "city"] ` | ` 50 ` |
+| ` row_3 ` | ` [2, 2] ` | ` ["village", "town", "city"] ` | ` 200 ` |
+| ` row_4 ` | ` [3, 3] ` | ` ["town", "city"] ` | ` 300 ` |
+| ` row_5 ` | ` [4, 5] ` | ` ["town", "city"] ` | ` 2000 ` |
+| ` row_6 ` | ` [6, 8] ` | ` ["city"] ` | ` 20000 ` |
+| ` row_7 ` | ` [9, 9] ` | ` ["city"] ` | ` 100000 ` |

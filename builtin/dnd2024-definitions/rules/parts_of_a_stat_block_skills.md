@@ -45,12 +45,31 @@ might apply.\
 
 #### Skill bonus
 
-<!-- splat:yaml path=splat_rule/parameters/skill_bonus -->
+<!-- splat:values path=splat_rule/parameters/skill_bonus -->
 
-```yaml
-op: add
-args:
-- variable: ability_modifier
-- variable: proficiency_bonus
-- variable: other_modifiers
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/skill_bonus/args
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Variable:
+    path: variable
+    type: symbol
+-->
+
+| Key | Variable |
+| --- | --- |
+| ` row_1 ` | ` Ability modifier ` |
+| ` row_2 ` | ` Proficiency bonus ` |
+| ` row_3 ` | ` Other modifiers ` |

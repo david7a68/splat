@@ -84,20 +84,44 @@ Original layout: [[../../srd-5.2.1/pages/113|page 113]].
 
 #### Wall
 
-<!-- splat:yaml path=splat_rule/parameters/wall -->
+<!-- splat:values path=splat_rule/parameters/wall -->
 
-```yaml
-choices:
-- shape: straight
-  max_length_feet: 100
-- shape: ring
-  max_diameter_feet: 60
-height_feet: 20
-thickness_feet: 5
-cover: three_quarters
-difficult_terrain: true
-duration: spell_duration
-```
+| Field | Value |
+| --- | --- |
+| ` height_feet ` | ` 20 ` |
+| ` thickness_feet ` | ` 5 ` |
+| ` cover ` | ` three_quarters ` |
+| ` difficult_terrain ` | ` true ` |
+| ` duration ` | ` spell_duration ` |
+
+##### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/wall/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Shape:
+    path: shape
+    type: symbol
+  Max length feet:
+    path: max_length_feet
+    type: integer
+    optional: true
+  Max diameter feet:
+    path: max_diameter_feet
+    type: integer
+    optional: true
+-->
+
+| Key | Shape | Max length feet | Max diameter feet |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Straight ` | ` 100 ` |  |
+| ` row_2 ` | ` Ring ` |  | ` 60 ` |
 
 #### Damage triggers
 

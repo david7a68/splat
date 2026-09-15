@@ -99,59 +99,93 @@ tation, during which you retain consciousness.\
 
 #### Elven lineage
 
-<!-- splat:yaml path=splat_rule/parameters/elven_lineage -->
+<!-- splat:values path=splat_rule/parameters/elven_lineage -->
+
+| Field | Value |
+| --- | --- |
+| ` level_basis ` | ` character_level ` |
+
+##### Choice
+
+<!-- splat:values path=splat_rule/parameters/elven_lineage/choice -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/elven_lineage/choice/options
+key: Variant
+order:
+- drow
+- high_elf
+- wood_elf
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Level 1 darkvision feet:
+    path: level_1/darkvision_feet
+    type: integer
+    optional: true
+  Level 1 cantrip:
+    path: level_1/cantrip
+    type: reference
+  Level 3 spell:
+    path: level_3_spell
+    type: reference
+  Level 5 spell:
+    path: level_5_spell
+    type: reference
+  Level 1 replace cantrip event:
+    path: level_1/replace_cantrip/event
+    type: string
+    optional: true
+  Level 1 replace cantrip list:
+    path: level_1/replace_cantrip/list
+    type: symbol
+    optional: true
+  Level 1 replace cantrip maximum:
+    path: level_1/replace_cantrip/maximum
+    type: integer
+    optional: true
+  Level 1 speed feet:
+    path: level_1/speed_feet
+    type: integer
+    optional: true
+-->
+
+| Variant | Level 1 darkvision feet | Level 1 cantrip | Level 3 spell | Level 5 spell | Level 1 replace cantrip event | Level 1 replace cantrip list | Level 1 replace cantrip maximum | Level 1 speed feet |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` Drow ` | ` 120 ` | [Dancing Lights](<../spells/dancing_lights.md> "dnd2024:spells/dancing_lights") | [Faerie Fire](<../spells/faerie_fire.md> "dnd2024:spells/faerie_fire") | [Darkness](<../spells/darkness.md> "dnd2024:spells/darkness") |  |  |  |  |
+| ` High elf ` |  | [Prestidigitation](<../spells/prestidigitation.md> "dnd2024:spells/prestidigitation") | [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | [Misty Step](<../spells/misty_step.md> "dnd2024:spells/misty_step") | ` rest.long_rest_completed ` | ` Wizard ` | ` 1 ` |  |
+| ` Wood elf ` |  | [Druidcraft](<../spells/druidcraft.md> "dnd2024:spells/druidcraft") | [Longstrider](<../spells/longstrider.md> "dnd2024:spells/longstrider") | [Pass without Trace](<../spells/pass_without_trace.md> "dnd2024:spells/pass_without_trace") |  |  |  | ` 35 ` |
+
+##### Spellcasting ability choice
+
+<!-- splat:values path=splat_rule/parameters/elven_lineage/spellcasting_ability_choice -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` options ` | ` ["intelligence", "wisdom", "charisma"] ` |
+
+##### Leveled spell grants
+
+<!-- splat:yaml path=splat_rule/parameters/elven_lineage/leveled_spell_grants -->
 
 ```yaml
-choice:
-  count: 1
-  options:
-  - id: drow
-    level_1:
-      darkvision_feet: 120
-      cantrip:
-        key: dnd2024:spells/dancing_lights
-    level_3_spell:
-      key: dnd2024:spells/faerie_fire
-    level_5_spell:
-      key: dnd2024:spells/darkness
-  - id: high_elf
-    level_1:
-      cantrip:
-        key: dnd2024:spells/prestidigitation
-      replace_cantrip:
-        event: rest.long_rest_completed
-        list: wizard
-        maximum: 1
-    level_3_spell:
-      key: dnd2024:spells/detect_magic
-    level_5_spell:
-      key: dnd2024:spells/misty_step
-  - id: wood_elf
-    level_1:
-      speed_feet: 35
-      cantrip:
-        key: dnd2024:spells/druidcraft
-    level_3_spell:
-      key: dnd2024:spells/longstrider
-    level_5_spell:
-      key: dnd2024:spells/pass_without_trace
-level_basis: character_level
-spellcasting_ability_choice:
-  count: 1
-  options:
-  - intelligence
-  - wisdom
-  - charisma
-leveled_spell_grants:
-  always_prepared: true
-  each_spell_free_cast:
-    spell_slot_cost: 0
-    uses:
-      maximum: 1
-      recover:
-        event: rest.long_rest_completed
-        amount: all
-  can_use_appropriate_spell_slots: true
+always_prepared: true
+each_spell_free_cast:
+  spell_slot_cost: 0
+  uses:
+    maximum: 1
+    recover:
+      event: rest.long_rest_completed
+      amount: all
+can_use_appropriate_spell_slots: true
 ```
 
 #### Fey ancestry

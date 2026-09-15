@@ -157,55 +157,39 @@ recovery:
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- cure_wounds
+- daylight
+- death_ward
+- detect_magic
+- scrying
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Level:
+    path: level
+    type: integer
+    optional: true
+  Charge cost:
+    path: charge_cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: integer
+    optional: true
+-->
 
-| Row | level | charge_cost | save_dc |
+| Spell | Level | Charge cost | Save dc |
 | --- | --- | --- | --- |
-| ` 0 ` | ` 9 ` | ` 4 ` |  |
-| ` 1 ` |  | ` 1 ` |  |
-| ` 2 ` |  | ` 2 ` |  |
-| ` 3 ` |  | ` 0 ` |  |
-| ` 4 ` |  | ` 3 ` | ` 18 ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/cure_wounds ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/daylight ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/death_ward ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/3/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/detect_magic ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/4/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/scrying ` |
+| [Cure Wounds](<../spells/cure_wounds.md> "dnd2024:spells/cure_wounds") | ` 9 ` | ` 4 ` |  |
+| [Daylight](<../spells/daylight.md> "dnd2024:spells/daylight") |  | ` 1 ` |  |
+| [Death Ward](<../spells/death_ward.md> "dnd2024:spells/death_ward") |  | ` 2 ` |  |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") |  | ` 0 ` |  |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") |  | ` 3 ` | ` 18 ` |
 
 #### Call dragons
 
@@ -228,13 +212,35 @@ cooldown:
 
 #### Object defense
 
-<!-- splat:yaml path=splat_rule/parameters/object_defense -->
+<!-- splat:values path=splat_rule/parameters/object_defense -->
 
-```yaml
-ac: 20
-damage_destroys_from:
-- weapon_magic_bonus: 3
-- spell:
-    key: dnd2024:spells/disintegrate
-immune_to_all_other_harm: true
-```
+| Field | Value |
+| --- | --- |
+| ` ac ` | ` 20 ` |
+| ` immune_to_all_other_harm ` | ` true ` |
+
+##### Damage destroys from
+
+<!-- splat:table
+path: splat_rule/parameters/object_defense/damage_destroys_from
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Weapon magic bonus:
+    path: weapon_magic_bonus
+    type: integer
+    optional: true
+  Spell:
+    path: spell
+    type: reference
+    optional: true
+-->
+
+| Key | Weapon magic bonus | Spell |
+| --- | --- | --- |
+| ` row_1 ` | ` 3 ` |  |
+| ` row_2 ` |  | [Disintegrate](<../spells/disintegrate.md> "dnd2024:spells/disintegrate") |

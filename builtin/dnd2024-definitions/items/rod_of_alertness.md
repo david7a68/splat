@@ -81,26 +81,37 @@ Original layout: [[../../srd-5.2.1/pages/241|page 241]].
 
 #### While held
 
-<!-- splat:yaml path=splat_rule/parameters/while_held -->
+<!-- splat:values path=splat_rule/parameters/while_held -->
 
-```yaml
-advantage:
-- wisdom_perception
-- initiative
-spells:
-- spell:
-    key: dnd2024:spells/detect_evil_and_good
-  usage: at_will
-- spell:
-    key: dnd2024:spells/detect_magic
-  usage: at_will
-- spell:
-    key: dnd2024:spells/detect_poison_and_disease
-  usage: at_will
-- spell:
-    key: dnd2024:spells/see_invisibility
-  usage: at_will
-```
+| Field | Value |
+| --- | --- |
+| ` advantage ` | ` ["wisdom_perception", "initiative"] ` |
+
+##### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/while_held/spells
+key: Spell
+order:
+- detect_evil_and_good
+- detect_magic
+- detect_poison_and_disease
+- see_invisibility
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Usage:
+    path: usage
+    type: symbol
+-->
+
+| Spell | Usage |
+| --- | --- |
+| [Detect Evil and Good](<../spells/detect_evil_and_good.md> "dnd2024:spells/detect_evil_and_good") | ` At will ` |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |
+| [Detect Poison and Disease](<../spells/detect_poison_and_disease.md> "dnd2024:spells/detect_poison_and_disease") | ` At will ` |
+| [See Invisibility](<../spells/see_invisibility.md> "dnd2024:spells/see_invisibility") | ` At will ` |
 
 #### Protective aura
 

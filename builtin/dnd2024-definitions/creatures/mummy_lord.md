@@ -250,46 +250,85 @@ sequence:
 
 ##### Rotting fist
 
-<!-- splat:yaml path=splat_rule/parameters/features/rotting_fist -->
+<!-- splat:values path=splat_rule/parameters/features/rotting_fist -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/rotting_fist/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 9
-  reach_ft: 5
-hit:
-  damage:
-  - average: 15
-    roll:
-      count: 2
-      sides: 10
-      modifier: 4
-    type: bludgeoning
-  - average: 10
-    roll:
-      count: 3
-      sides: 6
-      modifier: 0
-    type: necrotic
-  curse:
-    target_kind: creature
-    can_regain_hp: false
-    long_rest_benefits: false
-    maximum_hp_reduction:
-      interval_seconds: 86400
-      roll:
-        count: 3
-        sides: 6
-        modifier: 0
-  on_reduced_to_zero_hp:
-    die: true
-    turn_to_dust: true
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 9
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/rotting_fist/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 15 ` | ` 2 ` | ` 10 ` | ` 4 ` | ` Bludgeoning ` |
+| ` row_2 ` | ` 10 ` | ` 3 ` | ` 6 ` | ` 0 ` | ` Necrotic ` |
+
+###### Curse
+
+<!-- splat:yaml path=splat_rule/parameters/features/rotting_fist/hit/curse -->
+
+```yaml
+target_kind: creature
+can_regain_hp: false
+long_rest_benefits: false
+maximum_hp_reduction:
+  interval_seconds: 86400
+  roll:
+    count: 3
+    sides: 6
+    modifier: 0
+```
+
+###### On reduced to zero hp
+
+<!-- splat:values path=splat_rule/parameters/features/rotting_fist/hit/on_reduced_to_zero_hp -->
+
+| Field | Value |
+| --- | --- |
+| ` die ` | ` true ` |
+| ` turn_to_dust ` | ` true ` |
 
 ##### Channel negative energy
 
@@ -347,49 +386,61 @@ success:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-operation: spellcasting
-ability: wisdom
-components_waived:
-- material
-save_dc: 17
-supplied_spell_attack_total: 9
-options:
-- spell:
-    key: dnd2024:spells/dispel_magic
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/thaumaturgy
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/animate_dead
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/harm
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/insect_plague
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-  cast_level: 7
-material_components_available: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` wisdom ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 17 ` |
+| ` supplied_spell_attack_total ` | ` 9 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- dispel_magic
+- thaumaturgy
+- animate_dead
+- harm
+- insect_plague
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Use pool | Recovery | Cast level |
+| --- | --- | --- | --- | --- | --- |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") | ` At will ` |  |  |  |  |
+| [Thaumaturgy](<../spells/thaumaturgy.md> "dnd2024:spells/thaumaturgy") | ` At will ` |  |  |  |  |
+| [Animate Dead](<../spells/animate_dead.md> "dnd2024:spells/animate_dead") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |  |
+| [Harm](<../spells/harm.md> "dnd2024:spells/harm") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |  |
+| [Insect Plague](<../spells/insect_plague.md> "dnd2024:spells/insect_plague") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | ` 7 ` |
 
 ##### Whirlwind of sand
 

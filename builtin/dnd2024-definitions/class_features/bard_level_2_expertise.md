@@ -38,30 +38,36 @@ your skill proficiencies of your choice.\
 
 #### Expertise grants
 
-<!-- splat:rows path=splat_rule/parameters/expertise_grants -->
+<!-- splat:table
+path: splat_rule/parameters/expertise_grants
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Bard level:
+    path: bard_level
+    type: integer
+  Count:
+    path: count
+    type: integer
+  Eligible proficient:
+    path: eligible/proficient
+    type: boolean
+  Eligible expertise:
+    path: eligible/expertise
+    type: boolean
+  Grant:
+    path: grant
+    type: symbol
+-->
 
-| Row | bard_level | count | grant |
-| --- | --- | --- | --- |
-| ` 0 ` | ` 2 ` | ` 2 ` | ` expertise ` |
-| ` 1 ` | ` 9 ` | ` 2 ` | ` expertise ` |
-
-##### Eligible
-
-<!-- splat:values path=splat_rule/parameters/expertise_grants/0/eligible -->
-
-| Field | Value |
-| --- | --- |
-| ` proficient ` | ` true ` |
-| ` expertise ` | ` false ` |
-
-##### Eligible
-
-<!-- splat:values path=splat_rule/parameters/expertise_grants/1/eligible -->
-
-| Field | Value |
-| --- | --- |
-| ` proficient ` | ` true ` |
-| ` expertise ` | ` false ` |
+| Key | Bard level | Count | Eligible proficient | Eligible expertise | Grant |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 2 ` | ` 2 ` | true | false | ` Expertise ` |
+| ` row_2 ` | ` 9 ` | ` 2 ` | true | false | ` Expertise ` |
 
 #### Class scope
 

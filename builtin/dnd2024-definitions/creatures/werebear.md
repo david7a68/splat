@@ -286,22 +286,45 @@ allowed_forms:
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
 
-```yaml
-economy: bonus_action
-op: shapechange
-equipment_transformed: false
-statistics_preserved_except:
-- size
-choices:
-- form: hybrid
-  size: large
-  animal: bear
-- form: bear
-  size: large
-- form: true_humanoid
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` shapechange ` |
+| ` equipment_transformed ` | ` false ` |
+| ` statistics_preserved_except ` | ` ["size"] ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/choices
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Form:
+    path: form
+    type: symbol
+  Size:
+    path: size
+    type: symbol
+    optional: true
+  Animal:
+    path: animal
+    type: symbol
+    optional: true
+-->
+
+| Key | Form | Size | Animal |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Hybrid ` | ` Large ` | ` Bear ` |
+| ` row_2 ` | ` Bear ` | ` Large ` |  |
+| ` row_3 ` | ` True humanoid ` |  |  |
 
 ##### Multiattack
 

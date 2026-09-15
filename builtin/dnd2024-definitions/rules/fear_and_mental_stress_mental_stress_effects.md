@@ -81,49 +81,35 @@ character’s next turn.\
 
 #### Example effects
 
-<!-- splat:rows path=splat_rule/parameters/example_effects -->
+<!-- splat:table
+path: splat_rule/parameters/example_effects
+key: Variant
+order:
+- hallucinogenic_substance
+- fiendish_idol
+- far_realm_trap
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Save dc:
+    path: save_dc
+    type: integer
+  Damage dice:
+    path: damage_dice
+    type: dice
+  Planar displacement plane:
+    path: planar_displacement/plane
+    type: symbol
+    optional: true
+  Planar displacement until:
+    path: planar_displacement/until
+    type: symbol
+    optional: true
+-->
 
-| Row | id | save_dc |
-| --- | --- | --- |
-| ` 0 ` | ` hallucinogenic_substance ` | ` 10 ` |
-| ` 1 ` | ` fiendish_idol ` | ` 15 ` |
-| ` 2 ` | ` far_realm_trap ` | ` 20 ` |
-
-##### Damage dice
-
-<!-- splat:values path=splat_rule/parameters/example_effects/0/damage_dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 1 ` |
-| ` sides ` | ` 6 ` |
-| ` add ` | ` 0 ` |
-
-##### Damage dice
-
-<!-- splat:values path=splat_rule/parameters/example_effects/1/damage_dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 3 ` |
-| ` sides ` | ` 6 ` |
-| ` add ` | ` 0 ` |
-
-##### Damage dice
-
-<!-- splat:values path=splat_rule/parameters/example_effects/2/damage_dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 9 ` |
-| ` sides ` | ` 6 ` |
-| ` add ` | ` 0 ` |
-
-##### Planar displacement
-
-<!-- splat:values path=splat_rule/parameters/example_effects/2/planar_displacement -->
-
-| Field | Value |
-| --- | --- |
-| ` plane ` | ` far_realm ` |
-| ` until ` | ` target_next_turn_end ` |
+| Variant | Save dc | Damage dice | Planar displacement plane | Planar displacement until |
+| --- | --- | --- | --- | --- |
+| ` Hallucinogenic substance ` | ` 10 ` | ` 1d6 ` |  |  |
+| ` Fiendish idol ` | ` 15 ` | ` 3d6 ` |  |  |
+| ` Far realm trap ` | ` 20 ` | ` 9d6 ` | ` Far realm ` | ` Target next turn end ` |

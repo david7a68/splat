@@ -205,57 +205,69 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: intelligence
-  waived_components:
-  - somatic
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/mage_hand
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/minor_illusion
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/water_breathing
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/detect_thoughts
-    uses:
-      count: 2
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/dimension_door
-    uses:
-      count: 2
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/hold_person
-    uses:
-      count: 2
-      recovery: long_rest
-    cast_level: 3
-  - spell:
-      key: dnd2024:spells/lightning_bolt
-    uses:
-      count: 2
-      recovery: long_rest
-    cast_level: 4
-  save_dc: 14
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` intelligence ` |
+| ` waived_components ` | ` ["somatic", "material"] ` |
+| ` save_dc ` | ` 14 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- detect_magic
+- mage_hand
+- minor_illusion
+- water_breathing
+- detect_thoughts
+- dimension_door
+- hold_person
+- lightning_bolt
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+-->
+
+| Spell | Uses unlimited | Uses count | Uses recovery | Cast level |
+| --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |  |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | true |  |  |  |
+| [Minor Illusion](<../spells/minor_illusion.md> "dnd2024:spells/minor_illusion") | true |  |  |  |
+| [Water Breathing](<../spells/water_breathing.md> "dnd2024:spells/water_breathing") | true |  |  |  |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") |  | ` 2 ` | ` Long rest ` |  |
+| [Dimension Door](<../spells/dimension_door.md> "dnd2024:spells/dimension_door") |  | ` 2 ` | ` Long rest ` |  |
+| [Hold Person](<../spells/hold_person.md> "dnd2024:spells/hold_person") |  | ` 2 ` | ` Long rest ` | ` 3 ` |
+| [Lightning Bolt](<../spells/lightning_bolt.md> "dnd2024:spells/lightning_bolt") |  | ` 2 ` | ` Long rest ` | ` 4 ` |
 
 ##### Fiendish restoration
 

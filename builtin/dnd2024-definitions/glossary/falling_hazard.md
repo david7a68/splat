@@ -73,23 +73,52 @@ dice_count:
 
 #### Liquid landing
 
-<!-- splat:yaml path=splat_rule/parameters/liquid_landing -->
+<!-- splat:values path=splat_rule/parameters/liquid_landing -->
 
-```yaml
-eligible_liquids: any
-optional: true
-cost: reaction
-check:
-  chooser: subject
-  options:
-  - ability: strength
-    skill: athletics
-  - ability: dexterity
-    skill: acrobatics
-  dc: 15
-success:
-  entry_orientation:
-  - head_first
-  - feet_first
-  fall_damage_multiplier: 0.5
-```
+| Field | Value |
+| --- | --- |
+| ` eligible_liquids ` | ` any ` |
+| ` optional ` | ` true ` |
+| ` cost ` | ` reaction ` |
+
+##### Check
+
+<!-- splat:values path=splat_rule/parameters/liquid_landing/check -->
+
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` subject ` |
+| ` dc ` | ` 15 ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/liquid_landing/check/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Ability:
+    path: ability
+    type: symbol
+  Skill:
+    path: skill
+    type: symbol
+-->
+
+| Key | Ability | Skill |
+| --- | --- | --- |
+| ` row_1 ` | ` Strength ` | ` Athletics ` |
+| ` row_2 ` | ` Dexterity ` | ` Acrobatics ` |
+
+##### Success
+
+<!-- splat:values path=splat_rule/parameters/liquid_landing/success -->
+
+| Field | Value |
+| --- | --- |
+| ` entry_orientation ` | ` ["head_first", "feet_first"] ` |
+| ` fall_damage_multiplier ` | ` 0.5 ` |

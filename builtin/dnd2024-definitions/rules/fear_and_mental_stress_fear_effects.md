@@ -70,19 +70,38 @@ tion, or take a Bonus Action.\
 
 #### Dc choice
 
-<!-- splat:yaml path=splat_rule/parameters/dc_choice -->
+<!-- splat:values path=splat_rule/parameters/dc_choice -->
 
-```yaml
-actor: gm
-criterion: situation_terror
-examples:
-- situation: harmless_sarcophagus_apparition
-  dc: 10
-- situation: magical_trap_private_worst_fear_illusion
-  dc: 15
-- situation: abyss_portal_reveals_torment
-  dc: 20
-```
+| Field | Value |
+| --- | --- |
+| ` actor ` | ` gm ` |
+| ` criterion ` | ` situation_terror ` |
+
+##### Examples
+
+<!-- splat:table
+path: splat_rule/parameters/dc_choice/examples
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Situation:
+    path: situation
+    type: symbol
+  Dc:
+    path: dc
+    type: integer
+-->
+
+| Key | Situation | Dc |
+| --- | --- | --- |
+| ` row_1 ` | ` Harmless sarcophagus apparition ` | ` 10 ` |
+| ` row_2 ` | ` Magical trap private worst fear illusion ` | ` 15 ` |
+| ` row_3 ` | ` Abyss portal reveals torment ` | ` 20 ` |
 
 #### Default repeat save
 
@@ -95,17 +114,45 @@ examples:
 
 #### Optional riders
 
-<!-- splat:yaml path=splat_rule/parameters/optional_riders -->
+<!-- splat:values path=splat_rule/parameters/optional_riders -->
 
-```yaml
-actor: gm
-duration: while_frightened
-choices:
-- must_take_action: dash
-  movement_direction: away_from_fear_source
-- attacks_against_target: advantage
-- per_turn_choose_exactly_one:
-  - movement
-  - action
-  - bonus_action
-```
+| Field | Value |
+| --- | --- |
+| ` actor ` | ` gm ` |
+| ` duration ` | ` while_frightened ` |
+
+##### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/optional_riders/choices
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Must take action:
+    path: must_take_action
+    type: symbol
+    optional: true
+  Movement direction:
+    path: movement_direction
+    type: symbol
+    optional: true
+  Attacks against target:
+    path: attacks_against_target
+    type: symbol
+    optional: true
+  Per turn choose exactly one:
+    path: per_turn_choose_exactly_one
+    type: yaml
+    optional: true
+-->
+
+| Key | Must take action | Movement direction | Attacks against target | Per turn choose exactly one |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Dash ` | ` Away from fear source ` |  |  |
+| ` row_2 ` |  |  | ` Advantage ` |  |
+| ` row_3 ` |  |  |  | ` ["movement", "action", "bonus_action"] ` |

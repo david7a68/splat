@@ -63,55 +63,31 @@ These paladins share the following tenets:\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- oath_of_devotion_level_15_smite_of_protection
+- oath_of_devotion_level_20_holy_nimbus
+- oath_of_devotion_level_3_oath_of_devotion_spells
+- oath_of_devotion_level_3_sacred_weapon
+- oath_of_devotion_level_7_aura_of_devotion
+columns:
+  Item:
+    path: definition
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Item | Class level |
 | --- | --- |
-| ` 0 ` | ` 15 ` |
-| ` 1 ` | ` 20 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 7 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/oath_of_devotion_level_15_smite_of_protection ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/oath_of_devotion_level_20_holy_nimbus ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/oath_of_devotion_level_3_oath_of_devotion_spells ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/oath_of_devotion_level_3_sacred_weapon ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/oath_of_devotion_level_7_aura_of_devotion ` |
+| [Level 15: Smite of Protection](<../class_features/oath_of_devotion_level_15_smite_of_protection.md> "dnd2024:class_features/oath_of_devotion_level_15_smite_of_protection") | ` 15 ` |
+| [Level 20: Holy Nimbus](<../class_features/oath_of_devotion_level_20_holy_nimbus.md> "dnd2024:class_features/oath_of_devotion_level_20_holy_nimbus") | ` 20 ` |
+| [Level 3: Oath of Devotion Spells](<../class_features/oath_of_devotion_level_3_oath_of_devotion_spells.md> "dnd2024:class_features/oath_of_devotion_level_3_oath_of_devotion_spells") | ` 3 ` |
+| [Level 3: Sacred Weapon](<../class_features/oath_of_devotion_level_3_sacred_weapon.md> "dnd2024:class_features/oath_of_devotion_level_3_sacred_weapon") | ` 3 ` |
+| [Level 7: Aura of Devotion](<../class_features/oath_of_devotion_level_7_aura_of_devotion.md> "dnd2024:class_features/oath_of_devotion_level_7_aura_of_devotion") | ` 7 ` |
 
 #### Grant eligible features
 

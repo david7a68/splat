@@ -95,29 +95,46 @@ restore_points:
 
 #### Points to slot
 
-<!-- splat:yaml path=splat_rule/parameters/points_to_slot -->
+<!-- splat:values path=splat_rule/parameters/points_to_slot -->
 
-```yaml
-action: bonus_action
-create_slot_count: 1
-options:
-- slot_level: 1
-  point_cost: 2
-  minimum_sorcerer_level: 2
-- slot_level: 2
-  point_cost: 3
-  minimum_sorcerer_level: 3
-- slot_level: 3
-  point_cost: 5
-  minimum_sorcerer_level: 5
-- slot_level: 4
-  point_cost: 6
-  minimum_sorcerer_level: 7
-- slot_level: 5
-  point_cost: 7
-  minimum_sorcerer_level: 9
-slot_expires: actor.rest.long_completed
-```
+| Field | Value |
+| --- | --- |
+| ` action ` | ` bonus_action ` |
+| ` create_slot_count ` | ` 1 ` |
+| ` slot_expires ` | ` actor.rest.long_completed ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/points_to_slot/options
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Slot level:
+    path: slot_level
+    type: integer
+  Point cost:
+    path: point_cost
+    type: integer
+  Minimum sorcerer level:
+    path: minimum_sorcerer_level
+    type: integer
+-->
+
+| Key | Slot level | Point cost | Minimum sorcerer level |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 2 ` | ` 2 ` |
+| ` row_2 ` | ` 2 ` | ` 3 ` | ` 3 ` |
+| ` row_3 ` | ` 3 ` | ` 5 ` | ` 5 ` |
+| ` row_4 ` | ` 4 ` | ` 6 ` | ` 7 ` |
+| ` row_5 ` | ` 5 ` | ` 7 ` | ` 9 ` |
 
 #### Class scope
 

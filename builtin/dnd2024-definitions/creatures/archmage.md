@@ -185,93 +185,259 @@ steps:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` intelligence ` |
+| ` save_dc ` | ` 17 ` |
+| ` required_material_components_available ` | ` true ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- detect_magic
+- detect_thoughts
+- disguise_self
+- invisibility
+- light
+- mage_armor
+- mage_hand
+- prestidigitation
+- fly
+- lightning_bolt
+- cone_of_cold
+- mind_blank
+- scrying
+- teleport
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Precast:
+    path: precast
+    type: boolean
+    optional: true
+  Included in supplied ac:
+    path: included_in_supplied_ac
+    type: boolean
+    optional: true
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Spell | Frequency | Precast | Included in supplied ac | Uses | Resource scope | Recovery | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  |  |  | [Rules](#^splat-68a383d1-detect_magic "section:detect_magic") |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") | ` At will ` |  |  |  |  |  | [Rules](#^splat-68a383d1-detect_thoughts "section:detect_thoughts") |
+| [Disguise Self](<../spells/disguise_self.md> "dnd2024:spells/disguise_self") | ` At will ` |  |  |  |  |  | [Rules](#^splat-68a383d1-disguise_self "section:disguise_self") |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") | ` At will ` |  |  |  |  |  | [Rules](#^splat-68a383d1-invisibility "section:invisibility") |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | ` At will ` |  |  |  |  |  | [Rules](#^splat-68a383d1-light "section:light") |
+| [Mage Armor](<../spells/mage_armor.md> "dnd2024:spells/mage_armor") | ` At will ` | true | true |  |  |  | [Rules](#^splat-68a383d1-mage_armor "section:mage_armor") |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | ` At will ` |  |  |  |  |  | [Rules](#^splat-68a383d1-mage_hand "section:mage_hand") |
+| [Prestidigitation](<../spells/prestidigitation.md> "dnd2024:spells/prestidigitation") | ` At will ` |  |  |  |  |  | [Rules](#^splat-68a383d1-prestidigitation "section:prestidigitation") |
+| [Fly](<../spells/fly.md> "dnd2024:spells/fly") | ` Daily ` |  |  | ` 2 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-fly "section:fly") |
+| [Lightning Bolt](<../spells/lightning_bolt.md> "dnd2024:spells/lightning_bolt") | ` Daily ` |  |  | ` 2 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-lightning_bolt "section:lightning_bolt") |
+| [Cone of Cold](<../spells/cone_of_cold.md> "dnd2024:spells/cone_of_cold") | ` Daily ` |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-cone_of_cold "section:cone_of_cold") |
+| [Mind Blank](<../spells/mind_blank.md> "dnd2024:spells/mind_blank") | ` Daily ` | true |  | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-mind_blank "section:mind_blank") |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` Daily ` |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-scrying "section:scrying") |
+| [Teleport](<../spells/teleport.md> "dnd2024:spells/teleport") | ` Daily ` |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-teleport "section:teleport") |
+
+###### Detect magic
+
+^splat-68a383d1-detect_magic
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@detect_magic/cast_level -->
 
 ```yaml
-economy: action
-op: cast_spell_choice
-ability: intelligence
-spells:
-- spell:
-    key: dnd2024:spells/detect_magic
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/detect_thoughts
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/disguise_self
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/invisibility
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/light
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/mage_armor
-  frequency: at_will
-  precast: true
-  included_in_supplied_ac: true
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/mage_hand
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/prestidigitation
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/fly
-  frequency: daily
-  uses: 2
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/lightning_bolt
-  frequency: daily
-  uses: 2
-  resource_scope: per_spell
-  cast_level: 7
-  recovery: long_rest
-- spell:
-    key: dnd2024:spells/cone_of_cold
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  cast_level: 9
-  recovery: long_rest
-- spell:
-    key: dnd2024:spells/mind_blank
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  precast: true
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/scrying
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/teleport
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived: []
-save_dc: 17
-required_material_components_available: true
+spell_minimum
+```
+
+###### Detect thoughts
+
+^splat-68a383d1-detect_thoughts
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@detect_thoughts/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Disguise self
+
+^splat-68a383d1-disguise_self
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@disguise_self/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Invisibility
+
+^splat-68a383d1-invisibility
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@invisibility/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Light
+
+^splat-68a383d1-light
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@light/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Mage armor
+
+^splat-68a383d1-mage_armor
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@mage_armor/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Mage hand
+
+^splat-68a383d1-mage_hand
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@mage_hand/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Prestidigitation
+
+^splat-68a383d1-prestidigitation
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@prestidigitation/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Fly
+
+^splat-68a383d1-fly
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@fly/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Lightning bolt
+
+^splat-68a383d1-lightning_bolt
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@lightning_bolt/cast_level -->
+
+```yaml
+7
+```
+
+###### Cone of cold
+
+^splat-68a383d1-cone_of_cold
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@cone_of_cold/cast_level -->
+
+```yaml
+9
+```
+
+###### Mind blank
+
+^splat-68a383d1-mind_blank
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@mind_blank/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Scrying
+
+^splat-68a383d1-scrying
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@scrying/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Teleport
+
+^splat-68a383d1-teleport
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@teleport/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Components waived
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/components_waived -->
+
+```yaml
+[]
 ```
 
 ##### Misty step
@@ -293,24 +459,44 @@ cast_level: spell_minimum
 
 ##### Protective magic
 
-<!-- splat:yaml path=splat_rule/parameters/features/protective_magic -->
+<!-- splat:values path=splat_rule/parameters/features/protective_magic -->
 
-```yaml
-economy: reaction
-resource:
-  capacity: 3
-  recovery: long_rest
-  cost: 1
-op: cast_spell_choice
-choices:
-- spell:
-    key: dnd2024:spells/counterspell
-- spell:
-    key: dnd2024:spells/shield
-trigger: chosen_spell.trigger
-ability: intelligence
-save_dc: 17
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` reaction ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` trigger ` | ` chosen_spell.trigger ` |
+| ` ability ` | ` intelligence ` |
+| ` save_dc ` | ` 17 ` |
+
+###### Resource
+
+<!-- splat:values path=splat_rule/parameters/features/protective_magic/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` capacity ` | ` 3 ` |
+| ` recovery ` | ` long_rest ` |
+| ` cost ` | ` 1 ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/protective_magic/choices
+key: Spell
+order:
+- counterspell
+- shield
+columns:
+  Spell:
+    path: spell
+    type: reference
+-->
+
+| Spell |
+| --- |
+| [Counterspell](<../spells/counterspell.md> "dnd2024:spells/counterspell") |
+| [Shield](<../spells/shield.md> "dnd2024:spells/shield") |
 
 #### Skill totals
 

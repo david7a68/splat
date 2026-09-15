@@ -68,41 +68,497 @@ CR XP CR XP\
 
 #### Xp table
 
-<!-- splat:rows path=splat_rule/parameters/xp_table -->
+<!-- splat:table
+path: splat_rule/parameters/xp_table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+- row_17
+- row_18
+- row_19
+- row_20
+- row_21
+- row_22
+- row_23
+- row_24
+- row_25
+- row_26
+- row_27
+- row_28
+- row_29
+- row_30
+- row_31
+- row_32
+- row_33
+- row_34
+columns:
+  Key:
+    type: key
+  Xp:
+    path: xp
+    type: integer
+    nullable: true
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | cr | xp |
+| Key | Xp | Details |
 | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` null ` |
-| ` 1 ` | ` 0.125 ` | ` 25 ` |
-| ` 2 ` | ` 0.25 ` | ` 50 ` |
-| ` 3 ` | ` 0.5 ` | ` 100 ` |
-| ` 4 ` | ` 1 ` | ` 200 ` |
-| ` 5 ` | ` 2 ` | ` 450 ` |
-| ` 6 ` | ` 3 ` | ` 700 ` |
-| ` 7 ` | ` 4 ` | ` 1100 ` |
-| ` 8 ` | ` 5 ` | ` 1800 ` |
-| ` 9 ` | ` 6 ` | ` 2300 ` |
-| ` 10 ` | ` 7 ` | ` 2900 ` |
-| ` 11 ` | ` 8 ` | ` 3900 ` |
-| ` 12 ` | ` 9 ` | ` 5000 ` |
-| ` 13 ` | ` 10 ` | ` 5900 ` |
-| ` 14 ` | ` 11 ` | ` 7200 ` |
-| ` 15 ` | ` 12 ` | ` 8400 ` |
-| ` 16 ` | ` 13 ` | ` 10000 ` |
-| ` 17 ` | ` 14 ` | ` 11500 ` |
-| ` 18 ` | ` 15 ` | ` 13000 ` |
-| ` 19 ` | ` 16 ` | ` 15000 ` |
-| ` 20 ` | ` 17 ` | ` 18000 ` |
-| ` 21 ` | ` 18 ` | ` 20000 ` |
-| ` 22 ` | ` 19 ` | ` 22000 ` |
-| ` 23 ` | ` 20 ` | ` 25000 ` |
-| ` 24 ` | ` 21 ` | ` 33000 ` |
-| ` 25 ` | ` 22 ` | ` 41000 ` |
-| ` 26 ` | ` 23 ` | ` 50000 ` |
-| ` 27 ` | ` 24 ` | ` 62000 ` |
-| ` 28 ` | ` 25 ` | ` 75000 ` |
-| ` 29 ` | ` 26 ` | ` 90000 ` |
-| ` 30 ` | ` 27 ` | ` 105000 ` |
-| ` 31 ` | ` 28 ` | ` 120000 ` |
-| ` 32 ` | ` 29 ` | ` 135000 ` |
-| ` 33 ` | ` 30 ` | ` 155000 ` |
+| ` row_1 ` | null | [Rules](#^splat-67cb40b8-row_1 "section:row_1") |
+| ` row_2 ` | ` 25 ` | [Rules](#^splat-67cb40b8-row_2 "section:row_2") |
+| ` row_3 ` | ` 50 ` | [Rules](#^splat-67cb40b8-row_3 "section:row_3") |
+| ` row_4 ` | ` 100 ` | [Rules](#^splat-67cb40b8-row_4 "section:row_4") |
+| ` row_5 ` | ` 200 ` | [Rules](#^splat-67cb40b8-row_5 "section:row_5") |
+| ` row_6 ` | ` 450 ` | [Rules](#^splat-67cb40b8-row_6 "section:row_6") |
+| ` row_7 ` | ` 700 ` | [Rules](#^splat-67cb40b8-row_7 "section:row_7") |
+| ` row_8 ` | ` 1100 ` | [Rules](#^splat-67cb40b8-row_8 "section:row_8") |
+| ` row_9 ` | ` 1800 ` | [Rules](#^splat-67cb40b8-row_9 "section:row_9") |
+| ` row_10 ` | ` 2300 ` | [Rules](#^splat-67cb40b8-row_10 "section:row_10") |
+| ` row_11 ` | ` 2900 ` | [Rules](#^splat-67cb40b8-row_11 "section:row_11") |
+| ` row_12 ` | ` 3900 ` | [Rules](#^splat-67cb40b8-row_12 "section:row_12") |
+| ` row_13 ` | ` 5000 ` | [Rules](#^splat-67cb40b8-row_13 "section:row_13") |
+| ` row_14 ` | ` 5900 ` | [Rules](#^splat-67cb40b8-row_14 "section:row_14") |
+| ` row_15 ` | ` 7200 ` | [Rules](#^splat-67cb40b8-row_15 "section:row_15") |
+| ` row_16 ` | ` 8400 ` | [Rules](#^splat-67cb40b8-row_16 "section:row_16") |
+| ` row_17 ` | ` 10000 ` | [Rules](#^splat-67cb40b8-row_17 "section:row_17") |
+| ` row_18 ` | ` 11500 ` | [Rules](#^splat-67cb40b8-row_18 "section:row_18") |
+| ` row_19 ` | ` 13000 ` | [Rules](#^splat-67cb40b8-row_19 "section:row_19") |
+| ` row_20 ` | ` 15000 ` | [Rules](#^splat-67cb40b8-row_20 "section:row_20") |
+| ` row_21 ` | ` 18000 ` | [Rules](#^splat-67cb40b8-row_21 "section:row_21") |
+| ` row_22 ` | ` 20000 ` | [Rules](#^splat-67cb40b8-row_22 "section:row_22") |
+| ` row_23 ` | ` 22000 ` | [Rules](#^splat-67cb40b8-row_23 "section:row_23") |
+| ` row_24 ` | ` 25000 ` | [Rules](#^splat-67cb40b8-row_24 "section:row_24") |
+| ` row_25 ` | ` 33000 ` | [Rules](#^splat-67cb40b8-row_25 "section:row_25") |
+| ` row_26 ` | ` 41000 ` | [Rules](#^splat-67cb40b8-row_26 "section:row_26") |
+| ` row_27 ` | ` 50000 ` | [Rules](#^splat-67cb40b8-row_27 "section:row_27") |
+| ` row_28 ` | ` 62000 ` | [Rules](#^splat-67cb40b8-row_28 "section:row_28") |
+| ` row_29 ` | ` 75000 ` | [Rules](#^splat-67cb40b8-row_29 "section:row_29") |
+| ` row_30 ` | ` 90000 ` | [Rules](#^splat-67cb40b8-row_30 "section:row_30") |
+| ` row_31 ` | ` 105000 ` | [Rules](#^splat-67cb40b8-row_31 "section:row_31") |
+| ` row_32 ` | ` 120000 ` | [Rules](#^splat-67cb40b8-row_32 "section:row_32") |
+| ` row_33 ` | ` 135000 ` | [Rules](#^splat-67cb40b8-row_33 "section:row_33") |
+| ` row_34 ` | ` 155000 ` | [Rules](#^splat-67cb40b8-row_34 "section:row_34") |
+
+##### Row 1
+
+^splat-67cb40b8-row_1
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_1/cr -->
+
+```yaml
+0
+```
+
+##### Row 2
+
+^splat-67cb40b8-row_2
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_2/cr -->
+
+```yaml
+0.125
+```
+
+##### Row 3
+
+^splat-67cb40b8-row_3
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_3/cr -->
+
+```yaml
+0.25
+```
+
+##### Row 4
+
+^splat-67cb40b8-row_4
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_4/cr -->
+
+```yaml
+0.5
+```
+
+##### Row 5
+
+^splat-67cb40b8-row_5
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_5/cr -->
+
+```yaml
+1
+```
+
+##### Row 6
+
+^splat-67cb40b8-row_6
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_6/cr -->
+
+```yaml
+2
+```
+
+##### Row 7
+
+^splat-67cb40b8-row_7
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_7/cr -->
+
+```yaml
+3
+```
+
+##### Row 8
+
+^splat-67cb40b8-row_8
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_8/cr -->
+
+```yaml
+4
+```
+
+##### Row 9
+
+^splat-67cb40b8-row_9
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_9/cr -->
+
+```yaml
+5
+```
+
+##### Row 10
+
+^splat-67cb40b8-row_10
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_10/cr -->
+
+```yaml
+6
+```
+
+##### Row 11
+
+^splat-67cb40b8-row_11
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_11/cr -->
+
+```yaml
+7
+```
+
+##### Row 12
+
+^splat-67cb40b8-row_12
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_12/cr -->
+
+```yaml
+8
+```
+
+##### Row 13
+
+^splat-67cb40b8-row_13
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_13/cr -->
+
+```yaml
+9
+```
+
+##### Row 14
+
+^splat-67cb40b8-row_14
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_14/cr -->
+
+```yaml
+10
+```
+
+##### Row 15
+
+^splat-67cb40b8-row_15
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_15/cr -->
+
+```yaml
+11
+```
+
+##### Row 16
+
+^splat-67cb40b8-row_16
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_16/cr -->
+
+```yaml
+12
+```
+
+##### Row 17
+
+^splat-67cb40b8-row_17
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_17/cr -->
+
+```yaml
+13
+```
+
+##### Row 18
+
+^splat-67cb40b8-row_18
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_18/cr -->
+
+```yaml
+14
+```
+
+##### Row 19
+
+^splat-67cb40b8-row_19
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_19/cr -->
+
+```yaml
+15
+```
+
+##### Row 20
+
+^splat-67cb40b8-row_20
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_20/cr -->
+
+```yaml
+16
+```
+
+##### Row 21
+
+^splat-67cb40b8-row_21
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_21/cr -->
+
+```yaml
+17
+```
+
+##### Row 22
+
+^splat-67cb40b8-row_22
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_22/cr -->
+
+```yaml
+18
+```
+
+##### Row 23
+
+^splat-67cb40b8-row_23
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_23/cr -->
+
+```yaml
+19
+```
+
+##### Row 24
+
+^splat-67cb40b8-row_24
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_24/cr -->
+
+```yaml
+20
+```
+
+##### Row 25
+
+^splat-67cb40b8-row_25
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_25/cr -->
+
+```yaml
+21
+```
+
+##### Row 26
+
+^splat-67cb40b8-row_26
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_26/cr -->
+
+```yaml
+22
+```
+
+##### Row 27
+
+^splat-67cb40b8-row_27
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_27/cr -->
+
+```yaml
+23
+```
+
+##### Row 28
+
+^splat-67cb40b8-row_28
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_28/cr -->
+
+```yaml
+24
+```
+
+##### Row 29
+
+^splat-67cb40b8-row_29
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_29/cr -->
+
+```yaml
+25
+```
+
+##### Row 30
+
+^splat-67cb40b8-row_30
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_30/cr -->
+
+```yaml
+26
+```
+
+##### Row 31
+
+^splat-67cb40b8-row_31
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_31/cr -->
+
+```yaml
+27
+```
+
+##### Row 32
+
+^splat-67cb40b8-row_32
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_32/cr -->
+
+```yaml
+28
+```
+
+##### Row 33
+
+^splat-67cb40b8-row_33
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_33/cr -->
+
+```yaml
+29
+```
+
+##### Row 34
+
+^splat-67cb40b8-row_34
+
+###### Cr
+
+<!-- splat:yaml path=splat_rule/parameters/xp_table/@row_34/cr -->
+
+```yaml
+30
+```

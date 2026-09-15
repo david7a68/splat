@@ -157,332 +157,310 @@ recovery:
 
 #### Spell grants
 
-<!-- splat:rows path=splat_rule/parameters/spell_grants -->
+<!-- splat:table
+path: splat_rule/parameters/spell_grants
+key: Spell
+order:
+- arcane_lock
+- conjure_elemental
+- detect_magic
+- dispel_magic
+- enlarge_reduce
+- fireball
+- flaming_sphere
+- ice_storm
+- invisibility
+- knock
+- light
+- lightning_bolt
+- mage_hand
+- passwall
+- plane_shift
+- protection_from_evil_and_good
+- telekinesis
+- wall_of_fire
+- web
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Charge cost:
+    path: charge_cost
+    type: integer
+  Casting time:
+    path: casting_time
+    type: symbol
+  Method:
+    path: method
+    type: symbol
+  Slot cost:
+    path: slot_cost
+    type: integer
+  Components:
+    path: components
+    type: yaml
+  Range:
+    path: range
+    type: symbol
+  Duration:
+    path: duration
+    type: symbol
+  Concentration:
+    path: concentration
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | charge_cost | casting_time | method | slot_cost | level | range | duration | concentration |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 1 ` | ` 7 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 2 ` | ` 0 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 3 ` | ` 3 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 4 ` | ` 0 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 5 ` | ` 7 ` | ` spell_default ` | ` item ` | ` 0 ` | ` 7 ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 6 ` | ` 2 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 7 ` | ` 4 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 8 ` | ` 2 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 9 ` | ` 2 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 10 ` | ` 0 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 11 ` | ` 7 ` | ` spell_default ` | ` item ` | ` 0 ` | ` 7 ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 12 ` | ` 0 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 13 ` | ` 5 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 14 ` | ` 7 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 15 ` | ` 0 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 16 ` | ` 5 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 17 ` | ` 4 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 18 ` | ` 2 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
+| Spell | Charge cost | Casting time | Method | Slot cost | Components | Range | Duration | Concentration | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Arcane Lock](<../spells/arcane_lock.md> "dnd2024:spells/arcane_lock") | ` 0 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-arcane_lock "section:arcane_lock") |
+| [Conjure Elemental](<../spells/conjure_elemental.md> "dnd2024:spells/conjure_elemental") | ` 7 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-conjure_elemental "section:conjure_elemental") |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` 0 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-detect_magic "section:detect_magic") |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") | ` 3 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-dispel_magic "section:dispel_magic") |
+| [Enlarge/Reduce](<../spells/enlarge_reduce.md> "dnd2024:spells/enlarge_reduce") | ` 0 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-enlarge_reduce "section:enlarge_reduce") |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") | ` 7 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-fireball "section:fireball") |
+| [Flaming Sphere](<../spells/flaming_sphere.md> "dnd2024:spells/flaming_sphere") | ` 2 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-flaming_sphere "section:flaming_sphere") |
+| [Ice Storm](<../spells/ice_storm.md> "dnd2024:spells/ice_storm") | ` 4 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-ice_storm "section:ice_storm") |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") | ` 2 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-invisibility "section:invisibility") |
+| [Knock](<../spells/knock.md> "dnd2024:spells/knock") | ` 2 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-knock "section:knock") |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | ` 0 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-light "section:light") |
+| [Lightning Bolt](<../spells/lightning_bolt.md> "dnd2024:spells/lightning_bolt") | ` 7 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-lightning_bolt "section:lightning_bolt") |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | ` 0 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-mage_hand "section:mage_hand") |
+| [Passwall](<../spells/passwall.md> "dnd2024:spells/passwall") | ` 5 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-passwall "section:passwall") |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") | ` 7 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-plane_shift "section:plane_shift") |
+| [Protection from Evil and Good](<../spells/protection_from_evil_and_good.md> "dnd2024:spells/protection_from_evil_and_good") | ` 0 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-protection_from_evil_and_good "section:protection_from_evil_and_good") |
+| [Telekinesis](<../spells/telekinesis.md> "dnd2024:spells/telekinesis") | ` 5 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-telekinesis "section:telekinesis") |
+| [Wall of Fire](<../spells/wall_of_fire.md> "dnd2024:spells/wall_of_fire") | ` 4 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-wall_of_fire "section:wall_of_fire") |
+| [Web](<../spells/web.md> "dnd2024:spells/web") | ` 2 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-web "section:web") |
 
-##### Spell
+##### Arcane lock
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/0/spell -->
+^splat-af92c00a-arcane_lock
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/arcane_lock ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/0/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@arcane_lock/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Conjure elemental
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/1/spell -->
+^splat-af92c00a-conjure_elemental
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/conjure_elemental ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/1/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@conjure_elemental/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Detect magic
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/2/spell -->
+^splat-af92c00a-detect_magic
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/detect_magic ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/2/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@detect_magic/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Dispel magic
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/3/spell -->
+^splat-af92c00a-dispel_magic
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/dispel_magic ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/3/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@dispel_magic/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Enlarge reduce
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/4/spell -->
+^splat-af92c00a-enlarge_reduce
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/enlarge_reduce ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/4/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@enlarge_reduce/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Fireball
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/5/spell -->
+^splat-af92c00a-fireball
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fireball ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/5/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@fireball/level -->
 
 ```yaml
-[]
+7
 ```
 
-##### Spell
+##### Flaming sphere
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/6/spell -->
+^splat-af92c00a-flaming_sphere
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/flaming_sphere ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/6/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@flaming_sphere/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Ice storm
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/7/spell -->
+^splat-af92c00a-ice_storm
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/ice_storm ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/7/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@ice_storm/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Invisibility
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/8/spell -->
+^splat-af92c00a-invisibility
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/invisibility ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/8/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@invisibility/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Knock
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/9/spell -->
+^splat-af92c00a-knock
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/knock ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/9/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@knock/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Light
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/10/spell -->
+^splat-af92c00a-light
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/light ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/10/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@light/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Lightning bolt
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/11/spell -->
+^splat-af92c00a-lightning_bolt
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/lightning_bolt ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/11/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@lightning_bolt/level -->
 
 ```yaml
-[]
+7
 ```
 
-##### Spell
+##### Mage hand
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/12/spell -->
+^splat-af92c00a-mage_hand
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mage_hand ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/12/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@mage_hand/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Passwall
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/13/spell -->
+^splat-af92c00a-passwall
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/passwall ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/13/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@passwall/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Plane shift
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/14/spell -->
+^splat-af92c00a-plane_shift
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/plane_shift ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/14/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@plane_shift/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Protection from evil and good
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/15/spell -->
+^splat-af92c00a-protection_from_evil_and_good
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/protection_from_evil_and_good ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/15/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@protection_from_evil_and_good/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Telekinesis
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/16/spell -->
+^splat-af92c00a-telekinesis
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/telekinesis ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/16/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@telekinesis/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Wall of fire
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/17/spell -->
+^splat-af92c00a-wall_of_fire
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_fire ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/17/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@wall_of_fire/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Web
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/18/spell -->
+^splat-af92c00a-web
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/web ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/18/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@web/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
 #### Absorption

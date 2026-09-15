@@ -34,9 +34,27 @@ stitution scores increase by 4, to a maximum of 25.\
 
 #### Ability score increases
 
-<!-- splat:rows path=splat_rule/parameters/ability_score_increases -->
+<!-- splat:table
+path: splat_rule/parameters/ability_score_increases
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Ability:
+    path: ability
+    type: symbol
+  Amount:
+    path: amount
+    type: integer
+  Maximum:
+    path: maximum
+    type: integer
+-->
 
-| Row | ability | amount | maximum |
+| Key | Ability | Amount | Maximum |
 | --- | --- | --- | --- |
-| ` 0 ` | ` strength ` | ` 4 ` | ` 25 ` |
-| ` 1 ` | ` constitution ` | ` 4 ` | ` 25 ` |
+| ` row_1 ` | ` Strength ` | ` 4 ` | ` 25 ` |
+| ` row_2 ` | ` Constitution ` | ` 4 ` | ` 25 ` |

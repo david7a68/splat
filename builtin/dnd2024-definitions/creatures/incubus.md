@@ -210,36 +210,57 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: charisma
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/disguise_self
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/etherealness
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/dream
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/hypnotic_pattern
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 15
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` charisma ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 15 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- disguise_self
+- etherealness
+- dream
+- hypnotic_pattern
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Uses count | Uses recovery |
+| --- | --- | --- | --- |
+| [Disguise Self](<../spells/disguise_self.md> "dnd2024:spells/disguise_self") | true |  |  |
+| [Etherealness](<../spells/etherealness.md> "dnd2024:spells/etherealness") | true |  |  |
+| [Dream](<../spells/dream.md> "dnd2024:spells/dream") |  | ` 1 ` | ` Long rest ` |
+| [Hypnotic Pattern](<../spells/hypnotic_pattern.md> "dnd2024:spells/hypnotic_pattern") |  | ` 1 ` | ` Long rest ` |
 
 ##### Succubus form
 

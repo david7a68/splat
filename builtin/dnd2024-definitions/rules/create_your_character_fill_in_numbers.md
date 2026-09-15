@@ -134,17 +134,45 @@ your character sheet.\
 
 #### Saving throw and skill modifier
 
-<!-- splat:yaml path=splat_rule/parameters/saving_throw_and_skill_modifier -->
+<!-- splat:values path=splat_rule/parameters/saving_throw_and_skill_modifier -->
 
-```yaml
-op: add
-args:
-- variable: ability_modifier
-- if: proficient
-  then:
-    variable: proficiency_bonus
-  else: 0
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/saving_throw_and_skill_modifier/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Variable:
+    path: variable
+    type: symbol
+    optional: true
+  If:
+    path: if
+    type: symbol
+    optional: true
+  Then variable:
+    path: then/variable
+    type: symbol
+    optional: true
+  Else:
+    path: else
+    type: integer
+    optional: true
+-->
+
+| Key | Variable | If | Then variable | Else |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Ability modifier ` |  |  |  |
+| ` row_2 ` |  | ` Proficient ` | ` Proficiency bonus ` | ` 0 ` |
 
 #### Passive perception
 
@@ -191,21 +219,69 @@ args:
 
 #### Proficient weapon attack
 
-<!-- splat:yaml path=splat_rule/parameters/proficient_weapon_attack -->
+<!-- splat:values path=splat_rule/parameters/proficient_weapon_attack -->
 
-```yaml
-melee:
-  op: add
-  args:
-  - variable: strength_modifier
-  - variable: proficiency_bonus
-ranged:
-  op: add
-  args:
-  - variable: dexterity_modifier
-  - variable: proficiency_bonus
-property_override: true
-```
+| Field | Value |
+| --- | --- |
+| ` property_override ` | ` true ` |
+
+##### Melee
+
+<!-- splat:values path=splat_rule/parameters/proficient_weapon_attack/melee -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/proficient_weapon_attack/melee/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Variable:
+    path: variable
+    type: symbol
+-->
+
+| Key | Variable |
+| --- | --- |
+| ` row_1 ` | ` Strength modifier ` |
+| ` row_2 ` | ` Proficiency bonus ` |
+
+##### Ranged
+
+<!-- splat:values path=splat_rule/parameters/proficient_weapon_attack/ranged -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/proficient_weapon_attack/ranged/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Variable:
+    path: variable
+    type: symbol
+-->
+
+| Key | Variable |
+| --- | --- |
+| ` row_1 ` | ` Dexterity modifier ` |
+| ` row_2 ` | ` Proficiency bonus ` |
 
 #### Spell save dc
 
@@ -221,11 +297,29 @@ args:
 
 #### Spell attack
 
-<!-- splat:yaml path=splat_rule/parameters/spell_attack -->
+<!-- splat:values path=splat_rule/parameters/spell_attack -->
 
-```yaml
-op: add
-args:
-- variable: spellcasting_ability_modifier
-- variable: proficiency_bonus
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/spell_attack/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Variable:
+    path: variable
+    type: symbol
+-->
+
+| Key | Variable |
+| --- | --- |
+| ` row_1 ` | ` Spellcasting ability modifier ` |
+| ` row_2 ` | ` Proficiency bonus ` |

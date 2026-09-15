@@ -176,12 +176,27 @@ long_range_feet: 60
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Item name:
+    path: item_name
+    type: string
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item_name | quantity |
+| Key | Item name | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` Chain Shirt ` | ` 1 ` |
-| ` 1 ` | ` Spear ` | ` 1 ` |
+| ` row_1 ` | ` Chain Shirt ` | ` 1 ` |
+| ` row_2 ` | ` Spear ` | ` 1 ` |
 
 #### Communication
 

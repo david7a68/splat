@@ -89,14 +89,32 @@ args:
 
 #### Spell attack bonus
 
-<!-- splat:yaml path=splat_rule/parameters/spell_attack_bonus -->
+<!-- splat:values path=splat_rule/parameters/spell_attack_bonus -->
 
-```yaml
-op: add
-args:
-- var: actor.proficiency_bonus
-- var: actor.abilities.charisma.modifier
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/spell_attack_bonus/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: string
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` actor.proficiency_bonus ` |
+| ` row_2 ` | ` actor.abilities.charisma.modifier ` |
 
 #### Slots
 

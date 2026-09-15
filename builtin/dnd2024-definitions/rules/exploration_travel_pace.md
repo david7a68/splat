@@ -63,13 +63,43 @@ on Wisdom (Perception or Survival) checks.\
 
 #### Paces
 
-<!-- splat:rows path=splat_rule/parameters/paces -->
+<!-- splat:table
+path: splat_rule/parameters/paces
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Pace:
+    path: pace
+    type: symbol
+  Feet per minute:
+    path: feet_per_minute
+    type: integer
+  Miles per hour:
+    path: miles_per_hour
+    type: integer
+  Miles per day:
+    path: miles_per_day
+    type: integer
+  Disadvantage:
+    path: disadvantage
+    type: yaml
+    optional: true
+  Advantage:
+    path: advantage
+    type: yaml
+    optional: true
+-->
 
-| Row | pace | feet_per_minute | miles_per_hour | miles_per_day | disadvantage | advantage |
+| Key | Pace | Feet per minute | Miles per hour | Miles per day | Disadvantage | Advantage |
 | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` fast ` | ` 400 ` | ` 4 ` | ` 30 ` | ` ["wisdom_perception", "wisdom_survival", "dexterity_stealth"] ` |  |
-| ` 1 ` | ` normal ` | ` 300 ` | ` 3 ` | ` 24 ` | ` ["dexterity_stealth"] ` |  |
-| ` 2 ` | ` slow ` | ` 200 ` | ` 2 ` | ` 18 ` |  | ` ["wisdom_perception", "wisdom_survival"] ` |
+| ` row_1 ` | ` Fast ` | ` 400 ` | ` 4 ` | ` 30 ` | ` ["wisdom_perception", "wisdom_survival", "dexterity_stealth"] ` |  |
+| ` row_2 ` | ` Normal ` | ` 300 ` | ` 3 ` | ` 24 ` | ` ["dexterity_stealth"] ` |  |
+| ` row_3 ` | ` Slow ` | ` 200 ` | ` 2 ` | ` 18 ` |  | ` ["wisdom_perception", "wisdom_survival"] ` |
 
 #### Mounted
 

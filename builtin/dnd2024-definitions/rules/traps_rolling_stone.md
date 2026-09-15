@@ -80,12 +80,27 @@ a threat.\
 
 #### Severity by level
 
-<!-- splat:rows path=splat_rule/parameters/severity_by_level -->
+<!-- splat:table
+path: splat_rule/parameters/severity_by_level
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Severity:
+    path: severity
+    type: symbol
+-->
 
-| Row | levels | severity |
+| Key | Levels | Severity |
 | --- | --- | --- |
-| ` 0 ` | ` [11, 16] ` | ` deadly ` |
-| ` 1 ` | ` [17, 20] ` | ` nuisance ` |
+| ` row_1 ` | ` [11, 16] ` | ` Deadly ` |
+| ` row_2 ` | ` [17, 20] ` | ` Nuisance ` |
 
 #### Stone
 

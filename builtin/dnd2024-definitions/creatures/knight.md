@@ -179,16 +179,34 @@ long_range_feet: 400
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: repeat_choice
-count: 2
-choices:
-- feature: greatsword
-- feature: heavy_crossbow
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` repeat_choice ` |
+| ` count ` | ` 2 ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+-->
+
+| Key | Feature |
+| --- | --- |
+| ` row_1 ` | ` Greatsword ` |
+| ` row_2 ` | ` Heavy crossbow ` |
 
 ##### Parry
 
@@ -234,13 +252,29 @@ effects:
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Item name:
+    path: item_name
+    type: string
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item_name | quantity |
+| Key | Item name | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` Greatsword ` | ` 1 ` |
-| ` 1 ` | ` Heavy Crossbow ` | ` 1 ` |
-| ` 2 ` | ` Plate Armor ` | ` 1 ` |
+| ` row_1 ` | ` Greatsword ` | ` 1 ` |
+| ` row_2 ` | ` Heavy Crossbow ` | ` 1 ` |
+| ` row_3 ` | ` Plate Armor ` | ` 1 ` |
 
 #### Communication
 

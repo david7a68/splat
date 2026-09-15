@@ -237,20 +237,39 @@ creature_effect:
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
 
-```yaml
-economy: bonus_action
-op: shape_shift
-forms:
-- form: object
-  size_choice:
-  - medium
-  - small
-- form: true_blob
-retain_statistics: true
-equipment_transformed: false
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` shape_shift ` |
+| ` retain_statistics ` | ` true ` |
+| ` equipment_transformed ` | ` false ` |
+
+###### Forms
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/forms
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Form:
+    path: form
+    type: symbol
+  Size choice:
+    path: size_choice
+    type: yaml
+    optional: true
+-->
+
+| Key | Form | Size choice |
+| --- | --- | --- |
+| ` row_1 ` | ` Object ` | ` ["medium", "small"] ` |
+| ` row_2 ` | ` True blob ` |  |
 
 #### Skill totals
 

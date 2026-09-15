@@ -61,37 +61,27 @@ mine your available spell slots.\
 
 #### Features
 
-<!-- splat:rows path=splat_rule/parameters/features -->
+<!-- splat:table
+path: splat_rule/parameters/features
+key: Feature
+order:
+- wizard_level_1_arcane_recovery
+- wizard_level_1_ritual_adept
+- wizard_level_1_spellcasting
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 1 ` |
-| ` 1 ` | ` 1 ` |
-| ` 2 ` | ` 1 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_arcane_recovery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_ritual_adept ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_spellcasting ` |
+| [Level 1: Arcane Recovery](<../class_features/wizard_level_1_arcane_recovery.md> "dnd2024:class_features/wizard_level_1_arcane_recovery") | ` 1 ` |
+| [Level 1: Ritual Adept](<../class_features/wizard_level_1_ritual_adept.md> "dnd2024:class_features/wizard_level_1_ritual_adept") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/wizard_level_1_spellcasting.md> "dnd2024:class_features/wizard_level_1_spellcasting") | ` 1 ` |
 
 #### Spell slots rule
 

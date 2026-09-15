@@ -88,36 +88,72 @@ maximum_score: 20
 
 #### Equipment
 
-<!-- splat:yaml path=splat_rule/parameters/equipment -->
+<!-- splat:values path=splat_rule/parameters/equipment -->
 
-```yaml
-choose: 1
-options:
-  equipment:
-    items:
-    - definition:
-        key: dnd2024:equipment/spear
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/shortbow
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/ammunition_varies
-      quantity: 20
-    - definition:
-        key: dnd2024:equipment/healer_s_kit_5_gp
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/quiver_1_gp
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/clothes_traveler_s_2_gp
-      quantity: 1
-    currency:
-      gp: 14
-    ammunition_variant: arrows
-    matching_proficient_gaming_set:
-      quantity: 1
-  currency:
-    gp: 50
-```
+| Field | Value |
+| --- | --- |
+| ` choose ` | ` 1 ` |
+
+##### Options
+
+###### Equipment
+
+<!-- splat:values path=splat_rule/parameters/equipment/options/equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` ammunition_variant ` | ` arrows ` |
+
+###### Items
+
+<!-- splat:table
+path: splat_rule/parameters/equipment/options/equipment/items
+key: Item
+order:
+- spear
+- shortbow
+- ammunition_varies
+- healer_s_kit_5_gp
+- quiver_1_gp
+- clothes_traveler_s_2_gp
+columns:
+  Item:
+    path: definition
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Item | Quantity |
+| --- | --- |
+| [Spear](<../equipment/spear.md> "dnd2024:equipment/spear") | ` 1 ` |
+| [Shortbow](<../equipment/shortbow.md> "dnd2024:equipment/shortbow") | ` 1 ` |
+| [Ammunition (Varies)](<../equipment/ammunition_varies.md> "dnd2024:equipment/ammunition_varies") | ` 20 ` |
+| [Healer’s Kit (5 GP)](<../equipment/healer_s_kit_5_gp.md> "dnd2024:equipment/healer_s_kit_5_gp") | ` 1 ` |
+| [Quiver (1 GP)](<../equipment/quiver_1_gp.md> "dnd2024:equipment/quiver_1_gp") | ` 1 ` |
+| [Clothes, Traveler’s (2 GP)](<../equipment/clothes_traveler_s_2_gp.md> "dnd2024:equipment/clothes_traveler_s_2_gp") | ` 1 ` |
+
+###### Currency
+
+<!-- splat:values path=splat_rule/parameters/equipment/options/equipment/currency -->
+
+| Field | Value |
+| --- | --- |
+| ` gp ` | ` 14 ` |
+
+###### Matching proficient gaming set
+
+<!-- splat:values path=splat_rule/parameters/equipment/options/equipment/matching_proficient_gaming_set -->
+
+| Field | Value |
+| --- | --- |
+| ` quantity ` | ` 1 ` |
+
+###### Currency
+
+<!-- splat:values path=splat_rule/parameters/equipment/options/currency -->
+
+| Field | Value |
+| --- | --- |
+| ` gp ` | ` 50 ` |

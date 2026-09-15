@@ -187,16 +187,34 @@ range_feet: 60
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: repeat_choice
-count: 2
-choices:
-- feature: slam
-- feature: rock_launch
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` repeat_choice ` |
+| ` count ` | ` 2 ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+-->
+
+| Key | Feature |
+| --- | --- |
+| ` row_1 ` | ` Slam ` |
+| ` row_2 ` | ` Rock launch ` |
 
 ##### Earth glide
 
@@ -242,12 +260,27 @@ disturbs_material: false
 
 ##### Special
 
-<!-- splat:rows path=splat_rule/parameters/senses/special -->
+<!-- splat:table
+path: splat_rule/parameters/senses/special
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range feet:
+    path: range_feet
+    type: integer
+-->
 
-| Row | sense | range_feet |
+| Key | Sense | Range feet |
 | --- | --- | --- |
-| ` 0 ` | ` darkvision ` | ` 60 ` |
-| ` 1 ` | ` tremorsense ` | ` 60 ` |
+| ` row_1 ` | ` Darkvision ` | ` 60 ` |
+| ` row_2 ` | ` Tremorsense ` | ` 60 ` |
 
 #### Communication
 

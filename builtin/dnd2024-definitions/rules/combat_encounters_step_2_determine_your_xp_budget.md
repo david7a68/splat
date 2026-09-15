@@ -60,38 +60,95 @@ Level Low Moderate High\
 
 #### Per character xp
 
-<!-- splat:rows path=splat_rule/parameters/per_character_xp -->
+<!-- splat:table
+path: splat_rule/parameters/per_character_xp
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+- row_17
+- row_18
+- row_19
+- row_20
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Low:
+    path: low
+    type: integer
+  Moderate:
+    path: moderate
+    type: integer
+  High:
+    path: high
+    type: integer
+-->
 
-| Row | level | low | moderate | high |
+| Key | Level | Low | Moderate | High |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 50 ` | ` 75 ` | ` 100 ` |
-| ` 1 ` | ` 2 ` | ` 100 ` | ` 150 ` | ` 200 ` |
-| ` 2 ` | ` 3 ` | ` 150 ` | ` 225 ` | ` 400 ` |
-| ` 3 ` | ` 4 ` | ` 250 ` | ` 375 ` | ` 500 ` |
-| ` 4 ` | ` 5 ` | ` 500 ` | ` 750 ` | ` 1100 ` |
-| ` 5 ` | ` 6 ` | ` 600 ` | ` 1000 ` | ` 1400 ` |
-| ` 6 ` | ` 7 ` | ` 750 ` | ` 1300 ` | ` 1700 ` |
-| ` 7 ` | ` 8 ` | ` 1000 ` | ` 1700 ` | ` 2100 ` |
-| ` 8 ` | ` 9 ` | ` 1300 ` | ` 2000 ` | ` 2600 ` |
-| ` 9 ` | ` 10 ` | ` 1600 ` | ` 2300 ` | ` 3100 ` |
-| ` 10 ` | ` 11 ` | ` 1900 ` | ` 2900 ` | ` 4100 ` |
-| ` 11 ` | ` 12 ` | ` 2200 ` | ` 3700 ` | ` 4700 ` |
-| ` 12 ` | ` 13 ` | ` 2600 ` | ` 4200 ` | ` 5400 ` |
-| ` 13 ` | ` 14 ` | ` 2900 ` | ` 4900 ` | ` 6200 ` |
-| ` 14 ` | ` 15 ` | ` 3300 ` | ` 5400 ` | ` 7800 ` |
-| ` 15 ` | ` 16 ` | ` 3800 ` | ` 6100 ` | ` 9800 ` |
-| ` 16 ` | ` 17 ` | ` 4500 ` | ` 7200 ` | ` 11700 ` |
-| ` 17 ` | ` 18 ` | ` 5000 ` | ` 8700 ` | ` 14200 ` |
-| ` 18 ` | ` 19 ` | ` 5500 ` | ` 10700 ` | ` 17200 ` |
-| ` 19 ` | ` 20 ` | ` 6400 ` | ` 13200 ` | ` 22000 ` |
+| ` row_1 ` | ` 1 ` | ` 50 ` | ` 75 ` | ` 100 ` |
+| ` row_2 ` | ` 2 ` | ` 100 ` | ` 150 ` | ` 200 ` |
+| ` row_3 ` | ` 3 ` | ` 150 ` | ` 225 ` | ` 400 ` |
+| ` row_4 ` | ` 4 ` | ` 250 ` | ` 375 ` | ` 500 ` |
+| ` row_5 ` | ` 5 ` | ` 500 ` | ` 750 ` | ` 1100 ` |
+| ` row_6 ` | ` 6 ` | ` 600 ` | ` 1000 ` | ` 1400 ` |
+| ` row_7 ` | ` 7 ` | ` 750 ` | ` 1300 ` | ` 1700 ` |
+| ` row_8 ` | ` 8 ` | ` 1000 ` | ` 1700 ` | ` 2100 ` |
+| ` row_9 ` | ` 9 ` | ` 1300 ` | ` 2000 ` | ` 2600 ` |
+| ` row_10 ` | ` 10 ` | ` 1600 ` | ` 2300 ` | ` 3100 ` |
+| ` row_11 ` | ` 11 ` | ` 1900 ` | ` 2900 ` | ` 4100 ` |
+| ` row_12 ` | ` 12 ` | ` 2200 ` | ` 3700 ` | ` 4700 ` |
+| ` row_13 ` | ` 13 ` | ` 2600 ` | ` 4200 ` | ` 5400 ` |
+| ` row_14 ` | ` 14 ` | ` 2900 ` | ` 4900 ` | ` 6200 ` |
+| ` row_15 ` | ` 15 ` | ` 3300 ` | ` 5400 ` | ` 7800 ` |
+| ` row_16 ` | ` 16 ` | ` 3800 ` | ` 6100 ` | ` 9800 ` |
+| ` row_17 ` | ` 17 ` | ` 4500 ` | ` 7200 ` | ` 11700 ` |
+| ` row_18 ` | ` 18 ` | ` 5000 ` | ` 8700 ` | ` 14200 ` |
+| ` row_19 ` | ` 19 ` | ` 5500 ` | ` 10700 ` | ` 17200 ` |
+| ` row_20 ` | ` 20 ` | ` 6400 ` | ` 13200 ` | ` 22000 ` |
 
 #### Encounter budget
 
-<!-- splat:yaml path=splat_rule/parameters/encounter_budget -->
+<!-- splat:values path=splat_rule/parameters/encounter_budget -->
 
-```yaml
-op: multiply
-args:
-- var: per_character_budget
-- var: party_size
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` multiply ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/encounter_budget/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: symbol
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` Per character budget ` |
+| ` row_2 ` | ` Party size ` |

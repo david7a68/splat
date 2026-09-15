@@ -276,100 +276,87 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` intelligence ` |
+| ` save_dc ` | ` 20 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Components waived
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/components_waived -->
 
 ```yaml
-economy: action
-operation: spellcasting
-ability: intelligence
-components_waived: []
-save_dc: 20
-options:
-- spell:
-    key: dnd2024:spells/detect_magic
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/detect_thoughts
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/dispel_magic
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/fireball
-  usage:
-    kind: at_will
-  cast_level: 5
-- spell:
-    key: dnd2024:spells/invisibility
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/lightning_bolt
-  usage:
-    kind: at_will
-  cast_level: 5
-- spell:
-    key: dnd2024:spells/mage_hand
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/prestidigitation
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/animate_dead
-  usage:
-    kind: daily
-    uses: 2
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/dimension_door
-  usage:
-    kind: daily
-    uses: 2
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/plane_shift
-  usage:
-    kind: daily
-    uses: 2
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/chain_lightning
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/finger_of_death
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/power_word_kill
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/scrying
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
+[]
 ```
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- detect_magic
+- detect_thoughts
+- dispel_magic
+- fireball
+- invisibility
+- lightning_bolt
+- mage_hand
+- prestidigitation
+- animate_dead
+- dimension_door
+- plane_shift
+- chain_lightning
+- finger_of_death
+- power_word_kill
+- scrying
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Cast level | Uses | Use pool | Recovery |
+| --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  |  |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") | ` At will ` |  |  |  |  |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") | ` At will ` |  |  |  |  |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") | ` At will ` | ` 5 ` |  |  |  |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") | ` At will ` |  |  |  |  |
+| [Lightning Bolt](<../spells/lightning_bolt.md> "dnd2024:spells/lightning_bolt") | ` At will ` | ` 5 ` |  |  |  |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | ` At will ` |  |  |  |  |
+| [Prestidigitation](<../spells/prestidigitation.md> "dnd2024:spells/prestidigitation") | ` At will ` |  |  |  |  |
+| [Animate Dead](<../spells/animate_dead.md> "dnd2024:spells/animate_dead") | ` Daily ` |  | ` 2 ` | ` Per spell ` | ` Long rest ` |
+| [Dimension Door](<../spells/dimension_door.md> "dnd2024:spells/dimension_door") | ` Daily ` |  | ` 2 ` | ` Per spell ` | ` Long rest ` |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") | ` Daily ` |  | ` 2 ` | ` Per spell ` | ` Long rest ` |
+| [Chain Lightning](<../spells/chain_lightning.md> "dnd2024:spells/chain_lightning") | ` Daily ` |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Finger of Death](<../spells/finger_of_death.md> "dnd2024:spells/finger_of_death") | ` Daily ` |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Power Word Kill](<../spells/power_word_kill.md> "dnd2024:spells/power_word_kill") | ` Daily ` |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` Daily ` |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Protective magic
 

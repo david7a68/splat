@@ -178,12 +178,27 @@ Original layout: [[../../srd-5.2.1/pages/276|page 276]], [[../../srd-5.2.1/pages
 
 #### Senses
 
-<!-- splat:rows path=splat_rule/parameters/senses -->
+<!-- splat:table
+path: splat_rule/parameters/senses
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range ft:
+    path: range_ft
+    type: integer
+-->
 
-| Row | sense | range_ft |
+| Key | Sense | Range ft |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 60 ` |
-| ` 1 ` | ` darkvision ` | ` 120 ` |
+| ` row_1 ` | ` Blindsight ` | ` 60 ` |
+| ` row_2 ` | ` Darkvision ` | ` 120 ` |
 
 #### Languages
 
@@ -247,52 +262,81 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: charisma
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/mind_spike
-    uses:
-      unlimited: true
-    cast_level: 4
-  - spell:
-      key: dnd2024:spells/minor_illusion
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/shapechange
-    uses:
-      unlimited: true
-    overrides:
-      forms:
-      - beast
-      - humanoid
-      temporary_hp_granted: 0
-      maintain_requires_concentration: false
-      maintain_requires_temporary_hp: false
-  - spell:
-      key: dnd2024:spells/greater_restoration
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/major_image
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 17
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` charisma ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 17 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- detect_magic
+- mind_spike
+- minor_illusion
+- shapechange
+- greater_restoration
+- major_image
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+  Overrides forms:
+    path: overrides/forms
+    type: yaml
+    optional: true
+  Overrides temporary hp granted:
+    path: overrides/temporary_hp_granted
+    type: integer
+    optional: true
+  Overrides maintain requires concentration:
+    path: overrides/maintain_requires_concentration
+    type: boolean
+    optional: true
+  Overrides maintain requires temporary hp:
+    path: overrides/maintain_requires_temporary_hp
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Cast level | Overrides forms | Overrides temporary hp granted | Overrides maintain requires concentration | Overrides maintain requires temporary hp | Uses count | Uses recovery |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |  |  |  |  |  |
+| [Mind Spike](<../spells/mind_spike.md> "dnd2024:spells/mind_spike") | true | ` 4 ` |  |  |  |  |  |  |
+| [Minor Illusion](<../spells/minor_illusion.md> "dnd2024:spells/minor_illusion") | true |  |  |  |  |  |  |  |
+| [Shapechange](<../spells/shapechange.md> "dnd2024:spells/shapechange") | true |  | ` ["beast", "humanoid"] ` | ` 0 ` | false | false |  |  |
+| [Greater Restoration](<../spells/greater_restoration.md> "dnd2024:spells/greater_restoration") |  |  |  |  |  |  | ` 1 ` | ` Long rest ` |
+| [Major Image](<../spells/major_image.md> "dnd2024:spells/major_image") |  |  |  |  |  |  | ` 1 ` | ` Long rest ` |
 
 ##### Acid breath
 

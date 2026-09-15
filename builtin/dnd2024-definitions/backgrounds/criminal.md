@@ -85,30 +85,56 @@ maximum_score: 20
 
 #### Equipment
 
-<!-- splat:yaml path=splat_rule/parameters/equipment -->
+<!-- splat:values path=splat_rule/parameters/equipment -->
 
-```yaml
-choose: 1
-options:
-  equipment:
-    items:
-    - definition:
-        key: dnd2024:equipment/dagger
-      quantity: 2
-    - definition:
-        key: dnd2024:equipment/other_tools_thieves_tools_25_gp
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/crowbar_2_gp
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/pouch_5_sp
-      quantity: 2
-    - definition:
-        key: dnd2024:equipment/clothes_traveler_s_2_gp
-      quantity: 1
-    currency:
-      gp: 16
-  currency:
-    gp: 50
-```
+| Field | Value |
+| --- | --- |
+| ` choose ` | ` 1 ` |
+
+##### Options
+
+###### Equipment
+
+###### Items
+
+<!-- splat:table
+path: splat_rule/parameters/equipment/options/equipment/items
+key: Item
+order:
+- dagger
+- other_tools_thieves_tools_25_gp
+- crowbar_2_gp
+- pouch_5_sp
+- clothes_traveler_s_2_gp
+columns:
+  Item:
+    path: definition
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Item | Quantity |
+| --- | --- |
+| [Dagger](<../equipment/dagger.md> "dnd2024:equipment/dagger") | ` 2 ` |
+| [Thieves’ Tools (25 GP)](<../equipment/other_tools_thieves_tools_25_gp.md> "dnd2024:equipment/other_tools_thieves_tools_25_gp") | ` 1 ` |
+| [Crowbar (2 GP)](<../equipment/crowbar_2_gp.md> "dnd2024:equipment/crowbar_2_gp") | ` 1 ` |
+| [Pouch (5 SP)](<../equipment/pouch_5_sp.md> "dnd2024:equipment/pouch_5_sp") | ` 2 ` |
+| [Clothes, Traveler’s (2 GP)](<../equipment/clothes_traveler_s_2_gp.md> "dnd2024:equipment/clothes_traveler_s_2_gp") | ` 1 ` |
+
+###### Currency
+
+<!-- splat:values path=splat_rule/parameters/equipment/options/equipment/currency -->
+
+| Field | Value |
+| --- | --- |
+| ` gp ` | ` 16 ` |
+
+###### Currency
+
+<!-- splat:values path=splat_rule/parameters/equipment/options/currency -->
+
+| Field | Value |
+| --- | --- |
+| ` gp ` | ` 50 ` |

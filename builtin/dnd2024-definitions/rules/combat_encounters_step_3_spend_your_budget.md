@@ -83,17 +83,49 @@ args:
 
 #### Examples
 
-<!-- splat:rows path=splat_rule/parameters/examples -->
+<!-- splat:table
+path: splat_rule/parameters/examples
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Party size:
+    path: party_size
+    type: integer
+  Level:
+    path: level
+    type: integer
+  Difficulty:
+    path: difficulty
+    type: symbol
+  Xp per character:
+    path: xp_per_character
+    type: integer
+  Budget:
+    path: budget
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | party_size | level | difficulty | xp_per_character | budget |
-| --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 4 ` | ` 1 ` | ` low ` | ` 50 ` | ` 200 ` |
-| ` 1 ` | ` 5 ` | ` 3 ` | ` moderate ` | ` 225 ` | ` 1125 ` |
-| ` 2 ` | ` 6 ` | ` 15 ` | ` high ` | ` 7800 ` | ` 46800 ` |
+| Key | Party size | Level | Difficulty | Xp per character | Budget | Details |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 4 ` | ` 1 ` | ` Low ` | ` 50 ` | ` 200 ` | [Rules](#^splat-476791c0-row_1 "section:row_1") |
+| ` row_2 ` | ` 5 ` | ` 3 ` | ` Moderate ` | ` 225 ` | ` 1125 ` | [Rules](#^splat-476791c0-row_2 "section:row_2") |
+| ` row_3 ` | ` 6 ` | ` 15 ` | ` High ` | ` 7800 ` | ` 46800 ` | [Rules](#^splat-476791c0-row_3 "section:row_3") |
 
-##### Choices
+##### Row 1
 
-<!-- splat:yaml path=splat_rule/parameters/examples/0/choices -->
+^splat-476791c0-row_1
+
+###### Choices
+
+<!-- splat:yaml path=splat_rule/parameters/examples/@row_1/choices -->
 
 ```yaml
 - - monster: bugbear_warrior
@@ -107,9 +139,13 @@ args:
     xp_each: 25
 ```
 
-##### Choices
+##### Row 2
 
-<!-- splat:yaml path=splat_rule/parameters/examples/1/choices -->
+^splat-476791c0-row_2
+
+###### Choices
+
+<!-- splat:yaml path=splat_rule/parameters/examples/@row_2/choices -->
 
 ```yaml
 - - monster: druid
@@ -129,9 +165,13 @@ args:
     xp_each: 50
 ```
 
-##### Choices
+##### Row 3
 
-<!-- splat:yaml path=splat_rule/parameters/examples/2/choices -->
+^splat-476791c0-row_3
+
+###### Choices
+
+<!-- splat:yaml path=splat_rule/parameters/examples/@row_3/choices -->
 
 ```yaml
 - - monster: adult_red_dragon

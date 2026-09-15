@@ -181,52 +181,66 @@ replacement:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: cast_spell_choice
-ability: charisma
-spells:
-- spell:
-    key: dnd2024:spells/disguise_self
-  frequency: at_will
-  overrides:
-    appearance:
-      sizes:
-      - large
-      - medium
-      anatomy: biped
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/minor_illusion
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/geas
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/major_image
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/scrying
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- material
-save_dc: 13
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 13 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- disguise_self
+- minor_illusion
+- geas
+- major_image
+- scrying
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Overrides appearance sizes:
+    path: overrides/appearance/sizes
+    type: yaml
+    optional: true
+  Overrides appearance anatomy:
+    path: overrides/appearance/anatomy
+    type: symbol
+    optional: true
+  Cast level:
+    path: cast_level
+    type: symbol
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Overrides appearance sizes | Overrides appearance anatomy | Cast level | Uses | Resource scope | Recovery |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [Disguise Self](<../spells/disguise_self.md> "dnd2024:spells/disguise_self") | ` At will ` | ` ["large", "medium"] ` | ` Biped ` | ` Spell minimum ` |  |  |  |
+| [Minor Illusion](<../spells/minor_illusion.md> "dnd2024:spells/minor_illusion") | ` At will ` |  |  | ` Spell minimum ` |  |  |  |
+| [Geas](<../spells/geas.md> "dnd2024:spells/geas") | ` Daily ` |  |  | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Major Image](<../spells/major_image.md> "dnd2024:spells/major_image") | ` Daily ` |  |  | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` Daily ` |  |  | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Corrupting touch
 

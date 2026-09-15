@@ -41,12 +41,6 @@ obeys your commands.\
 
 <!-- SRD page 230 -->
 
-1d20 Golem Time Cost\
-1–5 Clay Golem 30 days 65,000 GP\
-6–17 Flesh Golem 60 days 50,000 GP\
-18 Iron Golem 120 days 100,000 GP\
-19–20 Stone Golem 90 days 80,000 GP\
-
 Original layout: [[../../srd-5.2.1/pages/229|page 229]], [[../../srd-5.2.1/pages/230|page 230]].
 
 ## Item
@@ -109,46 +103,35 @@ damage:
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Creature
+order:
+- clay_golem
+- flesh_golem
+- iron_golem
+- stone_golem
+columns:
+  Creature:
+    path: creature
+    type: reference
+  Roll:
+    path: roll
+    type: yaml
+  Work days:
+    path: work_days
+    type: integer
+  Cost gp:
+    path: cost_gp
+    type: integer
+-->
 
-| Row | roll | work_days | cost_gp |
+| Creature | Roll | Work days | Cost gp |
 | --- | --- | --- | --- |
-| ` 0 ` | ` [1, 5] ` | ` 30 ` | ` 65000 ` |
-| ` 1 ` | ` [6, 17] ` | ` 60 ` | ` 50000 ` |
-| ` 2 ` | ` [18, 18] ` | ` 120 ` | ` 100000 ` |
-| ` 3 ` | ` [19, 20] ` | ` 90 ` | ` 80000 ` |
-
-##### Creature
-
-<!-- splat:values path=splat_rule/parameters/variants/0/creature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:creatures/clay_golem ` |
-
-##### Creature
-
-<!-- splat:values path=splat_rule/parameters/variants/1/creature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:creatures/flesh_golem ` |
-
-##### Creature
-
-<!-- splat:values path=splat_rule/parameters/variants/2/creature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:creatures/iron_golem ` |
-
-##### Creature
-
-<!-- splat:values path=splat_rule/parameters/variants/3/creature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:creatures/stone_golem ` |
+| [Clay Golem](<../creatures/clay_golem.md> "dnd2024:creatures/clay_golem") | ` [1, 5] ` | ` 30 ` | ` 65000 ` |
+| [Flesh Golem](<../creatures/flesh_golem.md> "dnd2024:creatures/flesh_golem") | ` [6, 17] ` | ` 60 ` | ` 50000 ` |
+| [Iron Golem](<../creatures/iron_golem.md> "dnd2024:creatures/iron_golem") | ` [18, 18] ` | ` 120 ` | ` 100000 ` |
+| [Stone Golem](<../creatures/stone_golem.md> "dnd2024:creatures/stone_golem") | ` [19, 20] ` | ` 90 ` | ` 80000 ` |
 
 #### Crafting
 

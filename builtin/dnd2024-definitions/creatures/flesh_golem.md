@@ -228,45 +228,92 @@ disadvantage:
 
 ##### Berserk
 
-<!-- splat:yaml path=splat_rule/parameters/features/berserk -->
+<!-- splat:values path=splat_rule/parameters/features/berserk -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` passive ` |
+| ` trigger ` | ` self.turn.start ` |
+| ` state ` | ` berserk ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/berserk/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` self_bloodied ` | ` true ` |
+
+###### Activation roll
+
+<!-- splat:yaml path=splat_rule/parameters/features/berserk/activation_roll -->
 
 ```yaml
-economy: passive
-trigger: self.turn.start
-requires:
-  self_bloodied: true
-activation_roll:
-  roll:
-    dice:
-      count: 1
-      sides: 6
-    add: 0
-  success:
-  - 6
-state: berserk
-while_active:
-  turn_behavior:
-    attack_target: nearest_visible_creature
-    requires_reachable_with_move_and_attack: true
-    fallback_target_kind: object
-ends_any:
-- self_destroyed: true
-- self_bloodied: false
-suppress:
-  actor: creator
-  economy: action
-  range_feet: 60
-  self_can_hear_creator: true
-  check:
-    ability: charisma
-    skill: persuasion
-    dc: 15
-  on_success:
-    suppress_until:
-      event: turn.start
-      participant: self
-      occurrence: next
-    resume_activation_rolls_if_bloodied: true
+roll:
+  dice:
+    count: 1
+    sides: 6
+  add: 0
+success:
+- 6
+```
+
+###### While active
+
+<!-- splat:yaml path=splat_rule/parameters/features/berserk/while_active -->
+
+```yaml
+turn_behavior:
+  attack_target: nearest_visible_creature
+  requires_reachable_with_move_and_attack: true
+  fallback_target_kind: object
+```
+
+###### Ends any
+
+<!-- splat:table
+path: splat_rule/parameters/features/berserk/ends_any
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Self destroyed:
+    path: self_destroyed
+    type: boolean
+    optional: true
+  Self bloodied:
+    path: self_bloodied
+    type: boolean
+    optional: true
+-->
+
+| Key | Self destroyed | Self bloodied |
+| --- | --- | --- |
+| ` row_1 ` | true |  |
+| ` row_2 ` |  | false |
+
+###### Suppress
+
+<!-- splat:yaml path=splat_rule/parameters/features/berserk/suppress -->
+
+```yaml
+actor: creator
+economy: action
+range_feet: 60
+self_can_hear_creator: true
+check:
+  ability: charisma
+  skill: persuasion
+  dc: 15
+on_success:
+  suppress_until:
+    event: turn.start
+    participant: self
+    occurrence: next
+  resume_activation_rolls_if_bloodied: true
 ```
 
 #### Defenses

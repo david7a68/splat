@@ -38,11 +38,29 @@ modifier + your Proficiency Bonus\
 
 #### Spell attack modifier
 
-<!-- splat:yaml path=splat_rule/parameters/spell_attack_modifier -->
+<!-- splat:values path=splat_rule/parameters/spell_attack_modifier -->
 
-```yaml
-op: add
-args:
-- var: caster.spellcasting_ability_modifier
-- var: caster.proficiency_bonus
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/spell_attack_modifier/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: string
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` caster.spellcasting_ability_modifier ` |
+| ` row_2 ` | ` caster.proficiency_bonus ` |

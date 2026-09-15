@@ -77,20 +77,45 @@ Original layout: [[../../srd-5.2.1/pages/182|page 182]].
 
 #### Escape
 
-<!-- splat:yaml path=splat_rule/parameters/escape -->
+<!-- splat:values path=splat_rule/parameters/escape -->
 
-```yaml
-cost: action
-check_choice:
-  chooser: subject
-  options:
-  - ability: strength
-    skill: athletics
-  - ability: dexterity
-    skill: acrobatics
-dc: grapple_escape_dc
-success: end_grappled
-```
+| Field | Value |
+| --- | --- |
+| ` cost ` | ` action ` |
+| ` dc ` | ` grapple_escape_dc ` |
+| ` success ` | ` end_grappled ` |
+
+##### Check choice
+
+<!-- splat:values path=splat_rule/parameters/escape/check_choice -->
+
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` subject ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/escape/check_choice/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Ability:
+    path: ability
+    type: symbol
+  Skill:
+    path: skill
+    type: symbol
+-->
+
+| Key | Ability | Skill |
+| --- | --- | --- |
+| ` row_1 ` | ` Strength ` | ` Athletics ` |
+| ` row_2 ` | ` Dexterity ` | ` Acrobatics ` |
 
 #### Release
 

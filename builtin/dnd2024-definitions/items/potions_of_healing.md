@@ -24,14 +24,6 @@ The number of Hit Points depends on the potion’s\
 rarity, as shown in the table below.\
 Whatever its potency, the potion’s red liquid glim-\
 mers when agitated.\
-Potion HP Regained Rarity\
-Potion of Healing 2d4 + 2 Common\
-Potion of Healing 4d4 + 4 Uncommon\
-(greater)\
-Potion of Healing 8d4 + 8 Rare\
-(superior)\
-Potion of Healing 10d4 + 20 Very Rare\
-(supreme)\
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 
@@ -73,55 +65,29 @@ Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Name
+order:
+- healing
+- greater
+- superior
+- supreme
+columns:
+  Name:
+    path: name
+    type: symbol
+  Rarity:
+    path: rarity
+    type: symbol
+  Healing:
+    path: heal_hp/roll
+    type: dice
+-->
 
-| Row | name | rarity |
+| Name | Rarity | Healing |
 | --- | --- | --- |
-| ` 0 ` | ` healing ` | ` common ` |
-| ` 1 ` | ` greater ` | ` uncommon ` |
-| ` 2 ` | ` superior ` | ` rare ` |
-| ` 3 ` | ` supreme ` | ` very_rare ` |
-
-##### Heal hp
-
-<!-- splat:yaml path=splat_rule/parameters/variants/0/heal_hp -->
-
-```yaml
-roll:
-  count: 2
-  sides: 4
-  add: 2
-```
-
-##### Heal hp
-
-<!-- splat:yaml path=splat_rule/parameters/variants/1/heal_hp -->
-
-```yaml
-roll:
-  count: 4
-  sides: 4
-  add: 4
-```
-
-##### Heal hp
-
-<!-- splat:yaml path=splat_rule/parameters/variants/2/heal_hp -->
-
-```yaml
-roll:
-  count: 8
-  sides: 4
-  add: 8
-```
-
-##### Heal hp
-
-<!-- splat:yaml path=splat_rule/parameters/variants/3/heal_hp -->
-
-```yaml
-roll:
-  count: 10
-  sides: 4
-  add: 20
-```
+| ` Healing ` | ` Common ` | ` 2d4+2 ` |
+| ` Greater ` | ` Uncommon ` | ` 4d4+4 ` |
+| ` Superior ` | ` Rare ` | ` 8d4+8 ` |
+| ` Supreme ` | ` Very rare ` | ` 10d4+20 ` |

@@ -160,20 +160,53 @@ reach_feet: 5
 
 ##### Bubble dash
 
-<!-- splat:yaml path=splat_rule/parameters/features/bubble_dash -->
+<!-- splat:values path=splat_rule/parameters/features/bubble_dash -->
 
-```yaml
-economy: bonus_action
-requires:
-  underwater: true
-op: move
-distance_max:
-  multiply:
-  - stat: swim_speed
-  - numerator: 1
-    denominator: 2
-provokes_opportunity_attacks: false
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` move ` |
+| ` provokes_opportunity_attacks ` | ` false ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/bubble_dash/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` underwater ` | ` true ` |
+
+###### Distance max
+
+###### Multiply
+
+<!-- splat:table
+path: splat_rule/parameters/features/bubble_dash/distance_max/multiply
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Stat:
+    path: stat
+    type: symbol
+    optional: true
+  Numerator:
+    path: numerator
+    type: integer
+    optional: true
+  Denominator:
+    path: denominator
+    type: integer
+    optional: true
+-->
+
+| Key | Stat | Numerator | Denominator |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Swim speed ` |  |  |
+| ` row_2 ` |  | ` 1 ` | ` 2 ` |
 
 #### Defenses
 

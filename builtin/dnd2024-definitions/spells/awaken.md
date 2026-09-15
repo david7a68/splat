@@ -92,19 +92,44 @@ Original layout: [[../../srd-5.2.1/pages/111|page 111]], [[../../srd-5.2.1/pages
 
 #### Targeting
 
-<!-- splat:yaml path=splat_rule/parameters/targeting -->
+<!-- splat:values path=splat_rule/parameters/targeting -->
 
-```yaml
-touch: true
-options:
-- kind: creature
-  types:
-  - beast
-  - plant
-  intelligence_max: 3
-- kind: natural_plant
-  creature: false
-```
+| Field | Value |
+| --- | --- |
+| ` touch ` | ` true ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/targeting/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Types:
+    path: types
+    type: yaml
+    optional: true
+  Intelligence max:
+    path: intelligence_max
+    type: integer
+    optional: true
+  Creature:
+    path: creature
+    type: boolean
+    optional: true
+-->
+
+| Key | Kind | Types | Intelligence max | Creature |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Creature ` | ` ["beast", "plant"] ` | ` 3 ` |  |
+| ` row_2 ` | ` Natural plant ` |  |  | false |
 
 #### Grant
 

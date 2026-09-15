@@ -65,52 +65,28 @@ benefit from the magic items you find there.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- thief_level_13_use_magic_device
+- thief_level_17_thief_s_reflexes
+- thief_level_3_fast_hands
+- thief_level_3_second_story_work
+- thief_level_9_supreme_sneak
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 13 ` |
-| ` 1 ` | ` 17 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 9 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/thief_level_13_use_magic_device ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/thief_level_17_thief_s_reflexes ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/thief_level_3_fast_hands ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/thief_level_3_second_story_work ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/thief_level_9_supreme_sneak ` |
+| [Level 13: Use Magic Device](<../class_features/thief_level_13_use_magic_device.md> "dnd2024:class_features/thief_level_13_use_magic_device") | ` 13 ` |
+| [Level 17: Thief’s Reflexes](<../class_features/thief_level_17_thief_s_reflexes.md> "dnd2024:class_features/thief_level_17_thief_s_reflexes") | ` 17 ` |
+| [Level 3: Fast Hands](<../class_features/thief_level_3_fast_hands.md> "dnd2024:class_features/thief_level_3_fast_hands") | ` 3 ` |
+| [Level 3: Second-Story Work](<../class_features/thief_level_3_second_story_work.md> "dnd2024:class_features/thief_level_3_second_story_work") | ` 3 ` |
+| [Level 9: Supreme Sneak](<../class_features/thief_level_9_supreme_sneak.md> "dnd2024:class_features/thief_level_9_supreme_sneak") | ` 9 ` |

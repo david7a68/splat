@@ -128,12 +128,41 @@ hesitant:
 
 #### Suggested checks
 
-<!-- splat:rows path=splat_rule/parameters/suggested_checks -->
+<!-- splat:table
+path: splat_rule/parameters/suggested_checks
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Mode:
+    path: mode
+    type: symbol
+  Ability:
+    path: ability
+    type: symbol
+  Skill:
+    path: skill
+    type: symbol
+  Target understands:
+    path: target_understands
+    type: boolean
+    optional: true
+  Target types:
+    path: target_types
+    type: yaml
+    optional: true
+-->
 
-| Row | mode | ability | skill | target_understands | target_types |
+| Key | Mode | Ability | Skill | Target understands | Target types |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` deceive ` | ` charisma ` | ` deception ` | ` true ` |  |
-| ` 1 ` | ` intimidate ` | ` charisma ` | ` intimidation ` |  |  |
-| ` 2 ` | ` amuse ` | ` charisma ` | ` performance ` |  |  |
-| ` 3 ` | ` persuade ` | ` charisma ` | ` persuasion ` | ` true ` |  |
-| ` 4 ` | ` gently_coax ` | ` wisdom ` | ` animal_handling ` |  | ` ["beast", "monstrosity"] ` |
+| ` row_1 ` | ` Deceive ` | ` Charisma ` | ` Deception ` | true |  |
+| ` row_2 ` | ` Intimidate ` | ` Charisma ` | ` Intimidation ` |  |  |
+| ` row_3 ` | ` Amuse ` | ` Charisma ` | ` Performance ` |  |  |
+| ` row_4 ` | ` Persuade ` | ` Charisma ` | ` Persuasion ` | true |  |
+| ` row_5 ` | ` Gently coax ` | ` Wisdom ` | ` Animal handling ` |  | ` ["beast", "monstrosity"] ` |

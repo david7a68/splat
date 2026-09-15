@@ -101,21 +101,37 @@ recovery:
 
 #### Activation
 
-<!-- splat:yaml path=splat_rule/parameters/activation -->
+<!-- splat:values path=splat_rule/parameters/activation -->
 
-```yaml
-action: magic
-cost: 1
-options:
-- spell:
-    key: dnd2024:spells/gate
-  presses: 1
-  destination: selected_side_plane
-- spell:
-    key: dnd2024:spells/plane_shift
-  presses: 2
-  destination: selected_side_plane
-```
+| Field | Value |
+| --- | --- |
+| ` action ` | ` magic ` |
+| ` cost ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/activation/options
+key: Spell
+order:
+- gate
+- plane_shift
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Presses:
+    path: presses
+    type: integer
+  Destination:
+    path: destination
+    type: symbol
+-->
+
+| Spell | Presses | Destination |
+| --- | --- | --- |
+| [Gate](<../spells/gate.md> "dnd2024:spells/gate") | ` 1 ` | ` Selected side plane ` |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") | ` 2 ` | ` Selected side plane ` |
 
 #### Attunement
 

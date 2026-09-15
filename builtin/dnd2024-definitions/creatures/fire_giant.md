@@ -132,71 +132,137 @@ sequence:
 
 ##### Flame sword
 
-<!-- splat:yaml path=splat_rule/parameters/features/flame_sword -->
+<!-- splat:values path=splat_rule/parameters/features/flame_sword -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/flame_sword/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 11
-  reach_ft: 10
-hit:
-  damage:
-  - average: 21
-    roll:
-      count: 4
-      sides: 6
-      modifier: 7
-    type: slashing
-  - average: 10
-    roll:
-      count: 3
-      sides: 6
-      modifier: 0
-    type: fire
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 11
+reach_ft: 10
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/flame_sword/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 21 ` | ` 4 ` | ` 6 ` | ` 7 ` | ` Slashing ` |
+| ` row_2 ` | ` 10 ` | ` 3 ` | ` 6 ` | ` 0 ` | ` Fire ` |
 
 ##### Hammer throw
 
-<!-- splat:yaml path=splat_rule/parameters/features/hammer_throw -->
+<!-- splat:values path=splat_rule/parameters/features/hammer_throw -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/hammer_throw/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: ranged
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 11
-  range_ft: 60
-  long_range_ft: 240
-hit:
-  damage:
-  - average: 23
-    roll:
-      count: 3
-      sides: 10
-      modifier: 7
-    type: bludgeoning
-  - average: 4
-    roll:
-      count: 1
-      sides: 8
-      modifier: 0
-    type: fire
-  push:
-    maximum_ft: 15
-    direction: straight_away_from_self
-  next_attack_modifier:
-    disadvantage: true
-    expires: target.next_turn_end
-    uses: 1
+mode: ranged
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 11
+range_ft: 60
+long_range_ft: 240
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/hammer_throw/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 23 ` | ` 3 ` | ` 10 ` | ` 7 ` | ` Bludgeoning ` |
+| ` row_2 ` | ` 4 ` | ` 1 ` | ` 8 ` | ` 0 ` | ` Fire ` |
+
+###### Push
+
+<!-- splat:values path=splat_rule/parameters/features/hammer_throw/hit/push -->
+
+| Field | Value |
+| --- | --- |
+| ` maximum_ft ` | ` 15 ` |
+| ` direction ` | ` straight_away_from_self ` |
+
+###### Next attack modifier
+
+<!-- splat:values path=splat_rule/parameters/features/hammer_throw/hit/next_attack_modifier -->
+
+| Field | Value |
+| --- | --- |
+| ` disadvantage ` | ` true ` |
+| ` expires ` | ` target.next_turn_end ` |
+| ` uses ` | ` 1 ` |
 
 #### Skill totals
 

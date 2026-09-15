@@ -55,55 +55,31 @@ which you strive against those aims.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- fiend_patron_level_10_fiendish_resilience
+- fiend_patron_level_14_hurl_through_hell
+- fiend_patron_level_3_dark_one_s_blessing
+- fiend_patron_level_3_fiend_spells
+- fiend_patron_level_6_dark_one_s_own_luck
+columns:
+  Item:
+    path: definition
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Item | Class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 14 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 6 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fiend_patron_level_10_fiendish_resilience ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fiend_patron_level_14_hurl_through_hell ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fiend_patron_level_3_dark_one_s_blessing ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fiend_patron_level_3_fiend_spells ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fiend_patron_level_6_dark_one_s_own_luck ` |
+| [Level 10: Fiendish Resilience](<../class_features/fiend_patron_level_10_fiendish_resilience.md> "dnd2024:class_features/fiend_patron_level_10_fiendish_resilience") | ` 10 ` |
+| [Level 14: Hurl Through Hell](<../class_features/fiend_patron_level_14_hurl_through_hell.md> "dnd2024:class_features/fiend_patron_level_14_hurl_through_hell") | ` 14 ` |
+| [Level 3: Dark One’s Blessing](<../class_features/fiend_patron_level_3_dark_one_s_blessing.md> "dnd2024:class_features/fiend_patron_level_3_dark_one_s_blessing") | ` 3 ` |
+| [Level 3: Fiend Spells](<../class_features/fiend_patron_level_3_fiend_spells.md> "dnd2024:class_features/fiend_patron_level_3_fiend_spells") | ` 3 ` |
+| [Level 6: Dark One’s Own Luck](<../class_features/fiend_patron_level_6_dark_one_s_own_luck.md> "dnd2024:class_features/fiend_patron_level_6_dark_one_s_own_luck") | ` 6 ` |
 
 #### Grant eligible features
 

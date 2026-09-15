@@ -80,17 +80,38 @@ Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 
 #### Flight
 
-<!-- splat:yaml path=splat_rule/parameters/flight -->
+<!-- splat:values path=splat_rule/parameters/flight -->
 
-```yaml
-speed_ft: 40
-requires_all:
-- light_level_in:
-  - dim_light
-  - darkness
-- gripping_cloak_edges: true
-ends_immediately_if_requirement_lost: true
-```
+| Field | Value |
+| --- | --- |
+| ` speed_ft ` | ` 40 ` |
+| ` ends_immediately_if_requirement_lost ` | ` true ` |
+
+##### Requires all
+
+<!-- splat:table
+path: splat_rule/parameters/flight/requires_all
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Light level in:
+    path: light_level_in
+    type: yaml
+    optional: true
+  Gripping cloak edges:
+    path: gripping_cloak_edges
+    type: boolean
+    optional: true
+-->
+
+| Key | Light level in | Gripping cloak edges |
+| --- | --- | --- |
+| ` row_1 ` | ` ["dim_light", "darkness"] ` |  |
+| ` row_2 ` |  | true |
 
 #### Spells
 

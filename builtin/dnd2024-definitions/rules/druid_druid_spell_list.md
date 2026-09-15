@@ -193,1123 +193,278 @@ True Resurrection Necromancy M\
 
 #### Spell list
 
-<!-- splat:rows path=splat_rule/parameters/spell_list -->
+<!-- splat:table
+path: splat_rule/parameters/spell_list
+key: Spell
+order:
+- druidcraft
+- elementalism
+- guidance
+- mending
+- message
+- poison_spray
+- produce_flame
+- resistance
+- shillelagh
+- spare_the_dying
+- starry_wisp
+- animal_friendship
+- charm_person
+- create_or_destroy_water
+- cure_wounds
+- detect_magic
+- detect_poison_and_disease
+- entangle
+- faerie_fire
+- fog_cloud
+- goodberry
+- healing_word
+- ice_knife
+- jump
+- longstrider
+- protection_from_evil_and_good
+- purify_food_and_drink
+- speak_with_animals
+- thunderwave
+- aid
+- animal_messenger
+- augury
+- barkskin
+- continual_flame
+- darkvision
+- enhance_ability
+- enlarge_reduce
+- find_traps
+- flame_blade
+- flaming_sphere
+- gust_of_wind
+- heat_metal
+- hold_person
+- lesser_restoration
+- locate_animals_or_plants
+- locate_object
+- moonbeam
+- pass_without_trace
+- protection_from_poison
+- spike_growth
+- call_lightning
+- conjure_animals
+- daylight
+- dispel_magic
+- meld_into_stone
+- plant_growth
+- protection_from_energy
+- revivify
+- sleet_storm
+- speak_with_plants
+- water_breathing
+- water_walk
+- wind_wall
+- blight
+- charm_monster
+- confusion
+- conjure_minor_elementals
+- conjure_woodland_beings
+- control_water
+- divination
+- dominate_beast
+- fire_shield
+- freedom_of_movement
+- giant_insect
+- hallucinatory_terrain
+- ice_storm
+- locate_creature
+- polymorph
+- stone_shape
+- stoneskin
+- wall_of_fire
+- antilife_shell
+- awaken
+- commune_with_nature
+- cone_of_cold
+- conjure_elemental
+- contagion
+- geas
+- greater_restoration
+- insect_plague
+- mass_cure_wounds
+- planar_binding
+- reincarnate
+- scrying
+- tree_stride
+- wall_of_stone
+- conjure_fey
+- find_the_path
+- flesh_to_stone
+- heal
+- heroes_feast
+- move_earth
+- sunbeam
+- transport_via_plants
+- wall_of_thorns
+- wind_walk
+- fire_storm
+- mirage_arcane
+- plane_shift
+- regenerate
+- reverse_gravity
+- symbol
+- animal_shapes
+- antipathy_sympathy
+- befuddlement
+- control_weather
+- earthquake
+- incendiary_cloud
+- sunburst
+- tsunami
+- foresight
+- shapechange
+- storm_of_vengeance
+- true_resurrection
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Level:
+    path: level
+    type: integer
+  School:
+    path: school
+    type: symbol
+  Concentration:
+    path: concentration
+    type: boolean
+  Ritual:
+    path: ritual
+    type: boolean
+  Specific material:
+    path: specific_material
+    type: boolean
+-->
 
-| Row | level | school | concentration | ritual | specific_material |
+| Spell | Level | School | Concentration | Ritual | Specific material |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 1 ` | ` 0 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 2 ` | ` 0 ` | ` divination ` | ` true ` | ` false ` | ` false ` |
-| ` 3 ` | ` 0 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 4 ` | ` 0 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 5 ` | ` 0 ` | ` necromancy ` | ` false ` | ` false ` | ` false ` |
-| ` 6 ` | ` 0 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 7 ` | ` 0 ` | ` abjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 8 ` | ` 0 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 9 ` | ` 0 ` | ` necromancy ` | ` false ` | ` false ` | ` false ` |
-| ` 10 ` | ` 0 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 11 ` | ` 1 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 12 ` | ` 1 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 13 ` | ` 1 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 14 ` | ` 1 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 15 ` | ` 1 ` | ` divination ` | ` true ` | ` true ` | ` false ` |
-| ` 16 ` | ` 1 ` | ` divination ` | ` true ` | ` true ` | ` false ` |
-| ` 17 ` | ` 1 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 18 ` | ` 1 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 19 ` | ` 1 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 20 ` | ` 1 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 21 ` | ` 1 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 22 ` | ` 1 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 23 ` | ` 1 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 24 ` | ` 1 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 25 ` | ` 1 ` | ` abjuration ` | ` true ` | ` false ` | ` true ` |
-| ` 26 ` | ` 1 ` | ` transmutation ` | ` false ` | ` true ` | ` false ` |
-| ` 27 ` | ` 1 ` | ` divination ` | ` false ` | ` true ` | ` false ` |
-| ` 28 ` | ` 1 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 29 ` | ` 2 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 30 ` | ` 2 ` | ` enchantment ` | ` false ` | ` true ` | ` false ` |
-| ` 31 ` | ` 2 ` | ` divination ` | ` false ` | ` true ` | ` true ` |
-| ` 32 ` | ` 2 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 33 ` | ` 2 ` | ` evocation ` | ` false ` | ` false ` | ` true ` |
-| ` 34 ` | ` 2 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 35 ` | ` 2 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 36 ` | ` 2 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 37 ` | ` 2 ` | ` divination ` | ` false ` | ` false ` | ` false ` |
-| ` 38 ` | ` 2 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 39 ` | ` 2 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 40 ` | ` 2 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 41 ` | ` 2 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 42 ` | ` 2 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 43 ` | ` 2 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 44 ` | ` 2 ` | ` divination ` | ` false ` | ` true ` | ` false ` |
-| ` 45 ` | ` 2 ` | ` divination ` | ` true ` | ` false ` | ` false ` |
-| ` 46 ` | ` 2 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 47 ` | ` 2 ` | ` abjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 48 ` | ` 2 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 49 ` | ` 2 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 50 ` | ` 3 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 51 ` | ` 3 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 52 ` | ` 3 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 53 ` | ` 3 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 54 ` | ` 3 ` | ` transmutation ` | ` false ` | ` true ` | ` false ` |
-| ` 55 ` | ` 3 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 56 ` | ` 3 ` | ` abjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 57 ` | ` 3 ` | ` necromancy ` | ` false ` | ` false ` | ` true ` |
-| ` 58 ` | ` 3 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 59 ` | ` 3 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 60 ` | ` 3 ` | ` transmutation ` | ` false ` | ` true ` | ` false ` |
-| ` 61 ` | ` 3 ` | ` transmutation ` | ` false ` | ` true ` | ` false ` |
-| ` 62 ` | ` 3 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 63 ` | ` 4 ` | ` necromancy ` | ` false ` | ` false ` | ` false ` |
-| ` 64 ` | ` 4 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 65 ` | ` 4 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 66 ` | ` 4 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 67 ` | ` 4 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 68 ` | ` 4 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 69 ` | ` 4 ` | ` divination ` | ` false ` | ` true ` | ` true ` |
-| ` 70 ` | ` 4 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 71 ` | ` 4 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 72 ` | ` 4 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 73 ` | ` 4 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 74 ` | ` 4 ` | ` illusion ` | ` false ` | ` false ` | ` false ` |
-| ` 75 ` | ` 4 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 76 ` | ` 4 ` | ` divination ` | ` true ` | ` false ` | ` false ` |
-| ` 77 ` | ` 4 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 78 ` | ` 4 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 79 ` | ` 4 ` | ` transmutation ` | ` true ` | ` false ` | ` true ` |
-| ` 80 ` | ` 4 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 81 ` | ` 5 ` | ` abjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 82 ` | ` 5 ` | ` transmutation ` | ` false ` | ` false ` | ` true ` |
-| ` 83 ` | ` 5 ` | ` divination ` | ` false ` | ` true ` | ` false ` |
-| ` 84 ` | ` 5 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 85 ` | ` 5 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 86 ` | ` 5 ` | ` necromancy ` | ` false ` | ` false ` | ` false ` |
-| ` 87 ` | ` 5 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 88 ` | ` 5 ` | ` abjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 89 ` | ` 5 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 90 ` | ` 5 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 91 ` | ` 5 ` | ` abjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 92 ` | ` 5 ` | ` necromancy ` | ` false ` | ` false ` | ` true ` |
-| ` 93 ` | ` 5 ` | ` divination ` | ` true ` | ` false ` | ` true ` |
-| ` 94 ` | ` 5 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 95 ` | ` 5 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 96 ` | ` 6 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 97 ` | ` 6 ` | ` divination ` | ` true ` | ` false ` | ` true ` |
-| ` 98 ` | ` 6 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 99 ` | ` 6 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 100 ` | ` 6 ` | ` conjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 101 ` | ` 6 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 102 ` | ` 6 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 103 ` | ` 6 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 104 ` | ` 6 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 105 ` | ` 6 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 106 ` | ` 7 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 107 ` | ` 7 ` | ` illusion ` | ` false ` | ` false ` | ` false ` |
-| ` 108 ` | ` 7 ` | ` conjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 109 ` | ` 7 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 110 ` | ` 7 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 111 ` | ` 7 ` | ` abjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 112 ` | ` 8 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 113 ` | ` 8 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 114 ` | ` 8 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 115 ` | ` 8 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 116 ` | ` 8 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 117 ` | ` 8 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 118 ` | ` 8 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 119 ` | ` 8 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 120 ` | ` 9 ` | ` divination ` | ` false ` | ` false ` | ` false ` |
-| ` 121 ` | ` 9 ` | ` transmutation ` | ` true ` | ` false ` | ` true ` |
-| ` 122 ` | ` 9 ` | ` conjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 123 ` | ` 9 ` | ` necromancy ` | ` false ` | ` false ` | ` true ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/druidcraft ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/elementalism ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/guidance ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/3/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mending ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/4/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/message ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/5/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/poison_spray ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/6/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/produce_flame ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/7/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/resistance ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/8/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/shillelagh ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/9/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/spare_the_dying ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/10/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/starry_wisp ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/11/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/animal_friendship ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/12/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/charm_person ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/13/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/create_or_destroy_water ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/14/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/cure_wounds ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/15/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/detect_magic ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/16/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/detect_poison_and_disease ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/17/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/entangle ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/18/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/faerie_fire ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/19/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fog_cloud ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/20/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/goodberry ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/21/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/healing_word ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/22/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/ice_knife ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/23/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/jump ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/24/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/longstrider ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/25/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/protection_from_evil_and_good ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/26/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/purify_food_and_drink ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/27/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/speak_with_animals ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/28/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/thunderwave ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/29/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/aid ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/30/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/animal_messenger ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/31/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/augury ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/32/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/barkskin ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/33/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/continual_flame ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/34/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/darkvision ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/35/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/enhance_ability ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/36/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/enlarge_reduce ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/37/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/find_traps ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/38/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/flame_blade ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/39/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/flaming_sphere ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/40/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/gust_of_wind ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/41/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/heat_metal ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/42/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hold_person ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/43/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/lesser_restoration ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/44/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/locate_animals_or_plants ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/45/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/locate_object ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/46/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/moonbeam ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/47/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/pass_without_trace ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/48/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/protection_from_poison ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/49/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/spike_growth ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/50/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/call_lightning ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/51/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/conjure_animals ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/52/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/daylight ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/53/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/dispel_magic ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/54/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/meld_into_stone ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/55/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/plant_growth ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/56/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/protection_from_energy ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/57/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/revivify ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/58/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/sleet_storm ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/59/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/speak_with_plants ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/60/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/water_breathing ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/61/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/water_walk ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/62/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wind_wall ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/63/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/blight ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/64/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/charm_monster ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/65/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/confusion ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/66/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/conjure_minor_elementals ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/67/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/conjure_woodland_beings ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/68/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/control_water ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/69/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/divination ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/70/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/dominate_beast ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/71/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fire_shield ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/72/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/freedom_of_movement ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/73/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/giant_insect ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/74/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hallucinatory_terrain ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/75/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/ice_storm ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/76/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/locate_creature ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/77/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/polymorph ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/78/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/stone_shape ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/79/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/stoneskin ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/80/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_fire ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/81/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/antilife_shell ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/82/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/awaken ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/83/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/commune_with_nature ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/84/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/cone_of_cold ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/85/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/conjure_elemental ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/86/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/contagion ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/87/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/geas ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/88/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/greater_restoration ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/89/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/insect_plague ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/90/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mass_cure_wounds ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/91/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/planar_binding ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/92/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/reincarnate ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/93/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/scrying ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/94/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/tree_stride ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/95/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_stone ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/96/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/conjure_fey ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/97/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/find_the_path ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/98/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/flesh_to_stone ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/99/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/heal ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/100/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/heroes_feast ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/101/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/move_earth ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/102/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/sunbeam ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/103/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/transport_via_plants ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/104/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_thorns ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/105/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wind_walk ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/106/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fire_storm ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/107/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mirage_arcane ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/108/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/plane_shift ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/109/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/regenerate ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/110/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/reverse_gravity ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/111/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/symbol ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/112/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/animal_shapes ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/113/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/antipathy_sympathy ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/114/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/befuddlement ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/115/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/control_weather ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/116/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/earthquake ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/117/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/incendiary_cloud ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/118/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/sunburst ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/119/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/tsunami ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/120/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/foresight ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/121/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/shapechange ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/122/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/storm_of_vengeance ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_list/123/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/true_resurrection ` |
+| [Druidcraft](<../spells/druidcraft.md> "dnd2024:spells/druidcraft") | ` 0 ` | ` Transmutation ` | false | false | false |
+| [Elementalism](<../spells/elementalism.md> "dnd2024:spells/elementalism") | ` 0 ` | ` Transmutation ` | false | false | false |
+| [Guidance](<../spells/guidance.md> "dnd2024:spells/guidance") | ` 0 ` | ` Divination ` | true | false | false |
+| [Mending](<../spells/mending.md> "dnd2024:spells/mending") | ` 0 ` | ` Transmutation ` | false | false | false |
+| [Message](<../spells/message.md> "dnd2024:spells/message") | ` 0 ` | ` Transmutation ` | false | false | false |
+| [Poison Spray](<../spells/poison_spray.md> "dnd2024:spells/poison_spray") | ` 0 ` | ` Necromancy ` | false | false | false |
+| [Produce Flame](<../spells/produce_flame.md> "dnd2024:spells/produce_flame") | ` 0 ` | ` Conjuration ` | false | false | false |
+| [Resistance](<../spells/resistance.md> "dnd2024:spells/resistance") | ` 0 ` | ` Abjuration ` | true | false | false |
+| [Shillelagh](<../spells/shillelagh.md> "dnd2024:spells/shillelagh") | ` 0 ` | ` Transmutation ` | false | false | false |
+| [Spare the Dying](<../spells/spare_the_dying.md> "dnd2024:spells/spare_the_dying") | ` 0 ` | ` Necromancy ` | false | false | false |
+| [Starry Wisp](<../spells/starry_wisp.md> "dnd2024:spells/starry_wisp") | ` 0 ` | ` Evocation ` | false | false | false |
+| [Animal Friendship](<../spells/animal_friendship.md> "dnd2024:spells/animal_friendship") | ` 1 ` | ` Enchantment ` | false | false | false |
+| [Charm Person](<../spells/charm_person.md> "dnd2024:spells/charm_person") | ` 1 ` | ` Enchantment ` | false | false | false |
+| [Create or Destroy Water](<../spells/create_or_destroy_water.md> "dnd2024:spells/create_or_destroy_water") | ` 1 ` | ` Transmutation ` | false | false | false |
+| [Cure Wounds](<../spells/cure_wounds.md> "dnd2024:spells/cure_wounds") | ` 1 ` | ` Abjuration ` | false | false | false |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` 1 ` | ` Divination ` | true | true | false |
+| [Detect Poison and Disease](<../spells/detect_poison_and_disease.md> "dnd2024:spells/detect_poison_and_disease") | ` 1 ` | ` Divination ` | true | true | false |
+| [Entangle](<../spells/entangle.md> "dnd2024:spells/entangle") | ` 1 ` | ` Conjuration ` | true | false | false |
+| [Faerie Fire](<../spells/faerie_fire.md> "dnd2024:spells/faerie_fire") | ` 1 ` | ` Evocation ` | true | false | false |
+| [Fog Cloud](<../spells/fog_cloud.md> "dnd2024:spells/fog_cloud") | ` 1 ` | ` Conjuration ` | true | false | false |
+| [Goodberry](<../spells/goodberry.md> "dnd2024:spells/goodberry") | ` 1 ` | ` Conjuration ` | false | false | false |
+| [Healing Word](<../spells/healing_word.md> "dnd2024:spells/healing_word") | ` 1 ` | ` Abjuration ` | false | false | false |
+| [Ice Knife](<../spells/ice_knife.md> "dnd2024:spells/ice_knife") | ` 1 ` | ` Conjuration ` | false | false | false |
+| [Jump](<../spells/jump.md> "dnd2024:spells/jump") | ` 1 ` | ` Transmutation ` | false | false | false |
+| [Longstrider](<../spells/longstrider.md> "dnd2024:spells/longstrider") | ` 1 ` | ` Transmutation ` | false | false | false |
+| [Protection from Evil and Good](<../spells/protection_from_evil_and_good.md> "dnd2024:spells/protection_from_evil_and_good") | ` 1 ` | ` Abjuration ` | true | false | true |
+| [Purify Food and Drink](<../spells/purify_food_and_drink.md> "dnd2024:spells/purify_food_and_drink") | ` 1 ` | ` Transmutation ` | false | true | false |
+| [Speak with Animals](<../spells/speak_with_animals.md> "dnd2024:spells/speak_with_animals") | ` 1 ` | ` Divination ` | false | true | false |
+| [Thunderwave](<../spells/thunderwave.md> "dnd2024:spells/thunderwave") | ` 1 ` | ` Evocation ` | false | false | false |
+| [Aid](<../spells/aid.md> "dnd2024:spells/aid") | ` 2 ` | ` Abjuration ` | false | false | false |
+| [Animal Messenger](<../spells/animal_messenger.md> "dnd2024:spells/animal_messenger") | ` 2 ` | ` Enchantment ` | false | true | false |
+| [Augury](<../spells/augury.md> "dnd2024:spells/augury") | ` 2 ` | ` Divination ` | false | true | true |
+| [Barkskin](<../spells/barkskin.md> "dnd2024:spells/barkskin") | ` 2 ` | ` Transmutation ` | false | false | false |
+| [Continual Flame](<../spells/continual_flame.md> "dnd2024:spells/continual_flame") | ` 2 ` | ` Evocation ` | false | false | true |
+| [Darkvision](<../spells/darkvision.md> "dnd2024:spells/darkvision") | ` 2 ` | ` Transmutation ` | false | false | false |
+| [Enhance Ability](<../spells/enhance_ability.md> "dnd2024:spells/enhance_ability") | ` 2 ` | ` Transmutation ` | true | false | false |
+| [Enlarge/Reduce](<../spells/enlarge_reduce.md> "dnd2024:spells/enlarge_reduce") | ` 2 ` | ` Transmutation ` | true | false | false |
+| [Find Traps](<../spells/find_traps.md> "dnd2024:spells/find_traps") | ` 2 ` | ` Divination ` | false | false | false |
+| [Flame Blade](<../spells/flame_blade.md> "dnd2024:spells/flame_blade") | ` 2 ` | ` Evocation ` | true | false | false |
+| [Flaming Sphere](<../spells/flaming_sphere.md> "dnd2024:spells/flaming_sphere") | ` 2 ` | ` Evocation ` | true | false | false |
+| [Gust of Wind](<../spells/gust_of_wind.md> "dnd2024:spells/gust_of_wind") | ` 2 ` | ` Evocation ` | true | false | false |
+| [Heat Metal](<../spells/heat_metal.md> "dnd2024:spells/heat_metal") | ` 2 ` | ` Transmutation ` | true | false | false |
+| [Hold Person](<../spells/hold_person.md> "dnd2024:spells/hold_person") | ` 2 ` | ` Enchantment ` | true | false | false |
+| [Lesser Restoration](<../spells/lesser_restoration.md> "dnd2024:spells/lesser_restoration") | ` 2 ` | ` Abjuration ` | false | false | false |
+| [Locate Animals or Plants](<../spells/locate_animals_or_plants.md> "dnd2024:spells/locate_animals_or_plants") | ` 2 ` | ` Divination ` | false | true | false |
+| [Locate Object](<../spells/locate_object.md> "dnd2024:spells/locate_object") | ` 2 ` | ` Divination ` | true | false | false |
+| [Moonbeam](<../spells/moonbeam.md> "dnd2024:spells/moonbeam") | ` 2 ` | ` Evocation ` | true | false | false |
+| [Pass without Trace](<../spells/pass_without_trace.md> "dnd2024:spells/pass_without_trace") | ` 2 ` | ` Abjuration ` | true | false | false |
+| [Protection from Poison](<../spells/protection_from_poison.md> "dnd2024:spells/protection_from_poison") | ` 2 ` | ` Abjuration ` | false | false | false |
+| [Spike Growth](<../spells/spike_growth.md> "dnd2024:spells/spike_growth") | ` 2 ` | ` Transmutation ` | true | false | false |
+| [Call Lightning](<../spells/call_lightning.md> "dnd2024:spells/call_lightning") | ` 3 ` | ` Conjuration ` | true | false | false |
+| [Conjure Animals](<../spells/conjure_animals.md> "dnd2024:spells/conjure_animals") | ` 3 ` | ` Conjuration ` | true | false | false |
+| [Daylight](<../spells/daylight.md> "dnd2024:spells/daylight") | ` 3 ` | ` Evocation ` | false | false | false |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") | ` 3 ` | ` Abjuration ` | false | false | false |
+| [Meld into Stone](<../spells/meld_into_stone.md> "dnd2024:spells/meld_into_stone") | ` 3 ` | ` Transmutation ` | false | true | false |
+| [Plant Growth](<../spells/plant_growth.md> "dnd2024:spells/plant_growth") | ` 3 ` | ` Transmutation ` | false | false | false |
+| [Protection from Energy](<../spells/protection_from_energy.md> "dnd2024:spells/protection_from_energy") | ` 3 ` | ` Abjuration ` | true | false | false |
+| [Revivify](<../spells/revivify.md> "dnd2024:spells/revivify") | ` 3 ` | ` Necromancy ` | false | false | true |
+| [Sleet Storm](<../spells/sleet_storm.md> "dnd2024:spells/sleet_storm") | ` 3 ` | ` Conjuration ` | true | false | false |
+| [Speak with Plants](<../spells/speak_with_plants.md> "dnd2024:spells/speak_with_plants") | ` 3 ` | ` Transmutation ` | false | false | false |
+| [Water Breathing](<../spells/water_breathing.md> "dnd2024:spells/water_breathing") | ` 3 ` | ` Transmutation ` | false | true | false |
+| [Water Walk](<../spells/water_walk.md> "dnd2024:spells/water_walk") | ` 3 ` | ` Transmutation ` | false | true | false |
+| [Wind Wall](<../spells/wind_wall.md> "dnd2024:spells/wind_wall") | ` 3 ` | ` Evocation ` | true | false | false |
+| [Blight](<../spells/blight.md> "dnd2024:spells/blight") | ` 4 ` | ` Necromancy ` | false | false | false |
+| [Charm Monster](<../spells/charm_monster.md> "dnd2024:spells/charm_monster") | ` 4 ` | ` Enchantment ` | false | false | false |
+| [Confusion](<../spells/confusion.md> "dnd2024:spells/confusion") | ` 4 ` | ` Enchantment ` | true | false | false |
+| [Conjure Minor Elementals](<../spells/conjure_minor_elementals.md> "dnd2024:spells/conjure_minor_elementals") | ` 4 ` | ` Conjuration ` | true | false | false |
+| [Conjure Woodland Beings](<../spells/conjure_woodland_beings.md> "dnd2024:spells/conjure_woodland_beings") | ` 4 ` | ` Conjuration ` | true | false | false |
+| [Control Water](<../spells/control_water.md> "dnd2024:spells/control_water") | ` 4 ` | ` Transmutation ` | true | false | false |
+| [Divination](<../spells/divination.md> "dnd2024:spells/divination") | ` 4 ` | ` Divination ` | false | true | true |
+| [Dominate Beast](<../spells/dominate_beast.md> "dnd2024:spells/dominate_beast") | ` 4 ` | ` Enchantment ` | true | false | false |
+| [Fire Shield](<../spells/fire_shield.md> "dnd2024:spells/fire_shield") | ` 4 ` | ` Evocation ` | false | false | false |
+| [Freedom of Movement](<../spells/freedom_of_movement.md> "dnd2024:spells/freedom_of_movement") | ` 4 ` | ` Abjuration ` | false | false | false |
+| [Giant Insect](<../spells/giant_insect.md> "dnd2024:spells/giant_insect") | ` 4 ` | ` Conjuration ` | true | false | false |
+| [Hallucinatory Terrain](<../spells/hallucinatory_terrain.md> "dnd2024:spells/hallucinatory_terrain") | ` 4 ` | ` Illusion ` | false | false | false |
+| [Ice Storm](<../spells/ice_storm.md> "dnd2024:spells/ice_storm") | ` 4 ` | ` Evocation ` | false | false | false |
+| [Locate Creature](<../spells/locate_creature.md> "dnd2024:spells/locate_creature") | ` 4 ` | ` Divination ` | true | false | false |
+| [Polymorph](<../spells/polymorph.md> "dnd2024:spells/polymorph") | ` 4 ` | ` Transmutation ` | true | false | false |
+| [Stone Shape](<../spells/stone_shape.md> "dnd2024:spells/stone_shape") | ` 4 ` | ` Transmutation ` | false | false | false |
+| [Stoneskin](<../spells/stoneskin.md> "dnd2024:spells/stoneskin") | ` 4 ` | ` Transmutation ` | true | false | true |
+| [Wall of Fire](<../spells/wall_of_fire.md> "dnd2024:spells/wall_of_fire") | ` 4 ` | ` Evocation ` | true | false | false |
+| [Antilife Shell](<../spells/antilife_shell.md> "dnd2024:spells/antilife_shell") | ` 5 ` | ` Abjuration ` | true | false | false |
+| [Awaken](<../spells/awaken.md> "dnd2024:spells/awaken") | ` 5 ` | ` Transmutation ` | false | false | true |
+| [Commune with Nature](<../spells/commune_with_nature.md> "dnd2024:spells/commune_with_nature") | ` 5 ` | ` Divination ` | false | true | false |
+| [Cone of Cold](<../spells/cone_of_cold.md> "dnd2024:spells/cone_of_cold") | ` 5 ` | ` Evocation ` | false | false | false |
+| [Conjure Elemental](<../spells/conjure_elemental.md> "dnd2024:spells/conjure_elemental") | ` 5 ` | ` Conjuration ` | true | false | false |
+| [Contagion](<../spells/contagion.md> "dnd2024:spells/contagion") | ` 5 ` | ` Necromancy ` | false | false | false |
+| [Geas](<../spells/geas.md> "dnd2024:spells/geas") | ` 5 ` | ` Enchantment ` | false | false | false |
+| [Greater Restoration](<../spells/greater_restoration.md> "dnd2024:spells/greater_restoration") | ` 5 ` | ` Abjuration ` | false | false | true |
+| [Insect Plague](<../spells/insect_plague.md> "dnd2024:spells/insect_plague") | ` 5 ` | ` Conjuration ` | true | false | false |
+| [Mass Cure Wounds](<../spells/mass_cure_wounds.md> "dnd2024:spells/mass_cure_wounds") | ` 5 ` | ` Abjuration ` | false | false | false |
+| [Planar Binding](<../spells/planar_binding.md> "dnd2024:spells/planar_binding") | ` 5 ` | ` Abjuration ` | false | false | true |
+| [Reincarnate](<../spells/reincarnate.md> "dnd2024:spells/reincarnate") | ` 5 ` | ` Necromancy ` | false | false | true |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` 5 ` | ` Divination ` | true | false | true |
+| [Tree Stride](<../spells/tree_stride.md> "dnd2024:spells/tree_stride") | ` 5 ` | ` Conjuration ` | true | false | false |
+| [Wall of Stone](<../spells/wall_of_stone.md> "dnd2024:spells/wall_of_stone") | ` 5 ` | ` Evocation ` | true | false | false |
+| [Conjure Fey](<../spells/conjure_fey.md> "dnd2024:spells/conjure_fey") | ` 6 ` | ` Conjuration ` | true | false | false |
+| [Find the Path](<../spells/find_the_path.md> "dnd2024:spells/find_the_path") | ` 6 ` | ` Divination ` | true | false | true |
+| [Flesh to Stone](<../spells/flesh_to_stone.md> "dnd2024:spells/flesh_to_stone") | ` 6 ` | ` Transmutation ` | true | false | false |
+| [Heal](<../spells/heal.md> "dnd2024:spells/heal") | ` 6 ` | ` Abjuration ` | false | false | false |
+| [Heroes’ Feast](<../spells/heroes_feast.md> "dnd2024:spells/heroes_feast") | ` 6 ` | ` Conjuration ` | false | false | true |
+| [Move Earth](<../spells/move_earth.md> "dnd2024:spells/move_earth") | ` 6 ` | ` Transmutation ` | true | false | false |
+| [Sunbeam](<../spells/sunbeam.md> "dnd2024:spells/sunbeam") | ` 6 ` | ` Evocation ` | true | false | false |
+| [Transport via Plants](<../spells/transport_via_plants.md> "dnd2024:spells/transport_via_plants") | ` 6 ` | ` Conjuration ` | false | false | false |
+| [Wall of Thorns](<../spells/wall_of_thorns.md> "dnd2024:spells/wall_of_thorns") | ` 6 ` | ` Conjuration ` | true | false | false |
+| [Wind Walk](<../spells/wind_walk.md> "dnd2024:spells/wind_walk") | ` 6 ` | ` Transmutation ` | false | false | false |
+| [Fire Storm](<../spells/fire_storm.md> "dnd2024:spells/fire_storm") | ` 7 ` | ` Evocation ` | false | false | false |
+| [Mirage Arcane](<../spells/mirage_arcane.md> "dnd2024:spells/mirage_arcane") | ` 7 ` | ` Illusion ` | false | false | false |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") | ` 7 ` | ` Conjuration ` | false | false | true |
+| [Regenerate](<../spells/regenerate.md> "dnd2024:spells/regenerate") | ` 7 ` | ` Transmutation ` | false | false | false |
+| [Reverse Gravity](<../spells/reverse_gravity.md> "dnd2024:spells/reverse_gravity") | ` 7 ` | ` Transmutation ` | true | false | false |
+| [Symbol](<../spells/symbol.md> "dnd2024:spells/symbol") | ` 7 ` | ` Abjuration ` | false | false | true |
+| [Animal Shapes](<../spells/animal_shapes.md> "dnd2024:spells/animal_shapes") | ` 8 ` | ` Transmutation ` | false | false | false |
+| [Antipathy/Sympathy](<../spells/antipathy_sympathy.md> "dnd2024:spells/antipathy_sympathy") | ` 8 ` | ` Enchantment ` | false | false | false |
+| [Befuddlement](<../spells/befuddlement.md> "dnd2024:spells/befuddlement") | ` 8 ` | ` Enchantment ` | false | false | false |
+| [Control Weather](<../spells/control_weather.md> "dnd2024:spells/control_weather") | ` 8 ` | ` Transmutation ` | true | false | false |
+| [Earthquake](<../spells/earthquake.md> "dnd2024:spells/earthquake") | ` 8 ` | ` Transmutation ` | true | false | false |
+| [Incendiary Cloud](<../spells/incendiary_cloud.md> "dnd2024:spells/incendiary_cloud") | ` 8 ` | ` Conjuration ` | true | false | false |
+| [Sunburst](<../spells/sunburst.md> "dnd2024:spells/sunburst") | ` 8 ` | ` Evocation ` | false | false | false |
+| [Tsunami](<../spells/tsunami.md> "dnd2024:spells/tsunami") | ` 8 ` | ` Conjuration ` | true | false | false |
+| [Foresight](<../spells/foresight.md> "dnd2024:spells/foresight") | ` 9 ` | ` Divination ` | false | false | false |
+| [Shapechange](<../spells/shapechange.md> "dnd2024:spells/shapechange") | ` 9 ` | ` Transmutation ` | true | false | true |
+| [Storm of Vengeance](<../spells/storm_of_vengeance.md> "dnd2024:spells/storm_of_vengeance") | ` 9 ` | ` Conjuration ` | true | false | false |
+| [True Resurrection](<../spells/true_resurrection.md> "dnd2024:spells/true_resurrection") | ` 9 ` | ` Necromancy ` | false | false | true |

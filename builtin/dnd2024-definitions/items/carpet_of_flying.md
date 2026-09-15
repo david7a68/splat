@@ -88,11 +88,34 @@ Original layout: [[../../srd-5.2.1/pages/215|page 215]].
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Roll:
+    path: roll
+    type: yaml
+  Dimensions ft:
+    path: dimensions_ft
+    type: yaml
+  Normal capacity lb:
+    path: normal_capacity_lb
+    type: integer
+  Fly speed ft:
+    path: fly_speed_ft
+    type: integer
+-->
 
-| Row | roll | dimensions_ft | normal_capacity_lb | fly_speed_ft |
+| Key | Roll | Dimensions ft | Normal capacity lb | Fly speed ft |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` [1, 20] ` | ` [3, 5] ` | ` 200 ` | ` 80 ` |
-| ` 1 ` | ` [21, 55] ` | ` [4, 6] ` | ` 400 ` | ` 60 ` |
-| ` 2 ` | ` [56, 80] ` | ` [5, 7] ` | ` 600 ` | ` 40 ` |
-| ` 3 ` | ` [81, 100] ` | ` [6, 9] ` | ` 800 ` | ` 30 ` |
+| ` row_1 ` | ` [1, 20] ` | ` [3, 5] ` | ` 200 ` | ` 80 ` |
+| ` row_2 ` | ` [21, 55] ` | ` [4, 6] ` | ` 400 ` | ` 60 ` |
+| ` row_3 ` | ` [56, 80] ` | ` [5, 7] ` | ` 600 ` | ` 40 ` |
+| ` row_4 ` | ` [81, 100] ` | ` [6, 9] ` | ` 800 ` | ` 30 ` |

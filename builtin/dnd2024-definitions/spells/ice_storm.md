@@ -97,20 +97,46 @@ Original layout: [[../../srd-5.2.1/pages/141|page 141]], [[../../srd-5.2.1/pages
 
 #### Save
 
-<!-- splat:yaml path=splat_rule/parameters/save -->
+<!-- splat:values path=splat_rule/parameters/save -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` dexterity ` |
+
+##### Failure
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/save/failure/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice:
+    path: dice
+    type: string
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Dice | Type |
+| --- | --- | --- |
+| ` row_1 ` | ` 2d10 ` | ` Bludgeoning ` |
+| ` row_2 ` | ` 4d6 ` | ` Cold ` |
+
+##### Success
+
+<!-- splat:yaml path=splat_rule/parameters/save/success -->
 
 ```yaml
-ability: dexterity
-failure:
-  damage:
-  - dice: 2d10
-    type: bludgeoning
-  - dice: 4d6
-    type: cold
-success:
-  damage_fraction:
-    numerator: 1
-    denominator: 2
+damage_fraction:
+  numerator: 1
+  denominator: 2
 ```
 
 #### Terrain

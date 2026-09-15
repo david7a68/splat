@@ -162,12 +162,27 @@ Original layout: [[../../srd-5.2.1/pages/319|page 319]].
 
 #### Senses
 
-<!-- splat:rows path=splat_rule/parameters/senses -->
+<!-- splat:table
+path: splat_rule/parameters/senses
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range ft:
+    path: range_ft
+    type: integer
+-->
 
-| Row | sense | range_ft |
+| Key | Sense | Range ft |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 60 ` |
-| ` 1 ` | ` darkvision ` | ` 120 ` |
+| ` row_1 ` | ` Blindsight ` | ` 60 ` |
+| ` row_2 ` | ` Darkvision ` | ` 120 ` |
 
 #### Languages
 
@@ -231,44 +246,64 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: charisma
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/command
-    uses:
-      unlimited: true
-    cast_level: 2
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/scorching_ray
-    uses:
-      unlimited: true
-    cast_level: 3
-  - spell:
-      key: dnd2024:spells/fireball
-    uses:
-      count: 1
-      recovery: long_rest
-    cast_level: 6
-  - spell:
-      key: dnd2024:spells/scrying
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 23
-  attack_bonus: 15
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` charisma ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 23 ` |
+| ` attack_bonus ` | ` 15 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- command
+- detect_magic
+- scorching_ray
+- fireball
+- scrying
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Cast level | Uses count | Uses recovery |
+| --- | --- | --- | --- | --- |
+| [Command](<../spells/command.md> "dnd2024:spells/command") | true | ` 2 ` |  |  |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |  |
+| [Scorching Ray](<../spells/scorching_ray.md> "dnd2024:spells/scorching_ray") | true | ` 3 ` |  |  |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") |  | ` 6 ` | ` 1 ` | ` Long rest ` |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") |  |  | ` 1 ` | ` Long rest ` |
 
 ##### Fire breath
 

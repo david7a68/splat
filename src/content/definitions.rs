@@ -191,10 +191,13 @@ pub fn entries() -> Result<Vec<Entry>, String> {
     fn walk(dir: &Dir<'_>, result: &mut Vec<Entry>) -> Result<(), String> {
         for file in dir.files() {
             if file.path().extension().is_some_and(|e| e == "md") {
-                result.push(Entry::parse(
-                    &format!("definitions/{}", file.path().display()),
-                    file.contents_utf8().ok_or("Definition must be UTF-8")?,
-                )?);
+                result.push(
+                    Entry::parse(
+                        &format!("definitions/{}", file.path().display()),
+                        file.contents_utf8().ok_or("Definition must be UTF-8")?,
+                    )
+                    .map_err(|e| format!("{}: {e}", file.path().display()))?,
+                );
             }
         }
         for child in dir.dirs() {

@@ -76,73 +76,38 @@ Robe, and Tinderbox.\
 
 #### Contents
 
-<!-- splat:rows path=splat_rule/parameters/contents -->
+<!-- splat:table
+path: splat_rule/parameters/contents
+key: Item
+order:
+- backpack_2_gp
+- blanket_5_sp
+- holy_water_25_gp
+- lamp_5_sp
+- rations_5_sp
+- robe_1_gp
+- tinderbox_5_sp
+columns:
+  Item:
+    path: item
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Unit:
+    path: unit
+    type: symbol
+-->
 
-| Row | quantity | unit |
+| Item | Quantity | Unit |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` purchase_unit ` |
-| ` 1 ` | ` 1 ` | ` purchase_unit ` |
-| ` 2 ` | ` 1 ` | ` purchase_unit ` |
-| ` 3 ` | ` 1 ` | ` purchase_unit ` |
-| ` 4 ` | ` 7 ` | ` day ` |
-| ` 5 ` | ` 1 ` | ` purchase_unit ` |
-| ` 6 ` | ` 1 ` | ` purchase_unit ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/0/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/backpack_2_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/1/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/blanket_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/2/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/holy_water_25_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/3/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/lamp_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/4/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/rations_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/5/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/robe_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/6/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/tinderbox_5_sp ` |
+| [Backpack (2 GP)](<backpack_2_gp.md> "dnd2024:equipment/backpack_2_gp") | ` 1 ` | ` Purchase unit ` |
+| [Blanket (5 SP)](<blanket_5_sp.md> "dnd2024:equipment/blanket_5_sp") | ` 1 ` | ` Purchase unit ` |
+| [Holy Water (25 GP)](<holy_water_25_gp.md> "dnd2024:equipment/holy_water_25_gp") | ` 1 ` | ` Purchase unit ` |
+| [Lamp (5 SP)](<lamp_5_sp.md> "dnd2024:equipment/lamp_5_sp") | ` 1 ` | ` Purchase unit ` |
+| [Rations (5 SP)](<rations_5_sp.md> "dnd2024:equipment/rations_5_sp") | ` 7 ` | ` Day ` |
+| [Robe (1 GP)](<robe_1_gp.md> "dnd2024:equipment/robe_1_gp") | ` 1 ` | ` Purchase unit ` |
+| [Tinderbox (5 SP)](<tinderbox_5_sp.md> "dnd2024:equipment/tinderbox_5_sp") | ` 1 ` | ` Purchase unit ` |
 
 #### Mass
 

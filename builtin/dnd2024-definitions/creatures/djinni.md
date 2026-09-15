@@ -302,70 +302,73 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: charisma
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/detect_evil_and_good
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/create_food_and_water
-    uses:
-      count: 2
-      recovery: long_rest
-    overrides:
-      water_replacement_choice:
-      - water
-      - wine
-  - spell:
-      key: dnd2024:spells/tongues
-    uses:
-      count: 2
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/wind_walk
-    uses:
-      count: 2
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/creation
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/gaseous_form
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/invisibility
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/major_image
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/plane_shift
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 17
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` charisma ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 17 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- detect_evil_and_good
+- detect_magic
+- create_food_and_water
+- tongues
+- wind_walk
+- creation
+- gaseous_form
+- invisibility
+- major_image
+- plane_shift
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+  Overrides water replacement choice:
+    path: overrides/water_replacement_choice
+    type: yaml
+    optional: true
+-->
+
+| Spell | Uses unlimited | Uses count | Uses recovery | Overrides water replacement choice |
+| --- | --- | --- | --- | --- |
+| [Detect Evil and Good](<../spells/detect_evil_and_good.md> "dnd2024:spells/detect_evil_and_good") | true |  |  |  |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |  |
+| [Create Food and Water](<../spells/create_food_and_water.md> "dnd2024:spells/create_food_and_water") |  | ` 2 ` | ` Long rest ` | ` ["water", "wine"] ` |
+| [Tongues](<../spells/tongues.md> "dnd2024:spells/tongues") |  | ` 2 ` | ` Long rest ` |  |
+| [Wind Walk](<../spells/wind_walk.md> "dnd2024:spells/wind_walk") |  | ` 2 ` | ` Long rest ` |  |
+| [Creation](<../spells/creation.md> "dnd2024:spells/creation") |  | ` 1 ` | ` Long rest ` |  |
+| [Gaseous Form](<../spells/gaseous_form.md> "dnd2024:spells/gaseous_form") |  | ` 1 ` | ` Long rest ` |  |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") |  | ` 1 ` | ` Long rest ` |  |
+| [Major Image](<../spells/major_image.md> "dnd2024:spells/major_image") |  | ` 1 ` | ` Long rest ` |  |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") |  | ` 1 ` | ` Long rest ` |  |
 
 ##### Create whirlwind
 

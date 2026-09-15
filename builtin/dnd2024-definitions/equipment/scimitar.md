@@ -108,40 +108,57 @@ amount:
 
 #### Properties
 
-<!-- splat:rows path=splat_rule/parameters/properties -->
+<!-- splat:table
+path: splat_rule/parameters/properties
+key: Variant
+order:
+- finesse
+- light
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Rule:
+    path: rule
+    type: reference
+  Attack and damage ability choice:
+    path: attack_and_damage_ability_choice
+    type: yaml
+    optional: true
+  Same ability for both:
+    path: same_ability_for_both
+    type: boolean
+    optional: true
+  Trigger:
+    path: trigger
+    type: symbol
+    optional: true
+  Extra attack count:
+    path: extra_attack/count
+    type: integer
+    optional: true
+  Extra attack economy:
+    path: extra_attack/economy
+    type: symbol
+    optional: true
+  Extra attack timing:
+    path: extra_attack/timing
+    type: symbol
+    optional: true
+  Extra attack weapon:
+    path: extra_attack/weapon
+    type: symbol
+    optional: true
+  Extra attack damage ability modifier:
+    path: extra_attack/damage_ability_modifier
+    type: symbol
+    optional: true
+-->
 
-| Row | id | attack_and_damage_ability_choice | same_ability_for_both | trigger |
-| --- | --- | --- | --- | --- |
-| ` 0 ` | ` finesse ` | ` ["strength", "dexterity"] ` | ` true ` |  |
-| ` 1 ` | ` light ` |  |  | ` attack_with_light_weapon_during_own_attack_action ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/0/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_finesse ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/1/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_light ` |
-
-##### Extra attack
-
-<!-- splat:values path=splat_rule/parameters/properties/1/extra_attack -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 1 ` |
-| ` economy ` | ` bonus_action ` |
-| ` timing ` | ` later_same_turn ` |
-| ` weapon ` | ` different_light_weapon ` |
-| ` damage_ability_modifier ` | ` negative_only ` |
+| Variant | Rule | Attack and damage ability choice | Same ability for both | Trigger | Extra attack count | Extra attack economy | Extra attack timing | Extra attack weapon | Extra attack damage ability modifier |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` Finesse ` | [Finesse](<../rules/weapons_finesse.md> "dnd2024:rules/weapons_finesse") | ` ["strength", "dexterity"] ` | true |  |  |  |  |  |  |
+| ` Light ` | [Light](<../rules/weapons_light.md> "dnd2024:rules/weapons_light") |  |  | ` Attack with light weapon during own attack action ` | ` 1 ` | ` Bonus action ` | ` Later same turn ` | ` Different light weapon ` | ` Negative only ` |
 
 #### Attack
 

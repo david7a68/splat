@@ -99,61 +99,51 @@ Original layout: [[../../srd-5.2.1/pages/238|page 238]], [[../../srd-5.2.1/pages
 
 #### Spell grants
 
-<!-- splat:rows path=splat_rule/parameters/spell_grants -->
+<!-- splat:table
+path: splat_rule/parameters/spell_grants
+key: Spell
+order:
+- dancing_lights
+- light
+- faerie_fire
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Charge cost:
+    path: charge_cost
+    type: integer
+  Casting time:
+    path: casting_time
+    type: symbol
+  Method:
+    path: method
+    type: symbol
+  Slot cost:
+    path: slot_cost
+    type: integer
+  Components:
+    path: components
+    type: yaml
+  Level:
+    path: level
+    type: symbol
+  Range:
+    path: range
+    type: symbol
+  Duration:
+    path: duration
+    type: symbol
+  Concentration:
+    path: concentration
+    type: symbol
+-->
 
-| Row | charge_cost | casting_time | method | slot_cost | level | range | duration | concentration |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 1 ` | ` 0 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 2 ` | ` 1 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_grants/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/dancing_lights ` |
-
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/0/components -->
-
-```yaml
-[]
-```
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_grants/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/light ` |
-
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/1/components -->
-
-```yaml
-[]
-```
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_grants/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/faerie_fire ` |
-
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/2/components -->
-
-```yaml
-[]
-```
+| Spell | Charge cost | Casting time | Method | Slot cost | Components | Level | Range | Duration | Concentration |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Dancing Lights](<../spells/dancing_lights.md> "dnd2024:spells/dancing_lights") | ` 0 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Lowest possible ` | ` Spell default ` | ` Spell default ` | ` Spell default ` |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | ` 0 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Lowest possible ` | ` Spell default ` | ` Spell default ` | ` Spell default ` |
+| [Faerie Fire](<../spells/faerie_fire.md> "dnd2024:spells/faerie_fire") | ` 1 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Lowest possible ` | ` Spell default ` | ` Spell default ` | ` Spell default ` |
 
 #### Charges
 

@@ -112,20 +112,69 @@ has no effect while you’re in that form.\
 
 #### Resource
 
-<!-- splat:yaml path=splat_rule/parameters/resource -->
+<!-- splat:values path=splat_rule/parameters/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` id ` | ` wild_shape ` |
+| ` initial_maximum ` | ` 2 ` |
+
+##### Maximum by class level
+
+<!-- splat:yaml path=splat_rule/parameters/resource/maximum_by_class_level -->
 
 ```yaml
-id: wild_shape
-initial_maximum: 2
-maximum_by_class_level:
-  '2': 2
-  '6': 3
-  '17': 4
-recover:
-- event: rest.short_rest_completed
-  amount: 1
-- event: rest.long_rest_completed
-  amount: all_expended
+'2': 2
+'6': 3
+'17': 4
+```
+
+##### Recover
+
+<!-- splat:table
+path: splat_rule/parameters/resource/recover
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Event | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` rest.short_rest_completed ` | [Rules](#^splat-113f3e54-row_1 "section:row_1") |
+| ` row_2 ` | ` rest.long_rest_completed ` | [Rules](#^splat-113f3e54-row_2 "section:row_2") |
+
+###### Row 1
+
+^splat-113f3e54-row_1
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/resource/recover/@row_1/amount -->
+
+```yaml
+1
+```
+
+###### Row 2
+
+^splat-113f3e54-row_2
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/resource/recover/@row_2/amount -->
+
+```yaml
+all_expended
 ```
 
 #### Form choice

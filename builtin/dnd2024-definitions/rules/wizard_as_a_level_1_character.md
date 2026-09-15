@@ -82,100 +82,41 @@ Arcane Recovery\
 
 #### Feature unlocks
 
-<!-- splat:rows path=splat_rule/parameters/feature_unlocks -->
+<!-- splat:table
+path: splat_rule/parameters/feature_unlocks
+key: Feature
+order:
+- wizard_level_18_spell_mastery
+- wizard_level_19_epic_boon
+- wizard_level_1_arcane_recovery
+- wizard_level_1_ritual_adept
+- wizard_level_1_spellcasting
+- wizard_level_20_signature_spells
+- wizard_level_2_scholar
+- wizard_level_3_wizard_subclass
+- wizard_level_4_ability_score_improvement
+- wizard_level_5_memorize_spell
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Feature | Class level |
 | --- | --- |
-| ` 0 ` | ` 18 ` |
-| ` 1 ` | ` 19 ` |
-| ` 2 ` | ` 1 ` |
-| ` 3 ` | ` 1 ` |
-| ` 4 ` | ` 1 ` |
-| ` 5 ` | ` 20 ` |
-| ` 6 ` | ` 2 ` |
-| ` 7 ` | ` 3 ` |
-| ` 8 ` | ` 4 ` |
-| ` 9 ` | ` 5 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_18_spell_mastery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_arcane_recovery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_ritual_adept ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_20_signature_spells ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_2_scholar ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_3_wizard_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_5_memorize_spell ` |
+| [Level 18: Spell Mastery](<../class_features/wizard_level_18_spell_mastery.md> "dnd2024:class_features/wizard_level_18_spell_mastery") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/wizard_level_19_epic_boon.md> "dnd2024:class_features/wizard_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Arcane Recovery](<../class_features/wizard_level_1_arcane_recovery.md> "dnd2024:class_features/wizard_level_1_arcane_recovery") | ` 1 ` |
+| [Level 1: Ritual Adept](<../class_features/wizard_level_1_ritual_adept.md> "dnd2024:class_features/wizard_level_1_ritual_adept") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/wizard_level_1_spellcasting.md> "dnd2024:class_features/wizard_level_1_spellcasting") | ` 1 ` |
+| [Level 20: Signature Spells](<../class_features/wizard_level_20_signature_spells.md> "dnd2024:class_features/wizard_level_20_signature_spells") | ` 20 ` |
+| [Level 2: Scholar](<../class_features/wizard_level_2_scholar.md> "dnd2024:class_features/wizard_level_2_scholar") | ` 2 ` |
+| [Level 3: Wizard Subclass](<../class_features/wizard_level_3_wizard_subclass.md> "dnd2024:class_features/wizard_level_3_wizard_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/wizard_level_4_ability_score_improvement.md> "dnd2024:class_features/wizard_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Memorize Spell](<../class_features/wizard_level_5_memorize_spell.md> "dnd2024:class_features/wizard_level_5_memorize_spell") | ` 5 ` |
 
 #### Recurring feature levels
 

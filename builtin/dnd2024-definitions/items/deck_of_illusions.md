@@ -138,182 +138,538 @@ Original layout: [[../../srd-5.2.1/pages/217|page 217]], [[../../srd-5.2.1/pages
 
 #### Activate
 
-<!-- splat:yaml path=splat_rule/parameters/activate -->
+<!-- splat:values path=splat_rule/parameters/activate -->
+
+| Field | Value |
+| --- | --- |
+| ` action ` | ` magic ` |
+| ` draw ` | ` random_only ` |
+| ` throw_range_ft ` | ` 30 ` |
+
+##### Illusion
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/activate/illusion/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` expression ` | ` 1d100 ` |
+| ` scope ` | ` use ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/activate/illusion/rows
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+- row_17
+- row_18
+- row_19
+- row_20
+- row_21
+- row_22
+- row_23
+- row_24
+- row_25
+- row_26
+- row_27
+- row_28
+- row_29
+- row_30
+- row_31
+- row_32
+- row_33
+columns:
+  Key:
+    type: key
+  Roll:
+    path: ''
+    type: range
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Roll | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 1–3 ` | [Rules](#^splat-d415bdef-row_1 "section:row_1") |
+| ` row_2 ` | ` 4–6 ` | [Rules](#^splat-d415bdef-row_2 "section:row_2") |
+| ` row_3 ` | ` 7–9 ` | [Rules](#^splat-d415bdef-row_3 "section:row_3") |
+| ` row_4 ` | ` 10–12 ` | [Rules](#^splat-d415bdef-row_4 "section:row_4") |
+| ` row_5 ` | ` 13–15 ` | [Rules](#^splat-d415bdef-row_5 "section:row_5") |
+| ` row_6 ` | ` 16–18 ` | [Rules](#^splat-d415bdef-row_6 "section:row_6") |
+| ` row_7 ` | ` 19–21 ` | [Rules](#^splat-d415bdef-row_7 "section:row_7") |
+| ` row_8 ` | ` 22–24 ` | [Rules](#^splat-d415bdef-row_8 "section:row_8") |
+| ` row_9 ` | ` 25–27 ` | [Rules](#^splat-d415bdef-row_9 "section:row_9") |
+| ` row_10 ` | ` 28–30 ` | [Rules](#^splat-d415bdef-row_10 "section:row_10") |
+| ` row_11 ` | ` 31–33 ` | [Rules](#^splat-d415bdef-row_11 "section:row_11") |
+| ` row_12 ` | ` 34–36 ` | [Rules](#^splat-d415bdef-row_12 "section:row_12") |
+| ` row_13 ` | ` 37–39 ` | [Rules](#^splat-d415bdef-row_13 "section:row_13") |
+| ` row_14 ` | ` 40–42 ` | [Rules](#^splat-d415bdef-row_14 "section:row_14") |
+| ` row_15 ` | ` 43–45 ` | [Rules](#^splat-d415bdef-row_15 "section:row_15") |
+| ` row_16 ` | ` 46–48 ` | [Rules](#^splat-d415bdef-row_16 "section:row_16") |
+| ` row_17 ` | ` 49–51 ` | [Rules](#^splat-d415bdef-row_17 "section:row_17") |
+| ` row_18 ` | ` 52–54 ` | [Rules](#^splat-d415bdef-row_18 "section:row_18") |
+| ` row_19 ` | ` 55–57 ` | [Rules](#^splat-d415bdef-row_19 "section:row_19") |
+| ` row_20 ` | ` 58–60 ` | [Rules](#^splat-d415bdef-row_20 "section:row_20") |
+| ` row_21 ` | ` 61–63 ` | [Rules](#^splat-d415bdef-row_21 "section:row_21") |
+| ` row_22 ` | ` 64–66 ` | [Rules](#^splat-d415bdef-row_22 "section:row_22") |
+| ` row_23 ` | ` 67–69 ` | [Rules](#^splat-d415bdef-row_23 "section:row_23") |
+| ` row_24 ` | ` 70–72 ` | [Rules](#^splat-d415bdef-row_24 "section:row_24") |
+| ` row_25 ` | ` 73–75 ` | [Rules](#^splat-d415bdef-row_25 "section:row_25") |
+| ` row_26 ` | ` 76–78 ` | [Rules](#^splat-d415bdef-row_26 "section:row_26") |
+| ` row_27 ` | ` 79–81 ` | [Rules](#^splat-d415bdef-row_27 "section:row_27") |
+| ` row_28 ` | ` 82–84 ` | [Rules](#^splat-d415bdef-row_28 "section:row_28") |
+| ` row_29 ` | ` 85–87 ` | [Rules](#^splat-d415bdef-row_29 "section:row_29") |
+| ` row_30 ` | ` 88–90 ` | [Rules](#^splat-d415bdef-row_30 "section:row_30") |
+| ` row_31 ` | ` 91–93 ` | [Rules](#^splat-d415bdef-row_31 "section:row_31") |
+| ` row_32 ` | ` 94–96 ` | [Rules](#^splat-d415bdef-row_32 "section:row_32") |
+| ` row_33 ` | ` 97–100 ` | [Rules](#^splat-d415bdef-row_33 "section:row_33") |
+
+###### Row 1
+
+^splat-d415bdef-row_1
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_1/result -->
 
 ```yaml
-action: magic
-draw: random_only
-throw_range_ft: 30
-illusion:
-  roll:
-    expression: 1d100
-    scope: use
-  rows:
-  - min: 1
-    max: 3
-    result:
-      appearance:
-        key: dnd2024:creatures/adult_red_dragon
-  - min: 4
-    max: 6
-    result:
-      appearance:
-        key: dnd2024:creatures/archmage
-  - min: 7
-    max: 9
-    result:
-      appearance:
-        key: dnd2024:creatures/assassin
-  - min: 10
-    max: 12
-    result:
-      appearance:
-        key: dnd2024:creatures/bandit_captain
-  - min: 13
-    max: 15
-    result:
-      appearance:
-        key: dnd2024:creatures/basilisk
-  - min: 16
-    max: 18
-    result:
-      appearance:
-        key: dnd2024:creatures/berserker
-  - min: 19
-    max: 21
-    result:
-      appearance:
-        key: dnd2024:creatures/bugbear_warrior
-  - min: 22
-    max: 24
-    result:
-      appearance:
-        key: dnd2024:creatures/cloud_giant
-  - min: 25
-    max: 27
-    result:
-      appearance:
-        key: dnd2024:creatures/druid
-  - min: 28
-    max: 30
-    result:
-      appearance:
-        key: dnd2024:creatures/erinyes
-  - min: 31
-    max: 33
-    result:
-      appearance:
-        key: dnd2024:creatures/ettin
-  - min: 34
-    max: 36
-    result:
-      appearance:
-        key: dnd2024:creatures/fire_giant
-  - min: 37
-    max: 39
-    result:
-      appearance:
-        key: dnd2024:creatures/frost_giant
-  - min: 40
-    max: 42
-    result:
-      appearance:
-        key: dnd2024:creatures/gnoll_warrior
-  - min: 43
-    max: 45
-    result:
-      appearance:
-        key: dnd2024:creatures/goblin_warrior
-  - min: 46
-    max: 48
-    result:
-      appearance:
-        key: dnd2024:creatures/guardian_naga
-  - min: 49
-    max: 51
-    result:
-      appearance:
-        key: dnd2024:creatures/hill_giant
-  - min: 52
-    max: 54
-    result:
-      appearance:
-        key: dnd2024:creatures/hobgoblin_warrior
-  - min: 55
-    max: 57
-    result:
-      appearance:
-        key: dnd2024:creatures/incubus
-  - min: 58
-    max: 60
-    result:
-      appearance:
-        key: dnd2024:creatures/iron_golem
-  - min: 61
-    max: 63
-    result:
-      appearance:
-        key: dnd2024:creatures/knight
-  - min: 64
-    max: 66
-    result:
-      appearance:
-        key: dnd2024:creatures/kobold_warrior
-  - min: 67
-    max: 69
-    result:
-      appearance:
-        key: dnd2024:creatures/lich
-  - min: 70
-    max: 72
-    result:
-      appearance:
-        key: dnd2024:creatures/medusa
-  - min: 73
-    max: 75
-    result:
-      appearance:
-        key: dnd2024:creatures/night_hag
-  - min: 76
-    max: 78
-    result:
-      appearance:
-        key: dnd2024:creatures/ogre
-  - min: 79
-    max: 81
-    result:
-      appearance:
-        key: dnd2024:creatures/oni
-  - min: 82
-    max: 84
-    result:
-      appearance:
-        key: dnd2024:creatures/priest
-  - min: 85
-    max: 87
-    result:
-      appearance:
-        key: dnd2024:creatures/succubus
-  - min: 88
-    max: 90
-    result:
-      appearance:
-        key: dnd2024:creatures/troll
-  - min: 91
-    max: 93
-    result:
-      appearance:
-        key: dnd2024:creatures/warrior_veteran
-  - min: 94
-    max: 96
-    result:
-      appearance:
-        key: dnd2024:creatures/wyvern
-  - min: 97
-    max: 100
-    result:
-      appearance: card_drawer
+appearance:
+  key: dnd2024:creatures/adult_red_dragon
 ```
+
+###### Row 2
+
+^splat-d415bdef-row_2
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_2/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/archmage
+```
+
+###### Row 3
+
+^splat-d415bdef-row_3
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_3/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/assassin
+```
+
+###### Row 4
+
+^splat-d415bdef-row_4
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_4/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/bandit_captain
+```
+
+###### Row 5
+
+^splat-d415bdef-row_5
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_5/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/basilisk
+```
+
+###### Row 6
+
+^splat-d415bdef-row_6
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_6/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/berserker
+```
+
+###### Row 7
+
+^splat-d415bdef-row_7
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_7/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/bugbear_warrior
+```
+
+###### Row 8
+
+^splat-d415bdef-row_8
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_8/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/cloud_giant
+```
+
+###### Row 9
+
+^splat-d415bdef-row_9
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_9/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/druid
+```
+
+###### Row 10
+
+^splat-d415bdef-row_10
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_10/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/erinyes
+```
+
+###### Row 11
+
+^splat-d415bdef-row_11
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_11/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/ettin
+```
+
+###### Row 12
+
+^splat-d415bdef-row_12
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_12/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/fire_giant
+```
+
+###### Row 13
+
+^splat-d415bdef-row_13
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_13/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/frost_giant
+```
+
+###### Row 14
+
+^splat-d415bdef-row_14
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_14/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/gnoll_warrior
+```
+
+###### Row 15
+
+^splat-d415bdef-row_15
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_15/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/goblin_warrior
+```
+
+###### Row 16
+
+^splat-d415bdef-row_16
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_16/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/guardian_naga
+```
+
+###### Row 17
+
+^splat-d415bdef-row_17
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_17/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/hill_giant
+```
+
+###### Row 18
+
+^splat-d415bdef-row_18
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_18/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/hobgoblin_warrior
+```
+
+###### Row 19
+
+^splat-d415bdef-row_19
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_19/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/incubus
+```
+
+###### Row 20
+
+^splat-d415bdef-row_20
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_20/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/iron_golem
+```
+
+###### Row 21
+
+^splat-d415bdef-row_21
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_21/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/knight
+```
+
+###### Row 22
+
+^splat-d415bdef-row_22
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_22/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/kobold_warrior
+```
+
+###### Row 23
+
+^splat-d415bdef-row_23
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_23/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/lich
+```
+
+###### Row 24
+
+^splat-d415bdef-row_24
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_24/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/medusa
+```
+
+###### Row 25
+
+^splat-d415bdef-row_25
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_25/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/night_hag
+```
+
+###### Row 26
+
+^splat-d415bdef-row_26
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_26/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/ogre
+```
+
+###### Row 27
+
+^splat-d415bdef-row_27
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_27/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/oni
+```
+
+###### Row 28
+
+^splat-d415bdef-row_28
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_28/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/priest
+```
+
+###### Row 29
+
+^splat-d415bdef-row_29
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_29/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/succubus
+```
+
+###### Row 30
+
+^splat-d415bdef-row_30
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_30/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/troll
+```
+
+###### Row 31
+
+^splat-d415bdef-row_31
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_31/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/warrior_veteran
+```
+
+###### Row 32
+
+^splat-d415bdef-row_32
+
+###### Result
+
+<!-- splat:yaml path=splat_rule/parameters/activate/illusion/rows/@row_32/result -->
+
+```yaml
+appearance:
+  key: dnd2024:creatures/wyvern
+```
+
+###### Row 33
+
+^splat-d415bdef-row_33
+
+###### Result
+
+<!-- splat:values path=splat_rule/parameters/activate/illusion/rows/@row_33/result -->
+
+| Field | Value |
+| --- | --- |
+| ` appearance ` | ` card_drawer ` |
 
 #### Illusion
 

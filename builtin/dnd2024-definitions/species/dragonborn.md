@@ -106,80 +106,139 @@ use it again until you finish a Long Rest.\
 
 #### Ancestry choice
 
-<!-- splat:yaml path=splat_rule/parameters/ancestry_choice -->
+<!-- splat:values path=splat_rule/parameters/ancestry_choice -->
 
-```yaml
-count: 1
-options:
-- dragon: black
-  damage_type: acid
-- dragon: blue
-  damage_type: lightning
-- dragon: brass
-  damage_type: fire
-- dragon: bronze
-  damage_type: lightning
-- dragon: copper
-  damage_type: acid
-- dragon: gold
-  damage_type: fire
-- dragon: green
-  damage_type: poison
-- dragon: red
-  damage_type: fire
-- dragon: silver
-  damage_type: cold
-- dragon: white
-  damage_type: cold
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/ancestry_choice/options
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+columns:
+  Key:
+    type: key
+  Dragon:
+    path: dragon
+    type: symbol
+  Damage type:
+    path: damage_type
+    type: symbol
+-->
+
+| Key | Dragon | Damage type |
+| --- | --- | --- |
+| ` row_1 ` | ` Black ` | ` Acid ` |
+| ` row_2 ` | ` Blue ` | ` Lightning ` |
+| ` row_3 ` | ` Brass ` | ` Fire ` |
+| ` row_4 ` | ` Bronze ` | ` Lightning ` |
+| ` row_5 ` | ` Copper ` | ` Acid ` |
+| ` row_6 ` | ` Gold ` | ` Fire ` |
+| ` row_7 ` | ` Green ` | ` Poison ` |
+| ` row_8 ` | ` Red ` | ` Fire ` |
+| ` row_9 ` | ` Silver ` | ` Cold ` |
+| ` row_10 ` | ` White ` | ` Cold ` |
 
 #### Breath weapon
 
-<!-- splat:yaml path=splat_rule/parameters/breath_weapon -->
+<!-- splat:values path=splat_rule/parameters/breath_weapon -->
+
+| Field | Value |
+| --- | --- |
+| ` action ` | ` replace_one_attack_in_own_turn_attack_action ` |
+| ` magical ` | ` true ` |
+| ` targets ` | ` all_creatures_in_area ` |
+| ` damage_type ` | ` ancestry_damage_type ` |
+
+##### Area choice each use
+
+<!-- splat:table
+path: splat_rule/parameters/breath_weapon/area_choice_each_use
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Shape:
+    path: shape
+    type: symbol
+  Length feet:
+    path: length_feet
+    type: integer
+  Width feet:
+    path: width_feet
+    type: integer
+    optional: true
+-->
+
+| Key | Shape | Length feet | Width feet |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Cone ` | ` 15 ` |  |
+| ` row_2 ` | ` Line ` | ` 30 ` | ` 5 ` |
+
+##### Save
+
+<!-- splat:yaml path=splat_rule/parameters/breath_weapon/save -->
 
 ```yaml
-action: replace_one_attack_in_own_turn_attack_action
-magical: true
-area_choice_each_use:
-- shape: cone
-  length_feet: 15
-- shape: line
-  length_feet: 30
-  width_feet: 5
-targets: all_creatures_in_area
-save:
-  ability: dexterity
-  dc:
-    op: add
-    args:
-    - 8
-    - stat: abilities.constitution.modifier
-    - &id001
-      stat: proficiency_bonus
-  success_damage_multiplier: 0.5
-damage_type: ancestry_damage_type
-dice_by_character_level:
-  '1':
-    dice:
-      count: 1
-      sides: 10
-  '5':
-    dice:
-      count: 2
-      sides: 10
-  '11':
-    dice:
-      count: 3
-      sides: 10
-  '17':
-    dice:
-      count: 4
-      sides: 10
-uses:
-  maximum: *id001
-  recover:
-    event: rest.long_rest_completed
-    amount: all
+ability: dexterity
+dc:
+  op: add
+  args:
+  - 8
+  - stat: abilities.constitution.modifier
+  - stat: proficiency_bonus
+success_damage_multiplier: 0.5
+```
+
+##### Dice by character level
+
+<!-- splat:yaml path=splat_rule/parameters/breath_weapon/dice_by_character_level -->
+
+```yaml
+'1':
+  dice:
+    count: 1
+    sides: 10
+'5':
+  dice:
+    count: 2
+    sides: 10
+'11':
+  dice:
+    count: 3
+    sides: 10
+'17':
+  dice:
+    count: 4
+    sides: 10
+```
+
+##### Uses
+
+<!-- splat:yaml path=splat_rule/parameters/breath_weapon/uses -->
+
+```yaml
+maximum:
+  stat: proficiency_bonus
+recover:
+  event: rest.long_rest_completed
+  amount: all
 ```
 
 #### Draconic flight

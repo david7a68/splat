@@ -93,34 +93,92 @@ From SRD 5.2.1 page 71.
 
 #### Rows
 
-<!-- splat:rows path=splat_rule/parameters/rows -->
+<!-- splat:table
+path: splat_rule/parameters/rows
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+- row_17
+- row_18
+- row_19
+- row_20
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Proficiency bonus:
+    path: proficiency_bonus
+    type: integer
+  Features text:
+    path: features_text
+    type: string
+  Eldritch invocations:
+    path: eldritch_invocations
+    type: integer
+  Cantrips:
+    path: cantrips
+    type: integer
+  Prepared spells:
+    path: prepared_spells
+    type: integer
+  Pact slots:
+    path: pact_slots
+    type: integer
+  Pact slot level:
+    path: pact_slot_level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | level | proficiency_bonus | features_text | eldritch_invocations | cantrips | prepared_spells | pact_slots | pact_slot_level |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 2 ` | ` Eldritch Invocations, Pact Magic ` | ` 1 ` | ` 2 ` | ` 2 ` | ` 1 ` | ` 1 ` |
-| ` 1 ` | ` 2 ` | ` 2 ` | ` Magical Cunning ` | ` 3 ` | ` 2 ` | ` 3 ` | ` 2 ` | ` 1 ` |
-| ` 2 ` | ` 3 ` | ` 2 ` | ` Warlock Subclass ` | ` 3 ` | ` 2 ` | ` 4 ` | ` 2 ` | ` 2 ` |
-| ` 3 ` | ` 4 ` | ` 2 ` | ` Ability Score Improvement ` | ` 3 ` | ` 3 ` | ` 5 ` | ` 2 ` | ` 2 ` |
-| ` 4 ` | ` 5 ` | ` 3 ` | ` — ` | ` 5 ` | ` 3 ` | ` 6 ` | ` 2 ` | ` 3 ` |
-| ` 5 ` | ` 6 ` | ` 3 ` | ` Subclass feature ` | ` 5 ` | ` 3 ` | ` 7 ` | ` 2 ` | ` 3 ` |
-| ` 6 ` | ` 7 ` | ` 3 ` | ` — ` | ` 6 ` | ` 3 ` | ` 8 ` | ` 2 ` | ` 4 ` |
-| ` 7 ` | ` 8 ` | ` 3 ` | ` Ability Score Improvement ` | ` 6 ` | ` 3 ` | ` 9 ` | ` 2 ` | ` 4 ` |
-| ` 8 ` | ` 9 ` | ` 4 ` | ` Contact Patron ` | ` 7 ` | ` 3 ` | ` 10 ` | ` 2 ` | ` 5 ` |
-| ` 9 ` | ` 10 ` | ` 4 ` | ` Subclass feature ` | ` 7 ` | ` 4 ` | ` 10 ` | ` 2 ` | ` 5 ` |
-| ` 10 ` | ` 11 ` | ` 4 ` | ` Mystic Arcanum (level 6 spell) ` | ` 7 ` | ` 4 ` | ` 11 ` | ` 3 ` | ` 5 ` |
-| ` 11 ` | ` 12 ` | ` 4 ` | ` Ability Score Improvement ` | ` 8 ` | ` 4 ` | ` 11 ` | ` 3 ` | ` 5 ` |
-| ` 12 ` | ` 13 ` | ` 5 ` | ` Mystic Arcanum (level 7 spell) ` | ` 8 ` | ` 4 ` | ` 12 ` | ` 3 ` | ` 5 ` |
-| ` 13 ` | ` 14 ` | ` 5 ` | ` Subclass feature ` | ` 8 ` | ` 4 ` | ` 12 ` | ` 3 ` | ` 5 ` |
-| ` 14 ` | ` 15 ` | ` 5 ` | ` Mystic Arcanum (level 8 spell) ` | ` 9 ` | ` 4 ` | ` 13 ` | ` 3 ` | ` 5 ` |
-| ` 15 ` | ` 16 ` | ` 5 ` | ` Ability Score Improvement ` | ` 9 ` | ` 4 ` | ` 13 ` | ` 3 ` | ` 5 ` |
-| ` 16 ` | ` 17 ` | ` 6 ` | ` Mystic Arcanum (level 9 spell) ` | ` 9 ` | ` 4 ` | ` 14 ` | ` 4 ` | ` 5 ` |
-| ` 17 ` | ` 18 ` | ` 6 ` | ` — ` | ` 10 ` | ` 4 ` | ` 14 ` | ` 4 ` | ` 5 ` |
-| ` 18 ` | ` 19 ` | ` 6 ` | ` Epic Boon ` | ` 10 ` | ` 4 ` | ` 15 ` | ` 4 ` | ` 5 ` |
-| ` 19 ` | ` 20 ` | ` 6 ` | ` Eldritch Master ` | ` 10 ` | ` 4 ` | ` 15 ` | ` 4 ` | ` 5 ` |
+| Key | Level | Proficiency bonus | Features text | Eldritch invocations | Cantrips | Prepared spells | Pact slots | Pact slot level | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 2 ` | ` Eldritch Invocations, Pact Magic ` | ` 1 ` | ` 2 ` | ` 2 ` | ` 1 ` | ` 1 ` | [Rules](#^splat-0f5cfe33-row_1 "section:row_1") |
+| ` row_2 ` | ` 2 ` | ` 2 ` | ` Magical Cunning ` | ` 3 ` | ` 2 ` | ` 3 ` | ` 2 ` | ` 1 ` | [Rules](#^splat-0f5cfe33-row_2 "section:row_2") |
+| ` row_3 ` | ` 3 ` | ` 2 ` | ` Warlock Subclass ` | ` 3 ` | ` 2 ` | ` 4 ` | ` 2 ` | ` 2 ` | [Rules](#^splat-0f5cfe33-row_3 "section:row_3") |
+| ` row_4 ` | ` 4 ` | ` 2 ` | ` Ability Score Improvement ` | ` 3 ` | ` 3 ` | ` 5 ` | ` 2 ` | ` 2 ` | [Rules](#^splat-0f5cfe33-row_4 "section:row_4") |
+| ` row_5 ` | ` 5 ` | ` 3 ` | ` — ` | ` 5 ` | ` 3 ` | ` 6 ` | ` 2 ` | ` 3 ` | [Rules](#^splat-0f5cfe33-row_5 "section:row_5") |
+| ` row_6 ` | ` 6 ` | ` 3 ` | ` Subclass feature ` | ` 5 ` | ` 3 ` | ` 7 ` | ` 2 ` | ` 3 ` | [Rules](#^splat-0f5cfe33-row_6 "section:row_6") |
+| ` row_7 ` | ` 7 ` | ` 3 ` | ` — ` | ` 6 ` | ` 3 ` | ` 8 ` | ` 2 ` | ` 4 ` | [Rules](#^splat-0f5cfe33-row_7 "section:row_7") |
+| ` row_8 ` | ` 8 ` | ` 3 ` | ` Ability Score Improvement ` | ` 6 ` | ` 3 ` | ` 9 ` | ` 2 ` | ` 4 ` | [Rules](#^splat-0f5cfe33-row_8 "section:row_8") |
+| ` row_9 ` | ` 9 ` | ` 4 ` | ` Contact Patron ` | ` 7 ` | ` 3 ` | ` 10 ` | ` 2 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_9 "section:row_9") |
+| ` row_10 ` | ` 10 ` | ` 4 ` | ` Subclass feature ` | ` 7 ` | ` 4 ` | ` 10 ` | ` 2 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_10 "section:row_10") |
+| ` row_11 ` | ` 11 ` | ` 4 ` | ` Mystic Arcanum (level 6 spell) ` | ` 7 ` | ` 4 ` | ` 11 ` | ` 3 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_11 "section:row_11") |
+| ` row_12 ` | ` 12 ` | ` 4 ` | ` Ability Score Improvement ` | ` 8 ` | ` 4 ` | ` 11 ` | ` 3 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_12 "section:row_12") |
+| ` row_13 ` | ` 13 ` | ` 5 ` | ` Mystic Arcanum (level 7 spell) ` | ` 8 ` | ` 4 ` | ` 12 ` | ` 3 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_13 "section:row_13") |
+| ` row_14 ` | ` 14 ` | ` 5 ` | ` Subclass feature ` | ` 8 ` | ` 4 ` | ` 12 ` | ` 3 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_14 "section:row_14") |
+| ` row_15 ` | ` 15 ` | ` 5 ` | ` Mystic Arcanum (level 8 spell) ` | ` 9 ` | ` 4 ` | ` 13 ` | ` 3 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_15 "section:row_15") |
+| ` row_16 ` | ` 16 ` | ` 5 ` | ` Ability Score Improvement ` | ` 9 ` | ` 4 ` | ` 13 ` | ` 3 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_16 "section:row_16") |
+| ` row_17 ` | ` 17 ` | ` 6 ` | ` Mystic Arcanum (level 9 spell) ` | ` 9 ` | ` 4 ` | ` 14 ` | ` 4 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_17 "section:row_17") |
+| ` row_18 ` | ` 18 ` | ` 6 ` | ` — ` | ` 10 ` | ` 4 ` | ` 14 ` | ` 4 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_18 "section:row_18") |
+| ` row_19 ` | ` 19 ` | ` 6 ` | ` Epic Boon ` | ` 10 ` | ` 4 ` | ` 15 ` | ` 4 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_19 "section:row_19") |
+| ` row_20 ` | ` 20 ` | ` 6 ` | ` Eldritch Master ` | ` 10 ` | ` 4 ` | ` 15 ` | ` 4 ` | ` 5 ` | [Rules](#^splat-0f5cfe33-row_20 "section:row_20") |
 
-##### Grants
+##### Row 1
 
-<!-- splat:rows path=splat_rule/parameters/rows/0/grants -->
+^splat-0f5cfe33-row_1
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_1/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -129,7 +187,7 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/0/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_1/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -137,15 +195,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/0/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_1/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_1_pact_magic ` |
 
-##### Grants
+##### Row 2
 
-<!-- splat:rows path=splat_rule/parameters/rows/1/grants -->
+^splat-0f5cfe33-row_2
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_2/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -153,15 +215,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/1/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_2/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_2_magical_cunning ` |
 
-##### Grants
+##### Row 3
 
-<!-- splat:rows path=splat_rule/parameters/rows/2/grants -->
+^splat-0f5cfe33-row_3
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_3/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -169,15 +235,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/2/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_3/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_3_warlock_subclass ` |
 
-##### Grants
+##### Row 4
 
-<!-- splat:rows path=splat_rule/parameters/rows/3/grants -->
+^splat-0f5cfe33-row_4
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_4/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -185,39 +255,55 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/3/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_4/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_4_ability_score_improvement ` |
 
-##### Grants
+##### Row 5
 
-<!-- splat:yaml path=splat_rule/parameters/rows/4/grants -->
+^splat-0f5cfe33-row_5
+
+###### Grants
+
+<!-- splat:yaml path=splat_rule/parameters/rows/@row_5/grants -->
 
 ```yaml
 []
 ```
 
-##### Grants
+##### Row 6
 
-<!-- splat:rows path=splat_rule/parameters/rows/5/grants -->
+^splat-0f5cfe33-row_6
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_6/grants -->
 
 | Row | operation | class_level |
 | --- | --- | --- |
 | ` 0 ` | ` grant_selected_subclass_features ` | ` 6 ` |
 
-##### Grants
+##### Row 7
 
-<!-- splat:yaml path=splat_rule/parameters/rows/6/grants -->
+^splat-0f5cfe33-row_7
+
+###### Grants
+
+<!-- splat:yaml path=splat_rule/parameters/rows/@row_7/grants -->
 
 ```yaml
 []
 ```
 
-##### Grants
+##### Row 8
 
-<!-- splat:rows path=splat_rule/parameters/rows/7/grants -->
+^splat-0f5cfe33-row_8
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_8/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -225,15 +311,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/7/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_8/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_4_ability_score_improvement ` |
 
-##### Grants
+##### Row 9
 
-<!-- splat:rows path=splat_rule/parameters/rows/8/grants -->
+^splat-0f5cfe33-row_9
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_9/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -241,23 +331,31 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/8/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_9/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_9_contact_patron ` |
 
-##### Grants
+##### Row 10
 
-<!-- splat:rows path=splat_rule/parameters/rows/9/grants -->
+^splat-0f5cfe33-row_10
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_10/grants -->
 
 | Row | operation | class_level |
 | --- | --- | --- |
 | ` 0 ` | ` grant_selected_subclass_features ` | ` 10 ` |
 
-##### Grants
+##### Row 11
 
-<!-- splat:rows path=splat_rule/parameters/rows/10/grants -->
+^splat-0f5cfe33-row_11
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_11/grants -->
 
 | Row | operation | at_class_level | arcanum_spell_level |
 | --- | --- | --- | --- |
@@ -265,15 +363,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/10/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_11/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_11_mystic_arcanum ` |
 
-##### Grants
+##### Row 12
 
-<!-- splat:rows path=splat_rule/parameters/rows/11/grants -->
+^splat-0f5cfe33-row_12
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_12/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -281,15 +383,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/11/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_12/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_4_ability_score_improvement ` |
 
-##### Grants
+##### Row 13
 
-<!-- splat:rows path=splat_rule/parameters/rows/12/grants -->
+^splat-0f5cfe33-row_13
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_13/grants -->
 
 | Row | operation | at_class_level | arcanum_spell_level |
 | --- | --- | --- | --- |
@@ -297,23 +403,31 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/12/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_13/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_11_mystic_arcanum ` |
 
-##### Grants
+##### Row 14
 
-<!-- splat:rows path=splat_rule/parameters/rows/13/grants -->
+^splat-0f5cfe33-row_14
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_14/grants -->
 
 | Row | operation | class_level |
 | --- | --- | --- |
 | ` 0 ` | ` grant_selected_subclass_features ` | ` 14 ` |
 
-##### Grants
+##### Row 15
 
-<!-- splat:rows path=splat_rule/parameters/rows/14/grants -->
+^splat-0f5cfe33-row_15
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_15/grants -->
 
 | Row | operation | at_class_level | arcanum_spell_level |
 | --- | --- | --- | --- |
@@ -321,15 +435,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/14/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_15/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_11_mystic_arcanum ` |
 
-##### Grants
+##### Row 16
 
-<!-- splat:rows path=splat_rule/parameters/rows/15/grants -->
+^splat-0f5cfe33-row_16
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_16/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -337,15 +455,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/15/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_16/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_4_ability_score_improvement ` |
 
-##### Grants
+##### Row 17
 
-<!-- splat:rows path=splat_rule/parameters/rows/16/grants -->
+^splat-0f5cfe33-row_17
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_17/grants -->
 
 | Row | operation | at_class_level | arcanum_spell_level |
 | --- | --- | --- | --- |
@@ -353,23 +475,31 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/16/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_17/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_11_mystic_arcanum ` |
 
-##### Grants
+##### Row 18
 
-<!-- splat:yaml path=splat_rule/parameters/rows/17/grants -->
+^splat-0f5cfe33-row_18
+
+###### Grants
+
+<!-- splat:yaml path=splat_rule/parameters/rows/@row_18/grants -->
 
 ```yaml
 []
 ```
 
-##### Grants
+##### Row 19
 
-<!-- splat:rows path=splat_rule/parameters/rows/18/grants -->
+^splat-0f5cfe33-row_19
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_19/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -377,15 +507,19 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/18/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_19/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/warlock_level_19_epic_boon ` |
 
-##### Grants
+##### Row 20
 
-<!-- splat:rows path=splat_rule/parameters/rows/19/grants -->
+^splat-0f5cfe33-row_20
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_20/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -393,7 +527,7 @@ From SRD 5.2.1 page 71.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/19/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_20/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |

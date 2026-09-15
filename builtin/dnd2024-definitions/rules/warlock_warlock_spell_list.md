@@ -27,103 +27,6 @@ requires a specific Material component.\
 
 <!-- SRD page 75 -->
 
-Cantrips (Level 0 Warlock Spells)\
-Spell School Special\
-Chill Touch Necromancy —\
-Eldritch Blast Evocation —\
-Mage Hand Conjuration —\
-Minor Illusion Illusion —\
-Poison Spray Necromancy —\
-Prestidigitation Transmutation —\
-True Strike Divination —\
-Level 1 Warlock Spells\
-Spell School Special\
-Bane Enchantment C\
-Charm Person Enchantment —\
-Comprehend Languages Divination R\
-Detect Magic Divination C, R\
-Expeditious Retreat Transmutation C\
-Hellish Rebuke Evocation —\
-Hex Enchantment C\
-Hideous Laughter Enchantment C\
-Illusory Script Illusion R, M\
-Protection from Evil and Good Abjuration C, M\
-Speak with Animals Divination R\
-Unseen Servant Conjuration R\
-Level 2 Warlock Spells\
-Spell School Special\
-Darkness Evocation C\
-Enthrall Enchantment C\
-Hold Person Enchantment C\
-Invisibility Illusion C\
-Mind Spike Divination C\
-Mirror Image Illusion —\
-Misty Step Conjuration —\
-Ray of Enfeeblement Necromancy C\
-Spider Climb Transmutation C\
-Suggestion Enchantment C\
-Level 3 Warlock Spells\
-Spell School Special\
-Counterspell Abjuration —\
-Dispel Magic Abjuration —\
-Fear Illusion C\
-Fly Transmutation C\
-Spell School Special\
-Gaseous Form Transmutation C\
-Hypnotic Pattern Illusion C\
-Magic Circle Abjuration M\
-Major Image Illusion C\
-Remove Curse Abjuration —\
-Tongues Divination —\
-Vampiric Touch Necromancy C\
-Level 4 Warlock Spells\
-Spell School Special\
-Banishment Abjuration C\
-Blight Necromancy —\
-Charm Monster Enchantment —\
-Dimension Door Conjuration —\
-Hallucinatory Terrain Illusion —\
-Level 5 Warlock Spells\
-Spell School Special\
-Contact Other Plane Divination R\
-Dream Illusion —\
-Hold Monster Enchantment C\
-Mislead Illusion C\
-Planar Binding Abjuration M\
-Scrying Divination C, M\
-Teleportation Circle Conjuration M\
-Level 6 Warlock Spells\
-Spell School Special\
-Circle of Death Necromancy M\
-Create Undead Necromancy M\
-Eyebite Necromancy C\
-True Seeing Divination M\
-Level 7 Warlock Spells\
-Spell School Special\
-Etherealness Conjuration —\
-Finger of Death Necromancy —\
-Forcecage Evocation C, M\
-Plane Shift Conjuration M\
-
-<!-- SRD page 76 -->
-
-Level 8 Warlock Spells\
-Spell School Special\
-Befuddlement Enchantment —\
-Demiplane Conjuration —\
-Dominate Monster Enchantment C\
-Glibness Enchantment —\
-Power Word Stun Enchantment —\
-Level 9 Warlock Spells\
-Spell School Special\
-Astral Projection Necromancy M\
-Foresight Divination —\
-Gate Conjuration C, M\
-Imprisonment Abjuration M\
-Power Word Kill Enchantment —\
-True Polymorph Transmutation C\
-Weird Illusion C\
-
 ## Rule
 
 <!-- splat:values path=splat_rule -->
@@ -151,655 +54,174 @@ Weird Illusion C\
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- chill_touch
+- eldritch_blast
+- mage_hand
+- minor_illusion
+- poison_spray
+- prestidigitation
+- true_strike
+- bane
+- charm_person
+- comprehend_languages
+- detect_magic
+- expeditious_retreat
+- hellish_rebuke
+- hex
+- hideous_laughter
+- illusory_script
+- protection_from_evil_and_good
+- speak_with_animals
+- unseen_servant
+- darkness
+- enthrall
+- hold_person
+- invisibility
+- mind_spike
+- mirror_image
+- misty_step
+- ray_of_enfeeblement
+- spider_climb
+- suggestion
+- counterspell
+- dispel_magic
+- fear
+- fly
+- gaseous_form
+- hypnotic_pattern
+- magic_circle
+- major_image
+- remove_curse
+- tongues
+- vampiric_touch
+- banishment
+- blight
+- charm_monster
+- dimension_door
+- hallucinatory_terrain
+- contact_other_plane
+- dream
+- hold_monster
+- mislead
+- planar_binding
+- scrying
+- teleportation_circle
+- circle_of_death
+- create_undead
+- eyebite
+- true_seeing
+- etherealness
+- finger_of_death
+- forcecage
+- plane_shift
+- befuddlement
+- demiplane
+- dominate_monster
+- glibness
+- power_word_stun
+- astral_projection
+- foresight
+- gate
+- imprisonment
+- power_word_kill
+- true_polymorph
+- weird
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Level:
+    path: level
+    type: integer
+  School:
+    path: school
+    type: symbol
+  Concentration:
+    path: concentration
+    type: boolean
+  Ritual:
+    path: ritual
+    type: boolean
+  Specific material:
+    path: specific_material
+    type: boolean
+-->
 
-| Row | level | school | concentration | ritual | specific_material |
+| Spell | Level | School | Concentration | Ritual | Specific material |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` necromancy ` | ` false ` | ` false ` | ` false ` |
-| ` 1 ` | ` 0 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 2 ` | ` 0 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 3 ` | ` 0 ` | ` illusion ` | ` false ` | ` false ` | ` false ` |
-| ` 4 ` | ` 0 ` | ` necromancy ` | ` false ` | ` false ` | ` false ` |
-| ` 5 ` | ` 0 ` | ` transmutation ` | ` false ` | ` false ` | ` false ` |
-| ` 6 ` | ` 0 ` | ` divination ` | ` false ` | ` false ` | ` false ` |
-| ` 7 ` | ` 1 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 8 ` | ` 1 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 9 ` | ` 1 ` | ` divination ` | ` false ` | ` true ` | ` false ` |
-| ` 10 ` | ` 1 ` | ` divination ` | ` true ` | ` true ` | ` false ` |
-| ` 11 ` | ` 1 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 12 ` | ` 1 ` | ` evocation ` | ` false ` | ` false ` | ` false ` |
-| ` 13 ` | ` 1 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 14 ` | ` 1 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 15 ` | ` 1 ` | ` illusion ` | ` false ` | ` true ` | ` true ` |
-| ` 16 ` | ` 1 ` | ` abjuration ` | ` true ` | ` false ` | ` true ` |
-| ` 17 ` | ` 1 ` | ` divination ` | ` false ` | ` true ` | ` false ` |
-| ` 18 ` | ` 1 ` | ` conjuration ` | ` false ` | ` true ` | ` false ` |
-| ` 19 ` | ` 2 ` | ` evocation ` | ` true ` | ` false ` | ` false ` |
-| ` 20 ` | ` 2 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 21 ` | ` 2 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 22 ` | ` 2 ` | ` illusion ` | ` true ` | ` false ` | ` false ` |
-| ` 23 ` | ` 2 ` | ` divination ` | ` true ` | ` false ` | ` false ` |
-| ` 24 ` | ` 2 ` | ` illusion ` | ` false ` | ` false ` | ` false ` |
-| ` 25 ` | ` 2 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 26 ` | ` 2 ` | ` necromancy ` | ` true ` | ` false ` | ` false ` |
-| ` 27 ` | ` 2 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 28 ` | ` 2 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 29 ` | ` 3 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 30 ` | ` 3 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 31 ` | ` 3 ` | ` illusion ` | ` true ` | ` false ` | ` false ` |
-| ` 32 ` | ` 3 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 33 ` | ` 3 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 34 ` | ` 3 ` | ` illusion ` | ` true ` | ` false ` | ` false ` |
-| ` 35 ` | ` 3 ` | ` abjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 36 ` | ` 3 ` | ` illusion ` | ` true ` | ` false ` | ` false ` |
-| ` 37 ` | ` 3 ` | ` abjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 38 ` | ` 3 ` | ` divination ` | ` false ` | ` false ` | ` false ` |
-| ` 39 ` | ` 3 ` | ` necromancy ` | ` true ` | ` false ` | ` false ` |
-| ` 40 ` | ` 4 ` | ` abjuration ` | ` true ` | ` false ` | ` false ` |
-| ` 41 ` | ` 4 ` | ` necromancy ` | ` false ` | ` false ` | ` false ` |
-| ` 42 ` | ` 4 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 43 ` | ` 4 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 44 ` | ` 4 ` | ` illusion ` | ` false ` | ` false ` | ` false ` |
-| ` 45 ` | ` 5 ` | ` divination ` | ` false ` | ` true ` | ` false ` |
-| ` 46 ` | ` 5 ` | ` illusion ` | ` false ` | ` false ` | ` false ` |
-| ` 47 ` | ` 5 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 48 ` | ` 5 ` | ` illusion ` | ` true ` | ` false ` | ` false ` |
-| ` 49 ` | ` 5 ` | ` abjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 50 ` | ` 5 ` | ` divination ` | ` true ` | ` false ` | ` true ` |
-| ` 51 ` | ` 5 ` | ` conjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 52 ` | ` 6 ` | ` necromancy ` | ` false ` | ` false ` | ` true ` |
-| ` 53 ` | ` 6 ` | ` necromancy ` | ` false ` | ` false ` | ` true ` |
-| ` 54 ` | ` 6 ` | ` necromancy ` | ` true ` | ` false ` | ` false ` |
-| ` 55 ` | ` 6 ` | ` divination ` | ` false ` | ` false ` | ` true ` |
-| ` 56 ` | ` 7 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 57 ` | ` 7 ` | ` necromancy ` | ` false ` | ` false ` | ` false ` |
-| ` 58 ` | ` 7 ` | ` evocation ` | ` true ` | ` false ` | ` true ` |
-| ` 59 ` | ` 7 ` | ` conjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 60 ` | ` 8 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 61 ` | ` 8 ` | ` conjuration ` | ` false ` | ` false ` | ` false ` |
-| ` 62 ` | ` 8 ` | ` enchantment ` | ` true ` | ` false ` | ` false ` |
-| ` 63 ` | ` 8 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 64 ` | ` 8 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 65 ` | ` 9 ` | ` necromancy ` | ` false ` | ` false ` | ` true ` |
-| ` 66 ` | ` 9 ` | ` divination ` | ` false ` | ` false ` | ` false ` |
-| ` 67 ` | ` 9 ` | ` conjuration ` | ` true ` | ` false ` | ` true ` |
-| ` 68 ` | ` 9 ` | ` abjuration ` | ` false ` | ` false ` | ` true ` |
-| ` 69 ` | ` 9 ` | ` enchantment ` | ` false ` | ` false ` | ` false ` |
-| ` 70 ` | ` 9 ` | ` transmutation ` | ` true ` | ` false ` | ` false ` |
-| ` 71 ` | ` 9 ` | ` illusion ` | ` true ` | ` false ` | ` false ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/chill_touch ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/eldritch_blast ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mage_hand ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/3/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/minor_illusion ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/4/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/poison_spray ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/5/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/prestidigitation ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/6/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/true_strike ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/7/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/bane ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/8/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/charm_person ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/9/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/comprehend_languages ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/10/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/detect_magic ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/11/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/expeditious_retreat ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/12/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hellish_rebuke ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/13/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hex ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/14/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hideous_laughter ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/15/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/illusory_script ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/16/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/protection_from_evil_and_good ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/17/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/speak_with_animals ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/18/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/unseen_servant ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/19/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/darkness ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/20/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/enthrall ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/21/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hold_person ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/22/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/invisibility ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/23/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mind_spike ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/24/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mirror_image ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/25/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/misty_step ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/26/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/ray_of_enfeeblement ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/27/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/spider_climb ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/28/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/suggestion ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/29/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/counterspell ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/30/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/dispel_magic ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/31/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fear ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/32/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fly ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/33/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/gaseous_form ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/34/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hypnotic_pattern ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/35/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/magic_circle ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/36/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/major_image ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/37/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/remove_curse ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/38/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/tongues ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/39/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/vampiric_touch ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/40/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/banishment ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/41/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/blight ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/42/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/charm_monster ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/43/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/dimension_door ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/44/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hallucinatory_terrain ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/45/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/contact_other_plane ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/46/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/dream ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/47/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hold_monster ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/48/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mislead ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/49/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/planar_binding ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/50/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/scrying ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/51/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/teleportation_circle ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/52/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/circle_of_death ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/53/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/create_undead ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/54/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/eyebite ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/55/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/true_seeing ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/56/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/etherealness ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/57/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/finger_of_death ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/58/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/forcecage ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/59/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/plane_shift ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/60/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/befuddlement ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/61/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/demiplane ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/62/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/dominate_monster ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/63/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/glibness ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/64/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/power_word_stun ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/65/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/astral_projection ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/66/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/foresight ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/67/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/gate ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/68/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/imprisonment ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/69/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/power_word_kill ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/70/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/true_polymorph ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/71/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/weird ` |
+| [Chill Touch](<../spells/chill_touch.md> "dnd2024:spells/chill_touch") | ` 0 ` | ` Necromancy ` | false | false | false |
+| [Eldritch Blast](<../spells/eldritch_blast.md> "dnd2024:spells/eldritch_blast") | ` 0 ` | ` Evocation ` | false | false | false |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | ` 0 ` | ` Conjuration ` | false | false | false |
+| [Minor Illusion](<../spells/minor_illusion.md> "dnd2024:spells/minor_illusion") | ` 0 ` | ` Illusion ` | false | false | false |
+| [Poison Spray](<../spells/poison_spray.md> "dnd2024:spells/poison_spray") | ` 0 ` | ` Necromancy ` | false | false | false |
+| [Prestidigitation](<../spells/prestidigitation.md> "dnd2024:spells/prestidigitation") | ` 0 ` | ` Transmutation ` | false | false | false |
+| [True Strike](<../spells/true_strike.md> "dnd2024:spells/true_strike") | ` 0 ` | ` Divination ` | false | false | false |
+| [Bane](<../spells/bane.md> "dnd2024:spells/bane") | ` 1 ` | ` Enchantment ` | true | false | false |
+| [Charm Person](<../spells/charm_person.md> "dnd2024:spells/charm_person") | ` 1 ` | ` Enchantment ` | false | false | false |
+| [Comprehend Languages](<../spells/comprehend_languages.md> "dnd2024:spells/comprehend_languages") | ` 1 ` | ` Divination ` | false | true | false |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` 1 ` | ` Divination ` | true | true | false |
+| [Expeditious Retreat](<../spells/expeditious_retreat.md> "dnd2024:spells/expeditious_retreat") | ` 1 ` | ` Transmutation ` | true | false | false |
+| [Hellish Rebuke](<../spells/hellish_rebuke.md> "dnd2024:spells/hellish_rebuke") | ` 1 ` | ` Evocation ` | false | false | false |
+| [Hex](<../spells/hex.md> "dnd2024:spells/hex") | ` 1 ` | ` Enchantment ` | true | false | false |
+| [Hideous Laughter](<../spells/hideous_laughter.md> "dnd2024:spells/hideous_laughter") | ` 1 ` | ` Enchantment ` | true | false | false |
+| [Illusory Script](<../spells/illusory_script.md> "dnd2024:spells/illusory_script") | ` 1 ` | ` Illusion ` | false | true | true |
+| [Protection from Evil and Good](<../spells/protection_from_evil_and_good.md> "dnd2024:spells/protection_from_evil_and_good") | ` 1 ` | ` Abjuration ` | true | false | true |
+| [Speak with Animals](<../spells/speak_with_animals.md> "dnd2024:spells/speak_with_animals") | ` 1 ` | ` Divination ` | false | true | false |
+| [Unseen Servant](<../spells/unseen_servant.md> "dnd2024:spells/unseen_servant") | ` 1 ` | ` Conjuration ` | false | true | false |
+| [Darkness](<../spells/darkness.md> "dnd2024:spells/darkness") | ` 2 ` | ` Evocation ` | true | false | false |
+| [Enthrall](<../spells/enthrall.md> "dnd2024:spells/enthrall") | ` 2 ` | ` Enchantment ` | true | false | false |
+| [Hold Person](<../spells/hold_person.md> "dnd2024:spells/hold_person") | ` 2 ` | ` Enchantment ` | true | false | false |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") | ` 2 ` | ` Illusion ` | true | false | false |
+| [Mind Spike](<../spells/mind_spike.md> "dnd2024:spells/mind_spike") | ` 2 ` | ` Divination ` | true | false | false |
+| [Mirror Image](<../spells/mirror_image.md> "dnd2024:spells/mirror_image") | ` 2 ` | ` Illusion ` | false | false | false |
+| [Misty Step](<../spells/misty_step.md> "dnd2024:spells/misty_step") | ` 2 ` | ` Conjuration ` | false | false | false |
+| [Ray of Enfeeblement](<../spells/ray_of_enfeeblement.md> "dnd2024:spells/ray_of_enfeeblement") | ` 2 ` | ` Necromancy ` | true | false | false |
+| [Spider Climb](<../spells/spider_climb.md> "dnd2024:spells/spider_climb") | ` 2 ` | ` Transmutation ` | true | false | false |
+| [Suggestion](<../spells/suggestion.md> "dnd2024:spells/suggestion") | ` 2 ` | ` Enchantment ` | true | false | false |
+| [Counterspell](<../spells/counterspell.md> "dnd2024:spells/counterspell") | ` 3 ` | ` Abjuration ` | false | false | false |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") | ` 3 ` | ` Abjuration ` | false | false | false |
+| [Fear](<../spells/fear.md> "dnd2024:spells/fear") | ` 3 ` | ` Illusion ` | true | false | false |
+| [Fly](<../spells/fly.md> "dnd2024:spells/fly") | ` 3 ` | ` Transmutation ` | true | false | false |
+| [Gaseous Form](<../spells/gaseous_form.md> "dnd2024:spells/gaseous_form") | ` 3 ` | ` Transmutation ` | true | false | false |
+| [Hypnotic Pattern](<../spells/hypnotic_pattern.md> "dnd2024:spells/hypnotic_pattern") | ` 3 ` | ` Illusion ` | true | false | false |
+| [Magic Circle](<../spells/magic_circle.md> "dnd2024:spells/magic_circle") | ` 3 ` | ` Abjuration ` | false | false | true |
+| [Major Image](<../spells/major_image.md> "dnd2024:spells/major_image") | ` 3 ` | ` Illusion ` | true | false | false |
+| [Remove Curse](<../spells/remove_curse.md> "dnd2024:spells/remove_curse") | ` 3 ` | ` Abjuration ` | false | false | false |
+| [Tongues](<../spells/tongues.md> "dnd2024:spells/tongues") | ` 3 ` | ` Divination ` | false | false | false |
+| [Vampiric Touch](<../spells/vampiric_touch.md> "dnd2024:spells/vampiric_touch") | ` 3 ` | ` Necromancy ` | true | false | false |
+| [Banishment](<../spells/banishment.md> "dnd2024:spells/banishment") | ` 4 ` | ` Abjuration ` | true | false | false |
+| [Blight](<../spells/blight.md> "dnd2024:spells/blight") | ` 4 ` | ` Necromancy ` | false | false | false |
+| [Charm Monster](<../spells/charm_monster.md> "dnd2024:spells/charm_monster") | ` 4 ` | ` Enchantment ` | false | false | false |
+| [Dimension Door](<../spells/dimension_door.md> "dnd2024:spells/dimension_door") | ` 4 ` | ` Conjuration ` | false | false | false |
+| [Hallucinatory Terrain](<../spells/hallucinatory_terrain.md> "dnd2024:spells/hallucinatory_terrain") | ` 4 ` | ` Illusion ` | false | false | false |
+| [Contact Other Plane](<../spells/contact_other_plane.md> "dnd2024:spells/contact_other_plane") | ` 5 ` | ` Divination ` | false | true | false |
+| [Dream](<../spells/dream.md> "dnd2024:spells/dream") | ` 5 ` | ` Illusion ` | false | false | false |
+| [Hold Monster](<../spells/hold_monster.md> "dnd2024:spells/hold_monster") | ` 5 ` | ` Enchantment ` | true | false | false |
+| [Mislead](<../spells/mislead.md> "dnd2024:spells/mislead") | ` 5 ` | ` Illusion ` | true | false | false |
+| [Planar Binding](<../spells/planar_binding.md> "dnd2024:spells/planar_binding") | ` 5 ` | ` Abjuration ` | false | false | true |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` 5 ` | ` Divination ` | true | false | true |
+| [Teleportation Circle](<../spells/teleportation_circle.md> "dnd2024:spells/teleportation_circle") | ` 5 ` | ` Conjuration ` | false | false | true |
+| [Circle of Death](<../spells/circle_of_death.md> "dnd2024:spells/circle_of_death") | ` 6 ` | ` Necromancy ` | false | false | true |
+| [Create Undead](<../spells/create_undead.md> "dnd2024:spells/create_undead") | ` 6 ` | ` Necromancy ` | false | false | true |
+| [Eyebite](<../spells/eyebite.md> "dnd2024:spells/eyebite") | ` 6 ` | ` Necromancy ` | true | false | false |
+| [True Seeing](<../spells/true_seeing.md> "dnd2024:spells/true_seeing") | ` 6 ` | ` Divination ` | false | false | true |
+| [Etherealness](<../spells/etherealness.md> "dnd2024:spells/etherealness") | ` 7 ` | ` Conjuration ` | false | false | false |
+| [Finger of Death](<../spells/finger_of_death.md> "dnd2024:spells/finger_of_death") | ` 7 ` | ` Necromancy ` | false | false | false |
+| [Forcecage](<../spells/forcecage.md> "dnd2024:spells/forcecage") | ` 7 ` | ` Evocation ` | true | false | true |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") | ` 7 ` | ` Conjuration ` | false | false | true |
+| [Befuddlement](<../spells/befuddlement.md> "dnd2024:spells/befuddlement") | ` 8 ` | ` Enchantment ` | false | false | false |
+| [Demiplane](<../spells/demiplane.md> "dnd2024:spells/demiplane") | ` 8 ` | ` Conjuration ` | false | false | false |
+| [Dominate Monster](<../spells/dominate_monster.md> "dnd2024:spells/dominate_monster") | ` 8 ` | ` Enchantment ` | true | false | false |
+| [Glibness](<../spells/glibness.md> "dnd2024:spells/glibness") | ` 8 ` | ` Enchantment ` | false | false | false |
+| [Power Word Stun](<../spells/power_word_stun.md> "dnd2024:spells/power_word_stun") | ` 8 ` | ` Enchantment ` | false | false | false |
+| [Astral Projection](<../spells/astral_projection.md> "dnd2024:spells/astral_projection") | ` 9 ` | ` Necromancy ` | false | false | true |
+| [Foresight](<../spells/foresight.md> "dnd2024:spells/foresight") | ` 9 ` | ` Divination ` | false | false | false |
+| [Gate](<../spells/gate.md> "dnd2024:spells/gate") | ` 9 ` | ` Conjuration ` | true | false | true |
+| [Imprisonment](<../spells/imprisonment.md> "dnd2024:spells/imprisonment") | ` 9 ` | ` Abjuration ` | false | false | true |
+| [Power Word Kill](<../spells/power_word_kill.md> "dnd2024:spells/power_word_kill") | ` 9 ` | ` Enchantment ` | false | false | false |
+| [True Polymorph](<../spells/true_polymorph.md> "dnd2024:spells/true_polymorph") | ` 9 ` | ` Transmutation ` | true | false | false |
+| [Weird](<../spells/weird.md> "dnd2024:spells/weird") | ` 9 ` | ` Illusion ` | true | false | false |

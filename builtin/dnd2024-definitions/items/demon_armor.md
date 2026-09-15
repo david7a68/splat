@@ -89,23 +89,49 @@ damage_bonus: 1
 
 #### Curse
 
-<!-- splat:yaml path=splat_rule/parameters/curse -->
+<!-- splat:values path=splat_rule/parameters/curse -->
 
-```yaml
-starts: don_armor
-cannot_doff: true
-unlock:
-- spell:
-    key: dnd2024:spells/remove_curse
-- magic: similar_curse_removal
-attack_disadvantage_against: demons
-save_disadvantage_against:
-  source: demons
-  effect:
-  - spells
-  - special_abilities
-attunement_required: false
-```
+| Field | Value |
+| --- | --- |
+| ` starts ` | ` don_armor ` |
+| ` cannot_doff ` | ` true ` |
+| ` attack_disadvantage_against ` | ` demons ` |
+| ` attunement_required ` | ` false ` |
+
+##### Unlock
+
+<!-- splat:table
+path: splat_rule/parameters/curse/unlock
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Spell:
+    path: spell
+    type: reference
+    optional: true
+  Magic:
+    path: magic
+    type: symbol
+    optional: true
+-->
+
+| Key | Spell | Magic |
+| --- | --- | --- |
+| ` row_1 ` | [Remove Curse](<../spells/remove_curse.md> "dnd2024:spells/remove_curse") |  |
+| ` row_2 ` |  | ` Similar curse removal ` |
+
+##### Save disadvantage against
+
+<!-- splat:values path=splat_rule/parameters/curse/save_disadvantage_against -->
+
+| Field | Value |
+| --- | --- |
+| ` source ` | ` demons ` |
+| ` effect ` | ` ["spells", "special_abilities"] ` |
 
 #### Attunement
 

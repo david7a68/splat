@@ -164,27 +164,61 @@ hit:
 
 ##### Hellish restoration
 
-<!-- splat:yaml path=splat_rule/parameters/features/hellish_restoration -->
+<!-- splat:values path=splat_rule/parameters/features/hellish_restoration -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` passive ` |
+| ` trigger ` | ` actor.died ` |
+
+###### When
+
+<!-- splat:values path=splat_rule/parameters/features/hellish_restoration/when -->
+
+| Field | Value |
+| --- | --- |
+| ` plane ` | ` nine_hells ` |
+
+###### Revive
+
+<!-- splat:yaml path=splat_rule/parameters/features/hellish_restoration/revive -->
 
 ```yaml
-economy: passive
-trigger: actor.died
-when:
-  plane: nine_hells
-revive:
-  delay:
-    amount:
-      dice:
-        count: 1
-        sides: 10
-      add: 0
-    unit: day
-  hp: maximum
-prevented_by:
-- killer_has_spell:
-    key: dnd2024:spells/bless
-- remains_sprinkled_with: holy_water
+delay:
+  amount:
+    dice:
+      count: 1
+      sides: 10
+    add: 0
+  unit: day
+hp: maximum
 ```
+
+###### Prevented by
+
+<!-- splat:table
+path: splat_rule/parameters/features/hellish_restoration/prevented_by
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Killer has spell:
+    path: killer_has_spell
+    type: reference
+    optional: true
+  Remains sprinkled with:
+    path: remains_sprinkled_with
+    type: symbol
+    optional: true
+-->
+
+| Key | Killer has spell | Remains sprinkled with |
+| --- | --- | --- |
+| ` row_1 ` | [Bless](<../spells/bless.md> "dnd2024:spells/bless") |  |
+| ` row_2 ` |  | ` Holy water ` |
 
 #### Damage resolution
 

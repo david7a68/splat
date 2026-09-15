@@ -234,45 +234,61 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: intelligence
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/darkness
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/dispel_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/confusion
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/fly
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/power_word_stun
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 16
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` intelligence ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 16 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- darkness
+- detect_magic
+- dispel_magic
+- confusion
+- fly
+- power_word_stun
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Uses count | Uses recovery |
+| --- | --- | --- | --- |
+| [Darkness](<../spells/darkness.md> "dnd2024:spells/darkness") | true |  |  |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") | true |  |  |
+| [Confusion](<../spells/confusion.md> "dnd2024:spells/confusion") |  | ` 1 ` | ` Long rest ` |
+| [Fly](<../spells/fly.md> "dnd2024:spells/fly") |  | ` 1 ` | ` Long rest ` |
+| [Power Word Stun](<../spells/power_word_stun.md> "dnd2024:spells/power_word_stun") |  | ` 1 ` | ` Long rest ` |
 
 ##### Pummel
 
@@ -306,19 +322,41 @@ success:
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: multiattack
-sequence:
-- feature: pincer
-  count: 2
-- choose:
-  - pummel
-  - spellcasting
-  count: 1
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` multiattack ` |
+
+###### Sequence
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/sequence
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+    optional: true
+  Count:
+    path: count
+    type: integer
+  Choose:
+    path: choose
+    type: yaml
+    optional: true
+-->
+
+| Key | Feature | Count | Choose |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Pincer ` | ` 2 ` |  |
+| ` row_2 ` |  | ` 1 ` | ` ["pummel", "spellcasting"] ` |
 
 #### Damage resolution
 

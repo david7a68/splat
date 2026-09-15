@@ -124,40 +124,73 @@ Original layout: [[../../srd-5.2.1/pages/259|page 259]].
 
 ##### Bite
 
-<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+<!-- splat:values path=splat_rule/parameters/features/bite -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 5
-  reach_ft: 5
-  advantage_if:
-    target_grappled_by: self
-hit:
-  damage:
-  - average: 10
-    roll:
-      count: 2
-      sides: 6
-      modifier: 3
-    type: slashing
-  - average: 3
-    roll:
-      count: 1
-      sides: 6
-      modifier: 0
-    type: acid
-  grapple:
-    condition: grappled
-    source: self
-    escape_dc: 13
-    maximum_size: large
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 5
+reach_ft: 5
+advantage_if:
+  target_grappled_by: self
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/bite/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 10 ` | ` 2 ` | ` 6 ` | ` 3 ` | ` Slashing ` |
+| ` row_2 ` | ` 3 ` | ` 1 ` | ` 6 ` | ` 0 ` | ` Acid ` |
+
+###### Grapple
+
+<!-- splat:values path=splat_rule/parameters/features/bite/hit/grapple -->
+
+| Field | Value |
+| --- | --- |
+| ` condition ` | ` grappled ` |
+| ` source ` | ` self ` |
+| ` escape_dc ` | ` 13 ` |
+| ` maximum_size ` | ` large ` |
 
 ##### Acid spray
 

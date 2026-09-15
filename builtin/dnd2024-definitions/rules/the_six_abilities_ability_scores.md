@@ -58,14 +58,34 @@ go unless a feature says otherwise.\
 
 #### Score bands
 
-<!-- splat:rows path=splat_rule/parameters/score_bands -->
+<!-- splat:table
+path: splat_rule/parameters/score_bands
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+columns:
+  Key:
+    type: key
+  Roll:
+    path: ''
+    type: range
+  Category:
+    path: category
+    type: symbol
+-->
 
-| Row | min | max | category |
-| --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 1 ` | ` normal_minimum ` |
-| ` 1 ` | ` 2 ` | ` 9 ` | ` weak ` |
-| ` 2 ` | ` 10 ` | ` 11 ` | ` human_average ` |
-| ` 3 ` | ` 12 ` | ` 19 ` | ` strong ` |
-| ` 4 ` | ` 20 ` | ` 20 ` | ` adventurer_maximum ` |
-| ` 5 ` | ` 21 ` | ` 29 ` | ` extraordinary ` |
-| ` 6 ` | ` 30 ` | ` 30 ` | ` absolute_maximum ` |
+| Key | Roll | Category |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` Normal minimum ` |
+| ` row_2 ` | ` 2–9 ` | ` Weak ` |
+| ` row_3 ` | ` 10–11 ` | ` Human average ` |
+| ` row_4 ` | ` 12–19 ` | ` Strong ` |
+| ` row_5 ` | ` 20 ` | ` Adventurer maximum ` |
+| ` row_6 ` | ` 21–29 ` | ` Extraordinary ` |
+| ` row_7 ` | ` 30 ` | ` Absolute maximum ` |

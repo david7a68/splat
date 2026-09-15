@@ -254,39 +254,47 @@ last_charge:
 
 ##### Effect
 
-<!-- splat:yaml path=splat_rule/parameters/effects/0/effect -->
+<!-- splat:values path=splat_rule/parameters/effects/0/effect -->
 
-```yaml
-cast_at_origin: true
-spell_roll:
-  die: 10
-  rows:
-  - range:
-    - 1
-    - 2
-    spell:
-      key: dnd2024:spells/darkness
-  - range:
-    - 3
-    - 4
-    spell:
-      key: dnd2024:spells/faerie_fire
-  - range:
-    - 5
-    - 6
-    spell:
-      key: dnd2024:spells/fireball
-  - range:
-    - 7
-    - 8
-    spell:
-      key: dnd2024:spells/slow
-  - range:
-    - 9
-    - 10
-    spell:
-      key: dnd2024:spells/stinking_cloud
-```
+| Field | Value |
+| --- | --- |
+| ` cast_at_origin ` | ` true ` |
+
+###### Spell roll
+
+<!-- splat:values path=splat_rule/parameters/effects/0/effect/spell_roll -->
+
+| Field | Value |
+| --- | --- |
+| ` die ` | ` 10 ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/effects/0/effect/spell_roll/rows
+key: Spell
+order:
+- darkness
+- faerie_fire
+- fireball
+- slow
+- stinking_cloud
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Range:
+    path: range
+    type: yaml
+-->
+
+| Spell | Range |
+| --- | --- |
+| [Darkness](<../spells/darkness.md> "dnd2024:spells/darkness") | ` [1, 2] ` |
+| [Faerie Fire](<../spells/faerie_fire.md> "dnd2024:spells/faerie_fire") | ` [3, 4] ` |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") | ` [5, 6] ` |
+| [Slow](<../spells/slow.md> "dnd2024:spells/slow") | ` [7, 8] ` |
+| [Stinking Cloud](<../spells/stinking_cloud.md> "dnd2024:spells/stinking_cloud") | ` [9, 10] ` |
 
 ##### Effect
 
@@ -387,36 +395,56 @@ ineligible_other_target_fallback: user
 
 ##### Effect
 
-<!-- splat:yaml path=splat_rule/parameters/effects/8/effect -->
+<!-- splat:values path=splat_rule/parameters/effects/8/effect -->
 
-```yaml
-summon_roll:
-  die: 4
-  rows:
-  - range:
-    - 1
-    - 1
-    creature:
-      key: dnd2024:creatures/rhinoceros
-  - range:
-    - 2
-    - 2
-    creature:
-      key: dnd2024:creatures/elephant
-  - range:
-    - 3
-    - 4
-    creature:
-      key: dnd2024:creatures/rat
-placement: nearest_unoccupied_space_to_chosen_origin
-magically_formed: true
-controlled_by_user: false
-behavior: normal
-duration:
-  amount: 1
-  unit: hours
-ends_on: zero_hp
-```
+| Field | Value |
+| --- | --- |
+| ` placement ` | ` nearest_unoccupied_space_to_chosen_origin ` |
+| ` magically_formed ` | ` true ` |
+| ` controlled_by_user ` | ` false ` |
+| ` behavior ` | ` normal ` |
+| ` ends_on ` | ` zero_hp ` |
+
+###### Summon roll
+
+<!-- splat:values path=splat_rule/parameters/effects/8/effect/summon_roll -->
+
+| Field | Value |
+| --- | --- |
+| ` die ` | ` 4 ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/effects/8/effect/summon_roll/rows
+key: Creature
+order:
+- rhinoceros
+- elephant
+- rat
+columns:
+  Creature:
+    path: creature
+    type: reference
+  Range:
+    path: range
+    type: yaml
+-->
+
+| Creature | Range |
+| --- | --- |
+| [Rhinoceros](<../creatures/rhinoceros.md> "dnd2024:creatures/rhinoceros") | ` [1, 1] ` |
+| [Elephant](<../creatures/elephant.md> "dnd2024:creatures/elephant") | ` [2, 2] ` |
+| [Rat](<../creatures/rat.md> "dnd2024:creatures/rat") | ` [3, 4] ` |
+
+###### Duration
+
+<!-- splat:values path=splat_rule/parameters/effects/8/effect/duration -->
+
+| Field | Value |
+| --- | --- |
+| ` amount ` | ` 1 ` |
+| ` unit ` | ` hours ` |
 
 ##### Effect
 
@@ -538,61 +566,142 @@ damage:
 
 ##### Effect
 
-<!-- splat:yaml path=splat_rule/parameters/effects/16/effect -->
+<!-- splat:values path=splat_rule/parameters/effects/16/effect -->
 
-```yaml
-spell:
-  key: dnd2024:spells/polymorph
-target: closest_creature_to_chosen_origin
-form_roll:
-  die: 4
-  rows:
-  - range:
-    - 1
-    - 1
-    creature:
-      key: dnd2024:creatures/black_bear
-  - range:
-    - 2
-    - 2
-    creature:
-      key: dnd2024:creatures/giant_wasp
-  - range:
-    - 3
-    - 4
-    creature:
-      key: dnd2024:creatures/frog
-```
+| Field | Value |
+| --- | --- |
+| ` target ` | ` closest_creature_to_chosen_origin ` |
+
+###### Spell
+
+<!-- splat:values path=splat_rule/parameters/effects/16/effect/spell -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:spells/polymorph ` |
+
+###### Form roll
+
+<!-- splat:values path=splat_rule/parameters/effects/16/effect/form_roll -->
+
+| Field | Value |
+| --- | --- |
+| ` die ` | ` 4 ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/effects/16/effect/form_roll/rows
+key: Creature
+order:
+- black_bear
+- giant_wasp
+- frog
+columns:
+  Creature:
+    path: creature
+    type: reference
+  Range:
+    path: range
+    type: yaml
+-->
+
+| Creature | Range |
+| --- | --- |
+| [Black Bear](<../creatures/black_bear.md> "dnd2024:creatures/black_bear") | ` [1, 1] ` |
+| [Giant Wasp](<../creatures/giant_wasp.md> "dnd2024:creatures/giant_wasp") | ` [2, 2] ` |
+| [Frog](<../creatures/frog.md> "dnd2024:creatures/frog") | ` [3, 4] ` |
 
 ##### Effect
 
-<!-- splat:yaml path=splat_rule/parameters/effects/17/effect -->
+<!-- splat:values path=splat_rule/parameters/effects/17/effect -->
 
-```yaml
-target: closest_creature_to_chosen_origin
-save:
-  ability: constitution
-  dc: 15
-  failure:
-    condition: restrained
-    repeat_at: target.next_turn_end
-    repeat_save:
-      requires:
-        condition: restrained
-        source: this_effect
-        active: true
-      ability: constitution
-      dc: 15
-      failure:
-        replace_condition: petrified
-        ends_on:
-        - spell:
-            key: dnd2024:spells/greater_restoration
-        - magic_equivalent: greater_restoration
-          adjudicator: gm
-      success:
-        end_effect: true
-```
+| Field | Value |
+| --- | --- |
+| ` target ` | ` closest_creature_to_chosen_origin ` |
+
+###### Save
+
+<!-- splat:values path=splat_rule/parameters/effects/17/effect/save -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` constitution ` |
+| ` dc ` | ` 15 ` |
+
+###### Failure
+
+<!-- splat:values path=splat_rule/parameters/effects/17/effect/save/failure -->
+
+| Field | Value |
+| --- | --- |
+| ` condition ` | ` restrained ` |
+| ` repeat_at ` | ` target.next_turn_end ` |
+
+###### Repeat save
+
+<!-- splat:values path=splat_rule/parameters/effects/17/effect/save/failure/repeat_save -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` constitution ` |
+| ` dc ` | ` 15 ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/effects/17/effect/save/failure/repeat_save/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` condition ` | ` restrained ` |
+| ` source ` | ` this_effect ` |
+| ` active ` | ` true ` |
+
+###### Failure
+
+<!-- splat:values path=splat_rule/parameters/effects/17/effect/save/failure/repeat_save/failure -->
+
+| Field | Value |
+| --- | --- |
+| ` replace_condition ` | ` petrified ` |
+
+###### Ends on
+
+<!-- splat:table
+path: splat_rule/parameters/effects/17/effect/save/failure/repeat_save/failure/ends_on
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Spell:
+    path: spell
+    type: reference
+    optional: true
+  Magic equivalent:
+    path: magic_equivalent
+    type: symbol
+    optional: true
+  Adjudicator:
+    path: adjudicator
+    type: symbol
+    optional: true
+-->
+
+| Key | Spell | Magic equivalent | Adjudicator |
+| --- | --- | --- | --- |
+| ` row_1 ` | [Greater Restoration](<../spells/greater_restoration.md> "dnd2024:spells/greater_restoration") |  |  |
+| ` row_2 ` |  | ` Greater restoration ` | ` Gm ` |
+
+###### Success
+
+<!-- splat:values path=splat_rule/parameters/effects/17/effect/save/failure/repeat_save/success -->
+
+| Field | Value |
+| --- | --- |
+| ` end_effect ` | ` true ` |
 
 #### Gem damage rounding
 

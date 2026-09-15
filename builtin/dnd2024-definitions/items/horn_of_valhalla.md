@@ -39,14 +39,6 @@ If you blow the horn without meeting its require-\
 ment, the summoned spirits attack you. If you meet\
 the requirement, they are Friendly to you and your\
 allies and follow your commands.\
-1d100 Horn Type Spirits Requirement\
-01–40 Silver 2 None\
-41–75 Brass 3 Proficiency with all\
-Simple weapons\
-76–90 Bronze 4 Training with all\
-Medium armor\
-91–00 Iron 5 Proficiency with all\
-Martial weapons\
 
 Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 
@@ -122,38 +114,60 @@ summon:
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Roll:
+    path: ''
+    type: range
+  Metal:
+    path: metal
+    type: symbol
+  Rarity:
+    path: rarity
+    type: symbol
+  Spirits:
+    path: spirits
+    type: integer
+  Requirement proficiency:
+    path: requirement/proficiency
+    type: symbol
+    optional: true
+  Requirement training:
+    path: requirement/training
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | min | max | metal | rarity | spirits | requirement |
-| --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 40 ` | ` silver ` | ` rare ` | ` 2 ` | ` null ` |
-| ` 1 ` | ` 41 ` | ` 75 ` | ` brass ` | ` rare ` | ` 3 ` |  |
-| ` 2 ` | ` 76 ` | ` 90 ` | ` bronze ` | ` very_rare ` | ` 4 ` |  |
-| ` 3 ` | ` 91 ` | ` 100 ` | ` iron ` | ` legendary ` | ` 5 ` |  |
+| Key | Roll | Metal | Rarity | Spirits | Requirement proficiency | Requirement training | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1–40 ` | ` Silver ` | ` Rare ` | ` 2 ` |  |  | [Rules](#^splat-d2ccac60-row_1 "section:row_1") |
+| ` row_2 ` | ` 41–75 ` | ` Brass ` | ` Rare ` | ` 3 ` | ` All simple weapons ` |  |  |
+| ` row_3 ` | ` 76–90 ` | ` Bronze ` | ` Very rare ` | ` 4 ` |  | ` All medium armor ` |  |
+| ` row_4 ` | ` 91–100 ` | ` Iron ` | ` Legendary ` | ` 5 ` | ` All martial weapons ` |  |  |
 
-##### Requirement
+##### Row 1
 
-<!-- splat:values path=splat_rule/parameters/variants/1/requirement -->
+^splat-d2ccac60-row_1
 
-| Field | Value |
-| --- | --- |
-| ` proficiency ` | ` all_simple_weapons ` |
+###### Requirement
 
-##### Requirement
+<!-- splat:yaml path=splat_rule/parameters/variants/@row_1/requirement -->
 
-<!-- splat:values path=splat_rule/parameters/variants/2/requirement -->
-
-| Field | Value |
-| --- | --- |
-| ` training ` | ` all_medium_armor ` |
-
-##### Requirement
-
-<!-- splat:values path=splat_rule/parameters/variants/3/requirement -->
-
-| Field | Value |
-| --- | --- |
-| ` proficiency ` | ` all_martial_weapons ` |
+```yaml
+null
+```
 
 #### Attunement
 

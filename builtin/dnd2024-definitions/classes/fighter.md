@@ -141,48 +141,123 @@ Level Bonus Class Features\
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
 
-```yaml
-count: 1
-options:
-- id: a
-  grants:
-  - item_type: chain_mail
-    quantity: 1
-  - item_type: greatsword
-    quantity: 1
-  - item_type: flail
-    quantity: 1
-  - item_type: javelin
-    quantity: 8
-  - item_type: dungeoneer_s_pack
-    quantity: 1
-  - item_type: gp
-    quantity: 4
-- id: b
-  grants:
-  - item_type: studded_leather_armor
-    quantity: 1
-  - item_type: scimitar
-    quantity: 1
-  - item_type: shortsword
-    quantity: 1
-  - item_type: longbow
-    quantity: 1
-  - item_type: arrow
-    quantity: 20
-  - item_type: quiver
-    quantity: 1
-  - item_type: dungeoneer_s_pack
-    quantity: 1
-  - item_type: gp
-    quantity: 11
-- id: c
-  grants:
-  - item_type: gp
-    quantity: 155
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options
+key: Variant
+order:
+- a
+- b
+- c
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
+
+| Variant | Details |
+| --- | --- |
+| ` A ` | [Rules](#^splat-93071aae-a "section:a") |
+| ` B ` | [Rules](#^splat-93071aae-b "section:b") |
+| ` C ` | [Rules](#^splat-93071aae-c "section:c") |
+
+###### A
+
+^splat-93071aae-a
+
+###### Grants
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/@a/grants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+columns:
+  Key:
+    type: key
+  Item type:
+    path: item_type
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Key | Item type | Quantity |
+| --- | --- | --- |
+| ` row_1 ` | ` Chain mail ` | ` 1 ` |
+| ` row_2 ` | ` Greatsword ` | ` 1 ` |
+| ` row_3 ` | ` Flail ` | ` 1 ` |
+| ` row_4 ` | ` Javelin ` | ` 8 ` |
+| ` row_5 ` | ` Dungeoneer s pack ` | ` 1 ` |
+| ` row_6 ` | ` Gp ` | ` 4 ` |
+
+###### B
+
+^splat-93071aae-b
+
+###### Grants
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/@b/grants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+columns:
+  Key:
+    type: key
+  Item type:
+    path: item_type
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Key | Item type | Quantity |
+| --- | --- | --- |
+| ` row_1 ` | ` Studded leather armor ` | ` 1 ` |
+| ` row_2 ` | ` Scimitar ` | ` 1 ` |
+| ` row_3 ` | ` Shortsword ` | ` 1 ` |
+| ` row_4 ` | ` Longbow ` | ` 1 ` |
+| ` row_5 ` | ` Arrow ` | ` 20 ` |
+| ` row_6 ` | ` Quiver ` | ` 1 ` |
+| ` row_7 ` | ` Dungeoneer s pack ` | ` 1 ` |
+| ` row_8 ` | ` Gp ` | ` 11 ` |
+
+###### C
+
+^splat-93071aae-c
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/starting_equipment/options/@c/grants -->
+
+| Row | item_type | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` gp ` | ` 155 ` |
 
 #### Progression
 
@@ -194,142 +269,48 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- fighter_level_11_two_extra_attacks
+- fighter_level_13_studied_attacks
+- fighter_level_19_epic_boon
+- fighter_level_1_fighting_style
+- fighter_level_1_second_wind
+- fighter_level_1_weapon_mastery
+- fighter_level_20_three_extra_attacks
+- fighter_level_2_action_surge
+- fighter_level_2_tactical_mind
+- fighter_level_3_fighter_subclass
+- fighter_level_4_ability_score_improvement
+- fighter_level_5_extra_attack
+- fighter_level_5_tactical_shift
+- fighter_level_9_indomitable
+- fighter_level_9_tactical_master
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 11 ` |
-| ` 1 ` | ` 13 ` |
-| ` 2 ` | ` 19 ` |
-| ` 3 ` | ` 1 ` |
-| ` 4 ` | ` 1 ` |
-| ` 5 ` | ` 1 ` |
-| ` 6 ` | ` 20 ` |
-| ` 7 ` | ` 2 ` |
-| ` 8 ` | ` 2 ` |
-| ` 9 ` | ` 3 ` |
-| ` 10 ` | ` 4 ` |
-| ` 11 ` | ` 5 ` |
-| ` 12 ` | ` 5 ` |
-| ` 13 ` | ` 9 ` |
-| ` 14 ` | ` 9 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_11_two_extra_attacks ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_13_studied_attacks ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_1_fighting_style ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_1_second_wind ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_1_weapon_mastery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_20_three_extra_attacks ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_2_action_surge ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_2_tactical_mind ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_3_fighter_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/11/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_5_extra_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/12/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_5_tactical_shift ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/13/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_9_indomitable ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/14/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_9_tactical_master ` |
+| [Level 11: Two Extra Attacks](<../class_features/fighter_level_11_two_extra_attacks.md> "dnd2024:class_features/fighter_level_11_two_extra_attacks") | ` 11 ` |
+| [Level 13: Studied Attacks](<../class_features/fighter_level_13_studied_attacks.md> "dnd2024:class_features/fighter_level_13_studied_attacks") | ` 13 ` |
+| [Level 19: Epic Boon](<../class_features/fighter_level_19_epic_boon.md> "dnd2024:class_features/fighter_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Fighting Style](<../class_features/fighter_level_1_fighting_style.md> "dnd2024:class_features/fighter_level_1_fighting_style") | ` 1 ` |
+| [Level 1: Second Wind](<../class_features/fighter_level_1_second_wind.md> "dnd2024:class_features/fighter_level_1_second_wind") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/fighter_level_1_weapon_mastery.md> "dnd2024:class_features/fighter_level_1_weapon_mastery") | ` 1 ` |
+| [Level 20: Three Extra Attacks](<../class_features/fighter_level_20_three_extra_attacks.md> "dnd2024:class_features/fighter_level_20_three_extra_attacks") | ` 20 ` |
+| [Level 2: Action Surge](<../class_features/fighter_level_2_action_surge.md> "dnd2024:class_features/fighter_level_2_action_surge") | ` 2 ` |
+| [Level 2: Tactical Mind](<../class_features/fighter_level_2_tactical_mind.md> "dnd2024:class_features/fighter_level_2_tactical_mind") | ` 2 ` |
+| [Level 3: Fighter Subclass](<../class_features/fighter_level_3_fighter_subclass.md> "dnd2024:class_features/fighter_level_3_fighter_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/fighter_level_4_ability_score_improvement.md> "dnd2024:class_features/fighter_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Extra Attack](<../class_features/fighter_level_5_extra_attack.md> "dnd2024:class_features/fighter_level_5_extra_attack") | ` 5 ` |
+| [Level 5: Tactical Shift](<../class_features/fighter_level_5_tactical_shift.md> "dnd2024:class_features/fighter_level_5_tactical_shift") | ` 5 ` |
+| [Level 9: Indomitable](<../class_features/fighter_level_9_indomitable.md> "dnd2024:class_features/fighter_level_9_indomitable") | ` 9 ` |
+| [Level 9: Tactical Master](<../class_features/fighter_level_9_tactical_master.md> "dnd2024:class_features/fighter_level_9_tactical_master") | ` 9 ` |

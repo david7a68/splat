@@ -56,18 +56,49 @@ spell.\
 
 #### Potency benchmarks
 
-<!-- splat:rows path=splat_rule/parameters/potency_benchmarks -->
+<!-- splat:table
+path: splat_rule/parameters/potency_benchmarks
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Spell level:
+    path: spell_level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | spell_level | duration |
+| Key | Spell level | Details |
 | --- | --- | --- |
-| ` 0 ` | ` 3 ` |  |
-| ` 1 ` | ` 9 ` | ` until_dispelled ` |
+| ` row_1 ` | ` 3 ` | [Rules](#^splat-a9b74d87-row_1 "section:row_1") |
+| ` row_2 ` | ` 9 ` | [Rules](#^splat-a9b74d87-row_2 "section:row_2") |
 
-##### Duration
+##### Row 1
 
-<!-- splat:values path=splat_rule/parameters/potency_benchmarks/0/duration -->
+^splat-a9b74d87-row_1
+
+###### Duration
+
+<!-- splat:values path=splat_rule/parameters/potency_benchmarks/@row_1/duration -->
 
 | Field | Value |
 | --- | --- |
 | ` value ` | ` 1 ` |
 | ` unit ` | ` minute ` |
+
+##### Row 2
+
+^splat-a9b74d87-row_2
+
+###### Duration
+
+<!-- splat:yaml path=splat_rule/parameters/potency_benchmarks/@row_2/duration -->
+
+```yaml
+until_dispelled
+```

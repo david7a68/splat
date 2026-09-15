@@ -67,46 +67,53 @@ Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- scrying
+- suggestion
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Save dc:
+    path: save_dc
+    type: integer
+  Resource uses:
+    path: resource/uses
+    type: integer
+    optional: true
+  Resource recovery:
+    path: resource/recovery
+    type: symbol
+    optional: true
+  Target seen:
+    path: target/seen
+    type: boolean
+    optional: true
+  Target within sensor ft:
+    path: target/within_sensor_ft
+    type: integer
+    optional: true
+  Origin:
+    path: origin
+    type: symbol
+    optional: true
+  Concentration:
+    path: concentration
+    type: boolean
+    optional: true
+  End on:
+    path: end_on
+    type: yaml
+    optional: true
+-->
 
-| Row | save_dc | origin | concentration | end_on |
-| --- | --- | --- | --- | --- |
-| ` 0 ` | ` 17 ` |  |  |  |
-| ` 1 ` | ` 17 ` | ` scrying_sensor ` | ` false ` | ` ["scrying_ends"] ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/scrying ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/suggestion ` |
-
-##### Resource
-
-<!-- splat:values path=splat_rule/parameters/spells/1/resource -->
-
-| Field | Value |
-| --- | --- |
-| ` uses ` | ` 1 ` |
-| ` recovery ` | ` dawn ` |
-
-##### Target
-
-<!-- splat:values path=splat_rule/parameters/spells/1/target -->
-
-| Field | Value |
-| --- | --- |
-| ` seen ` | ` true ` |
-| ` within_sensor_ft ` | ` 30 ` |
+| Spell | Save dc | Resource uses | Resource recovery | Target seen | Target within sensor ft | Origin | Concentration | End on |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` 17 ` |  |  |  |  |  |  |  |
+| [Suggestion](<../spells/suggestion.md> "dnd2024:spells/suggestion") | ` 17 ` | ` 1 ` | ` Dawn ` | true | ` 30 ` | ` Scrying sensor ` | false | ` ["scrying_ends"] ` |
 
 #### Telepathy
 

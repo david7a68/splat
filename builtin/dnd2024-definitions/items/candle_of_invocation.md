@@ -119,67 +119,80 @@ cleric_or_druid_in_light:
 
 #### First lighting alternative
 
-<!-- splat:yaml path=splat_rule/parameters/first_lighting_alternative -->
+<!-- splat:values path=splat_rule/parameters/first_lighting_alternative -->
+
+| Field | Value |
+| --- | --- |
+| ` destroys_item ` | ` true ` |
+
+##### Cast
+
+<!-- splat:yaml path=splat_rule/parameters/first_lighting_alternative/cast -->
 
 ```yaml
-cast:
-  spell:
-    key: dnd2024:spells/gate
-destroys_item: true
-portal_destination:
-  plane_selection:
-  - gm_choice
-  - d100
-  table:
-  - min: 1
-    max: 5
-    plane: abyss
-  - min: 6
-    max: 10
-    plane: acheron
-  - min: 11
-    max: 17
-    plane: arborea
-  - min: 18
-    max: 25
-    plane: arcadia
-  - min: 26
-    max: 33
-    plane: beastlands
-  - min: 34
-    max: 41
-    plane: bytopia
-  - min: 42
-    max: 46
-    plane: carceri
-  - min: 47
-    max: 54
-    plane: elysium
-  - min: 55
-    max: 59
-    plane: gehenna
-  - min: 60
-    max: 64
-    plane: hades
-  - min: 65
-    max: 69
-    plane: limbo
-  - min: 70
-    max: 77
-    plane: mechanus
-  - min: 78
-    max: 85
-    plane: mount_celestia
-  - min: 86
-    max: 90
-    plane: nine_hells
-  - min: 91
-    max: 95
-    plane: pandemonium
-  - min: 96
-    max: 100
-    plane: ysgard
+spell:
+  key: dnd2024:spells/gate
 ```
+
+##### Portal destination
+
+<!-- splat:values path=splat_rule/parameters/first_lighting_alternative/portal_destination -->
+
+| Field | Value |
+| --- | --- |
+| ` plane_selection ` | ` ["gm_choice", "d100"] ` |
+
+###### Table
+
+<!-- splat:table
+path: splat_rule/parameters/first_lighting_alternative/portal_destination/table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+columns:
+  Key:
+    type: key
+  Roll:
+    path: ''
+    type: range
+  Plane:
+    path: plane
+    type: symbol
+-->
+
+| Key | Roll | Plane |
+| --- | --- | --- |
+| ` row_1 ` | ` 1–5 ` | ` Abyss ` |
+| ` row_2 ` | ` 6–10 ` | ` Acheron ` |
+| ` row_3 ` | ` 11–17 ` | ` Arborea ` |
+| ` row_4 ` | ` 18–25 ` | ` Arcadia ` |
+| ` row_5 ` | ` 26–33 ` | ` Beastlands ` |
+| ` row_6 ` | ` 34–41 ` | ` Bytopia ` |
+| ` row_7 ` | ` 42–46 ` | ` Carceri ` |
+| ` row_8 ` | ` 47–54 ` | ` Elysium ` |
+| ` row_9 ` | ` 55–59 ` | ` Gehenna ` |
+| ` row_10 ` | ` 60–64 ` | ` Hades ` |
+| ` row_11 ` | ` 65–69 ` | ` Limbo ` |
+| ` row_12 ` | ` 70–77 ` | ` Mechanus ` |
+| ` row_13 ` | ` 78–85 ` | ` Mount celestia ` |
+| ` row_14 ` | ` 86–90 ` | ` Nine hells ` |
+| ` row_15 ` | ` 91–95 ` | ` Pandemonium ` |
+| ` row_16 ` | ` 96–100 ` | ` Ysgard ` |
 
 #### Attunement
 

@@ -75,24 +75,61 @@ do so again until you finish a Long Rest.\
 
 #### Adrenaline rush
 
-<!-- splat:yaml path=splat_rule/parameters/adrenaline_rush -->
+<!-- splat:values path=splat_rule/parameters/adrenaline_rush -->
 
-```yaml
-action: bonus_action
-take_action: dash
-temporary_hit_points:
-  var: actor.proficiency_bonus
-resource:
-  id: orc.adrenaline_rush
-  maximum:
-    var: actor.proficiency_bonus
-  recovery:
-  - event: rest.short_completed
-    amount: all
-  - event: rest.long_completed
-    amount: all
-cost: 1
-```
+| Field | Value |
+| --- | --- |
+| ` action ` | ` bonus_action ` |
+| ` take_action ` | ` dash ` |
+| ` cost ` | ` 1 ` |
+
+##### Temporary hit points
+
+<!-- splat:values path=splat_rule/parameters/adrenaline_rush/temporary_hit_points -->
+
+| Field | Value |
+| --- | --- |
+| ` var ` | ` actor.proficiency_bonus ` |
+
+##### Resource
+
+<!-- splat:values path=splat_rule/parameters/adrenaline_rush/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` id ` | ` orc.adrenaline_rush ` |
+
+###### Maximum
+
+<!-- splat:values path=splat_rule/parameters/adrenaline_rush/resource/maximum -->
+
+| Field | Value |
+| --- | --- |
+| ` var ` | ` actor.proficiency_bonus ` |
+
+###### Recovery
+
+<!-- splat:table
+path: splat_rule/parameters/adrenaline_rush/resource/recovery
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Amount:
+    path: amount
+    type: symbol
+-->
+
+| Key | Event | Amount |
+| --- | --- | --- |
+| ` row_1 ` | ` rest.short_completed ` | ` All ` |
+| ` row_2 ` | ` rest.long_completed ` | ` All ` |
 
 #### Relentless endurance
 

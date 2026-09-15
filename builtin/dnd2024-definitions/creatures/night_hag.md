@@ -233,90 +233,122 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: intelligence
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/etherealness
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/magic_missile
-    uses:
-      unlimited: true
-    cast_level: 4
-  - spell:
-      key: dnd2024:spells/phantasmal_killer
-    uses:
-      count: 2
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/plane_shift
-    uses:
-      count: 2
-      recovery: long_rest
-    target_override: self
-  save_dc: 14
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` intelligence ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 14 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- detect_magic
+- etherealness
+- magic_missile
+- phantasmal_killer
+- plane_shift
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+  Target override:
+    path: target_override
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Cast level | Uses count | Uses recovery | Target override |
+| --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |  |  |
+| [Etherealness](<../spells/etherealness.md> "dnd2024:spells/etherealness") | true |  |  |  |  |
+| [Magic Missile](<../spells/magic_missile.md> "dnd2024:spells/magic_missile") | true | ` 4 ` |  |  |  |
+| [Phantasmal Killer](<../spells/phantasmal_killer.md> "dnd2024:spells/phantasmal_killer") |  |  | ` 2 ` | ` Long rest ` |  |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") |  |  | ` 2 ` | ` Long rest ` | ` Self ` |
 
 ##### Coven magic
 
-<!-- splat:yaml path=splat_rule/parameters/features/coven_magic -->
+<!-- splat:values path=splat_rule/parameters/features/coven_magic -->
 
-```yaml
-economy: passive
-op: spellcasting
-requires:
-  hag_allies_within_ft: 30
-  minimum_allies: 2
-ability: intelligence
-save_dc: 14
-waived_components:
-- material
-casting_time: spell_normal
-spells:
-- spell:
-    key: dnd2024:spells/augury
-  uses:
-    count: 1
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/find_familiar
-  uses:
-    count: 1
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/identify
-  uses:
-    count: 1
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/locate_object
-  uses:
-    count: 1
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/scrying
-  uses:
-    count: 1
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/unseen_servant
-  uses:
-    count: 1
-    recovery: long_rest
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` passive ` |
+| ` op ` | ` spellcasting ` |
+| ` ability ` | ` intelligence ` |
+| ` save_dc ` | ` 14 ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` casting_time ` | ` spell_normal ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/coven_magic/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` hag_allies_within_ft ` | ` 30 ` |
+| ` minimum_allies ` | ` 2 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/coven_magic/spells
+key: Spell
+order:
+- augury
+- find_familiar
+- identify
+- locate_object
+- scrying
+- unseen_servant
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses count:
+    path: uses/count
+    type: integer
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+-->
+
+| Spell | Uses count | Uses recovery |
+| --- | --- | --- |
+| [Augury](<../spells/augury.md> "dnd2024:spells/augury") | ` 1 ` | ` Long rest ` |
+| [Find Familiar](<../spells/find_familiar.md> "dnd2024:spells/find_familiar") | ` 1 ` | ` Long rest ` |
+| [Identify](<../spells/identify.md> "dnd2024:spells/identify") | ` 1 ` | ` Long rest ` |
+| [Locate Object](<../spells/locate_object.md> "dnd2024:spells/locate_object") | ` 1 ` | ` Long rest ` |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` 1 ` | ` Long rest ` |
+| [Unseen Servant](<../spells/unseen_servant.md> "dnd2024:spells/unseen_servant") | ` 1 ` | ` Long rest ` |
 
 ##### Soul bag
 
@@ -342,58 +374,133 @@ create_replacement_after:
 
 ##### Nightmare haunting
 
-<!-- splat:yaml path=splat_rule/parameters/features/nightmare_haunting -->
+<!-- splat:values path=splat_rule/parameters/features/nightmare_haunting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spell.cast ` |
+| ` profile ` | ` spellcasting ` |
+| ` messenger ` | ` actor_only ` |
+
+###### Spell
+
+<!-- splat:values path=splat_rule/parameters/features/nightmare_haunting/spell -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:spells/dream ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/nightmare_haunting/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` actor_plane ` | ` ethereal ` |
+| ` holding_or_carrying_item ` | ` soul_bag ` |
+
+###### Target
+
+<!-- splat:values path=splat_rule/parameters/features/nightmare_haunting/target -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` count ` | ` 1 ` |
+| ` visible_to_actor ` | ` true ` |
+| ` plane ` | ` material ` |
+
+###### Fails and wasted if target
+
+<!-- splat:table
+path: splat_rule/parameters/features/nightmare_haunting/fails_and_wasted_if_target
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Spell:
+    path: spell
+    type: reference
+    optional: true
+  Within spell:
+    path: within_spell
+    type: reference
+    optional: true
+-->
+
+| Key | Spell | Within spell |
+| --- | --- | --- |
+| ` row_1 ` | [Protection from Evil and Good](<../spells/protection_from_evil_and_good.md> "dnd2024:spells/protection_from_evil_and_good") |  |
+| ` row_2 ` |  | [Magic Circle](<../spells/magic_circle.md> "dnd2024:spells/magic_circle") |
+
+###### On damage
+
+<!-- splat:yaml path=splat_rule/parameters/features/nightmare_haunting/on_damage -->
 
 ```yaml
-economy: action
-op: spell.cast
-spell:
-  key: dnd2024:spells/dream
-profile: spellcasting
-requires:
-  actor_plane: ethereal
-  holding_or_carrying_item: soul_bag
-target:
-  kind: creature
-  count: 1
-  visible_to_actor: true
-  plane: material
-messenger: actor_only
-fails_and_wasted_if_target:
-- spell:
-    key: dnd2024:spells/protection_from_evil_and_good
-- within_spell:
-    key: dnd2024:spells/magic_circle
-on_damage:
-  op: hp_maximum.reduce
-  amount:
-    event_field: dream_damage_taken
-on_kill:
-  op: soul.trap
-  container: soul_bag
-  cannot_raise_until_soul_released: true
-uses:
-  count: 1
-  recovery: long_rest
+op: hp_maximum.reduce
+amount:
+  event_field: dream_damage_taken
 ```
+
+###### On kill
+
+<!-- splat:values path=splat_rule/parameters/features/nightmare_haunting/on_kill -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` soul.trap ` |
+| ` container ` | ` soul_bag ` |
+| ` cannot_raise_until_soul_released ` | ` true ` |
+
+###### Uses
+
+<!-- splat:values path=splat_rule/parameters/features/nightmare_haunting/uses -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` recovery ` | ` long_rest ` |
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
 
-```yaml
-economy: bonus_action
-op: shapechange
-equipment_transformed: false
-statistics_preserved_except:
-- size
-choices:
-- form: humanoid
-  sizes:
-  - small
-  - medium
-- form: true_form
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` shapechange ` |
+| ` equipment_transformed ` | ` false ` |
+| ` statistics_preserved_except ` | ` ["size"] ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Form:
+    path: form
+    type: symbol
+  Sizes:
+    path: sizes
+    type: yaml
+    optional: true
+-->
+
+| Key | Form | Sizes |
+| --- | --- | --- |
+| ` row_1 ` | ` Humanoid ` | ` ["small", "medium"] ` |
+| ` row_2 ` | ` True form ` |  |
 
 ##### Multiattack
 

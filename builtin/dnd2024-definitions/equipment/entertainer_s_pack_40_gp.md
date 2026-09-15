@@ -77,100 +77,44 @@ derbox, and Waterskin.\
 
 #### Contents
 
-<!-- splat:rows path=splat_rule/parameters/contents -->
+<!-- splat:table
+path: splat_rule/parameters/contents
+key: Item
+order:
+- backpack_2_gp
+- bedroll_1_gp
+- bell_1_gp
+- lantern_bullseye_10_gp
+- costume_5_gp
+- mirror_5_gp
+- oil_1_sp
+- rations_5_sp
+- tinderbox_5_sp
+- waterskin_2_sp
+columns:
+  Item:
+    path: item
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Unit:
+    path: unit
+    type: symbol
+-->
 
-| Row | quantity | unit |
+| Item | Quantity | Unit |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` purchase_unit ` |
-| ` 1 ` | ` 1 ` | ` purchase_unit ` |
-| ` 2 ` | ` 1 ` | ` purchase_unit ` |
-| ` 3 ` | ` 1 ` | ` purchase_unit ` |
-| ` 4 ` | ` 3 ` | ` purchase_unit ` |
-| ` 5 ` | ` 1 ` | ` purchase_unit ` |
-| ` 6 ` | ` 8 ` | ` purchase_unit ` |
-| ` 7 ` | ` 9 ` | ` day ` |
-| ` 8 ` | ` 1 ` | ` purchase_unit ` |
-| ` 9 ` | ` 1 ` | ` purchase_unit ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/0/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/backpack_2_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/1/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/bedroll_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/2/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/bell_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/3/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/lantern_bullseye_10_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/4/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/costume_5_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/5/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/mirror_5_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/6/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/oil_1_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/7/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/rations_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/8/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/tinderbox_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/9/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/waterskin_2_sp ` |
+| [Backpack (2 GP)](<backpack_2_gp.md> "dnd2024:equipment/backpack_2_gp") | ` 1 ` | ` Purchase unit ` |
+| [Bedroll (1 GP)](<bedroll_1_gp.md> "dnd2024:equipment/bedroll_1_gp") | ` 1 ` | ` Purchase unit ` |
+| [Bell (1 GP)](<bell_1_gp.md> "dnd2024:equipment/bell_1_gp") | ` 1 ` | ` Purchase unit ` |
+| [Lantern, Bullseye (10 GP)](<lantern_bullseye_10_gp.md> "dnd2024:equipment/lantern_bullseye_10_gp") | ` 1 ` | ` Purchase unit ` |
+| [Costume (5 GP)](<costume_5_gp.md> "dnd2024:equipment/costume_5_gp") | ` 3 ` | ` Purchase unit ` |
+| [Mirror (5 GP)](<mirror_5_gp.md> "dnd2024:equipment/mirror_5_gp") | ` 1 ` | ` Purchase unit ` |
+| [Oil (1 SP)](<oil_1_sp.md> "dnd2024:equipment/oil_1_sp") | ` 8 ` | ` Purchase unit ` |
+| [Rations (5 SP)](<rations_5_sp.md> "dnd2024:equipment/rations_5_sp") | ` 9 ` | ` Day ` |
+| [Tinderbox (5 SP)](<tinderbox_5_sp.md> "dnd2024:equipment/tinderbox_5_sp") | ` 1 ` | ` Purchase unit ` |
+| [Waterskin (2 SP)](<waterskin_2_sp.md> "dnd2024:equipment/waterskin_2_sp") | ` 1 ` | ` Purchase unit ` |
 
 #### Mass
 

@@ -95,60 +95,130 @@ Original layout: [[../../srd-5.2.1/pages/127|page 127]].
 
 #### Modes
 
-<!-- splat:yaml path=splat_rule/parameters/modes -->
+##### Beckon air
 
-```yaml
-beckon_air:
-  shape: cube
-  side_feet: 5
-  effects:
-  - ripple_cloth
-  - stir_dust
-  - rustle_leaves
-  - close_doors
-  - close_shutters
-  doors_shutters_held_open_immune: true
-beckon_earth:
-  choices:
-  - cover: thin_dust_or_sand
-    shape: square
-    side_feet: 5
-  - write_words_maximum: 1
-    medium:
-    - dirt
-    - sand
-    handwriting: caster
-beckon_fire:
-  shape: cube
-  side_feet: 5
-  embers_harmless: true
-  smoke_color_choice: true
-  smoke_scent_choice: true
-  scent_duration_minutes: 1
-  can_light:
-  - candles
-  - torches
-  - lamps
-beckon_water:
-  choices:
-  - shape: cube
-    side_feet: 5
-    effect: lightly_dampen_creatures_and_objects
-    temperature: cool
-  - clean_water_cups: 1
-    destination:
-    - open_container
-    - surface
-    evaporates_after_minutes: 1
-sculpt_element:
-  materials:
-  - dirt
-  - sand
-  - fire
-  - smoke
-  - mist
-  - water
-  maximum_cube_side_feet: 1
-  shape_choice: crude
-  duration_hours: 1
-```
+<!-- splat:values path=splat_rule/parameters/modes/beckon_air -->
+
+| Field | Value |
+| --- | --- |
+| ` shape ` | ` cube ` |
+| ` side_feet ` | ` 5 ` |
+| ` effects ` | ` ["ripple_cloth", "stir_dust", "rustle_leaves", "close_doors", "close_shutters"] ` |
+| ` doors_shutters_held_open_immune ` | ` true ` |
+
+##### Beckon earth
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/modes/beckon_earth/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Cover:
+    path: cover
+    type: symbol
+    optional: true
+  Shape:
+    path: shape
+    type: symbol
+    optional: true
+  Side feet:
+    path: side_feet
+    type: integer
+    optional: true
+  Write words maximum:
+    path: write_words_maximum
+    type: integer
+    optional: true
+  Medium:
+    path: medium
+    type: yaml
+    optional: true
+  Handwriting:
+    path: handwriting
+    type: symbol
+    optional: true
+-->
+
+| Key | Cover | Shape | Side feet | Write words maximum | Medium | Handwriting |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Thin dust or sand ` | ` Square ` | ` 5 ` |  |  |  |
+| ` row_2 ` |  |  |  | ` 1 ` | ` ["dirt", "sand"] ` | ` Caster ` |
+
+##### Beckon fire
+
+<!-- splat:values path=splat_rule/parameters/modes/beckon_fire -->
+
+| Field | Value |
+| --- | --- |
+| ` shape ` | ` cube ` |
+| ` side_feet ` | ` 5 ` |
+| ` embers_harmless ` | ` true ` |
+| ` smoke_color_choice ` | ` true ` |
+| ` smoke_scent_choice ` | ` true ` |
+| ` scent_duration_minutes ` | ` 1 ` |
+| ` can_light ` | ` ["candles", "torches", "lamps"] ` |
+
+##### Beckon water
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/modes/beckon_water/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Shape:
+    path: shape
+    type: symbol
+    optional: true
+  Side feet:
+    path: side_feet
+    type: integer
+    optional: true
+  Effect:
+    path: effect
+    type: symbol
+    optional: true
+  Temperature:
+    path: temperature
+    type: symbol
+    optional: true
+  Clean water cups:
+    path: clean_water_cups
+    type: integer
+    optional: true
+  Destination:
+    path: destination
+    type: yaml
+    optional: true
+  Evaporates after minutes:
+    path: evaporates_after_minutes
+    type: integer
+    optional: true
+-->
+
+| Key | Shape | Side feet | Effect | Temperature | Clean water cups | Destination | Evaporates after minutes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Cube ` | ` 5 ` | ` Lightly dampen creatures and objects ` | ` Cool ` |  |  |  |
+| ` row_2 ` |  |  |  |  | ` 1 ` | ` ["open_container", "surface"] ` | ` 1 ` |
+
+##### Sculpt element
+
+<!-- splat:values path=splat_rule/parameters/modes/sculpt_element -->
+
+| Field | Value |
+| --- | --- |
+| ` materials ` | ` ["dirt", "sand", "fire", "smoke", "mist", "water"] ` |
+| ` maximum_cube_side_feet ` | ` 1 ` |
+| ` shape_choice ` | ` crude ` |
+| ` duration_hours ` | ` 1 ` |

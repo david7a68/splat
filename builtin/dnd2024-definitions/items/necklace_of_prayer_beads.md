@@ -101,139 +101,51 @@ roll:
 
 #### Beads
 
-<!-- splat:rows path=splat_rule/parameters/beads -->
+<!-- splat:table
+path: splat_rule/parameters/beads
+key: Name
+order:
+- blessing
+- curing
+- favor
+- smiting
+- summons
+- wind_walking
+columns:
+  Name:
+    path: name
+    type: symbol
+  Roll:
+    path: roll
+    type: yaml
+  Cast spell:
+    path: cast/spell
+    type: reference
+  Cast action:
+    path: cast/action
+    type: symbol
+  Cast save dc:
+    path: cast/save_dc
+    type: string
+  Cast level:
+    path: cast/level
+    type: integer
+  Uses maximum:
+    path: uses/maximum
+    type: integer
+  Uses recovery event:
+    path: uses/recovery_event
+    type: string
+  Usage pool:
+    path: usage_pool
+    type: symbol
+-->
 
-| Row | roll | name | usage_pool |
-| --- | --- | --- | --- |
-| ` 0 ` | ` [1, 6] ` | ` blessing ` | ` per_bead ` |
-| ` 1 ` | ` [7, 12] ` | ` curing ` | ` per_bead ` |
-| ` 2 ` | ` [13, 16] ` | ` favor ` | ` per_bead ` |
-| ` 3 ` | ` [17, 18] ` | ` smiting ` | ` per_bead ` |
-| ` 4 ` | ` [19, 19] ` | ` summons ` | ` per_bead ` |
-| ` 5 ` | ` [20, 20] ` | ` wind_walking ` | ` per_bead ` |
-
-##### Cast
-
-<!-- splat:yaml path=splat_rule/parameters/beads/0/cast -->
-
-```yaml
-spell:
-  key: dnd2024:spells/bless
-action: bonus_action
-save_dc: user.spell_save_dc
-level: 1
-```
-
-##### Uses
-
-<!-- splat:values path=splat_rule/parameters/beads/0/uses -->
-
-| Field | Value |
-| --- | --- |
-| ` maximum ` | ` 1 ` |
-| ` recovery_event ` | ` time.dawn ` |
-
-##### Cast
-
-<!-- splat:yaml path=splat_rule/parameters/beads/1/cast -->
-
-```yaml
-spell:
-  key: dnd2024:spells/cure_wounds
-action: bonus_action
-save_dc: user.spell_save_dc
-level: 2
-```
-
-##### Uses
-
-<!-- splat:values path=splat_rule/parameters/beads/1/uses -->
-
-| Field | Value |
-| --- | --- |
-| ` maximum ` | ` 1 ` |
-| ` recovery_event ` | ` time.dawn ` |
-
-##### Cast
-
-<!-- splat:yaml path=splat_rule/parameters/beads/2/cast -->
-
-```yaml
-spell:
-  key: dnd2024:spells/greater_restoration
-action: bonus_action
-save_dc: user.spell_save_dc
-level: 5
-```
-
-##### Uses
-
-<!-- splat:values path=splat_rule/parameters/beads/2/uses -->
-
-| Field | Value |
-| --- | --- |
-| ` maximum ` | ` 1 ` |
-| ` recovery_event ` | ` time.dawn ` |
-
-##### Cast
-
-<!-- splat:yaml path=splat_rule/parameters/beads/3/cast -->
-
-```yaml
-spell:
-  key: dnd2024:spells/shining_smite
-action: bonus_action
-save_dc: user.spell_save_dc
-level: 2
-```
-
-##### Uses
-
-<!-- splat:values path=splat_rule/parameters/beads/3/uses -->
-
-| Field | Value |
-| --- | --- |
-| ` maximum ` | ` 1 ` |
-| ` recovery_event ` | ` time.dawn ` |
-
-##### Cast
-
-<!-- splat:yaml path=splat_rule/parameters/beads/4/cast -->
-
-```yaml
-spell:
-  key: dnd2024:spells/guardian_of_faith
-action: bonus_action
-save_dc: user.spell_save_dc
-level: 4
-```
-
-##### Uses
-
-<!-- splat:values path=splat_rule/parameters/beads/4/uses -->
-
-| Field | Value |
-| --- | --- |
-| ` maximum ` | ` 1 ` |
-| ` recovery_event ` | ` time.dawn ` |
-
-##### Cast
-
-<!-- splat:yaml path=splat_rule/parameters/beads/5/cast -->
-
-```yaml
-spell:
-  key: dnd2024:spells/wind_walk
-action: bonus_action
-save_dc: user.spell_save_dc
-level: 6
-```
-
-##### Uses
-
-<!-- splat:values path=splat_rule/parameters/beads/5/uses -->
-
-| Field | Value |
-| --- | --- |
-| ` maximum ` | ` 1 ` |
-| ` recovery_event ` | ` time.dawn ` |
+| Name | Roll | Cast spell | Cast action | Cast save dc | Cast level | Uses maximum | Uses recovery event | Usage pool |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` Blessing ` | ` [1, 6] ` | [Bless](<../spells/bless.md> "dnd2024:spells/bless") | ` Bonus action ` | ` user.spell_save_dc ` | ` 1 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |
+| ` Curing ` | ` [7, 12] ` | [Cure Wounds](<../spells/cure_wounds.md> "dnd2024:spells/cure_wounds") | ` Bonus action ` | ` user.spell_save_dc ` | ` 2 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |
+| ` Favor ` | ` [13, 16] ` | [Greater Restoration](<../spells/greater_restoration.md> "dnd2024:spells/greater_restoration") | ` Bonus action ` | ` user.spell_save_dc ` | ` 5 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |
+| ` Smiting ` | ` [17, 18] ` | [Shining Smite](<../spells/shining_smite.md> "dnd2024:spells/shining_smite") | ` Bonus action ` | ` user.spell_save_dc ` | ` 2 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |
+| ` Summons ` | ` [19, 19] ` | [Guardian of Faith](<../spells/guardian_of_faith.md> "dnd2024:spells/guardian_of_faith") | ` Bonus action ` | ` user.spell_save_dc ` | ` 4 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |
+| ` Wind walking ` | ` [20, 20] ` | [Wind Walk](<../spells/wind_walk.md> "dnd2024:spells/wind_walk") | ` Bonus action ` | ` user.spell_save_dc ` | ` 6 ` | ` 1 ` | ` time.dawn ` | ` Per bead ` |

@@ -27,10 +27,7 @@ staff, you can cast one of the spells on the following\
 table from it, using your spell save DC. The table in-\
 dicates how many charges you must expend to cast\
 the spell.\
-Charge Charge\
-Spell Cost Spell Cost\
-Cone of Cold 5 Ice Storm 4\
-Fog Cloud 1 Wall of Ice 4\
+
 Regaining Charges. The staff regains 1d6 + 4 ex-\
 pended charges daily at dawn. If you expend the last\
 charge, roll 1d20. On a 1, the staff turns to water\
@@ -102,43 +99,29 @@ last_charge:
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- cone_of_cold
+- ice_storm
+- fog_cloud
+- wall_of_ice
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Charge cost:
+    path: charge_cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: string
+-->
 
-| Row | charge_cost | save_dc |
+| Spell | Charge cost | Save dc |
 | --- | --- | --- |
-| ` 0 ` | ` 5 ` | ` user.spell_save_dc ` |
-| ` 1 ` | ` 4 ` | ` user.spell_save_dc ` |
-| ` 2 ` | ` 1 ` | ` user.spell_save_dc ` |
-| ` 3 ` | ` 4 ` | ` user.spell_save_dc ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/cone_of_cold ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/ice_storm ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fog_cloud ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/3/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_ice ` |
+| [Cone of Cold](<../spells/cone_of_cold.md> "dnd2024:spells/cone_of_cold") | ` 5 ` | ` user.spell_save_dc ` |
+| [Ice Storm](<../spells/ice_storm.md> "dnd2024:spells/ice_storm") | ` 4 ` | ` user.spell_save_dc ` |
+| [Fog Cloud](<../spells/fog_cloud.md> "dnd2024:spells/fog_cloud") | ` 1 ` | ` user.spell_save_dc ` |
+| [Wall of Ice](<../spells/wall_of_ice.md> "dnd2024:spells/wall_of_ice") | ` 4 ` | ` user.spell_save_dc ` |

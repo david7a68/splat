@@ -122,82 +122,43 @@ damage_bonus: 2
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- animal_friendship
+- awaken
+- barkskin
+- locate_animals_or_plants
+- pass_without_trace
+- speak_with_animals
+- speak_with_plants
+- wall_of_thorns
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Cost:
+    path: cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: symbol
+  Requires:
+    path: requires
+    type: symbol
+-->
 
-| Row | cost | save_dc | requires |
+| Spell | Cost | Save dc | Requires |
 | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` user_spell_save_dc ` | ` held ` |
-| ` 1 ` | ` 5 ` | ` user_spell_save_dc ` | ` held ` |
-| ` 2 ` | ` 2 ` | ` user_spell_save_dc ` | ` held ` |
-| ` 3 ` | ` 2 ` | ` user_spell_save_dc ` | ` held ` |
-| ` 4 ` | ` 2 ` | ` user_spell_save_dc ` | ` held ` |
-| ` 5 ` | ` 1 ` | ` user_spell_save_dc ` | ` held ` |
-| ` 6 ` | ` 3 ` | ` user_spell_save_dc ` | ` held ` |
-| ` 7 ` | ` 6 ` | ` user_spell_save_dc ` | ` held ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/animal_friendship ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/awaken ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/barkskin ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/3/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/locate_animals_or_plants ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/4/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/pass_without_trace ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/5/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/speak_with_animals ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/6/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/speak_with_plants ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/7/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_thorns ` |
+| [Animal Friendship](<../spells/animal_friendship.md> "dnd2024:spells/animal_friendship") | ` 1 ` | ` User spell save dc ` | ` Held ` |
+| [Awaken](<../spells/awaken.md> "dnd2024:spells/awaken") | ` 5 ` | ` User spell save dc ` | ` Held ` |
+| [Barkskin](<../spells/barkskin.md> "dnd2024:spells/barkskin") | ` 2 ` | ` User spell save dc ` | ` Held ` |
+| [Locate Animals or Plants](<../spells/locate_animals_or_plants.md> "dnd2024:spells/locate_animals_or_plants") | ` 2 ` | ` User spell save dc ` | ` Held ` |
+| [Pass without Trace](<../spells/pass_without_trace.md> "dnd2024:spells/pass_without_trace") | ` 2 ` | ` User spell save dc ` | ` Held ` |
+| [Speak with Animals](<../spells/speak_with_animals.md> "dnd2024:spells/speak_with_animals") | ` 1 ` | ` User spell save dc ` | ` Held ` |
+| [Speak with Plants](<../spells/speak_with_plants.md> "dnd2024:spells/speak_with_plants") | ` 3 ` | ` User spell save dc ` | ` Held ` |
+| [Wall of Thorns](<../spells/wall_of_thorns.md> "dnd2024:spells/wall_of_thorns") | ` 6 ` | ` User spell save dc ` | ` Held ` |
 
 #### Tree form
 

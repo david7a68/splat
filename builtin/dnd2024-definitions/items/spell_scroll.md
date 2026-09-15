@@ -120,20 +120,49 @@ higher_than_normally_castable:
 
 #### Level table
 
-<!-- splat:rows path=splat_rule/parameters/level_table -->
+<!-- splat:table
+path: splat_rule/parameters/level_table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+columns:
+  Key:
+    type: key
+  Spell level:
+    path: spell_level
+    type: integer
+  Rarity:
+    path: rarity
+    type: symbol
+  Save dc:
+    path: save_dc
+    type: integer
+  Attack bonus:
+    path: attack_bonus
+    type: integer
+-->
 
-| Row | spell_level | rarity | save_dc | attack_bonus |
+| Key | Spell level | Rarity | Save dc | Attack bonus |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` common ` | ` 13 ` | ` 5 ` |
-| ` 1 ` | ` 1 ` | ` common ` | ` 13 ` | ` 5 ` |
-| ` 2 ` | ` 2 ` | ` uncommon ` | ` 13 ` | ` 5 ` |
-| ` 3 ` | ` 3 ` | ` uncommon ` | ` 15 ` | ` 7 ` |
-| ` 4 ` | ` 4 ` | ` rare ` | ` 15 ` | ` 7 ` |
-| ` 5 ` | ` 5 ` | ` rare ` | ` 17 ` | ` 9 ` |
-| ` 6 ` | ` 6 ` | ` very_rare ` | ` 17 ` | ` 9 ` |
-| ` 7 ` | ` 7 ` | ` very_rare ` | ` 18 ` | ` 10 ` |
-| ` 8 ` | ` 8 ` | ` very_rare ` | ` 18 ` | ` 10 ` |
-| ` 9 ` | ` 9 ` | ` legendary ` | ` 19 ` | ` 11 ` |
+| ` row_1 ` | ` 0 ` | ` Common ` | ` 13 ` | ` 5 ` |
+| ` row_2 ` | ` 1 ` | ` Common ` | ` 13 ` | ` 5 ` |
+| ` row_3 ` | ` 2 ` | ` Uncommon ` | ` 13 ` | ` 5 ` |
+| ` row_4 ` | ` 3 ` | ` Uncommon ` | ` 15 ` | ` 7 ` |
+| ` row_5 ` | ` 4 ` | ` Rare ` | ` 15 ` | ` 7 ` |
+| ` row_6 ` | ` 5 ` | ` Rare ` | ` 17 ` | ` 9 ` |
+| ` row_7 ` | ` 6 ` | ` Very rare ` | ` 17 ` | ` 9 ` |
+| ` row_8 ` | ` 7 ` | ` Very rare ` | ` 18 ` | ` 10 ` |
+| ` row_9 ` | ` 8 ` | ` Very rare ` | ` 18 ` | ` 10 ` |
+| ` row_10 ` | ` 9 ` | ` Legendary ` | ` 19 ` | ` 11 ` |
 
 #### Copy to spellbook
 

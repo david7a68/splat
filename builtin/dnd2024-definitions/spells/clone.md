@@ -92,15 +92,36 @@ Original layout: [[../../srd-5.2.1/pages/115|page 115]], [[../../srd-5.2.1/pages
 
 #### Targeting
 
-<!-- splat:yaml path=splat_rule/parameters/targeting -->
+<!-- splat:values path=splat_rule/parameters/targeting -->
 
-```yaml
-touch: true
-options:
-- kind: creature
-- kind: flesh_sample
-  volume_min_cubic_inches: 1
-```
+| Field | Value |
+| --- | --- |
+| ` touch ` | ` true ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/targeting/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Volume min cubic inches:
+    path: volume_min_cubic_inches
+    type: integer
+    optional: true
+-->
+
+| Key | Kind | Volume min cubic inches |
+| --- | --- | --- |
+| ` row_1 ` | ` Creature ` |  |
+| ` row_2 ` | ` Flesh sample ` | ` 1 ` |
 
 #### Duplicate
 

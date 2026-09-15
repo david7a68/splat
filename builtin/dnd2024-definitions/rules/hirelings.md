@@ -45,13 +45,46 @@ Messenger 2 CP per mile\
 
 #### Services
 
-<!-- splat:rows path=splat_rule/parameters/services -->
+<!-- splat:table
+path: splat_rule/parameters/services
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Service:
+    path: service
+    type: symbol
+  Requires any proficiency:
+    path: requires_any_proficiency
+    type: yaml
+    optional: true
+  Minimum gp per day:
+    path: minimum_gp_per_day
+    type: integer
+    optional: true
+  Requires proficiency:
+    path: requires_proficiency
+    type: boolean
+    optional: true
+  Minimum sp per day:
+    path: minimum_sp_per_day
+    type: integer
+    optional: true
+  Cp per mile:
+    path: cp_per_mile
+    type: integer
+    optional: true
+-->
 
-| Row | service | requires_any_proficiency | minimum_gp_per_day | requires_proficiency | minimum_sp_per_day | cp_per_mile |
+| Key | Service | Requires any proficiency | Minimum gp per day | Requires proficiency | Minimum sp per day | Cp per mile |
 | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` skilled_hireling ` | ` ["weapon", "tool", "skill"] ` | ` 2 ` |  |  |  |
-| ` 1 ` | ` untrained_hireling ` |  |  | ` false ` | ` 2 ` |  |
-| ` 2 ` | ` messenger ` |  |  |  |  | ` 2 ` |
+| ` row_1 ` | ` Skilled hireling ` | ` ["weapon", "tool", "skill"] ` | ` 2 ` |  |  |  |
+| ` row_2 ` | ` Untrained hireling ` |  |  | false | ` 2 ` |  |
+| ` row_3 ` | ` Messenger ` |  |  |  |  | ` 2 ` |
 
 #### Expert price increase
 

@@ -38,12 +38,28 @@ Points.\
 
 #### Triggers
 
-<!-- splat:rows path=splat_rule/parameters/triggers -->
+<!-- splat:table
+path: splat_rule/parameters/triggers
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Enemy reduced to zero by:
+    path: enemy_reduced_to_zero_by
+    type: symbol
+  Enemy distance max feet:
+    path: enemy_distance_max_feet
+    type: integer
+    optional: true
+-->
 
-| Row | enemy_reduced_to_zero_by | enemy_distance_max_feet |
+| Key | Enemy reduced to zero by | Enemy distance max feet |
 | --- | --- | --- |
-| ` 0 ` | ` self ` |  |
-| ` 1 ` | ` other ` | ` 10 ` |
+| ` row_1 ` | ` Self ` |  |
+| ` row_2 ` | ` Other ` | ` 10 ` |
 
 #### Temporary hit points
 

@@ -65,27 +65,65 @@ Original layout: [[../../srd-5.2.1/pages/224|page 224]].
 
 #### Reaction
 
-<!-- splat:yaml path=splat_rule/parameters/reaction -->
+<!-- splat:values path=splat_rule/parameters/reaction -->
 
-```yaml
-trigger:
-  hit_by: attack_roll
-  weapon_category:
-  - ranged
-  - thrown
-requires: free_hand
-damage_reduction:
-  sum:
-  - dice: 1
-    sides: 10
-    bonus: 0
-  - value_from: dexterity_modifier
-if_damage_reduced_to_zero:
-  may_catch:
-  - ammunition
-  - weapon
-  requires: fits_free_hand
-```
+| Field | Value |
+| --- | --- |
+| ` requires ` | ` free_hand ` |
+
+##### Trigger
+
+<!-- splat:values path=splat_rule/parameters/reaction/trigger -->
+
+| Field | Value |
+| --- | --- |
+| ` hit_by ` | ` attack_roll ` |
+| ` weapon_category ` | ` ["ranged", "thrown"] ` |
+
+##### Damage reduction
+
+###### Sum
+
+<!-- splat:table
+path: splat_rule/parameters/reaction/damage_reduction/sum
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice:
+    path: dice
+    type: integer
+    optional: true
+  Sides:
+    path: sides
+    type: integer
+    optional: true
+  Bonus:
+    path: bonus
+    type: integer
+    optional: true
+  Value from:
+    path: value_from
+    type: symbol
+    optional: true
+-->
+
+| Key | Dice | Sides | Bonus | Value from |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 10 ` | ` 0 ` |  |
+| ` row_2 ` |  |  |  | ` Dexterity modifier ` |
+
+##### If damage reduced to zero
+
+<!-- splat:values path=splat_rule/parameters/reaction/if_damage_reduced_to_zero -->
+
+| Field | Value |
+| --- | --- |
+| ` may_catch ` | ` ["ammunition", "weapon"] ` |
+| ` requires ` | ` fits_free_hand ` |
 
 #### Attunement
 

@@ -41,18 +41,46 @@ on all other attack rolls against you this turn.\
 
 #### Choice
 
-<!-- splat:yaml path=splat_rule/parameters/choice -->
+<!-- splat:values path=splat_rule/parameters/choice -->
 
-```yaml
-count: 1
-options:
-- id: escape_the_horde
-  opportunity_attacks_against_self: disadvantage
-- id: multiattack_defense
-  trigger: creature.attack_roll_hits_self
-  source_further_attacks_against_self: disadvantage
-  until: current_turn_end
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/choice/options
+key: Variant
+order:
+- escape_the_horde
+- multiattack_defense
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Opportunity attacks against self:
+    path: opportunity_attacks_against_self
+    type: symbol
+    optional: true
+  Trigger:
+    path: trigger
+    type: string
+    optional: true
+  Source further attacks against self:
+    path: source_further_attacks_against_self
+    type: symbol
+    optional: true
+  Until:
+    path: until
+    type: symbol
+    optional: true
+-->
+
+| Variant | Opportunity attacks against self | Trigger | Source further attacks against self | Until |
+| --- | --- | --- | --- | --- |
+| ` Escape the horde ` | ` Disadvantage ` |  |  |  |
+| ` Multiattack defense ` |  | ` creature.attack_roll_hits_self ` | ` Disadvantage ` | ` Current turn end ` |
 
 #### Replace choice
 

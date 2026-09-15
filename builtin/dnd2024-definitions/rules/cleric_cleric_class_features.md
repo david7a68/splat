@@ -53,106 +53,40 @@ features are listed in the Cleric Features table.\
 
 #### Feature unlocks
 
-<!-- splat:rows path=splat_rule/parameters/feature_unlocks -->
+<!-- splat:table
+path: splat_rule/parameters/feature_unlocks
+key: Feature
+order:
+- cleric_level_10_divine_intervention
+- cleric_level_14_improved_blessed_strikes
+- cleric_level_19_epic_boon
+- cleric_level_1_divine_order
+- cleric_level_1_spellcasting
+- cleric_level_20_greater_divine_intervention
+- cleric_level_2_channel_divinity
+- cleric_level_3_cleric_subclass
+- cleric_level_4_ability_score_improvement
+- cleric_level_5_sear_undead
+- cleric_level_7_blessed_strikes
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Feature | Class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 14 ` |
-| ` 2 ` | ` 19 ` |
-| ` 3 ` | ` 1 ` |
-| ` 4 ` | ` 1 ` |
-| ` 5 ` | ` 20 ` |
-| ` 6 ` | ` 2 ` |
-| ` 7 ` | ` 3 ` |
-| ` 8 ` | ` 4 ` |
-| ` 9 ` | ` 5 ` |
-| ` 10 ` | ` 7 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_10_divine_intervention ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_14_improved_blessed_strikes ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_1_divine_order ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_20_greater_divine_intervention ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_2_channel_divinity ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_3_cleric_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_5_sear_undead ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_7_blessed_strikes ` |
+| [Level 10: Divine Intervention](<../class_features/cleric_level_10_divine_intervention.md> "dnd2024:class_features/cleric_level_10_divine_intervention") | ` 10 ` |
+| [Level 14: Improved Blessed Strikes](<../class_features/cleric_level_14_improved_blessed_strikes.md> "dnd2024:class_features/cleric_level_14_improved_blessed_strikes") | ` 14 ` |
+| [Level 19: Epic Boon](<../class_features/cleric_level_19_epic_boon.md> "dnd2024:class_features/cleric_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Divine Order](<../class_features/cleric_level_1_divine_order.md> "dnd2024:class_features/cleric_level_1_divine_order") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/cleric_level_1_spellcasting.md> "dnd2024:class_features/cleric_level_1_spellcasting") | ` 1 ` |
+| [Level 20: Greater Divine Intervention](<../class_features/cleric_level_20_greater_divine_intervention.md> "dnd2024:class_features/cleric_level_20_greater_divine_intervention") | ` 20 ` |
+| [Level 2: Channel Divinity](<../class_features/cleric_level_2_channel_divinity.md> "dnd2024:class_features/cleric_level_2_channel_divinity") | ` 2 ` |
+| [Level 3: Cleric Subclass](<../class_features/cleric_level_3_cleric_subclass.md> "dnd2024:class_features/cleric_level_3_cleric_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/cleric_level_4_ability_score_improvement.md> "dnd2024:class_features/cleric_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Sear Undead](<../class_features/cleric_level_5_sear_undead.md> "dnd2024:class_features/cleric_level_5_sear_undead") | ` 5 ` |
+| [Level 7: Blessed Strikes](<../class_features/cleric_level_7_blessed_strikes.md> "dnd2024:class_features/cleric_level_7_blessed_strikes") | ` 7 ` |

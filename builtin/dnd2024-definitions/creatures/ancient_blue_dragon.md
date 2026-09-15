@@ -162,12 +162,27 @@ Original layout: [[../../srd-5.2.1/pages/267|page 267]].
 
 #### Senses
 
-<!-- splat:rows path=splat_rule/parameters/senses -->
+<!-- splat:table
+path: splat_rule/parameters/senses
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range ft:
+    path: range_ft
+    type: integer
+-->
 
-| Row | sense | range_ft |
+| Key | Sense | Range ft |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 60 ` |
-| ` 1 ` | ` darkvision ` | ` 120 ` |
+| ` row_1 ` | ` Blindsight ` | ` 60 ` |
+| ` row_2 ` | ` Darkvision ` | ` 120 ` |
 
 #### Languages
 
@@ -231,45 +246,65 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: charisma
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/invisibility
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/mage_hand
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/shatter
-    uses:
-      unlimited: true
-    cast_level: 3
-  - spell:
-      key: dnd2024:spells/scrying
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/sending
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 22
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` charisma ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 22 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- detect_magic
+- invisibility
+- mage_hand
+- shatter
+- scrying
+- sending
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Cast level | Uses count | Uses recovery |
+| --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |  |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") | true |  |  |  |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | true |  |  |  |
+| [Shatter](<../spells/shatter.md> "dnd2024:spells/shatter") | true | ` 3 ` |  |  |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") |  |  | ` 1 ` | ` Long rest ` |
+| [Sending](<../spells/sending.md> "dnd2024:spells/sending") |  |  | ` 1 ` | ` Long rest ` |
 
 ##### Lightning breath
 

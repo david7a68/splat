@@ -168,36 +168,68 @@ sequence:
 
 ##### Bite
 
-<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+<!-- splat:values path=splat_rule/parameters/features/bite -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 4
-  reach_ft: 5
-hit:
-  damage:
-  - average: 5
-    roll:
-      count: 1
-      sides: 6
-      modifier: 2
-    type: piercing
-  - average: 2
-    roll:
-      count: 1
-      sides: 4
-      modifier: 0
-    type: poison
-  conditions:
-  - condition: poisoned
-    until: self.next_turn_start
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 4
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/bite/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 5 ` | ` 1 ` | ` 6 ` | ` 2 ` | ` Piercing ` |
+| ` row_2 ` | ` 2 ` | ` 1 ` | ` 4 ` | ` 0 ` | ` Poison ` |
+
+###### Conditions
+
+<!-- splat:rows path=splat_rule/parameters/features/bite/hit/conditions -->
+
+| Row | condition | until |
+| --- | --- | --- |
+| ` 0 ` | ` poisoned ` | ` self.next_turn_start ` |
 
 ##### Claw
 

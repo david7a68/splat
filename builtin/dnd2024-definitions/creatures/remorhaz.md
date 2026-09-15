@@ -164,96 +164,187 @@ damage:
 
 ##### Bite
 
-<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+<!-- splat:values path=splat_rule/parameters/features/bite -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 11
-  reach_ft: 10
-hit:
-  damage:
-  - average: 18
-    roll:
-      count: 2
-      sides: 10
-      modifier: 7
-    type: piercing
-  - average: 14
-    roll:
-      count: 4
-      sides: 6
-      modifier: 0
-    type: fire
-  grapple:
-    condition: grappled
-    source: self
-    escape_dc: 17
-    maximum_size: large
-    while_grappled:
-      conditions:
-      - restrained
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 11
+reach_ft: 10
+```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/bite/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 18 ` | ` 2 ` | ` 10 ` | ` 7 ` | ` Piercing ` |
+| ` row_2 ` | ` 14 ` | ` 4 ` | ` 6 ` | ` 0 ` | ` Fire ` |
+
+###### Grapple
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite/hit/grapple -->
+
+```yaml
+condition: grappled
+source: self
+escape_dc: 17
+maximum_size: large
+while_grappled:
+  conditions:
+  - restrained
 ```
 
 ##### Swallow
 
-<!-- splat:yaml path=splat_rule/parameters/features/swallow -->
+<!-- splat:values path=splat_rule/parameters/features/swallow -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` operation ` | ` saving_throw ` |
+| ` ability ` | ` strength ` |
+| ` dc ` | ` 19 ` |
+| ` capacity ` | ` 2 ` |
+
+###### Failure
+
+<!-- splat:values path=splat_rule/parameters/features/swallow/failure -->
+
+| Field | Value |
+| --- | --- |
+| ` end_grapple ` | ` true ` |
+
+###### Swallow
+
+<!-- splat:values path=splat_rule/parameters/features/swallow/failure/swallow -->
+
+| Field | Value |
+| --- | --- |
+| ` maximum_size ` | ` large ` |
+| ` conditions ` | ` ["restrained", "blinded"] ` |
+| ` cover_against_outside ` | ` total ` |
+
+###### Periodic damage
+
+<!-- splat:values path=splat_rule/parameters/features/swallow/failure/swallow/periodic_damage -->
+
+| Field | Value |
+| --- | --- |
+| ` event ` | ` self.turn_start ` |
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/swallow/failure/swallow/periodic_damage/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 3 ` | ` 6 ` | ` 0 ` | ` Acid ` |
+| ` row_2 ` | ` 3 ` | ` 6 ` | ` 0 ` | ` Fire ` |
+
+###### Regurgitate
+
+<!-- splat:yaml path=splat_rule/parameters/features/swallow/failure/swallow/regurgitate -->
 
 ```yaml
-economy: bonus_action
-operation: saving_throw
-ability: strength
-dc: 19
-failure:
-  end_grapple: true
-  swallow:
-    maximum_size: large
+trigger: turn_end
+if_damage_on_single_turn_from_one_inside_creature_at_least: 30
+save:
+  ability: constitution
+  dc: 15
+  failure:
+    eject: all
+    within_ft: 5
     conditions:
-    - restrained
-    - blinded
-    cover_against_outside: total
-    periodic_damage:
-      event: self.turn_start
-      damage:
-      - roll:
-          count: 3
-          sides: 6
-          modifier: 0
-        type: acid
-      - roll:
-          count: 3
-          sides: 6
-          modifier: 0
-        type: fire
-    regurgitate:
-      trigger: turn_end
-      if_damage_on_single_turn_from_one_inside_creature_at_least: 30
-      save:
-        ability: constitution
-        dc: 15
-        failure:
-          eject: all
-          within_ft: 5
-          conditions:
-          - prone
-    on_self_death:
-      remove_conditions:
-      - restrained
-      escape_movement_ft: 15
-      exit_condition: prone
-targets:
-  kind: creature
-  count: 1
-  grappled_by: self
-  maximum_size: large
-capacity: 2
-success:
-  effects: []
+    - prone
+```
+
+###### On self death
+
+<!-- splat:values path=splat_rule/parameters/features/swallow/failure/swallow/on_self_death -->
+
+| Field | Value |
+| --- | --- |
+| ` remove_conditions ` | ` ["restrained"] ` |
+| ` escape_movement_ft ` | ` 15 ` |
+| ` exit_condition ` | ` prone ` |
+
+###### Targets
+
+<!-- splat:values path=splat_rule/parameters/features/swallow/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` count ` | ` 1 ` |
+| ` grappled_by ` | ` self ` |
+| ` maximum_size ` | ` large ` |
+
+###### Success
+
+<!-- splat:yaml path=splat_rule/parameters/features/swallow/success -->
+
+```yaml
+effects: []
 ```
 
 #### Condition immunities

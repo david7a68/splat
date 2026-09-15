@@ -94,37 +94,30 @@ recovery:
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- charm_person
+- command
+- comprehend_languages
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Cost:
+    path: cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: symbol
+-->
 
-| Row | cost | save_dc |
+| Spell | Cost | Save dc |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` user_spell_save_dc ` |
-| ` 1 ` | ` 1 ` | ` user_spell_save_dc ` |
-| ` 2 ` | ` 1 ` | ` user_spell_save_dc ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/charm_person ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/command ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/comprehend_languages ` |
+| [Charm Person](<../spells/charm_person.md> "dnd2024:spells/charm_person") | ` 1 ` | ` User spell save dc ` |
+| [Command](<../spells/command.md> "dnd2024:spells/command") | ` 1 ` | ` User spell save dc ` |
+| [Comprehend Languages](<../spells/comprehend_languages.md> "dnd2024:spells/comprehend_languages") | ` 1 ` | ` User spell save dc ` |
 
 #### Reflect
 

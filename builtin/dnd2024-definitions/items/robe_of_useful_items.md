@@ -114,131 +114,224 @@ Original layout: [[../../srd-5.2.1/pages/240|page 240]], [[../../srd-5.2.1/pages
 
 #### Initial patches
 
-<!-- splat:yaml path=splat_rule/parameters/initial_patches -->
+<!-- splat:values path=splat_rule/parameters/initial_patches -->
+
+| Field | Value |
+| --- | --- |
+| ` additional_selection ` | ` ["gm_choice", "d100_per_patch"] ` |
+| ` additional_table_rolls_independent ` | ` true ` |
+
+##### Fixed
+
+<!-- splat:table
+path: splat_rule/parameters/initial_patches/fixed
+key: Item
+order:
+- lantern_bullseye_10_gp
+- dagger
+- mirror_5_gp
+- pole_5_cp
+- rope_1_gp
+- sack_1_cp
+columns:
+  Item:
+    path: definition
+    type: reference
+  Count:
+    path: count
+    type: integer
+  Filled:
+    path: filled
+    type: boolean
+    optional: true
+  Lit:
+    path: lit
+    type: boolean
+    optional: true
+  Coiled:
+    path: coiled
+    type: boolean
+    optional: true
+-->
+
+| Item | Count | Filled | Lit | Coiled |
+| --- | --- | --- | --- | --- |
+| [Lantern, Bullseye (10 GP)](<../equipment/lantern_bullseye_10_gp.md> "dnd2024:equipment/lantern_bullseye_10_gp") | ` 2 ` | true | true |  |
+| [Dagger](<../equipment/dagger.md> "dnd2024:equipment/dagger") | ` 2 ` |  |  |  |
+| [Mirror (5 GP)](<../equipment/mirror_5_gp.md> "dnd2024:equipment/mirror_5_gp") | ` 2 ` |  |  |  |
+| [Pole (5 CP)](<../equipment/pole_5_cp.md> "dnd2024:equipment/pole_5_cp") | ` 2 ` |  |  |  |
+| [Rope (1 GP)](<../equipment/rope_1_gp.md> "dnd2024:equipment/rope_1_gp") | ` 2 ` |  |  | true |
+| [Sack (1 CP)](<../equipment/sack_1_cp.md> "dnd2024:equipment/sack_1_cp") | ` 2 ` |  |  |  |
+
+##### Additional count
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/additional_count -->
+
+| Field | Value |
+| --- | --- |
+| ` dice ` | ` 4 ` |
+| ` sides ` | ` 4 ` |
+| ` bonus ` | ` 0 ` |
+
+##### Table
+
+<!-- splat:rows path=splat_rule/parameters/initial_patches/table -->
+
+| Row | min | max |
+| --- | --- | --- |
+| ` 0 ` | ` 1 ` | ` 8 ` |
+| ` 1 ` | ` 9 ` | ` 15 ` |
+| ` 2 ` | ` 16 ` | ` 22 ` |
+| ` 3 ` | ` 23 ` | ` 30 ` |
+| ` 4 ` | ` 31 ` | ` 44 ` |
+| ` 5 ` | ` 45 ` | ` 51 ` |
+| ` 6 ` | ` 52 ` | ` 59 ` |
+| ` 7 ` | ` 60 ` | ` 68 ` |
+| ` 8 ` | ` 69 ` | ` 75 ` |
+| ` 9 ` | ` 76 ` | ` 83 ` |
+| ` 10 ` | ` 84 ` | ` 90 ` |
+| ` 11 ` | ` 91 ` | ` 96 ` |
+| ` 12 ` | ` 97 ` | ` 100 ` |
+
+###### Patch
+
+<!-- splat:yaml path=splat_rule/parameters/initial_patches/table/0/patch -->
 
 ```yaml
-fixed:
-- definition:
-    key: dnd2024:equipment/lantern_bullseye_10_gp
-  count: 2
-  filled: true
-  lit: true
-- definition:
-    key: dnd2024:equipment/dagger
-  count: 2
-- definition:
-    key: dnd2024:equipment/mirror_5_gp
-  count: 2
-- definition:
-    key: dnd2024:equipment/pole_5_cp
-  count: 2
-- definition:
-    key: dnd2024:equipment/rope_1_gp
-  count: 2
-  coiled: true
-- definition:
-    key: dnd2024:equipment/sack_1_cp
-  count: 2
-additional_count:
-  dice: 4
-  sides: 4
-  bonus: 0
-additional_selection:
-- gm_choice
-- d100_per_patch
-table:
-- min: 1
-  max: 8
-  patch:
-    kind: bag
-    contents:
-      gp: 100
-- min: 9
-  max: 15
-  patch:
-    kind: silver_coffer
-    length_ft: 1
-    width_inches: 6
-    depth_inches: 6
-    value_gp: 500
-- min: 16
-  max: 22
-  patch:
-    kind: iron_door
-    maximum_width_ft: 10
-    maximum_height_ft: 10
-    barred_side: user_choice
-    placement: reachable_opening
-    conform_to_opening: true
-    attach_and_hinge: true
-- min: 23
-  max: 30
-  patch:
-    kind: gems
-    count: 10
-    value_each_gp: 100
-- min: 31
-  max: 44
-  patch:
-    kind: wooden_ladder
-    length_ft: 24
-- min: 45
-  max: 51
-  patch:
-    creature:
-      key: dnd2024:creatures/riding_horse
-    equipment:
-      kind: riding_saddle
-- min: 52
-  max: 59
-  patch:
-    kind: open_pit
-    cube_side_ft: 10
-    placement: ground
-    range_ft: 10
-- min: 60
-  max: 68
-  patch:
-    definition:
-      key: dnd2024:equipment/potion_of_healing_50_gp
-    count: 4
-- min: 69
-  max: 75
-  patch:
-    kind: rowboat
-    length_ft: 12
-- min: 76
-  max: 83
-  patch:
-    definition:
-      key: dnd2024:items/spell_scroll
-    spell_choice:
-      chooser: user
-      allowed_levels:
-      - 1
-      - 2
-      - 3
-- min: 84
-  max: 90
-  patch:
-    creature:
-      key: dnd2024:creatures/mastiff
-    count: 2
-- min: 91
-  max: 96
-  patch:
-    kind: window
-    dimensions_ft:
-    - 2
-    - 4
-    maximum_depth_ft: 2
-    placement: reachable_vertical_surface
-- min: 97
-  max: 100
-  patch:
-    kind: portable_ram
-additional_table_rolls_independent: true
+kind: bag
+contents:
+  gp: 100
 ```
+
+###### Patch
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/table/1/patch -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` silver_coffer ` |
+| ` length_ft ` | ` 1 ` |
+| ` width_inches ` | ` 6 ` |
+| ` depth_inches ` | ` 6 ` |
+| ` value_gp ` | ` 500 ` |
+
+###### Patch
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/table/2/patch -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` iron_door ` |
+| ` maximum_width_ft ` | ` 10 ` |
+| ` maximum_height_ft ` | ` 10 ` |
+| ` barred_side ` | ` user_choice ` |
+| ` placement ` | ` reachable_opening ` |
+| ` conform_to_opening ` | ` true ` |
+| ` attach_and_hinge ` | ` true ` |
+
+###### Patch
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/table/3/patch -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` gems ` |
+| ` count ` | ` 10 ` |
+| ` value_each_gp ` | ` 100 ` |
+
+###### Patch
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/table/4/patch -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` wooden_ladder ` |
+| ` length_ft ` | ` 24 ` |
+
+###### Patch
+
+<!-- splat:yaml path=splat_rule/parameters/initial_patches/table/5/patch -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/riding_horse
+equipment:
+  kind: riding_saddle
+```
+
+###### Patch
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/table/6/patch -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` open_pit ` |
+| ` cube_side_ft ` | ` 10 ` |
+| ` placement ` | ` ground ` |
+| ` range_ft ` | ` 10 ` |
+
+###### Patch
+
+<!-- splat:yaml path=splat_rule/parameters/initial_patches/table/7/patch -->
+
+```yaml
+definition:
+  key: dnd2024:equipment/potion_of_healing_50_gp
+count: 4
+```
+
+###### Patch
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/table/8/patch -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` rowboat ` |
+| ` length_ft ` | ` 12 ` |
+
+###### Patch
+
+<!-- splat:yaml path=splat_rule/parameters/initial_patches/table/9/patch -->
+
+```yaml
+definition:
+  key: dnd2024:items/spell_scroll
+spell_choice:
+  chooser: user
+  allowed_levels:
+  - 1
+  - 2
+  - 3
+```
+
+###### Patch
+
+<!-- splat:yaml path=splat_rule/parameters/initial_patches/table/10/patch -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/mastiff
+count: 2
+```
+
+###### Patch
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/table/11/patch -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` window ` |
+| ` dimensions_ft ` | ` [2, 4] ` |
+| ` maximum_depth_ft ` | ` 2 ` |
+| ` placement ` | ` reachable_vertical_surface ` |
+
+###### Patch
+
+<!-- splat:values path=splat_rule/parameters/initial_patches/table/12/patch -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` portable_ram ` |
 
 #### Attunement
 

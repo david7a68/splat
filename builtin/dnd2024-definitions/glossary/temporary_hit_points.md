@@ -44,13 +44,37 @@ Original layout: [[../../srd-5.2.1/pages/190|page 190]].
 
 #### Damage absorption
 
-<!-- splat:yaml path=splat_rule/parameters/damage_absorption -->
+<!-- splat:values path=splat_rule/parameters/damage_absorption -->
 
-```yaml
-before: real_hit_points
-amount:
-  op: min
-  args:
-  - var: temporary_hit_points
-  - var: incoming_damage
-```
+| Field | Value |
+| --- | --- |
+| ` before ` | ` real_hit_points ` |
+
+##### Amount
+
+<!-- splat:values path=splat_rule/parameters/damage_absorption/amount -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` min ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/damage_absorption/amount/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: symbol
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` Temporary hit points ` |
+| ` row_2 ` | ` Incoming damage ` |

@@ -139,191 +139,223 @@ recovery:
 
 #### Spell grants
 
-<!-- splat:rows path=splat_rule/parameters/spell_grants -->
+<!-- splat:table
+path: splat_rule/parameters/spell_grants
+key: Spell
+order:
+- cone_of_cold
+- fireball
+- globe_of_invulnerability
+- hold_monster
+- levitate
+- lightning_bolt
+- magic_missile
+- ray_of_enfeeblement
+- wall_of_force
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Charge cost:
+    path: charge_cost
+    type: integer
+  Casting time:
+    path: casting_time
+    type: symbol
+  Method:
+    path: method
+    type: symbol
+  Slot cost:
+    path: slot_cost
+    type: integer
+  Components:
+    path: components
+    type: yaml
+  Range:
+    path: range
+    type: symbol
+  Duration:
+    path: duration
+    type: symbol
+  Concentration:
+    path: concentration
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | charge_cost | casting_time | method | slot_cost | level | range | duration | concentration |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 5 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 1 ` | ` 5 ` | ` spell_default ` | ` item ` | ` 0 ` | ` 5 ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 2 ` | ` 6 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 3 ` | ` 5 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 4 ` | ` 2 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 5 ` | ` 5 ` | ` spell_default ` | ` item ` | ` 0 ` | ` 5 ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 6 ` | ` 1 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 7 ` | ` 1 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 8 ` | ` 5 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
+| Spell | Charge cost | Casting time | Method | Slot cost | Components | Range | Duration | Concentration | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Cone of Cold](<../spells/cone_of_cold.md> "dnd2024:spells/cone_of_cold") | ` 5 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-cone_of_cold "section:cone_of_cold") |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") | ` 5 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-fireball "section:fireball") |
+| [Globe of Invulnerability](<../spells/globe_of_invulnerability.md> "dnd2024:spells/globe_of_invulnerability") | ` 6 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-globe_of_invulnerability "section:globe_of_invulnerability") |
+| [Hold Monster](<../spells/hold_monster.md> "dnd2024:spells/hold_monster") | ` 5 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-hold_monster "section:hold_monster") |
+| [Levitate](<../spells/levitate.md> "dnd2024:spells/levitate") | ` 2 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-levitate "section:levitate") |
+| [Lightning Bolt](<../spells/lightning_bolt.md> "dnd2024:spells/lightning_bolt") | ` 5 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-lightning_bolt "section:lightning_bolt") |
+| [Magic Missile](<../spells/magic_missile.md> "dnd2024:spells/magic_missile") | ` 1 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-magic_missile "section:magic_missile") |
+| [Ray of Enfeeblement](<../spells/ray_of_enfeeblement.md> "dnd2024:spells/ray_of_enfeeblement") | ` 1 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-ray_of_enfeeblement "section:ray_of_enfeeblement") |
+| [Wall of Force](<../spells/wall_of_force.md> "dnd2024:spells/wall_of_force") | ` 5 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Spell default ` | ` Spell default ` | ` Spell default ` | [Rules](#^splat-af92c00a-wall_of_force "section:wall_of_force") |
 
-##### Spell
+##### Cone of cold
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/0/spell -->
+^splat-af92c00a-cone_of_cold
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/cone_of_cold ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/0/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@cone_of_cold/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Fireball
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/1/spell -->
+^splat-af92c00a-fireball
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fireball ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/1/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@fireball/level -->
 
 ```yaml
-[]
+5
 ```
 
-##### Spell
+##### Globe of invulnerability
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/2/spell -->
+^splat-af92c00a-globe_of_invulnerability
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/globe_of_invulnerability ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/2/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@globe_of_invulnerability/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Hold monster
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/3/spell -->
+^splat-af92c00a-hold_monster
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hold_monster ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/3/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@hold_monster/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Levitate
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/4/spell -->
+^splat-af92c00a-levitate
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/levitate ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/4/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@levitate/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Lightning bolt
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/5/spell -->
+^splat-af92c00a-lightning_bolt
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/lightning_bolt ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/5/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@lightning_bolt/level -->
 
 ```yaml
-[]
+5
 ```
 
-##### Spell
+##### Magic missile
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/6/spell -->
+^splat-af92c00a-magic_missile
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/magic_missile ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/6/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@magic_missile/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Ray of enfeeblement
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/7/spell -->
+^splat-af92c00a-ray_of_enfeeblement
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/ray_of_enfeeblement ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/7/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@ray_of_enfeeblement/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
-##### Spell
+##### Wall of force
 
-<!-- splat:values path=splat_rule/parameters/spell_grants/8/spell -->
+^splat-af92c00a-wall_of_force
 
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_force ` |
+###### Level
 
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/8/components -->
+<!-- splat:yaml path=splat_rule/parameters/spell_grants/@wall_of_force/level -->
 
 ```yaml
-[]
+lowest_possible
 ```
 
 #### Last charge
 
-<!-- splat:yaml path=splat_rule/parameters/last_charge -->
+##### Table
 
-```yaml
-table:
-  roll:
-    expression: 1d20
-    scope: use
-  rows:
-  - min: 1
-    max: 1
-    result:
-      retain_only:
-      - weapon_attack_bonus
-      - weapon_damage_bonus
-  - min: 2
-    max: 19
-    result:
-      effect: none
-  - min: 20
-    max: 20
-    result:
-      restore_charges:
-        expression: 1d8+2
-        scope: use
-```
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/last_charge/table/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` expression ` | ` 1d20 ` |
+| ` scope ` | ` use ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/last_charge/table/rows
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Roll:
+    path: ''
+    type: range
+  Result retain only:
+    path: result/retain_only
+    type: yaml
+    optional: true
+  Result effect:
+    path: result/effect
+    type: symbol
+    optional: true
+  Result restore charges expression:
+    path: result/restore_charges/expression
+    type: string
+    optional: true
+  Result restore charges scope:
+    path: result/restore_charges/scope
+    type: symbol
+    optional: true
+-->
+
+| Key | Roll | Result retain only | Result effect | Result restore charges expression | Result restore charges scope |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` ["weapon_attack_bonus", "weapon_damage_bonus"] ` |  |  |  |
+| ` row_2 ` | ` 2–19 ` |  | ` None ` |  |  |
+| ` row_3 ` | ` 20 ` |  |  | ` 1d8+2 ` | ` Use ` |
 
 #### Retributive strike
 

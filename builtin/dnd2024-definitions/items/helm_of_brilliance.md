@@ -178,90 +178,41 @@ end_on:
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- daylight
+- fireball
+- prismatic_spray
+- wall_of_fire
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Save dc:
+    path: save_dc
+    type: integer
+  Component gem:
+    path: component/gem
+    type: symbol
+  Component quantity:
+    path: component/quantity
+    type: integer
+  Component consumed:
+    path: component/consumed
+    type: boolean
+  Component remove from helm:
+    path: component/remove_from_helm
+    type: boolean
+-->
 
-| Row | save_dc |
-| --- | --- |
-| ` 0 ` | ` 18 ` |
-| ` 1 ` | ` 18 ` |
-| ` 2 ` | ` 18 ` |
-| ` 3 ` | ` 18 ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/daylight ` |
-
-##### Component
-
-<!-- splat:values path=splat_rule/parameters/spells/0/component -->
-
-| Field | Value |
-| --- | --- |
-| ` gem ` | ` opal ` |
-| ` quantity ` | ` 1 ` |
-| ` consumed ` | ` true ` |
-| ` remove_from_helm ` | ` true ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fireball ` |
-
-##### Component
-
-<!-- splat:values path=splat_rule/parameters/spells/1/component -->
-
-| Field | Value |
-| --- | --- |
-| ` gem ` | ` fire_opal ` |
-| ` quantity ` | ` 1 ` |
-| ` consumed ` | ` true ` |
-| ` remove_from_helm ` | ` true ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/prismatic_spray ` |
-
-##### Component
-
-<!-- splat:values path=splat_rule/parameters/spells/2/component -->
-
-| Field | Value |
-| --- | --- |
-| ` gem ` | ` diamond ` |
-| ` quantity ` | ` 1 ` |
-| ` consumed ` | ` true ` |
-| ` remove_from_helm ` | ` true ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/3/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_fire ` |
-
-##### Component
-
-<!-- splat:values path=splat_rule/parameters/spells/3/component -->
-
-| Field | Value |
-| --- | --- |
-| ` gem ` | ` ruby ` |
-| ` quantity ` | ` 1 ` |
-| ` consumed ` | ` true ` |
-| ` remove_from_helm ` | ` true ` |
+| Spell | Save dc | Component gem | Component quantity | Component consumed | Component remove from helm |
+| --- | --- | --- | --- | --- | --- |
+| [Daylight](<../spells/daylight.md> "dnd2024:spells/daylight") | ` 18 ` | ` Opal ` | ` 1 ` | true | true |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") | ` 18 ` | ` Fire opal ` | ` 1 ` | true | true |
+| [Prismatic Spray](<../spells/prismatic_spray.md> "dnd2024:spells/prismatic_spray") | ` 18 ` | ` Diamond ` | ` 1 ` | true | true |
+| [Wall of Fire](<../spells/wall_of_fire.md> "dnd2024:spells/wall_of_fire") | ` 18 ` | ` Ruby ` | ` 1 ` | true | true |
 
 #### Fire damage mishap
 

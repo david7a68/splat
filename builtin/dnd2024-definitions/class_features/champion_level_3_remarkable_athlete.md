@@ -37,12 +37,32 @@ provoking Opportunity Attacks.\
 
 #### Advantage on
 
-<!-- splat:rows path=splat_rule/parameters/advantage_on -->
+<!-- splat:table
+path: splat_rule/parameters/advantage_on
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Roll:
+    path: roll
+    type: symbol
+  Ability:
+    path: ability
+    type: symbol
+    optional: true
+  Skill:
+    path: skill
+    type: symbol
+    optional: true
+-->
 
-| Row | roll | ability | skill |
+| Key | Roll | Ability | Skill |
 | --- | --- | --- | --- |
-| ` 0 ` | ` initiative ` |  |  |
-| ` 1 ` | ` ability_check ` | ` strength ` | ` athletics ` |
+| ` row_1 ` | ` Initiative ` |  |  |
+| ` row_2 ` | ` Ability check ` | ` Strength ` | ` Athletics ` |
 
 #### After critical hit
 

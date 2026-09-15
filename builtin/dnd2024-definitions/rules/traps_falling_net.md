@@ -174,11 +174,28 @@ attempt_duration:
 
 #### Scaling
 
-<!-- splat:rows path=splat_rule/parameters/scaling -->
+<!-- splat:table
+path: splat_rule/parameters/scaling
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Save and escape dc:
+    path: save_and_escape_dc
+    type: integer
+-->
 
-| Row | levels | save_and_escape_dc |
+| Key | Levels | Save and escape dc |
 | --- | --- | --- |
-| ` 0 ` | ` [1, 4] ` | ` 10 ` |
-| ` 1 ` | ` [5, 10] ` | ` 12 ` |
-| ` 2 ` | ` [11, 16] ` | ` 14 ` |
-| ` 3 ` | ` [17, 20] ` | ` 16 ` |
+| ` row_1 ` | ` [1, 4] ` | ` 10 ` |
+| ` row_2 ` | ` [5, 10] ` | ` 12 ` |
+| ` row_3 ` | ` [11, 16] ` | ` 14 ` |
+| ` row_4 ` | ` [17, 20] ` | ` 16 ` |

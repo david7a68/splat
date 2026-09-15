@@ -129,21 +129,47 @@ Original layout: [[../../srd-5.2.1/pages/136|page 136]].
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` repeat_choice ` |
+
+###### Count
+
+<!-- splat:yaml path=splat_rule/parameters/features/multiattack/count -->
 
 ```yaml
-economy: action
-op: repeat_choice
-count:
-  floor_divide:
-  - input: spell_level
-  - 2
-choices:
-- feature: poison_jab
-- feature: web_bolt
-  requires_form:
-  - spider
+floor_divide:
+- input: spell_level
+- 2
 ```
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+  Requires form:
+    path: requires_form
+    type: yaml
+    optional: true
+-->
+
+| Key | Feature | Requires form |
+| --- | --- | --- |
+| ` row_1 ` | ` Poison jab ` |  |
+| ` row_2 ` | ` Web bolt ` | ` ["spider"] ` |
 
 ##### Poison jab
 

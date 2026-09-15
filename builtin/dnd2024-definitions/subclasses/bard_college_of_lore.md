@@ -56,46 +56,29 @@ figures of authority.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- college_of_lore_level_14_peerless_skill
+- college_of_lore_level_3_bonus_proficiencies
+- college_of_lore_level_3_cutting_words
+- college_of_lore_level_6_magical_discoveries
+columns:
+  Item:
+    path: definition
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Item | Class level |
 | --- | --- |
-| ` 0 ` | ` 14 ` |
-| ` 1 ` | ` 3 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 6 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/college_of_lore_level_14_peerless_skill ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/college_of_lore_level_3_bonus_proficiencies ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/college_of_lore_level_3_cutting_words ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/college_of_lore_level_6_magical_discoveries ` |
+| [Level 14: Peerless Skill](<../class_features/college_of_lore_level_14_peerless_skill.md> "dnd2024:class_features/college_of_lore_level_14_peerless_skill") | ` 14 ` |
+| [Level 3: Bonus Proficiencies](<../class_features/college_of_lore_level_3_bonus_proficiencies.md> "dnd2024:class_features/college_of_lore_level_3_bonus_proficiencies") | ` 3 ` |
+| [Level 3: Cutting Words](<../class_features/college_of_lore_level_3_cutting_words.md> "dnd2024:class_features/college_of_lore_level_3_cutting_words") | ` 3 ` |
+| [Level 6: Magical Discoveries](<../class_features/college_of_lore_level_6_magical_discoveries.md> "dnd2024:class_features/college_of_lore_level_6_magical_discoveries") | ` 6 ` |
 
 #### Grant eligible features
 

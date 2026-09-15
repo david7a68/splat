@@ -120,12 +120,27 @@ Original layout: [[../../srd-5.2.1/pages/164|page 164]].
 
 #### Terrain choices
 
-<!-- splat:rows path=splat_rule/parameters/terrain_choices -->
+<!-- splat:table
+path: splat_rule/parameters/terrain_choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  From:
+    path: from
+    type: symbol
+  To:
+    path: to
+    type: symbol
+-->
 
-| Row | from | to |
+| Key | From | To |
 | --- | --- | --- |
-| ` 0 ` | ` plant_growth_difficult_terrain ` | ` ordinary ` |
-| ` 1 ` | ` ordinary_with_plants ` | ` difficult_terrain ` |
+| ` row_1 ` | ` Plant growth difficult terrain ` | ` Ordinary ` |
+| ` row_2 ` | ` Ordinary with plants ` | ` Difficult terrain ` |
 
 #### Plant creatures
 

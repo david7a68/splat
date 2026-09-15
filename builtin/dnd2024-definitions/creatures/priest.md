@@ -175,70 +175,145 @@ range_feet: 60
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: repeat_choice
-count: 2
-choices:
-- feature: mace
-- feature: radiant_flame
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` repeat_choice ` |
+| ` count ` | ` 2 ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+-->
+
+| Key | Feature |
+| --- | --- |
+| ` row_1 ` | ` Mace ` |
+| ` row_2 ` | ` Radiant flame ` |
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` wisdom ` |
+| ` save_dc ` | ` 13 ` |
+| ` required_material_components_available ` | ` true ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- light
+- thaumaturgy
+- spirit_guardians
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: symbol
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Cast level | Uses | Resource scope | Recovery |
+| --- | --- | --- | --- | --- | --- |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Thaumaturgy](<../spells/thaumaturgy.md> "dnd2024:spells/thaumaturgy") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Spirit Guardians](<../spells/spirit_guardians.md> "dnd2024:spells/spirit_guardians") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+
+###### Components waived
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/components_waived -->
 
 ```yaml
-economy: action
-op: cast_spell_choice
-ability: wisdom
-spells:
-- spell:
-    key: dnd2024:spells/light
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/thaumaturgy
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/spirit_guardians
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived: []
-save_dc: 13
-required_material_components_available: true
+[]
 ```
 
 ##### Divine aid
 
-<!-- splat:yaml path=splat_rule/parameters/features/divine_aid -->
+<!-- splat:values path=splat_rule/parameters/features/divine_aid -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` wisdom ` |
+| ` save_dc ` | ` 13 ` |
+
+###### Resource
+
+<!-- splat:values path=splat_rule/parameters/features/divine_aid/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` capacity ` | ` 3 ` |
+| ` cost ` | ` 1 ` |
+| ` recovery ` | ` long_rest ` |
+| ` scope ` | ` shared_choices ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/divine_aid/choices
+key: Spell
+order:
+- bless
+- dispel_magic
+- healing_word
+- lesser_restoration
+columns:
+  Spell:
+    path: spell
+    type: reference
+-->
+
+| Spell |
+| --- |
+| [Bless](<../spells/bless.md> "dnd2024:spells/bless") |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") |
+| [Healing Word](<../spells/healing_word.md> "dnd2024:spells/healing_word") |
+| [Lesser Restoration](<../spells/lesser_restoration.md> "dnd2024:spells/lesser_restoration") |
+
+###### Components waived
+
+<!-- splat:yaml path=splat_rule/parameters/features/divine_aid/components_waived -->
 
 ```yaml
-economy: bonus_action
-resource:
-  capacity: 3
-  cost: 1
-  recovery: long_rest
-  scope: shared_choices
-op: cast_spell_choice
-choices:
-- spell:
-    key: dnd2024:spells/bless
-- spell:
-    key: dnd2024:spells/dispel_magic
-- spell:
-    key: dnd2024:spells/healing_word
-- spell:
-    key: dnd2024:spells/lesser_restoration
-ability: wisdom
-save_dc: 13
-components_waived: []
+[]
 ```
 
 #### Skill totals
@@ -277,13 +352,29 @@ components_waived: []
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Item name:
+    path: item_name
+    type: string
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item_name | quantity |
+| Key | Item name | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` Chain Shirt ` | ` 1 ` |
-| ` 1 ` | ` Holy Symbol ` | ` 1 ` |
-| ` 2 ` | ` Mace ` | ` 1 ` |
+| ` row_1 ` | ` Chain Shirt ` | ` 1 ` |
+| ` row_2 ` | ` Holy Symbol ` | ` 1 ` |
+| ` row_3 ` | ` Mace ` | ` 1 ` |
 
 #### Communication
 

@@ -52,55 +52,31 @@ them.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- hunter_level_11_superior_hunter_s_prey
+- hunter_level_15_superior_hunter_s_defense
+- hunter_level_3_hunter_s_lore
+- hunter_level_3_hunter_s_prey
+- hunter_level_7_defensive_tactics
+columns:
+  Item:
+    path: definition
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Item | Class level |
 | --- | --- |
-| ` 0 ` | ` 11 ` |
-| ` 1 ` | ` 15 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 7 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/hunter_level_11_superior_hunter_s_prey ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/hunter_level_15_superior_hunter_s_defense ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/hunter_level_3_hunter_s_lore ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/hunter_level_3_hunter_s_prey ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/hunter_level_7_defensive_tactics ` |
+| [Level 11: Superior Hunter’s Prey](<../class_features/hunter_level_11_superior_hunter_s_prey.md> "dnd2024:class_features/hunter_level_11_superior_hunter_s_prey") | ` 11 ` |
+| [Level 15: Superior Hunter’s Defense](<../class_features/hunter_level_15_superior_hunter_s_defense.md> "dnd2024:class_features/hunter_level_15_superior_hunter_s_defense") | ` 15 ` |
+| [Level 3: Hunter’s Lore](<../class_features/hunter_level_3_hunter_s_lore.md> "dnd2024:class_features/hunter_level_3_hunter_s_lore") | ` 3 ` |
+| [Level 3: Hunter’s Prey](<../class_features/hunter_level_3_hunter_s_prey.md> "dnd2024:class_features/hunter_level_3_hunter_s_prey") | ` 3 ` |
+| [Level 7: Defensive Tactics](<../class_features/hunter_level_7_defensive_tactics.md> "dnd2024:class_features/hunter_level_7_defensive_tactics") | ` 7 ` |
 
 #### Grant eligible features
 

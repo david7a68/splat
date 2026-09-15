@@ -83,33 +83,61 @@ Original layout: [[../../srd-5.2.1/pages/171|page 171]].
 
 #### Attack
 
-<!-- splat:yaml path=splat_rule/parameters/attack -->
+<!-- splat:values path=splat_rule/parameters/attack -->
 
-```yaml
-count: 1
-weapon: casting_material_weapon
-attack_ability: spellcasting
-damage_ability: spellcasting
-replace_abilities:
-- strength
-- dexterity
-damage_type_choice:
-- radiant
-- weapon_normal
-extra_damage:
-  type: radiant
-  dice:
-    count:
-      by_caster_level:
-      - minimum: 1
-        count: 0
-      - minimum: 5
-        count: 1
-      - minimum: 11
-        count: 2
-      - minimum: 17
-        count: 3
-    sides: 6
-    add: 0
-  applies_regardless_of_chosen_damage_type: true
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` weapon ` | ` casting_material_weapon ` |
+| ` attack_ability ` | ` spellcasting ` |
+| ` damage_ability ` | ` spellcasting ` |
+| ` replace_abilities ` | ` ["strength", "dexterity"] ` |
+| ` damage_type_choice ` | ` ["radiant", "weapon_normal"] ` |
+
+##### Extra damage
+
+<!-- splat:values path=splat_rule/parameters/attack/extra_damage -->
+
+| Field | Value |
+| --- | --- |
+| ` type ` | ` radiant ` |
+| ` applies_regardless_of_chosen_damage_type ` | ` true ` |
+
+###### Dice
+
+<!-- splat:values path=splat_rule/parameters/attack/extra_damage/dice -->
+
+| Field | Value |
+| --- | --- |
+| ` sides ` | ` 6 ` |
+| ` add ` | ` 0 ` |
+
+###### Count
+
+###### By caster level
+
+<!-- splat:table
+path: splat_rule/parameters/attack/extra_damage/dice/count/by_caster_level
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum:
+    path: minimum
+    type: integer
+  Count:
+    path: count
+    type: integer
+-->
+
+| Key | Minimum | Count |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 0 ` |
+| ` row_2 ` | ` 5 ` | ` 1 ` |
+| ` row_3 ` | ` 11 ` | ` 2 ` |
+| ` row_4 ` | ` 17 ` | ` 3 ` |

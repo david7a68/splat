@@ -64,24 +64,58 @@ increases by 1d12.\
 
 #### Backlash
 
-<!-- splat:yaml path=splat_rule/parameters/backlash -->
+<!-- splat:values path=splat_rule/parameters/backlash -->
 
-```yaml
-when_use_number_minimum: 2
-timing: immediately_after_cast
-damage:
-  dice:
-    count:
-      op: multiply
-      args:
-      - var: slot.level
-      - var: overchannel.use_number
-    sides: 12
-  type: necrotic
-ignores:
-- resistance
-- immunity
-```
+| Field | Value |
+| --- | --- |
+| ` when_use_number_minimum ` | ` 2 ` |
+| ` timing ` | ` immediately_after_cast ` |
+| ` ignores ` | ` ["resistance", "immunity"] ` |
+
+##### Damage
+
+<!-- splat:values path=splat_rule/parameters/backlash/damage -->
+
+| Field | Value |
+| --- | --- |
+| ` type ` | ` necrotic ` |
+
+###### Dice
+
+<!-- splat:values path=splat_rule/parameters/backlash/damage/dice -->
+
+| Field | Value |
+| --- | --- |
+| ` sides ` | ` 12 ` |
+
+###### Count
+
+<!-- splat:values path=splat_rule/parameters/backlash/damage/dice/count -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` multiply ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/backlash/damage/dice/count/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: string
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` slot.level ` |
+| ` row_2 ` | ` overchannel.use_number ` |
 
 #### Class scope
 

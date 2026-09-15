@@ -78,18 +78,42 @@ Original layout: [[../../srd-5.2.1/pages/151|page 151]].
 
 #### Targets
 
-<!-- splat:yaml path=splat_rule/parameters/targets -->
+<!-- splat:values path=splat_rule/parameters/targets -->
 
-```yaml
-touched: true
-choices:
-- kind: creature
-  willing: true
-- kind: place
-  maximum_dimension_feet: 10
-- kind: object
-  maximum_dimension_feet: 10
-```
+| Field | Value |
+| --- | --- |
+| ` touched ` | ` true ` |
+
+##### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/targets/choices
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Willing:
+    path: willing
+    type: boolean
+    optional: true
+  Maximum dimension feet:
+    path: maximum_dimension_feet
+    type: integer
+    optional: true
+-->
+
+| Key | Kind | Willing | Maximum dimension feet |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Creature ` | true |  |
+| ` row_2 ` | ` Place ` |  | ` 10 ` |
+| ` row_3 ` | ` Object ` |  | ` 10 ` |
 
 #### Protection
 

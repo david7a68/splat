@@ -173,56 +173,131 @@ replacement:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` wisdom ` |
+| ` components_waived ` | ` ["somatic", "material"] ` |
+| ` save_dc ` | ` 16 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- thaumaturgy
+- clairvoyance
+- cure_wounds
+- flame_strike
+- geas
+- true_seeing
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Resource scope | Recovery | Details |
+| --- | --- | --- | --- | --- | --- |
+| [Thaumaturgy](<../spells/thaumaturgy.md> "dnd2024:spells/thaumaturgy") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-thaumaturgy "section:thaumaturgy") |
+| [Clairvoyance](<../spells/clairvoyance.md> "dnd2024:spells/clairvoyance") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-clairvoyance "section:clairvoyance") |
+| [Cure Wounds](<../spells/cure_wounds.md> "dnd2024:spells/cure_wounds") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-cure_wounds "section:cure_wounds") |
+| [Flame Strike](<../spells/flame_strike.md> "dnd2024:spells/flame_strike") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-flame_strike "section:flame_strike") |
+| [Geas](<../spells/geas.md> "dnd2024:spells/geas") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-geas "section:geas") |
+| [True Seeing](<../spells/true_seeing.md> "dnd2024:spells/true_seeing") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-true_seeing "section:true_seeing") |
+
+###### Thaumaturgy
+
+^splat-68a383d1-thaumaturgy
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@thaumaturgy/cast_level -->
 
 ```yaml
-economy: action
-op: cast_spell_choice
-ability: wisdom
-spells:
-- spell:
-    key: dnd2024:spells/thaumaturgy
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/clairvoyance
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/cure_wounds
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  cast_level: 6
-  recovery: long_rest
-- spell:
-    key: dnd2024:spells/flame_strike
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  cast_level: 6
-  recovery: long_rest
-- spell:
-    key: dnd2024:spells/geas
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/true_seeing
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- somatic
-- material
-save_dc: 16
+spell_minimum
+```
+
+###### Clairvoyance
+
+^splat-68a383d1-clairvoyance
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@clairvoyance/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Cure wounds
+
+^splat-68a383d1-cure_wounds
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@cure_wounds/cast_level -->
+
+```yaml
+6
+```
+
+###### Flame strike
+
+^splat-68a383d1-flame_strike
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@flame_strike/cast_level -->
+
+```yaml
+6
+```
+
+###### Geas
+
+^splat-68a383d1-geas
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@geas/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### True seeing
+
+^splat-68a383d1-true_seeing
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@true_seeing/cast_level -->
+
+```yaml
+spell_minimum
 ```
 
 ##### Celestial restoration

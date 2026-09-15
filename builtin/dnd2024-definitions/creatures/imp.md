@@ -187,28 +187,51 @@ cast_level: spell_minimum
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
 
-```yaml
-economy: action
-op: shape_shift
-forms:
-- form: rat
-  speeds_feet:
-    walk: 20
-- form: raven
-  speeds_feet:
-    walk: 20
-    fly: 60
-- form: spider
-  speeds_feet:
-    walk: 20
-    climb: 20
-- form: 'true'
-retain_statistics_except:
-- speed
-equipment_transformed: false
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` shape_shift ` |
+| ` retain_statistics_except ` | ` ["speed"] ` |
+| ` equipment_transformed ` | ` false ` |
+
+###### Forms
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/forms
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Form:
+    path: form
+    type: symbol
+  Speeds feet walk:
+    path: speeds_feet/walk
+    type: integer
+    optional: true
+  Speeds feet fly:
+    path: speeds_feet/fly
+    type: integer
+    optional: true
+  Speeds feet climb:
+    path: speeds_feet/climb
+    type: integer
+    optional: true
+-->
+
+| Key | Form | Speeds feet walk | Speeds feet fly | Speeds feet climb |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Rat ` | ` 20 ` |  |  |
+| ` row_2 ` | ` Raven ` | ` 20 ` | ` 60 ` |  |
+| ` row_3 ` | ` Spider ` | ` 20 ` |  | ` 20 ` |
+| ` row_4 ` | ` True ` |  |  |  |
 
 #### Skill totals
 

@@ -63,9 +63,34 @@ Original layout: [[../../srd-5.2.1/pages/215|page 215]].
 
 #### Checks
 
-<!-- splat:rows path=splat_rule/parameters/checks -->
+<!-- splat:table
+path: splat_rule/parameters/checks
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Ability:
+    path: ability
+    type: symbol
+  Skill:
+    path: skill
+    type: symbol
+  Actor:
+    path: actor
+    type: symbol
+  Target:
+    path: target
+    type: symbol
+    optional: true
+  Mode:
+    path: mode
+    type: symbol
+-->
 
-| Row | ability | skill | actor | target | mode |
+| Key | Ability | Skill | Actor | Target | Mode |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` wisdom ` | ` perception ` | ` other ` | ` wearer ` | ` disadvantage ` |
-| ` 1 ` | ` dexterity ` | ` stealth ` | ` wearer ` |  | ` advantage ` |
+| ` row_1 ` | ` Wisdom ` | ` Perception ` | ` Other ` | ` Wearer ` | ` Disadvantage ` |
+| ` row_2 ` | ` Dexterity ` | ` Stealth ` | ` Wearer ` |  | ` Advantage ` |

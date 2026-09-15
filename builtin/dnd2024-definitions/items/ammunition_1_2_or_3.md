@@ -68,13 +68,35 @@ Original layout: [[../../srd-5.2.1/pages/209|page 209]].
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Rarity:
+    path: rarity
+    type: symbol
+  Attack roll bonus:
+    path: attack_roll_bonus
+    type: integer
+  Damage roll bonus:
+    path: damage_roll_bonus
+    type: integer
+  Scope:
+    path: scope
+    type: symbol
+-->
 
-| Row | rarity | attack_roll_bonus | damage_roll_bonus | scope |
+| Key | Rarity | Attack roll bonus | Damage roll bonus | Scope |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` uncommon ` | ` 1 ` | ` 1 ` | ` attacks_with_source_item ` |
-| ` 1 ` | ` rare ` | ` 2 ` | ` 2 ` | ` attacks_with_source_item ` |
-| ` 2 ` | ` very_rare ` | ` 3 ` | ` 3 ` | ` attacks_with_source_item ` |
+| ` row_1 ` | ` Uncommon ` | ` 1 ` | ` 1 ` | ` Attacks with source item ` |
+| ` row_2 ` | ` Rare ` | ` 2 ` | ` 2 ` | ` Attacks with source item ` |
+| ` row_3 ` | ` Very rare ` | ` 3 ` | ` 3 ` | ` Attacks with source item ` |
 
 #### On hit
 

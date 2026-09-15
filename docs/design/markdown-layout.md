@@ -9,13 +9,116 @@ citations and tags in frontmatter. Put readable descriptions in ordinary
 Markdown. Game fields belong in marked tables or local YAML blocks. Headings
 have no parsing role: users can rename, move and fold them in Obsidian.
 
-## Marked tables
+## Mapped record tables
+
+Use a `splat:table` comment to declare the collection, its stable row identities,
+and how readable columns map to nested fields. The declaration is hidden in
+Obsidian reading view; the table remains ordinary Markdown.
+
+```markdown
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Variant
+order: [arrows, bolts]
+columns:
+  Variant: {path: id, type: symbol}
+  Quantity: {path: purchase_quantity, type: integer}
+  Weight: {path: mass, type: quantity}
+  Cost: {path: price, type: quantity}
+-->
+
+| Variant | Quantity | Weight | Cost |
+| --- | --- | --- | --- |
+| Arrows | 20 | 1 lb | 1 GP |
+| Bolts | 20 | 1½ lb | 1 GP |
+```
+
+This reconstructs the original record list, including nested `mass` and `price`
+mappings. Column paths are relative to each row. `order` gives the output list
+order and must name every row once. Sorting the visible rows or rearranging
+columns does not change the data. Change `order` explicitly to change the list.
+
+`key` names the identity column. Symbols such as “Firearm bullets” resolve to
+`firearm_bullets`. A reference identity uses the last component of its resource
+key. When records have no suitable identity, use a `type: key` column without a
+`path`; its local key exists only to address the row. Generated keys must remain
+with their rows when editing; they are not display positions.
+
+### Column types
+
+| Type | Cell | Stored value |
+| --- | --- | --- |
+| `string` | `false` | Literal string `false`; JSON quotes can protect ambiguous text |
+| `symbol` | `At will` | String `at_will` |
+| `integer` | `20` | Integer 20 |
+| `number` | `1.5`, `1½`, `1/2` | Finite numeric value; explicit decimal notation retains float type |
+| `boolean` | `false` | Boolean false |
+| `quantity` | `1½ lb.`, `1 GP` | `{value: 1.5, unit: lb}`, `{value: 1, unit: gp}` |
+| `reference` | Resource key, UUID, or link with identity title | `{key: ...}` or `{id: ...}` |
+| `dice` | `2d4+2` | `{count: 2, sides: 4, add: 2}` |
+| `range` | `1–20` or `7` | `{min: 1, max: 20}` or `{min: 7, max: 7}` |
+| `yaml` | `[held, worn]` | Explicit YAML value for a small collection |
+| `key` | `row_one` | Stable row address; no game field unless `path` is supplied |
+| `section` | A Rules link | Navigation only; no game data |
+
+A compound column can declare `fields`, such as `[count, sides, modifier]` for
+dice or `[start, end]` for ranges. An empty `path` distributes those compound
+fields directly onto the row, so a single Roll column can supply `min` and `max`.
+There is no formula evaluation or user-supplied parser code.
+
+Blank cells are omitted only when `optional: true`; otherwise they are errors.
+`nullable: true` allows explicit `null`. Missing, null, false, zero, and an empty
+collection stay distinct. Quoted `"null"` in a string column is literal text.
+Unit names are normalized to lowercase. The owning content schema still checks
+which units, values and rules are valid in its domain.
+
+### References and row details
+
+A navigable reference looks like:
+
+```markdown
+[Quiver](quiver_1_gp.md "dnd2024:equipment/quiver_1_gp")
+```
+
+The title holds the authoritative identity. Link text and the navigation path
+do not determine identity. Renaming a file or its display text does not change
+the reference. Plain resource keys and UUIDs also work.
+
+Keep complex rules in YAML blocks addressed through the stable key:
+
+````markdown
+### Bolts
+
+<!-- splat:yaml path=splat_rule/parameters/variants/@bolts/special -->
+
+```yaml
+requires: held
+```
+````
+
+Blocks may appear before their table. Nested tables can use the same `@key`
+syntax at each level. Numeric addresses under a mapped table are rejected.
+A block and a column cannot both assign the same field or overlapping parents.
+Unknown keys, duplicate keys, duplicate column targets, malformed values and
+missing rows produce errors instead of silent overrides.
+
+Generated Details columns link to Obsidian block anchors. Their link titles use
+`section:<row_key>` to keep navigation tied to a stable row. Section links do not
+supply rules; the marked YAML blocks do.
+
+The converter selects tables from record shapes. Variants, pack contents,
+spell lists and simple roll results share this mechanism. Branching action
+sequences and wide records retain YAML or the existing table layout. Checked
+source-specific presentation boundaries remove duplicated source tables while
+retaining descriptive prose and citations; the original pinned source remains.
+
+## Legacy marked tables
 
 Each marker must immediately precede its table, with optional blank lines.
 Paths address schema fields inside this note, not files or entry IDs. Separate
 path components with `/`. Local map keys use the existing lowercase key grammar.
 
-A values table fills a mapping. Column labels are exact schema syntax:
+A values table fills a mapping. Column labels in the legacy formats are exact schema syntax:
 
 ```markdown
 <!-- splat:values path=splat_spell -->
@@ -108,7 +211,8 @@ Every field has one authoritative location. Duplicate keys, overlapping parent
 and child assignments, conflicting frontmatter, invalid paths, missing/extra
 cells, row gaps, detached markers and unclosed YAML fences are errors. No
 last-write-wins merge occurs. Ordinary tables, code examples, prose, Obsidian
-links and inline controls do not become data without a marker.
+links and inline controls do not become data without a marker. Only mapped
+reference and section columns interpret links.
 
 ## Generated reports and source text
 

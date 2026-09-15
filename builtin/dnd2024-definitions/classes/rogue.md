@@ -108,43 +108,69 @@ tool_proficiencies:
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` choose ` | ` 1 ` |
+
+##### Options
+
+###### Equipment
+
+###### Items
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/equipment/items
+key: Item
+order:
+- leather_armor
+- dagger
+- shortsword
+- shortbow
+- ammunition_varies
+- quiver_1_gp
+- other_tools_thieves_tools_25_gp
+- burglar_s_pack_16_gp
+columns:
+  Item:
+    path: definition
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Variant:
+    path: variant
+    type: symbol
+    optional: true
+-->
+
+| Item | Quantity | Variant |
+| --- | --- | --- |
+| [Leather Armor](<../equipment/leather_armor.md> "dnd2024:equipment/leather_armor") | ` 1 ` |  |
+| [Dagger](<../equipment/dagger.md> "dnd2024:equipment/dagger") | ` 2 ` |  |
+| [Shortsword](<../equipment/shortsword.md> "dnd2024:equipment/shortsword") | ` 1 ` |  |
+| [Shortbow](<../equipment/shortbow.md> "dnd2024:equipment/shortbow") | ` 1 ` |  |
+| [Ammunition (Varies)](<../equipment/ammunition_varies.md> "dnd2024:equipment/ammunition_varies") | ` 20 ` | ` Arrows ` |
+| [Quiver (1 GP)](<../equipment/quiver_1_gp.md> "dnd2024:equipment/quiver_1_gp") | ` 1 ` |  |
+| [Thieves’ Tools (25 GP)](<../equipment/other_tools_thieves_tools_25_gp.md> "dnd2024:equipment/other_tools_thieves_tools_25_gp") | ` 1 ` |  |
+| [Burglar’s Pack (16 GP)](<../equipment/burglar_s_pack_16_gp.md> "dnd2024:equipment/burglar_s_pack_16_gp") | ` 1 ` |  |
+
+###### Currency
+
+<!-- splat:values path=splat_rule/parameters/starting_equipment/options/equipment/currency -->
+
+| Field | Value |
+| --- | --- |
+| ` gp ` | ` 8 ` |
+
+###### Currency
+
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment/options/currency -->
 
 ```yaml
-choose: 1
-options:
-  equipment:
-    items:
-    - definition:
-        key: dnd2024:equipment/leather_armor
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/dagger
-      quantity: 2
-    - definition:
-        key: dnd2024:equipment/shortsword
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/shortbow
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/ammunition_varies
-      quantity: 20
-      variant: arrows
-    - definition:
-        key: dnd2024:equipment/quiver_1_gp
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/other_tools_thieves_tools_25_gp
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/burglar_s_pack_16_gp
-      quantity: 1
-    currency:
-      gp: 8
-  currency:
-    currency:
-      gp: 100
+currency:
+  gp: 100
 ```
 
 #### Progression
@@ -157,169 +183,54 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- rogue_level_11_improved_cunning_strike
+- rogue_level_14_devious_strikes
+- rogue_level_15_slippery_mind
+- rogue_level_18_elusive
+- rogue_level_19_epic_boon
+- rogue_level_1_expertise
+- rogue_level_1_sneak_attack
+- rogue_level_1_thieves_cant
+- rogue_level_1_weapon_mastery
+- rogue_level_20_stroke_of_luck
+- rogue_level_2_cunning_action
+- rogue_level_3_rogue_subclass
+- rogue_level_3_steady_aim
+- rogue_level_4_ability_score_improvement
+- rogue_level_5_cunning_strike
+- rogue_level_5_uncanny_dodge
+- rogue_level_7_evasion
+- rogue_level_7_reliable_talent
+columns:
+  Item:
+    path: definition
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Item | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 11 ` |
-| ` 1 ` | ` 14 ` |
-| ` 2 ` | ` 15 ` |
-| ` 3 ` | ` 18 ` |
-| ` 4 ` | ` 19 ` |
-| ` 5 ` | ` 1 ` |
-| ` 6 ` | ` 1 ` |
-| ` 7 ` | ` 1 ` |
-| ` 8 ` | ` 1 ` |
-| ` 9 ` | ` 20 ` |
-| ` 10 ` | ` 2 ` |
-| ` 11 ` | ` 3 ` |
-| ` 12 ` | ` 3 ` |
-| ` 13 ` | ` 4 ` |
-| ` 14 ` | ` 5 ` |
-| ` 15 ` | ` 5 ` |
-| ` 16 ` | ` 7 ` |
-| ` 17 ` | ` 7 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_11_improved_cunning_strike ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_14_devious_strikes ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_15_slippery_mind ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_18_elusive ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_19_epic_boon ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_1_expertise ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_1_sneak_attack ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_1_thieves_cant ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_1_weapon_mastery ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_20_stroke_of_luck ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/10/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_2_cunning_action ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/11/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_3_rogue_subclass ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/12/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_3_steady_aim ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/13/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_4_ability_score_improvement ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/14/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_5_cunning_strike ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/15/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_5_uncanny_dodge ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/16/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_7_evasion ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/17/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_7_reliable_talent ` |
+| [Level 11: Improved Cunning Strike](<../class_features/rogue_level_11_improved_cunning_strike.md> "dnd2024:class_features/rogue_level_11_improved_cunning_strike") | ` 11 ` |
+| [Level 14: Devious Strikes](<../class_features/rogue_level_14_devious_strikes.md> "dnd2024:class_features/rogue_level_14_devious_strikes") | ` 14 ` |
+| [Level 15: Slippery Mind](<../class_features/rogue_level_15_slippery_mind.md> "dnd2024:class_features/rogue_level_15_slippery_mind") | ` 15 ` |
+| [Level 18: Elusive](<../class_features/rogue_level_18_elusive.md> "dnd2024:class_features/rogue_level_18_elusive") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/rogue_level_19_epic_boon.md> "dnd2024:class_features/rogue_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Expertise](<../class_features/rogue_level_1_expertise.md> "dnd2024:class_features/rogue_level_1_expertise") | ` 1 ` |
+| [Level 1: Sneak Attack](<../class_features/rogue_level_1_sneak_attack.md> "dnd2024:class_features/rogue_level_1_sneak_attack") | ` 1 ` |
+| [Level 1: Thieves’ Cant](<../class_features/rogue_level_1_thieves_cant.md> "dnd2024:class_features/rogue_level_1_thieves_cant") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/rogue_level_1_weapon_mastery.md> "dnd2024:class_features/rogue_level_1_weapon_mastery") | ` 1 ` |
+| [Level 20: Stroke of Luck](<../class_features/rogue_level_20_stroke_of_luck.md> "dnd2024:class_features/rogue_level_20_stroke_of_luck") | ` 20 ` |
+| [Level 2: Cunning Action](<../class_features/rogue_level_2_cunning_action.md> "dnd2024:class_features/rogue_level_2_cunning_action") | ` 2 ` |
+| [Level 3: Rogue Subclass](<../class_features/rogue_level_3_rogue_subclass.md> "dnd2024:class_features/rogue_level_3_rogue_subclass") | ` 3 ` |
+| [Level 3: Steady Aim](<../class_features/rogue_level_3_steady_aim.md> "dnd2024:class_features/rogue_level_3_steady_aim") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/rogue_level_4_ability_score_improvement.md> "dnd2024:class_features/rogue_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Cunning Strike](<../class_features/rogue_level_5_cunning_strike.md> "dnd2024:class_features/rogue_level_5_cunning_strike") | ` 5 ` |
+| [Level 5: Uncanny Dodge](<../class_features/rogue_level_5_uncanny_dodge.md> "dnd2024:class_features/rogue_level_5_uncanny_dodge") | ` 5 ` |
+| [Level 7: Evasion](<../class_features/rogue_level_7_evasion.md> "dnd2024:class_features/rogue_level_7_evasion") | ` 7 ` |
+| [Level 7: Reliable Talent](<../class_features/rogue_level_7_reliable_talent.md> "dnd2024:class_features/rogue_level_7_reliable_talent") | ` 7 ` |

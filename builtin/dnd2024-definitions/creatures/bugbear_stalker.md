@@ -230,13 +230,29 @@ success:
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item | quantity |
+| Key | Item | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` chain_shirt ` | ` 1 ` |
-| ` 1 ` | ` javelins ` | ` 6 ` |
-| ` 2 ` | ` morningstar ` | ` 1 ` |
+| ` row_1 ` | ` Chain shirt ` | ` 1 ` |
+| ` row_2 ` | ` Javelins ` | ` 6 ` |
+| ` row_3 ` | ` Morningstar ` | ` 1 ` |
 
 #### Senses
 

@@ -67,32 +67,65 @@ or finish a Short or Long Rest.\
 
 #### Improve fate
 
-<!-- splat:yaml path=splat_rule/parameters/improve_fate -->
+<!-- splat:values path=splat_rule/parameters/improve_fate -->
 
-```yaml
-trigger_any:
-- creature.d20_test_succeeded
-- creature.d20_test_failed
-target:
-  self_allowed: true
-  range_feet: 60
-optional: true
-roll:
-  count: 2
-  sides: 4
-modify_choice:
-- add_to_d20
-- subtract_from_d20
-recompute_result: true
-resource:
-  id: boon.fate
-  maximum: 1
-  recovery:
-  - event: actor.initiative.rolled
-    amount: all
-  - event: rest.short_completed
-    amount: all
-  - event: rest.long_completed
-    amount: all
-cost: 1
-```
+| Field | Value |
+| --- | --- |
+| ` trigger_any ` | ` ["creature.d20_test_succeeded", "creature.d20_test_failed"] ` |
+| ` optional ` | ` true ` |
+| ` modify_choice ` | ` ["add_to_d20", "subtract_from_d20"] ` |
+| ` recompute_result ` | ` true ` |
+| ` cost ` | ` 1 ` |
+
+##### Target
+
+<!-- splat:values path=splat_rule/parameters/improve_fate/target -->
+
+| Field | Value |
+| --- | --- |
+| ` self_allowed ` | ` true ` |
+| ` range_feet ` | ` 60 ` |
+
+##### Roll
+
+<!-- splat:values path=splat_rule/parameters/improve_fate/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 2 ` |
+| ` sides ` | ` 4 ` |
+
+##### Resource
+
+<!-- splat:values path=splat_rule/parameters/improve_fate/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` id ` | ` boon.fate ` |
+| ` maximum ` | ` 1 ` |
+
+###### Recovery
+
+<!-- splat:table
+path: splat_rule/parameters/improve_fate/resource/recovery
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Amount:
+    path: amount
+    type: symbol
+-->
+
+| Key | Event | Amount |
+| --- | --- | --- |
+| ` row_1 ` | ` actor.initiative.rolled ` | ` All ` |
+| ` row_2 ` | ` rest.short_completed ` | ` All ` |
+| ` row_3 ` | ` rest.long_completed ` | ` All ` |

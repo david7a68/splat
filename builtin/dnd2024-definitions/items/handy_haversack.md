@@ -94,12 +94,31 @@ Original layout: [[../../srd-5.2.1/pages/224|page 224]].
 
 #### Pouches
 
-<!-- splat:rows path=splat_rule/parameters/pouches -->
+<!-- splat:table
+path: splat_rule/parameters/pouches
+key: Name
+order:
+- side
+- central
+columns:
+  Name:
+    path: name
+    type: symbol
+  Count:
+    path: count
+    type: integer
+  Capacity lb:
+    path: capacity_lb
+    type: integer
+  Capacity cubic ft:
+    path: capacity_cubic_ft
+    type: integer
+-->
 
-| Row | name | count | capacity_lb | capacity_cubic_ft |
-| --- | --- | --- | --- | --- |
-| ` 0 ` | ` side ` | ` 2 ` | ` 200 ` | ` 25 ` |
-| ` 1 ` | ` central ` | ` 1 ` | ` 500 ` | ` 64 ` |
+| Name | Count | Capacity lb | Capacity cubic ft |
+| --- | --- | --- | --- |
+| ` Side ` | ` 2 ` | ` 200 ` | ` 25 ` |
+| ` Central ` | ` 1 ` | ` 500 ` | ` 64 ` |
 
 #### Retrieve
 

@@ -62,59 +62,156 @@ The damage is the same type dealt by the attack.\
 
 #### Reduce total damage
 
-<!-- splat:yaml path=splat_rule/parameters/reduce_total_damage -->
+<!-- splat:values path=splat_rule/parameters/reduce_total_damage -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/reduce_total_damage/args
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Dice count:
+    path: dice/count
+    type: integer
+    optional: true
+  Dice sides:
+    path: dice/sides
+    type: integer
+    optional: true
+  Var:
+    path: var
+    type: string
+    optional: true
+-->
+
+| Key | Dice count | Dice sides | Var |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 10 ` |  |
+| ` row_2 ` |  |  | ` actor.abilities.dexterity.modifier ` |
+| ` row_3 ` |  |  | ` actor.class_levels.monk ` |
+
+#### If damage reduced to zero
+
+<!-- splat:values path=splat_rule/parameters/if_damage_reduced_to_zero -->
+
+| Field | Value |
+| --- | --- |
+| ` optional ` | ` true ` |
+
+##### Cost
+
+<!-- splat:values path=splat_rule/parameters/if_damage_reduced_to_zero/cost -->
+
+| Field | Value |
+| --- | --- |
+| ` resource ` | ` monk.focus_points ` |
+| ` amount ` | ` 1 ` |
+
+##### Target
+
+<!-- splat:yaml path=splat_rule/parameters/if_damage_reduced_to_zero/target -->
+
+```yaml
+visible: true
+type: creature
+if_melee_attack:
+  range_feet: 5
+if_ranged_attack:
+  range_feet: 60
+  total_cover: false
+```
+
+##### Save
+
+<!-- splat:values path=splat_rule/parameters/if_damage_reduced_to_zero/save -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` dexterity ` |
+| ` success_damage ` | ` 0 ` |
+
+###### Dc
+
+<!-- splat:yaml path=splat_rule/parameters/if_damage_reduced_to_zero/save/dc -->
 
 ```yaml
 op: add
 args:
-- dice:
-    count: 1
-    sides: 10
-- var: actor.abilities.dexterity.modifier
-- var: actor.class_levels.monk
+- 8
+- var: actor.abilities.wisdom.modifier
+- var: actor.proficiency_bonus
 ```
 
-#### If damage reduced to zero
+###### Failure damage
 
-<!-- splat:yaml path=splat_rule/parameters/if_damage_reduced_to_zero -->
+<!-- splat:values path=splat_rule/parameters/if_damage_reduced_to_zero/save/failure_damage -->
+
+| Field | Value |
+| --- | --- |
+| ` type ` | ` trigger_attack.damage_type ` |
+
+###### Amount
+
+<!-- splat:values path=splat_rule/parameters/if_damage_reduced_to_zero/save/failure_damage/amount -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/if_damage_reduced_to_zero/save/failure_damage/amount/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice count:
+    path: dice/count
+    type: integer
+    optional: true
+  Var:
+    path: var
+    type: string
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Dice count | Var | Details |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 2 ` |  | [Rules](#^splat-5d551cdb-row_1 "section:row_1") |
+| ` row_2 ` |  | ` actor.abilities.dexterity.modifier ` |  |
+
+###### Row 1
+
+^splat-5d551cdb-row_1
+
+###### Sides
+
+<!-- splat:yaml path=splat_rule/parameters/if_damage_reduced_to_zero/save/failure_damage/amount/args/@row_1/dice/sides -->
 
 ```yaml
-optional: true
-cost:
-  resource: monk.focus_points
-  amount: 1
-target:
-  visible: true
-  type: creature
-  if_melee_attack:
-    range_feet: 5
-  if_ranged_attack:
-    range_feet: 60
-    total_cover: false
-save:
-  ability: dexterity
-  dc:
-    op: add
-    args:
-    - 8
-    - var: actor.abilities.wisdom.modifier
-    - var: actor.proficiency_bonus
-  failure_damage:
-    amount:
-      op: add
-      args:
-      - dice:
-          count: 2
-          sides:
-            martial_arts_die_sides:
-              table:
-                key: dnd2024:tables/monk_progression
-              row:
-                var: actor.class_levels.monk
-              column: martial_arts
-      - var: actor.abilities.dexterity.modifier
-    type: trigger_attack.damage_type
-  success_damage: 0
+martial_arts_die_sides:
+  table:
+    key: dnd2024:tables/monk_progression
+  row:
+    var: actor.class_levels.monk
+  column: martial_arts
 ```
 
 #### Class scope

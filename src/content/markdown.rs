@@ -10,6 +10,18 @@ struct Node {
     children: BTreeMap<String, Node>,
 }
 impl Node {
+    fn ensure_record(&mut self, path: &[&str]) -> Result<(), String> {
+        if self.value.is_some() {
+            return Err("Table row overlaps a block or frontmatter value".into());
+        }
+        if let Some((key, tail)) = path.split_first() {
+            self.children
+                .entry((*key).into())
+                .or_default()
+                .ensure_record(tail)?;
+        }
+        Ok(())
+    }
     fn insert(&mut self, path: &[&str], value: Value) -> Result<(), String> {
         if self.value.is_some() || (path.is_empty() && !self.children.is_empty()) {
             return Err("Duplicate or overlapping Markdown data field".into());
@@ -59,6 +71,7 @@ impl Node {
 struct Marker {
     mode: String,
     path: String,
+    mapping: Option<super::table_mapping::Table>,
 }
 
 fn marker(raw: &str) -> Result<Option<Marker>, String> {
@@ -66,19 +79,41 @@ fn marker(raw: &str) -> Result<Option<Marker>, String> {
     if !raw.starts_with("<!-- splat:") || raw.starts_with("<!-- splat:inventory") {
         return Ok(None);
     }
+    if let Some(config) = raw
+        .strip_prefix("<!-- splat:table\n")
+        .and_then(|s| s.strip_suffix("-->"))
+    {
+        let mapping: super::table_mapping::Table = serde_yaml_ng::from_value(yaml(config)?)
+            .map_err(|e| format!("Invalid table mapping: {e}"))?;
+        mapping.validate()?;
+        // Share the root and identity restrictions with existing data markers.
+        marker(&format!("<!-- splat:rows path={} -->", mapping.path))?;
+        return Ok(Some(Marker {
+            mode: "table".into(),
+            path: mapping.path.clone(),
+            mapping: Some(mapping),
+        }));
+    }
     let (mode, path) = raw
         .strip_prefix("<!-- splat:")
         .and_then(|s| s.strip_suffix(" -->"))
         .and_then(|s| s.split_once(" path="))
-        .ok_or("Invalid Splat data marker")?;
+        .ok_or_else(|| {
+            format!(
+                "Invalid Splat data marker: {}",
+                raw.chars().take(100).collect::<String>()
+            )
+        })?;
     if !["values", "map", "rows", "abilities", "yaml"].contains(&mode) {
         return Err("Unknown Splat data marker".into());
     }
     let parts: Vec<_> = path.split('/').collect();
     if !parts[0].starts_with("splat_")
-        || parts
-            .iter()
-            .any(|p| !local_key(p) && !(p.parse::<usize>().is_ok_and(|i| i.to_string() == *p)))
+        || parts.iter().any(|p| {
+            !local_key(p)
+                && !p.strip_prefix('@').is_some_and(local_key)
+                && !(p.parse::<usize>().is_ok_and(|i| i.to_string() == *p))
+        })
     {
         return Err("Invalid Markdown data path".into());
     }
@@ -98,6 +133,7 @@ fn marker(raw: &str) -> Result<Option<Marker>, String> {
     Ok(Some(Marker {
         mode: mode.into(),
         path: path.into(),
+        mapping: None,
     }))
 }
 
@@ -228,6 +264,165 @@ fn add_table(
     Ok(())
 }
 
+fn add_mapped_table(
+    root: &mut Node,
+    table: &super::table_mapping::Table,
+    headers: &[String],
+    rows: &[Vec<String>],
+    links: &[Vec<Option<String>>],
+    arrays: &mut BTreeSet<String>,
+    aliases: &mut BTreeMap<String, Vec<String>>,
+) -> Result<(), String> {
+    if headers.iter().collect::<BTreeSet<_>>().len() != headers.len()
+        || headers.iter().collect::<BTreeSet<_>>() != table.columns.keys().collect()
+    {
+        return Err("Table columns differ from their mapping".into());
+    }
+    if !arrays.insert(table.path.clone())
+        || aliases
+            .insert(table.path.clone(), table.order.clone())
+            .is_some()
+    {
+        return Err("Duplicate table target".into());
+    }
+    let identity = headers.iter().position(|h| h == &table.key).unwrap();
+    let mut seen = BTreeSet::new();
+    for (row, links) in rows.iter().zip(links) {
+        let key_value =
+            table.columns[&table.key].decode(&row[identity], links[identity].as_deref())?;
+        let key = if table.columns[&table.key].kind == super::table_mapping::Kind::Reference {
+            key_value
+                .as_mapping()
+                .and_then(|m| m.values().next())
+                .and_then(Value::as_str)
+                .ok_or("Invalid reference key")?
+                .rsplit('/')
+                .next()
+                .unwrap()
+                .to_owned()
+        } else {
+            key_value.as_str().ok_or("Invalid row key")?.to_owned()
+        };
+        if !local_key(&key) || !table.order.contains(&key) || !seen.insert(key.clone()) {
+            return Err("Unknown or duplicate stable row key".into());
+        }
+        root.ensure_record(
+            &format!("{}/@{key}", table.path)
+                .split('/')
+                .collect::<Vec<_>>(),
+        )?;
+        for ((header, raw), link) in headers.iter().zip(row).zip(links) {
+            let column = &table.columns[header];
+            if raw.is_empty() {
+                if !column.optional {
+                    return Err(format!("{key}/{header}: required cell is blank"));
+                }
+                continue;
+            }
+            if link.is_some()
+                && ![
+                    super::table_mapping::Kind::Reference,
+                    super::table_mapping::Kind::Section,
+                ]
+                .contains(&column.kind)
+            {
+                return Err("Only reference and section columns accept links".into());
+            }
+            if column.kind == super::table_mapping::Kind::Section
+                && link.as_deref() != Some(&format!("section:{key}"))
+            {
+                return Err("Section link must name its stable row key".into());
+            }
+            let value = column
+                .decode(raw, link.as_deref())
+                .map_err(|e| format!("{key}/{header}: {e}"))?;
+            if let Some(path) = &column.path {
+                if path.is_empty() {
+                    for (field, value) in value
+                        .as_mapping()
+                        .ok_or("Compound column must be a mapping")?
+                    {
+                        insert(
+                            root,
+                            &format!(
+                                "{}/@{key}/{}",
+                                table.path,
+                                field.as_str().ok_or("Invalid compound field")?
+                            ),
+                            value.clone(),
+                        )?;
+                    }
+                } else {
+                    insert(root, &format!("{}/@{key}/{path}", table.path), value)?;
+                }
+            }
+        }
+    }
+    if seen.len() != table.order.len() {
+        return Err("Table order names missing rows".into());
+    }
+    Ok(())
+}
+
+fn resolve_aliases(
+    node: &mut Node,
+    path: &str,
+    aliases: &BTreeMap<String, Vec<String>>,
+) -> Result<(), String> {
+    let order = aliases.get(path);
+    for (key, child) in &mut node.children {
+        if key.starts_with('@') && order.is_none() {
+            return Err("Stable row address has no mapped table".into());
+        }
+        let subpath = if path.is_empty() {
+            key.clone()
+        } else {
+            format!("{path}/{key}")
+        };
+        resolve_aliases(child, &subpath, aliases)?;
+    }
+    if let Some(order) = order {
+        if node.value.is_some() {
+            return Err("Table overlaps a block assignment".into());
+        }
+        let mut children = BTreeMap::new();
+        for (name, child) in std::mem::take(&mut node.children) {
+            let key = name
+                .strip_prefix('@')
+                .ok_or("Mapped tables require stable @row addresses")?;
+            let index = order
+                .iter()
+                .position(|k| k == key)
+                .ok_or("Block names unknown table row")?;
+            children.insert(index.to_string(), child);
+        }
+        node.children = children;
+    }
+    Ok(())
+}
+
+fn resolved_path(path: &str, aliases: &BTreeMap<String, Vec<String>>) -> Result<String, String> {
+    let mut logical = String::new();
+    let mut parts = Vec::new();
+    for part in path.split('/') {
+        let physical = if let Some(key) = part.strip_prefix('@') {
+            aliases
+                .get(&logical)
+                .and_then(|order| order.iter().position(|k| k == key))
+                .ok_or("Unknown stable row address")?
+                .to_string()
+        } else {
+            part.to_owned()
+        };
+        parts.push(physical);
+        if !logical.is_empty() {
+            logical.push('/');
+        }
+        logical.push_str(part);
+    }
+    Ok(parts.join("/"))
+}
+
 fn check_table_width(raw: &str) -> Result<(), String> {
     let widths: Vec<_> = raw
         .lines()
@@ -278,6 +473,10 @@ pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
         );
     }
     let mut arrays = BTreeSet::new();
+    let mut aliases = BTreeMap::new();
+    let mut links = Vec::new();
+    let mut cell_links = Vec::new();
+    let mut cell_link: Option<String> = None;
     let mut pending: Option<Marker> = None;
     let mut table: Option<Marker> = None;
     let mut code: Option<Marker> = None;
@@ -288,6 +487,7 @@ pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
     let mut cell = String::new();
     let mut in_cell = false;
     let mut marked_blocks = BTreeSet::new();
+    let mut html_block = false;
     for (event, range) in Parser::new_ext(body, Options::ENABLE_TABLES).into_offset_iter() {
         if code.is_some() {
             match event {
@@ -302,21 +502,51 @@ pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
         }
         if table.is_some() {
             match event {
-                Event::Start(Tag::TableHead | Tag::TableRow) => cells.clear(),
+                Event::Start(Tag::TableHead | Tag::TableRow) => {
+                    cells.clear();
+                    cell_links.clear();
+                }
                 Event::Start(Tag::TableCell) => {
                     cell.clear();
+                    cell_link = None;
                     in_cell = true;
+                }
+                Event::Start(Tag::Link { title, .. })
+                    if in_cell && table.as_ref().is_some_and(|m| m.mapping.is_some()) =>
+                {
+                    if cell_link.is_some() || !cell.is_empty() || title.is_empty() {
+                        return Err(
+                            "Reference cell requires one link with an identity title".into()
+                        );
+                    }
+                    cell_link = Some(title.to_string());
                 }
                 Event::Text(text) | Event::Code(text) if in_cell => cell.push_str(&text),
                 Event::End(TagEnd::TableCell) => {
                     cells.push(cell.trim().to_owned());
+                    cell_links.push(cell_link.clone());
                     in_cell = false;
                 }
                 Event::End(TagEnd::TableHead) => headers = cells.clone(),
-                Event::End(TagEnd::TableRow) => rows.push(cells.clone()),
+                Event::End(TagEnd::TableRow) => {
+                    rows.push(cells.clone());
+                    links.push(cell_links.clone());
+                }
                 Event::End(TagEnd::Table) => {
                     let active = table.take().unwrap();
-                    add_table(&mut root, &active, &headers, &rows, &mut arrays)?;
+                    if let Some(mapping) = &active.mapping {
+                        add_mapped_table(
+                            &mut root,
+                            mapping,
+                            &headers,
+                            &rows,
+                            &links,
+                            &mut arrays,
+                            &mut aliases,
+                        )?;
+                    } else {
+                        add_table(&mut root, &active, &headers, &rows, &mut arrays)?;
+                    }
                 }
                 Event::Start(_)
                 | Event::Html(_)
@@ -331,6 +561,22 @@ pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
             }
             continue;
         }
+        if html_block {
+            if matches!(event, Event::End(TagEnd::HtmlBlock)) {
+                html_block = false;
+            }
+            continue;
+        }
+        if pending.is_none() && matches!(event, Event::Start(Tag::HtmlBlock)) {
+            html_block = true;
+            if let Some(active) = marker(&body[range])? {
+                if !marked_blocks.insert((active.mode.clone(), active.path.clone())) {
+                    return Err("Duplicate Markdown data block".into());
+                }
+                pending = Some(active);
+            }
+            continue;
+        }
         if let Some(active) = pending.take() {
             match event {
                 Event::End(TagEnd::HtmlBlock) => pending = Some(active),
@@ -339,6 +585,7 @@ pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
                     table = Some(active);
                     headers.clear();
                     rows.clear();
+                    links.clear();
                 }
                 Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(ref info)))
                     if active.mode == "yaml" && info.as_ref() == "yaml" =>
@@ -367,6 +614,11 @@ pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
     if pending.is_some() || code.is_some() || table.is_some() {
         return Err("Incomplete marked Markdown data".into());
     }
+    resolve_aliases(&mut root, "", &aliases)?;
+    let arrays = arrays
+        .iter()
+        .map(|path| resolved_path(path, &aliases))
+        .collect::<Result<BTreeSet<_>, _>>()?;
     *fields = root
         .finish("", &arrays)?
         .as_mapping()

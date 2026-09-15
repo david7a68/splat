@@ -321,36 +321,83 @@ hit:
 
 ##### Consume memories
 
-<!-- splat:yaml path=splat_rule/parameters/features/consume_memories -->
+<!-- splat:values path=splat_rule/parameters/features/consume_memories -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` saving_throw ` |
+| ` ability ` | ` intelligence ` |
+| ` dc ` | ` 16 ` |
+
+###### Targets
+
+<!-- splat:values path=splat_rule/parameters/features/consume_memories/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` count ` | ` 1 ` |
+| ` range_ft ` | ` 30 ` |
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/features/consume_memories/targets/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Charmed by:
+    path: charmed_by
+    type: symbol
+    optional: true
+  Grappled by:
+    path: grappled_by
+    type: symbol
+    optional: true
+-->
+
+| Key | Charmed by | Grappled by |
+| --- | --- | --- |
+| ` row_1 ` | ` Self ` |  |
+| ` row_2 ` |  | ` Self ` |
+
+###### Failure
+
+<!-- splat:yaml path=splat_rule/parameters/features/consume_memories/failure -->
 
 ```yaml
-economy: action
-operation: saving_throw
-ability: intelligence
-dc: 16
-targets:
-  kind: creature
-  count: 1
-  range_ft: 30
-  any_of:
-  - charmed_by: self
-  - grappled_by: self
-failure:
-  damage:
-  - average: 10
-    roll:
-      count: 3
-      sides: 6
-      modifier: 0
-    type: psychic
-success:
-  damage_multiplier: 0.5
-  other_effects: false
-after_resolution:
-  if:
-    target_type: humanoid
-    target_reduced_to_zero_hp_by_this_action: true
-  learn: target.memories
+damage:
+- average: 10
+  roll:
+    count: 3
+    sides: 6
+    modifier: 0
+  type: psychic
+```
+
+###### Success
+
+<!-- splat:values path=splat_rule/parameters/features/consume_memories/success -->
+
+| Field | Value |
+| --- | --- |
+| ` damage_multiplier ` | ` 0.5 ` |
+| ` other_effects ` | ` false ` |
+
+###### After resolution
+
+<!-- splat:yaml path=splat_rule/parameters/features/consume_memories/after_resolution -->
+
+```yaml
+if:
+  target_type: humanoid
+  target_reduced_to_zero_hp_by_this_action: true
+learn: target.memories
 ```
 
 ##### Dominate mind
@@ -409,27 +456,62 @@ success:
 
 ##### Psychic drain
 
-<!-- splat:yaml path=splat_rule/parameters/features/psychic_drain -->
+<!-- splat:values path=splat_rule/parameters/features/psychic_drain -->
 
-```yaml
-economy: legendary_action
-legendary_cost: 1
-operation: sequence
-requires:
-  any_creature:
-    any_of:
-    - charmed_by: self
-    - grappled_by: self
-effects:
-- operation: use_feature
-  feature: consume_memories
-- operation: heal
-  target: self
-  roll:
-    count: 1
-    sides: 10
-    modifier: 0
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` legendary_action ` |
+| ` legendary_cost ` | ` 1 ` |
+| ` operation ` | ` sequence ` |
+
+###### Requires
+
+###### Any creature
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/features/psychic_drain/requires/any_creature/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Charmed by:
+    path: charmed_by
+    type: symbol
+    optional: true
+  Grappled by:
+    path: grappled_by
+    type: symbol
+    optional: true
+-->
+
+| Key | Charmed by | Grappled by |
+| --- | --- | --- |
+| ` row_1 ` | ` Self ` |  |
+| ` row_2 ` |  | ` Self ` |
+
+###### Effects
+
+<!-- splat:rows path=splat_rule/parameters/features/psychic_drain/effects -->
+
+| Row | operation | feature | target |
+| --- | --- | --- | --- |
+| ` 0 ` | ` use_feature ` | ` consume_memories ` |  |
+| ` 1 ` | ` heal ` |  | ` self ` |
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/features/psychic_drain/effects/1/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` sides ` | ` 10 ` |
+| ` modifier ` | ` 0 ` |
 
 #### Skill totals
 

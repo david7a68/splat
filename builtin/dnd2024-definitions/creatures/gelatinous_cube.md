@@ -147,40 +147,75 @@ Original layout: [[../../srd-5.2.1/pages/286|page 286]], [[../../srd-5.2.1/pages
 
 ##### Ooze cube
 
-<!-- splat:yaml path=splat_rule/parameters/features/ooze_cube -->
+<!-- splat:values path=splat_rule/parameters/features/ooze_cube -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` trait ` |
+| ` operation ` | ` passive_rule ` |
+| ` fills_space ` | ` true ` |
+| ` transparent ` | ` true ` |
+| ` other_creatures_can_enter ` | ` true ` |
+| ` inside_cover ` | ` total ` |
+
+###### On creature entry
+
+<!-- splat:values path=splat_rule/parameters/features/ooze_cube/on_creature_entry -->
+
+| Field | Value |
+| --- | --- |
+| ` use ` | ` engulf ` |
+| ` save_disadvantage ` | ` true ` |
+
+###### Capacity
+
+###### Choose one
+
+<!-- splat:table
+path: splat_rule/parameters/features/ooze_cube/capacity/choose_one
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Size:
+    path: size
+    type: symbol
+    optional: true
+  Count:
+    path: count
+    type: integer
+  Sizes:
+    path: sizes
+    type: yaml
+    optional: true
+-->
+
+| Key | Size | Count | Sizes |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Large ` | ` 1 ` |  |
+| ` row_2 ` |  | ` 4 ` | ` ["medium", "small"] ` |
+
+###### Pull out
+
+<!-- splat:yaml path=splat_rule/parameters/features/ooze_cube/pull_out -->
 
 ```yaml
-economy: trait
-operation: passive_rule
-fills_space: true
-transparent: true
-other_creatures_can_enter: true
-on_creature_entry:
-  use: engulf
-  save_disadvantage: true
-inside_cover: total
-capacity:
-  choose_one:
-  - size: large
-    count: 1
-  - sizes:
-    - medium
-    - small
-    count: 4
-pull_out:
-  economy: action
-  actor_within_ft: 5
-  targets:
-  - creature
-  - object
-  check: strength_athletics
-  dc: 12
-  actor_damage:
-  - roll:
-      count: 3
-      sides: 6
-      modifier: 0
-    type: acid
+economy: action
+actor_within_ft: 5
+targets:
+- creature
+- object
+check: strength_athletics
+dc: 12
+actor_damage:
+- roll:
+    count: 3
+    sides: 6
+    modifier: 0
+  type: acid
 ```
 
 ##### Transparent

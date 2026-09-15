@@ -218,45 +218,61 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: charisma
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/fog_cloud
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/light
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/control_weather
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/gaseous_form
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/telekinesis
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 15
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` charisma ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 15 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- detect_magic
+- fog_cloud
+- light
+- control_weather
+- gaseous_form
+- telekinesis
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Uses count | Uses recovery |
+| --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |
+| [Fog Cloud](<../spells/fog_cloud.md> "dnd2024:spells/fog_cloud") | true |  |  |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | true |  |  |
+| [Control Weather](<../spells/control_weather.md> "dnd2024:spells/control_weather") |  | ` 1 ` | ` Long rest ` |
+| [Gaseous Form](<../spells/gaseous_form.md> "dnd2024:spells/gaseous_form") |  | ` 1 ` | ` Long rest ` |
+| [Telekinesis](<../spells/telekinesis.md> "dnd2024:spells/telekinesis") |  | ` 1 ` | ` Long rest ` |
 
 ##### Misty step
 

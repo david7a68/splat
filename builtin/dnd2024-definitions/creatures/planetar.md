@@ -200,33 +200,60 @@ sequence:
 
 ##### Radiant sword
 
-<!-- splat:yaml path=splat_rule/parameters/features/radiant_sword -->
+<!-- splat:values path=splat_rule/parameters/features/radiant_sword -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/radiant_sword/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 12
-  reach_ft: 10
-hit:
-  damage:
-  - average: 14
-    roll:
-      count: 2
-      sides: 6
-      modifier: 7
-    type: slashing
-  - average: 18
-    roll:
-      count: 4
-      sides: 8
-      modifier: 0
-    type: radiant
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 12
+reach_ft: 10
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/radiant_sword/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 14 ` | ` 2 ` | ` 6 ` | ` 7 ` | ` Slashing ` |
+| ` row_2 ` | ` 18 ` | ` 4 ` | ` 8 ` | ` 0 ` | ` Radiant ` |
 
 ##### Holy burst
 
@@ -261,50 +288,56 @@ success:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-operation: spellcasting
-ability: charisma
-components_waived:
-- material
-save_dc: 20
-options:
-- spell:
-    key: dnd2024:spells/detect_evil_and_good
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/commune
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/control_weather
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/dispel_evil_and_good
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/raise_dead
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 20 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- detect_evil_and_good
+- commune
+- control_weather
+- dispel_evil_and_good
+- raise_dead
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Use pool | Recovery |
+| --- | --- | --- | --- | --- |
+| [Detect Evil and Good](<../spells/detect_evil_and_good.md> "dnd2024:spells/detect_evil_and_good") | ` At will ` |  |  |  |
+| [Commune](<../spells/commune.md> "dnd2024:spells/commune") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Control Weather](<../spells/control_weather.md> "dnd2024:spells/control_weather") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Dispel Evil and Good](<../spells/dispel_evil_and_good.md> "dnd2024:spells/dispel_evil_and_good") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Raise Dead](<../spells/raise_dead.md> "dnd2024:spells/raise_dead") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Divine aid
 

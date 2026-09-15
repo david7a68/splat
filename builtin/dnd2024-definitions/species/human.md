@@ -66,20 +66,38 @@ You also know the Fire Bolt cantrip.\
 
 #### Size choice
 
-<!-- splat:yaml path=splat_rule/parameters/size_choice -->
+<!-- splat:values path=splat_rule/parameters/size_choice -->
 
-```yaml
-count: 1
-options:
-- size: medium
-  height_feet_approximate:
-    minimum: 4
-    maximum: 7
-- size: small
-  height_feet_approximate:
-    minimum: 2
-    maximum: 4
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/size_choice/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Size:
+    path: size
+    type: symbol
+  Height feet approximate minimum:
+    path: height_feet_approximate/minimum
+    type: integer
+  Height feet approximate maximum:
+    path: height_feet_approximate/maximum
+    type: integer
+-->
+
+| Key | Size | Height feet approximate minimum | Height feet approximate maximum |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Medium ` | ` 4 ` | ` 7 ` |
+| ` row_2 ` | ` Small ` | ` 2 ` | ` 4 ` |
 
 #### Resourceful
 

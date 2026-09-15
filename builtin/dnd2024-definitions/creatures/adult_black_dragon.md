@@ -273,43 +273,118 @@ replacement:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 17 ` |
+| ` spell_attack_bonus ` | ` 9 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- acid_arrow
+- detect_magic
+- fear
+- speak_with_dead
+- vitriolic_sphere
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Resource scope | Recovery | Details |
+| --- | --- | --- | --- | --- | --- |
+| [Acid Arrow](<../spells/acid_arrow.md> "dnd2024:spells/acid_arrow") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-acid_arrow "section:acid_arrow") |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-detect_magic "section:detect_magic") |
+| [Fear](<../spells/fear.md> "dnd2024:spells/fear") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-fear "section:fear") |
+| [Speak with Dead](<../spells/speak_with_dead.md> "dnd2024:spells/speak_with_dead") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-speak_with_dead "section:speak_with_dead") |
+| [Vitriolic Sphere](<../spells/vitriolic_sphere.md> "dnd2024:spells/vitriolic_sphere") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-vitriolic_sphere "section:vitriolic_sphere") |
+
+###### Acid arrow
+
+^splat-68a383d1-acid_arrow
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@acid_arrow/cast_level -->
 
 ```yaml
-economy: action
-op: cast_spell_choice
-ability: charisma
-spells:
-- spell:
-    key: dnd2024:spells/acid_arrow
-  frequency: at_will
-  cast_level: 3
-- spell:
-    key: dnd2024:spells/detect_magic
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/fear
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/speak_with_dead
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/vitriolic_sphere
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- material
-save_dc: 17
-spell_attack_bonus: 9
+3
+```
+
+###### Detect magic
+
+^splat-68a383d1-detect_magic
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@detect_magic/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Fear
+
+^splat-68a383d1-fear
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@fear/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Speak with dead
+
+^splat-68a383d1-speak_with_dead
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@speak_with_dead/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Vitriolic sphere
+
+^splat-68a383d1-vitriolic_sphere
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@vitriolic_sphere/cast_level -->
+
+```yaml
+spell_minimum
 ```
 
 ##### Cloud of insects
@@ -413,12 +488,27 @@ steps:
 
 ##### Special
 
-<!-- splat:rows path=splat_rule/parameters/senses/special -->
+<!-- splat:table
+path: splat_rule/parameters/senses/special
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range feet:
+    path: range_feet
+    type: integer
+-->
 
-| Row | sense | range_feet |
+| Key | Sense | Range feet |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 60 ` |
-| ` 1 ` | ` darkvision ` | ` 120 ` |
+| ` row_1 ` | ` Blindsight ` | ` 60 ` |
+| ` row_2 ` | ` Darkvision ` | ` 120 ` |
 
 #### Communication
 

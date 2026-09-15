@@ -263,79 +263,216 @@ success:
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: sequence
-steps:
-- op: use_feature
-  feature: rend
-  count: 3
-replacement:
-  max_attacks: 1
-  choices:
-  - feature: repulsion_breath
-  - feature: spellcasting
-    spell:
-      key: dnd2024:spells/guiding_bolt
-    cast_level: 2
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` sequence ` |
+
+###### Steps
+
+<!-- splat:rows path=splat_rule/parameters/features/multiattack/steps -->
+
+| Row | op | feature | count |
+| --- | --- | --- | --- |
+| ` 0 ` | ` use_feature ` | ` rend ` | ` 3 ` |
+
+###### Replacement
+
+<!-- splat:values path=splat_rule/parameters/features/multiattack/replacement -->
+
+| Field | Value |
+| --- | --- |
+| ` max_attacks ` | ` 1 ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/replacement/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+  Spell:
+    path: spell
+    type: reference
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+-->
+
+| Key | Feature | Spell | Cast level |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Repulsion breath ` |  |  |
+| ` row_2 ` | ` Spellcasting ` | [Guiding Bolt](<../spells/guiding_bolt.md> "dnd2024:spells/guiding_bolt") | ` 2 ` |
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 17 ` |
+| ` spell_attack_bonus ` | ` 10 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- detect_magic
+- guiding_bolt
+- shapechange
+- speak_with_animals
+- thaumaturgy
+- detect_thoughts
+- water_breathing
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Overrides form types:
+    path: overrides/form_types
+    type: yaml
+    optional: true
+  Overrides temporary hit points gained:
+    path: overrides/temporary_hit_points_gained
+    type: integer
+    optional: true
+  Overrides concentration required:
+    path: overrides/concentration_required
+    type: boolean
+    optional: true
+  Overrides temporary hit points to maintain required:
+    path: overrides/temporary_hit_points_to_maintain_required
+    type: boolean
+    optional: true
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Spell | Frequency | Overrides form types | Overrides temporary hit points gained | Overrides concentration required | Overrides temporary hit points to maintain required | Uses | Resource scope | Recovery | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  |  |  |  |  | [Rules](#^splat-68a383d1-detect_magic "section:detect_magic") |
+| [Guiding Bolt](<../spells/guiding_bolt.md> "dnd2024:spells/guiding_bolt") | ` At will ` |  |  |  |  |  |  |  | [Rules](#^splat-68a383d1-guiding_bolt "section:guiding_bolt") |
+| [Shapechange](<../spells/shapechange.md> "dnd2024:spells/shapechange") | ` At will ` | ` ["beast", "humanoid"] ` | ` 0 ` | false | false |  |  |  | [Rules](#^splat-68a383d1-shapechange "section:shapechange") |
+| [Speak with Animals](<../spells/speak_with_animals.md> "dnd2024:spells/speak_with_animals") | ` At will ` |  |  |  |  |  |  |  | [Rules](#^splat-68a383d1-speak_with_animals "section:speak_with_animals") |
+| [Thaumaturgy](<../spells/thaumaturgy.md> "dnd2024:spells/thaumaturgy") | ` At will ` |  |  |  |  |  |  |  | [Rules](#^splat-68a383d1-thaumaturgy "section:thaumaturgy") |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") | ` Daily ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-detect_thoughts "section:detect_thoughts") |
+| [Water Breathing](<../spells/water_breathing.md> "dnd2024:spells/water_breathing") | ` Daily ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-water_breathing "section:water_breathing") |
+
+###### Detect magic
+
+^splat-68a383d1-detect_magic
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@detect_magic/cast_level -->
 
 ```yaml
-economy: action
-op: cast_spell_choice
-ability: charisma
-spells:
-- spell:
-    key: dnd2024:spells/detect_magic
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/guiding_bolt
-  frequency: at_will
-  cast_level: 2
-- spell:
-    key: dnd2024:spells/shapechange
-  frequency: at_will
-  overrides:
-    form_types:
-    - beast
-    - humanoid
-    temporary_hit_points_gained: 0
-    concentration_required: false
-    temporary_hit_points_to_maintain_required: false
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/speak_with_animals
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/thaumaturgy
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/detect_thoughts
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/water_breathing
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- material
-save_dc: 17
-spell_attack_bonus: 10
+spell_minimum
+```
+
+###### Guiding bolt
+
+^splat-68a383d1-guiding_bolt
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@guiding_bolt/cast_level -->
+
+```yaml
+2
+```
+
+###### Shapechange
+
+^splat-68a383d1-shapechange
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@shapechange/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Speak with animals
+
+^splat-68a383d1-speak_with_animals
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@speak_with_animals/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Thaumaturgy
+
+^splat-68a383d1-thaumaturgy
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@thaumaturgy/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Detect thoughts
+
+^splat-68a383d1-detect_thoughts
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@detect_thoughts/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Water breathing
+
+^splat-68a383d1-water_breathing
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@water_breathing/cast_level -->
+
+```yaml
+spell_minimum
 ```
 
 ##### Thunderclap
@@ -461,12 +598,27 @@ steps:
 
 ##### Special
 
-<!-- splat:rows path=splat_rule/parameters/senses/special -->
+<!-- splat:table
+path: splat_rule/parameters/senses/special
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range feet:
+    path: range_feet
+    type: integer
+-->
 
-| Row | sense | range_feet |
+| Key | Sense | Range feet |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 60 ` |
-| ` 1 ` | ` darkvision ` | ` 120 ` |
+| ` row_1 ` | ` Blindsight ` | ` 60 ` |
+| ` row_2 ` | ` Darkvision ` | ` 120 ` |
 
 #### Communication
 

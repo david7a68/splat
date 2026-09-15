@@ -86,13 +86,30 @@ feature_recharge: feature_description_defined
 
 #### Interruptions
 
-<!-- splat:rows path=splat_rule/parameters/interruptions -->
+<!-- splat:table
+path: splat_rule/parameters/interruptions
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Spell level min:
+    path: spell_level_min
+    type: integer
+    optional: true
+-->
 
-| Row | event | spell_level_min |
+| Key | Event | Spell level min |
 | --- | --- | --- |
-| ` 0 ` | ` initiative.rolled ` |  |
-| ` 1 ` | ` spell.cast ` | ` 1 ` |
-| ` 2 ` | ` damage.taken ` |  |
+| ` row_1 ` | ` initiative.rolled ` |  |
+| ` row_2 ` | ` spell.cast ` | ` 1 ` |
+| ` row_3 ` | ` damage.taken ` |  |
 
 #### Interruption result
 

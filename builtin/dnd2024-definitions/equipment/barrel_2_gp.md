@@ -68,13 +68,31 @@ cubic feet of dry goods.\
 
 #### Capacity
 
-<!-- splat:yaml path=splat_rule/parameters/capacity -->
+##### Alternative capacities
 
-```yaml
-alternative_capacities:
-- liquid_gallons: 40
-- dry_volume_ft3: 4
-```
+<!-- splat:table
+path: splat_rule/parameters/capacity/alternative_capacities
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Liquid gallons:
+    path: liquid_gallons
+    type: integer
+    optional: true
+  Dry volume ft3:
+    path: dry_volume_ft3
+    type: integer
+    optional: true
+-->
+
+| Key | Liquid gallons | Dry volume ft3 |
+| --- | --- | --- |
+| ` row_1 ` | ` 40 ` |  |
+| ` row_2 ` |  | ` 4 ` |
 
 #### Mass
 

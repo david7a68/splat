@@ -100,15 +100,34 @@ Original layout: [[../../srd-5.2.1/pages/160|page 160]].
 
 #### Targeting
 
-<!-- splat:yaml path=splat_rule/parameters/targeting -->
+##### Options
 
-```yaml
-options:
-- kind: creature
-  same_plane: true
-- kind: location
-  previously_seen: true
-```
+<!-- splat:table
+path: splat_rule/parameters/targeting/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Same plane:
+    path: same_plane
+    type: boolean
+    optional: true
+  Previously seen:
+    path: previously_seen
+    type: boolean
+    optional: true
+-->
+
+| Key | Kind | Same plane | Previously seen |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Creature ` | true |  |
+| ` row_2 ` | ` Location ` |  | true |
 
 #### Creature save
 

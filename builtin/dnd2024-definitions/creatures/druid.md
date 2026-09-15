@@ -130,33 +130,60 @@ sequence:
 
 ##### Vine staff
 
-<!-- splat:yaml path=splat_rule/parameters/features/vine_staff -->
+<!-- splat:values path=splat_rule/parameters/features/vine_staff -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/vine_staff/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 5
-  reach_ft: 5
-hit:
-  damage:
-  - average: 7
-    roll:
-      count: 1
-      sides: 8
-      modifier: 3
-    type: bludgeoning
-  - average: 2
-    roll:
-      count: 1
-      sides: 4
-      modifier: 0
-    type: poison
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 5
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/vine_staff/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 7 ` | ` 1 ` | ` 8 ` | ` 3 ` | ` Bludgeoning ` |
+| ` row_2 ` | ` 2 ` | ` 1 ` | ` 4 ` | ` 0 ` | ` Poison ` |
 
 ##### Verdant wisp
 
@@ -185,60 +212,67 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` wisdom ` |
+| ` save_dc ` | ` 13 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Components waived
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/components_waived -->
 
 ```yaml
-economy: action
-operation: spellcasting
-ability: wisdom
-components_waived: []
-save_dc: 13
-options:
-- spell:
-    key: dnd2024:spells/druidcraft
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/speak_with_animals
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/entangle
-  usage:
-    kind: daily
-    uses: 2
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/thunderwave
-  usage:
-    kind: daily
-    uses: 2
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/animal_messenger
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/longstrider
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/moonbeam
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
+[]
 ```
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- druidcraft
+- speak_with_animals
+- entangle
+- thunderwave
+- animal_messenger
+- longstrider
+- moonbeam
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Use pool | Recovery |
+| --- | --- | --- | --- | --- |
+| [Druidcraft](<../spells/druidcraft.md> "dnd2024:spells/druidcraft") | ` At will ` |  |  |  |
+| [Speak with Animals](<../spells/speak_with_animals.md> "dnd2024:spells/speak_with_animals") | ` At will ` |  |  |  |
+| [Entangle](<../spells/entangle.md> "dnd2024:spells/entangle") | ` Daily ` | ` 2 ` | ` Per spell ` | ` Long rest ` |
+| [Thunderwave](<../spells/thunderwave.md> "dnd2024:spells/thunderwave") | ` Daily ` | ` 2 ` | ` Per spell ` | ` Long rest ` |
+| [Animal Messenger](<../spells/animal_messenger.md> "dnd2024:spells/animal_messenger") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Longstrider](<../spells/longstrider.md> "dnd2024:spells/longstrider") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Moonbeam](<../spells/moonbeam.md> "dnd2024:spells/moonbeam") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 #### Skill totals
 

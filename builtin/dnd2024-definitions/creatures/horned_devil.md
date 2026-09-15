@@ -210,19 +210,43 @@ range_feet: 150
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` repeat_choice ` |
+| ` count ` | ` 3 ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+-->
+
+| Key | Feature |
+| --- | --- |
+| ` row_1 ` | ` Searing fork ` |
+| ` row_2 ` | ` Hurl flame ` |
+
+###### Replacement
+
+<!-- splat:yaml path=splat_rule/parameters/features/multiattack/replacement -->
 
 ```yaml
-economy: action
-op: repeat_choice
-count: 3
+max_attacks: 1
 choices:
-- feature: searing_fork
-- feature: hurl_flame
-replacement:
-  max_attacks: 1
-  choices:
-  - feature: infernal_tail
+- feature: infernal_tail
 ```
 
 ##### Diabolical restoration

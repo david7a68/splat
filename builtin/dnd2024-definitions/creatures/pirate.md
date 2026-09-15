@@ -175,12 +175,27 @@ success:
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item | quantity |
+| Key | Item | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` daggers ` | ` 6 ` |
-| ` 1 ` | ` leather_armor ` | ` 1 ` |
+| ` row_1 ` | ` Daggers ` | ` 6 ` |
+| ` row_2 ` | ` Leather armor ` | ` 1 ` |
 
 #### Senses
 

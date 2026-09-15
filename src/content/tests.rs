@@ -335,3 +335,199 @@ fn unmarked_examples_are_not_interpreted_as_data() {
             .is_empty()
     );
 }
+
+fn mapped_sample() -> String {
+    r#"<!-- splat:table
+path: splat_rule/parameters/options
+key: Variant
+order: [arrows, bolts]
+columns:
+  Variant: {path: id, type: symbol}
+  Weight: {path: mass, type: quantity}
+  Price: {path: price, type: quantity}
+  Spell: {path: spell, type: reference, optional: true}
+  Healing: {path: heal/roll, type: dice, optional: true}
+  Note: {path: note, type: string, optional: true}
+-->
+
+| Variant | Weight | Price | Spell | Healing | Note |
+| --- | --- | --- | --- | --- | --- |
+| Bolts | 1½ lb. | 1 GP | [Any display text](elsewhere.md "test:spells/heal") | 2d4+2 | false |
+| Arrows | 1 lb | 4 CP | | | |
+
+### This heading can change
+<!-- splat:yaml path=splat_rule/parameters/options/@bolts/extra -->
+
+```yaml
+requires: held
+```
+"#
+    .into()
+}
+
+#[test]
+fn mapped_tables_preserve_nested_values_and_stable_rows() {
+    let body = mapped_sample();
+    let entry = parse("mapped", "rule", "", &body);
+    let rule = field(&entry.fields, "splat_rule").unwrap();
+    let expected: Value = serde_yaml_ng::from_str(
+        r#"
+parameters:
+  options:
+  - {id: arrows, mass: {value: 1, unit: lb}, price: {value: 4, unit: cp}}
+  - id: bolts
+    mass: {value: 1.5, unit: lb}
+    price: {value: 1, unit: gp}
+    spell: {key: 'test:spells/heal'}
+    heal: {roll: {count: 2, sides: 4, add: 2}}
+    note: 'false'
+    extra: {requires: held}
+"#,
+    )
+    .unwrap();
+    assert_eq!(rule, &expected);
+    // Move the block before its table; the key, not position, binds it.
+    let (table, block) = body.split_once("### This heading").unwrap();
+    let moved = format!("### This heading{block}\n{table}");
+    assert_eq!(
+        parse("moved", "rule", "", &moved)
+            .fields
+            .get(Value::String("splat_rule".into())),
+        Some(rule)
+    );
+}
+
+#[test]
+fn mapped_tables_reject_conflicts_bad_codecs_and_unknown_rows() {
+    let original = mapped_sample();
+    for (from, to) in [
+        ("order: [arrows, bolts]", "order: [arrows, arrows]"),
+        ("order: [arrows, bolts]", "order: [arrows, missing]"),
+        ("@bolts/extra", "@unknown/extra"),
+        ("@bolts/extra", "@bolts/mass"),
+        ("@bolts/extra", "1/extra"),
+        ("1½ lb.", "bad½ lb"),
+        ("1½ lb.", "1/0 lb"),
+        ("2d4+2", "2d1+2"),
+        ("2d4+2", "2d4+oops"),
+        ("test:spells/heal", "not-an-identity"),
+        ("type: symbol", "type: execute"),
+        ("path: price", "path: mass/value"),
+        ("| Arrows | 1 lb", "| Bolts | 1 lb"),
+        ("| Arrows | 1 lb", "| Arrows | "),
+        ("key: Variant", "key: Variant\nkey: Weight"),
+    ] {
+        let bad = original.replace(from, to);
+        assert!(
+            Entry::parse("bad", &note("bad", "rule", "", &bad)).is_err(),
+            "Accepted {from} -> {to}"
+        );
+    }
+}
+
+#[test]
+fn mapped_root_ranges_and_custom_compound_fields_are_lossless() {
+    let body = r#"<!-- splat:table
+path: splat_rule/parameters/results
+key: Key
+order: [first, second]
+columns:
+  Key: {type: key}
+  Roll: {path: '', type: range, fields: [start, end]}
+  Damage: {path: damage, type: dice, fields: [count, sides, modifier]}
+-->
+
+| Key | Roll | Damage |
+| --- | --- | --- |
+| first | 1–20 | 1d6-2 |
+| second | 21 | 2d6 |
+"#;
+    let e = parse("range", "rule", "", body);
+    assert_eq!(field(&e.fields,"splat_rule").unwrap(),&serde_yaml_ng::from_str::<Value>("parameters: {results: [{start: 1, end: 20, damage: {count: 1, sides: 6, modifier: -2}}, {start: 21, end: 21, damage: {count: 2, sides: 6, modifier: 0}}]}").unwrap());
+    assert!(
+        Entry::parse(
+            "bad",
+            &note("bad", "rule", "", &body.replace("1–20", "20–1"))
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn mapped_nullable_values_and_sections_preserve_distinctions() {
+    let body = r#"<!-- splat:table
+path: splat_rule/parameters/rows
+key: Key
+order: [first, second, third]
+columns:
+  Key: {type: key}
+  Value: {path: value, type: number, optional: true, nullable: true}
+  Details: {type: section, optional: true}
+-->
+
+| Key | Value | Details |
+| --- | --- | --- |
+| first | null | [Rules](#^stable "section:first") |
+| second | 0.0 | |
+| third | | [Rules](#^other "section:third") |
+
+<!-- splat:yaml path=splat_rule/parameters/rows/@first/rule -->
+
+```yaml
+mode: immediate
+```
+
+<!-- splat:yaml path=splat_rule/parameters/rows/@third/rule -->
+
+```yaml
+mode: next_turn
+```
+"#;
+    let entry = parse("nullable", "rule", "", body);
+    assert_eq!(field(&entry.fields,"splat_rule").unwrap(),&serde_yaml_ng::from_str::<Value>("parameters: {rows: [{value: null, rule: {mode: immediate}}, {value: 0.0}, {rule: {mode: next_turn}}]}").unwrap());
+    let actual = crate::content::contracts::specification(&entry).unwrap();
+    assert_eq!(
+        actual["splat_rule"]["parameters"]["rows"][1]["value"].to_string(),
+        "0.0"
+    );
+    for replacement in ["NaN", "infinity", "bad½", "1,2"] {
+        assert!(
+            Entry::parse(
+                "bad",
+                &note("bad", "rule", "", &body.replace("0.0", replacement))
+            )
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn nested_mapped_tables_use_stable_paths_at_each_level() {
+    let body = r#"<!-- splat:table
+path: splat_rule/parameters/groups/@winter/spells
+key: Spell
+order: [ice]
+columns:
+  Spell: {path: spell, type: reference}
+-->
+
+| Spell |
+| --- |
+| [Ice](ice.md "test:spells/ice") |
+
+<!-- splat:table
+path: splat_rule/parameters/groups
+key: Group
+order: [winter, summer]
+columns:
+  Group: {path: name, type: symbol}
+-->
+
+| Group |
+| --- |
+| Summer |
+| Winter |
+"#;
+    let e = parse("nested", "rule", "", body);
+    assert_eq!(field(&e.fields,"splat_rule").unwrap(),&serde_yaml_ng::from_str::<Value>("parameters: {groups: [{name: winter, spells: [{spell: {key: 'test:spells/ice'}}]}, {name: summer}]}").unwrap());
+}

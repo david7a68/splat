@@ -55,14 +55,32 @@ Original layout: [[../../srd-5.2.1/pages/180|page 180]].
 
 #### Pass predicate
 
-<!-- splat:yaml path=splat_rule/parameters/pass_predicate -->
+<!-- splat:values path=splat_rule/parameters/pass_predicate -->
 
-```yaml
-op: greater_or_equal
-args:
-- var: damage_amount
-- var: threshold
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` greater_or_equal ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/pass_predicate/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: symbol
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` Damage amount ` |
+| ` row_2 ` | ` Threshold ` |
 
 #### Pass damage
 

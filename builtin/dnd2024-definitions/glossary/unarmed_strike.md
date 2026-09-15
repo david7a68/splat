@@ -80,21 +80,46 @@ Original layout: [[../../srd-5.2.1/pages/190|page 190]].
 
 #### Damage
 
-<!-- splat:yaml path=splat_rule/parameters/damage -->
+##### Attack bonus
+
+<!-- splat:values path=splat_rule/parameters/damage/attack_bonus -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/damage/attack_bonus/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: symbol
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` Strength modifier ` |
+| ` row_2 ` | ` Proficiency bonus ` |
+
+##### Hit damage
+
+<!-- splat:yaml path=splat_rule/parameters/damage/hit_damage -->
 
 ```yaml
-attack_bonus:
+type: bludgeoning
+amount:
   op: add
   args:
+  - 1
   - var: strength_modifier
-  - var: proficiency_bonus
-hit_damage:
-  type: bludgeoning
-  amount:
-    op: add
-    args:
-    - 1
-    - var: strength_modifier
 ```
 
 #### Grapple
@@ -121,25 +146,67 @@ failure_condition: grappled
 
 #### Shove
 
-<!-- splat:yaml path=splat_rule/parameters/shove -->
+<!-- splat:values path=splat_rule/parameters/shove -->
+
+| Field | Value |
+| --- | --- |
+| ` target_maximum_size_categories_larger ` | ` 1 ` |
+
+##### Save ability choice
+
+<!-- splat:values path=splat_rule/parameters/shove/save_ability_choice -->
+
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` target ` |
+| ` options ` | ` ["strength", "dexterity"] ` |
+
+##### Save dc
+
+<!-- splat:yaml path=splat_rule/parameters/shove/save_dc -->
 
 ```yaml
-target_maximum_size_categories_larger: 1
-save_ability_choice:
-  chooser: target
-  options:
-  - strength
-  - dexterity
-save_dc:
-  op: add
-  args:
-  - 8
-  - var: strength_modifier
-  - var: proficiency_bonus
-failure_choice:
-  chooser: subject
-  options:
-  - push_feet: 5
-    direction: away_from_subject
-  - condition: prone
+op: add
+args:
+- 8
+- var: strength_modifier
+- var: proficiency_bonus
 ```
+
+##### Failure choice
+
+<!-- splat:values path=splat_rule/parameters/shove/failure_choice -->
+
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` subject ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/shove/failure_choice/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Push feet:
+    path: push_feet
+    type: integer
+    optional: true
+  Direction:
+    path: direction
+    type: symbol
+    optional: true
+  Condition:
+    path: condition
+    type: symbol
+    optional: true
+-->
+
+| Key | Push feet | Direction | Condition |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 5 ` | ` Away from subject ` |  |
+| ` row_2 ` |  |  | ` Prone ` |

@@ -48,11 +48,53 @@ you have neither Advantage nor Disadvantage.\
 
 #### Cases
 
-<!-- splat:rows path=splat_rule/parameters/cases -->
+<!-- splat:table
+path: splat_rule/parameters/cases
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Advantage sources min:
+    path: advantage_sources_min
+    type: integer
+    optional: true
+  Disadvantage sources:
+    path: disadvantage_sources
+    type: integer
+    optional: true
+  Dice:
+    path: dice
+    type: integer
+  Select:
+    path: select
+    type: symbol
+    optional: true
+  Advantage sources:
+    path: advantage_sources
+    type: integer
+    optional: true
+  Disadvantage sources min:
+    path: disadvantage_sources_min
+    type: integer
+    optional: true
+  Advantage:
+    path: advantage
+    type: boolean
+    optional: true
+  Disadvantage:
+    path: disadvantage
+    type: boolean
+    optional: true
+-->
 
-| Row | advantage_sources_min | disadvantage_sources | dice | select | advantage_sources | disadvantage_sources_min | advantage | disadvantage |
+| Key | Advantage sources min | Disadvantage sources | Dice | Select | Advantage sources | Disadvantage sources min | Advantage | Disadvantage |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 0 ` | ` 2 ` | ` highest ` |  |  |  |  |
-| ` 1 ` |  |  | ` 2 ` | ` lowest ` | ` 0 ` | ` 1 ` |  |  |
-| ` 2 ` | ` 1 ` |  | ` 1 ` |  |  | ` 1 ` | ` false ` | ` false ` |
-| ` 3 ` |  | ` 0 ` | ` 1 ` |  | ` 0 ` |  |  |  |
+| ` row_1 ` | ` 1 ` | ` 0 ` | ` 2 ` | ` Highest ` |  |  |  |  |
+| ` row_2 ` |  |  | ` 2 ` | ` Lowest ` | ` 0 ` | ` 1 ` |  |  |
+| ` row_3 ` | ` 1 ` |  | ` 1 ` |  |  | ` 1 ` | false | false |
+| ` row_4 ` |  | ` 0 ` | ` 1 ` |  | ` 0 ` |  |  |  |

@@ -76,19 +76,53 @@ damage_resistance:
 
 #### Curse
 
-<!-- splat:yaml path=splat_rule/parameters/curse -->
+<!-- splat:values path=splat_rule/parameters/curse -->
 
-```yaml
-apply_on: attunement_completed
-persists_after_doff: true
-ends_on:
-- spell:
-    key: dnd2024:spells/remove_curse
-  target: user
-- magic_equivalent: remove_curse
-  adjudicator: gm
-redirect_attack:
-  weapon_category: ranged
-  original_target_distance_from_user_ft_max: 10
-  new_target: user
-```
+| Field | Value |
+| --- | --- |
+| ` apply_on ` | ` attunement_completed ` |
+| ` persists_after_doff ` | ` true ` |
+
+##### Ends on
+
+<!-- splat:table
+path: splat_rule/parameters/curse/ends_on
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Spell:
+    path: spell
+    type: reference
+    optional: true
+  Target:
+    path: target
+    type: symbol
+    optional: true
+  Magic equivalent:
+    path: magic_equivalent
+    type: symbol
+    optional: true
+  Adjudicator:
+    path: adjudicator
+    type: symbol
+    optional: true
+-->
+
+| Key | Spell | Target | Magic equivalent | Adjudicator |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | [Remove Curse](<../spells/remove_curse.md> "dnd2024:spells/remove_curse") | ` User ` |  |  |
+| ` row_2 ` |  |  | ` Remove curse ` | ` Gm ` |
+
+##### Redirect attack
+
+<!-- splat:values path=splat_rule/parameters/curse/redirect_attack -->
+
+| Field | Value |
+| --- | --- |
+| ` weapon_category ` | ` ranged ` |
+| ` original_target_distance_from_user_ft_max ` | ` 10 ` |
+| ` new_target ` | ` user ` |

@@ -85,19 +85,39 @@ Original layout: [[../../srd-5.2.1/pages/154|page 154]].
 
 #### Branches
 
-<!-- splat:yaml path=splat_rule/parameters/branches -->
+<!-- splat:table
+path: splat_rule/parameters/branches
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  When stat:
+    path: when/stat
+    type: symbol
+  When comparison:
+    path: when/comparison
+    type: symbol
+  When value:
+    path: when/value
+    type: integer
+  Effect:
+    path: effect
+    type: symbol
+    optional: true
+  Damage dice:
+    path: damage/dice
+    type: string
+    optional: true
+  Damage type:
+    path: damage/type
+    type: symbol
+    optional: true
+-->
 
-```yaml
-- when:
-    stat: current_hit_points
-    comparison: lte
-    value: 100
-  effect: die
-- when:
-    stat: current_hit_points
-    comparison: gt
-    value: 100
-  damage:
-    dice: 12d12
-    type: psychic
-```
+| Key | When stat | When comparison | When value | Effect | Damage dice | Damage type |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Current hit points ` | ` Lte ` | ` 100 ` | ` Die ` |  |  |
+| ` row_2 ` | ` Current hit points ` | ` Gt ` | ` 100 ` |  | ` 12d12 ` | ` Psychic ` |

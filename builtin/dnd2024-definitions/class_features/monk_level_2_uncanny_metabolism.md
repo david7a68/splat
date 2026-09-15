@@ -53,17 +53,41 @@ until you finish a Long Rest.\
 
 #### Heal self
 
-<!-- splat:yaml path=splat_rule/parameters/heal_self -->
+<!-- splat:values path=splat_rule/parameters/heal_self -->
 
-```yaml
-op: add
-args:
-- stat: classes.monk.level
-- dice:
-    count: 1
-    sides:
-      stat: martial_arts_die.sides
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/heal_self/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Stat:
+    path: stat
+    type: string
+    optional: true
+  Dice count:
+    path: dice/count
+    type: integer
+    optional: true
+  Dice sides stat:
+    path: dice/sides/stat
+    type: string
+    optional: true
+-->
+
+| Key | Stat | Dice count | Dice sides stat |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` classes.monk.level ` |  |  |
+| ` row_2 ` |  | ` 1 ` | ` martial_arts_die.sides ` |
 
 #### Uses
 

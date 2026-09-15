@@ -79,10 +79,35 @@ Original layout: [[../../srd-5.2.1/pages/123|page 123]].
 
 #### Barriers
 
-<!-- splat:rows path=splat_rule/parameters/barriers -->
+<!-- splat:table
+path: splat_rule/parameters/barriers
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Materials:
+    path: materials
+    type: yaml
+  Thickness feet:
+    path: thickness_feet
+    type: integer
+    optional: true
+  Thickness inches:
+    path: thickness_inches
+    type: integer
+    optional: true
+  Thickness:
+    path: thickness
+    type: symbol
+    optional: true
+-->
 
-| Row | materials | thickness_feet | thickness_inches | thickness |
+| Key | Materials | Thickness feet | Thickness inches | Thickness |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` ["stone", "dirt", "wood"] ` | ` 1 ` |  |  |
-| ` 1 ` | ` ["metal"] ` |  | ` 1 ` |  |
-| ` 2 ` | ` ["lead"] ` |  |  | ` thin_sheet ` |
+| ` row_1 ` | ` ["stone", "dirt", "wood"] ` | ` 1 ` |  |  |
+| ` row_2 ` | ` ["metal"] ` |  | ` 1 ` |  |
+| ` row_3 ` | ` ["lead"] ` |  |  | ` Thin sheet ` |

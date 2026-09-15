@@ -130,12 +130,27 @@ Original layout: [[../../srd-5.2.1/pages/278|page 278]].
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Count:
+    path: count
+    type: integer
+-->
 
-| Row | item | count |
+| Key | Item | Count |
 | --- | --- | --- |
-| ` 0 ` | ` holy_symbol ` | ` 1 ` |
-| ` 1 ` | ` leather_armor ` | ` 1 ` |
+| ` row_1 ` | ` Holy symbol ` | ` 1 ` |
+| ` row_2 ` | ` Leather armor ` | ` 1 ` |
 
 #### Senses
 
@@ -191,36 +206,65 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` wisdom ` |
+| ` save_dc ` | ` 12 ` |
+| ` attack_bonus ` | ` 4 ` |
+
+###### Waived components
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/profile/waived_components -->
 
 ```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: wisdom
-  waived_components: []
-  spells:
-  - spell:
-      key: dnd2024:spells/light
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/thaumaturgy
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/command
-    uses:
-      count: 2
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/hold_person
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 12
-  attack_bonus: 4
+[]
 ```
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- light
+- thaumaturgy
+- command
+- hold_person
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Uses count | Uses recovery |
+| --- | --- | --- | --- |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | true |  |  |
+| [Thaumaturgy](<../spells/thaumaturgy.md> "dnd2024:spells/thaumaturgy") | true |  |  |
+| [Command](<../spells/command.md> "dnd2024:spells/command") |  | ` 2 ` | ` Long rest ` |
+| [Hold Person](<../spells/hold_person.md> "dnd2024:spells/hold_person") |  | ` 1 ` | ` Long rest ` |
 
 ##### Spiritual weapon
 

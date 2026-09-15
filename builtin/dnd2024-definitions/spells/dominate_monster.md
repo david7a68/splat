@@ -170,9 +170,24 @@ after_completion_without_new_order:
 
 #### Slot duration
 
-<!-- splat:rows path=splat_rule/parameters/slot_duration -->
+<!-- splat:table
+path: splat_rule/parameters/slot_duration
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Seconds:
+    path: seconds
+    type: integer
+-->
 
-| Row | levels | seconds |
+| Key | Levels | Seconds |
 | --- | --- | --- |
-| ` 0 ` | ` [8] ` | ` 3600 ` |
-| ` 1 ` | ` [9] ` | ` 28800 ` |
+| ` row_1 ` | ` [8] ` | ` 3600 ` |
+| ` row_2 ` | ` [9] ` | ` 28800 ` |

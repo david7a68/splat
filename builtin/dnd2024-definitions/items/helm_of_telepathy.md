@@ -65,43 +65,31 @@ Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- detect_thoughts
+- suggestion
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Save dc:
+    path: save_dc
+    type: integer
+  Uses maximum:
+    path: uses/maximum
+    type: integer
+  Uses recovery event:
+    path: uses/recovery_event
+    type: string
+  Usage pool:
+    path: usage_pool
+    type: symbol
+-->
 
-| Row | save_dc | usage_pool |
-| --- | --- | --- |
-| ` 0 ` | ` 13 ` | ` independent_per_spell ` |
-| ` 1 ` | ` 13 ` | ` independent_per_spell ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/detect_thoughts ` |
-
-##### Uses
-
-<!-- splat:values path=splat_rule/parameters/spells/0/uses -->
-
-| Field | Value |
-| --- | --- |
-| ` maximum ` | ` 1 ` |
-| ` recovery_event ` | ` time.dawn ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/suggestion ` |
-
-##### Uses
-
-<!-- splat:values path=splat_rule/parameters/spells/1/uses -->
-
-| Field | Value |
-| --- | --- |
-| ` maximum ` | ` 1 ` |
-| ` recovery_event ` | ` time.dawn ` |
+| Spell | Save dc | Uses maximum | Uses recovery event | Usage pool |
+| --- | --- | --- | --- | --- |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") | ` 13 ` | ` 1 ` | ` time.dawn ` | ` Independent per spell ` |
+| [Suggestion](<../spells/suggestion.md> "dnd2024:spells/suggestion") | ` 13 ` | ` 1 ` | ` time.dawn ` | ` Independent per spell ` |

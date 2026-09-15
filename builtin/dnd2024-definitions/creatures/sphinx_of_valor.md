@@ -235,51 +235,63 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: wisdom
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/detect_evil_and_good
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/thaumaturgy
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/dispel_magic
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/greater_restoration
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/heroes_feast
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/zone_of_truth
-    uses:
-      count: 1
-      recovery: long_rest
-  save_dc: 20
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` wisdom ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 20 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- detect_evil_and_good
+- thaumaturgy
+- detect_magic
+- dispel_magic
+- greater_restoration
+- heroes_feast
+- zone_of_truth
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Uses unlimited | Uses count | Uses recovery |
+| --- | --- | --- | --- |
+| [Detect Evil and Good](<../spells/detect_evil_and_good.md> "dnd2024:spells/detect_evil_and_good") | true |  |  |
+| [Thaumaturgy](<../spells/thaumaturgy.md> "dnd2024:spells/thaumaturgy") | true |  |  |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") |  | ` 1 ` | ` Long rest ` |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") |  | ` 1 ` | ` Long rest ` |
+| [Greater Restoration](<../spells/greater_restoration.md> "dnd2024:spells/greater_restoration") |  | ` 1 ` | ` Long rest ` |
+| [Heroes’ Feast](<../spells/heroes_feast.md> "dnd2024:spells/heroes_feast") |  | ` 1 ` | ` Long rest ` |
+| [Zone of Truth](<../spells/zone_of_truth.md> "dnd2024:spells/zone_of_truth") |  | ` 1 ` | ` Long rest ` |
 
 ##### Inscrutable
 
@@ -436,17 +448,36 @@ legendary_cost: 1
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: multiattack
-sequence:
-- feature: claw
-  count: 2
-- feature: roar
-  count: 1
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` multiattack ` |
+
+###### Sequence
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/sequence
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+  Count:
+    path: count
+    type: integer
+-->
+
+| Key | Feature | Count |
+| --- | --- | --- |
+| ` row_1 ` | ` Claw ` | ` 2 ` |
+| ` row_2 ` | ` Roar ` | ` 1 ` |
 
 #### Legendary actions
 

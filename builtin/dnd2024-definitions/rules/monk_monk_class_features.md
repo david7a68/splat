@@ -80,208 +80,65 @@ Uncanny Metabolism\
 
 #### Feature unlocks
 
-<!-- splat:rows path=splat_rule/parameters/feature_unlocks -->
+<!-- splat:table
+path: splat_rule/parameters/feature_unlocks
+key: Feature
+order:
+- monk_level_10_heightened_focus
+- monk_level_10_self_restoration
+- monk_level_13_deflect_energy
+- monk_level_14_disciplined_survivor
+- monk_level_15_perfect_focus
+- monk_level_18_superior_defense
+- monk_level_19_epic_boon
+- monk_level_1_martial_arts
+- monk_level_1_unarmored_defense
+- monk_level_20_body_and_mind
+- monk_level_2_monk_s_focus
+- monk_level_2_unarmored_movement
+- monk_level_2_uncanny_metabolism
+- monk_level_3_deflect_attacks
+- monk_level_3_monk_subclass
+- monk_level_4_ability_score_improvement
+- monk_level_4_slow_fall
+- monk_level_5_extra_attack
+- monk_level_5_stunning_strike
+- monk_level_6_empowered_strikes
+- monk_level_7_evasion
+- monk_level_9_acrobatic_movement
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Feature | Class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 10 ` |
-| ` 2 ` | ` 13 ` |
-| ` 3 ` | ` 14 ` |
-| ` 4 ` | ` 15 ` |
-| ` 5 ` | ` 18 ` |
-| ` 6 ` | ` 19 ` |
-| ` 7 ` | ` 1 ` |
-| ` 8 ` | ` 1 ` |
-| ` 9 ` | ` 20 ` |
-| ` 10 ` | ` 2 ` |
-| ` 11 ` | ` 2 ` |
-| ` 12 ` | ` 2 ` |
-| ` 13 ` | ` 3 ` |
-| ` 14 ` | ` 3 ` |
-| ` 15 ` | ` 4 ` |
-| ` 16 ` | ` 4 ` |
-| ` 17 ` | ` 5 ` |
-| ` 18 ` | ` 5 ` |
-| ` 19 ` | ` 6 ` |
-| ` 20 ` | ` 7 ` |
-| ` 21 ` | ` 9 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_10_heightened_focus ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_10_self_restoration ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_13_deflect_energy ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_14_disciplined_survivor ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_15_perfect_focus ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_18_superior_defense ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_1_martial_arts ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_1_unarmored_defense ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_20_body_and_mind ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_2_monk_s_focus ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/11/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_2_unarmored_movement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/12/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_2_uncanny_metabolism ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/13/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_3_deflect_attacks ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/14/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_3_monk_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/15/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/16/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_4_slow_fall ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/17/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_5_extra_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/18/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_5_stunning_strike ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/19/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_6_empowered_strikes ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/20/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_7_evasion ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/21/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_9_acrobatic_movement ` |
+| [Level 10: Heightened Focus](<../class_features/monk_level_10_heightened_focus.md> "dnd2024:class_features/monk_level_10_heightened_focus") | ` 10 ` |
+| [Level 10: Self-Restoration](<../class_features/monk_level_10_self_restoration.md> "dnd2024:class_features/monk_level_10_self_restoration") | ` 10 ` |
+| [Level 13: Deflect Energy](<../class_features/monk_level_13_deflect_energy.md> "dnd2024:class_features/monk_level_13_deflect_energy") | ` 13 ` |
+| [Level 14: Disciplined Survivor](<../class_features/monk_level_14_disciplined_survivor.md> "dnd2024:class_features/monk_level_14_disciplined_survivor") | ` 14 ` |
+| [Level 15: Perfect Focus](<../class_features/monk_level_15_perfect_focus.md> "dnd2024:class_features/monk_level_15_perfect_focus") | ` 15 ` |
+| [Level 18: Superior Defense](<../class_features/monk_level_18_superior_defense.md> "dnd2024:class_features/monk_level_18_superior_defense") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/monk_level_19_epic_boon.md> "dnd2024:class_features/monk_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Martial Arts](<../class_features/monk_level_1_martial_arts.md> "dnd2024:class_features/monk_level_1_martial_arts") | ` 1 ` |
+| [Level 1: Unarmored Defense](<../class_features/monk_level_1_unarmored_defense.md> "dnd2024:class_features/monk_level_1_unarmored_defense") | ` 1 ` |
+| [Level 20: Body and Mind](<../class_features/monk_level_20_body_and_mind.md> "dnd2024:class_features/monk_level_20_body_and_mind") | ` 20 ` |
+| [Level 2: Monk’s Focus](<../class_features/monk_level_2_monk_s_focus.md> "dnd2024:class_features/monk_level_2_monk_s_focus") | ` 2 ` |
+| [Level 2: Unarmored Movement](<../class_features/monk_level_2_unarmored_movement.md> "dnd2024:class_features/monk_level_2_unarmored_movement") | ` 2 ` |
+| [Level 2: Uncanny Metabolism](<../class_features/monk_level_2_uncanny_metabolism.md> "dnd2024:class_features/monk_level_2_uncanny_metabolism") | ` 2 ` |
+| [Level 3: Deflect Attacks](<../class_features/monk_level_3_deflect_attacks.md> "dnd2024:class_features/monk_level_3_deflect_attacks") | ` 3 ` |
+| [Level 3: Monk Subclass](<../class_features/monk_level_3_monk_subclass.md> "dnd2024:class_features/monk_level_3_monk_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/monk_level_4_ability_score_improvement.md> "dnd2024:class_features/monk_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 4: Slow Fall](<../class_features/monk_level_4_slow_fall.md> "dnd2024:class_features/monk_level_4_slow_fall") | ` 4 ` |
+| [Level 5: Extra Attack](<../class_features/monk_level_5_extra_attack.md> "dnd2024:class_features/monk_level_5_extra_attack") | ` 5 ` |
+| [Level 5: Stunning Strike](<../class_features/monk_level_5_stunning_strike.md> "dnd2024:class_features/monk_level_5_stunning_strike") | ` 5 ` |
+| [Level 6: Empowered Strikes](<../class_features/monk_level_6_empowered_strikes.md> "dnd2024:class_features/monk_level_6_empowered_strikes") | ` 6 ` |
+| [Level 7: Evasion](<../class_features/monk_level_7_evasion.md> "dnd2024:class_features/monk_level_7_evasion") | ` 7 ` |
+| [Level 9: Acrobatic Movement](<../class_features/monk_level_9_acrobatic_movement.md> "dnd2024:class_features/monk_level_9_acrobatic_movement") | ` 9 ` |
 
 #### Recurring feature levels
 

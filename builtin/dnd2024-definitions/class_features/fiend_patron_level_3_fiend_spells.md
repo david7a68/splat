@@ -51,18 +51,39 @@ Scorching Ray, Suggestion\
 
 #### Always prepared
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared -->
+<!-- splat:table
+path: splat_rule/parameters/always_prepared
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | minimum_class_level |
-| --- | --- |
-| ` 0 ` | ` 3 ` |
-| ` 1 ` | ` 5 ` |
-| ` 2 ` | ` 7 ` |
-| ` 3 ` | ` 9 ` |
+| Key | Minimum class level | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 3 ` | [Rules](#^splat-403d5a47-row_1 "section:row_1") |
+| ` row_2 ` | ` 5 ` | [Rules](#^splat-403d5a47-row_2 "section:row_2") |
+| ` row_3 ` | ` 7 ` | [Rules](#^splat-403d5a47-row_3 "section:row_3") |
+| ` row_4 ` | ` 9 ` | [Rules](#^splat-403d5a47-row_4 "section:row_4") |
 
-##### Spells
+##### Row 1
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared/0/spells -->
+^splat-403d5a47-row_1
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/@row_1/spells -->
 
 | Row | key |
 | --- | --- |
@@ -71,27 +92,39 @@ Scorching Ray, Suggestion\
 | ` 2 ` | ` dnd2024:spells/scorching_ray ` |
 | ` 3 ` | ` dnd2024:spells/suggestion ` |
 
-##### Spells
+##### Row 2
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared/1/spells -->
+^splat-403d5a47-row_2
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/@row_2/spells -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:spells/fireball ` |
 | ` 1 ` | ` dnd2024:spells/stinking_cloud ` |
 
-##### Spells
+##### Row 3
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared/2/spells -->
+^splat-403d5a47-row_3
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/@row_3/spells -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:spells/fire_shield ` |
 | ` 1 ` | ` dnd2024:spells/wall_of_fire ` |
 
-##### Spells
+##### Row 4
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared/3/spells -->
+^splat-403d5a47-row_4
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/@row_4/spells -->
 
 | Row | key |
 | --- | --- |

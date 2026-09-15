@@ -155,23 +155,47 @@ while_charmed:
 
 #### Memory event
 
-<!-- splat:yaml path=splat_rule/parameters/memory_event -->
+<!-- splat:values path=splat_rule/parameters/memory_event -->
 
-```yaml
-experienced_by_target: true
-maximum_event_minutes: 10
-history_window_by_slot:
-- level: 5
-  days: 1
-- level: 6
-  days: 7
-- level: 7
-  days: 30
-- level: 8
-  days: 365
-- level: 9
-  history: any_time
-```
+| Field | Value |
+| --- | --- |
+| ` experienced_by_target ` | ` true ` |
+| ` maximum_event_minutes ` | ` 10 ` |
+
+##### History window by slot
+
+<!-- splat:table
+path: splat_rule/parameters/memory_event/history_window_by_slot
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Days:
+    path: days
+    type: integer
+    optional: true
+  History:
+    path: history
+    type: symbol
+    optional: true
+-->
+
+| Key | Level | Days | History |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 5 ` | ` 1 ` |  |
+| ` row_2 ` | ` 6 ` | ` 7 ` |  |
+| ` row_3 ` | ` 7 ` | ` 30 ` |  |
+| ` row_4 ` | ` 8 ` | ` 365 ` |  |
+| ` row_5 ` | ` 9 ` |  | ` Any time ` |
 
 #### Modification choice
 

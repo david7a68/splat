@@ -143,23 +143,47 @@ escape:
 
 #### Delayed choice
 
-<!-- splat:yaml path=splat_rule/parameters/delayed_choice -->
+<!-- splat:values path=splat_rule/parameters/delayed_choice -->
 
-```yaml
-spawn: caster_hand
-size: sling_bullet
-temperature: cool
-transfer_to_other_creature: true
-launch_timing: any_time
-launch_options:
-- kind: throw
-  range_feet: 40
-- kind: sling
-  range: sling_normal
-impact: same_spell_explosion
-set_down_without_shattering: true
-automatic_explosion_after_minutes: 1
-```
+| Field | Value |
+| --- | --- |
+| ` spawn ` | ` caster_hand ` |
+| ` size ` | ` sling_bullet ` |
+| ` temperature ` | ` cool ` |
+| ` transfer_to_other_creature ` | ` true ` |
+| ` launch_timing ` | ` any_time ` |
+| ` impact ` | ` same_spell_explosion ` |
+| ` set_down_without_shattering ` | ` true ` |
+| ` automatic_explosion_after_minutes ` | ` 1 ` |
+
+##### Launch options
+
+<!-- splat:table
+path: splat_rule/parameters/delayed_choice/launch_options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Range feet:
+    path: range_feet
+    type: integer
+    optional: true
+  Range:
+    path: range
+    type: symbol
+    optional: true
+-->
+
+| Key | Kind | Range feet | Range |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Throw ` | ` 40 ` |  |
+| ` row_2 ` | ` Sling ` |  | ` Sling normal ` |
 
 #### Slot scaling
 

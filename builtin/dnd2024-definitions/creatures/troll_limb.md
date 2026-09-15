@@ -158,32 +158,70 @@ death:
 
 ##### Troll spawn
 
-<!-- splat:yaml path=splat_rule/parameters/features/troll_spawn -->
+<!-- splat:values path=splat_rule/parameters/features/troll_spawn -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` passive ` |
+| ` trigger ` | ` self.exists_for_24_hours ` |
+
+###### Senses as
+
+<!-- splat:values path=splat_rule/parameters/features/troll_spawn/senses_as -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:creatures/troll ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/troll_spawn/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` not_destroyed ` | ` true ` |
+
+###### Roll
+
+<!-- splat:yaml path=splat_rule/parameters/features/troll_spawn/roll -->
 
 ```yaml
-economy: passive
-senses_as:
-  key: dnd2024:creatures/troll
-trigger: self.exists_for_24_hours
-requires:
-  not_destroyed: true
-roll:
-  dice:
-    count: 1
-    sides: 12
-  add: 0
-table:
-- roll_min: 12
-  roll_max: 12
-  effect:
-    op: replace_stat_block
-    definition:
-      key: dnd2024:creatures/troll
-- roll_min: 1
-  roll_max: 11
-  effect:
-    op: wither_away
+dice:
+  count: 1
+  sides: 12
+add: 0
 ```
+
+###### Table
+
+<!-- splat:table
+path: splat_rule/parameters/features/troll_spawn/table
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Roll min:
+    path: roll_min
+    type: integer
+  Roll max:
+    path: roll_max
+    type: integer
+  Effect op:
+    path: effect/op
+    type: symbol
+  Effect definition:
+    path: effect/definition
+    type: reference
+    optional: true
+-->
+
+| Key | Roll min | Roll max | Effect op | Effect definition |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 12 ` | ` 12 ` | ` Replace stat block ` | [Troll](<troll.md> "dnd2024:creatures/troll") |
+| ` row_2 ` | ` 1 ` | ` 11 ` | ` Wither away ` |  |
 
 #### Defenses
 

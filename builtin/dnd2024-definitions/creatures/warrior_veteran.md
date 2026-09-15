@@ -126,13 +126,29 @@ Original layout: [[../../srd-5.2.1/pages/337|page 337]].
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Count:
+    path: count
+    type: integer
+-->
 
-| Row | item | count |
+| Key | Item | Count |
 | --- | --- | --- |
-| ` 0 ` | ` greatsword ` | ` 1 ` |
-| ` 1 ` | ` heavy_crossbow ` | ` 1 ` |
-| ` 2 ` | ` splint_armor ` | ` 1 ` |
+| ` row_1 ` | ` Greatsword ` | ` 1 ` |
+| ` row_2 ` | ` Heavy crossbow ` | ` 1 ` |
+| ` row_3 ` | ` Splint armor ` | ` 1 ` |
 
 #### Senses
 
@@ -225,17 +241,36 @@ recheck_hit: true
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: multiattack
-choose_sequence:
-- feature: greatsword
-  count: 2
-- feature: heavy_crossbow
-  count: 2
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` multiattack ` |
+
+###### Choose sequence
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/choose_sequence
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+  Count:
+    path: count
+    type: integer
+-->
+
+| Key | Feature | Count |
+| --- | --- | --- |
+| ` row_1 ` | ` Greatsword ` | ` 2 ` |
+| ` row_2 ` | ` Heavy crossbow ` | ` 2 ` |
 
 #### Damage resolution
 

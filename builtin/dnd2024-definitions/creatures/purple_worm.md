@@ -141,12 +141,27 @@ Original layout: [[../../srd-5.2.1/pages/316|page 316]], [[../../srd-5.2.1/pages
 
 #### Senses
 
-<!-- splat:rows path=splat_rule/parameters/senses -->
+<!-- splat:table
+path: splat_rule/parameters/senses
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range ft:
+    path: range_ft
+    type: integer
+-->
 
-| Row | sense | range_ft |
+| Key | Sense | Range ft |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 30 ` |
-| ` 1 ` | ` tremorsense ` | ` 60 ` |
+| ` row_1 ` | ` Blindsight ` | ` 30 ` |
+| ` row_2 ` | ` Tremorsense ` | ` 60 ` |
 
 #### Languages
 
@@ -288,17 +303,36 @@ actor_death:
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: multiattack
-sequence:
-- count: 1
-  feature: bite
-- count: 1
-  feature: tail_stinger
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` multiattack ` |
+
+###### Sequence
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/sequence
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Count:
+    path: count
+    type: integer
+  Feature:
+    path: feature
+    type: symbol
+-->
+
+| Key | Count | Feature |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` Bite ` |
+| ` row_2 ` | ` 1 ` | ` Tail stinger ` |
 
 #### Damage resolution
 

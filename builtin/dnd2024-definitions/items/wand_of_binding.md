@@ -96,25 +96,25 @@ last_charge:
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- hold_monster
+- hold_person
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Charge cost:
+    path: charge_cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: integer
+-->
 
-| Row | charge_cost | save_dc |
+| Spell | Charge cost | Save dc |
 | --- | --- | --- |
-| ` 0 ` | ` 5 ` | ` 17 ` |
-| ` 1 ` | ` 2 ` | ` 17 ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hold_monster ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/hold_person ` |
+| [Hold Monster](<../spells/hold_monster.md> "dnd2024:spells/hold_monster") | ` 5 ` | ` 17 ` |
+| [Hold Person](<../spells/hold_person.md> "dnd2024:spells/hold_person") | ` 2 ` | ` 17 ` |

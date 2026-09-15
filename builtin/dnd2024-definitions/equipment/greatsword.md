@@ -108,28 +108,41 @@ amount:
 
 #### Properties
 
-<!-- splat:rows path=splat_rule/parameters/properties -->
+<!-- splat:table
+path: splat_rule/parameters/properties
+key: Variant
+order:
+- heavy
+- two_handed
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Rule:
+    path: rule
+    type: reference
+  Required ability:
+    path: required_ability
+    type: symbol
+    optional: true
+  Minimum score:
+    path: minimum_score
+    type: integer
+    optional: true
+  Below minimum attack mode:
+    path: below_minimum_attack_mode
+    type: symbol
+    optional: true
+  Hands to attack:
+    path: hands_to_attack
+    type: integer
+    optional: true
+-->
 
-| Row | id | required_ability | minimum_score | below_minimum_attack_mode | hands_to_attack |
+| Variant | Rule | Required ability | Minimum score | Below minimum attack mode | Hands to attack |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` heavy ` | ` strength ` | ` 13 ` | ` disadvantage ` |  |
-| ` 1 ` | ` two_handed ` |  |  |  | ` 2 ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/0/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_heavy ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/1/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_two_handed ` |
+| ` Heavy ` | [Heavy](<../rules/weapons_heavy.md> "dnd2024:rules/weapons_heavy") | ` Strength ` | ` 13 ` | ` Disadvantage ` |  |
+| ` Two handed ` | [Two-Handed](<../rules/weapons_two_handed.md> "dnd2024:rules/weapons_two_handed") |  |  |  | ` 2 ` |
 
 #### Attack
 

@@ -204,38 +204,82 @@ long_range_feet: 120
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` repeat_choice ` |
+| ` count ` | ` 2 ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+-->
+
+| Key | Feature |
+| --- | --- |
+| ` row_1 ` | ` Scratch ` |
+| ` row_2 ` | ` Hand crossbow ` |
+
+###### Replacement
+
+<!-- splat:yaml path=splat_rule/parameters/features/multiattack/replacement -->
 
 ```yaml
-economy: action
-op: repeat_choice
-count: 2
+max_attacks: 1
 choices:
-- feature: scratch
-- feature: hand_crossbow
-replacement:
-  max_attacks: 1
-  choices:
-  - feature: bite
+- feature: bite
 ```
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
 
-```yaml
-economy: bonus_action
-op: shape_shift
-forms:
-- form: hybrid
-  size: medium
-- form: rat
-  size: small
-- form: true_humanoid
-retain_statistics_except:
-- size
-equipment_transformed: false
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` shape_shift ` |
+| ` retain_statistics_except ` | ` ["size"] ` |
+| ` equipment_transformed ` | ` false ` |
+
+###### Forms
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/forms
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Form:
+    path: form
+    type: symbol
+  Size:
+    path: size
+    type: symbol
+    optional: true
+-->
+
+| Key | Form | Size |
+| --- | --- | --- |
+| ` row_1 ` | ` Hybrid ` | ` Medium ` |
+| ` row_2 ` | ` Rat ` | ` Small ` |
+| ` row_3 ` | ` True humanoid ` |  |
 
 ##### Hand crossbow
 

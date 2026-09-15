@@ -69,13 +69,29 @@ Original layout: [[../../srd-5.2.1/pages/219|page 219]].
 
 #### Extradimensional compartments
 
-<!-- splat:rows path=splat_rule/parameters/extradimensional_compartments -->
+<!-- splat:table
+path: splat_rule/parameters/extradimensional_compartments
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Capacity:
+    path: capacity
+    type: integer
+  Item shapes:
+    path: item_shapes
+    type: yaml
+-->
 
-| Row | capacity | item_shapes |
+| Key | Capacity | Item shapes |
 | --- | --- | --- |
-| ` 0 ` | ` 60 ` | ` ["arrow", "bolt", "similar"] ` |
-| ` 1 ` | ` 18 ` | ` ["javelin", "similar"] ` |
-| ` 2 ` | ` 6 ` | ` ["bow", "quarterstaff", "spear", "similar_long_object"] ` |
+| ` row_1 ` | ` 60 ` | ` ["arrow", "bolt", "similar"] ` |
+| ` row_2 ` | ` 18 ` | ` ["javelin", "similar"] ` |
+| ` row_3 ` | ` 6 ` | ` ["bow", "quarterstaff", "spear", "similar_long_object"] ` |
 
 #### Attunement
 

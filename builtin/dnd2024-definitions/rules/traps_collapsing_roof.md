@@ -114,43 +114,38 @@ success:
 
 #### Higher level variants
 
-<!-- splat:rows path=splat_rule/parameters/higher_level_variants -->
+<!-- splat:table
+path: splat_rule/parameters/higher_level_variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Damage dice count:
+    path: damage/dice/count
+    type: integer
+  Damage dice sides:
+    path: damage/dice/sides
+    type: integer
+  Average:
+    path: average
+    type: integer
+  Dc:
+    path: dc
+    type: integer
+-->
 
-| Row | levels | average | dc |
-| --- | --- | --- | --- |
-| ` 0 ` | ` [5, 10] ` | ` 22 ` | ` 15 ` |
-| ` 1 ` | ` [11, 16] ` | ` 55 ` | ` 17 ` |
-| ` 2 ` | ` [17, 20] ` | ` 99 ` | ` 19 ` |
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/higher_level_variants/0/damage -->
-
-```yaml
-dice:
-  count: 4
-  sides: 10
-```
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/higher_level_variants/1/damage -->
-
-```yaml
-dice:
-  count: 10
-  sides: 10
-```
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/higher_level_variants/2/damage -->
-
-```yaml
-dice:
-  count: 18
-  sides: 10
-```
+| Key | Levels | Damage dice count | Damage dice sides | Average | Dc |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` [5, 10] ` | ` 4 ` | ` 10 ` | ` 22 ` | ` 15 ` |
+| ` row_2 ` | ` [11, 16] ` | ` 10 ` | ` 10 ` | ` 55 ` | ` 17 ` |
+| ` row_3 ` | ` [17, 20] ` | ` 18 ` | ` 10 ` | ` 99 ` | ` 19 ` |
 
 #### Geometry assumption
 

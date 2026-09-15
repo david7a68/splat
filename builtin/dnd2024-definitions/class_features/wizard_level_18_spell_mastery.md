@@ -49,12 +49,27 @@ an eligible spell of the same level from the book.\
 
 #### Choose spells
 
-<!-- splat:rows path=splat_rule/parameters/choose_spells -->
+<!-- splat:table
+path: splat_rule/parameters/choose_spells
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Count:
+    path: count
+    type: integer
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | count | level |
+| Key | Count | Level |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 1 ` |
-| ` 1 ` | ` 1 ` | ` 2 ` |
+| ` row_1 ` | ` 1 ` | ` 1 ` |
+| ` row_2 ` | ` 1 ` | ` 2 ` |
 
 #### Eligibility
 

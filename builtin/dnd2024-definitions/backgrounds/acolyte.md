@@ -83,27 +83,78 @@ spell_list: cleric
 
 #### Equipment choice
 
-<!-- splat:yaml path=splat_rule/parameters/equipment_choice -->
+<!-- splat:values path=splat_rule/parameters/equipment_choice -->
 
-```yaml
-count: 1
-options:
-- id: a
-  grants:
-  - item_type: calligraphers_supplies
-    quantity: 1
-  - item_type: book_prayers
-    quantity: 1
-  - item_type: holy_symbol
-    quantity: 1
-  - item_type: parchment_sheet
-    quantity: 10
-  - item_type: robe
-    quantity: 1
-  - item_type: gp
-    quantity: 8
-- id: b
-  grants:
-  - item_type: gp
-    quantity: 50
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/equipment_choice/options
+key: Variant
+order:
+- a
+- b
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
+
+| Variant | Details |
+| --- | --- |
+| ` A ` | [Rules](#^splat-7a51fef2-a "section:a") |
+| ` B ` | [Rules](#^splat-7a51fef2-b "section:b") |
+
+###### A
+
+^splat-7a51fef2-a
+
+###### Grants
+
+<!-- splat:table
+path: splat_rule/parameters/equipment_choice/options/@a/grants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+columns:
+  Key:
+    type: key
+  Item type:
+    path: item_type
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Key | Item type | Quantity |
+| --- | --- | --- |
+| ` row_1 ` | ` Calligraphers supplies ` | ` 1 ` |
+| ` row_2 ` | ` Book prayers ` | ` 1 ` |
+| ` row_3 ` | ` Holy symbol ` | ` 1 ` |
+| ` row_4 ` | ` Parchment sheet ` | ` 10 ` |
+| ` row_5 ` | ` Robe ` | ` 1 ` |
+| ` row_6 ` | ` Gp ` | ` 8 ` |
+
+###### B
+
+^splat-7a51fef2-b
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/equipment_choice/options/@b/grants -->
+
+| Row | item_type | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` gp ` | ` 50 ` |

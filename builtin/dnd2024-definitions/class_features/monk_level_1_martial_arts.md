@@ -77,12 +77,31 @@ Arts Points Movement\
 
 #### Monk weapon categories
 
-<!-- splat:rows path=splat_rule/parameters/monk_weapon_categories -->
+<!-- splat:table
+path: splat_rule/parameters/monk_weapon_categories
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Category:
+    path: category
+    type: symbol
+  Range:
+    path: range
+    type: symbol
+  Requires property:
+    path: requires_property
+    type: symbol
+    optional: true
+-->
 
-| Row | category | range | requires_property |
+| Key | Category | Range | Requires property |
 | --- | --- | --- | --- |
-| ` 0 ` | ` simple ` | ` melee ` |  |
-| ` 1 ` | ` martial ` | ` melee ` | ` light ` |
+| ` row_1 ` | ` Simple ` | ` Melee ` |  |
+| ` row_2 ` | ` Martial ` | ` Melee ` | ` Light ` |
 
 #### Benefit requirements
 

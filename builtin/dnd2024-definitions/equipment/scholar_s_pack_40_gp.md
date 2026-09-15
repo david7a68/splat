@@ -76,82 +76,40 @@ sheets of Parchment, and Tinderbox.\
 
 #### Contents
 
-<!-- splat:rows path=splat_rule/parameters/contents -->
+<!-- splat:table
+path: splat_rule/parameters/contents
+key: Item
+order:
+- backpack_2_gp
+- book_25_gp
+- ink_10_gp
+- ink_pen_2_cp
+- lamp_5_sp
+- oil_1_sp
+- parchment_1_sp
+- tinderbox_5_sp
+columns:
+  Item:
+    path: item
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Unit:
+    path: unit
+    type: symbol
+-->
 
-| Row | quantity | unit |
+| Item | Quantity | Unit |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` purchase_unit ` |
-| ` 1 ` | ` 1 ` | ` purchase_unit ` |
-| ` 2 ` | ` 1 ` | ` purchase_unit ` |
-| ` 3 ` | ` 1 ` | ` purchase_unit ` |
-| ` 4 ` | ` 1 ` | ` purchase_unit ` |
-| ` 5 ` | ` 10 ` | ` purchase_unit ` |
-| ` 6 ` | ` 10 ` | ` purchase_unit ` |
-| ` 7 ` | ` 1 ` | ` purchase_unit ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/0/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/backpack_2_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/1/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/book_25_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/2/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/ink_10_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/3/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/ink_pen_2_cp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/4/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/lamp_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/5/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/oil_1_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/6/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/parchment_1_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/7/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/tinderbox_5_sp ` |
+| [Backpack (2 GP)](<backpack_2_gp.md> "dnd2024:equipment/backpack_2_gp") | ` 1 ` | ` Purchase unit ` |
+| [Book (25 GP)](<book_25_gp.md> "dnd2024:equipment/book_25_gp") | ` 1 ` | ` Purchase unit ` |
+| [Ink (10 GP)](<ink_10_gp.md> "dnd2024:equipment/ink_10_gp") | ` 1 ` | ` Purchase unit ` |
+| [Ink Pen (2 CP)](<ink_pen_2_cp.md> "dnd2024:equipment/ink_pen_2_cp") | ` 1 ` | ` Purchase unit ` |
+| [Lamp (5 SP)](<lamp_5_sp.md> "dnd2024:equipment/lamp_5_sp") | ` 1 ` | ` Purchase unit ` |
+| [Oil (1 SP)](<oil_1_sp.md> "dnd2024:equipment/oil_1_sp") | ` 10 ` | ` Purchase unit ` |
+| [Parchment (1 SP)](<parchment_1_sp.md> "dnd2024:equipment/parchment_1_sp") | ` 10 ` | ` Purchase unit ` |
+| [Tinderbox (5 SP)](<tinderbox_5_sp.md> "dnd2024:equipment/tinderbox_5_sp") | ` 1 ` | ` Purchase unit ` |
 
 #### Mass
 

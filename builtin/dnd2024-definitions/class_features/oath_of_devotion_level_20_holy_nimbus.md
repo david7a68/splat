@@ -84,23 +84,58 @@ recover:
 
 #### Benefits
 
-<!-- splat:yaml path=splat_rule/parameters/benefits -->
+##### Saving throw advantage
 
-```yaml
-saving_throw_advantage:
-  forced_by_creature_types:
-  - fiend
-  - undead
-aura_damage:
-  aura: own_aura_of_protection
-  trigger: enemy.turn_started_in_aura
-  amount:
-    op: add
-    args:
-    - stat: abilities.charisma.modifier
-    - stat: proficiency_bonus
-  type: radiant
-aura_light:
-  brightness: bright
-  sunlight: true
-```
+<!-- splat:values path=splat_rule/parameters/benefits/saving_throw_advantage -->
+
+| Field | Value |
+| --- | --- |
+| ` forced_by_creature_types ` | ` ["fiend", "undead"] ` |
+
+##### Aura damage
+
+<!-- splat:values path=splat_rule/parameters/benefits/aura_damage -->
+
+| Field | Value |
+| --- | --- |
+| ` aura ` | ` own_aura_of_protection ` |
+| ` trigger ` | ` enemy.turn_started_in_aura ` |
+| ` type ` | ` radiant ` |
+
+###### Amount
+
+<!-- splat:values path=splat_rule/parameters/benefits/aura_damage/amount -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/benefits/aura_damage/amount/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Stat:
+    path: stat
+    type: string
+-->
+
+| Key | Stat |
+| --- | --- |
+| ` row_1 ` | ` abilities.charisma.modifier ` |
+| ` row_2 ` | ` proficiency_bonus ` |
+
+##### Aura light
+
+<!-- splat:values path=splat_rule/parameters/benefits/aura_light -->
+
+| Field | Value |
+| --- | --- |
+| ` brightness ` | ` bright ` |
+| ` sunlight ` | ` true ` |

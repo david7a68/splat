@@ -145,33 +145,60 @@ grant:
 
 ##### Hooves
 
-<!-- splat:yaml path=splat_rule/parameters/features/hooves -->
+<!-- splat:values path=splat_rule/parameters/features/hooves -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/hooves/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 6
-  reach_ft: 5
-hit:
-  damage:
-  - average: 13
-    roll:
-      count: 2
-      sides: 8
-      modifier: 4
-    type: bludgeoning
-  - average: 10
-    roll:
-      count: 3
-      sides: 6
-      modifier: 0
-    type: fire
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 6
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/hooves/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 13 ` | ` 2 ` | ` 8 ` | ` 4 ` | ` Bludgeoning ` |
+| ` row_2 ` | ` 10 ` | ` 3 ` | ` 6 ` | ` 0 ` | ` Fire ` |
 
 ##### Ethereal stride
 

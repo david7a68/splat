@@ -62,10 +62,78 @@ directly the whole target\
 
 #### Degrees
 
-<!-- splat:rows path=splat_rule/parameters/degrees -->
+<!-- splat:table
+path: splat_rule/parameters/degrees
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Degree:
+    path: degree
+    type: symbol
+  Ac bonus:
+    path: ac_bonus
+    type: integer
+    optional: true
+  Dexterity save bonus:
+    path: dexterity_save_bonus
+    type: integer
+    optional: true
+  Creature can supply:
+    path: creature_can_supply
+    type: boolean
+    optional: true
+  Direct targeting:
+    path: direct_targeting
+    type: boolean
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | degree | minimum_covered_fraction | ac_bonus | dexterity_save_bonus | creature_can_supply | direct_targeting |
+| Key | Degree | Ac bonus | Dexterity save bonus | Creature can supply | Direct targeting | Details |
 | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` half ` | ` 0.5 ` | ` 2 ` | ` 2 ` | ` true ` |  |
-| ` 1 ` | ` three_quarters ` | ` 0.75 ` | ` 5 ` | ` 5 ` |  |  |
-| ` 2 ` | ` total ` | ` 1 ` |  |  |  | ` false ` |
+| ` row_1 ` | ` Half ` | ` 2 ` | ` 2 ` | true |  | [Rules](#^splat-d3e28ab8-row_1 "section:row_1") |
+| ` row_2 ` | ` Three quarters ` | ` 5 ` | ` 5 ` |  |  | [Rules](#^splat-d3e28ab8-row_2 "section:row_2") |
+| ` row_3 ` | ` Total ` |  |  |  | false | [Rules](#^splat-d3e28ab8-row_3 "section:row_3") |
+
+##### Row 1
+
+^splat-d3e28ab8-row_1
+
+###### Minimum covered fraction
+
+<!-- splat:yaml path=splat_rule/parameters/degrees/@row_1/minimum_covered_fraction -->
+
+```yaml
+0.5
+```
+
+##### Row 2
+
+^splat-d3e28ab8-row_2
+
+###### Minimum covered fraction
+
+<!-- splat:yaml path=splat_rule/parameters/degrees/@row_2/minimum_covered_fraction -->
+
+```yaml
+0.75
+```
+
+##### Row 3
+
+^splat-d3e28ab8-row_3
+
+###### Minimum covered fraction
+
+<!-- splat:yaml path=splat_rule/parameters/degrees/@row_3/minimum_covered_fraction -->
+
+```yaml
+1
+```

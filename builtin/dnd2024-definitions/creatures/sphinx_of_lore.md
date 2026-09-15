@@ -202,79 +202,70 @@ steps:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: cast_spell_choice
-ability: intelligence
-spells:
-- spell:
-    key: dnd2024:spells/detect_magic
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/identify
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/mage_hand
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/minor_illusion
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/prestidigitation
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/dispel_magic
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/legend_lore
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/locate_object
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/plane_shift
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/remove_curse
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/tongues
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- material
-save_dc: 16
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` intelligence ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 16 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- detect_magic
+- identify
+- mage_hand
+- minor_illusion
+- prestidigitation
+- dispel_magic
+- legend_lore
+- locate_object
+- plane_shift
+- remove_curse
+- tongues
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: symbol
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Cast level | Uses | Resource scope | Recovery |
+| --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Identify](<../spells/identify.md> "dnd2024:spells/identify") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Minor Illusion](<../spells/minor_illusion.md> "dnd2024:spells/minor_illusion") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Prestidigitation](<../spells/prestidigitation.md> "dnd2024:spells/prestidigitation") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Dispel Magic](<../spells/dispel_magic.md> "dnd2024:spells/dispel_magic") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Legend Lore](<../spells/legend_lore.md> "dnd2024:spells/legend_lore") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Locate Object](<../spells/locate_object.md> "dnd2024:spells/locate_object") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Remove Curse](<../spells/remove_curse.md> "dnd2024:spells/remove_curse") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Tongues](<../spells/tongues.md> "dnd2024:spells/tongues") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Inscrutable
 

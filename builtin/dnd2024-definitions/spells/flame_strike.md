@@ -119,34 +119,36 @@ Original layout: [[../../srd-5.2.1/pages/132|page 132]].
 
 #### Damage
 
-<!-- splat:rows path=splat_rule/parameters/damage -->
+<!-- splat:table
+path: splat_rule/parameters/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice base count:
+    path: dice/base_count
+    type: integer
+  Dice sides:
+    path: dice/sides
+    type: integer
+  Dice extra per slot:
+    path: dice/extra_per_slot
+    type: integer
+  Dice base slot:
+    path: dice/base_slot
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
 
-| Row | type |
-| --- | --- |
-| ` 0 ` | ` fire ` |
-| ` 1 ` | ` radiant ` |
-
-##### Dice
-
-<!-- splat:values path=splat_rule/parameters/damage/0/dice -->
-
-| Field | Value |
-| --- | --- |
-| ` base_count ` | ` 5 ` |
-| ` sides ` | ` 6 ` |
-| ` extra_per_slot ` | ` 1 ` |
-| ` base_slot ` | ` 5 ` |
-
-##### Dice
-
-<!-- splat:values path=splat_rule/parameters/damage/1/dice -->
-
-| Field | Value |
-| --- | --- |
-| ` base_count ` | ` 5 ` |
-| ` sides ` | ` 6 ` |
-| ` extra_per_slot ` | ` 1 ` |
-| ` base_slot ` | ` 5 ` |
+| Key | Dice base count | Dice sides | Dice extra per slot | Dice base slot | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 5 ` | ` 6 ` | ` 1 ` | ` 5 ` | ` Fire ` |
+| ` row_2 ` | ` 5 ` | ` 6 ` | ` 1 ` | ` 5 ` | ` Radiant ` |
 
 #### Success damage scale
 

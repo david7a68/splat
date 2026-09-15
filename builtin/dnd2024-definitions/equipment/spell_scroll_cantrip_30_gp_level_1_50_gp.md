@@ -74,30 +74,28 @@ completed.\
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Variant
+order:
+- cantrip
+- level_1
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Spell level:
+    path: spell_level
+    type: integer
+  Cost:
+    path: price
+    type: quantity
+-->
 
-| Row | id | spell_level |
+| Variant | Spell level | Cost |
 | --- | --- | --- |
-| ` 0 ` | ` cantrip ` | ` 0 ` |
-| ` 1 ` | ` level_1 ` | ` 1 ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/0/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 30 ` |
-| ` unit ` | ` gp ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/1/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 50 ` |
-| ` unit ` | ` gp ` |
+| ` Cantrip ` | ` 0 ` | ` 30 GP ` |
+| ` Level 1 ` | ` 1 ` | ` 50 GP ` |
 
 #### Spell selection
 

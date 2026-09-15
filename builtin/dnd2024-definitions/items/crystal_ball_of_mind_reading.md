@@ -66,34 +66,41 @@ Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- scrying
+- detect_thoughts
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Save dc:
+    path: save_dc
+    type: integer
+  Usage:
+    path: usage
+    type: symbol
+  Targets visible to actor:
+    path: targets/visible_to_actor
+    type: boolean
+    optional: true
+  Targets maximum distance from scrying sensor ft:
+    path: targets/maximum_distance_from_scrying_sensor_ft
+    type: integer
+    optional: true
+  Concentration:
+    path: concentration
+    type: boolean
+    optional: true
+  Ends on:
+    path: ends_on
+    type: symbol
+    optional: true
+-->
 
-| Row | save_dc | usage | concentration | ends_on |
-| --- | --- | --- | --- | --- |
-| ` 0 ` | ` 17 ` | ` at_will ` |  |  |
-| ` 1 ` | ` 17 ` | ` at_will ` | ` false ` | ` linked_scrying_ends ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/scrying ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/detect_thoughts ` |
-
-##### Targets
-
-<!-- splat:values path=splat_rule/parameters/spells/1/targets -->
-
-| Field | Value |
-| --- | --- |
-| ` visible_to_actor ` | ` true ` |
-| ` maximum_distance_from_scrying_sensor_ft ` | ` 30 ` |
+| Spell | Save dc | Usage | Targets visible to actor | Targets maximum distance from scrying sensor ft | Concentration | Ends on |
+| --- | --- | --- | --- | --- | --- | --- |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` 17 ` | ` At will ` |  |  |  |  |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") | ` 17 ` | ` At will ` | true | ` 30 ` | false | ` Linked scrying ends ` |

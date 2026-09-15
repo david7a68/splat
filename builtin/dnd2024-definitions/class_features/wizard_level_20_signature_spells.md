@@ -56,21 +56,46 @@ level, you must expend a spell slot.\
 
 #### Free cast
 
-<!-- splat:yaml path=splat_rule/parameters/free_cast -->
+<!-- splat:values path=splat_rule/parameters/free_cast -->
 
-```yaml
-per_spell_resource:
-  id: wizard.signature_spell
-  maximum: 1
-  recovery:
-  - event: rest.short_completed
-    amount: all
-  - event: rest.long_completed
-    amount: all
-cost: 1
-cast_level: 3
-expend_slot: false
-```
+| Field | Value |
+| --- | --- |
+| ` cost ` | ` 1 ` |
+| ` cast_level ` | ` 3 ` |
+| ` expend_slot ` | ` false ` |
+
+##### Per spell resource
+
+<!-- splat:values path=splat_rule/parameters/free_cast/per_spell_resource -->
+
+| Field | Value |
+| --- | --- |
+| ` id ` | ` wizard.signature_spell ` |
+| ` maximum ` | ` 1 ` |
+
+###### Recovery
+
+<!-- splat:table
+path: splat_rule/parameters/free_cast/per_spell_resource/recovery
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Amount:
+    path: amount
+    type: symbol
+-->
+
+| Key | Event | Amount |
+| --- | --- | --- |
+| ` row_1 ` | ` rest.short_completed ` | ` All ` |
+| ` row_2 ` | ` rest.long_completed ` | ` All ` |
 
 #### Higher level casting
 

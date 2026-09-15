@@ -252,25 +252,66 @@ additional_targets:
 
 ##### Water susceptibility
 
-<!-- splat:yaml path=splat_rule/parameters/features/water_susceptibility -->
+<!-- splat:values path=splat_rule/parameters/features/water_susceptibility -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` passive ` |
+
+###### Triggers
+
+<!-- splat:table
+path: splat_rule/parameters/features/water_susceptibility/triggers
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Per distance ft:
+    path: per_distance_ft
+    type: integer
+    optional: true
+  Per volume gallons:
+    path: per_volume_gallons
+    type: integer
+    optional: true
+-->
+
+| Key | Event | Per distance ft | Per volume gallons |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` actor.moves_in_water ` | ` 5 ` |  |
+| ` row_2 ` | ` water.splashed_on_actor ` |  | ` 1 ` |
+
+###### Effects
+
+<!-- splat:rows path=splat_rule/parameters/features/water_susceptibility/effects -->
+
+| Row | op |
+| --- | --- |
+| ` 0 ` | ` damage ` |
+
+###### Components
+
+<!-- splat:rows path=splat_rule/parameters/features/water_susceptibility/effects/0/components -->
+
+| Row | type | average |
+| --- | --- | --- |
+| ` 0 ` | ` cold ` | ` 3 ` |
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/features/water_susceptibility/effects/0/components/0/amount -->
 
 ```yaml
-economy: passive
-triggers:
-- event: actor.moves_in_water
-  per_distance_ft: 5
-- event: water.splashed_on_actor
-  per_volume_gallons: 1
-effects:
-- op: damage
-  components:
-  - type: cold
-    amount:
-      dice:
-        count: 1
-        sides: 6
-      add: 0
-    average: 3
+dice:
+  count: 1
+  sides: 6
+add: 0
 ```
 
 ##### Multiattack

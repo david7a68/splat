@@ -52,14 +52,35 @@ Original layout: [[../../srd-5.2.1/pages/182|page 182]].
 
 #### Grappler moves subject
 
-<!-- splat:yaml path=splat_rule/parameters/grappler_moves_subject -->
+<!-- splat:values path=splat_rule/parameters/grappler_moves_subject -->
 
-```yaml
-allowed_modes:
-- drag
-- carry
-extra_cost_per_foot: 1
-extra_cost_exceptions:
-- target_size: tiny
-- target_size_at_least_categories_smaller: 2
-```
+| Field | Value |
+| --- | --- |
+| ` allowed_modes ` | ` ["drag", "carry"] ` |
+| ` extra_cost_per_foot ` | ` 1 ` |
+
+##### Extra cost exceptions
+
+<!-- splat:table
+path: splat_rule/parameters/grappler_moves_subject/extra_cost_exceptions
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Target size:
+    path: target_size
+    type: symbol
+    optional: true
+  Target size at least categories smaller:
+    path: target_size_at_least_categories_smaller
+    type: integer
+    optional: true
+-->
+
+| Key | Target size | Target size at least categories smaller |
+| --- | --- | --- |
+| ` row_1 ` | ` Tiny ` |  |
+| ` row_2 ` |  | ` 2 ` |

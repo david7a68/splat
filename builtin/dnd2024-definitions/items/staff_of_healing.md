@@ -90,37 +90,43 @@ recovery:
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- cure_wounds
+- lesser_restoration
+- mass_cure_wounds
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Cost per spell level:
+    path: cost_per_spell_level
+    type: integer
+    optional: true
+  Minimum spell level:
+    path: minimum_spell_level
+    type: integer
+    optional: true
+  Maximum spell level:
+    path: maximum_spell_level
+    type: integer
+    optional: true
+  Ability modifier:
+    path: ability_modifier
+    type: symbol
+  Cost:
+    path: cost
+    type: integer
+    optional: true
+-->
 
-| Row | cost_per_spell_level | minimum_spell_level | maximum_spell_level | ability_modifier | cost |
+| Spell | Cost per spell level | Minimum spell level | Maximum spell level | Ability modifier | Cost |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 1 ` | ` 4 ` | ` user_spellcasting_ability_modifier ` |  |
-| ` 1 ` |  |  |  | ` user_spellcasting_ability_modifier ` | ` 2 ` |
-| ` 2 ` |  |  |  | ` user_spellcasting_ability_modifier ` | ` 5 ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/cure_wounds ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/lesser_restoration ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mass_cure_wounds ` |
+| [Cure Wounds](<../spells/cure_wounds.md> "dnd2024:spells/cure_wounds") | ` 1 ` | ` 1 ` | ` 4 ` | ` User spellcasting ability modifier ` |  |
+| [Lesser Restoration](<../spells/lesser_restoration.md> "dnd2024:spells/lesser_restoration") |  |  |  | ` User spellcasting ability modifier ` | ` 2 ` |
+| [Mass Cure Wounds](<../spells/mass_cure_wounds.md> "dnd2024:spells/mass_cure_wounds") |  |  |  | ` User spellcasting ability modifier ` | ` 5 ` |
 
 #### Last charge
 

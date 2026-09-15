@@ -44,17 +44,43 @@ days, those days needn’t be consecutive.\
 
 #### Table
 
-<!-- splat:rows path=splat_rule/parameters/table -->
+<!-- splat:table
+path: splat_rule/parameters/table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+columns:
+  Key:
+    type: key
+  Spell level:
+    path: spell_level
+    type: integer
+  Days:
+    path: days
+    type: integer
+  Cost gp:
+    path: cost_gp
+    type: integer
+-->
 
-| Row | spell_level | days | cost_gp |
+| Key | Spell level | Days | Cost gp |
 | --- | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` 1 ` | ` 15 ` |
-| ` 1 ` | ` 1 ` | ` 1 ` | ` 25 ` |
-| ` 2 ` | ` 2 ` | ` 3 ` | ` 100 ` |
-| ` 3 ` | ` 3 ` | ` 5 ` | ` 150 ` |
-| ` 4 ` | ` 4 ` | ` 10 ` | ` 1000 ` |
-| ` 5 ` | ` 5 ` | ` 25 ` | ` 1500 ` |
-| ` 6 ` | ` 6 ` | ` 40 ` | ` 10000 ` |
-| ` 7 ` | ` 7 ` | ` 50 ` | ` 12500 ` |
-| ` 8 ` | ` 8 ` | ` 60 ` | ` 15000 ` |
-| ` 9 ` | ` 9 ` | ` 120 ` | ` 50000 ` |
+| ` row_1 ` | ` 0 ` | ` 1 ` | ` 15 ` |
+| ` row_2 ` | ` 1 ` | ` 1 ` | ` 25 ` |
+| ` row_3 ` | ` 2 ` | ` 3 ` | ` 100 ` |
+| ` row_4 ` | ` 3 ` | ` 5 ` | ` 150 ` |
+| ` row_5 ` | ` 4 ` | ` 10 ` | ` 1000 ` |
+| ` row_6 ` | ` 5 ` | ` 25 ` | ` 1500 ` |
+| ` row_7 ` | ` 6 ` | ` 40 ` | ` 10000 ` |
+| ` row_8 ` | ` 7 ` | ` 50 ` | ` 12500 ` |
+| ` row_9 ` | ` 8 ` | ` 60 ` | ` 15000 ` |
+| ` row_10 ` | ` 9 ` | ` 120 ` | ` 50000 ` |

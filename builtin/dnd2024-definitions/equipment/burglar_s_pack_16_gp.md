@@ -77,109 +77,46 @@ Rope, Tinderbox, and Waterskin.\
 
 #### Contents
 
-<!-- splat:rows path=splat_rule/parameters/contents -->
+<!-- splat:table
+path: splat_rule/parameters/contents
+key: Item
+order:
+- backpack_2_gp
+- ball_bearings_1_gp
+- bell_1_gp
+- candle_1_cp
+- crowbar_2_gp
+- lantern_hooded_5_gp
+- oil_1_sp
+- rations_5_sp
+- rope_1_gp
+- tinderbox_5_sp
+- waterskin_2_sp
+columns:
+  Item:
+    path: item
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Unit:
+    path: unit
+    type: symbol
+-->
 
-| Row | quantity | unit |
+| Item | Quantity | Unit |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` purchase_unit ` |
-| ` 1 ` | ` 1 ` | ` purchase_unit ` |
-| ` 2 ` | ` 1 ` | ` purchase_unit ` |
-| ` 3 ` | ` 10 ` | ` purchase_unit ` |
-| ` 4 ` | ` 1 ` | ` purchase_unit ` |
-| ` 5 ` | ` 1 ` | ` purchase_unit ` |
-| ` 6 ` | ` 7 ` | ` purchase_unit ` |
-| ` 7 ` | ` 5 ` | ` day ` |
-| ` 8 ` | ` 1 ` | ` purchase_unit ` |
-| ` 9 ` | ` 1 ` | ` purchase_unit ` |
-| ` 10 ` | ` 1 ` | ` purchase_unit ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/0/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/backpack_2_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/1/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/ball_bearings_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/2/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/bell_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/3/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/candle_1_cp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/4/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/crowbar_2_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/5/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/lantern_hooded_5_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/6/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/oil_1_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/7/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/rations_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/8/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/rope_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/9/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/tinderbox_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/10/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/waterskin_2_sp ` |
+| [Backpack (2 GP)](<backpack_2_gp.md> "dnd2024:equipment/backpack_2_gp") | ` 1 ` | ` Purchase unit ` |
+| [Ball Bearings (1 GP)](<ball_bearings_1_gp.md> "dnd2024:equipment/ball_bearings_1_gp") | ` 1 ` | ` Purchase unit ` |
+| [Bell (1 GP)](<bell_1_gp.md> "dnd2024:equipment/bell_1_gp") | ` 1 ` | ` Purchase unit ` |
+| [Candle (1 CP)](<candle_1_cp.md> "dnd2024:equipment/candle_1_cp") | ` 10 ` | ` Purchase unit ` |
+| [Crowbar (2 GP)](<crowbar_2_gp.md> "dnd2024:equipment/crowbar_2_gp") | ` 1 ` | ` Purchase unit ` |
+| [Lantern, Hooded (5 GP)](<lantern_hooded_5_gp.md> "dnd2024:equipment/lantern_hooded_5_gp") | ` 1 ` | ` Purchase unit ` |
+| [Oil (1 SP)](<oil_1_sp.md> "dnd2024:equipment/oil_1_sp") | ` 7 ` | ` Purchase unit ` |
+| [Rations (5 SP)](<rations_5_sp.md> "dnd2024:equipment/rations_5_sp") | ` 5 ` | ` Day ` |
+| [Rope (1 GP)](<rope_1_gp.md> "dnd2024:equipment/rope_1_gp") | ` 1 ` | ` Purchase unit ` |
+| [Tinderbox (5 SP)](<tinderbox_5_sp.md> "dnd2024:equipment/tinderbox_5_sp") | ` 1 ` | ` Purchase unit ` |
+| [Waterskin (2 SP)](<waterskin_2_sp.md> "dnd2024:equipment/waterskin_2_sp") | ` 1 ` | ` Purchase unit ` |
 
 #### Mass
 

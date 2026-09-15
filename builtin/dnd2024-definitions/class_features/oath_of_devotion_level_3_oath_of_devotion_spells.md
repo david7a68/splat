@@ -53,55 +53,93 @@ Guardian of Faith\
 
 #### Always prepared by class level
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level -->
+<!-- splat:table
+path: splat_rule/parameters/always_prepared_by_class_level
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | level |
-| --- | --- |
-| ` 0 ` | ` 3 ` |
-| ` 1 ` | ` 5 ` |
-| ` 2 ` | ` 9 ` |
-| ` 3 ` | ` 13 ` |
-| ` 4 ` | ` 17 ` |
+| Key | Level | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 3 ` | [Rules](#^splat-a3ddf6f9-row_1 "section:row_1") |
+| ` row_2 ` | ` 5 ` | [Rules](#^splat-a3ddf6f9-row_2 "section:row_2") |
+| ` row_3 ` | ` 9 ` | [Rules](#^splat-a3ddf6f9-row_3 "section:row_3") |
+| ` row_4 ` | ` 13 ` | [Rules](#^splat-a3ddf6f9-row_4 "section:row_4") |
+| ` row_5 ` | ` 17 ` | [Rules](#^splat-a3ddf6f9-row_5 "section:row_5") |
 
-##### Spells
+##### Row 1
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/0/spells -->
+^splat-a3ddf6f9-row_1
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_1/spells -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:spells/protection_from_evil_and_good ` |
 | ` 1 ` | ` dnd2024:spells/shield_of_faith ` |
 
-##### Spells
+##### Row 2
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/1/spells -->
+^splat-a3ddf6f9-row_2
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_2/spells -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:spells/aid ` |
 | ` 1 ` | ` dnd2024:spells/zone_of_truth ` |
 
-##### Spells
+##### Row 3
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/2/spells -->
+^splat-a3ddf6f9-row_3
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_3/spells -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:spells/beacon_of_hope ` |
 | ` 1 ` | ` dnd2024:spells/dispel_magic ` |
 
-##### Spells
+##### Row 4
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/3/spells -->
+^splat-a3ddf6f9-row_4
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_4/spells -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:spells/freedom_of_movement ` |
 | ` 1 ` | ` dnd2024:spells/guardian_of_faith ` |
 
-##### Spells
+##### Row 5
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/4/spells -->
+^splat-a3ddf6f9-row_5
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_5/spells -->
 
 | Row | key |
 | --- | --- |

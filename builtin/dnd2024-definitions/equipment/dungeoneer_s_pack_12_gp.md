@@ -77,91 +77,42 @@ Waterskin.\
 
 #### Contents
 
-<!-- splat:rows path=splat_rule/parameters/contents -->
+<!-- splat:table
+path: splat_rule/parameters/contents
+key: Item
+order:
+- backpack_2_gp
+- caltrops_1_gp
+- crowbar_2_gp
+- oil_1_sp
+- rations_5_sp
+- rope_1_gp
+- tinderbox_5_sp
+- torch_1_cp
+- waterskin_2_sp
+columns:
+  Item:
+    path: item
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Unit:
+    path: unit
+    type: symbol
+-->
 
-| Row | quantity | unit |
+| Item | Quantity | Unit |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` purchase_unit ` |
-| ` 1 ` | ` 1 ` | ` purchase_unit ` |
-| ` 2 ` | ` 1 ` | ` purchase_unit ` |
-| ` 3 ` | ` 2 ` | ` purchase_unit ` |
-| ` 4 ` | ` 10 ` | ` day ` |
-| ` 5 ` | ` 1 ` | ` purchase_unit ` |
-| ` 6 ` | ` 1 ` | ` purchase_unit ` |
-| ` 7 ` | ` 10 ` | ` purchase_unit ` |
-| ` 8 ` | ` 1 ` | ` purchase_unit ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/0/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/backpack_2_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/1/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/caltrops_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/2/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/crowbar_2_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/3/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/oil_1_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/4/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/rations_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/5/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/rope_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/6/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/tinderbox_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/7/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/torch_1_cp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/8/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/waterskin_2_sp ` |
+| [Backpack (2 GP)](<backpack_2_gp.md> "dnd2024:equipment/backpack_2_gp") | ` 1 ` | ` Purchase unit ` |
+| [Caltrops (1 GP)](<caltrops_1_gp.md> "dnd2024:equipment/caltrops_1_gp") | ` 1 ` | ` Purchase unit ` |
+| [Crowbar (2 GP)](<crowbar_2_gp.md> "dnd2024:equipment/crowbar_2_gp") | ` 1 ` | ` Purchase unit ` |
+| [Oil (1 SP)](<oil_1_sp.md> "dnd2024:equipment/oil_1_sp") | ` 2 ` | ` Purchase unit ` |
+| [Rations (5 SP)](<rations_5_sp.md> "dnd2024:equipment/rations_5_sp") | ` 10 ` | ` Day ` |
+| [Rope (1 GP)](<rope_1_gp.md> "dnd2024:equipment/rope_1_gp") | ` 1 ` | ` Purchase unit ` |
+| [Tinderbox (5 SP)](<tinderbox_5_sp.md> "dnd2024:equipment/tinderbox_5_sp") | ` 1 ` | ` Purchase unit ` |
+| [Torch (1 CP)](<torch_1_cp.md> "dnd2024:equipment/torch_1_cp") | ` 10 ` | ` Purchase unit ` |
+| [Waterskin (2 SP)](<waterskin_2_sp.md> "dnd2024:equipment/waterskin_2_sp") | ` 1 ` | ` Purchase unit ` |
 
 #### Mass
 

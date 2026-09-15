@@ -102,34 +102,79 @@ type: fire
 
 #### Ongoing
 
-<!-- splat:yaml path=splat_rule/parameters/ongoing -->
+<!-- splat:values path=splat_rule/parameters/ongoing -->
+
+| Field | Value |
+| --- | --- |
+| ` duration ` | ` spell_duration ` |
+| ` event ` | ` target_turn_start ` |
+
+##### Steps
+
+<!-- splat:table
+path: splat_rule/parameters/ongoing/steps
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Damage dice sides:
+    path: damage/dice/sides
+    type: integer
+    optional: true
+  Damage dice add:
+    path: damage/dice/add
+    type: integer
+    optional: true
+  Damage type:
+    path: damage/type
+    type: symbol
+    optional: true
+  Save ability:
+    path: save/ability
+    type: symbol
+    optional: true
+  Save dc binding:
+    path: save/dc/binding
+    type: symbol
+    optional: true
+  Save failure continue spell:
+    path: save/failure/continue_spell
+    type: boolean
+    optional: true
+  Save success end spell:
+    path: save/success/end_spell
+    type: boolean
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Damage dice sides | Damage dice add | Damage type | Save ability | Save dc binding | Save failure continue spell | Save success end spell | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 6 ` | ` 0 ` | ` Fire ` |  |  |  |  | [Rules](#^splat-5ea14734-row_1 "section:row_1") |
+| ` row_2 ` |  |  |  | ` Constitution ` | ` Save dc ` | true | true |  |
+
+###### Row 1
+
+^splat-5ea14734-row_1
+
+###### Count
+
+<!-- splat:yaml path=splat_rule/parameters/ongoing/steps/@row_1/damage/dice/count -->
 
 ```yaml
-duration: spell_duration
-event: target_turn_start
-steps:
-- damage:
-    dice:
-      count:
-        op: add
-        args:
-        - 1
-        - op: multiply
-          args:
-          - 1
-          - op: subtract
-            args:
-            - binding: cast_level
-            - 1
-      sides: 6
-      add: 0
-    type: fire
-- save:
-    ability: constitution
-    dc:
-      binding: save_dc
-    failure:
-      continue_spell: true
-    success:
-      end_spell: true
+op: add
+args:
+- 1
+- op: multiply
+  args:
+  - 1
+  - op: subtract
+    args:
+    - binding: cast_level
+    - 1
 ```

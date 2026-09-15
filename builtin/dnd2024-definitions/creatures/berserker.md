@@ -144,12 +144,27 @@ hit:
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item | quantity |
+| Key | Item | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` greataxe ` | ` 1 ` |
-| ` 1 ` | ` hide_armor ` | ` 1 ` |
+| ` row_1 ` | ` Greataxe ` | ` 1 ` |
+| ` row_2 ` | ` Hide armor ` | ` 1 ` |
 
 #### Senses
 

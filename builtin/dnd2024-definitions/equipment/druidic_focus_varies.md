@@ -22,11 +22,6 @@ A Druidic Focus takes one of the forms in the Dru-\
 idic Focuses table and is carved, tied with ribbon, or\
 painted to channel primal magic. A Druid or Ranger\
 can use such an object as a Spellcasting Focus.\
-Druidic Focuses\
-Focus Weight Cost\
-Sprig of mistletoe — 1 GP\
-Wooden staff (also a Quarterstaff) 4 lb. 5 GP\
-Yew wand 1 lb. 10 GP\
 
 ## Item
 
@@ -69,72 +64,34 @@ rule:
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Variant
+order:
+- sprig_of_mistletoe
+- wooden_staff
+- yew_wand
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Weight:
+    path: mass
+    type: quantity
+  Cost:
+    path: price
+    type: quantity
+  Valid use states:
+    path: valid_use_states
+    type: yaml
+  Also weapon:
+    path: also_weapon
+    type: reference
+    optional: true
+-->
 
-| Row | id | valid_use_states |
-| --- | --- | --- |
-| ` 0 ` | ` sprig_of_mistletoe ` | ` ["held"] ` |
-| ` 1 ` | ` wooden_staff ` | ` ["held"] ` |
-| ` 2 ` | ` yew_wand ` | ` ["held"] ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/0/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/0/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/1/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 4 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/1/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
-
-##### Also weapon
-
-<!-- splat:values path=splat_rule/parameters/variants/1/also_weapon -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/quarterstaff ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/2/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/2/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10 ` |
-| ` unit ` | ` gp ` |
+| Variant | Weight | Cost | Valid use states | Also weapon |
+| --- | --- | --- | --- | --- |
+| ` Sprig of mistletoe ` | ` 0 lb ` | ` 1 GP ` | ` ["held"] ` |  |
+| ` Wooden staff ` | ` 4 lb ` | ` 5 GP ` | ` ["held"] ` | [Quarterstaff](<quarterstaff.md> "dnd2024:equipment/quarterstaff") |
+| ` Yew wand ` | ` 1 lb ` | ` 10 GP ` | ` ["held"] ` |  |

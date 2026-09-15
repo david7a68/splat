@@ -25,11 +25,6 @@ Symbol as a Spellcasting Focus.\
 The table indicates whether a Holy Symbol needs\
 to be held, worn, or borne on fabric (such as a tab-\
 ard or banner) or a Shield.\
-Holy Symbols\
-Symbol Weight Cost\
-Amulet (worn or held) 1 lb. 5 GP\
-Emblem (borne on fabric or a Shield) — 5 GP\
-Reliquary (held) 2 lb. 5 GP\
 
 ## Item
 
@@ -72,64 +67,30 @@ rule:
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Variant
+order:
+- amulet
+- emblem
+- reliquary
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Weight:
+    path: mass
+    type: quantity
+  Cost:
+    path: price
+    type: quantity
+  Valid use states:
+    path: valid_use_states
+    type: yaml
+-->
 
-| Row | id | valid_use_states |
-| --- | --- | --- |
-| ` 0 ` | ` amulet ` | ` ["worn", "held"] ` |
-| ` 1 ` | ` emblem ` | ` ["borne_on_fabric", "borne_on_shield"] ` |
-| ` 2 ` | ` reliquary ` | ` ["held"] ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/0/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/0/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/1/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/1/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/2/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/2/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
+| Variant | Weight | Cost | Valid use states |
+| --- | --- | --- | --- |
+| ` Amulet ` | ` 1 lb ` | ` 5 GP ` | ` ["worn", "held"] ` |
+| ` Emblem ` | ` 0 lb ` | ` 5 GP ` | ` ["borne_on_fabric", "borne_on_shield"] ` |
+| ` Reliquary ` | ` 2 lb ` | ` 5 GP ` | ` ["held"] ` |

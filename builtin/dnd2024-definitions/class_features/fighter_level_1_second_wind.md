@@ -49,30 +49,104 @@ Wind column of the Fighter Features table.\
 
 #### Heal self
 
-<!-- splat:yaml path=splat_rule/parameters/heal_self -->
+<!-- splat:values path=splat_rule/parameters/heal_self -->
 
-```yaml
-op: add
-args:
-- dice:
-    count: 1
-    sides: 10
-- stat: classes.fighter.level
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/heal_self/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice count:
+    path: dice/count
+    type: integer
+    optional: true
+  Dice sides:
+    path: dice/sides
+    type: integer
+    optional: true
+  Stat:
+    path: stat
+    type: string
+    optional: true
+-->
+
+| Key | Dice count | Dice sides | Stat |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 10 ` |  |
+| ` row_2 ` |  |  | ` classes.fighter.level ` |
 
 #### Resource
 
-<!-- splat:yaml path=splat_rule/parameters/resource -->
+<!-- splat:values path=splat_rule/parameters/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` cost ` | ` 1 ` |
+
+##### Maximum by fighter level
+
+<!-- splat:yaml path=splat_rule/parameters/resource/maximum_by_fighter_level -->
 
 ```yaml
-maximum_by_fighter_level:
-  '1': 2
-  '4': 3
-  '10': 4
-cost: 1
-recover:
-- event: rest.short_rest_completed
-  amount: 1
-- event: rest.long_rest_completed
-  amount: all_expended
+'1': 2
+'4': 3
+'10': 4
+```
+
+##### Recover
+
+<!-- splat:table
+path: splat_rule/parameters/resource/recover
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Event | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` rest.short_rest_completed ` | [Rules](#^splat-113f3e54-row_1 "section:row_1") |
+| ` row_2 ` | ` rest.long_rest_completed ` | [Rules](#^splat-113f3e54-row_2 "section:row_2") |
+
+###### Row 1
+
+^splat-113f3e54-row_1
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/resource/recover/@row_1/amount -->
+
+```yaml
+1
+```
+
+###### Row 2
+
+^splat-113f3e54-row_2
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/resource/recover/@row_2/amount -->
+
+```yaml
+all_expended
 ```

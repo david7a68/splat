@@ -73,15 +73,36 @@ a Spell Scroll, whose crafting time and cost are given in “Equipment.”\
 
 #### Rarity table
 
-<!-- splat:rows path=splat_rule/parameters/rarity_table -->
+<!-- splat:table
+path: splat_rule/parameters/rarity_table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Rarity:
+    path: rarity
+    type: symbol
+  Days:
+    path: days
+    type: integer
+  Raw material gp:
+    path: raw_material_gp
+    type: integer
+-->
 
-| Row | rarity | days | raw_material_gp |
+| Key | Rarity | Days | Raw material gp |
 | --- | --- | --- | --- |
-| ` 0 ` | ` common ` | ` 5 ` | ` 50 ` |
-| ` 1 ` | ` uncommon ` | ` 10 ` | ` 200 ` |
-| ` 2 ` | ` rare ` | ` 50 ` | ` 2000 ` |
-| ` 3 ` | ` very_rare ` | ` 125 ` | ` 20000 ` |
-| ` 4 ` | ` legendary ` | ` 250 ` | ` 100000 ` |
+| ` row_1 ` | ` Common ` | ` 5 ` | ` 50 ` |
+| ` row_2 ` | ` Uncommon ` | ` 10 ` | ` 200 ` |
+| ` row_3 ` | ` Rare ` | ` 50 ` | ` 2000 ` |
+| ` row_4 ` | ` Very rare ` | ` 125 ` | ` 20000 ` |
+| ` row_5 ` | ` Legendary ` | ` 250 ` | ` 100000 ` |
 
 #### Assistants
 

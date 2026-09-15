@@ -43,9 +43,24 @@ of your skill proficiencies of your choice.\
 
 #### Expertise choices
 
-<!-- splat:rows path=splat_rule/parameters/expertise_choices -->
+<!-- splat:table
+path: splat_rule/parameters/expertise_choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Rogue level:
+    path: rogue_level
+    type: integer
+  Count:
+    path: count
+    type: integer
+-->
 
-| Row | rogue_level | count |
+| Key | Rogue level | Count |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 2 ` |
-| ` 1 ` | ` 6 ` | ` 2 ` |
+| ` row_1 ` | ` 1 ` | ` 2 ` |
+| ` row_2 ` | ` 6 ` | ` 2 ` |

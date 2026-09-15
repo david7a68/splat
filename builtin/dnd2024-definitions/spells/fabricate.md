@@ -106,20 +106,42 @@ Original layout: [[../../srd-5.2.1/pages/129|page 129]].
 
 #### Output
 
-<!-- splat:yaml path=splat_rule/parameters/output -->
+<!-- splat:values path=splat_rule/parameters/output -->
 
-```yaml
-kind: object
-material: same_as_inputs
-quality: based_on_input_quality
-maximum_size: large
-geometry_choice:
-- cube_side_feet: 10
-  count: 1
-- cube_side_feet: 5
-  count: 8
-  connected: true
-```
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` object ` |
+| ` material ` | ` same_as_inputs ` |
+| ` quality ` | ` based_on_input_quality ` |
+| ` maximum_size ` | ` large ` |
+
+##### Geometry choice
+
+<!-- splat:table
+path: splat_rule/parameters/output/geometry_choice
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Cube side feet:
+    path: cube_side_feet
+    type: integer
+  Count:
+    path: count
+    type: integer
+  Connected:
+    path: connected
+    type: boolean
+    optional: true
+-->
+
+| Key | Cube side feet | Count | Connected |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 10 ` | ` 1 ` |  |
+| ` row_2 ` | ` 5 ` | ` 8 ` | true |
 
 #### Mineral exception
 

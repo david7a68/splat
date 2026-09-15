@@ -80,70 +80,317 @@ Druid Level Circle Spells\
 
 #### Always prepared
 
-<!-- splat:yaml path=splat_rule/parameters/always_prepared -->
+##### Arid
 
-```yaml
-arid:
-- minimum_druid_level: 3
-  spells:
-  - key: dnd2024:spells/blur
-  - key: dnd2024:spells/burning_hands
-  - key: dnd2024:spells/fire_bolt
-- minimum_druid_level: 5
-  spells:
-  - key: dnd2024:spells/fireball
-- minimum_druid_level: 7
-  spells:
-  - key: dnd2024:spells/blight
-- minimum_druid_level: 9
-  spells:
-  - key: dnd2024:spells/wall_of_stone
-polar:
-- minimum_druid_level: 3
-  spells:
-  - key: dnd2024:spells/fog_cloud
-  - key: dnd2024:spells/hold_person
-  - key: dnd2024:spells/ray_of_frost
-- minimum_druid_level: 5
-  spells:
-  - key: dnd2024:spells/sleet_storm
-- minimum_druid_level: 7
-  spells:
-  - key: dnd2024:spells/ice_storm
-- minimum_druid_level: 9
-  spells:
-  - key: dnd2024:spells/cone_of_cold
-temperate:
-- minimum_druid_level: 3
-  spells:
-  - key: dnd2024:spells/misty_step
-  - key: dnd2024:spells/shocking_grasp
-  - key: dnd2024:spells/sleep
-- minimum_druid_level: 5
-  spells:
-  - key: dnd2024:spells/lightning_bolt
-- minimum_druid_level: 7
-  spells:
-  - key: dnd2024:spells/freedom_of_movement
-- minimum_druid_level: 9
-  spells:
-  - key: dnd2024:spells/tree_stride
-tropical:
-- minimum_druid_level: 3
-  spells:
-  - key: dnd2024:spells/acid_splash
-  - key: dnd2024:spells/ray_of_sickness
-  - key: dnd2024:spells/web
-- minimum_druid_level: 5
-  spells:
-  - key: dnd2024:spells/stinking_cloud
-- minimum_druid_level: 7
-  spells:
-  - key: dnd2024:spells/polymorph
-- minimum_druid_level: 9
-  spells:
-  - key: dnd2024:spells/insect_plague
-```
+<!-- splat:table
+path: splat_rule/parameters/always_prepared/arid
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum druid level:
+    path: minimum_druid_level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Minimum druid level | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 3 ` | [Rules](#^splat-1fe33818-row_1 "section:row_1") |
+| ` row_2 ` | ` 5 ` | [Rules](#^splat-1fe33818-row_2 "section:row_2") |
+| ` row_3 ` | ` 7 ` | [Rules](#^splat-1fe33818-row_3 "section:row_3") |
+| ` row_4 ` | ` 9 ` | [Rules](#^splat-1fe33818-row_4 "section:row_4") |
+
+###### Row 1
+
+^splat-1fe33818-row_1
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/arid/@row_1/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/blur ` |
+| ` 1 ` | ` dnd2024:spells/burning_hands ` |
+| ` 2 ` | ` dnd2024:spells/fire_bolt ` |
+
+###### Row 2
+
+^splat-1fe33818-row_2
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/arid/@row_2/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/fireball ` |
+
+###### Row 3
+
+^splat-1fe33818-row_3
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/arid/@row_3/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/blight ` |
+
+###### Row 4
+
+^splat-1fe33818-row_4
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/arid/@row_4/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/wall_of_stone ` |
+
+##### Polar
+
+<!-- splat:table
+path: splat_rule/parameters/always_prepared/polar
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum druid level:
+    path: minimum_druid_level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Minimum druid level | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 3 ` | [Rules](#^splat-2cc156f3-row_1 "section:row_1") |
+| ` row_2 ` | ` 5 ` | [Rules](#^splat-2cc156f3-row_2 "section:row_2") |
+| ` row_3 ` | ` 7 ` | [Rules](#^splat-2cc156f3-row_3 "section:row_3") |
+| ` row_4 ` | ` 9 ` | [Rules](#^splat-2cc156f3-row_4 "section:row_4") |
+
+###### Row 1
+
+^splat-2cc156f3-row_1
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/polar/@row_1/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/fog_cloud ` |
+| ` 1 ` | ` dnd2024:spells/hold_person ` |
+| ` 2 ` | ` dnd2024:spells/ray_of_frost ` |
+
+###### Row 2
+
+^splat-2cc156f3-row_2
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/polar/@row_2/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/sleet_storm ` |
+
+###### Row 3
+
+^splat-2cc156f3-row_3
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/polar/@row_3/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/ice_storm ` |
+
+###### Row 4
+
+^splat-2cc156f3-row_4
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/polar/@row_4/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/cone_of_cold ` |
+
+##### Temperate
+
+<!-- splat:table
+path: splat_rule/parameters/always_prepared/temperate
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum druid level:
+    path: minimum_druid_level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Minimum druid level | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 3 ` | [Rules](#^splat-7740fe79-row_1 "section:row_1") |
+| ` row_2 ` | ` 5 ` | [Rules](#^splat-7740fe79-row_2 "section:row_2") |
+| ` row_3 ` | ` 7 ` | [Rules](#^splat-7740fe79-row_3 "section:row_3") |
+| ` row_4 ` | ` 9 ` | [Rules](#^splat-7740fe79-row_4 "section:row_4") |
+
+###### Row 1
+
+^splat-7740fe79-row_1
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/temperate/@row_1/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/misty_step ` |
+| ` 1 ` | ` dnd2024:spells/shocking_grasp ` |
+| ` 2 ` | ` dnd2024:spells/sleep ` |
+
+###### Row 2
+
+^splat-7740fe79-row_2
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/temperate/@row_2/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/lightning_bolt ` |
+
+###### Row 3
+
+^splat-7740fe79-row_3
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/temperate/@row_3/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/freedom_of_movement ` |
+
+###### Row 4
+
+^splat-7740fe79-row_4
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/temperate/@row_4/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/tree_stride ` |
+
+##### Tropical
+
+<!-- splat:table
+path: splat_rule/parameters/always_prepared/tropical
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum druid level:
+    path: minimum_druid_level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Minimum druid level | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 3 ` | [Rules](#^splat-c378aa69-row_1 "section:row_1") |
+| ` row_2 ` | ` 5 ` | [Rules](#^splat-c378aa69-row_2 "section:row_2") |
+| ` row_3 ` | ` 7 ` | [Rules](#^splat-c378aa69-row_3 "section:row_3") |
+| ` row_4 ` | ` 9 ` | [Rules](#^splat-c378aa69-row_4 "section:row_4") |
+
+###### Row 1
+
+^splat-c378aa69-row_1
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/tropical/@row_1/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/acid_splash ` |
+| ` 1 ` | ` dnd2024:spells/ray_of_sickness ` |
+| ` 2 ` | ` dnd2024:spells/web ` |
+
+###### Row 2
+
+^splat-c378aa69-row_2
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/tropical/@row_2/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/stinking_cloud ` |
+
+###### Row 3
+
+^splat-c378aa69-row_3
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/tropical/@row_3/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/polymorph ` |
+
+###### Row 4
+
+^splat-c378aa69-row_4
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared/tropical/@row_4/spells -->
+
+| Row | key |
+| --- | --- |
+| ` 0 ` | ` dnd2024:spells/insect_plague ` |
 
 #### Class scope
 

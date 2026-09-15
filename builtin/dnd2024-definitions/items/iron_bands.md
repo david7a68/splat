@@ -83,29 +83,72 @@ Original layout: [[../../srd-5.2.1/pages/228|page 228]].
 
 #### Activation
 
-<!-- splat:yaml path=splat_rule/parameters/activation -->
+<!-- splat:values path=splat_rule/parameters/activation -->
 
-```yaml
-action: magic
-operation: throw
-target:
-  maximum_size: huge
-  seen: true
-  range_ft: 60
-attack:
-  kind: ranged
-  bonus:
-    sum:
-    - value_from: dexterity_modifier
-    - value_from: proficiency_bonus
-on_hit:
-  condition: restrained
-  duration: until_released_or_broken
-on_miss: revert_to_sphere
-resource:
-  uses: 1
-  recovery: dawn
-```
+| Field | Value |
+| --- | --- |
+| ` action ` | ` magic ` |
+| ` operation ` | ` throw ` |
+| ` on_miss ` | ` revert_to_sphere ` |
+
+##### Target
+
+<!-- splat:values path=splat_rule/parameters/activation/target -->
+
+| Field | Value |
+| --- | --- |
+| ` maximum_size ` | ` huge ` |
+| ` seen ` | ` true ` |
+| ` range_ft ` | ` 60 ` |
+
+##### Attack
+
+<!-- splat:values path=splat_rule/parameters/activation/attack -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` ranged ` |
+
+###### Bonus
+
+###### Sum
+
+<!-- splat:table
+path: splat_rule/parameters/activation/attack/bonus/sum
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Value from:
+    path: value_from
+    type: symbol
+-->
+
+| Key | Value from |
+| --- | --- |
+| ` row_1 ` | ` Dexterity modifier ` |
+| ` row_2 ` | ` Proficiency bonus ` |
+
+##### On hit
+
+<!-- splat:values path=splat_rule/parameters/activation/on_hit -->
+
+| Field | Value |
+| --- | --- |
+| ` condition ` | ` restrained ` |
+| ` duration ` | ` until_released_or_broken ` |
+
+##### Resource
+
+<!-- splat:values path=splat_rule/parameters/activation/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` uses ` | ` 1 ` |
+| ` recovery ` | ` dawn ` |
 
 #### Release
 

@@ -212,32 +212,77 @@ result: success
 
 ##### Reflective carapace
 
-<!-- splat:yaml path=splat_rule/parameters/features/reflective_carapace -->
+<!-- splat:values path=splat_rule/parameters/features/reflective_carapace -->
 
-```yaml
-economy: trait
-operation: passive_rule
-trigger: self.targeted_by_spell
-spell_eligibility:
-  any_of:
-  - spell:
-      key: dnd2024:spells/magic_missile
-  - requires_ranged_attack_roll: true
-roll:
-  die: 6
-  results:
-  - faces:
-    - 1
-    - 2
-    - 3
-    - 4
-    - 5
-    self_affected: false
-  - faces:
-    - 6
-    self_affected: false
-    reflect_to: caster
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` trait ` |
+| ` operation ` | ` passive_rule ` |
+| ` trigger ` | ` self.targeted_by_spell ` |
+
+###### Spell eligibility
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/features/reflective_carapace/spell_eligibility/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Spell:
+    path: spell
+    type: reference
+    optional: true
+  Requires ranged attack roll:
+    path: requires_ranged_attack_roll
+    type: boolean
+    optional: true
+-->
+
+| Key | Spell | Requires ranged attack roll |
+| --- | --- | --- |
+| ` row_1 ` | [Magic Missile](<../spells/magic_missile.md> "dnd2024:spells/magic_missile") |  |
+| ` row_2 ` |  | true |
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/features/reflective_carapace/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` die ` | ` 6 ` |
+
+###### Results
+
+<!-- splat:table
+path: splat_rule/parameters/features/reflective_carapace/roll/results
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Faces:
+    path: faces
+    type: yaml
+  Self affected:
+    path: self_affected
+    type: boolean
+  Reflect to:
+    path: reflect_to
+    type: symbol
+    optional: true
+-->
+
+| Key | Faces | Self affected | Reflect to |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` [1, 2, 3, 4, 5] ` | false |  |
+| ` row_2 ` | ` [6] ` | false | ` Caster ` |
 
 ##### Siege monster
 
@@ -353,54 +398,99 @@ hit:
 
 ##### Thunderous bellow
 
-<!-- splat:yaml path=splat_rule/parameters/features/thunderous_bellow -->
+<!-- splat:values path=splat_rule/parameters/features/thunderous_bellow -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` saving_throw ` |
+| ` ability ` | ` constitution ` |
+| ` dc ` | ` 27 ` |
+
+###### Resource
+
+<!-- splat:values path=splat_rule/parameters/features/thunderous_bellow/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` recharge ` |
+| ` die ` | ` 6 ` |
+| ` success_faces ` | ` [5, 6] ` |
+| ` check ` | ` self.turn_start ` |
+| ` rest_recovery ` | ` ["short", "long"] ` |
+| ` capacity ` | ` 1 ` |
+| ` initial_uses ` | ` 1 ` |
+
+###### Targets
+
+<!-- splat:yaml path=splat_rule/parameters/features/thunderous_bellow/targets -->
 
 ```yaml
-economy: action
-resource:
-  kind: recharge
-  die: 6
-  success_faces:
-  - 5
-  - 6
-  check: self.turn_start
-  rest_recovery:
-  - short
-  - long
-  capacity: 1
-  initial_uses: 1
-operation: saving_throw
-ability: constitution
-dc: 27
-targets:
-  kinds:
-  - creature
-  - object
-  objects_exclude:
-  - worn
-  - carried
-  selection: each
-  area:
-    shape: cone
-    size_ft: 150
-    origin: self
-failure:
-  damage:
-  - average: 78
-    roll:
-      count: 12
-      sides: 12
-      modifier: 0
-    type: thunder
-  conditions:
-  - condition: deafened
-    until: target.next_turn_end
-  - condition: frightened
-    until: target.next_turn_end
-success:
-  damage_multiplier: 0.5
-  other_effects: false
+kinds:
+- creature
+- object
+objects_exclude:
+- worn
+- carried
+selection: each
+area:
+  shape: cone
+  size_ft: 150
+  origin: self
 ```
+
+###### Failure
+
+###### Damage
+
+<!-- splat:rows path=splat_rule/parameters/features/thunderous_bellow/failure/damage -->
+
+| Row | average | type |
+| --- | --- | --- |
+| ` 0 ` | ` 78 ` | ` thunder ` |
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/features/thunderous_bellow/failure/damage/0/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 12 ` |
+| ` sides ` | ` 12 ` |
+| ` modifier ` | ` 0 ` |
+
+###### Conditions
+
+<!-- splat:table
+path: splat_rule/parameters/features/thunderous_bellow/failure/conditions
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Condition:
+    path: condition
+    type: symbol
+  Until:
+    path: until
+    type: string
+-->
+
+| Key | Condition | Until |
+| --- | --- | --- |
+| ` row_1 ` | ` Deafened ` | ` target.next_turn_end ` |
+| ` row_2 ` | ` Frightened ` | ` target.next_turn_end ` |
+
+###### Success
+
+<!-- splat:values path=splat_rule/parameters/features/thunderous_bellow/success -->
+
+| Field | Value |
+| --- | --- |
+| ` damage_multiplier ` | ` 0.5 ` |
+| ` other_effects ` | ` false ` |
 
 ##### Swallow
 

@@ -175,33 +175,60 @@ sequence:
 
 ##### Shred
 
-<!-- splat:yaml path=splat_rule/parameters/features/shred -->
+<!-- splat:values path=splat_rule/parameters/features/shred -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/shred/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 6
-  reach_ft: 5
-hit:
-  damage:
-  - average: 10
-    roll:
-      count: 2
-      sides: 6
-      modifier: 3
-    type: piercing
-  - average: 10
-    roll:
-      count: 3
-      sides: 6
-      modifier: 0
-    type: poison
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 6
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/shred/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 10 ` | ` 2 ` | ` 6 ` | ` 3 ` | ` Piercing ` |
+| ` row_2 ` | ` 10 ` | ` 3 ` | ` 6 ` | ` 0 ` | ` Poison ` |
 
 ##### Spores
 

@@ -80,16 +80,40 @@ Original layout: [[../../srd-5.2.1/pages/165|page 165]].
 
 #### Target
 
-<!-- splat:yaml path=splat_rule/parameters/target -->
+<!-- splat:values path=splat_rule/parameters/target -->
 
-```yaml
-touch: true
-choice:
-- kind: stone_object
-  maximum_size: medium
-- kind: stone_section
-  maximum_each_dimension_feet: 5
-```
+| Field | Value |
+| --- | --- |
+| ` touch ` | ` true ` |
+
+##### Choice
+
+<!-- splat:table
+path: splat_rule/parameters/target/choice
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Maximum size:
+    path: maximum_size
+    type: symbol
+    optional: true
+  Maximum each dimension feet:
+    path: maximum_each_dimension_feet
+    type: integer
+    optional: true
+-->
+
+| Key | Kind | Maximum size | Maximum each dimension feet |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Stone object ` | ` Medium ` |  |
+| ` row_2 ` | ` Stone section ` |  | ` 5 ` |
 
 #### Shape
 

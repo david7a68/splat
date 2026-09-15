@@ -39,24 +39,6 @@ appropriate to its nature.\
 Once three fuzzy objects have been pulled from\
 the bag, the bag can’t be used again until the next\
 dawn.\
-Gray Bag of Tricks\
-1d8 Creature 1d8 Creature\
-1 Weasel 5 Panther\
-2 Giant Rat 6 Giant Badger\
-3 Badger 7 Dire Wolf\
-4 Boar 8 Giant Elk\
-Rust Bag of Tricks\
-1d8 Creature 1d8 Creature\
-1 Rat 5 Giant Goat\
-2 Owl 6 Giant Boar\
-3 Mastiff 7 Lion\
-4 Goat 8 Brown Bear\
-Tan Bag of Tricks\
-1d8 Creature 1d8 Creature\
-1 Jackal 5 Black Bear\
-2 Ape 6 Giant Weasel\
-3 Baboon 7 Giant Hyena\
-4 Axe Beak 8 Tiger\
 
 Original layout: [[../../srd-5.2.1/pages/212|page 212]].
 
@@ -115,145 +97,140 @@ recovery:
 
 #### Variants
 
-<!-- splat:yaml path=splat_rule/parameters/variants -->
+##### Gray
 
-```yaml
-gray:
-  roll:
-    expression: 1d8
-    scope: use
-  rows:
-  - min: 1
-    max: 1
-    result:
-      creature:
-        key: dnd2024:creatures/weasel
-  - min: 2
-    max: 2
-    result:
-      creature:
-        key: dnd2024:creatures/giant_rat
-  - min: 3
-    max: 3
-    result:
-      creature:
-        key: dnd2024:creatures/badger
-  - min: 4
-    max: 4
-    result:
-      creature:
-        key: dnd2024:creatures/boar
-  - min: 5
-    max: 5
-    result:
-      creature:
-        key: dnd2024:creatures/panther
-  - min: 6
-    max: 6
-    result:
-      creature:
-        key: dnd2024:creatures/giant_badger
-  - min: 7
-    max: 7
-    result:
-      creature:
-        key: dnd2024:creatures/dire_wolf
-  - min: 8
-    max: 8
-    result:
-      creature:
-        key: dnd2024:creatures/giant_elk
-rust:
-  roll:
-    expression: 1d8
-    scope: use
-  rows:
-  - min: 1
-    max: 1
-    result:
-      creature:
-        key: dnd2024:creatures/rat
-  - min: 2
-    max: 2
-    result:
-      creature:
-        key: dnd2024:creatures/owl
-  - min: 3
-    max: 3
-    result:
-      creature:
-        key: dnd2024:creatures/mastiff
-  - min: 4
-    max: 4
-    result:
-      creature:
-        key: dnd2024:creatures/goat
-  - min: 5
-    max: 5
-    result:
-      creature:
-        key: dnd2024:creatures/giant_goat
-  - min: 6
-    max: 6
-    result:
-      creature:
-        key: dnd2024:creatures/giant_boar
-  - min: 7
-    max: 7
-    result:
-      creature:
-        key: dnd2024:creatures/lion
-  - min: 8
-    max: 8
-    result:
-      creature:
-        key: dnd2024:creatures/brown_bear
-tan:
-  roll:
-    expression: 1d8
-    scope: use
-  rows:
-  - min: 1
-    max: 1
-    result:
-      creature:
-        key: dnd2024:creatures/jackal
-  - min: 2
-    max: 2
-    result:
-      creature:
-        key: dnd2024:creatures/ape
-  - min: 3
-    max: 3
-    result:
-      creature:
-        key: dnd2024:creatures/baboon
-  - min: 4
-    max: 4
-    result:
-      creature:
-        key: dnd2024:creatures/axe_beak
-  - min: 5
-    max: 5
-    result:
-      creature:
-        key: dnd2024:creatures/black_bear
-  - min: 6
-    max: 6
-    result:
-      creature:
-        key: dnd2024:creatures/giant_weasel
-  - min: 7
-    max: 7
-    result:
-      creature:
-        key: dnd2024:creatures/giant_hyena
-  - min: 8
-    max: 8
-    result:
-      creature:
-        key: dnd2024:creatures/tiger
-```
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/variants/gray/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` expression ` | ` 1d8 ` |
+| ` scope ` | ` use ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/variants/gray/rows
+key: Creature
+order:
+- weasel
+- giant_rat
+- badger
+- boar
+- panther
+- giant_badger
+- dire_wolf
+- giant_elk
+columns:
+  Roll:
+    path: ''
+    type: range
+  Creature:
+    path: result/creature
+    type: reference
+-->
+
+| Roll | Creature |
+| --- | --- |
+| ` 1 ` | [Weasel](<../creatures/weasel.md> "dnd2024:creatures/weasel") |
+| ` 2 ` | [Giant Rat](<../creatures/giant_rat.md> "dnd2024:creatures/giant_rat") |
+| ` 3 ` | [Badger](<../creatures/badger.md> "dnd2024:creatures/badger") |
+| ` 4 ` | [Boar](<../creatures/boar.md> "dnd2024:creatures/boar") |
+| ` 5 ` | [Panther](<../creatures/panther.md> "dnd2024:creatures/panther") |
+| ` 6 ` | [Giant Badger](<../creatures/giant_badger.md> "dnd2024:creatures/giant_badger") |
+| ` 7 ` | [Dire Wolf](<../creatures/dire_wolf.md> "dnd2024:creatures/dire_wolf") |
+| ` 8 ` | [Giant Elk](<../creatures/giant_elk.md> "dnd2024:creatures/giant_elk") |
+
+##### Rust
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/variants/rust/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` expression ` | ` 1d8 ` |
+| ` scope ` | ` use ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/variants/rust/rows
+key: Creature
+order:
+- rat
+- owl
+- mastiff
+- goat
+- giant_goat
+- giant_boar
+- lion
+- brown_bear
+columns:
+  Roll:
+    path: ''
+    type: range
+  Creature:
+    path: result/creature
+    type: reference
+-->
+
+| Roll | Creature |
+| --- | --- |
+| ` 1 ` | [Rat](<../creatures/rat.md> "dnd2024:creatures/rat") |
+| ` 2 ` | [Owl](<../creatures/owl.md> "dnd2024:creatures/owl") |
+| ` 3 ` | [Mastiff](<../creatures/mastiff.md> "dnd2024:creatures/mastiff") |
+| ` 4 ` | [Goat](<../creatures/goat.md> "dnd2024:creatures/goat") |
+| ` 5 ` | [Giant Goat](<../creatures/giant_goat.md> "dnd2024:creatures/giant_goat") |
+| ` 6 ` | [Giant Boar](<../creatures/giant_boar.md> "dnd2024:creatures/giant_boar") |
+| ` 7 ` | [Lion](<../creatures/lion.md> "dnd2024:creatures/lion") |
+| ` 8 ` | [Brown Bear](<../creatures/brown_bear.md> "dnd2024:creatures/brown_bear") |
+
+##### Tan
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/variants/tan/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` expression ` | ` 1d8 ` |
+| ` scope ` | ` use ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/variants/tan/rows
+key: Creature
+order:
+- jackal
+- ape
+- baboon
+- axe_beak
+- black_bear
+- giant_weasel
+- giant_hyena
+- tiger
+columns:
+  Roll:
+    path: ''
+    type: range
+  Creature:
+    path: result/creature
+    type: reference
+-->
+
+| Roll | Creature |
+| --- | --- |
+| ` 1 ` | [Jackal](<../creatures/jackal.md> "dnd2024:creatures/jackal") |
+| ` 2 ` | [Ape](<../creatures/ape.md> "dnd2024:creatures/ape") |
+| ` 3 ` | [Baboon](<../creatures/baboon.md> "dnd2024:creatures/baboon") |
+| ` 4 ` | [Axe Beak](<../creatures/axe_beak.md> "dnd2024:creatures/axe_beak") |
+| ` 5 ` | [Black Bear](<../creatures/black_bear.md> "dnd2024:creatures/black_bear") |
+| ` 6 ` | [Giant Weasel](<../creatures/giant_weasel.md> "dnd2024:creatures/giant_weasel") |
+| ` 7 ` | [Giant Hyena](<../creatures/giant_hyena.md> "dnd2024:creatures/giant_hyena") |
+| ` 8 ` | [Tiger](<../creatures/tiger.md> "dnd2024:creatures/tiger") |
 
 #### Summon
 

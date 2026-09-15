@@ -102,44 +102,69 @@ armor_training:
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` choose ` | ` 1 ` |
+
+##### Options
+
+###### Equipment
+
+###### Items
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/equipment/items
+key: Item
+order:
+- studded_leather_armor
+- scimitar
+- shortsword
+- longbow
+- ammunition_varies
+- quiver_1_gp
+- druidic_focus_varies
+- explorer_s_pack_10_gp
+columns:
+  Item:
+    path: definition
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Variant:
+    path: variant
+    type: symbol
+    optional: true
+-->
+
+| Item | Quantity | Variant |
+| --- | --- | --- |
+| [Studded Leather Armor](<../equipment/studded_leather_armor.md> "dnd2024:equipment/studded_leather_armor") | ` 1 ` |  |
+| [Scimitar](<../equipment/scimitar.md> "dnd2024:equipment/scimitar") | ` 1 ` |  |
+| [Shortsword](<../equipment/shortsword.md> "dnd2024:equipment/shortsword") | ` 1 ` |  |
+| [Longbow](<../equipment/longbow.md> "dnd2024:equipment/longbow") | ` 1 ` |  |
+| [Ammunition (Varies)](<../equipment/ammunition_varies.md> "dnd2024:equipment/ammunition_varies") | ` 20 ` | ` Arrows ` |
+| [Quiver (1 GP)](<../equipment/quiver_1_gp.md> "dnd2024:equipment/quiver_1_gp") | ` 1 ` |  |
+| [Druidic Focus (Varies)](<../equipment/druidic_focus_varies.md> "dnd2024:equipment/druidic_focus_varies") | ` 1 ` | ` Sprig of mistletoe ` |
+| [Explorer’s Pack (10 GP)](<../equipment/explorer_s_pack_10_gp.md> "dnd2024:equipment/explorer_s_pack_10_gp") | ` 1 ` |  |
+
+###### Currency
+
+<!-- splat:values path=splat_rule/parameters/starting_equipment/options/equipment/currency -->
+
+| Field | Value |
+| --- | --- |
+| ` gp ` | ` 7 ` |
+
+###### Currency
+
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment/options/currency -->
 
 ```yaml
-choose: 1
-options:
-  equipment:
-    items:
-    - definition:
-        key: dnd2024:equipment/studded_leather_armor
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/scimitar
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/shortsword
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/longbow
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/ammunition_varies
-      quantity: 20
-      variant: arrows
-    - definition:
-        key: dnd2024:equipment/quiver_1_gp
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/druidic_focus_varies
-      quantity: 1
-      variant: sprig_of_mistletoe
-    - definition:
-        key: dnd2024:equipment/explorer_s_pack_10_gp
-      quantity: 1
-    currency:
-      gp: 7
-  currency:
-    currency:
-      gp: 150
+currency:
+  gp: 150
 ```
 
 #### Progression
@@ -152,160 +177,52 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- ranger_level_10_tireless
+- ranger_level_13_relentless_hunter
+- ranger_level_14_nature_s_veil
+- ranger_level_17_precise_hunter
+- ranger_level_18_feral_senses
+- ranger_level_19_epic_boon
+- ranger_level_1_favored_enemy
+- ranger_level_1_spellcasting
+- ranger_level_1_weapon_mastery
+- ranger_level_20_foe_slayer
+- ranger_level_2_deft_explorer
+- ranger_level_2_fighting_style
+- ranger_level_3_ranger_subclass
+- ranger_level_4_ability_score_improvement
+- ranger_level_5_extra_attack
+- ranger_level_6_roving
+- ranger_level_9_expertise
+columns:
+  Item:
+    path: definition
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Item | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 13 ` |
-| ` 2 ` | ` 14 ` |
-| ` 3 ` | ` 17 ` |
-| ` 4 ` | ` 18 ` |
-| ` 5 ` | ` 19 ` |
-| ` 6 ` | ` 1 ` |
-| ` 7 ` | ` 1 ` |
-| ` 8 ` | ` 1 ` |
-| ` 9 ` | ` 20 ` |
-| ` 10 ` | ` 2 ` |
-| ` 11 ` | ` 2 ` |
-| ` 12 ` | ` 3 ` |
-| ` 13 ` | ` 4 ` |
-| ` 14 ` | ` 5 ` |
-| ` 15 ` | ` 6 ` |
-| ` 16 ` | ` 9 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_10_tireless ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_13_relentless_hunter ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_14_nature_s_veil ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_17_precise_hunter ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_18_feral_senses ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_19_epic_boon ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_favored_enemy ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_spellcasting ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_weapon_mastery ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_20_foe_slayer ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/10/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_2_deft_explorer ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/11/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_2_fighting_style ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/12/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_3_ranger_subclass ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/13/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_4_ability_score_improvement ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/14/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_5_extra_attack ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/15/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_6_roving ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/16/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_9_expertise ` |
+| [Level 10: Tireless](<../class_features/ranger_level_10_tireless.md> "dnd2024:class_features/ranger_level_10_tireless") | ` 10 ` |
+| [Level 13: Relentless Hunter](<../class_features/ranger_level_13_relentless_hunter.md> "dnd2024:class_features/ranger_level_13_relentless_hunter") | ` 13 ` |
+| [Level 14: Nature’s Veil](<../class_features/ranger_level_14_nature_s_veil.md> "dnd2024:class_features/ranger_level_14_nature_s_veil") | ` 14 ` |
+| [Level 17: Precise Hunter](<../class_features/ranger_level_17_precise_hunter.md> "dnd2024:class_features/ranger_level_17_precise_hunter") | ` 17 ` |
+| [Level 18: Feral Senses](<../class_features/ranger_level_18_feral_senses.md> "dnd2024:class_features/ranger_level_18_feral_senses") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/ranger_level_19_epic_boon.md> "dnd2024:class_features/ranger_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Favored Enemy](<../class_features/ranger_level_1_favored_enemy.md> "dnd2024:class_features/ranger_level_1_favored_enemy") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/ranger_level_1_spellcasting.md> "dnd2024:class_features/ranger_level_1_spellcasting") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/ranger_level_1_weapon_mastery.md> "dnd2024:class_features/ranger_level_1_weapon_mastery") | ` 1 ` |
+| [Level 20: Foe Slayer](<../class_features/ranger_level_20_foe_slayer.md> "dnd2024:class_features/ranger_level_20_foe_slayer") | ` 20 ` |
+| [Level 2: Deft Explorer](<../class_features/ranger_level_2_deft_explorer.md> "dnd2024:class_features/ranger_level_2_deft_explorer") | ` 2 ` |
+| [Level 2: Fighting Style](<../class_features/ranger_level_2_fighting_style.md> "dnd2024:class_features/ranger_level_2_fighting_style") | ` 2 ` |
+| [Level 3: Ranger Subclass](<../class_features/ranger_level_3_ranger_subclass.md> "dnd2024:class_features/ranger_level_3_ranger_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/ranger_level_4_ability_score_improvement.md> "dnd2024:class_features/ranger_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Extra Attack](<../class_features/ranger_level_5_extra_attack.md> "dnd2024:class_features/ranger_level_5_extra_attack") | ` 5 ` |
+| [Level 6: Roving](<../class_features/ranger_level_6_roving.md> "dnd2024:class_features/ranger_level_6_roving") | ` 6 ` |
+| [Level 9: Expertise](<../class_features/ranger_level_9_expertise.md> "dnd2024:class_features/ranger_level_9_expertise") | ` 9 ` |

@@ -63,43 +63,26 @@ to protect themselves from harm.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- warrior_of_the_open_hand_level_11_fleet_step
+- warrior_of_the_open_hand_level_17_quivering_palm
+- warrior_of_the_open_hand_level_3_open_hand_technique
+- warrior_of_the_open_hand_level_6_wholeness_of_body
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 11 ` |
-| ` 1 ` | ` 17 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 6 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/warrior_of_the_open_hand_level_11_fleet_step ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/warrior_of_the_open_hand_level_17_quivering_palm ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/warrior_of_the_open_hand_level_3_open_hand_technique ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/warrior_of_the_open_hand_level_6_wholeness_of_body ` |
+| [Level 11: Fleet Step](<../class_features/warrior_of_the_open_hand_level_11_fleet_step.md> "dnd2024:class_features/warrior_of_the_open_hand_level_11_fleet_step") | ` 11 ` |
+| [Level 17: Quivering Palm](<../class_features/warrior_of_the_open_hand_level_17_quivering_palm.md> "dnd2024:class_features/warrior_of_the_open_hand_level_17_quivering_palm") | ` 17 ` |
+| [Level 3: Open Hand Technique](<../class_features/warrior_of_the_open_hand_level_3_open_hand_technique.md> "dnd2024:class_features/warrior_of_the_open_hand_level_3_open_hand_technique") | ` 3 ` |
+| [Level 6: Wholeness of Body](<../class_features/warrior_of_the_open_hand_level_6_wholeness_of_body.md> "dnd2024:class_features/warrior_of_the_open_hand_level_6_wholeness_of_body") | ` 6 ` |

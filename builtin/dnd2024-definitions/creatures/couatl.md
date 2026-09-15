@@ -164,77 +164,82 @@ reach_feet: 5
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: cast_spell_choice
-ability: wisdom
-spells:
-- spell:
-    key: dnd2024:spells/detect_evil_and_good
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/detect_magic
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/detect_thoughts
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/shapechange
-  frequency: at_will
-  overrides:
-    form_types:
-    - beast
-    - humanoid
-    temporary_hit_points_gained: 0
-    concentration_required: false
-    temporary_hit_points_to_maintain_required: false
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/create_food_and_water
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/dream
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/greater_restoration
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/scrying
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/sleep
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- verbal
-- somatic
-- material
-save_dc: 15
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` wisdom ` |
+| ` components_waived ` | ` ["verbal", "somatic", "material"] ` |
+| ` save_dc ` | ` 15 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- detect_evil_and_good
+- detect_magic
+- detect_thoughts
+- shapechange
+- create_food_and_water
+- dream
+- greater_restoration
+- scrying
+- sleep
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: symbol
+  Overrides form types:
+    path: overrides/form_types
+    type: yaml
+    optional: true
+  Overrides temporary hit points gained:
+    path: overrides/temporary_hit_points_gained
+    type: integer
+    optional: true
+  Overrides concentration required:
+    path: overrides/concentration_required
+    type: boolean
+    optional: true
+  Overrides temporary hit points to maintain required:
+    path: overrides/temporary_hit_points_to_maintain_required
+    type: boolean
+    optional: true
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Cast level | Overrides form types | Overrides temporary hit points gained | Overrides concentration required | Overrides temporary hit points to maintain required | Uses | Resource scope | Recovery |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Detect Evil and Good](<../spells/detect_evil_and_good.md> "dnd2024:spells/detect_evil_and_good") | ` At will ` | ` Spell minimum ` |  |  |  |  |  |  |  |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` | ` Spell minimum ` |  |  |  |  |  |  |  |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") | ` At will ` | ` Spell minimum ` |  |  |  |  |  |  |  |
+| [Shapechange](<../spells/shapechange.md> "dnd2024:spells/shapechange") | ` At will ` | ` Spell minimum ` | ` ["beast", "humanoid"] ` | ` 0 ` | false | false |  |  |  |
+| [Create Food and Water](<../spells/create_food_and_water.md> "dnd2024:spells/create_food_and_water") | ` Daily ` | ` Spell minimum ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Dream](<../spells/dream.md> "dnd2024:spells/dream") | ` Daily ` | ` Spell minimum ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Greater Restoration](<../spells/greater_restoration.md> "dnd2024:spells/greater_restoration") | ` Daily ` | ` Spell minimum ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` Daily ` | ` Spell minimum ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Sleep](<../spells/sleep.md> "dnd2024:spells/sleep") | ` Daily ` | ` Spell minimum ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Shielded mind
 
@@ -248,30 +253,47 @@ save_dc: 15
 
 ##### Divine aid
 
-<!-- splat:yaml path=splat_rule/parameters/features/divine_aid -->
+<!-- splat:values path=splat_rule/parameters/features/divine_aid -->
 
-```yaml
-economy: bonus_action
-resource:
-  capacity: 2
-  cost: 1
-  recovery: long_rest
-  scope: shared_choices
-op: cast_spell_choice
-choices:
-- spell:
-    key: dnd2024:spells/bless
-- spell:
-    key: dnd2024:spells/lesser_restoration
-- spell:
-    key: dnd2024:spells/sanctuary
-ability: wisdom
-save_dc: 15
-components_waived:
-- verbal
-- somatic
-- material
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` wisdom ` |
+| ` save_dc ` | ` 15 ` |
+| ` components_waived ` | ` ["verbal", "somatic", "material"] ` |
+
+###### Resource
+
+<!-- splat:values path=splat_rule/parameters/features/divine_aid/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` capacity ` | ` 2 ` |
+| ` cost ` | ` 1 ` |
+| ` recovery ` | ` long_rest ` |
+| ` scope ` | ` shared_choices ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/divine_aid/choices
+key: Spell
+order:
+- bless
+- lesser_restoration
+- sanctuary
+columns:
+  Spell:
+    path: spell
+    type: reference
+-->
+
+| Spell |
+| --- |
+| [Bless](<../spells/bless.md> "dnd2024:spells/bless") |
+| [Lesser Restoration](<../spells/lesser_restoration.md> "dnd2024:spells/lesser_restoration") |
+| [Sanctuary](<../spells/sanctuary.md> "dnd2024:spells/sanctuary") |
 
 ##### Constrict
 

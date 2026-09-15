@@ -89,30 +89,51 @@ args:
 
 #### Options
 
-<!-- splat:rows path=splat_rule/parameters/options -->
+<!-- splat:table
+path: splat_rule/parameters/options
+key: Variant
+order:
+- flurry_of_blows
+- patient_defense
+- step_of_the_wind
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Action:
+    path: action
+    type: symbol
+  Focus cost:
+    path: focus_cost
+    type: integer
+  Unarmed strikes:
+    path: unarmed_strikes
+    type: integer
+    optional: true
+  Actions:
+    path: actions
+    type: yaml
+    optional: true
+  Paid alternative focus cost:
+    path: paid_alternative/focus_cost
+    type: integer
+    optional: true
+  Paid alternative actions:
+    path: paid_alternative/actions
+    type: yaml
+    optional: true
+  Paid alternative jump distance multiplier:
+    path: paid_alternative/jump_distance_multiplier
+    type: integer
+    optional: true
+  Paid alternative duration:
+    path: paid_alternative/duration
+    type: symbol
+    optional: true
+-->
 
-| Row | id | action | focus_cost | unarmed_strikes | actions |
-| --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` flurry_of_blows ` | ` bonus_action ` | ` 1 ` | ` 2 ` |  |
-| ` 1 ` | ` patient_defense ` | ` bonus_action ` | ` 0 ` |  | ` ["disengage"] ` |
-| ` 2 ` | ` step_of_the_wind ` | ` bonus_action ` | ` 0 ` |  | ` ["dash"] ` |
-
-##### Paid alternative
-
-<!-- splat:values path=splat_rule/parameters/options/1/paid_alternative -->
-
-| Field | Value |
-| --- | --- |
-| ` focus_cost ` | ` 1 ` |
-| ` actions ` | ` ["disengage", "dodge"] ` |
-
-##### Paid alternative
-
-<!-- splat:values path=splat_rule/parameters/options/2/paid_alternative -->
-
-| Field | Value |
-| --- | --- |
-| ` focus_cost ` | ` 1 ` |
-| ` actions ` | ` ["disengage", "dash"] ` |
-| ` jump_distance_multiplier ` | ` 2 ` |
-| ` duration ` | ` current_turn ` |
+| Variant | Action | Focus cost | Unarmed strikes | Actions | Paid alternative focus cost | Paid alternative actions | Paid alternative jump distance multiplier | Paid alternative duration |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` Flurry of blows ` | ` Bonus action ` | ` 1 ` | ` 2 ` |  |  |  |  |  |
+| ` Patient defense ` | ` Bonus action ` | ` 0 ` |  | ` ["disengage"] ` | ` 1 ` | ` ["disengage", "dodge"] ` |  |  |
+| ` Step of the wind ` | ` Bonus action ` | ` 0 ` |  | ` ["dash"] ` | ` 1 ` | ` ["disengage", "dash"] ` | ` 2 ` | ` Current turn ` |

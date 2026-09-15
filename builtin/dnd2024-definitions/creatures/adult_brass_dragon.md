@@ -204,33 +204,60 @@ replacements:
 
 ##### Rend
 
-<!-- splat:yaml path=splat_rule/parameters/features/rend -->
+<!-- splat:values path=splat_rule/parameters/features/rend -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/rend/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 11
-  reach_ft: 10
-hit:
-  damage:
-  - average: 17
-    roll:
-      count: 2
-      sides: 10
-      modifier: 6
-    type: slashing
-  - average: 4
-    roll:
-      count: 1
-      sides: 8
-      modifier: 0
-    type: fire
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 11
+reach_ft: 10
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/rend/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 17 ` | ` 2 ` | ` 10 ` | ` 6 ` | ` Slashing ` |
+| ` row_2 ` | ` 4 ` | ` 1 ` | ` 8 ` | ` 0 ` | ` Fire ` |
 
 ##### Fire breath
 
@@ -312,59 +339,76 @@ success:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-operation: spellcasting
-ability: charisma
-components_waived:
-- material
-save_dc: 16
-options:
-- spell:
-    key: dnd2024:spells/detect_magic
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/minor_illusion
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/scorching_ray
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/shapechange
-  usage:
-    kind: at_will
-  overrides:
-    allowed_types:
-    - beast
-    - humanoid
-    gain_temporary_hp: false
-    maintain_requires_concentration: false
-    maintain_requires_temporary_hp: false
-- spell:
-    key: dnd2024:spells/speak_with_animals
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/detect_thoughts
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/control_weather
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 16 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- detect_magic
+- minor_illusion
+- scorching_ray
+- shapechange
+- speak_with_animals
+- detect_thoughts
+- control_weather
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Overrides allowed types:
+    path: overrides/allowed_types
+    type: yaml
+    optional: true
+  Overrides gain temporary hp:
+    path: overrides/gain_temporary_hp
+    type: boolean
+    optional: true
+  Overrides maintain requires concentration:
+    path: overrides/maintain_requires_concentration
+    type: boolean
+    optional: true
+  Overrides maintain requires temporary hp:
+    path: overrides/maintain_requires_temporary_hp
+    type: boolean
+    optional: true
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Overrides allowed types | Overrides gain temporary hp | Overrides maintain requires concentration | Overrides maintain requires temporary hp | Uses | Use pool | Recovery |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  |  |  |  |  |
+| [Minor Illusion](<../spells/minor_illusion.md> "dnd2024:spells/minor_illusion") | ` At will ` |  |  |  |  |  |  |  |
+| [Scorching Ray](<../spells/scorching_ray.md> "dnd2024:spells/scorching_ray") | ` At will ` |  |  |  |  |  |  |  |
+| [Shapechange](<../spells/shapechange.md> "dnd2024:spells/shapechange") | ` At will ` | ` ["beast", "humanoid"] ` | false | false | false |  |  |  |
+| [Speak with Animals](<../spells/speak_with_animals.md> "dnd2024:spells/speak_with_animals") | ` At will ` |  |  |  |  |  |  |  |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") | ` Daily ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Control Weather](<../spells/control_weather.md> "dnd2024:spells/control_weather") | ` Daily ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Blazing light
 

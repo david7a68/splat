@@ -35,12 +35,30 @@ by 4, to a maximum of 25.\
 
 #### Ability increases
 
-<!-- splat:rows path=splat_rule/parameters/ability_increases -->
+<!-- splat:table
+path: splat_rule/parameters/ability_increases
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Ability:
+    path: ability
+    type: symbol
+  Amount:
+    path: amount
+    type: integer
+  Maximum:
+    path: maximum
+    type: integer
+-->
 
-| Row | ability | amount | maximum |
+| Key | Ability | Amount | Maximum |
 | --- | --- | --- | --- |
-| ` 0 ` | ` dexterity ` | ` 4 ` | ` 25 ` |
-| ` 1 ` | ` wisdom ` | ` 4 ` | ` 25 ` |
+| ` row_1 ` | ` Dexterity ` | ` 4 ` | ` 25 ` |
+| ` row_2 ` | ` Wisdom ` | ` 4 ` | ` 25 ` |
 
 #### Class scope
 

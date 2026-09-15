@@ -210,203 +210,322 @@ invalid_space: no_transformation
 
 #### Variants
 
-<!-- splat:yaml path=splat_rule/parameters/variants -->
+##### Bronze griffon
+
+<!-- splat:yaml path=splat_rule/parameters/variants/bronze_griffon -->
 
 ```yaml
-bronze_griffon:
-  creature:
-    key: dnd2024:creatures/griffon
-  duration:
-    value: 6
-    unit: hour
-  recovery:
-    value: 5
-    unit: day
-  rarity: rare
-ebony_fly:
-  creature:
-    key: dnd2024:creatures/giant_fly
-  duration:
-    value: 12
-    unit: hour
-  recovery:
-    value: 2
-    unit: day
-  rarity: rare
-  mount: true
-  creature_definition_owns_embedded_stat_block: true
-golden_lions:
-  creature:
-    key: dnd2024:creatures/lion
+creature:
+  key: dnd2024:creatures/griffon
+duration:
+  value: 6
+  unit: hour
+recovery:
+  value: 5
+  unit: day
+rarity: rare
+```
+
+##### Ebony fly
+
+<!-- splat:yaml path=splat_rule/parameters/variants/ebony_fly -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/giant_fly
+duration:
+  value: 12
+  unit: hour
+recovery:
+  value: 2
+  unit: day
+rarity: rare
+mount: true
+creature_definition_owns_embedded_stat_block: true
+```
+
+##### Golden lions
+
+<!-- splat:yaml path=splat_rule/parameters/variants/golden_lions -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/lion
+duration:
+  value: 1
+  unit: hour
+recovery:
+  value: 7
+  unit: day
+rarity: rare
+set_count: 2
+activation_count_choices:
+- 1
+- 2
+resource_scope: each_figurine
+```
+
+##### Ivory goats
+
+<!-- splat:values path=splat_rule/parameters/variants/ivory_goats -->
+
+| Field | Value |
+| --- | --- |
+| ` rarity ` | ` rare ` |
+| ` set_count ` | ` 3 ` |
+
+###### Members
+
+###### Terror
+
+<!-- splat:values path=splat_rule/parameters/variants/ivory_goats/members/terror -->
+
+| Field | Value |
+| --- | --- |
+| ` can_attack ` | ` false ` |
+
+###### Creature
+
+<!-- splat:values path=splat_rule/parameters/variants/ivory_goats/members/terror/creature -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:creatures/giant_goat ` |
+
+###### Duration
+
+<!-- splat:values path=splat_rule/parameters/variants/ivory_goats/members/terror/duration -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 3 ` |
+| ` unit ` | ` hour ` |
+
+###### Recovery
+
+<!-- splat:values path=splat_rule/parameters/variants/ivory_goats/members/terror/recovery -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 15 ` |
+| ` unit ` | ` day ` |
+
+###### Horns
+
+<!-- splat:values path=splat_rule/parameters/variants/ivory_goats/members/terror/horns -->
+
+| Field | Value |
+| --- | --- |
+| ` remove_action ` | ` magic ` |
+| ` harmless_removal ` | ` true ` |
+
+###### Weapons
+
+<!-- splat:table
+path: splat_rule/parameters/variants/ivory_goats/members/terror/horns/weapons
+key: Base
+order:
+- lance
+- longsword
+columns:
+  Base:
+    path: base
+    type: reference
+  Bonus:
+    path: bonus
+    type: integer
+-->
+
+| Base | Bonus |
+| --- | --- |
+| [Lance](<../equipment/lance.md> "dnd2024:equipment/lance") | ` 1 ` |
+| [Longsword](<../equipment/longsword.md> "dnd2024:equipment/longsword") | ` 2 ` |
+
+###### On revert
+
+<!-- splat:values path=splat_rule/parameters/variants/ivory_goats/members/terror/horns/on_revert -->
+
+| Field | Value |
+| --- | --- |
+| ` weapons ` | ` disappear ` |
+| ` horns ` | ` return ` |
+
+###### Fear
+
+<!-- splat:yaml path=splat_rule/parameters/variants/ivory_goats/members/terror/fear -->
+
+```yaml
+requires: user_riding_goat
+shape: emanation
+radius_ft: 30
+origin: goat
+trigger: hostile_creature_turn_start
+save:
+  ability: wisdom
+  dc: 15
+failure:
+  condition: frightened
   duration:
     value: 1
-    unit: hour
-  recovery:
-    value: 7
-    unit: day
-  rarity: rare
-  set_count: 2
-  activation_count_choices:
-  - 1
-  - 2
-  resource_scope: each_figurine
-ivory_goats:
-  rarity: rare
-  set_count: 3
-  members:
-    terror:
-      creature:
-        key: dnd2024:creatures/giant_goat
-      duration:
-        value: 3
-        unit: hour
-      recovery:
-        value: 15
-        unit: day
-      can_attack: false
-      horns:
-        remove_action: magic
-        harmless_removal: true
-        weapons:
-        - base:
-            key: dnd2024:equipment/lance
-          bonus: 1
-        - base:
-            key: dnd2024:equipment/longsword
-          bonus: 2
-        on_revert:
-          weapons: disappear
-          horns: return
-      fear:
-        requires: user_riding_goat
-        shape: emanation
-        radius_ft: 30
-        origin: goat
-        trigger: hostile_creature_turn_start
-        save:
-          ability: wisdom
-          dc: 15
-        failure:
-          condition: frightened
-          duration:
-            value: 1
-            unit: minute
-          end_on:
-          - rider_dismounts
-          - goat_reverts
-        repeat_save: target_turn_end
-        success:
-          end_effect: true
-          immunity:
-            value: 24
-            unit: hour
-    traveling:
-      creature:
-        key: dnd2024:creatures/riding_horse
-      appearance: goat
-      size: large
-      charges:
-        maximum: 24
-        initial: 24
-        cost:
-          per:
-            value: 1
-            unit: hour
-          partial_interval_rounding: up
-        multiple_activations: true
-        on_zero:
-          revert: true
-          unavailable_for:
-            value: 7
-            unit: day
-          then_recover: all_charges
-    travail:
-      creature:
-        key: dnd2024:creatures/giant_goat
-      duration:
-        value: 3
-        unit: hour
-      recovery:
-        value: 30
-        unit: day
-marble_elephant:
-  creature:
-    key: dnd2024:creatures/elephant
-  duration:
+    unit: minute
+  end_on:
+  - rider_dismounts
+  - goat_reverts
+repeat_save: target_turn_end
+success:
+  end_effect: true
+  immunity:
     value: 24
     unit: hour
-  recovery:
-    value: 7
-    unit: day
-  rarity: rare
-obsidian_steed:
-  creature:
-    key: dnd2024:creatures/nightmare
-  duration:
-    value: 24
-    unit: hour
-  recovery:
-    value: 5
-    unit: day
-  rarity: very_rare
-  combat: self_defense_only
-  disobedience:
-    probability_per_activation: 0.1
-    ignores:
-    - orders
-    - revert_command
-    if_mounted:
-      transport:
-      - rider
-      - nightmare
-      destination:
-        plane: hades
-        location: random
-      then: revert
-onyx_dog:
-  creature:
-    key: dnd2024:creatures/mastiff
-  duration:
-    value: 6
-    unit: hour
-  recovery:
-    value: 7
-    unit: day
-  rarity: rare
-  overrides:
-    intelligence: 8
-    languages:
-    - common
-    blindsight_ft: 60
-serpentine_owl:
-  creature:
-    key: dnd2024:creatures/giant_owl
-  duration:
-    value: 8
-    unit: hour
-  recovery:
-    value: 2
-    unit: day
-  rarity: rare
-  telepathy:
-    with: user
-    range: unlimited
-    same_plane_required: true
-silver_raven:
-  creature:
-    key: dnd2024:creatures/raven
-  duration:
-    value: 12
-    unit: hour
-  recovery:
-    value: 2
-    unit: day
-  rarity: uncommon
-  spells:
-  - spell:
-      key: dnd2024:spells/animal_messenger
-    target: this_creature
-    requires: raven_form
+```
+
+###### Traveling
+
+<!-- splat:yaml path=splat_rule/parameters/variants/ivory_goats/members/traveling -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/riding_horse
+appearance: goat
+size: large
+charges:
+  maximum: 24
+  initial: 24
+  cost:
+    per:
+      value: 1
+      unit: hour
+    partial_interval_rounding: up
+  multiple_activations: true
+  on_zero:
+    revert: true
+    unavailable_for:
+      value: 7
+      unit: day
+    then_recover: all_charges
+```
+
+###### Travail
+
+<!-- splat:yaml path=splat_rule/parameters/variants/ivory_goats/members/travail -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/giant_goat
+duration:
+  value: 3
+  unit: hour
+recovery:
+  value: 30
+  unit: day
+```
+
+##### Marble elephant
+
+<!-- splat:yaml path=splat_rule/parameters/variants/marble_elephant -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/elephant
+duration:
+  value: 24
+  unit: hour
+recovery:
+  value: 7
+  unit: day
+rarity: rare
+```
+
+##### Obsidian steed
+
+<!-- splat:yaml path=splat_rule/parameters/variants/obsidian_steed -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/nightmare
+duration:
+  value: 24
+  unit: hour
+recovery:
+  value: 5
+  unit: day
+rarity: very_rare
+combat: self_defense_only
+disobedience:
+  probability_per_activation: 0.1
+  ignores:
+  - orders
+  - revert_command
+  if_mounted:
+    transport:
+    - rider
+    - nightmare
+    destination:
+      plane: hades
+      location: random
+    then: revert
+```
+
+##### Onyx dog
+
+<!-- splat:yaml path=splat_rule/parameters/variants/onyx_dog -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/mastiff
+duration:
+  value: 6
+  unit: hour
+recovery:
+  value: 7
+  unit: day
+rarity: rare
+overrides:
+  intelligence: 8
+  languages:
+  - common
+  blindsight_ft: 60
+```
+
+##### Serpentine owl
+
+<!-- splat:yaml path=splat_rule/parameters/variants/serpentine_owl -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/giant_owl
+duration:
+  value: 8
+  unit: hour
+recovery:
+  value: 2
+  unit: day
+rarity: rare
+telepathy:
+  with: user
+  range: unlimited
+  same_plane_required: true
+```
+
+##### Silver raven
+
+<!-- splat:yaml path=splat_rule/parameters/variants/silver_raven -->
+
+```yaml
+creature:
+  key: dnd2024:creatures/raven
+duration:
+  value: 12
+  unit: hour
+recovery:
+  value: 2
+  unit: day
+rarity: uncommon
+spells:
+- spell:
+    key: dnd2024:spells/animal_messenger
+  target: this_creature
+  requires: raven_form
 ```
 
 #### Attunement

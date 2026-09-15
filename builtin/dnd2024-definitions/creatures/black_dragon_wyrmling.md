@@ -140,12 +140,27 @@ Original layout: [[../../srd-5.2.1/pages/263|page 263]], [[../../srd-5.2.1/pages
 
 #### Senses
 
-<!-- splat:rows path=splat_rule/parameters/senses -->
+<!-- splat:table
+path: splat_rule/parameters/senses
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range ft:
+    path: range_ft
+    type: integer
+-->
 
-| Row | sense | range_ft |
+| Key | Sense | Range ft |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 10 ` |
-| ` 1 ` | ` darkvision ` | ` 60 ` |
+| ` row_1 ` | ` Blindsight ` | ` 10 ` |
+| ` row_2 ` | ` Darkvision ` | ` 60 ` |
 
 #### Languages
 

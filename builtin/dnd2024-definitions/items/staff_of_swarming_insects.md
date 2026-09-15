@@ -116,28 +116,31 @@ end_on: strong_wind
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- giant_insect
+- insect_plague
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Cost:
+    path: cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: symbol
+  Attack modifier:
+    path: attack_modifier
+    type: symbol
+-->
 
-| Row | cost | save_dc | attack_modifier |
+| Spell | Cost | Save dc | Attack modifier |
 | --- | --- | --- | --- |
-| ` 0 ` | ` 4 ` | ` user_spell_save_dc ` | ` user_spell_attack_modifier ` |
-| ` 1 ` | ` 5 ` | ` user_spell_save_dc ` | ` user_spell_attack_modifier ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/giant_insect ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/insect_plague ` |
+| [Giant Insect](<../spells/giant_insect.md> "dnd2024:spells/giant_insect") | ` 4 ` | ` User spell save dc ` | ` User spell attack modifier ` |
+| [Insect Plague](<../spells/insect_plague.md> "dnd2024:spells/insect_plague") | ` 5 ` | ` User spell save dc ` | ` User spell attack modifier ` |
 
 #### Last charge
 

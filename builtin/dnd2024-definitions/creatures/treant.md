@@ -190,42 +190,111 @@ steps:
 
 ##### Animate trees
 
-<!-- splat:yaml path=splat_rule/parameters/features/animate_trees -->
+<!-- splat:values path=splat_rule/parameters/features/animate_trees -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` animate_objects ` |
+| ` controller ` | ` self ` |
+
+###### Resource
+
+<!-- splat:values path=splat_rule/parameters/features/animate_trees/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` capacity ` | ` 1 ` |
+| ` recovery ` | ` long_rest ` |
+| ` cost ` | ` 1 ` |
+
+###### Targets
+
+<!-- splat:values path=splat_rule/parameters/features/animate_trees/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` tree ` |
+| ` count_max ` | ` 2 ` |
+| ` range_feet ` | ` 60 ` |
+| ` visible_to ` | ` self ` |
+
+###### Stat block
+
+<!-- splat:values path=splat_rule/parameters/features/animate_trees/stat_block -->
+
+| Field | Value |
+| --- | --- |
+| ` key ` | ` dnd2024:creatures/treant ` |
+
+###### Overrides
+
+<!-- splat:yaml path=splat_rule/parameters/features/animate_trees/overrides -->
 
 ```yaml
-economy: action
-resource:
-  capacity: 1
-  recovery: long_rest
-  cost: 1
-op: animate_objects
-targets:
-  kind: tree
-  count_max: 2
-  range_feet: 60
-  visible_to: self
-stat_block:
-  key: dnd2024:creatures/treant
-overrides:
-  ability_scores:
-    intelligence: 1
-    charisma: 1
-  can_speak: false
-  remove_features:
-  - animate_trees
-initiative:
-  same_count_as: self
-  turn_order: immediately_after_self
-controller: self
-ends_any:
-- days: 1
-- animated_tree_dies: true
-- self_dies: true
-- distance_from_self_exceeds_feet: 120
-on_end:
-  op: take_root
-  if_possible: true
+ability_scores:
+  intelligence: 1
+  charisma: 1
+can_speak: false
+remove_features:
+- animate_trees
 ```
+
+###### Initiative
+
+<!-- splat:values path=splat_rule/parameters/features/animate_trees/initiative -->
+
+| Field | Value |
+| --- | --- |
+| ` same_count_as ` | ` self ` |
+| ` turn_order ` | ` immediately_after_self ` |
+
+###### Ends any
+
+<!-- splat:table
+path: splat_rule/parameters/features/animate_trees/ends_any
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Days:
+    path: days
+    type: integer
+    optional: true
+  Animated tree dies:
+    path: animated_tree_dies
+    type: boolean
+    optional: true
+  Self dies:
+    path: self_dies
+    type: boolean
+    optional: true
+  Distance from self exceeds feet:
+    path: distance_from_self_exceeds_feet
+    type: integer
+    optional: true
+-->
+
+| Key | Days | Animated tree dies | Self dies | Distance from self exceeds feet |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` |  |  |  |
+| ` row_2 ` |  | true |  |  |
+| ` row_3 ` |  |  | true |  |
+| ` row_4 ` |  |  |  | ` 120 ` |
+
+###### On end
+
+<!-- splat:values path=splat_rule/parameters/features/animate_trees/on_end -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` take_root ` |
+| ` if_possible ` | ` true ` |
 
 #### Defenses
 

@@ -125,36 +125,79 @@ success:
 
 #### Barrier
 
-<!-- splat:yaml path=splat_rule/parameters/barrier -->
+<!-- splat:values path=splat_rule/parameters/barrier -->
+
+| Field | Value |
+| --- | --- |
+| ` transparent ` | ` true ` |
+| ` passable ` | ` ["breathable_air"] ` |
+| ` blocks ` | ` ["attacks", "other_effects", "other_matter"] ` |
+| ` can_be_picked_up ` | ` true ` |
+| ` weight_lb ` | ` 1 ` |
+| ` weight_includes_contents ` | ` true ` |
+
+##### Duration
+
+<!-- splat:values path=splat_rule/parameters/barrier/duration -->
+
+| Field | Value |
+| --- | --- |
+| ` amount ` | ` 1 ` |
+| ` unit ` | ` minutes ` |
+
+##### Trapped
+
+<!-- splat:values path=splat_rule/parameters/barrier/trapped -->
+
+| Field | Value |
+| --- | --- |
+| ` save ` | ` failure ` |
+| ` wholly_inside ` | ` true ` |
+
+##### Push out
+
+<!-- splat:values path=splat_rule/parameters/barrier/push_out -->
+
+| Field | Value |
+| --- | --- |
+| ` direction ` | ` away_from_center ` |
+| ` until ` | ` outside ` |
+
+###### Or
+
+<!-- splat:table
+path: splat_rule/parameters/barrier/push_out/or
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Save:
+    path: save
+    type: symbol
+    optional: true
+  Partially inside:
+    path: partially_inside
+    type: boolean
+    optional: true
+-->
+
+| Key | Save | Partially inside |
+| --- | --- | --- |
+| ` row_1 ` | ` Success ` |  |
+| ` row_2 ` |  | true |
+
+##### Movement
+
+<!-- splat:yaml path=splat_rule/parameters/barrier/movement -->
 
 ```yaml
-duration:
-  amount: 1
-  unit: minutes
-transparent: true
-trapped:
-  save: failure
-  wholly_inside: true
-push_out:
-  or:
-  - save: success
-  - partially_inside: true
-  direction: away_from_center
-  until: outside
-passable:
-- breathable_air
-blocks:
-- attacks
-- other_effects
-- other_matter
-movement:
-  actor: enclosed_creature
-  action: utilize
-  maximum_distance:
-    multiply:
-    - actor.speed
-    - 0.5
-can_be_picked_up: true
-weight_lb: 1
-weight_includes_contents: true
+actor: enclosed_creature
+action: utilize
+maximum_distance:
+  multiply:
+  - actor.speed
+  - 0.5
 ```

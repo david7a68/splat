@@ -108,32 +108,39 @@ damage_per_dart:
 
 #### Detection
 
-<!-- splat:rows path=splat_rule/parameters/detection -->
+<!-- splat:table
+path: splat_rule/parameters/detection
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Location:
+    path: location
+    type: symbol
+  Economy:
+    path: economy
+    type: symbol
+  Check ability:
+    path: check/ability
+    type: symbol
+  Check dc:
+    path: check/dc
+    type: integer
+  Check skill:
+    path: check/skill
+    type: symbol
+  Reveals:
+    path: reveals
+    type: symbol
+-->
 
-| Row | location | economy | reveals |
-| --- | --- | --- | --- |
-| ` 0 ` | ` walls ` | ` search ` | ` dart_holes ` |
-| ` 1 ` | ` floor_pressure_plate ` | ` search ` | ` pressure_plate ` |
-
-##### Check
-
-<!-- splat:values path=splat_rule/parameters/detection/0/check -->
-
-| Field | Value |
-| --- | --- |
-| ` ability ` | ` wisdom ` |
-| ` dc ` | ` 15 ` |
-| ` skill ` | ` perception ` |
-
-##### Check
-
-<!-- splat:values path=splat_rule/parameters/detection/1/check -->
-
-| Field | Value |
-| --- | --- |
-| ` ability ` | ` wisdom ` |
-| ` dc ` | ` 15 ` |
-| ` skill ` | ` perception ` |
+| Key | Location | Economy | Check ability | Check dc | Check skill | Reveals |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Walls ` | ` Search ` | ` Wisdom ` | ` 15 ` | ` Perception ` | ` Dart holes ` |
+| ` row_2 ` | ` Floor pressure plate ` | ` Search ` | ` Wisdom ` | ` 15 ` | ` Perception ` | ` Pressure plate ` |
 
 #### Disarm
 
@@ -146,59 +153,31 @@ damage_per_dart:
 
 #### Scaling
 
-<!-- splat:rows path=splat_rule/parameters/scaling -->
+<!-- splat:table
+path: splat_rule/parameters/scaling
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Poison per dart dice:
+    path: poison_per_dart/dice
+    type: dice
+  Poison per dart average:
+    path: poison_per_dart/average
+    type: integer
+-->
 
-| Row | levels |
-| --- | --- |
-| ` 0 ` | ` [1, 4] ` |
-| ` 1 ` | ` [5, 10] ` |
-| ` 2 ` | ` [11, 16] ` |
-| ` 3 ` | ` [17, 20] ` |
-
-##### Poison per dart
-
-<!-- splat:yaml path=splat_rule/parameters/scaling/0/poison_per_dart -->
-
-```yaml
-dice:
-  count: 1
-  sides: 6
-  add: 0
-average: 3
-```
-
-##### Poison per dart
-
-<!-- splat:yaml path=splat_rule/parameters/scaling/1/poison_per_dart -->
-
-```yaml
-dice:
-  count: 2
-  sides: 6
-  add: 0
-average: 7
-```
-
-##### Poison per dart
-
-<!-- splat:yaml path=splat_rule/parameters/scaling/2/poison_per_dart -->
-
-```yaml
-dice:
-  count: 4
-  sides: 6
-  add: 0
-average: 14
-```
-
-##### Poison per dart
-
-<!-- splat:yaml path=splat_rule/parameters/scaling/3/poison_per_dart -->
-
-```yaml
-dice:
-  count: 7
-  sides: 6
-  add: 0
-average: 24
-```
+| Key | Levels | Poison per dart dice | Poison per dart average |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` [1, 4] ` | ` 1d6 ` | ` 3 ` |
+| ` row_2 ` | ` [5, 10] ` | ` 2d6 ` | ` 7 ` |
+| ` row_3 ` | ` [11, 16] ` | ` 4d6 ` | ` 14 ` |
+| ` row_4 ` | ` [17, 20] ` | ` 7d6 ` | ` 24 ` |

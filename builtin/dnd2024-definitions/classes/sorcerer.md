@@ -114,28 +114,79 @@ and 28 GP; or (B) 50 GP\
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
 
-```yaml
-count: 1
-options:
-- id: a
-  grants:
-  - item_type: spear
-    quantity: 1
-  - item_type: dagger
-    quantity: 2
-  - item_type: arcane_focus_crystal
-    quantity: 1
-  - item_type: dungeoneer_s_pack
-    quantity: 1
-  - item_type: gp
-    quantity: 28
-- id: b
-  grants:
-  - item_type: gp
-    quantity: 50
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options
+key: Variant
+order:
+- a
+- b
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
+
+| Variant | Details |
+| --- | --- |
+| ` A ` | [Rules](#^splat-93071aae-a "section:a") |
+| ` B ` | [Rules](#^splat-93071aae-b "section:b") |
+
+###### A
+
+^splat-93071aae-a
+
+###### Grants
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/@a/grants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Item type:
+    path: item_type
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Key | Item type | Quantity |
+| --- | --- | --- |
+| ` row_1 ` | ` Spear ` | ` 1 ` |
+| ` row_2 ` | ` Dagger ` | ` 2 ` |
+| ` row_3 ` | ` Arcane focus crystal ` | ` 1 ` |
+| ` row_4 ` | ` Dungeoneer s pack ` | ` 1 ` |
+| ` row_5 ` | ` Gp ` | ` 28 ` |
+
+###### B
+
+^splat-93071aae-b
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/starting_equipment/options/@b/grants -->
+
+| Row | item_type | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` gp ` | ` 50 ` |
 
 #### Progression
 
@@ -147,97 +198,38 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- sorcerer_level_19_epic_boon
+- sorcerer_level_1_innate_sorcery
+- sorcerer_level_1_spellcasting
+- sorcerer_level_20_arcane_apotheosis
+- sorcerer_level_2_font_of_magic
+- sorcerer_level_2_metamagic
+- sorcerer_level_3_sorcerer_subclass
+- sorcerer_level_4_ability_score_improvement
+- sorcerer_level_5_sorcerous_restoration
+- sorcerer_level_7_sorcery_incarnate
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 19 ` |
-| ` 1 ` | ` 1 ` |
-| ` 2 ` | ` 1 ` |
-| ` 3 ` | ` 20 ` |
-| ` 4 ` | ` 2 ` |
-| ` 5 ` | ` 2 ` |
-| ` 6 ` | ` 3 ` |
-| ` 7 ` | ` 4 ` |
-| ` 8 ` | ` 5 ` |
-| ` 9 ` | ` 7 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_1_innate_sorcery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_20_arcane_apotheosis ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_2_font_of_magic ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_2_metamagic ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_3_sorcerer_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_5_sorcerous_restoration ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_7_sorcery_incarnate ` |
+| [Level 19: Epic Boon](<../class_features/sorcerer_level_19_epic_boon.md> "dnd2024:class_features/sorcerer_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Innate Sorcery](<../class_features/sorcerer_level_1_innate_sorcery.md> "dnd2024:class_features/sorcerer_level_1_innate_sorcery") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/sorcerer_level_1_spellcasting.md> "dnd2024:class_features/sorcerer_level_1_spellcasting") | ` 1 ` |
+| [Level 20: Arcane Apotheosis](<../class_features/sorcerer_level_20_arcane_apotheosis.md> "dnd2024:class_features/sorcerer_level_20_arcane_apotheosis") | ` 20 ` |
+| [Level 2: Font of Magic](<../class_features/sorcerer_level_2_font_of_magic.md> "dnd2024:class_features/sorcerer_level_2_font_of_magic") | ` 2 ` |
+| [Level 2: Metamagic](<../class_features/sorcerer_level_2_metamagic.md> "dnd2024:class_features/sorcerer_level_2_metamagic") | ` 2 ` |
+| [Level 3: Sorcerer Subclass](<../class_features/sorcerer_level_3_sorcerer_subclass.md> "dnd2024:class_features/sorcerer_level_3_sorcerer_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/sorcerer_level_4_ability_score_improvement.md> "dnd2024:class_features/sorcerer_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Sorcerous Restoration](<../class_features/sorcerer_level_5_sorcerous_restoration.md> "dnd2024:class_features/sorcerer_level_5_sorcerous_restoration") | ` 5 ` |
+| [Level 7: Sorcery Incarnate](<../class_features/sorcerer_level_7_sorcery_incarnate.md> "dnd2024:class_features/sorcerer_level_7_sorcery_incarnate") | ` 7 ` |

@@ -95,12 +95,32 @@ Original layout: [[../../srd-5.2.1/pages/134|page 134]].
 
 #### Modifiers
 
-<!-- splat:rows path=splat_rule/parameters/modifiers -->
+<!-- splat:table
+path: splat_rule/parameters/modifiers
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Selector:
+    path: selector
+    type: symbol
+  Advantage:
+    path: advantage
+    type: boolean
+    optional: true
+  Disadvantage:
+    path: disadvantage
+    type: boolean
+    optional: true
+-->
 
-| Row | selector | advantage | disadvantage |
+| Key | Selector | Advantage | Disadvantage |
 | --- | --- | --- | --- |
-| ` 0 ` | ` target_d20_tests ` | ` true ` |  |
-| ` 1 ` | ` other_creatures_attack_rolls_against_target ` |  | ` true ` |
+| ` row_1 ` | ` Target d20 tests ` | true |  |
+| ` row_2 ` | ` Other creatures attack rolls against target ` |  | true |
 
 #### End early
 

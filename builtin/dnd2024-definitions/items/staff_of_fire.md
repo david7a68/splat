@@ -92,61 +92,51 @@ recovery:
 
 #### Spell grants
 
-<!-- splat:rows path=splat_rule/parameters/spell_grants -->
+<!-- splat:table
+path: splat_rule/parameters/spell_grants
+key: Spell
+order:
+- burning_hands
+- wall_of_fire
+- fireball
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Charge cost:
+    path: charge_cost
+    type: integer
+  Casting time:
+    path: casting_time
+    type: symbol
+  Method:
+    path: method
+    type: symbol
+  Slot cost:
+    path: slot_cost
+    type: integer
+  Components:
+    path: components
+    type: yaml
+  Level:
+    path: level
+    type: symbol
+  Range:
+    path: range
+    type: symbol
+  Duration:
+    path: duration
+    type: symbol
+  Concentration:
+    path: concentration
+    type: symbol
+-->
 
-| Row | charge_cost | casting_time | method | slot_cost | level | range | duration | concentration |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 1 ` | ` 4 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-| ` 2 ` | ` 3 ` | ` spell_default ` | ` item ` | ` 0 ` | ` lowest_possible ` | ` spell_default ` | ` spell_default ` | ` spell_default ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_grants/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/burning_hands ` |
-
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/0/components -->
-
-```yaml
-[]
-```
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_grants/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_fire ` |
-
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/1/components -->
-
-```yaml
-[]
-```
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spell_grants/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/fireball ` |
-
-##### Components
-
-<!-- splat:yaml path=splat_rule/parameters/spell_grants/2/components -->
-
-```yaml
-[]
-```
+| Spell | Charge cost | Casting time | Method | Slot cost | Components | Level | Range | Duration | Concentration |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Burning Hands](<../spells/burning_hands.md> "dnd2024:spells/burning_hands") | ` 1 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Lowest possible ` | ` Spell default ` | ` Spell default ` | ` Spell default ` |
+| [Wall of Fire](<../spells/wall_of_fire.md> "dnd2024:spells/wall_of_fire") | ` 4 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Lowest possible ` | ` Spell default ` | ` Spell default ` | ` Spell default ` |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") | ` 3 ` | ` Spell default ` | ` Item ` | ` 0 ` | ` [] ` | ` Lowest possible ` | ` Spell default ` | ` Spell default ` | ` Spell default ` |
 
 #### Last charge
 

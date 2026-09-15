@@ -204,13 +204,29 @@ reevaluate_hit: true
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item | quantity |
+| Key | Item | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` pistol ` | ` 1 ` |
-| ` 1 ` | ` scimitar ` | ` 1 ` |
-| ` 2 ` | ` studded_leather_armor ` | ` 1 ` |
+| ` row_1 ` | ` Pistol ` | ` 1 ` |
+| ` row_2 ` | ` Scimitar ` | ` 1 ` |
+| ` row_3 ` | ` Studded leather armor ` | ` 1 ` |
 
 #### Senses
 

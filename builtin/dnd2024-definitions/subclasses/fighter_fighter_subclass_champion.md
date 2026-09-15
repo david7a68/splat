@@ -68,61 +68,30 @@ victor.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- champion_level_10_heroic_warrior
+- champion_level_15_superior_critical
+- champion_level_18_survivor
+- champion_level_3_improved_critical
+- champion_level_3_remarkable_athlete
+- champion_level_7_additional_fighting_style
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 15 ` |
-| ` 2 ` | ` 18 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 3 ` |
-| ` 5 ` | ` 7 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/champion_level_10_heroic_warrior ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/champion_level_15_superior_critical ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/champion_level_18_survivor ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/champion_level_3_improved_critical ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/champion_level_3_remarkable_athlete ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/champion_level_7_additional_fighting_style ` |
+| [Level 10: Heroic Warrior](<../class_features/champion_level_10_heroic_warrior.md> "dnd2024:class_features/champion_level_10_heroic_warrior") | ` 10 ` |
+| [Level 15: Superior Critical](<../class_features/champion_level_15_superior_critical.md> "dnd2024:class_features/champion_level_15_superior_critical") | ` 15 ` |
+| [Level 18: Survivor](<../class_features/champion_level_18_survivor.md> "dnd2024:class_features/champion_level_18_survivor") | ` 18 ` |
+| [Level 3: Improved Critical](<../class_features/champion_level_3_improved_critical.md> "dnd2024:class_features/champion_level_3_improved_critical") | ` 3 ` |
+| [Level 3: Remarkable Athlete](<../class_features/champion_level_3_remarkable_athlete.md> "dnd2024:class_features/champion_level_3_remarkable_athlete") | ` 3 ` |
+| [Level 7: Additional Fighting Style](<../class_features/champion_level_7_additional_fighting_style.md> "dnd2024:class_features/champion_level_7_additional_fighting_style") | ` 7 ` |

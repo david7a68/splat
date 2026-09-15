@@ -86,12 +86,35 @@ Original layout: [[../../srd-5.2.1/pages/122|page 122]].
 
 #### Replacements
 
-<!-- splat:rows path=splat_rule/parameters/replacements -->
+<!-- splat:table
+path: splat_rule/parameters/replacements
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Trigger:
+    path: trigger
+    type: symbol
+  Set hp:
+    path: set_hp
+    type: integer
+    optional: true
+  End spell:
+    path: end_spell
+    type: boolean
+  Negate for target:
+    path: negate_for_target
+    type: boolean
+    optional: true
+-->
 
-| Row | trigger | set_hp | end_spell | negate_for_target |
+| Key | Trigger | Set hp | End spell | Negate for target |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` first_hp_drop_to_zero ` | ` 1 ` | ` true ` |  |
-| ` 1 ` | ` instant_death_without_damage ` |  | ` true ` | ` true ` |
+| ` row_1 ` | ` First hp drop to zero ` | ` 1 ` | true |  |
+| ` row_2 ` | ` Instant death without damage ` |  | true | true |
 
 #### Spell lifetime
 

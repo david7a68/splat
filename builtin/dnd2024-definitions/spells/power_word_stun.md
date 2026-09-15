@@ -80,19 +80,50 @@ Original layout: [[../../srd-5.2.1/pages/154|page 154]].
 
 #### Branches
 
-<!-- splat:rows path=splat_rule/parameters/branches -->
+<!-- splat:table
+path: splat_rule/parameters/branches
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Hp lte:
+    path: hp_lte
+    type: integer
+    optional: true
+  Condition:
+    path: condition
+    type: symbol
+    optional: true
+  Repeat save event:
+    path: repeat_save/event
+    type: string
+    optional: true
+  Repeat save ability:
+    path: repeat_save/ability
+    type: symbol
+    optional: true
+  Repeat save success:
+    path: repeat_save/success
+    type: symbol
+    optional: true
+  Hp gt:
+    path: hp_gt
+    type: integer
+    optional: true
+  Speed:
+    path: speed
+    type: integer
+    optional: true
+  Until:
+    path: until
+    type: string
+    optional: true
+-->
 
-| Row | hp_lte | condition | hp_gt | speed | until |
-| --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 150 ` | ` stunned ` |  |  |  |
-| ` 1 ` |  |  | ` 150 ` | ` 0 ` | ` caster.next_turn.start ` |
-
-##### Repeat save
-
-<!-- splat:values path=splat_rule/parameters/branches/0/repeat_save -->
-
-| Field | Value |
-| --- | --- |
-| ` event ` | ` turn.end ` |
-| ` ability ` | ` constitution ` |
-| ` success ` | ` end_stunned ` |
+| Key | Hp lte | Condition | Repeat save event | Repeat save ability | Repeat save success | Hp gt | Speed | Until |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 150 ` | ` Stunned ` | ` turn.end ` | ` Constitution ` | ` End stunned ` |  |  |  |
+| ` row_2 ` |  |  |  |  |  | ` 150 ` | ` 0 ` | ` caster.next_turn.start ` |

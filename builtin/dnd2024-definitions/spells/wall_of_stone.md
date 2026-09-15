@@ -114,23 +114,43 @@ Original layout: [[../../srd-5.2.1/pages/173|page 173]].
 
 #### Wall
 
-<!-- splat:yaml path=splat_rule/parameters/wall -->
+<!-- splat:values path=splat_rule/parameters/wall -->
 
-```yaml
-material: stone
-magical: false
-origin: chosen_point
-range_feet: 120
-panel_count: 10
-panel_choice:
-- width_feet: 10
-  height_feet: 10
-  thickness_inches: 6
-- width_feet: 10
-  height_feet: 20
-  thickness_inches: 3
-every_panel_contiguous_with_another: true
-```
+| Field | Value |
+| --- | --- |
+| ` material ` | ` stone ` |
+| ` magical ` | ` false ` |
+| ` origin ` | ` chosen_point ` |
+| ` range_feet ` | ` 120 ` |
+| ` panel_count ` | ` 10 ` |
+| ` every_panel_contiguous_with_another ` | ` true ` |
+
+##### Panel choice
+
+<!-- splat:table
+path: splat_rule/parameters/wall/panel_choice
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Width feet:
+    path: width_feet
+    type: integer
+  Height feet:
+    path: height_feet
+    type: integer
+  Thickness inches:
+    path: thickness_inches
+    type: integer
+-->
+
+| Key | Width feet | Height feet | Thickness inches |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 10 ` | ` 10 ` | ` 6 ` |
+| ` row_2 ` | ` 10 ` | ` 20 ` | ` 3 ` |
 
 #### Appearance collision
 

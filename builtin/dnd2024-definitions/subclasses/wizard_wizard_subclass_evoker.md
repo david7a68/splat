@@ -67,52 +67,28 @@ some seek their own gain.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- evoker_level_10_empowered_evocation
+- evoker_level_14_overchannel
+- evoker_level_3_evocation_savant
+- evoker_level_3_potent_cantrip
+- evoker_level_6_sculpt_spells
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 14 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 6 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/evoker_level_10_empowered_evocation ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/evoker_level_14_overchannel ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/evoker_level_3_evocation_savant ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/evoker_level_3_potent_cantrip ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/evoker_level_6_sculpt_spells ` |
+| [Level 10: Empowered Evocation](<../class_features/evoker_level_10_empowered_evocation.md> "dnd2024:class_features/evoker_level_10_empowered_evocation") | ` 10 ` |
+| [Level 14: Overchannel](<../class_features/evoker_level_14_overchannel.md> "dnd2024:class_features/evoker_level_14_overchannel") | ` 14 ` |
+| [Level 3: Evocation Savant](<../class_features/evoker_level_3_evocation_savant.md> "dnd2024:class_features/evoker_level_3_evocation_savant") | ` 3 ` |
+| [Level 3: Potent Cantrip](<../class_features/evoker_level_3_potent_cantrip.md> "dnd2024:class_features/evoker_level_3_potent_cantrip") | ` 3 ` |
+| [Level 6: Sculpt Spells](<../class_features/evoker_level_6_sculpt_spells.md> "dnd2024:class_features/evoker_level_6_sculpt_spells") | ` 6 ` |

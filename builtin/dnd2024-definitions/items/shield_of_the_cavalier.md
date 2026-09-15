@@ -99,30 +99,55 @@ Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
 #### Forceful bash
 
-<!-- splat:yaml path=splat_rule/parameters/forceful_bash -->
+<!-- splat:values path=splat_rule/parameters/forceful_bash -->
+
+| Field | Value |
+| --- | --- |
+| ` trigger ` | ` attack_action ` |
+| ` replaces ` | ` one_attack_roll ` |
+| ` range_ft ` | ` 5 ` |
+
+##### Attack bonus
+
+###### Sum
+
+<!-- splat:table
+path: splat_rule/parameters/forceful_bash/attack_bonus/sum
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Value from:
+    path: value_from
+    type: symbol
+-->
+
+| Key | Value from |
+| --- | --- |
+| ` row_1 ` | ` Proficiency bonus ` |
+| ` row_2 ` | ` Strength modifier ` |
+
+##### On hit
+
+<!-- splat:yaml path=splat_rule/parameters/forceful_bash/on_hit -->
 
 ```yaml
-trigger: attack_action
-replaces: one_attack_roll
-range_ft: 5
-attack_bonus:
-  sum:
-  - value_from: proficiency_bonus
-  - value_from: strength_modifier
-on_hit:
-  damage:
-    roll:
-      dice: 2
-      sides: 6
-      bonus: 2
-    add: strength_modifier
-    type: force
-  if_creature:
-    optional_push:
-      maximum_ft: 10
-      direction: directly_away_from_user
-    optional_prone:
-      maximum_size: user_size
+damage:
+  roll:
+    dice: 2
+    sides: 6
+    bonus: 2
+  add: strength_modifier
+  type: force
+if_creature:
+  optional_push:
+    maximum_ft: 10
+    direction: directly_away_from_user
+  optional_prone:
+    maximum_size: user_size
 ```
 
 #### Protective field

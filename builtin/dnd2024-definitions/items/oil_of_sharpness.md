@@ -62,33 +62,68 @@ Original layout: [[../../srd-5.2.1/pages/233|page 233]].
 
 #### Application
 
-<!-- splat:yaml path=splat_rule/parameters/application -->
+<!-- splat:values path=splat_rule/parameters/application -->
+
+| Field | Value |
+| --- | --- |
+| ` consume_vial ` | ` true ` |
+| ` duration_of_conversion ` | ` permanent ` |
+
+##### Duration
+
+<!-- splat:values path=splat_rule/parameters/application/duration -->
+
+| Field | Value |
+| --- | --- |
+| ` value ` | ` 1 ` |
+| ` unit ` | ` minute ` |
+
+##### Target choice
+
+<!-- splat:table
+path: splat_rule/parameters/application/target_choice
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Count:
+    path: count
+    type: integer
+-->
+
+| Key | Kind | Count |
+| --- | --- | --- |
+| ` row_1 ` | ` Melee weapon ` | ` 1 ` |
+| ` row_2 ` | ` Ammunition ` | ` 20 ` |
+
+##### Eligibility
+
+<!-- splat:values path=splat_rule/parameters/application/eligibility -->
+
+| Field | Value |
+| --- | --- |
+| ` nonmagical ` | ` true ` |
+| ` damage_types_any ` | ` ["slashing", "piercing"] ` |
+
+##### Result
+
+<!-- splat:yaml path=splat_rule/parameters/application/result -->
 
 ```yaml
-duration:
-  value: 1
-  unit: minute
-consume_vial: true
-target_choice:
-- kind: melee_weapon
-  count: 1
-- kind: ammunition
-  count: 20
-eligibility:
-  nonmagical: true
-  damage_types_any:
-  - slashing
-  - piercing
-result:
-  melee_weapon:
-    definition:
-      key: dnd2024:items/weapon_1_2_or_3
-    bonus: 3
-  ammunition:
-    definition:
-      key: dnd2024:items/ammunition_1_2_or_3
-    bonus: 3
-duration_of_conversion: permanent
+melee_weapon:
+  definition:
+    key: dnd2024:items/weapon_1_2_or_3
+  bonus: 3
+ammunition:
+  definition:
+    key: dnd2024:items/ammunition_1_2_or_3
+  bonus: 3
 ```
 
 #### Attunement

@@ -111,12 +111,32 @@ Original layout: [[../../srd-5.2.1/pages/163|page 163]].
 
 #### Triggers
 
-<!-- splat:rows path=splat_rule/parameters/triggers -->
+<!-- splat:table
+path: splat_rule/parameters/triggers
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Occurrence per turn:
+    path: occurrence_per_turn
+    type: symbol
+    optional: true
+  Subjects:
+    path: subjects
+    type: symbol
+    optional: true
+-->
 
-| Row | event | occurrence_per_turn | subjects |
+| Key | Event | Occurrence per turn | Subjects |
 | --- | --- | --- | --- |
-| ` 0 ` | ` creature.entered_area ` | ` first ` |  |
-| ` 1 ` | ` turn.start ` |  | ` creatures_in_area ` |
+| ` row_1 ` | ` creature.entered_area ` | ` First ` |  |
+| ` row_2 ` | ` turn.start ` |  | ` Creatures in area ` |
 
 #### Save
 

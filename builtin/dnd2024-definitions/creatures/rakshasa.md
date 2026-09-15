@@ -192,65 +192,66 @@ steps:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: cast_spell_choice
-ability: charisma
-spells:
-- spell:
-    key: dnd2024:spells/detect_magic
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/detect_thoughts
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/disguise_self
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/mage_hand
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/minor_illusion
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/fly
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/invisibility
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/major_image
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/plane_shift
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- material
-save_dc: 18
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 18 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- detect_magic
+- detect_thoughts
+- disguise_self
+- mage_hand
+- minor_illusion
+- fly
+- invisibility
+- major_image
+- plane_shift
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: symbol
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Cast level | Uses | Resource scope | Recovery |
+| --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Detect Thoughts](<../spells/detect_thoughts.md> "dnd2024:spells/detect_thoughts") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Disguise Self](<../spells/disguise_self.md> "dnd2024:spells/disguise_self") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Minor Illusion](<../spells/minor_illusion.md> "dnd2024:spells/minor_illusion") | ` At will ` | ` Spell minimum ` |  |  |  |
+| [Fly](<../spells/fly.md> "dnd2024:spells/fly") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Major Image](<../spells/major_image.md> "dnd2024:spells/major_image") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") | ` Daily ` | ` Spell minimum ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Fiendish restoration
 

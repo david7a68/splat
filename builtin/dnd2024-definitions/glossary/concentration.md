@@ -71,14 +71,36 @@ Original layout: [[../../srd-5.2.1/pages/179|page 179]].
 
 #### Breaks when
 
-<!-- splat:rows path=splat_rule/parameters/breaks_when -->
+<!-- splat:table
+path: splat_rule/parameters/breaks_when
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Requires concentration:
+    path: requires_concentration
+    type: boolean
+    optional: true
+  Condition:
+    path: condition
+    type: symbol
+    optional: true
+-->
 
-| Row | event | requires_concentration | condition |
+| Key | Event | Requires concentration | Condition |
 | --- | --- | --- | --- |
-| ` 0 ` | ` spell.cast_started ` | ` true ` |  |
-| ` 1 ` | ` effect.activated ` | ` true ` |  |
-| ` 2 ` | ` condition.applied ` |  | ` incapacitated ` |
-| ` 3 ` | ` creature.died ` |  |  |
+| ` row_1 ` | ` spell.cast_started ` | true |  |
+| ` row_2 ` | ` effect.activated ` | true |  |
+| ` row_3 ` | ` condition.applied ` |  | ` Incapacitated ` |
+| ` row_4 ` | ` creature.died ` |  |  |
 
 #### Damage save
 

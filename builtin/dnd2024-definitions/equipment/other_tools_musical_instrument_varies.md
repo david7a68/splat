@@ -82,197 +82,41 @@ crafting_rule:
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Variant
+order:
+- bagpipes
+- drum
+- dulcimer
+- flute
+- horn
+- lute
+- lyre
+- pan_flute
+- shawm
+- viol
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Cost:
+    path: price
+    type: quantity
+  Weight:
+    path: mass
+    type: quantity
+-->
 
-| Row | id |
-| --- | --- |
-| ` 0 ` | ` bagpipes ` |
-| ` 1 ` | ` drum ` |
-| ` 2 ` | ` dulcimer ` |
-| ` 3 ` | ` flute ` |
-| ` 4 ` | ` horn ` |
-| ` 5 ` | ` lute ` |
-| ` 6 ` | ` lyre ` |
-| ` 7 ` | ` pan_flute ` |
-| ` 8 ` | ` shawm ` |
-| ` 9 ` | ` viol ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/0/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 30 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/0/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 6 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/1/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 6 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/1/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 3 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/2/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 25 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/2/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/3/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/3/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/4/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 3 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/4/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/5/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 35 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/5/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/6/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 30 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/6/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/7/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 12 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/7/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/8/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/8/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/9/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 30 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/9/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` lb ` |
+| Variant | Cost | Weight |
+| --- | --- | --- |
+| ` Bagpipes ` | ` 30 GP ` | ` 6 lb ` |
+| ` Drum ` | ` 6 GP ` | ` 3 lb ` |
+| ` Dulcimer ` | ` 25 GP ` | ` 10 lb ` |
+| ` Flute ` | ` 2 GP ` | ` 1 lb ` |
+| ` Horn ` | ` 3 GP ` | ` 2 lb ` |
+| ` Lute ` | ` 35 GP ` | ` 2 lb ` |
+| ` Lyre ` | ` 30 GP ` | ` 2 lb ` |
+| ` Pan flute ` | ` 12 GP ` | ` 2 lb ` |
+| ` Shawm ` | ` 2 GP ` | ` 1 lb ` |
+| ` Viol ` | ` 30 GP ` | ` 1 lb ` |

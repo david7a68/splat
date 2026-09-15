@@ -74,212 +74,328 @@ Level Bonus Class Features Divinity\
 
 #### Features
 
-<!-- splat:rows path=splat_rule/parameters/features -->
+<!-- splat:table
+path: splat_rule/parameters/features
+key: Feature
+order:
+- cleric_level_1_divine_order
+- cleric_level_1_spellcasting
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 1 ` |
-| ` 1 ` | ` 1 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_1_divine_order ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_1_spellcasting ` |
+| [Level 1: Divine Order](<../class_features/cleric_level_1_divine_order.md> "dnd2024:class_features/cleric_level_1_divine_order") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/cleric_level_1_spellcasting.md> "dnd2024:class_features/cleric_level_1_spellcasting") | ` 1 ` |
 
 #### Progression
 
-<!-- splat:rows path=splat_rule/parameters/progression -->
+<!-- splat:table
+path: splat_rule/parameters/progression
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+- row_17
+- row_18
+- row_19
+- row_20
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Proficiency bonus:
+    path: proficiency_bonus
+    type: integer
+  Channel divinity uses:
+    path: channel_divinity_uses
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | level | proficiency_bonus | channel_divinity_uses |
-| --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 2 ` | ` 0 ` |
-| ` 1 ` | ` 2 ` | ` 2 ` | ` 2 ` |
-| ` 2 ` | ` 3 ` | ` 2 ` | ` 2 ` |
-| ` 3 ` | ` 4 ` | ` 2 ` | ` 2 ` |
-| ` 4 ` | ` 5 ` | ` 3 ` | ` 2 ` |
-| ` 5 ` | ` 6 ` | ` 3 ` | ` 3 ` |
-| ` 6 ` | ` 7 ` | ` 3 ` | ` 3 ` |
-| ` 7 ` | ` 8 ` | ` 3 ` | ` 3 ` |
-| ` 8 ` | ` 9 ` | ` 4 ` | ` 3 ` |
-| ` 9 ` | ` 10 ` | ` 4 ` | ` 3 ` |
-| ` 10 ` | ` 11 ` | ` 4 ` | ` 3 ` |
-| ` 11 ` | ` 12 ` | ` 4 ` | ` 3 ` |
-| ` 12 ` | ` 13 ` | ` 5 ` | ` 3 ` |
-| ` 13 ` | ` 14 ` | ` 5 ` | ` 3 ` |
-| ` 14 ` | ` 15 ` | ` 5 ` | ` 3 ` |
-| ` 15 ` | ` 16 ` | ` 5 ` | ` 3 ` |
-| ` 16 ` | ` 17 ` | ` 6 ` | ` 3 ` |
-| ` 17 ` | ` 18 ` | ` 6 ` | ` 4 ` |
-| ` 18 ` | ` 19 ` | ` 6 ` | ` 4 ` |
-| ` 19 ` | ` 20 ` | ` 6 ` | ` 4 ` |
+| Key | Level | Proficiency bonus | Channel divinity uses | Details |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 2 ` | ` 0 ` | [Rules](#^splat-af862744-row_1 "section:row_1") |
+| ` row_2 ` | ` 2 ` | ` 2 ` | ` 2 ` | [Rules](#^splat-af862744-row_2 "section:row_2") |
+| ` row_3 ` | ` 3 ` | ` 2 ` | ` 2 ` | [Rules](#^splat-af862744-row_3 "section:row_3") |
+| ` row_4 ` | ` 4 ` | ` 2 ` | ` 2 ` | [Rules](#^splat-af862744-row_4 "section:row_4") |
+| ` row_5 ` | ` 5 ` | ` 3 ` | ` 2 ` | [Rules](#^splat-af862744-row_5 "section:row_5") |
+| ` row_6 ` | ` 6 ` | ` 3 ` | ` 3 ` | [Rules](#^splat-af862744-row_6 "section:row_6") |
+| ` row_7 ` | ` 7 ` | ` 3 ` | ` 3 ` | [Rules](#^splat-af862744-row_7 "section:row_7") |
+| ` row_8 ` | ` 8 ` | ` 3 ` | ` 3 ` | [Rules](#^splat-af862744-row_8 "section:row_8") |
+| ` row_9 ` | ` 9 ` | ` 4 ` | ` 3 ` | [Rules](#^splat-af862744-row_9 "section:row_9") |
+| ` row_10 ` | ` 10 ` | ` 4 ` | ` 3 ` | [Rules](#^splat-af862744-row_10 "section:row_10") |
+| ` row_11 ` | ` 11 ` | ` 4 ` | ` 3 ` | [Rules](#^splat-af862744-row_11 "section:row_11") |
+| ` row_12 ` | ` 12 ` | ` 4 ` | ` 3 ` | [Rules](#^splat-af862744-row_12 "section:row_12") |
+| ` row_13 ` | ` 13 ` | ` 5 ` | ` 3 ` | [Rules](#^splat-af862744-row_13 "section:row_13") |
+| ` row_14 ` | ` 14 ` | ` 5 ` | ` 3 ` | [Rules](#^splat-af862744-row_14 "section:row_14") |
+| ` row_15 ` | ` 15 ` | ` 5 ` | ` 3 ` | [Rules](#^splat-af862744-row_15 "section:row_15") |
+| ` row_16 ` | ` 16 ` | ` 5 ` | ` 3 ` | [Rules](#^splat-af862744-row_16 "section:row_16") |
+| ` row_17 ` | ` 17 ` | ` 6 ` | ` 3 ` | [Rules](#^splat-af862744-row_17 "section:row_17") |
+| ` row_18 ` | ` 18 ` | ` 6 ` | ` 4 ` | [Rules](#^splat-af862744-row_18 "section:row_18") |
+| ` row_19 ` | ` 19 ` | ` 6 ` | ` 4 ` | [Rules](#^splat-af862744-row_19 "section:row_19") |
+| ` row_20 ` | ` 20 ` | ` 6 ` | ` 4 ` | [Rules](#^splat-af862744-row_20 "section:row_20") |
 
-##### Features
+##### Row 1
 
-<!-- splat:rows path=splat_rule/parameters/progression/0/features -->
+^splat-af862744-row_1
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_1/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_1_divine_order ` |
 | ` 1 ` | ` dnd2024:class_features/cleric_level_1_spellcasting ` |
 
-##### Features
+##### Row 2
 
-<!-- splat:rows path=splat_rule/parameters/progression/1/features -->
+^splat-af862744-row_2
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_2/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_2_channel_divinity ` |
 
-##### Features
+##### Row 3
 
-<!-- splat:rows path=splat_rule/parameters/progression/2/features -->
+^splat-af862744-row_3
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_3/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_3_cleric_subclass ` |
 
-##### Features
+##### Row 4
 
-<!-- splat:rows path=splat_rule/parameters/progression/3/features -->
+^splat-af862744-row_4
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_4/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_4_ability_score_improvement ` |
 
-##### Features
+##### Row 5
 
-<!-- splat:rows path=splat_rule/parameters/progression/4/features -->
+^splat-af862744-row_5
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_5/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_5_sear_undead ` |
 
-##### Features
+##### Row 6
 
-<!-- splat:yaml path=splat_rule/parameters/progression/5/features -->
+^splat-af862744-row_6
+
+###### Features
+
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_6/features -->
 
 ```yaml
 []
 ```
 
-##### Features
+##### Row 7
 
-<!-- splat:rows path=splat_rule/parameters/progression/6/features -->
+^splat-af862744-row_7
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_7/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_7_blessed_strikes ` |
 
-##### Features
+##### Row 8
 
-<!-- splat:yaml path=splat_rule/parameters/progression/7/features -->
+^splat-af862744-row_8
 
-```yaml
-[]
-```
+###### Features
 
-##### Features
-
-<!-- splat:yaml path=splat_rule/parameters/progression/8/features -->
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_8/features -->
 
 ```yaml
 []
 ```
 
-##### Features
+##### Row 9
 
-<!-- splat:rows path=splat_rule/parameters/progression/9/features -->
+^splat-af862744-row_9
+
+###### Features
+
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_9/features -->
+
+```yaml
+[]
+```
+
+##### Row 10
+
+^splat-af862744-row_10
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_10/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_10_divine_intervention ` |
 
-##### Features
+##### Row 11
 
-<!-- splat:yaml path=splat_rule/parameters/progression/10/features -->
+^splat-af862744-row_11
 
-```yaml
-[]
-```
+###### Features
 
-##### Features
-
-<!-- splat:yaml path=splat_rule/parameters/progression/11/features -->
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_11/features -->
 
 ```yaml
 []
 ```
 
-##### Features
+##### Row 12
 
-<!-- splat:yaml path=splat_rule/parameters/progression/12/features -->
+^splat-af862744-row_12
+
+###### Features
+
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_12/features -->
 
 ```yaml
 []
 ```
 
-##### Features
+##### Row 13
 
-<!-- splat:rows path=splat_rule/parameters/progression/13/features -->
+^splat-af862744-row_13
+
+###### Features
+
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_13/features -->
+
+```yaml
+[]
+```
+
+##### Row 14
+
+^splat-af862744-row_14
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_14/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_14_improved_blessed_strikes ` |
 
-##### Features
+##### Row 15
 
-<!-- splat:yaml path=splat_rule/parameters/progression/14/features -->
+^splat-af862744-row_15
 
-```yaml
-[]
-```
+###### Features
 
-##### Features
-
-<!-- splat:yaml path=splat_rule/parameters/progression/15/features -->
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_15/features -->
 
 ```yaml
 []
 ```
 
-##### Features
+##### Row 16
 
-<!-- splat:yaml path=splat_rule/parameters/progression/16/features -->
+^splat-af862744-row_16
 
-```yaml
-[]
-```
+###### Features
 
-##### Features
-
-<!-- splat:yaml path=splat_rule/parameters/progression/17/features -->
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_16/features -->
 
 ```yaml
 []
 ```
 
-##### Features
+##### Row 17
 
-<!-- splat:rows path=splat_rule/parameters/progression/18/features -->
+^splat-af862744-row_17
+
+###### Features
+
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_17/features -->
+
+```yaml
+[]
+```
+
+##### Row 18
+
+^splat-af862744-row_18
+
+###### Features
+
+<!-- splat:yaml path=splat_rule/parameters/progression/@row_18/features -->
+
+```yaml
+[]
+```
+
+##### Row 19
+
+^splat-af862744-row_19
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_19/features -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:class_features/cleric_level_19_epic_boon ` |
 
-##### Features
+##### Row 20
 
-<!-- splat:rows path=splat_rule/parameters/progression/19/features -->
+^splat-af862744-row_20
+
+###### Features
+
+<!-- splat:rows path=splat_rule/parameters/progression/@row_20/features -->
 
 | Row | key |
 | --- | --- |

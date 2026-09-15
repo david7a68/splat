@@ -77,28 +77,52 @@ Original layout: [[../../srd-5.2.1/pages/123|page 123]].
 
 #### Sense
 
-<!-- splat:yaml path=splat_rule/parameters/sense -->
+<!-- splat:values path=splat_rule/parameters/sense -->
 
-```yaml
-radius_feet: 30
-origin: caster
-duration: spell_duration
-categories:
-- poison
-- poisonous_creature
-- venomous_creature
-- magical_contagion
-outputs:
-- location
-- kind
-barrier_blocks:
-- materials:
-  - stone
-  - dirt
-  - wood
-  minimum_thickness_feet: 1
-- material: metal
-  minimum_thickness_inches: 1
-- material: lead
-  any_thin_sheet: true
-```
+| Field | Value |
+| --- | --- |
+| ` radius_feet ` | ` 30 ` |
+| ` origin ` | ` caster ` |
+| ` duration ` | ` spell_duration ` |
+| ` categories ` | ` ["poison", "poisonous_creature", "venomous_creature", "magical_contagion"] ` |
+| ` outputs ` | ` ["location", "kind"] ` |
+
+##### Barrier blocks
+
+<!-- splat:table
+path: splat_rule/parameters/sense/barrier_blocks
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Materials:
+    path: materials
+    type: yaml
+    optional: true
+  Minimum thickness feet:
+    path: minimum_thickness_feet
+    type: integer
+    optional: true
+  Material:
+    path: material
+    type: symbol
+    optional: true
+  Minimum thickness inches:
+    path: minimum_thickness_inches
+    type: integer
+    optional: true
+  Any thin sheet:
+    path: any_thin_sheet
+    type: boolean
+    optional: true
+-->
+
+| Key | Materials | Minimum thickness feet | Material | Minimum thickness inches | Any thin sheet |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` ["stone", "dirt", "wood"] ` | ` 1 ` |  |  |  |
+| ` row_2 ` |  |  | ` Metal ` | ` 1 ` |  |
+| ` row_3 ` |  |  | ` Lead ` |  | true |

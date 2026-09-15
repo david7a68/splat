@@ -96,75 +96,132 @@ Original layout: [[../../srd-5.2.1/pages/209|page 209]].
 
 #### Check
 
-<!-- splat:yaml path=splat_rule/parameters/check -->
+<!-- splat:values path=splat_rule/parameters/check -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` intelligence ` |
+| ` skill ` | ` arcana ` |
+| ` dc ` | ` 15 ` |
+
+##### Success
+
+<!-- splat:yaml path=splat_rule/parameters/check/success -->
 
 ```yaml
-ability: intelligence
-skill: arcana
-dc: 15
-success:
-  spell:
-    key: dnd2024:spells/plane_shift
-failure:
-  transport:
-  - actor
-  - creatures
-  - objects
-  radius_ft: 15
-  destination_roll:
-    die: 100
-    rows:
-    - range:
-      - 1
-      - 60
-      plane: named_plane
-      location: random
-    - range:
-      - 61
-      - 70
-      plane_roll:
-        die: 6
-        values:
-        - air
-        - earth
-        - fire
-        - water
-        - feywild
-        - shadowfell
-      location: random
-    - range:
-      - 71
-      - 80
-      plane_roll:
-        die: 8
-        values:
-        - arborea
-        - arcadia
-        - beastlands
-        - bytopia
-        - elysium
-        - mechanus
-        - mount_celestia
-        - ysgard
-      location: random
-    - range:
-      - 81
-      - 90
-      plane_roll:
-        die: 8
-        values:
-        - abyss
-        - acheron
-        - carceri
-        - gehenna
-        - hades
-        - limbo
-        - nine_hells
-        - pandemonium
-      location: random
-    - range:
-      - 91
-      - 100
-      plane: astral
-      location: random
+spell:
+  key: dnd2024:spells/plane_shift
+```
+
+##### Failure
+
+<!-- splat:values path=splat_rule/parameters/check/failure -->
+
+| Field | Value |
+| --- | --- |
+| ` transport ` | ` ["actor", "creatures", "objects"] ` |
+| ` radius_ft ` | ` 15 ` |
+
+###### Destination roll
+
+<!-- splat:values path=splat_rule/parameters/check/failure/destination_roll -->
+
+| Field | Value |
+| --- | --- |
+| ` die ` | ` 100 ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/check/failure/destination_roll/rows
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Range:
+    path: range
+    type: yaml
+  Plane:
+    path: plane
+    type: symbol
+    optional: true
+  Location:
+    path: location
+    type: symbol
+  Plane roll die:
+    path: plane_roll/die
+    type: integer
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Range | Plane | Location | Plane roll die | Details |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` [1, 60] ` | ` Named plane ` | ` Random ` |  |  |
+| ` row_2 ` | ` [61, 70] ` |  | ` Random ` | ` 6 ` | [Rules](#^splat-2ba9a9c2-row_2 "section:row_2") |
+| ` row_3 ` | ` [71, 80] ` |  | ` Random ` | ` 8 ` | [Rules](#^splat-2ba9a9c2-row_3 "section:row_3") |
+| ` row_4 ` | ` [81, 90] ` |  | ` Random ` | ` 8 ` | [Rules](#^splat-2ba9a9c2-row_4 "section:row_4") |
+| ` row_5 ` | ` [91, 100] ` | ` Astral ` | ` Random ` |  |  |
+
+###### Row 2
+
+^splat-2ba9a9c2-row_2
+
+###### Values
+
+<!-- splat:yaml path=splat_rule/parameters/check/failure/destination_roll/rows/@row_2/plane_roll/values -->
+
+```yaml
+- air
+- earth
+- fire
+- water
+- feywild
+- shadowfell
+```
+
+###### Row 3
+
+^splat-2ba9a9c2-row_3
+
+###### Values
+
+<!-- splat:yaml path=splat_rule/parameters/check/failure/destination_roll/rows/@row_3/plane_roll/values -->
+
+```yaml
+- arborea
+- arcadia
+- beastlands
+- bytopia
+- elysium
+- mechanus
+- mount_celestia
+- ysgard
+```
+
+###### Row 4
+
+^splat-2ba9a9c2-row_4
+
+###### Values
+
+<!-- splat:yaml path=splat_rule/parameters/check/failure/destination_roll/rows/@row_4/plane_roll/values -->
+
+```yaml
+- abyss
+- acheron
+- carceri
+- gehenna
+- hades
+- limbo
+- nine_hells
+- pandemonium
 ```

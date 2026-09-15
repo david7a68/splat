@@ -20,6 +20,7 @@ from convert_srd import SOURCE, MANUAL, NAMESPACE, ABILITIES, load_note, clean, 
 from import_srd import positioned_lines, render, PDF_SHA256, ATTRIBUTION, SECTIONS
 from srd_contracts import read_research, merge_fields, contract_record, fingerprint
 from markdown_content import render_note
+from mapped_tables import plan as table_plan
 
 OUTPUT = Path('builtin/dnd2024-definitions')
 CONTRACTS = Path('scripts/srd_inputs/contracts.yaml')
@@ -312,9 +313,31 @@ def progression_tables():
                    'fields':{'splat_rule':{'mechanic':'dnd2024:class_progression','parameters':{'class':name.lower(),'rows':rows}}}}
 
 
+def deduplicate_source_tables(key, body, fields, boundaries):
+    def mapped(path):
+        value=fields
+        for part in path.split('/'):
+            if not isinstance(value,dict) or part not in value:return False
+            value=value[part]
+        return table_plan(path,value) is not None
+    boundary=boundaries.get(key)
+    if key.endswith('_spell_list') and mapped('splat_rule/parameters/spells'):
+        match=re.search(r'^Cantrips \(Level 0 .* Spells\)\\$',body,re.M)
+        if match:boundary={'table':'splat_rule/parameters/spells','start':match[0]}
+    if not boundary or not mapped(boundary['table']):return body
+    start=body.find(boundary['start'])
+    if start<0:raise ValueError('Source table boundary changed: '+key)
+    end_marker=boundary.get('end','Original layout:')
+    end=body.find(end_marker,start)
+    if end<0 and 'end' in boundary:raise ValueError('Source table end changed: '+key)
+    end=len(body) if end<0 else end
+    return body[:start].rstrip()+'\n\n'+body[end:].lstrip()
+
+
 def generate(lines, require_complete=True):
     researched = read_research()
     registry = []
+    table_boundaries=yaml.safe_load(Path('scripts/srd_inputs/table_excerpts.yaml').read_text())
     missing = []
     contracts=yaml.load(CONTRACTS.read_text(),Loader=yaml.SafeLoader)
     proof={}
@@ -323,6 +346,13 @@ def generate(lines, require_complete=True):
         if 'splat_origin' in meta:proof.setdefault(meta['splat_origin']['key'],[]).append(meta)
     outputs={};records=[];keys=set();ids=set()
     sources=list(named_sources())+list(section_sources(lines))+list(equipment_tables())+list(progression_tables())
+    names = {}
+    for entry in sources:
+        category=entry['category']
+        folder={'creature':'creatures','spell':'spells','magic_item':'items','glossary':'glossary','equipment':'equipment','class':'classes','subclass':'subclasses','species':'species'}.get(category,category+'s')
+        key='dnd2024:'+folder+'/'+entry['slug']
+        names[key]=entry['name']
+        names['__path__'+key]=folder+'/'+entry['slug']+'.md'
     for source in sources:
         category=source['category'];name=source['name'];s=source['slug'];origin=source['source']
         folder={'creature':'creatures','spell':'spells','magic_item':'items','glossary':'glossary','equipment':'equipment','class':'classes','subclass':'subclasses','species':'species'}.get(category,category+'s')
@@ -384,7 +414,10 @@ def generate(lines, require_complete=True):
         if required:front['splat_requires_mechanics']=required
         path=folder+'/'+s+'.md'
         body=source['body'].strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')
-        outputs[path]=render_note(front, body)
+        if key == 'dnd2024:equipment/ammunition_varies':
+            body = body.split('| Type | Amount | Storage | Weight | Cost |')[0].rstrip() + '\n\nThe ammunition table below gives weight and cost per listed quantity. Storage is sold separately.\n'
+        body=deduplicate_source_tables(key,body,fields,table_boundaries)
+        outputs[path]=render_note(front, body, names, path)
         records.append({'key':key,'id':ident,'path':path,'source':origin,**conversion,'sha256':digest(outputs[path].encode())})
     extra = researched.keys() - keys
     if extra: raise ValueError('Research names unknown definitions: '+', '.join(sorted(extra)))

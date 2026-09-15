@@ -77,73 +77,111 @@ Hellish Rebuke Darkness\
 
 #### Size choice
 
-<!-- splat:yaml path=splat_rule/parameters/size_choice -->
+<!-- splat:values path=splat_rule/parameters/size_choice -->
 
-```yaml
-count: 1
-options:
-- size: medium
-  height_feet_approximate:
-    minimum: 4
-    maximum: 7
-- size: small
-  height_feet_approximate:
-    minimum: 3
-    maximum: 4
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/size_choice/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Size:
+    path: size
+    type: symbol
+  Height feet approximate minimum:
+    path: height_feet_approximate/minimum
+    type: integer
+  Height feet approximate maximum:
+    path: height_feet_approximate/maximum
+    type: integer
+-->
+
+| Key | Size | Height feet approximate minimum | Height feet approximate maximum |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Medium ` | ` 4 ` | ` 7 ` |
+| ` row_2 ` | ` Small ` | ` 3 ` | ` 4 ` |
 
 #### Fiendish legacy
 
-<!-- splat:yaml path=splat_rule/parameters/fiendish_legacy -->
+<!-- splat:values path=splat_rule/parameters/fiendish_legacy -->
+
+| Field | Value |
+| --- | --- |
+| ` level_basis ` | ` character_level ` |
+
+##### Choice
+
+<!-- splat:values path=splat_rule/parameters/fiendish_legacy/choice -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/fiendish_legacy/choice/options
+key: Variant
+order:
+- abyssal
+- chthonic
+- infernal
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Level 1 damage resistance:
+    path: level_1/damage_resistance
+    type: symbol
+  Level 1 cantrip:
+    path: level_1/cantrip
+    type: reference
+  Level 3 spell:
+    path: level_3_spell
+    type: reference
+  Level 5 spell:
+    path: level_5_spell
+    type: reference
+-->
+
+| Variant | Level 1 damage resistance | Level 1 cantrip | Level 3 spell | Level 5 spell |
+| --- | --- | --- | --- | --- |
+| ` Abyssal ` | ` Poison ` | [Poison Spray](<../spells/poison_spray.md> "dnd2024:spells/poison_spray") | [Ray of Sickness](<../spells/ray_of_sickness.md> "dnd2024:spells/ray_of_sickness") | [Hold Person](<../spells/hold_person.md> "dnd2024:spells/hold_person") |
+| ` Chthonic ` | ` Necrotic ` | [Chill Touch](<../spells/chill_touch.md> "dnd2024:spells/chill_touch") | [False Life](<../spells/false_life.md> "dnd2024:spells/false_life") | [Ray of Enfeeblement](<../spells/ray_of_enfeeblement.md> "dnd2024:spells/ray_of_enfeeblement") |
+| ` Infernal ` | ` Fire ` | [Fire Bolt](<../spells/fire_bolt.md> "dnd2024:spells/fire_bolt") | [Hellish Rebuke](<../spells/hellish_rebuke.md> "dnd2024:spells/hellish_rebuke") | [Darkness](<../spells/darkness.md> "dnd2024:spells/darkness") |
+
+##### Spellcasting ability choice
+
+<!-- splat:values path=splat_rule/parameters/fiendish_legacy/spellcasting_ability_choice -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` options ` | ` ["intelligence", "wisdom", "charisma"] ` |
+
+##### Leveled spell grants
+
+<!-- splat:yaml path=splat_rule/parameters/fiendish_legacy/leveled_spell_grants -->
 
 ```yaml
-choice:
-  count: 1
-  options:
-  - id: abyssal
-    level_1:
-      damage_resistance: poison
-      cantrip:
-        key: dnd2024:spells/poison_spray
-    level_3_spell:
-      key: dnd2024:spells/ray_of_sickness
-    level_5_spell:
-      key: dnd2024:spells/hold_person
-  - id: chthonic
-    level_1:
-      damage_resistance: necrotic
-      cantrip:
-        key: dnd2024:spells/chill_touch
-    level_3_spell:
-      key: dnd2024:spells/false_life
-    level_5_spell:
-      key: dnd2024:spells/ray_of_enfeeblement
-  - id: infernal
-    level_1:
-      damage_resistance: fire
-      cantrip:
-        key: dnd2024:spells/fire_bolt
-    level_3_spell:
-      key: dnd2024:spells/hellish_rebuke
-    level_5_spell:
-      key: dnd2024:spells/darkness
-level_basis: character_level
-spellcasting_ability_choice:
-  count: 1
-  options:
-  - intelligence
-  - wisdom
-  - charisma
-leveled_spell_grants:
-  always_prepared: true
-  each_spell_free_cast:
-    spell_slot_cost: 0
-    uses:
-      maximum: 1
-      recover:
-        event: rest.long_rest_completed
-        amount: all
-  can_use_appropriate_spell_slots: true
+always_prepared: true
+each_spell_free_cast:
+  spell_slot_cost: 0
+  uses:
+    maximum: 1
+    recover:
+      event: rest.long_rest_completed
+      amount: all
+can_use_appropriate_spell_slots: true
 ```
 
 #### Otherworldly presence

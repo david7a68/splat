@@ -63,24 +63,64 @@ For more on Hit Points, see “Playing the Game.”\
 
 #### Constitution contribution
 
-<!-- splat:yaml path=splat_rule/parameters/constitution_contribution -->
+<!-- splat:values path=splat_rule/parameters/constitution_contribution -->
 
-```yaml
-op: multiply
-args:
-- variable: constitution_modifier
-- variable: hit_dice_count
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` multiply ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/constitution_contribution/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Variable:
+    path: variable
+    type: symbol
+-->
+
+| Key | Variable |
+| --- | --- |
+| ` row_1 ` | ` Constitution modifier ` |
+| ` row_2 ` | ` Hit dice count ` |
 
 #### Typical hit die by size
 
-<!-- splat:rows path=splat_rule/parameters/typical_hit_die_by_size -->
+<!-- splat:table
+path: splat_rule/parameters/typical_hit_die_by_size
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+columns:
+  Key:
+    type: key
+  Size:
+    path: size
+    type: symbol
+  Die sides:
+    path: die_sides
+    type: integer
+  Average per die:
+    path: average_per_die
+    type: number
+-->
 
-| Row | size | die_sides | average_per_die |
+| Key | Size | Die sides | Average per die |
 | --- | --- | --- | --- |
-| ` 0 ` | ` tiny ` | ` 4 ` | ` 2.5 ` |
-| ` 1 ` | ` small ` | ` 6 ` | ` 3.5 ` |
-| ` 2 ` | ` medium ` | ` 8 ` | ` 4.5 ` |
-| ` 3 ` | ` large ` | ` 10 ` | ` 5.5 ` |
-| ` 4 ` | ` huge ` | ` 12 ` | ` 6.5 ` |
-| ` 5 ` | ` gargantuan ` | ` 20 ` | ` 10.5 ` |
+| ` row_1 ` | ` Tiny ` | ` 4 ` | ` 2.5 ` |
+| ` row_2 ` | ` Small ` | ` 6 ` | ` 3.5 ` |
+| ` row_3 ` | ` Medium ` | ` 8 ` | ` 4.5 ` |
+| ` row_4 ` | ` Large ` | ` 10 ` | ` 5.5 ` |
+| ` row_5 ` | ` Huge ` | ` 12 ` | ` 6.5 ` |
+| ` row_6 ` | ` Gargantuan ` | ` 20 ` | ` 10.5 ` |

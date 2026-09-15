@@ -42,28 +42,71 @@ equals your Wisdom modifier (minimum of +1).\
 
 #### Choice
 
-<!-- splat:yaml path=splat_rule/parameters/choice -->
+<!-- splat:values path=splat_rule/parameters/choice -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/choice/options
+key: Variant
+order:
+- protector
+- thaumaturge
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Weapon proficiencies:
+    path: weapon_proficiencies
+    type: yaml
+    optional: true
+  Armor training:
+    path: armor_training
+    type: yaml
+    optional: true
+  Cantrip choice list:
+    path: cantrip_choice/list
+    type: symbol
+    optional: true
+  Cantrip choice count:
+    path: cantrip_choice/count
+    type: integer
+    optional: true
+  Check bonus ability:
+    path: check_bonus/ability
+    type: symbol
+    optional: true
+  Check bonus skills:
+    path: check_bonus/skills
+    type: yaml
+    optional: true
+  Check bonus amount op:
+    path: check_bonus/amount/op
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Variant | Weapon proficiencies | Armor training | Cantrip choice list | Cantrip choice count | Check bonus ability | Check bonus skills | Check bonus amount op | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` Protector ` | ` ["martial"] ` | ` ["heavy"] ` |  |  |  |  |  |  |
+| ` Thaumaturge ` |  |  | ` Cleric ` | ` 1 ` | ` Intelligence ` | ` ["arcana", "religion"] ` | ` Max ` | [Rules](#^splat-b0a614eb-thaumaturge "section:thaumaturge") |
+
+###### Thaumaturge
+
+^splat-b0a614eb-thaumaturge
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/choice/options/@thaumaturge/check_bonus/amount/args -->
 
 ```yaml
-count: 1
-options:
-- id: protector
-  weapon_proficiencies:
-  - martial
-  armor_training:
-  - heavy
-- id: thaumaturge
-  cantrip_choice:
-    list: cleric
-    count: 1
-  check_bonus:
-    ability: intelligence
-    skills:
-    - arcana
-    - religion
-    amount:
-      op: max
-      args:
-      - 1
-      - stat: abilities.wisdom.modifier
+- 1
+- stat: abilities.wisdom.modifier
 ```

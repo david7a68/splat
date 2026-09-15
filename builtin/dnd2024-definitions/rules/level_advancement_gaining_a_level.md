@@ -113,11 +113,29 @@ fixed:
 
 #### Constitution hp adjustment
 
-<!-- splat:yaml path=splat_rule/parameters/constitution_hp_adjustment -->
+<!-- splat:values path=splat_rule/parameters/constitution_hp_adjustment -->
 
-```yaml
-op: multiply
-args:
-- var: constitution_modifier_increase
-- var: total_character_level
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` multiply ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/constitution_hp_adjustment/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: symbol
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` Constitution modifier increase ` |
+| ` row_2 ` | ` Total character level ` |

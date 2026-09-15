@@ -50,34 +50,24 @@ listed in the Ranger Features table.\
 
 #### Features
 
-<!-- splat:rows path=splat_rule/parameters/features -->
+<!-- splat:table
+path: splat_rule/parameters/features
+key: Feature
+order:
+- ranger_level_1_favored_enemy
+- ranger_level_1_spellcasting
+- ranger_level_1_weapon_mastery
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 1 ` |
-| ` 1 ` | ` 1 ` |
-| ` 2 ` | ` 1 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_favored_enemy ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_weapon_mastery ` |
+| [Level 1: Favored Enemy](<../class_features/ranger_level_1_favored_enemy.md> "dnd2024:class_features/ranger_level_1_favored_enemy") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/ranger_level_1_spellcasting.md> "dnd2024:class_features/ranger_level_1_spellcasting") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/ranger_level_1_weapon_mastery.md> "dnd2024:class_features/ranger_level_1_weapon_mastery") | ` 1 ` |

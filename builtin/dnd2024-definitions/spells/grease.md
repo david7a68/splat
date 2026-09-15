@@ -109,13 +109,30 @@ Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 
 #### Saving throw triggers
 
-<!-- splat:rows path=splat_rule/parameters/saving_throw_triggers -->
+<!-- splat:table
+path: splat_rule/parameters/saving_throw_triggers
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Subjects:
+    path: subjects
+    type: symbol
+    optional: true
+-->
 
-| Row | event | subjects |
+| Key | Event | Subjects |
 | --- | --- | --- |
-| ` 0 ` | ` spell.cast_completed ` | ` creatures_standing_in_area ` |
-| ` 1 ` | ` creature.entered_area ` |  |
-| ` 2 ` | ` turn.end ` | ` creatures_in_area ` |
+| ` row_1 ` | ` spell.cast_completed ` | ` Creatures standing in area ` |
+| ` row_2 ` | ` creature.entered_area ` |  |
+| ` row_3 ` | ` turn.end ` | ` Creatures in area ` |
 
 #### Save
 

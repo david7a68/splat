@@ -276,42 +276,112 @@ hit:
 
 ##### Bite
 
-<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+<!-- splat:values path=splat_rule/parameters/features/bite -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` saving_throw ` |
+| ` ability ` | ` constitution ` |
+| ` dc ` | ` 14 ` |
+
+###### Targets
+
+<!-- splat:values path=splat_rule/parameters/features/bite/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` count ` | ` 1 ` |
+| ` range_ft ` | ` 5 ` |
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/features/bite/targets/any_of
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Willing:
+    path: willing
+    type: boolean
+    optional: true
+  Condition:
+    path: condition
+    type: symbol
+    optional: true
+-->
+
+| Key | Willing | Condition |
+| --- | --- | --- |
+| ` row_1 ` | true |  |
+| ` row_2 ` |  | ` Grappled ` |
+| ` row_3 ` |  | ` Incapacitated ` |
+| ` row_4 ` |  | ` Restrained ` |
+
+###### Failure
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/bite/failure/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 5 ` | ` 1 ` | ` 4 ` | ` 3 ` | ` Piercing ` |
+| ` row_2 ` | ` 10 ` | ` 3 ` | ` 6 ` | ` 0 ` | ` Necrotic ` |
+
+###### Maximum hp reduction
+
+<!-- splat:values path=splat_rule/parameters/features/bite/failure/maximum_hp_reduction -->
+
+| Field | Value |
+| --- | --- |
+| ` equal ` | ` necrotic_damage_taken ` |
+
+###### Heal self
+
+<!-- splat:values path=splat_rule/parameters/features/bite/failure/heal_self -->
+
+| Field | Value |
+| --- | --- |
+| ` equal ` | ` necrotic_damage_taken ` |
+
+###### Success
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite/success -->
 
 ```yaml
-economy: action
-operation: saving_throw
-ability: constitution
-dc: 14
-targets:
-  kind: creature
-  count: 1
-  range_ft: 5
-  any_of:
-  - willing: true
-  - condition: grappled
-  - condition: incapacitated
-  - condition: restrained
-failure:
-  damage:
-  - average: 5
-    roll:
-      count: 1
-      sides: 4
-      modifier: 3
-    type: piercing
-  - average: 10
-    roll:
-      count: 3
-      sides: 6
-      modifier: 0
-    type: necrotic
-  maximum_hp_reduction:
-    equal: necrotic_damage_taken
-  heal_self:
-    equal: necrotic_damage_taken
-success:
-  effects: []
+effects: []
 ```
 
 ##### Deathless agility

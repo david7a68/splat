@@ -53,9 +53,34 @@ make the spell’s range 30 feet.\
 
 #### Range branches
 
-<!-- splat:rows path=splat_rule/parameters/range_branches -->
+<!-- splat:table
+path: splat_rule/parameters/range_branches
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Range feet minimum:
+    path: range_feet_minimum
+    type: integer
+    optional: true
+  Range multiplier:
+    path: range_multiplier
+    type: integer
+    optional: true
+  Range kind:
+    path: range_kind
+    type: symbol
+    optional: true
+  Replacement range feet:
+    path: replacement_range_feet
+    type: integer
+    optional: true
+-->
 
-| Row | range_feet_minimum | range_multiplier | range_kind | replacement_range_feet |
+| Key | Range feet minimum | Range multiplier | Range kind | Replacement range feet |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 5 ` | ` 2 ` |  |  |
-| ` 1 ` |  |  | ` touch ` | ` 30 ` |
+| ` row_1 ` | ` 5 ` | ` 2 ` |  |  |
+| ` row_2 ` |  |  | ` Touch ` | ` 30 ` |

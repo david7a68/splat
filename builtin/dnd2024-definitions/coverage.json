@@ -2101,7 +2101,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "fba03f177d7e2064ddc3a843c047ffeeee17158e56bc24871ba6f66719568810",
-      "sha256": "b31b654c6b6481e7b5ee6001811aabe3dff494838a03347d2a8dc64ab205b2d1"
+      "sha256": "b7a09a5e54cb2876a1af91c3bedf4c0a7231306bb6308e5ac2ad8426e36139eb"
     },
     {
       "key": "dnd2024:creatures/adult_black_dragon",
@@ -2122,7 +2122,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "fafe717c48fa802a5b41da9cc740f0b56307a4ed898bdb0aef90f762804c7afa",
-      "sha256": "735ed24083f116354b8fedb1ab6689acf430315be9cde720f487ade3f28ee184"
+      "sha256": "65bb0beeefe9b678fb5284fe608389a0b5727b2377b56301b83599279be469bd"
     },
     {
       "key": "dnd2024:creatures/adult_blue_dragon",
@@ -2144,7 +2144,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "9077d4e90b58939a0a78d27bf33a7a874133cb60664c34e58b6211f48b20c65d",
-      "sha256": "8c8f583a226fd50dde294580f5c7a58bef1ac96c76dbd7b6ba9643a9e9339660"
+      "sha256": "f0fbfaf7d425674636231a158fe0a6bfb461f57fa0873bb8fa9a000cfb597d84"
     },
     {
       "key": "dnd2024:creatures/adult_brass_dragon",
@@ -2166,7 +2166,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "2577280b6d0e169cf3c956144ea9be7596e0b04417d9508741d8c14a1ab0f6a3",
-      "sha256": "4117ef3a3b36562120c19a9fd9da505f5e7bade69bfe2cce0c09cc7bbb480e4e"
+      "sha256": "b4c4008e4db6675c9118f1b9a384b4b4eae03ba206e767da72aa761d9916ce14"
     },
     {
       "key": "dnd2024:creatures/adult_bronze_dragon",
@@ -2188,7 +2188,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "4170df5eaa54b34725e5efc1410babb64cf9260545e7ea0c43e436446b37c3de",
-      "sha256": "dc15f74fc664562b9cf3eb7a51ef68156b374c12740ad443e8963e73975d75ed"
+      "sha256": "683f3ed7dd4ed4ff5642368760949576c6a4930f9547798fba93f83103a516cb"
     },
     {
       "key": "dnd2024:creatures/adult_copper_dragon",
@@ -2210,7 +2210,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "a2f4ebff2c8d111a73b7fd5020957fc01b4e74e19db6f32d2da3fddd67e63361",
-      "sha256": "95e50a4cf54ef320634a0301d5f73c7bfe5dc9486000b38d43ae1b1d5f81e4d6"
+      "sha256": "6813d5038440e77661e85cabedabebbf053f8af01697a05f404ae993080846eb"
     },
     {
       "key": "dnd2024:creatures/adult_gold_dragon",
@@ -2232,7 +2232,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "538be546164f73fa194517766b185529950d50c35b0abf10784b488eff5f7f56",
-      "sha256": "2ffb79ccea0775bd0409500cfdb03566f3a3137b33d8f17e829ee2919cc4496b"
+      "sha256": "eab362f511aa595d26dc30d041ba9ddff237e2b56d9ee0abde01c9efee90b417"
     },
     {
       "key": "dnd2024:creatures/adult_green_dragon",
@@ -2253,7 +2253,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "1a00a707e29ab645a55813d1b188d7f84bf5ee6887ec0cd4af1856929289816b",
-      "sha256": "3420d645af2cb7bd4a7a846dba60956943abd014bdaf1c2957c3045149dceb83"
+      "sha256": "2f07b889daab5aebee861eb6b7e49a4c28ff18e1d7183886660ea1f80b431d2e"
     },
     {
       "key": "dnd2024:creatures/adult_red_dragon",
@@ -2275,7 +2275,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "80bb583d5907116512afcac5ad88d29e7af4ad3824c9b58cfc47a3fc7444eddc",
-      "sha256": "5f897d48c2397ffae3e292583841765e58b1a6f11afc8512425a675303e05923"
+      "sha256": "2aec178b18695b0045d209013370a999e2316ae73399df2d2d7b7108f73c38ac"
     },
     {
       "key": "dnd2024:creatures/adult_silver_dragon",
@@ -2297,7 +2297,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "67c4ec5d1b2aff56b1b976f81cbbc4c06f08a31aaa5376ea5c188283869967a7",
-      "sha256": "62ed58e20da98e601c05e3bc68864fb10ddde1dab4ac9cc55a1749a11ea3478c"
+      "sha256": "cf02beab7d7f996fdb28970f197f55f6e91e1a86f1a79134cc3beff1ccc19768"
     },
     {
       "key": "dnd2024:creatures/adult_white_dragon",
@@ -2318,7 +2318,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "ae5cdf7b87b500bb0115136545f78fdb1e59e7f59e7e869336788dc4c41fbc42",
-      "sha256": "ee915b9b1a3fb7dd144272310b9477c43a7e270e43b42b2d389bb25a7272ddc3"
+      "sha256": "f35caf4d32898b7da94b57b62ea717cfd8414fdd241e978d441c62b3f568196c"
     },
     {
       "key": "dnd2024:creatures/air_elemental",
@@ -2382,7 +2382,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "57a92f3e871b2cfbba3bc150f80163cdd5c2978fe2adfe276c0bbe8edbf0f3a7",
-      "sha256": "592ce84382fb91cf346a865676f83c74f697659956bf367a4df5857365f31532"
+      "sha256": "72a024c7f5e6c4ad8bc5dcfccd54d6c036e0c8537fdd7578418fd5805cdedb38"
     },
     {
       "key": "dnd2024:creatures/ancient_blue_dragon",
@@ -2403,7 +2403,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "c18ecea5af93c73399abd2264611b599a7e1311ceba48f95be9902fc384e7ad7",
-      "sha256": "6281325c310278b1fd2bf634931c9df61cfb5895c9872a15486c61770129dcbe"
+      "sha256": "8a437a527a94c1d4d3ecd578a6148ba88ef4baa82600a873f68cbe0cfe2ed011"
     },
     {
       "key": "dnd2024:creatures/ancient_brass_dragon",
@@ -2424,7 +2424,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "473186ef53f952c88f21f5d301f96d0da6965d5c1519b8edfb4610e57e8fe3ea",
-      "sha256": "7a5e29eb3378073ab1f5c440e0ecd3e1242df3a72eec0fadec5610c3736bb4c2"
+      "sha256": "e338a501c0cb4a7146706b5e9f597afc031dce391226817264f07ebb19cceb3c"
     },
     {
       "key": "dnd2024:creatures/ancient_bronze_dragon",
@@ -2445,7 +2445,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "7f08b46979265ae73e601cac82fa360dd771bb0ea0087def29ae04e441a07772",
-      "sha256": "549ef33a59cc887ca63899fa9620805ef617dca5fcdb9110928591b79a22ad93"
+      "sha256": "b3e2eb3c525c736cd93396981da3d3cbf9c654ae65dd9d54508f51d0f98d2680"
     },
     {
       "key": "dnd2024:creatures/ancient_copper_dragon",
@@ -2466,7 +2466,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "ab5510a180d2522185d2ebbb07de914da7019b6bb1a2ba722469ec3e65f704b6",
-      "sha256": "6fc54511c6e4df2f9feed2d5c6ba9d7cdb46e3d490bcd4ff8405055a98b27348"
+      "sha256": "f04355a1d4e3d75677a013530b58ea7fe081234df13ecbb9f93654db5af3193c"
     },
     {
       "key": "dnd2024:creatures/ancient_gold_dragon",
@@ -2487,7 +2487,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "fd59afa39b5265b9b19069ff27a68220474b8af5512117dccf612f616e599c5f",
-      "sha256": "86210ee00b252db0b161aa9986d8995c8c4802212a13d117a7b9aaae0bd2c926"
+      "sha256": "8bd4bf5607ed27e3d4d0cb90977dec4407b04b6feef3dd80e6ffcbc668c26244"
     },
     {
       "key": "dnd2024:creatures/ancient_green_dragon",
@@ -2509,7 +2509,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "4af788e4cccfd35bb105334db5178fe0cbfb39e6a27e7bc184a0baf63c8c9d75",
-      "sha256": "ca3e66b4e3e87d0846bffcfa6a890eb52453a21317b928488fe68b2ca59b61be"
+      "sha256": "f7a0af2e762e64775a07a80ba4770107fb924b7f47375d576db3aa1a8eae2525"
     },
     {
       "key": "dnd2024:creatures/ancient_red_dragon",
@@ -2530,7 +2530,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "4c4a0a16b06865524943d61f905afe030aa8cba275b9cfa85ad61cc8741c9b28",
-      "sha256": "7c8ca1c98f8d00758b055564a4c95855e1c7cd55297af2de43c3fd1b5389b977"
+      "sha256": "5409708e1d25f1a5858442636b48f0298ef75956434022dca56a779a031d81bd"
     },
     {
       "key": "dnd2024:creatures/ancient_silver_dragon",
@@ -2551,7 +2551,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "0a30bf312739540bbd62ae54a7e9f161972cef7ee5a46258030f02d8318885d2",
-      "sha256": "32d842ade45b33328f625cdee2c3a8ec530f0d9bc7e1162af55ae5303fa80908"
+      "sha256": "25336174d5b7669574476dc9a4c223b0ca7624c07f2e710ad25cb1f2bbfbb5a9"
     },
     {
       "key": "dnd2024:creatures/ancient_white_dragon",
@@ -2572,7 +2572,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "d50d0387da7889a15e7ba87bf2cc13f27b3949a91d12be43440903f462836980",
-      "sha256": "15479768f6aa579dc7376def6f56c02df393de554c9ea3acf8a70dba8549820f"
+      "sha256": "178ad18e0b12d9e7eb6a98a47e7f6cf30e29e720dc6e621ba3a5712fdd573e99"
     },
     {
       "key": "dnd2024:creatures/animated_armor",
@@ -2681,7 +2681,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "4adb54d788766fbfee6bc2b7027bd402a7299530aefdf9f15b7f44f7334f0ebb",
-      "sha256": "99b0720426c1a5ed0ecc0ce3d0a80c5958f2f81a94a7efe9250f702557011b3c"
+      "sha256": "92b531f92457cec6b2cf2593eefb1fd5445e224ab5a8d26346fd951f9facb696"
     },
     {
       "key": "dnd2024:creatures/ankylosaurus",
@@ -2766,7 +2766,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "0b59323dbd15cd1664f272d938815513509b3dfac302c8bf58ddaaaff9257cad",
-      "sha256": "95d2d27274433aa0dce1cb91d2eda64fe59774c4513ccdb97806b214b2528f98"
+      "sha256": "5b9d2b1eace27ab2eddcfb2647faee950949f076da2a0946e29b5919a0b4ecab"
     },
     {
       "key": "dnd2024:creatures/assassin",
@@ -2787,7 +2787,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "b27ea1866e3d6887dcde19fec300344fccb09842db659d7209b9370de1990c2e",
-      "sha256": "594c024983f2b987ed7afc79819cf922d235181ad65af08c4951980005731c2d"
+      "sha256": "5a9efbadc1d72bbb6570b96d3431d2203527fc7c22316c3dc6b5cfbc3311dbc8"
     },
     {
       "key": "dnd2024:creatures/avatar_of_death",
@@ -2808,7 +2808,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "a2b958436bca695d1b6ff5c7b3a1815d2bd8dbd21257a150ef0c12c3e7f5f42b",
-      "sha256": "55417330e72be3de0cc8b8037592788df0a7269f95ffedeee55592c56ce1bb4a"
+      "sha256": "4c316c61553436dff108522f18a2da48f7676f25760fadeb2cd70b09ad454118"
     },
     {
       "key": "dnd2024:creatures/awakened_shrub",
@@ -2986,7 +2986,7 @@
       ],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "fa9e0b72af7fc42328ef417d2dc97c29e6d084dadf22fe50bcb3a77c463559bd",
-      "sha256": "32d0cb4c0914be158b090f2bfe4df476ee83b719d6d3f71fc5abe82b9b1e7d36"
+      "sha256": "563b8ea1338ae9dd1f4b2e7b67ce70b8a91fb127eef6239749ff1af08b4dbb27"
     },
     {
       "key": "dnd2024:creatures/bandit_captain",
@@ -3008,7 +3008,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "64824d28ef6dc7c6b231284ac5a61fabb062249e4410114d6264943ee1fa1270",
-      "sha256": "adc212bdd8816d28693ed5bc18855b25df5cca6ec7839adbc685ef7701b15fb4"
+      "sha256": "3e5a66ce9a6785947d124b93e85c7ee25ac080b05537a3ac62fecdf9a819f89c"
     },
     {
       "key": "dnd2024:creatures/barbed_devil",
@@ -3116,7 +3116,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "9f56568301fe423c349fb0ad8912a58002c5e355f714a8b6e6aaa2fef35e72ff",
-      "sha256": "5c2e0bf62b5ba48f4c014002d5d5372340250b7b7231bbe2167e3eec06fbc5d4"
+      "sha256": "cb8b37630b7648bcad927eaafc507f861043b0b9ad03c857864f085ea664b028"
     },
     {
       "key": "dnd2024:creatures/berserker",
@@ -3137,7 +3137,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "14064144058ea1af86135557134ca3d2f67e8c908268cf14fcf3058500dc99b3",
-      "sha256": "d0b326cddaec15daf076ab7b37325faa3fb8c33597b07663408682b6bdef3e66"
+      "sha256": "f5bdc5dff34c7b7fb94f48fdf5470da2e3868c8422cfd09ea52a2095b33db8c7"
     },
     {
       "key": "dnd2024:creatures/black_bear",
@@ -3182,7 +3182,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "ed98777a2ac53e91d5cab545353ce298a939ca140000dbc2d120735ce8a8527d",
-      "sha256": "9e71f3331ff697b5700e24f47d83b2c6dacaa3c988d3fba262c34ffb3e1b7def"
+      "sha256": "9d0fba9fd925d0122494113953a81eda67e2fec7e5faad43cd3b89226f63ae2b"
     },
     {
       "key": "dnd2024:creatures/black_pudding",
@@ -3268,7 +3268,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "b52a1f6e3f53a5649fe5987db7e40526476719abe327fffecd0af56f5b803e72",
-      "sha256": "7564829ec6a8161cb58c1899b2e3c51d7f499e70ec58cdd373715c88030ebbd6"
+      "sha256": "c97cdc80968455b718b9a7ff5f16cabcdf6084a01c7161c3497686f4c9c2d715"
     },
     {
       "key": "dnd2024:creatures/boar",
@@ -3311,7 +3311,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "162247591adb1e645d751997eb63e588bcba383ae93c01e1551cf17c52f9a693",
-      "sha256": "bd309ea064d8cd252719e920933f31541f74ded55c600838c2d221d76c460446"
+      "sha256": "bee6888799e1c199aa6ea555ae32dd7fb1b325da04a741a87addc73462297887"
     },
     {
       "key": "dnd2024:creatures/brass_dragon_wyrmling",
@@ -3354,7 +3354,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "f914d1a1f946ebc851ed8ef3412bfc70ac3c0acceaf3cd5c9fa6f79388e7f062",
-      "sha256": "fff0cec9d537f2eb3f99c35674d09404d9247e81b57e48d24b24debdccc8cfeb"
+      "sha256": "4f3bdfa4cbea903d97ded883ab7833c6a9df1fd6ab1193c6922069bfe8b1251d"
     },
     {
       "key": "dnd2024:creatures/brown_bear",
@@ -3375,7 +3375,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "dccc0dfb9326e75fcc804cd178ed6afa5b55f75711747a19ad5388e9ee08fb83",
-      "sha256": "2175e094ff23e0ee479ed964be0a2abe9cc8f6d649eae8a826a649be3810a197"
+      "sha256": "7849ac74de90f83a13789e7687ec13770a358ae54280846a07cb9dd3cc263694"
     },
     {
       "key": "dnd2024:creatures/bugbear_stalker",
@@ -3396,7 +3396,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "966c10e2b0f8fb4572216cf88f991b64143436f48d93cdf0104e778fdfd63062",
-      "sha256": "afbb56b5f112042810b70608be1e8eed9bf9f9e52174c8a3a0cb5b6e6dbe6bdb"
+      "sha256": "de3177b0c698cb02c444d67d6d278c2ec3a1a354e1b3b3aab277da878e6dabb4"
     },
     {
       "key": "dnd2024:creatures/bugbear_warrior",
@@ -3417,7 +3417,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "d745febb64f90b02929e6beded660e3beb767718de5b4bbf2d4c917c58c81efc",
-      "sha256": "0b4000e87349d1a734dc9fa694978c57bc68cf0a566d358c0afe3b02378a30b1"
+      "sha256": "b3d28d4f1d076e7f8ea82602a145922c2c05f3ab95a974b4423ddf4a20ab164b"
     },
     {
       "key": "dnd2024:creatures/bulette",
@@ -3438,7 +3438,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "294462a64053d40c234c10630540db8d2a5eb23bc347a959ed339e799ff0d2be",
-      "sha256": "6ffa82b85726c5eb1b2acfb6aa1152a2893c835f2979ace74791be2a6c1ca7b4"
+      "sha256": "b4c34db2c3d88db818087daf75f0e01a36cc52c8c7e49ce0bba3576ed4a14f04"
     },
     {
       "key": "dnd2024:creatures/camel",
@@ -3503,7 +3503,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "aa24ece5d7ee68198b505e453a5f0034376384815065c619758c4f5faf4cf69e",
-      "sha256": "43a57ae03870e8e657e5431499d4e6aa98c55150a9a256c8abb0cc50276f0528"
+      "sha256": "a234285586a8d88e7f40748c24eaac72761bc820ae97c2d211c9548f7558d411"
     },
     {
       "key": "dnd2024:creatures/chain_devil",
@@ -3568,7 +3568,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "d7e57fd1df84fa9f4c2d23ba36f93ae2c81ee2369767ce46c74588c88640fe55",
-      "sha256": "3fc65f0dc46a0ccd79ba77bca8908b02c20dc42c5eb6d1b0675b3498e4b70692"
+      "sha256": "732ae2a4931fc981f4056daf7d440d38a64e8c6f00905e272902de087a79b6c1"
     },
     {
       "key": "dnd2024:creatures/clay_golem",
@@ -3589,7 +3589,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "128731a994a733aaf727a0942e8b3a11fce9ab942b8a57b50e9ee92f70976502",
-      "sha256": "6af39e470413428569dd5dcb752bf76c2b6aa4586a85b31be5b2baaf3dd21d12"
+      "sha256": "2705765969753c6af565b520ede0add5976c41908d2f4418a20d58c18a4cb411"
     },
     {
       "key": "dnd2024:creatures/cloaker",
@@ -3631,7 +3631,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "bd9be63bee26747cb7b2d42ad2e3deca2491b430733ed73cdb5707e325b3dc0e",
-      "sha256": "0c804e1a9b393d3c64b1adbae458c3cdb497a92805552f27aec03e60f27cc246"
+      "sha256": "4ecc29f301b7673a141e13d150ac8b3ef172a006c3292d9cce02b2709a640f8c"
     },
     {
       "key": "dnd2024:creatures/cockatrice",
@@ -3739,7 +3739,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "de329743dffbd347d427a809c2f5c6185bc23a41d4fb1c267fc75866b3f03e2b",
-      "sha256": "d7cd9e37a834e8c1d6a597d142a6311c44108aef2b1f7b1a594adacd853fd5dc"
+      "sha256": "85413ae55319eef5b051e44e7c1191b37427ba31e1ef9893066e2e3b86764116"
     },
     {
       "key": "dnd2024:creatures/crab",
@@ -3802,7 +3802,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "3299c0ce171a7a13d85da53bd7360ddf70397f5077ff8fe72c9bd2fba90fd900",
-      "sha256": "fafa40906b2a0426d6aafa14b5b9140e89ac0114898dad7d8ba76e67c60a6e5f"
+      "sha256": "32558c149038fae4930a3d2666edb2b8759d083d9d8288c348501dcad8be1d32"
     },
     {
       "key": "dnd2024:creatures/cultist_fanatic",
@@ -3823,7 +3823,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "ee04c06c8c3886bdfca7d257a272ff8d1836b0f3ab676b3de0338c7e3e650e02",
-      "sha256": "fa1934938c53fd9246815a86ac66739f745805c28cf8ad9d82ec57e6c77f9cd7"
+      "sha256": "cf96345422ee139ae52be2c3a61a0b5abdab9bb850c7ce80484cee0db72e5891"
     },
     {
       "key": "dnd2024:creatures/darkmantle",
@@ -3908,7 +3908,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "fb20ee50dead79bc9e3b04d3dcb7f306dbbdd7cec0fd000537495d106c0074f1",
-      "sha256": "68e6a532732aab3eb8d9c9128f277f107ce06aeb2c38eff58fe733e36477feaa"
+      "sha256": "4e546273053913ca96f837f81813601f21051aa7807b901797aa42c9c6a119f2"
     },
     {
       "key": "dnd2024:creatures/dire_wolf",
@@ -3950,7 +3950,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "6daa64d0602eb725984f04a4d24663bef6e6359355a2ed82192556ae6062bd05",
-      "sha256": "f4815e4884fd8d599b71533b0f7893fc913548ae808b62096450b886ab3d7379"
+      "sha256": "25a5084430326f851517d8d9eadc13477769f43c5fe6cd62e348feea1d5865e3"
     },
     {
       "key": "dnd2024:creatures/doppelganger",
@@ -3971,7 +3971,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "cf0bb6820c984d810a55e5694e0b15c3382e54da23bbb0a4352bd831ba9f3361",
-      "sha256": "6f296d690eb1804d3654074441552085a9452bbc311f438b6b2dbd11f7d644a2"
+      "sha256": "8e4392209ed018e85461fcd538e947224a1f67089fab968f446d935e5219a121"
     },
     {
       "key": "dnd2024:creatures/draconic_spirit",
@@ -3992,7 +3992,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "1cc8dcf1c79555c5c7f0d0a4bb2dc4c76a48fc1ea6a72d3bb55a25ad1ddfda96",
-      "sha256": "8759a120eabc582585cb5953e4c049765480c28e3508ad26c7af38cbeea47f2e"
+      "sha256": "3488cd40aa7f954217f14d7d94f42924e1b53b4a2ff15c43d3b7c143363457d9"
     },
     {
       "key": "dnd2024:creatures/draft_horse",
@@ -4037,7 +4037,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "dfe2dd3598a4b2c4ae3dd144608403dad948b3f6500e758286d6643efc6d1a83",
-      "sha256": "0f9017a190794b09e7ec0a399f80fd4b5846806608ef1dabb688cdd32ca771cc"
+      "sha256": "25d1e85e80b71cd6a157f24ab5ca4190f9a5ed16deeaaed14945628f2fbb1be6"
     },
     {
       "key": "dnd2024:creatures/dretch",
@@ -4100,7 +4100,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "08e19af72e5fe6698d2d3114e9e6c859e7dae0a96ab0b621c5325c75dbfd752a",
-      "sha256": "327a569a0639b305a3d96ad1628f1d0f5b6e71e42dc576eac984171d59947cd6"
+      "sha256": "f136d6004bc504f28dbe313c791061715e7dc7a4cd9461ed5fa760302e012a71"
     },
     {
       "key": "dnd2024:creatures/dryad",
@@ -4121,7 +4121,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "b9d57e5d06a21e556b91bbdb32972bc1f7e4ab714cb104eca3093f670487330e",
-      "sha256": "c10953a250f18277f96fcea2234fd37e085b29d353e81a6acf83c9fcfa064f03"
+      "sha256": "309b403c4bfeb99114f3d6b904282c58a58992edd9d6c2d0669afe67f5d099b5"
     },
     {
       "key": "dnd2024:creatures/dust_mephit",
@@ -4185,7 +4185,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "bc2627c84b5d22eef9220f82611d460a659fd3e00e5b06592f4e8b5ee034a808",
-      "sha256": "ff3ac105746bb567181684b3a0d55ff8f9590cd30719978e183d6b07b3ab051a"
+      "sha256": "64ccfc7f1a686f74081ce64a6ce9734710d835ea7a5289ee319d53f2cfd66725"
     },
     {
       "key": "dnd2024:creatures/efreeti",
@@ -4206,7 +4206,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "e67750d0ce40f8daf821774de6df2439e657ecae2570bc2d5da1c120ef64b658",
-      "sha256": "2a3b1a27651c7fb9e256aca810ab10854347b8b2f86a309bf8da7915f4bec7ca"
+      "sha256": "bf9d5583f0e0c7dbdf3543e84ddb2565b5ffb083a9e065224d94b3dc9435ae31"
     },
     {
       "key": "dnd2024:creatures/elephant",
@@ -4269,7 +4269,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "1613b0cd60ca2569f48945a18e82ae4cec3642b897acb2ae6330cae46f20e659",
-      "sha256": "fae5f88b9f34fbb2c4e669c43457a4da54aea1502527e6086b2b5a4576ef9a78"
+      "sha256": "f4139a0086557b9abd496c5d3c21a689d587d4eeaa68d264cd06c8272ac17f82"
     },
     {
       "key": "dnd2024:creatures/ettercap",
@@ -4290,7 +4290,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "bd2bbe9db273c0c2702493e3dadf8c8d5e716cac732e22b8c29b72dd85407d7d",
-      "sha256": "f1d24a12cc8eed0d0e40b02df739fc4c620ee153025752aeb80ae938c6bbfbd9"
+      "sha256": "7bb924ff4e314885f73efb9598109c54ed40434cbdcee4e1a5182fc4840c688e"
     },
     {
       "key": "dnd2024:creatures/ettin",
@@ -4311,7 +4311,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "5163f59df108ebde49a82356fd02a695800d7a8f120c0ccd4224d62718291798",
-      "sha256": "e6ffab1c96c3bc2d412ad7ae94e6db19e8d4dbada98c44a0918425b7ea058bb9"
+      "sha256": "ccbf6615aa18f44f95d71ac645389bd31ec23168ccd2f209e2c3559f3c4a26d8"
     },
     {
       "key": "dnd2024:creatures/fire_elemental",
@@ -4333,7 +4333,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "47e3c1336e204f7fe12073af63a0a62298239c8f96d4fc46eceb08a3f2bbf843",
-      "sha256": "2acc1bb0dd46fbcf1889a970abc534656e49eea8c14fada119675c3a849b956f"
+      "sha256": "97ac8ad6069c9a8aec640675901ee529c76b52b3dcd1a2b31f19589da310b448"
     },
     {
       "key": "dnd2024:creatures/fire_giant",
@@ -4354,7 +4354,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "5c3f7fef806717e6bc71621a5ac3deed111c05fbef61a3bcb581c99d8d2f9201",
-      "sha256": "fee9abd22686b2a57a7ac1b120c0de9dd6a693b9b1ec479daedaebb550ffabd4"
+      "sha256": "62981f691073d7b918e2ce0d915aebb15abc72245ee3c6d14b31a9fcd200b5b2"
     },
     {
       "key": "dnd2024:creatures/flesh_golem",
@@ -4375,7 +4375,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "edd84d5ac41cab17fb31186afe33346dfcb313da9cd90a4c044c5fba20c8b5c1",
-      "sha256": "7b2cce0b3d5c86e12314c3b80aa589d88f34516341faf6a749ace68ef4499553"
+      "sha256": "2dbb03618de12b7e4fde13814b3dc21889064d9aa6e3dc6da1c56b09085e43aa"
     },
     {
       "key": "dnd2024:creatures/flying_snake",
@@ -4440,7 +4440,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "925ff7a4e129134046b2c0282836620fdf9ff13b12c8fd23dccffb9f2a7d2b72",
-      "sha256": "eb0723af759acbadbdc75b5ee1d02f388348ef0fe5848fe1b1485c0ab31a558f"
+      "sha256": "95cdb9c131529d3aa8b7d3ba8c668f2cacd71282dfb8e73ca8ebd80ebcbcec2c"
     },
     {
       "key": "dnd2024:creatures/gargoyle",
@@ -4483,7 +4483,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "dd3e7f6bcd1fe864cca510e1c83bc87738ab8cb157c317374f99b76348e45115",
-      "sha256": "e8fe937c220b1ff5a2a42ce7517fb7c715b3ed31525c9276e8c4ae6b8759f006"
+      "sha256": "1c4ddfdda833ab5bf761e4b9b752cbfdd7e131b4f40ba05cba253550dcceb3ec"
     },
     {
       "key": "dnd2024:creatures/ghast",
@@ -4547,7 +4547,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "aab4e2b564fcabdc94b7edbf348918cccdc153c5b43080efdb78435a33a03216",
-      "sha256": "c481f5dfffea5ed0f4832ec7bb0a6b53e87d84c3752a24165d8865f9b45678c0"
+      "sha256": "d4a4aa3876788573284295ec4f73f72e5609f5a8da612da5ed9ef40d34f61448"
     },
     {
       "key": "dnd2024:creatures/giant_ape",
@@ -4720,7 +4720,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "a392879e39a47b20752ef47abcce23c00c7d76d7869c280bfa58b9181349f343",
-      "sha256": "4bdbd4fae656fade269830994caaa4e3a57ccb35d3d7ba0c547020275abf51fd"
+      "sha256": "faba66e8500a3da84e9b589c8a7654bce1fa134169b92ed0e13cb4748a459d26"
     },
     {
       "key": "dnd2024:creatures/giant_eagle",
@@ -4742,7 +4742,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "37e0170b9811928ce1d97641665ccb016f6b2005912d372aeb444bcef719cc54",
-      "sha256": "493e5cb9b3043ba77e2796eaa6867bb5f2c1219b6e9e9c651a47c5151132a309"
+      "sha256": "efbb189cd31541175f49a6470231e9f1cf4ba32cff0850720d159eddebf4155e"
     },
     {
       "key": "dnd2024:creatures/giant_elk",
@@ -4889,7 +4889,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "08ef00b1c7a7f4d9eff2b9a17cb62c080345f76d1b0353336eed9c6c4ec1dbce",
-      "sha256": "c376d255408399904666255fe0c15d36e84b9dfd446f3207d7b33fdb968f13f3"
+      "sha256": "08a3ece4ff1fa71f39b5e718964668974ebdd8cafa7297223793b90b824e2846"
     },
     {
       "key": "dnd2024:creatures/giant_lizard",
@@ -4952,7 +4952,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "c7a2fe3229efc1054f4aaa55d5b5dd09e07ecc59cd5fbfe810ab1ead97adfaa5",
-      "sha256": "7b0226043792207a941a8c8d7ccb51dec4a0be9599f8de3d6ec4b7ae7705b34d"
+      "sha256": "e4d001c6a9720575d4921ec36b4a0dd1167a61080773d93d58e3e41fe3e01849"
     },
     {
       "key": "dnd2024:creatures/giant_rat",
@@ -4994,7 +4994,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "87013a383e8a0aec5fb83e55d88d1528cfcda02d539d73dadfe455025a722983",
-      "sha256": "e5adb9898dd8482b0e8e63e8a940ebf330b771c5bca635b3e8f5dac14df6a882"
+      "sha256": "3588588edf10e2eb5424fe4a7c2d68c37a6622f1c34ad064c145f972e5967dc8"
     },
     {
       "key": "dnd2024:creatures/giant_seahorse",
@@ -5015,7 +5015,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "ba170fe78028a7f1e47584c5c8f901de4dbc084dbf44f125db6e48c07315656d",
-      "sha256": "f2f89efa455e8031af49afb65f66b57d7838dc3ade8f9ee901bfa8e6a14a406d"
+      "sha256": "83f59c82648f892dc36076653dc92a732e7cf10de5484a3635c28dc282c57287"
     },
     {
       "key": "dnd2024:creatures/giant_shark",
@@ -5058,7 +5058,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "f507a546b8cf6dc54184df5fb368417a51b04ca77feeb6505874e1446284b698",
-      "sha256": "c53f65278d76653d412f8eb5943182a055d7ce95ecd8dc0cdff6caa0e38f8ca1"
+      "sha256": "a912f0584ae5f9e9237e745b99c350f0f5b7b2c844a2a4f81ec8b1f4b1d4f5f5"
     },
     {
       "key": "dnd2024:creatures/giant_toad",
@@ -5187,7 +5187,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "62092cd6cfaf56ebf3c48705924438229eacef30a08fc89029acad5ec0521dcd",
-      "sha256": "cffe424b007b122bc44c8cc6b00e59d1d64879933d335a85c14ee91d862baeea"
+      "sha256": "0cbd6207745222280c5b032d982167c51050445e7b4a081c0f56a3110974dd51"
     },
     {
       "key": "dnd2024:creatures/gibbering_mouther",
@@ -5229,7 +5229,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "9418ea3e5dbb7c5bbd2ecffa4d4b4eb85979278f8fa8b32b520a6eb6ea313c5e",
-      "sha256": "11e92194e0efae2470c631ee3910462ba50ddba014acb3866674f23e2639985e"
+      "sha256": "8c0afe1656ab81ecbc1d9fc0c2d7c20b8ebc72d991b8c09365882f85f452cb19"
     },
     {
       "key": "dnd2024:creatures/gladiator",
@@ -5250,7 +5250,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "134b4e414afc99e0fa198b6f1428d7aed074d4abfa37427eecb6c889e4ba30e3",
-      "sha256": "ba7d5b5e7cac5060e4e522958f29598eb849d882c6e7b0fa860eec36f9653ca5"
+      "sha256": "ca3df9ea6ced6768e06b551d3d6e2761d26a166ddba097e98a7c44c1f9ce5fa1"
     },
     {
       "key": "dnd2024:creatures/gnoll_warrior",
@@ -5313,7 +5313,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "6dc1da35d7be3aae5cbfde705b52109b0efa8f780b692f8d118478c5adff4c48",
-      "sha256": "7ed2989f70132880710ac746325fb8d637b02fc4af49d3ac7ab7372cc1ed9730"
+      "sha256": "353577e261eec77147d21b9c44197d9a81740aac57bb5a5fa677c988d4687926"
     },
     {
       "key": "dnd2024:creatures/goblin_minion",
@@ -5355,7 +5355,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "4b9cb6dbcaca8616f52957a42029996280cd0bbca6038b20c76d4778f300111f",
-      "sha256": "058b5b287257b4186b4fdb72ed2a2941e91cee83ef01b4f662384df9b86613f0"
+      "sha256": "c23299a0162da64ba0f0eee204e9b4317eb541b9ec54533986c15143264a8961"
     },
     {
       "key": "dnd2024:creatures/gold_dragon_wyrmling",
@@ -5441,7 +5441,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "4f93598241a783d124e00bc69b02090f72030d9654f2b6b383e4ce447124a2b7",
-      "sha256": "6a6f03d7ada875a01538893ea8c1f7de7d88b80fcefff76c5d90c85788f94e7c"
+      "sha256": "412d0738f5f5eac9f08acb319a92a357bc4b6caf0af727a8e561c201b61c45d6"
     },
     {
       "key": "dnd2024:creatures/green_hag",
@@ -5462,7 +5462,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "253702974e6147466c6c3e0a7ba31c7c9c7de886d1957927966c5533aaa76f6a",
-      "sha256": "5aa81f9b5f8903c4aa37244dd308c1862c81823f34af062c8f73fb9bbc502dfb"
+      "sha256": "66356b209acc27be2f9419edeed9732a8b7ab7dfea1bfca57f4a6d3f1bf1bd53"
     },
     {
       "key": "dnd2024:creatures/grick",
@@ -5483,7 +5483,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "4a49ae3e689fff36da1bab5a822c2ae7d46be8759c62dd34c1ceef0eafaf15e0",
-      "sha256": "252fb61350784c7a8883da513d4680b51bb78ebcc5515473032f5d4e0afbd530"
+      "sha256": "8035207ff25625809651e35110f99853aeedbb1be54cb7d81dba8c8f806fbd22"
     },
     {
       "key": "dnd2024:creatures/griffon",
@@ -5548,7 +5548,7 @@
       ],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "8123ed7126451fc65c16be146c0905b5531f6a4d0cc33a2f10489caa8283c97d",
-      "sha256": "8f07030688df4e55e0db5a8743cb5dfa6c423963371278adaa49ca362a17fb53"
+      "sha256": "4f2733229a36cb12ea358997aa8368bf64c295344a559cd729801a83e572989f"
     },
     {
       "key": "dnd2024:creatures/guard_captain",
@@ -5569,7 +5569,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "3c01fc9095ae944c2c3696dcd8d2d2c32d772e5cdcd3a04db104a8a3d02c1de0",
-      "sha256": "adeb78d4f0ee9bd88544612b3ce105b777135aec5b02456847cc3bc6e3dd59b6"
+      "sha256": "97542e7ce6273e5506d2450ade90a45865838accca107ca86c5a97379a52f959"
     },
     {
       "key": "dnd2024:creatures/guardian_naga",
@@ -5590,7 +5590,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "49cf71cc4a264f207decba214ff9e6f2ee1a570c067863e6a42244a50a5783e2",
-      "sha256": "a48e33594c54d2859d417cfe4de3b8b804d7187bd26bfae902361de5cf944fbc"
+      "sha256": "ecd1abd25125eb3a680f1fd870e8c158dad424a67bf55808a456afdb2494b550"
     },
     {
       "key": "dnd2024:creatures/half_dragon",
@@ -5611,7 +5611,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "54a1db0b42d6e64e8de8576179f64bc575d0ee0ecca25bf1d1c4abf1bde18fb3",
-      "sha256": "630a6d76d7c93c9d5ccf5bcc70e2e92c74477db90d5e6d28c8cce8826ce3155f"
+      "sha256": "2f4e3256e9401a1e438cd3339a6d04f4de544ab270a324b61474b461ad4ec585"
     },
     {
       "key": "dnd2024:creatures/harpy",
@@ -5697,7 +5697,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "a2fafb050cd5b7e72b251ee1838b4ad03c1c42961a373060d672591427a2ac54",
-      "sha256": "1723db907a4549f88b657081087dcb69c5ac97fd2afe41f751706c6fadc68ead"
+      "sha256": "1cb7ca55af88f0c8e358c8f60ead3752194f887bf1fea3131cdc225979194a1f"
     },
     {
       "key": "dnd2024:creatures/hill_giant",
@@ -5718,7 +5718,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "618156b669bc22817f59e3dc5ad876c97a8c4ecfc45e02bbc04566dc56e15432",
-      "sha256": "a37553795eb696096860fffa40a13b22ea891ae3cb7d3b8afe488cc6c218dec6"
+      "sha256": "bf1236394fb37a7fa7d77a687dd0b6cf9000917ccb409b9863c371115ae1c350"
     },
     {
       "key": "dnd2024:creatures/hippogriff",
@@ -5782,7 +5782,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "e0ac54896e04252222054ee551fe67aac6e68ddb2b61e053311bfc0c05944213",
-      "sha256": "17a92cd4c7e53bf1643bdf1d5fdc412224d81ca1c4aac18a20b07824d196f99a"
+      "sha256": "024278685ea79372be75d2a3538a2555087131bdf1f94596761ad211c247ee05"
     },
     {
       "key": "dnd2024:creatures/hobgoblin_warrior",
@@ -5804,7 +5804,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "a782bae8860f1b8dcedf09b7d9b4c841081e0d07677bb36cf41a97303ad48fff",
-      "sha256": "990d8c66c0717fb0ccbd7f66870f44aa0a9eb92a00bf1f75d0e8a3a1dd33ef25"
+      "sha256": "4d363c32fde28e015efd2932332530bb9cb3a20697bc123b84afab8472fdf396"
     },
     {
       "key": "dnd2024:creatures/homunculus",
@@ -5847,7 +5847,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "1a964419ca793396445f1a182c32451dfed245319f7d6069d01237b05f23cf6d",
-      "sha256": "7636adc8ae357cacdf21368a8ac034ad4fa0951522903cbdec727f69b2e60838"
+      "sha256": "9bd5ecafda4812ede6c7513b16d277f73a79958af6587e2e91b1fb26a9b5b883"
     },
     {
       "key": "dnd2024:creatures/hunter_shark",
@@ -5952,7 +5952,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "f44343eddb8fd4bb981a9efec12d8f27838a6ca3251d202d71e76a15eb916aea",
-      "sha256": "38965865238644df83d09119ff104a232b4d56aa774e04c15070aa34fee987fd"
+      "sha256": "a986b2915707731e66398bab47592f5582eb22c3b5edffb36675f34fff7492eb"
     },
     {
       "key": "dnd2024:creatures/imp",
@@ -5974,7 +5974,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "e30f5fd8fda6dc9e5595c2f64714d25322a033d785d6c5563565705f175a350b",
-      "sha256": "3d6bb3d155367b6ab2c7058c90d66bbe7448e0a104d003d96e963a54efd70a90"
+      "sha256": "a60083d046cd646ee4a988e3e9766b1767e2fd18e1f2283a295874c42b193e40"
     },
     {
       "key": "dnd2024:creatures/incubus",
@@ -5995,7 +5995,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "26a843313e7de7a767247a0f2057923cca183fd744c81ad5901030fa7f0f4baa",
-      "sha256": "099ae7fdbb57b81152e672f62ce114318e988a24cc3c7b8c37a655928f17ea5f"
+      "sha256": "168bae762412fceacd7e66efa17f785a9b20c1df2ef85c6e59073f7aa6c82448"
     },
     {
       "key": "dnd2024:creatures/invisible_stalker",
@@ -6038,7 +6038,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "d1b1ad7d14ebbc558b812252a71761ab6ed5863e12873cf2e0c921501039bc45",
-      "sha256": "51422e909863673f390ce29cc8664b712997fd6b773cad8433f0a6d2ff6780ee"
+      "sha256": "163b730ab82602d4fff1b80f5d3be743dccf4843b753ad7b5dd4f415c3a0a8fb"
     },
     {
       "key": "dnd2024:creatures/jackal",
@@ -6101,7 +6101,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "845e7fcf4857147976536ec2ac63ee302c5355287932101e5c06b979b0837818",
-      "sha256": "3de22261ab916bb2a128637af07fd798a6a97976cdabded817e75111af9a8158"
+      "sha256": "5928402eec50fd85dbe0e4f8a3dbf185d418b42c66c3eff83e8cfcdd37f55345"
     },
     {
       "key": "dnd2024:creatures/kobold_warrior",
@@ -6143,7 +6143,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "ed7f0d2ecbe41e2609e38b8eeb47bbfbc9bdb9274e4e47b7625e8f76896d406f",
-      "sha256": "af3661bd31fd1478b24897ce6070fca0fb0df0ddd96ea71e275a08c63ba444ee"
+      "sha256": "ae75b4cecba80b2373834974257cd256f674ef3a72c40fb144f9b9d7f3ac385a"
     },
     {
       "key": "dnd2024:creatures/lamia",
@@ -6165,7 +6165,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "b07c9b6d33c148a484f00a5f7c770bf75d3efb5b762a9b27fab721614146412e",
-      "sha256": "06db57af8b1ed62849b7ce83be82ee48946d67781263058ef14c80eff3f97f46"
+      "sha256": "f6744173366f1923e6825577c3c299b3abecc73a1413c5b4b322f0dd3b981b31"
     },
     {
       "key": "dnd2024:creatures/lemure",
@@ -6186,7 +6186,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "dd96acdb5208acd67069a4d726b594dc9eb72722ef3869b73e9205d3d8feedeb",
-      "sha256": "48e5ceba093a81f87bbea75eaae3fd1a248a83203cdb7c61dd78688c69e3348f"
+      "sha256": "552211c34e08a3b156a7820548108c4055f8ff537617a27aa43f445bf4bb0b31"
     },
     {
       "key": "dnd2024:creatures/lich",
@@ -6207,7 +6207,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "31e3d213e6c79c0649a9a3f480a5e7ec31ea910b6b88eeab2edec64800f36194",
-      "sha256": "0adb5722c2e421692ccadd017c90728103702a06e31181e32ee9cffbeac641f8"
+      "sha256": "626e3a907cbddd97102e5d22ae645eba27b14a45bb4ac8333cd475249146fe63"
     },
     {
       "key": "dnd2024:creatures/lion",
@@ -6271,7 +6271,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "5fd74c2ce31d8fe7622cbb28faed94f3ea8df653e537840cae3aa53a3be33039",
-      "sha256": "65c68880a064ce2a84e604a202b4bca8e1a8eded0b24472c9550c5486de9ed3b"
+      "sha256": "6fa45057e7ae4a3bfb7b856b22487c7829a3cb39b8f01c40d54a42781bf865d5"
     },
     {
       "key": "dnd2024:creatures/magma_mephit",
@@ -6356,7 +6356,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "b3cff8c97c69e4ab82c371ed9cfc76076804e57214126a68d5bcbcc7624b1e52",
-      "sha256": "e55e1f9a8f56a4dfe560a099149adda1af227dc133ef505b707578d15f88f4ae"
+      "sha256": "20fd2bd4ef57b7878b06c7ff2ede51d4543e3908742844df7b10d6fc287665d1"
     },
     {
       "key": "dnd2024:creatures/marilith",
@@ -6377,7 +6377,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "566fa46112eb178b7c5a8e4021d61775aa2f58ea8742e307b00cc8c4dfc335fe",
-      "sha256": "48dfc163468fe4547fb26f5c8a61166f0ab72332bd6a0cc3db282cf3f6985cc1"
+      "sha256": "4ab138c6fafeac8709b7c2a6e8832cc47863f91b333e5326718154a44db091e0"
     },
     {
       "key": "dnd2024:creatures/mastiff",
@@ -6484,7 +6484,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "88044cc89c26b14565dc4ddb2c60f503f133e33a5668acd12ed0465154d2923c",
-      "sha256": "b30bf2fe51d3583aa3362dbbc7e1106158f38845c1bcfa65f8c3edc5e36e7d00"
+      "sha256": "f10ee394c17d588885b1c799284bd7c98f761cb48247eeb4cd894f1f2332f577"
     },
     {
       "key": "dnd2024:creatures/minotaur_of_baphomet",
@@ -6568,7 +6568,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "74815586752b10708676cd416767212678d4883b9b6c5cfc933936ca0fdb1c79",
-      "sha256": "1112b888b91d1c9c0796616486841285effd8fef2047c94cf934afdda7bd2b70"
+      "sha256": "ee1a13ed72d4273464d950c0194f560a2d888b72051464de8600108c433d91ed"
     },
     {
       "key": "dnd2024:creatures/mummy_lord",
@@ -6590,7 +6590,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "3c0b7f236cd79d5faa606acf9e0326ede393fc1482228d801d428d2680113995",
-      "sha256": "e23db6675a5b66b2aa41b6022ead3a752ab4100f835afcdc473ee518ffb02adc"
+      "sha256": "bb27063a603d6e2e59f74ece498769e02eb8ad3008a8d054e697730137892532"
     },
     {
       "key": "dnd2024:creatures/nalfeshnee",
@@ -6633,7 +6633,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "93c257866eb28f4c2c52a6df67ae88af8340f64feb25a589833a20e0b96f4465",
-      "sha256": "c64db3d30987d272295c1dd3cb26da6e237c057c92cc4ad633ad08edfcdb5ecb"
+      "sha256": "9f2dec5bd761447e1e2f262f276a95e84bf44fae60a2e9b45df9c86b4ae00055"
     },
     {
       "key": "dnd2024:creatures/nightmare",
@@ -6654,7 +6654,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "c1db638d65bbac9e6864667f5a5d670f27bf282cafccf908fc5330af457d7ba9",
-      "sha256": "a31a73d359daea8514ed25e01d2db07ac320d1815e47e773ef6300b86dad1c56"
+      "sha256": "a3db6466fdfefca4d0896973a9306e7f038b5cdc228601c830d9ed2f792a8b39"
     },
     {
       "key": "dnd2024:creatures/noble",
@@ -6675,7 +6675,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "f26ed5c085a390a85dba829cb957f2e45c3d5dd3e63c6fd194a6e833ec3b0d36",
-      "sha256": "0ad9464e43adc18808fc5293a561883535487eb9b7b623dae90c6972b2d5e00c"
+      "sha256": "015de8183528d88a183993e8bb7a4ec955c892ac30b1c109d86564c79efd4047"
     },
     {
       "key": "dnd2024:creatures/ochre_jelly",
@@ -6741,7 +6741,7 @@
       ],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "0920678c2e2b0f9f690c163fc2fc4b97be1d8e8d5b8aae4ee6ee422a857d0703",
-      "sha256": "4abc6b02a07b0abfd1ca6c8f550057516dbbcbf12b90ec10188fe80b5a5dcb7d"
+      "sha256": "325fb57f1d6619965b1c73c18bff29a73f3a0783d33409153421fda8fb16821e"
     },
     {
       "key": "dnd2024:creatures/ogre_zombie",
@@ -6784,7 +6784,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "b32e78a01ba0234c6c4411ac0ca1ef92131ac506d419e4c46918cc47b843665d",
-      "sha256": "5f5d48606782b1b22503d7a5640942e8dd35a01f1683f71cc40f25105ad839a4"
+      "sha256": "d8d492538df769839b5b6a4c0d3885dfdea1751a03456783e8e9c6e2b9bec567"
     },
     {
       "key": "dnd2024:creatures/otherworldly_steed",
@@ -6805,7 +6805,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "28c5690e62d7f14340e7c66351db50512056d09a16ead59264045fee3b6b9ebc",
-      "sha256": "dfd89751b987012a6d02eb48bb40a414b72b0540ea5d2366168d7a765670024e"
+      "sha256": "6303ced597eebe54ee9bb13cff251ae608922fb1e29c40fe470e7db4e94a0bae"
     },
     {
       "key": "dnd2024:creatures/otyugh",
@@ -6826,7 +6826,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "f9c34c8182854c47794706f95ae83a7d5fe00707fdeb0d048eaf93ecb301b1db",
-      "sha256": "ebca76985e8ed066458761bb2dd234f97f85692e9825214e431230eddc821436"
+      "sha256": "852d89f2aa2ba215e1dedbed2a104de7be29af7ad5c66e3e662df300d7bcfda4"
     },
     {
       "key": "dnd2024:creatures/owl",
@@ -6912,7 +6912,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "80d9c103bda6d58f5f2b2d586794887e8c639f959a8983a853531053c395a351",
-      "sha256": "adc888348030d9687c3d783071fdc823850bbedb92260d77cd03c7b496a877e3"
+      "sha256": "e46486cb885cecbf2b4a82ac24d4564f295d9be4afd69078f69f54e219868a58"
     },
     {
       "key": "dnd2024:creatures/phase_spider",
@@ -6976,7 +6976,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "a30185bae883f448a64fd2eafe45f2446a9e597d085d4e5af85db0cfb5842865",
-      "sha256": "48112517989b8e2ce236dec02e0074d777a56715a47dd61490376c4d13378045"
+      "sha256": "55a51296bde2c9932363195db806f99a219c373a6f1257368a953e5f97d9607e"
     },
     {
       "key": "dnd2024:creatures/pirate_captain",
@@ -6997,7 +6997,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "41884a23ed0d94a73bebf46c8ea9899c6f12d891983b575a991c665df9bc4ad6",
-      "sha256": "7894939df7577a19805897579a0c46c5637d562b2103e0c486794c640a5c5a86"
+      "sha256": "e166ea67c12e91efd8c8a80ceadac5ed009b49cf039498cd8fc05125a525e285"
     },
     {
       "key": "dnd2024:creatures/pit_fiend",
@@ -7019,7 +7019,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "41df1f01d7c82294d7e10d5eba28e2fdd35bae665e23aebea0123773d226baea",
-      "sha256": "ea5758fe103c4f4fc66f59d05c2db26a3de22548a929ea96a08eefa4c705b776"
+      "sha256": "b7dcbd5a759e5e41623ac75166a935ef5edfc41355936f82a5c4e20a26caa6d3"
     },
     {
       "key": "dnd2024:creatures/planetar",
@@ -7040,7 +7040,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "b33857fc15bb227298c033d1bc4b1907ed172505f2dbf08f15516ef9e7e77adf",
-      "sha256": "0746d8348b1cf15e77bf666f69a93987d342fb1e8493d54a5d883448804f3b06"
+      "sha256": "322ceb899d9adf4c4e706441be05315db83f6cf4868b624118f1919fee5e56e5"
     },
     {
       "key": "dnd2024:creatures/plesiosaurus",
@@ -7129,7 +7129,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "9e4c0fba143932bbd644829a6ad94dade002c50aef386eb42c67ce23b0591a39",
-      "sha256": "f41cf64c3b3cafce2f8e91ad96e3530f7c80924c1c10b17a5931781c6decc85d"
+      "sha256": "6edf37335efbef15e1798c7791c5e5da8bc27ebd65c37beb470881bed3e1f165"
     },
     {
       "key": "dnd2024:creatures/priest_acolyte",
@@ -7150,7 +7150,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "3b0c4b7a6c29e14004e62e4e6c5b51b415da6cfc90ff96cf1372178287445365",
-      "sha256": "79dea1798078727b6a78733234619a920dae4351d8b7d3c5d5b6ac48709153db"
+      "sha256": "ba9dd69ddf8dd4db5c9f8a14fdebf7daace302ddb87fbe213e8a4a6731c1c8b6"
     },
     {
       "key": "dnd2024:creatures/pseudodragon",
@@ -7214,7 +7214,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "3183cd5bc850ba1a62709798c76f64fe1d56505c16cd8a9fd661778d85d9edf5",
-      "sha256": "4126a2f73f06f67daea1cce57dcb514166b6ba7587d3d8330c81143279b1dfef"
+      "sha256": "5d1edbe67b0a2ec3aaf97e7c951b33034bd2968bdaa92d1a886e5102a68937ef"
     },
     {
       "key": "dnd2024:creatures/quasit",
@@ -7235,7 +7235,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "e642c4766c49c98490bad82f47eea69f0f0d31505e81af3d75abb9739b579058",
-      "sha256": "0ed405b3d8516052cbf1813861e293505d8f234b55f1cda1c5c0f66685f2dc06"
+      "sha256": "20a66d6ddd120996178f697ef10056ad8780350c652680894769e1eae1e48da7"
     },
     {
       "key": "dnd2024:creatures/rakshasa",
@@ -7257,7 +7257,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "24789dc2b02fc178d57c3035eb3948c36df1622e631080b7a11ebeb6d756bd05",
-      "sha256": "8f9fd5a344b28397f024a89ab26c50797471ab03322710a06acb74da59540187"
+      "sha256": "06aa980e545f8cb932a3d9e7f746f5858c165ad87689cf5b398603f66a21bf62"
     },
     {
       "key": "dnd2024:creatures/rat",
@@ -7320,7 +7320,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "4cecf2e4720d3faadcce4292c2129b242bde63897dc8e5f44fa8f78843a0c293",
-      "sha256": "e802f2a55f649f253f77e515a4a00fa68ac0c0dd0e13ce80ebc8326204ab604d"
+      "sha256": "aca94b7998dfaca82dd8411622b62fa8869a4c4c5d6185711909c3479cf896dd"
     },
     {
       "key": "dnd2024:creatures/reef_shark",
@@ -7363,7 +7363,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "3da223a72e8ddafef31e3f6f003fcdcae32e01ddb7bdaa9912cf3f1fabaca9b1",
-      "sha256": "2c90d688e6c6d259903a6c7d0a8a28e845991dff7d8be83b6afdc631764a3ca5"
+      "sha256": "f7c3ed4970c174ce08ffcdc0315426c7d97445284fc9173a5913672e41cfb6ec"
     },
     {
       "key": "dnd2024:creatures/rhinoceros",
@@ -7471,7 +7471,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "f3fd91bcb1d100cac5f605afc057a90855708fec22416f4ad3fccd707970e5b2",
-      "sha256": "454b7d34631dd7f6a9e9ae29f418bb4c38f3b06927e5e2d1f95631036f3b4026"
+      "sha256": "00de2b36eb67a96d11b6f860445d74f3df330143882f5ae43d02491dd972ff76"
     },
     {
       "key": "dnd2024:creatures/saber_toothed_tiger",
@@ -7598,7 +7598,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "925029aeefaac104b3cba98c89e09facf7ee61e5e6df3a0104193f220b010043",
-      "sha256": "920015108aab79edb6621c192d9cb8d723f8702390db52a1ccfc9305413475c5"
+      "sha256": "5fdb424029bdb7ad0ef2f5d21648b56439c291463c40ed6aecec33d4dcd2c6fb"
     },
     {
       "key": "dnd2024:creatures/sea_hag",
@@ -7619,7 +7619,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "8028a7ef89e92881ad40e0dae6688f514a16d7f94d865c1dad3b3ebe605be57a",
-      "sha256": "e69519e48339d11b48d617fed86f3aef8d7f95d3d4830239a0c1468b86180bbe"
+      "sha256": "97d5dbffbb2facec986294f1e5a3c23a8ec7c87d23b49b7963404c999a026eee"
     },
     {
       "key": "dnd2024:creatures/seahorse",
@@ -7683,7 +7683,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "31b8a6f14abc2824effdc1f1b0f8d05dc8a12414148a638c6c387230792247f9",
-      "sha256": "51345663dffdd0d77b3c73372695f6c90aad9b3aa3f2a153412857c739222e40"
+      "sha256": "08c8be0edff9014d67267e864b81ee74ce84c7eb472c354a81029678435c8457"
     },
     {
       "key": "dnd2024:creatures/shield_guardian",
@@ -7704,7 +7704,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "1e37c23f04a076d5ef383fc42bd374ab0ea0a618d04d0c3d7220aef357c6d227",
-      "sha256": "994cf77cfd35bdfc406892e5e59e317069a3aaec88b582cf8caf9c328d7b527e"
+      "sha256": "d4b83c3ed1fd7d20c73ac90dfa2fb13b60d1674f7cf88d543c18ec65c2d1c0c3"
     },
     {
       "key": "dnd2024:creatures/shrieker_fungus",
@@ -7770,7 +7770,7 @@
       ],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "3f934e83698ca981bae4bce5446a41642e5f13ca5e2e5c05b12797b82bc33eeb",
-      "sha256": "49ccd6aa1857d6d797b807ab13faefed914cfa05204a5d909e1b89b98ae9ee2f"
+      "sha256": "8a4869921d77df35b0a94a090f2694afdd9de80169f6d24abc9ab637174fce4e"
     },
     {
       "key": "dnd2024:creatures/solar",
@@ -7792,7 +7792,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "e5937f831eb9f80c29476a1a7ffa362968f8317bf37e5bd4d93ed0258b0013bf",
-      "sha256": "c206101b4b89c09a4e32070b2550a2415222d0b52943541af24bca39ee128b44"
+      "sha256": "5befcfd9f8eb8d884425d22b419ed73b069fc17a3ef1e32ba2aef40f823ad672"
     },
     {
       "key": "dnd2024:creatures/specter",
@@ -7835,7 +7835,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "d91eeed21e39389219ad4af759b7fd29ec0340a9b7ab39bd285396ce53a681cc",
-      "sha256": "0a96c72f319e93a496616bc39ae13c1114ed7e302caec39cbc906cb1c4f48142"
+      "sha256": "ebb2211ef6dfdc5a2a7ac2240319f70f7b613ce6186f07ca22f07745309531b4"
     },
     {
       "key": "dnd2024:creatures/sphinx_of_valor",
@@ -7856,7 +7856,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "4fd0a6a7138453433b9dd65573f85289ba45dadd2d00aa1a2cf4ce5210a17870",
-      "sha256": "f1bbdfb874fb080020bb949746750d67ce1b2ac23d4abeff847e829fddcaa1ad"
+      "sha256": "6b7a1d3ba15a37ff064f75aa2dcc4245fde31baad70736373746ee7acacd5460"
     },
     {
       "key": "dnd2024:creatures/sphinx_of_wonder",
@@ -7877,7 +7877,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "354bac0d7fee30bc4637050306ae5dc6bbba154149f30dac318d40d3eec49499",
-      "sha256": "19eeaa1e1a310be49149af02e703f5f69878b625bec0a631e55a6345f18f748c"
+      "sha256": "e11c3a6b7f444c1f4f49e81ddb98f400309befaa5f4828710de27643b6421a88"
     },
     {
       "key": "dnd2024:creatures/spider",
@@ -7919,7 +7919,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "65bcbbb1403cdad8caad1b2716a2dd4c01ddd17f55f3a9e6ac594bf9d067ce5d",
-      "sha256": "28b3d798800ae3487236632bae111fb5a4a68feb6504fd60a22f601b94298690"
+      "sha256": "05d3d6955233395e2219e6917709e1a759e388601b31bf1b776d801a6ceba334"
     },
     {
       "key": "dnd2024:creatures/sprite",
@@ -7961,7 +7961,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "75fdd3c86ecdf98672c22ae2c6b70fd47f7385ebb90e1ba7401125b0830d6d10",
-      "sha256": "f76d81cd6e93d0479bc6a07e542d6c55c2126642f2d5b9b98b429da1125201bc"
+      "sha256": "29066449f610da43ead92e66d0901920f3a4542df124a7782b1d136ebccf26ef"
     },
     {
       "key": "dnd2024:creatures/steam_mephit",
@@ -8025,7 +8025,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "610c40e9faf8e0322c382953383e08d82052bc2ef0696e27b7d6e68fe76d9fe4",
-      "sha256": "e3a1f27bfc08acf49efa77ae5f557d0fe260da614a60adf8f98174ca4cb22e13"
+      "sha256": "c86a6810b1adc2bd2b5d5a4935f8099205c9977aa1e395fb74fb01d55c60be54"
     },
     {
       "key": "dnd2024:creatures/stone_golem",
@@ -8068,7 +8068,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "87c993a127f944054fc8cad64fad29f2558e18b612b0ff7fea0745a368408637",
-      "sha256": "9c1f25d9418cd4efe119e6a40939613ab9d69a198bc4d8b341f45dae2dc9a6ae"
+      "sha256": "fc7cf5d768ed247664e64767c047d233f54414aeba8e51d535cd7e7634c5b416"
     },
     {
       "key": "dnd2024:creatures/succubus",
@@ -8089,7 +8089,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "be827794a18cb3a0acf003220c930ba43d172cc0a171a581b8e929aeb5f76209",
-      "sha256": "65687a244543328f292d45e2101b921494093d1a2437a355b29e96e3b95904d2"
+      "sha256": "6fd03270cf2f1e7d973d94efcd8c2220b3cca54bdeac139520d23ae1b1241e70"
     },
     {
       "key": "dnd2024:creatures/swarm_of_bats",
@@ -8152,7 +8152,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "41a07d7350897dbfc4adfa5628e5b15ffa8786eeb59cf8fbc78011e5334a2449",
-      "sha256": "61b1a20ef272426e2719850ddd20f9ac097a97f4cd3d0df191f2db51a2d1c6f0"
+      "sha256": "611073fb0955c83b62ea8e475e39f82a0db66172b314977294d50da2b44d0167"
     },
     {
       "key": "dnd2024:creatures/swarm_of_piranhas",
@@ -8259,7 +8259,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "e6bed3e16a7decd617d862c229ec4ed6ad6046a8297dd63cda1845700d2c0b53",
-      "sha256": "60ed033d59c1843d69871a88798c7982f371b05a59fdc1ad8b47ddfad37f92f2"
+      "sha256": "86efac962a0e496f68537246b77c2ccea7a9b8764c70aad9e730e7c869c9fe91"
     },
     {
       "key": "dnd2024:creatures/tiger",
@@ -8301,7 +8301,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "bc270700f24c26fb85dcc1435ee96c54157e9bb654e1f0582638c1759677affd",
-      "sha256": "f691744d348ece3eec5b26f1eaa29e6b315b3f2cb66f0bd0a75637b5f02872e5"
+      "sha256": "7fa2cbd472790bf98dcd8f8ced75b704dc9b2e7c6b399b4757f9ef6f7e130066"
     },
     {
       "key": "dnd2024:creatures/tough_boss",
@@ -8322,7 +8322,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "a0ebf034677da64f365a1eb9dff591fb0cdc7e0149622338194119703d2377b1",
-      "sha256": "3982423a5ce176b635ac56812cda2648bbdeead776afa8ac44763c1ef4f289ee"
+      "sha256": "a40d83a26f5b2b10a70ebdaec41231bf8220da71a499b0e0c77c889e2ed41768"
     },
     {
       "key": "dnd2024:creatures/treant",
@@ -8343,7 +8343,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "faa29a79ae7f329623ba74fdf326d0d781dbcf71a67b9cb3a2e06c418e11de3e",
-      "sha256": "ccd9f6b1120ee84661c03d3564295dde256c05d2c4351dce9710be420ca27299"
+      "sha256": "87450805442edb215f6cfd534c44883bb88e3408bd9c3c96efb318f46cbcf987"
     },
     {
       "key": "dnd2024:creatures/triceratops",
@@ -8406,7 +8406,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "56f9544e0381d7b301c02906dd543d529ad323b8a4f8d661d926bfef6de0bfaa",
-      "sha256": "0222ec030ef785c39d496c6b61f43aebb4f8dd5f7df0c0fee4ffac42264d149a"
+      "sha256": "29f1140344b33456e1d03a7e39148eaafd201a89de147cc0a5685a78feb700e8"
     },
     {
       "key": "dnd2024:creatures/tyrannosaurus_rex",
@@ -8427,7 +8427,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "760f1c39dc548e352aafb941aa9f59ab263718005aa64c7a97783f1981e1300b",
-      "sha256": "c175ed9b844e2ab09fae876a593cc80a040ae0d03d6a4cb3a196329f6c2eb155"
+      "sha256": "eeb0cc1c2094b75fe8880d748b96cbd11d1822ffc7d4b476e1e6cc42d1a5aa77"
     },
     {
       "key": "dnd2024:creatures/unicorn",
@@ -8448,7 +8448,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "ce22108071257a66e66fa6311e00aa6d7f9773f19126804ba14acca5d0431ac4",
-      "sha256": "95687cdf8a17e45827fab6f465e327383d4bf482c7a8e2df7797b8cf005f33e1"
+      "sha256": "9a16a079d350c165b8d6616ee24564fd2637d9fc3acad87a45b205ee4141a441"
     },
     {
       "key": "dnd2024:creatures/vampire",
@@ -8513,7 +8513,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "60f0dc57d65fd849f42e15bb722987d5c2338dc9100cbf9f6bac38258d744dcc",
-      "sha256": "d7416a60d57d476e2967301036dec6bb799b336635f6040092b6bf31d7ddf700"
+      "sha256": "a7787e455701ef33d956c3cea3ac20acb33529faf657b831c060e7064371527e"
     },
     {
       "key": "dnd2024:creatures/venomous_snake",
@@ -8578,7 +8578,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "3785f620376a2bf7cd6dcde0f2bb49e722d460e8dac8a87202a0800c7db4cd93",
-      "sha256": "865aeeccb28cde42023190138a4851f2b957d1ea2986a7c3085bb4b69e10a721"
+      "sha256": "27abfbff442595dc9a330b67b07b4d581a3227b52fda29f14fa846d829b03697"
     },
     {
       "key": "dnd2024:creatures/vulture",
@@ -8664,7 +8664,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "d0f63fcb4f4646083b4736f210d181d71d8dfcde4d668de1fab23d9e92df71a3",
-      "sha256": "e9409354ae5d73aae109a2ecd30271e9b373b00fe1b68e59f31cdeee748fb82b"
+      "sha256": "12ac39fbbecbd39b750a5495df44dd579497ad4bfed35a4e3a5eccb7710e223d"
     },
     {
       "key": "dnd2024:creatures/warrior_veteran",
@@ -8685,7 +8685,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "feca0e74e99f1ac73db93c45d3b6deb379589d888624d2efd0a175ce45fd272e",
-      "sha256": "27da026135bbe11a6344bd2068b889362d40e34ebf28431a82c4faf753bd59f3"
+      "sha256": "599e89907edbfd0ca128ab331b8f0f34d4a7924ac0ed6f79c41e3191174685a3"
     },
     {
       "key": "dnd2024:creatures/water_elemental",
@@ -8706,7 +8706,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "f814c4cc0a22d91d3543095f4210846cc5667ce8f6222510ae3e04874550d65a",
-      "sha256": "524af31056f392d20022f381c8b217c3c1bcccc05aaafb158cc359c38f53e374"
+      "sha256": "497fa8d1e52e791d0905e0e99b02a7c142c2bf04c97d120d5ebc193c9e8ef797"
     },
     {
       "key": "dnd2024:creatures/weasel",
@@ -8751,7 +8751,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "d6419230b768628069fe2d67859f9e7b53d86d692cb4456b38c5a2a26d7c331d",
-      "sha256": "cb75cb2522a8c4fe03c65ef424e94b47d348003655ba547f65c7a9e46b8c8a5c"
+      "sha256": "f0a0e86bfa263bd50defebdb8b838f13f2f563237964696f2c27e15e1dd24676"
     },
     {
       "key": "dnd2024:creatures/wereboar",
@@ -8772,7 +8772,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "767354309995f44312098603f67b6ca1e21d10f01366db7daa174e741a55f7d1",
-      "sha256": "928788d7e267f2040112a4dec9c84de4bfc3564c0fbfb9d5dd7689eec446e75c"
+      "sha256": "2c2e8f5862071017f39bf8edbf679c004572c347c62bc2e5b461756d8f6bacc0"
     },
     {
       "key": "dnd2024:creatures/wererat",
@@ -8793,7 +8793,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "4149cde2906de29d669f39effeb0a993d8f659721ea5128749b44f575e375b98",
-      "sha256": "4d2a2639b46f16e3214dc85d2241401e7f3d278fc98708e066118dd7e7ba4292"
+      "sha256": "e8633f276b2ae3e4c7574c367635af9d73585caf5c861f4ea4aa871c972f6000"
     },
     {
       "key": "dnd2024:creatures/weretiger",
@@ -8814,7 +8814,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "373e2307aa984a671cc8d1021ffcae7ec4541b0ccf8f7174baa8d2dbf6aafd4f",
-      "sha256": "2a8a20f5d10b28ef787284f0d5410adb1da197fdc4497453f00cfa9cbf081d51"
+      "sha256": "a36cf007c212e9d6045a1d1953c6a32f8c79e18f6178ce5da77661aec312b132"
     },
     {
       "key": "dnd2024:creatures/werewolf",
@@ -8835,7 +8835,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_1.md",
       "specification_sha256": "53c93e3cae79557872af5911d1da50ed971207b102e589bc1f008e6f557df946",
-      "sha256": "c89346a82a9b258ac7e8921c72f61ce55544052a21cdd947b275c115081d11e2"
+      "sha256": "552e377220fbb3d185f9bdcf4f47bc7cdb492e130fdab0e9f1b2e22b9c9fc587"
     },
     {
       "key": "dnd2024:creatures/white_dragon_wyrmling",
@@ -8857,7 +8857,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "e217e723bd74091d5fd055cd44e72f7337102504b5c337fec13332262d685386",
-      "sha256": "ac0cf3a5391f8df713dccc3673e0bd53c18a0f4d9a7d8d60bfd7680baf436966"
+      "sha256": "53e0d371da9a86f566c85f1b272c32c7ec76d6bbf144e613772ab0dbde1d944e"
     },
     {
       "key": "dnd2024:creatures/wight",
@@ -9006,7 +9006,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "393a4a930fb3b23292a90f9821b2b6f552b41d8a652fd16c256268251ec9bb4b",
-      "sha256": "f731400b93135eb924d5b65aaa5a3cf2268a6e371d376bf0c44d0282cf573ebe"
+      "sha256": "634e920e565a981cad79ade48dd63dc4ec1f0c727d724bca25cf49aade92c81a"
     },
     {
       "key": "dnd2024:creatures/xorn",
@@ -9048,7 +9048,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "f78280b2dbc28c8ad4605d020db8b7c8b9590a85ab6665d1ab25007df4267448",
-      "sha256": "68f423ca3938c69f031497b49e82306dbe4431d2a819c458f691a3ad5360df58"
+      "sha256": "0f14a23708beddb6296c622e47675bbf94640426126084226007a11b35639fa6"
     },
     {
       "key": "dnd2024:creatures/young_blue_dragon",
@@ -9069,7 +9069,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "754cb19930245feedacdc6e5f9113aa72fe4e13b36332262c538f96373a63e35",
-      "sha256": "2d1b10e4bf28576619499349e93e2eab2d3c25642ab3a8620573364288b68a05"
+      "sha256": "ac8f321454196e050569b47342a6bfcd69701e923a072d0aa1eff5669b6954f3"
     },
     {
       "key": "dnd2024:creatures/young_brass_dragon",
@@ -9111,7 +9111,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "2514c0349cdf7dfb0ee7ea23a6969d68fc54daaf226654384fa1d26042060291",
-      "sha256": "2299c183b933f71e7cf9f21cb06514762e17127bebf7bad5162ed32fdd02b9e1"
+      "sha256": "e8a16e959bf8324bc4c14a9536ce35ca2aa5bc4d81b0efc1916d756f577a488e"
     },
     {
       "key": "dnd2024:creatures/young_copper_dragon",
@@ -9132,7 +9132,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "07bb96b2c7c40200847c85bf36856b839c7478b2b72b3ea291442252091f792f",
-      "sha256": "78ce3affcc263702902baf2a2caf4e43fbe38777a9b824361bf3b1f330bc7034"
+      "sha256": "a5b195e9e61d8176443c13c878c11fa70f4d124524503b767f0204c783e66c2a"
     },
     {
       "key": "dnd2024:creatures/young_gold_dragon",
@@ -9175,7 +9175,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "57424097495ab6a1a93391ce65fa3c7ef58c2b93c9cd3a48939d6b621f69474a",
-      "sha256": "638442e74e19d21a08b13e552e94a073e68142ecf9343897a9c8047bda94430b"
+      "sha256": "56f6bf3ae642b264cfa0dfcca4025f7337d683305fab669bb48af9071e8850af"
     },
     {
       "key": "dnd2024:creatures/young_red_dragon",
@@ -9196,7 +9196,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_3.md",
       "specification_sha256": "2cb5cc9a6662c7220c7fa30db35ed3b35fa40157301a4b7bca00c17a572ce1ca",
-      "sha256": "391854622445516252c46875e3dec18a65c93007bbbc14582fd898e2bc68f2fd"
+      "sha256": "2e6004ca51b6776a565cb39d8b467829b9eda2bdb6f47dcc8d008c027748be01"
     },
     {
       "key": "dnd2024:creatures/young_silver_dragon",
@@ -9238,7 +9238,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/creatures_2.md",
       "specification_sha256": "71239144f4ef8b328af8755d3098e2e7e3d1f7eb1fb6621cfd8b36eb982356f7",
-      "sha256": "66e3bb54edf42f9a57355ca3de649453831c0ecc677dc6908cda7089dd8b75b7"
+      "sha256": "79469de45f13838cbbd6a9349a73f3529189d20a4008b9076a2960c755e1f050"
     },
     {
       "key": "dnd2024:creatures/zombie",
@@ -9644,7 +9644,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "417dcdb14259ff04bfa5106b2bf90b719ec917926fac0e7363191dea012a2e74",
-      "sha256": "0f01afe2afd80dea851987069788b6c7db836168615440cf1276c12e4999d460"
+      "sha256": "7972a780928f88bbb84a0793d5ddd1e4fc5bfb9f09f69f62a731ac600ba31c95"
     },
     {
       "key": "dnd2024:spells/astral_projection",
@@ -9729,7 +9729,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "297b6a9e2e34ef1c46db48c35b6f00e8a8c6c655c5d32f578e95b21938f4f0c8",
-      "sha256": "68f62852b1ee17771bedca47100f8d63628c807add4ca65a08795b3b91a6bce4"
+      "sha256": "51ff796eb3b37c02045528050eafb129df1a2af48a5065497971cd1b22e88178"
     },
     {
       "key": "dnd2024:spells/bane",
@@ -9856,7 +9856,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "3e43d51904644557cf0ef1ee5cfea245c051691f8dc4e66a9791814ce6d4dd0d",
-      "sha256": "229c1ce681bc519224a63f4e0fbbeadffaf8f1a71a827fe9900692f811f4816b"
+      "sha256": "4897b0112cd51a1aa863d7938c1c7b91d596d4206033b13599318d968467a2bd"
     },
     {
       "key": "dnd2024:spells/black_tentacles",
@@ -9898,7 +9898,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "47e96dfcdff9ffdc63297bc05396e942d543976fa40e9fda7af29bc4aac6ea13",
-      "sha256": "6ead1b9c9f24a45a3a335bbf9091330f18532b18991ddba0440e842a256b4b7d"
+      "sha256": "7ae015aab42b51e1e928c90f9a2f8cc5e1e863eb9af3e66522642df0b3e03766"
     },
     {
       "key": "dnd2024:spells/bless",
@@ -10237,7 +10237,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "d746389041ab8b2dc14abce6f7218c0e381c8ddfe0a3cb0f27722beea88a14b7",
-      "sha256": "f871cb14dfa9e5473734139dcb596378daa88f35fe97d86cf08e4fb3484c59be"
+      "sha256": "e07695b7b9259e28dd43576ca4ec36b0b6e6c008ae96dc2d3a3de479339ecda4"
     },
     {
       "key": "dnd2024:spells/cloudkill",
@@ -10427,7 +10427,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "f56996ea70799ac7368876ee3aca730e3e5b63ca9ba59751c06864bda12a23c5",
-      "sha256": "c29f06847f63e143b6df1f107fa2d5f2e42072c2e8788c4507cb576703ba651e"
+      "sha256": "9180e6dc18b12807c25973a7b72638c0bdc4551a8436a2e29c2a647640f2f189"
     },
     {
       "key": "dnd2024:spells/conjure_animals",
@@ -10916,7 +10916,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "4d7485a20d042b55ba18eb1a192525a7cb6ad87f16c52d80d59314995937b221",
-      "sha256": "59ff83c61bfd1d2fa150d506833c09b8bd0c0c18d6c9bd2fdec51a16fad594c8"
+      "sha256": "bd5e6b5980cef24151a9cb0625f7bde8104b2c2bc515e35520fdb80dfc270fb7"
     },
     {
       "key": "dnd2024:spells/delayed_blast_fireball",
@@ -10980,7 +10980,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_1.md",
       "specification_sha256": "f60ff9fe4a1f9aae61cb851d4a5a16627ebd8a968744c8021c3d0ecb36b2e210",
-      "sha256": "6c1a40db46839d7577bd1bd7f39241d48d282292ba2ec2243921df1ceac07d6a"
+      "sha256": "a19f124665cb20c0660f38165476647623adb5954d0b53462f9712490763cd8c"
     },
     {
       "key": "dnd2024:spells/detect_magic",
@@ -11001,7 +11001,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "3b21e184b694fc38326ccf44649e434ce522e9f9f9d6eddb89b4a56eb6dd6e23",
-      "sha256": "3215871e7f5c1cbad046034aea51c4e31a337f5c91515ba6b08be78cce52254c"
+      "sha256": "2eba6b75cc0352623c692e53f95bcbb83f3e104c110bbc819941ca6a19f33c80"
     },
     {
       "key": "dnd2024:spells/detect_poison_and_disease",
@@ -11022,7 +11022,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "1e6ca2155e2ef463e7af349e03b47c228aac74b621ea47fed0a8cfdc23d69f0b",
-      "sha256": "be1e121c56fd0618f0dda767f870ac2e6cabdbb1e583d4793842e843f73dbb2b"
+      "sha256": "a9a266f0d15f8420feb3125e42f055aff0b59d27985f92973f2d45c0bd937610"
     },
     {
       "key": "dnd2024:spells/detect_thoughts",
@@ -11043,7 +11043,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "b30c1ccc8f6fb277332fc6b1985da4a7ee7133ebde9a1deb50007c8aa796252f",
-      "sha256": "5de3d8d5dd7338339e8620827e0990c527557b7d39cbac5be3acccf9a71d1f66"
+      "sha256": "1536a6d8b568188368146fcae8674769e58f3db925793a6235708b5b89f96267"
     },
     {
       "key": "dnd2024:spells/dimension_door",
@@ -11254,7 +11254,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "edbddf13cf4cc87835a6da408d6cd2eb7711f02811e1e69729d20fe1496cee9f",
-      "sha256": "9b9506feee6e00886ed99818dff9c4560ae1662d1e6dd96b3191315d252717f4"
+      "sha256": "33ba46197a3b463619718c6869626d45680a5c4b073fe8392aa69022519d0a77"
     },
     {
       "key": "dnd2024:spells/dominate_beast",
@@ -11297,7 +11297,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "78580e7c66ed65332229650b13bea08a74b4480e54a049d206f89738396b5a50",
-      "sha256": "8af8bffc2f0c01437bb2ab451be1aca008a42280bb223cd71fa41fd8fdfd78ad"
+      "sha256": "53d410409be9c0ddf22c99e472ecc65b86aa2ed843862dc7fce0e24615be0617"
     },
     {
       "key": "dnd2024:spells/dominate_person",
@@ -11444,7 +11444,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "7853d8218ab34b3a3a263168ed163dcbf5d021659488004fb25c53da80a1b87f",
-      "sha256": "98836a965afd7179e0203326b34d9bbedd47df34bcafa1f896ddf70d709ff71d"
+      "sha256": "4021cbda43403c0c8a4a1dacac35e644dca66a92bbfde32a2bed097df489ab79"
     },
     {
       "key": "dnd2024:spells/enhance_ability",
@@ -11550,7 +11550,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "8981960906b9d6431324f8fe506e478ad101804cdd5e579ede64bc45817f87b1",
-      "sha256": "cfafa1c63d2d4d35376e068038cec1cd0a044906cbfe8910baab8f65bdac6b9c"
+      "sha256": "e5923e2caf60b3f28bbc94babf8974c757eff538e5da4713bf82968345d82414"
     },
     {
       "key": "dnd2024:spells/etherealness",
@@ -11634,7 +11634,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "5c38f37bb21e8dd2540ea2e4eb27cf53a48271e0dbefec0cb4c68726bd194187",
-      "sha256": "ca766826dd17be548ae9bf9ad3fefc7c0d090a5eb9f1b97c8f96bb2ffe191dc4"
+      "sha256": "daef47d6fd6e20b989a4478ef69f388c674e72f24f6d4bfb15e15bea8a60fd8a"
     },
     {
       "key": "dnd2024:spells/faerie_fire",
@@ -11866,7 +11866,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "129536b987a96435138deb6ad79c9297364787af270c8e92dd83f77c94d201d3",
-      "sha256": "3b3fd1c7850e4c11c8cc409da571962f389a9805e1215f6c48c8ff49efaab2d6"
+      "sha256": "aafa3ab06f8e89e6805a1ac8368a0e4d3f85832113d0d78e985b0f8609e5c934"
     },
     {
       "key": "dnd2024:spells/fire_shield",
@@ -11971,7 +11971,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "bd51b4630b0ada7fb3b40944694907156b17bd55f03bbc54c77af25710ed7969",
-      "sha256": "afe37d31a198fc44e2a243f50846fa0fa11166cb34dd0db7ae26f4da2a80ba61"
+      "sha256": "69f17d2dc32cc7409481f81fa19b3b43fa5fcc4680de01397c24f0d6966feeab"
     },
     {
       "key": "dnd2024:spells/flaming_sphere",
@@ -12139,7 +12139,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "561b5625d673aa2045f56fd02dea43d52871a2da2302ddeaaa340a985d4f8707",
-      "sha256": "45a18274be6e48f929a48c25bbb9166617e563f2f4c3def244bdd21813194412"
+      "sha256": "b7cb8f50db5a618dbedb74a86489eb41441ecdb98c850fdcdc4ebcb7b2f86280"
     },
     {
       "key": "dnd2024:spells/freedom_of_movement",
@@ -12181,7 +12181,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "c6765b9309371ef3f413c5488ef799a3c82744325c3e90ba2f999c8c87d2ebc0",
-      "sha256": "f584796570c10a9267ecc805153b399fdacb59dcbce72f94dc899ec737bcb7f1"
+      "sha256": "793e0441b58e1776b23278ab6e96342715fb8c442f81e5bd86492145b495a4f3"
     },
     {
       "key": "dnd2024:spells/gaseous_form",
@@ -12288,7 +12288,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "aee69f231dab20a47352d6b61543fa426aa16ec91e3cff203f6f416a2944a8ea",
-      "sha256": "3746321e3e7d1b4b8c1b5b26094f54a27f52c8c2ff80e7f14e4db04188e0f0a0"
+      "sha256": "8354c322cfd82300ff31f431967c6f8084bdd94dd4562fcd3cb9e07af5bb7a4e"
     },
     {
       "key": "dnd2024:spells/glibness",
@@ -12394,7 +12394,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "faa442336e2311e757b0ea02e30d1cc77ed9e89dbf057111feb73112c381b523",
-      "sha256": "5b69d4951c7abca9692c7bec8487448fbce06a0888783ce2ad9978958d9cd168"
+      "sha256": "616456636b9a2bcb74b291b2c42623e10083c9c4877fb02de25ac740325f4db3"
     },
     {
       "key": "dnd2024:spells/greater_invisibility",
@@ -12436,7 +12436,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "ed1305129ca8e13cf422986993c090da69f43cacbd8480868ece08126e3bcd29",
-      "sha256": "bfd5f02c5612f887c4bc83f5edc9f061c4d2f93db8481e891a2005d6c4ab6a9f"
+      "sha256": "49d9780bad45b0b8d7b4afd2f43cdcf505b51839a615f1391aa010c0fba39117"
     },
     {
       "key": "dnd2024:spells/guardian_of_faith",
@@ -12479,7 +12479,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "49727515016da8ba008427f2adab5ae2ea167e826f320921484de565dc910033",
-      "sha256": "542274ffbc38c51b8ac226c642041d526b15293e9116497b359d7d90cfa81197"
+      "sha256": "050fa966605b7453f571ceb2ce64f5815ab63db33890243e1aa96b58a60e4f12"
     },
     {
       "key": "dnd2024:spells/guidance",
@@ -12904,7 +12904,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "6230d6ef3054ae07c3c31f94543b326403d6005aff7b60bc961cd83c44a81d54",
-      "sha256": "4fe6e5af1d0e05927eab79120f3d05e0bc418b185207e8866ab9d58e9a7d3439"
+      "sha256": "85ea4c571ba048c6e6be77a80a8de76d3e962f13fba2848d6fc6e6d2ca45236b"
     },
     {
       "key": "dnd2024:spells/ice_knife",
@@ -12947,7 +12947,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "e251cc7acb2c4356eaa5821979efc4d0501c492b8b651b02c443de1eed49770e",
-      "sha256": "58372468d5c258be5c148ba51e53b71fc7beaf2fbb75e2ef45c166f2060ef6d7"
+      "sha256": "2090a1cbe7b548b9c5cba44e976a2015df8cc1d8064c697d6660f5555c9b24ab"
     },
     {
       "key": "dnd2024:spells/identify",
@@ -13076,7 +13076,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "126070318ea40c687874081a74ca80fb2fd5fe9b71104489f084b5c2741f897a",
-      "sha256": "b2c13beb7bb1eea3ac2f8e72d43fc24180a3c930ceeb011b70d74f7f55ce3e18"
+      "sha256": "4d0f9776b081e9c67db88471330f383c0100e21259b1987eed32367b94953b5c"
     },
     {
       "key": "dnd2024:spells/instant_summons",
@@ -13731,7 +13731,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "53ec6f002a3a25df69e49d1405f36ab0df209bf4767d8ee124caa57f099e3c18",
-      "sha256": "eb45a46861a9c0c1f65af6b91310fdb14a505d6ff9b5c0d0a8ad337fcea104ce"
+      "sha256": "f0c7f0c0991ee94713ed11275de59676a9bb8db1f32f04f3e6cc0ffcdf93a732"
     },
     {
       "key": "dnd2024:spells/meteor_swarm",
@@ -13752,7 +13752,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "f59616dce4bd4be5216386aa17c85ff47b4683a160c53487dfd01e1fe6e79c70",
-      "sha256": "2a9334d0f9eb5f953e4f7599afa59613a6b70de1a4a25c035583a4491d0942ed"
+      "sha256": "0ae7922ff84cd4f158634ced62d33075bb76cf7130d97d4df2513323fea13121"
     },
     {
       "key": "dnd2024:spells/mind_blank",
@@ -13921,7 +13921,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "cd45ac79cf8ed71185ae47b9eeec6c94aeea7d7e18e3f1b3f4918c2a389a19f4",
-      "sha256": "ae841ecda10cac3a6039f1236d600f380674ea13872a9ee34f868327dada597e"
+      "sha256": "f09f347b4e692b923eb1db29f2be61fdc9c3e4d644e63d38f27405dbc01cfad2"
     },
     {
       "key": "dnd2024:spells/moonbeam",
@@ -13985,7 +13985,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "2621413203001fce1f862bc13063a7c4a5baf6b4dbb016f20b355e6784f496d3",
-      "sha256": "cd5c4c14220c27f27d5eaa81a5f137876d7a39e2a4578b150150deda5891c443"
+      "sha256": "b136064ab48c8334682a3967f5fed659bff08f306b94e67294914da394e903a4"
     },
     {
       "key": "dnd2024:spells/pass_without_trace",
@@ -14112,7 +14112,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_1.md",
       "specification_sha256": "876ca00988ac9a0a3432cf82450ba207edaa9bd96f87b504a8305adc57ee3afb",
-      "sha256": "83134f996a27358cc2d450443616283f496ac28778d46b059ff4f168aa69c0be"
+      "sha256": "a1bac39b7f8c7e7aa18be7bcac30847cb2dfe80e38855ab1f4421cddb76d0b45"
     },
     {
       "key": "dnd2024:spells/planar_binding",
@@ -14261,7 +14261,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "97db6cd300b456e50b70caca3c0f3a08b10cce6d51569d5484c1afe4cc69c39d",
-      "sha256": "cb160972c822fb70b7742290782191b3b4d67441018efd1deb8a60e929b4f399"
+      "sha256": "90ec421c97fdb5dcb32dd5cd06892e6d3386e43c24c35fb3473e64b5660e7fa3"
     },
     {
       "key": "dnd2024:spells/power_word_stun",
@@ -14282,7 +14282,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_1.md",
       "specification_sha256": "243d2581470908b63d82a61ab2e06c4c1ec9c9e40b7b67f798832d0b0094c30c",
-      "sha256": "182acb8be74cc29b59416289a22525e2fce401f92330202f752b40e351fc62b8"
+      "sha256": "1a4d63a6ce3a897347bb1c96187688e56c72e20bccef0d1b0ffa2a7a197829d0"
     },
     {
       "key": "dnd2024:spells/prayer_of_healing",
@@ -14409,7 +14409,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "b01e6c06c3a468802abce670319004646930ac0ef78d40fa1f619ed0826e6f65",
-      "sha256": "357e0223616b4386fda892ccdf02572403e16aa9b52ffe237b54e296b9f2fee6"
+      "sha256": "fe81429744d15a02256bd4c6d8a22518692177b1754c45c761bb73ea09465ec4"
     },
     {
       "key": "dnd2024:spells/programmed_illusion",
@@ -14599,7 +14599,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "1f4066b20e8c1496985079eacf8e0a7a73f70f8194bd87ca9bb309c54f821f58",
-      "sha256": "3b196a08a54ee73d1c631ebc664774dc89360fe76a5d7e0b0a48bc9590add90a"
+      "sha256": "5c529b3240b44edb5019b5f86268bd9e1c6ca4930adcd6da43f2715ee6c25081"
     },
     {
       "key": "dnd2024:spells/ray_of_sickness",
@@ -14831,7 +14831,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "80c0a1898861b5e97025585e7f1543eea5fa944f18675945cf7e8eb9a72eda7c",
-      "sha256": "ee3c51ff46155ce1300d82ad618e33f38b9b7ecedd246776f179389c0a0c09fe"
+      "sha256": "70d560b227dd2afb1c41d8babcc7ef21ce080bb3768f48371f0923fa8d6b7124"
     },
     {
       "key": "dnd2024:spells/sanctuary",
@@ -14894,7 +14894,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "493ac785d35f77d4b50fff393e9620187edf5164756dbd379ade657d741391d1",
-      "sha256": "d06802c9f6b1e413a451082450c4176e98e381f81d15dd3e66a93f04c95538ce"
+      "sha256": "c1b84eef609ac39ba63fd6d8dc1f13abf4b0facb1923c27efc26acc7c746bef7"
     },
     {
       "key": "dnd2024:spells/searing_smite",
@@ -14915,7 +14915,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "693e4192479cfc58bf1acfc2f334c572ba46add29d51772436cccb5826a4ed93",
-      "sha256": "a313ed7e7c75f56e6f93126d6449e5d2e8eb92c6111761806e9fa920178226bc"
+      "sha256": "009ed70525f8c18ac969a8df6502bfeeaa8d69493f62ee3d777d07abc1e2d521"
     },
     {
       "key": "dnd2024:spells/secret_chest",
@@ -15169,7 +15169,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "f11ab66b28db7a6ed5d64ea1d5f7427e081f00629be50ce99056567d2cc6e468",
-      "sha256": "0aea4768986138e37a7d2cb91940f6793d775133fc499069c608472224e582aa"
+      "sha256": "8604ae9d8db7e03939d6ae7e339043c2f7126ece4b65693a436ad77b8dc46e87"
     },
     {
       "key": "dnd2024:spells/silence",
@@ -15275,7 +15275,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "496a03dd34a4db79fcc8be7ac58d273ed615e0662b3ad5947f6a38bd6a529bf1",
-      "sha256": "9207ce3ae99d90359e8746efd6428daba82aed5cdc6ed657e78f13634d045c74"
+      "sha256": "a6c7a9b95227ffe2d0dfb6c04e1b5e605dbc702355ab50a7c3b4647680d78d3a"
     },
     {
       "key": "dnd2024:spells/slow",
@@ -15338,7 +15338,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "97981fc16f9a32c41e9d2deff615a14e68a0525ea16f0ed66b1d25517f89f44b",
-      "sha256": "ea6293ec076762900217118b334386e17bcd33f9bf75b9a41645667d3d51f300"
+      "sha256": "2e74ad689c953b1541b3c936e9b5fdc1e88b27f9291104be025fd6569908994a"
     },
     {
       "key": "dnd2024:spells/speak_with_animals",
@@ -15401,7 +15401,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "9d1f8f31e41b3f4960cdb445ba0b5bec68336f29f70c1541fd253304db8480c9",
-      "sha256": "ff3b6c89138dbc5eae7095b234a5b9da5cc381aae85c2b5ed7dbf346ae59f7f5"
+      "sha256": "2f2fbdba5fd5b1ae27040d0b0b36fac684b89e261b778af58233928ae47761bd"
     },
     {
       "key": "dnd2024:spells/spider_climb",
@@ -15507,7 +15507,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "c9959a345a45e4e9efc560f4dd5199c54341342a058912dadc7fd81162a3e267",
-      "sha256": "9501005252fdf73bac9860a4082c2d7cc03a3b9694e0eda8b05828a1655477de"
+      "sha256": "5b05ec550189f0e5111f10676fad660987ab951706fcee2fb817cecb04e9fbd0"
     },
     {
       "key": "dnd2024:spells/stinking_cloud",
@@ -15549,7 +15549,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_1.md",
       "specification_sha256": "7d760c1c4725a8faf44a585caeb467c20f160aa3c226a3bc287cd8fe78dd98b7",
-      "sha256": "3956a63c82cd59023b963ae479cfa251c1d0322b8b3c9e5e30daeb44dcb84594"
+      "sha256": "2ebc42b9cb2a8c4533013583741a2d946024b095cec7fbed67ea3c02338ae89f"
     },
     {
       "key": "dnd2024:spells/stoneskin",
@@ -16016,7 +16016,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "eb4a90b4c1f9732457a4c586d91f85a0a0ceb92a069665fbc533790119cb2ba6",
-      "sha256": "0501337f838eb3a47659565f5929bde20147430b18bfce14ce0ad30c76b3f559"
+      "sha256": "f514e55d27a0e408ca01be81980d44db43acec1f3e5c35bc13ecbe847197920a"
     },
     {
       "key": "dnd2024:spells/tsunami",
@@ -16101,7 +16101,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_3.md",
       "specification_sha256": "fded6f8cf3e5fc06abf6e52f074b576c701a1a8bf1ae699b707d80146681c1c3",
-      "sha256": "6169145bf524252fdbab54689f367b8846d97b271039986cb83e1a2b9eea8a53"
+      "sha256": "c6427519c30fc7afb8a58cc7309c50eb1acab5f7fe1e748575ac2d43caa5e8bd"
     },
     {
       "key": "dnd2024:spells/vitriolic_sphere",
@@ -16164,7 +16164,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_2.md",
       "specification_sha256": "6be06e9a473a22bd84b458ff4f77a246c0bcc8cb6ab94e075be4ebe3ff422f87",
-      "sha256": "7882b784e41a25f5af612355aa9fc609fe555756ff4753f9f72e3e4411e40ab4"
+      "sha256": "612d4dfd166deff294e6b53bc52a172e8dfad22dbf0e1d661015d1026648661f"
     },
     {
       "key": "dnd2024:spells/wall_of_ice",
@@ -16207,7 +16207,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/spells_4.md",
       "specification_sha256": "444b98a55c8605cd8bd3f3a0eb646a1116a80b4877f06f8d554a00f39493c5ef",
-      "sha256": "eecc0bc65a7925b303de7eea61b97b44a25a996685c80bf501fbe88f74ee04dd"
+      "sha256": "93a0adbc2edb65fd1ba4bafaae5f46d9a8eeb7d6558a4234f351f3dabc7267ec"
     },
     {
       "key": "dnd2024:spells/wall_of_thorns",
@@ -16481,7 +16481,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "cf6cf3e9d880a6ea4ef8ce5af7a5a5907bc1d410be3a9016e7f7d02896d00c6f",
-      "sha256": "629c95e804ba8c9a1b124ec34a699539e5329a5a9745693ae3077c30e6f82a7e"
+      "sha256": "cf35f1b862adce2b9a1b0447370d0eb31826bbe1fdc70eb3cf0d2f6203b3ee29"
     },
     {
       "key": "dnd2024:items/ammunition_of_slaying",
@@ -16565,7 +16565,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "647b159d8aa23f8ef47e9c4b014ea4a378bfbff83ba7d1494f08c4385a5b246c",
-      "sha256": "f1832ccb35ee8970b9ba0c1f57d2a3ba3e5d6f624d9463b0f084a4f6abac0aef"
+      "sha256": "4bd5c9bca2a096c0b0aac0604a66391031ad99c5896b0ef002b72a7551cad250"
     },
     {
       "key": "dnd2024:items/animated_shield",
@@ -16628,7 +16628,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "4e2ff9967559c161f2acae09fb329d79424d9a2efde5d762c40b73fec784f59b",
-      "sha256": "a78a259a83a9bcfccabbc5a424d27c7ef9bd0d2cc179a992f91f5cdf1d6df827"
+      "sha256": "bd3eb3d0b1dafcb28819df48c21737a02170b570362d66ffd67033435c3e1063"
     },
     {
       "key": "dnd2024:items/armor_of_invulnerability",
@@ -16670,7 +16670,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "b6a65cc21953a90642ab57139f57efb270386acd90aa1ee9aa871d75993d5489",
-      "sha256": "41b9b26df85416470648a869db4994b4b4e2c36086f7a04e3edf69c099ded858"
+      "sha256": "bacf69b81aa6795e83f71a136ce22889ef85148ddfba7787e8ba5578759d196c"
     },
     {
       "key": "dnd2024:items/armor_of_vulnerability",
@@ -16691,7 +16691,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "26b3ea7732b22120e7f6a9ab70a2dbd0b1241ee428b29a1e8b12be8d6ac63272",
-      "sha256": "6fe1a1f67f9a34bc7dd3a9cce1d0c5a98ddd75779645ecbaeb80c6cedfe566c1"
+      "sha256": "a96b63339c5c3de22b490701b73254af84bac11ad3704a67a327bbcb6f5bfcb0"
     },
     {
       "key": "dnd2024:items/arrow_catching_shield",
@@ -16796,7 +16796,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "636668dd52d10a36b47ca019405e249197c67416eaf5b3420bd5365a9c57bb29",
-      "sha256": "5e925489b5c6bbd4dfcf9470b5c6ff8599b2cdb84ab087a8ec5bad5949d717ef"
+      "sha256": "c50dcfb00a1c04ec56fad241a7d9df9b411f5b6b8fd50ce2e0b4d425cce273ff"
     },
     {
       "key": "dnd2024:items/bead_of_force",
@@ -16818,7 +16818,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "84ca90c5fcdbbb50b3b313fbf69adf4ee7ae8b96cc1914c0f77e75cdbb06fe03",
-      "sha256": "f8f737d00c0cdbc371e30cc5fd07ba7ebdf989e042eae22bcba1ab7016cd933e"
+      "sha256": "f2c15ecf3bbd81a5a14e0b3bf59f35de145f326038423d499f58270335f5f273"
     },
     {
       "key": "dnd2024:items/bead_of_nourishment",
@@ -16881,7 +16881,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "a7d032e0b7b620410e64107898a5260ff4c1f0820943e036c528498b9a9ee0a3",
-      "sha256": "c51be26dcd364a2f831247ac190b5579de9835dccb7da97bf2ef39231784fef2"
+      "sha256": "ec1091ce76fa356059d2971077cb4cb55a8c46e5b792531e2816919fbb4d641e"
     },
     {
       "key": "dnd2024:items/berserker_axe",
@@ -17155,7 +17155,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "ef0feade2e1f64c1d1bf701e9b7b19b8cc540acc52a76bbccd464f74e8a1e411",
-      "sha256": "7f045e3d56e07ef2bfc043e68953f1f372be65845c5c6ef7112e00476100df39"
+      "sha256": "e842a16fa9fea67fc35a51a0c965521125f8936c135eb314108bacc455841cad"
     },
     {
       "key": "dnd2024:items/cape_of_the_mountebank",
@@ -17197,7 +17197,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "599cbed81cff75a3d5a5a756a22cbb64f679c5e4e00b8ce6066cfbcfd8fa2a0d",
-      "sha256": "93fabf2a8497316d0f5e6dd79258fdde61bceccef816cd560d3b8aa0bc0b3d5a"
+      "sha256": "4a4d6b8d0e3ca65d9c28f704ad09e0b3c33d36595415f69ab504152de630f1eb"
     },
     {
       "key": "dnd2024:items/censer_of_controlling_air_elementals",
@@ -17323,7 +17323,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "140df2cba2d5f2bc2296e9bbf64866259b70c671b9c44c4619b44fc25dd84f59",
-      "sha256": "a811a4c19af18bdfae66fe83c74822acdaf52370acbadc6eb385abd5377bfbc3"
+      "sha256": "24baf3d5065bc743f1162a33de1ae8455319147e953df79908282ea9c3b11bbc"
     },
     {
       "key": "dnd2024:items/cloak_of_invisibility",
@@ -17387,7 +17387,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "b304e19839dc0ac5a258626ab3f613542098d82d9b2a8e228bde3607a32f3b84",
-      "sha256": "003b68f2861a6e37c119cb6f96d116fb6815b94145d064703af16e7f212b54a6"
+      "sha256": "974a39b7b1af3c4b9742c27442d7cc0514a14183ed1bc66acdc614788c11b1aa"
     },
     {
       "key": "dnd2024:items/cloak_of_the_manta_ray",
@@ -17450,7 +17450,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "e9b7bf7becefede566fd8c325b18e3627fb5aaa4d33b82bedd621d0924845957",
-      "sha256": "ebc3fcb940fa42e874a79f4303ef139550618137aa3aea11ae49c79bfc863413"
+      "sha256": "5f8ce26dec99326df5470088fbc4baca341f6255a66a84b7a789913f7c9c06c2"
     },
     {
       "key": "dnd2024:items/crystal_ball_of_telepathy",
@@ -17471,7 +17471,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "10ec78c8b6c5a1a5a04747194b82ae020b48d897477a591d1e99e0d63ebb284a",
-      "sha256": "b5f02ffad57695c4b14cb0a09d7dcf573d27dc83be6ed583483e54e809d2e994"
+      "sha256": "cd4762c8c42320900bfecce1e88f235eb328abaab1c5a7f2a23625075cb66851"
     },
     {
       "key": "dnd2024:items/crystal_ball_of_true_seeing",
@@ -17513,7 +17513,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "e5d19aa17b9f0c45c534bb77b91fbd77969fc1fc17fb3a098bda761c93fe5cfc",
-      "sha256": "dc28118977c21c0fcb804c9ecdd2d495afd0a6eb7d74f2ff5ac15a5797909d44"
+      "sha256": "9f5fbd1820249adce87cb699b61a47dc9e57531a53b7b03fb853437040d5acb7"
     },
     {
       "key": "dnd2024:items/cubic_gate",
@@ -17534,7 +17534,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "e5ae310811f96b3ecab807c99437d812355a0bc6f0ed6d72731c6ccd7f9af0fd",
-      "sha256": "6bbb7671bac8eb0b4f4d4c540518115d9d2eff041589f8c29fce9518557f6f2f"
+      "sha256": "74ab61915001ac2c9e10c56f67d42cd4fb3ea55e8127908037fcfb3db0df1456"
     },
     {
       "key": "dnd2024:items/dagger_of_venom",
@@ -17619,7 +17619,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "5c6c2925cc49886509501911f4a8f14e3f77b1bded9f27ff515c7bee72fe9517",
-      "sha256": "d09a839bb6b84d8396f474778903145cbbb4dfa3e4b8abb5fbaf012db938d8b9"
+      "sha256": "c1a3bf9db4625a019314ec69e5a8c5c61a921b7b8372bd63d76694e247e7bcab"
     },
     {
       "key": "dnd2024:items/defender",
@@ -17661,7 +17661,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "4d5d8c2fc8e799ac5b5e725156651961c86e2261d718c1ff07856f382314e115",
-      "sha256": "61f911d317da9ce2056b644e6d1d83d1053059f0fd00bc16a82e786455cf9b43"
+      "sha256": "2a7e1f116c9a57584f4e43c1ae96d8d481944dc33481f48a3a763865664946e3"
     },
     {
       "key": "dnd2024:items/dimensional_shackles",
@@ -17703,7 +17703,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "69b17663d044fea8605a76145d1182164e3aae335bcf82b8a598f10067473f9b",
-      "sha256": "3e525cf86873064e625bf9f96dc3aa9b077fefd147d3bcc1b0f26f1615e40e09"
+      "sha256": "b738420f2927c56e48a530ba7814e2ca4135c23ed7e8edae9e78e760840d3226"
     },
     {
       "key": "dnd2024:items/dragon_scale_mail",
@@ -17851,7 +17851,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "cea7dbdbc824f43df3cae864f87de0082112d6b16893b163c48a57c1a476c461",
-      "sha256": "c8bb5e4a5aa24b58cddbbe1a5bb58018808d20cd0ec902b5fa492a09564f589b"
+      "sha256": "f53181c556bc5ccb77e99fd116cc8974a93cde06a0579e8f5d67b848be6768a5"
     },
     {
       "key": "dnd2024:items/efficient_quiver",
@@ -17872,7 +17872,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "10ce1147b4b346fae17e16209cc14831aba57905bf44c07a1add00861416d6d7",
-      "sha256": "af72b2def6141f0760fb977d787dd3172b70c2270965d96622bc29ab731d40dd"
+      "sha256": "53f644a59cc15a3086ca16000178e22391733ccd2c993f24a5077a8386def159"
     },
     {
       "key": "dnd2024:items/efreeti_bottle",
@@ -17977,7 +17977,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "fd150631955bde5c801cf560fa85df8738c5e9826352989060bf719d252cf76f",
-      "sha256": "19a99e6ed4c20e852bca208e15f3def4dfa60e974829130b2f7fa6e7dfa33dbf"
+      "sha256": "31976a7903b916ee507b948f61abfd7a8d1da84821ad1a4c48f24e2c1171b371"
     },
     {
       "key": "dnd2024:items/eversmoking_bottle",
@@ -18105,7 +18105,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "df18c29adbb204e52caba96c12866d6e7761a81a805b154231a568459a7f86b8",
-      "sha256": "e518386951b3901dbc79bcdd73dbc7ef9665d99972bcff12e5d77a7dc9cd46d2"
+      "sha256": "1a7efba137469ae4ededab5e1b20cbef2c15449c2ccd64f51b918f340d528a42"
     },
     {
       "key": "dnd2024:items/flame_tongue",
@@ -18295,7 +18295,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "97425a80f53f2d650bd1c4410953fb0e07947b08d3ffb3dbe10c0b5b6c8371f6",
-      "sha256": "252ef22eb818c373b0587a418a12b6ec28b3de02b95a8401df53ed0c4ca98187"
+      "sha256": "10fbdc05b0d60bc6e168df549659f260a3e4fc05bbb9051826a2fe1f619bfbeb"
     },
     {
       "key": "dnd2024:items/gloves_of_swimming_and_climbing",
@@ -18400,7 +18400,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "523aa62e733feac905d2c19fcedb01519699422e18cefa7d68696bb43c098df8",
-      "sha256": "edef340db26046413389314eba66e72394383180df5e2d71d740ed80a4be4f9c"
+      "sha256": "64164535fcd968679cf4e4abad2547149edfde3dc642a20ee9ec0cefc54c5e9e"
     },
     {
       "key": "dnd2024:items/hat_of_disguise",
@@ -18486,7 +18486,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "a8cb377a0e7508d197f383875834a5346e8bac100b30dc4e9bcb56a32226e4ea",
-      "sha256": "490815f85473d787d80a86df60b6f686f2c8cf653e9b2546756c3d1c98869d2f"
+      "sha256": "c2fa8dd124c32831642770514bdaee143c2bcfd2d888f38e6228f65f33755a18"
     },
     {
       "key": "dnd2024:items/helm_of_comprehending_languages",
@@ -18528,7 +18528,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "b4dae0d8b43d842192c59cfeee139f84668a197c114372540ca992e5ab059fae",
-      "sha256": "6765e0a2391623ef9ca5b6cbf6a337941073a4e8a0eeeeacd91ea6d9d3f427f2"
+      "sha256": "e737b09f32eb4e91fceff74e4428a1326dd5d9a35e176008812faf24a50fb93e"
     },
     {
       "key": "dnd2024:items/helm_of_teleportation",
@@ -18612,7 +18612,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "3c96b2de7d0a6a1f790be93ebf5a6921dfb40b69fe07a005651077febc870571",
-      "sha256": "3a849e569aeecb7e202c0b87e223fd59c7e722d46fce84cc4a85cc1494d030dc"
+      "sha256": "c7777b3a41b7031cd1f9ed1bd2b0b2a9d497e11bbb1b4a43ab9b3d448329d8cb"
     },
     {
       "key": "dnd2024:items/horseshoes_of_a_zephyr",
@@ -18739,7 +18739,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "f38ee8a179422ac3e9a8def23f25ec3f3413d02ace1f457c7f2e5a3e0b9eb77d",
-      "sha256": "1ce917bfb40252894eb2efbf517fc9d03f298601864540748d10494a96991c25"
+      "sha256": "44caeedcf2e3a16458bb6e47d2f58bc7715bc5c1c9ffdff23a6554ffdf82c2fc"
     },
     {
       "key": "dnd2024:items/iron_flask",
@@ -18972,7 +18972,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "d882ab0bccf36d9162e22cc3943543e5f0aab84b059a32bdd66d7225c566ac5d",
-      "sha256": "e915831a0fc1f5b3130992ad52cb2aef987db31126267c699a8c3f1f2fd4936e"
+      "sha256": "d54dd3478e0f90b8586bf23d95da9296cbbcc5d22c48c91f1b8129da1bf6190a"
     },
     {
       "key": "dnd2024:items/manual_of_quickness_of_action",
@@ -19099,7 +19099,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "ae8a79b7a5782a1208d1cc46ef08797d878503689122279d8489bdba3e17b8e0",
-      "sha256": "c508c147c2f2821d5d92a51044413020ce6be1a86c346a3df420b825281cc023"
+      "sha256": "8446a0f13369fa6c8821ef4d15392805fed6f84335587dfe3e0f8cda6a231141"
     },
     {
       "key": "dnd2024:items/necklace_of_adaptation",
@@ -19162,7 +19162,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "4ccd516422bc9001b0fe259a54f83cd36198aa4e06634274b4260d4b72a7d5c8",
-      "sha256": "2e85483e303f0e067521840443b22534d6b162a406d807254d762fa2576008a2"
+      "sha256": "72f5c376b43c7ed42e76df496840d562bd65922bcbbba7c8a7fbad77cdc588b4"
     },
     {
       "key": "dnd2024:items/nine_lives_stealer",
@@ -19246,7 +19246,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "6651db86b8646347aaf754675ddf59249aadc42e845782f0e0178ed9489caba3",
-      "sha256": "a1d02e4cd35f8da6283127bf317fa0819b6ed6443a70735374e22c16aac1d60d"
+      "sha256": "4e52acbb5694ae6c3970ba4ea6da14f209c7e98f8c7501ef56f58a209d566e81"
     },
     {
       "key": "dnd2024:items/oil_of_slipperiness",
@@ -19605,7 +19605,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "21c8a4c79c54b6190f3b3fcc7f027ad95f09aaa0bbd24b58414e1899bcb3acbb",
-      "sha256": "324283effcb1903c53fd355721f8596e11fc0a3d0ca0a4314ce65f6f8e9ba113"
+      "sha256": "13d5172f06d8b6f8452cfa40b418c6bd5f6da503a590793baf971993c43be8e4"
     },
     {
       "key": "dnd2024:items/potion_of_growth",
@@ -19773,7 +19773,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "f83013599a60912f88f9f1d927697f3149420d76b9b9b442283fda6793236ee7",
-      "sha256": "6cb41710eeea00aad10b630b16f65e72690aaeca1df6a8f1a9d624f76fb9cd72"
+      "sha256": "b0e749e3371064343c4163be2727446b8e67271bf976234d082b3ca1301cc14a"
     },
     {
       "key": "dnd2024:items/potion_of_speed",
@@ -19863,7 +19863,7 @@
       ],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "1d7d56aef669dcbb06712ae9475ebe987fa3e6e336926dd0e4b40f542f6974c3",
-      "sha256": "af4d48a19ef42ee45c022d4c6c32f72efb33914a534425cdaf6ff85716e1e56f"
+      "sha256": "07db48a0954d012c030c1b6ab2edc75dfe974ea8758a279803c4a3ee5b194744"
     },
     {
       "key": "dnd2024:items/quarterstaff_of_the_acrobat",
@@ -19948,7 +19948,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "01fa55e05b8f6ae97592f7731f9fa5d23d79d11ea5c889367290f29e03731db6",
-      "sha256": "20400aa5eb0b8a7e58baa8354796c15e26bdc36072f2d191d4c5dff25e2496a8"
+      "sha256": "137e89c93cb352b2e1b13f6e1014c321ad8dc8999aee8d0a8c23c0b4a958612e"
     },
     {
       "key": "dnd2024:items/ring_of_evasion",
@@ -20137,7 +20137,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "ea5475a48d6de0940b96deacf77d884af07b6d759f67438af11bf452b1b23315",
-      "sha256": "fed2ef0b04f6d9c088625ed617e85a6518558d52edb292d20b8a11102b5e5510"
+      "sha256": "9fb55db6b6da191b4d2efc21371b804a2c8daeae019eb5507eab9ea1733ffe2e"
     },
     {
       "key": "dnd2024:items/ring_of_shooting_stars",
@@ -20159,7 +20159,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "3416cb0ef305241424c33f90f713eb4d4849555281c254da460abf78895d227e",
-      "sha256": "d0ca925bcc9de2adebb9c6af3616f633c40af0440a9c919aebb48f3a73ffa749"
+      "sha256": "f072646f328bdf9a869c53bee97592c13ab6269427c96727f8884ca7c290631d"
     },
     {
       "key": "dnd2024:items/ring_of_spell_storing",
@@ -20349,7 +20349,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "40f42d4eea1e312f966b35e3d54286af8919304139d9ce2ea19edd0494fd795c",
-      "sha256": "8bc3f2c67e28a52f27f311b1388b9a262ebfdd962b72980ee85158170eff9a4f"
+      "sha256": "a7d8c43f62c13247a034a6472ce020969e8195565b7350b3efdbb95266919aa6"
     },
     {
       "key": "dnd2024:items/robe_of_eyes",
@@ -20455,7 +20455,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "a25ad2d97bf982380d9f141f95b92fbe803cf1040b32355bb3ab77cd4c3deb18",
-      "sha256": "57375461618a313068b55f30e11060d330faecfa78c93130de1c583857e1d55b"
+      "sha256": "8b016ea824311d9624e223a05d3f287c458be0e2b05f8acf29134806f61a3770"
     },
     {
       "key": "dnd2024:items/rod_of_absorption",
@@ -20497,7 +20497,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "19c4011a0b8cf6d5d24e4ce0a32f31729f74da69596eca27590a8f9ebfd5c73e",
-      "sha256": "3c76d77b8b2fc07967ab9791df373fb22d399677d2ae52513a6475882a88fccb"
+      "sha256": "48ba4c37456014d260b11e9fc87fd9448ff13f04fa51920d817ed388fc59dbce"
     },
     {
       "key": "dnd2024:items/rod_of_lordly_might",
@@ -20540,7 +20540,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "35baec6f7b241e95bf6bd2caa409f69f49c15f2acfc8cec3d9f2002a5fa56830",
-      "sha256": "1def16c1d5db3221a53aa00cc681903bd921ef1d334c2bd446c8f437cb87d968"
+      "sha256": "bc42471a8ad9aa1dab1215cf590539ea1f5de4375203c18651969b3820e00a39"
     },
     {
       "key": "dnd2024:items/rod_of_rulership",
@@ -20625,7 +20625,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "2e9acd13801caea25255ed6dbdb086d3102c381501cb9f86ddac837f1998bdfc",
-      "sha256": "566360b84758dc28f94be176ac1b47b94fb7978ea7c4926332e5674749cbdb34"
+      "sha256": "bd0d4d6b2b0a43ebd90ef8ff917b9d627a2e4b8254d479b7766c35a884a5ba47"
     },
     {
       "key": "dnd2024:items/scarab_of_protection",
@@ -20646,7 +20646,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "fdeaa42c015e053f3351d601c978142665d8230cb064188e0cbeeed66144dba4",
-      "sha256": "dadd8a821ae1284642a242c712227264e91bdecbe0357384b4207db2bfbe08fb"
+      "sha256": "1c70234302759e1f1c0bf0227d75e059d345d6636b0b118934b9f408581b3349"
     },
     {
       "key": "dnd2024:items/scimitar_of_speed",
@@ -20730,7 +20730,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "4cb653df727ec054eef90df686d35435bd1af00fc6b30e645ca7c80391ca0d1b",
-      "sha256": "7050326f90878f83086161906c647250fa5525e2f2fca380e9f1933e96cdbb7a"
+      "sha256": "65e21f571cc9d7300b6460da9b09d64075298386fd3e31a5329c0f39ffb5abad"
     },
     {
       "key": "dnd2024:items/shield_of_missile_attraction",
@@ -20751,7 +20751,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "8cbac690b9f5cb161ca399c1a2375745d65a1ce7200c4f80f478c682e0341be0",
-      "sha256": "4907158600aa7c48ae2f40166c0dead2194375441806c7c528ed6130ec0ef979"
+      "sha256": "e87a1f258af19dfdceedf798b081f293b1d0c2fcf00a68537d718b52502242fa"
     },
     {
       "key": "dnd2024:items/shield_of_the_cavalier",
@@ -20772,7 +20772,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "5f6b57cd07d997f8c54dac0d4b4b54834b47a13a98e3c399acfed472e8ae2d83",
-      "sha256": "438f4dd3685f2271433b4172fd8d17c67310263a7926caf63e447956a8479824"
+      "sha256": "216a75ec94891bb36f66bb486b7de08a58c484e9346b89e6e96ae288636573a6"
     },
     {
       "key": "dnd2024:items/slippers_of_spider_climbing",
@@ -20835,7 +20835,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "266ac7da863b5124da67f0f892049f6325a63a30b284b11fdf1d378e51b5f2ba",
-      "sha256": "13adf8d04ff8a542ce579cdfeef22039ce1f5228530eec91c812505598b233fe"
+      "sha256": "6216b33f7c5f9344ae9ad148ad774602db9be53e17be51ccf6c93280407d77d1"
     },
     {
       "key": "dnd2024:items/spellguard_shield",
@@ -20878,7 +20878,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "348cfb27ee492a6bfdd4f7771ea09b6a04e12527b95243504de7ef4d02a12b91",
-      "sha256": "a57c89ef2d5b0271936226eefd8f64b2d7f946f5332841ac3c4e05d00ca70da2"
+      "sha256": "4cc068cf5b7b65359a76557b41dc2c1de35d99962d42253806c2aea338ef37c7"
     },
     {
       "key": "dnd2024:items/staff_of_charming",
@@ -20899,7 +20899,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "bbeed81343cb838c16d97845fad6d9261b9f35413e3413e80795ea18e6fbbb12",
-      "sha256": "85b95e6b27b63ffce8ee484921e7cd13e5a66972fad3db90484ff8234f66b301"
+      "sha256": "bdbef274b8950c392f02839a393e4db31488b10d83ba0dbe5cddcf5c51c6733d"
     },
     {
       "key": "dnd2024:items/staff_of_fire",
@@ -20920,7 +20920,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "4e81f7669bd34710163ce84ec5940f727f4f36d1cdb279b7a78c4322be12ec36",
-      "sha256": "85409f077037e24371e6953970d63ece90e28ef6a40f725ea2b655a29eeb7426"
+      "sha256": "9d5bfdb65ec1b008c818efc16a8d4dd2ea4c47c35f3e5295d3c45d72bcc346eb"
     },
     {
       "key": "dnd2024:items/staff_of_frost",
@@ -20941,7 +20941,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "b9851be5a3fef13adfc443a81d5b3829472ba88baf2b606c20d513f457feae07",
-      "sha256": "5d0ac8cab5b7bfda61a25ffefdf04b95a46b3a77b59efbb6ccb12f14f5c20e9e"
+      "sha256": "85587a43bd3b8ad79a6072a2467e9f6354acfebbbba404cc95557d18a797c3f2"
     },
     {
       "key": "dnd2024:items/staff_of_healing",
@@ -20962,7 +20962,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "f3d04139c137430316a6ece07d2772ece307f3c04c8ab4b0c5467f796b7ff19c",
-      "sha256": "f844b81954fc7ffb9369c5ef8dc4327a8e4be42531d71bcebba46c685a14d8b4"
+      "sha256": "b2eb671367abb509ed0ab1a75d5a2a9e13dd8ecdf8de66fe476edde430bcaf74"
     },
     {
       "key": "dnd2024:items/staff_of_power",
@@ -20984,7 +20984,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "be72efd89eed1690d60ad9725e3fa7f88c19164f444319fb2c13cf76855530cc",
-      "sha256": "c4510539c053d398a27281ed66797ca50bb481be3c5aea9e20be026a20bbbba0"
+      "sha256": "d20665682d8f551031831915de6c287a122394600885ee985be30478a47a8cb8"
     },
     {
       "key": "dnd2024:items/staff_of_striking",
@@ -21026,7 +21026,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "f58615adadf3c464e03d7f15d86c5c34332f29425db6414a07243a861976c54f",
-      "sha256": "200dd4017d44da02e8a839f419eb7e6552041034d93e27d8f12185bb447f0968"
+      "sha256": "c7e5eec99e33455f968621c7f04fdc45644f3c651efc2a4b2960c42e8905309d"
     },
     {
       "key": "dnd2024:items/staff_of_the_magi",
@@ -21048,7 +21048,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_2.md",
       "specification_sha256": "e94349c65c5ee4a6c428c5eeff177a52c414b5f1afc054e518d77abe2686ec50",
-      "sha256": "ecd599c1bfdca0aed07b530357c0e03d8051ba753cb34115cc2fa56d1d20ddf6"
+      "sha256": "8f3e807bb717fd1ebf17349f32e0d63559716a9a8c8077e51aca0022715f4eff"
     },
     {
       "key": "dnd2024:items/staff_of_the_python",
@@ -21090,7 +21090,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "c112b9758a4a3fcedb45182fe791d7950195cacff4d2f88bd348ce0605ddc8d9",
-      "sha256": "ea20db0bec6ec18a3cf224db68005d35d336775d7f7fee091d2758a7c1c5141b"
+      "sha256": "5ce2126d201affee6818ade21701e03562c562210c1b0cbdef57d4cac887a629"
     },
     {
       "key": "dnd2024:items/staff_of_thunder_and_lightning",
@@ -21513,7 +21513,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "0a6a609d95c6df86f303aea1988a9ea9954533784c198df40df0420b6b083d48",
-      "sha256": "92381e5dabded11eaca17da36eae015c4338849e133ba6868a91c252d9d88a42"
+      "sha256": "b2b89a1735c3a9f807e332478ee42ba23ff78d4c73200b96a2a3435b86173323"
     },
     {
       "key": "dnd2024:items/wand_of_enemy_detection",
@@ -21724,7 +21724,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "e990663a3a18af47aaa937fb9e19453ef1f79bee4d3f6990c2fd911d6eff710f",
-      "sha256": "be98a7b2944993cc5d3ac503ef2bf20af2d5f746c6faae6a2b3b261d182e9690"
+      "sha256": "e7ccf1d21bd32d1f19c6ab6b1f114deab41772d05b1f7f65cd0a79518257490e"
     },
     {
       "key": "dnd2024:items/wand_of_web",
@@ -21767,7 +21767,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_3.md",
       "specification_sha256": "847d40fd80bf3e174a005d733d0be669cf4c7d54e8a666f81b0b463975098aac",
-      "sha256": "3f88cb6e853ea8592f0858faaf055ebe4da84239050e3c60300f0a207064fa81"
+      "sha256": "28cdc86843fada55049488db331765f422947df98efbc088d8f6157a6387d791"
     },
     {
       "key": "dnd2024:items/weapon_1_2_or_3",
@@ -21788,7 +21788,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/items_1.md",
       "specification_sha256": "b97e3cca172c90a995b718735ee372b903c039cd585565501b4d907b70b5523d",
-      "sha256": "5c9e9f030437740f2b0e20188760315283efe740ba49e4a7993141b4aeb9febc"
+      "sha256": "f5cbef470ae3d39f27f3c62599268e8f1cc061a99864f0ef118b45cfa0474be1"
     },
     {
       "key": "dnd2024:items/weapon_of_warning",
@@ -22540,7 +22540,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "6d0ba28b8458211b17af89271387a519f105e7b8af6254eb3d2b8ddd6dca2b2c",
-      "sha256": "2522e94fe79139072a8713c88c0d8706eb5eb230891871355fce0fd87df1b5cc"
+      "sha256": "ecb1e161c4bb597eb9c433dd780af62935166ed6e82589edf548f8c6fd48d155"
     },
     {
       "key": "dnd2024:glossary/condition",
@@ -22811,7 +22811,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "86cec1c5961a52ae629aba894f5b3208a5fb95864a1843fa76af87eb04f8bbd0",
-      "sha256": "6756f29f6cd06fdd6fb0b8042998739c034cec9b238584945d5277aed26211de"
+      "sha256": "bc2d0775015fee5f9a8695176374475e0b2b1c7a65b0db3b686514c62b38bce3"
     },
     {
       "key": "dnd2024:glossary/damage_threshold",
@@ -22832,7 +22832,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "9e23d91c4eedf95f8a6190b31e3043eb72c1d8c2a63c829b85f517cc547b216f",
-      "sha256": "63c223f7a5bc6a5dd188a14b2ebec4006dc90830f33eef325c08e5249dd82d36"
+      "sha256": "2fe37ff56ae5015d092e4f71fb4dbc465bbc8792177abceff8605f38cf09664f"
     },
     {
       "key": "dnd2024:glossary/damage_types",
@@ -23021,7 +23021,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "dcff24e38e4dd97eb526ab3c7adb2a38470d1737974aa331429386cd00c0f88a",
-      "sha256": "56851b0c0cb03fade67d07d8027615c585144d654928633dc4e50086bb7d5e55"
+      "sha256": "bd52f36a9e0a2f1d8161c471eec4b68e1f5533e5ab05d1ec689dd2674ea889d7"
     },
     {
       "key": "dnd2024:glossary/difficulty_class",
@@ -23271,7 +23271,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "0cd232fed55d2eea8d92452525aa58e645403301735f8d20b98d367e06eb8047",
-      "sha256": "3fa39dac53bd00fd350e3cef2fa94a894802f989ff2a924a3ce397371d8e4ec2"
+      "sha256": "02e8871ce0b4a1e657d35c09d6e3cb27cb1c8f4bbaffe3e37a666725e0933f06"
     },
     {
       "key": "dnd2024:glossary/fly_speed",
@@ -23376,7 +23376,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "5e0e2bf95f8011bc7999bfadc442bda833e1898fe6d641a86f741532c525d3c7",
-      "sha256": "1aaa0a837a2d34089a4da21c2e3543e6f1b0a2657b47dc472bba5e80de0b4c07"
+      "sha256": "5ccdfb718bdab875c3fe52f958b26cbe3c4a8b872e17334620de5454fcc3bf21"
     },
     {
       "key": "dnd2024:glossary/grappling",
@@ -23397,7 +23397,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "ea10f659eb8b541e3ff3357d23a02110e241466b4eb0b7ad315f425b8585bca9",
-      "sha256": "a9a4350286e7a93694405c14afef78983e78de0bdcd6f6e4e079bc82ef1748b5"
+      "sha256": "f0cac40e790aba6ab7c718c70b4f303efa2f646bedf163275f616890744f12b6"
     },
     {
       "key": "dnd2024:glossary/hazard",
@@ -23753,7 +23753,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "102caffb0cbd3c49d1e69868f41307a40da1852c257e93db6cf32f0188ef4357",
-      "sha256": "e7829772641abdb1c0c1f73e92db0881812a7e6cb540b5ce184eca42a0ddce05"
+      "sha256": "2fec0591778699b4043051c66aeaaa90d228df17f1eb60b76014182942c45200"
     },
     {
       "key": "dnd2024:glossary/initiative",
@@ -23816,7 +23816,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "7a0090e3f5bae336bde0dbe0b1e458b855c8f2d3edc37e876634a7f08f6f5ae4",
-      "sha256": "80450a60bdb4fdff86338d6dbe6acd1ca6bff58827b9780e133d731352b4ca25"
+      "sha256": "27f56ef54104779a4844f2488616f9f1c18a815aa2b08e75f86bca0e60b5a398"
     },
     {
       "key": "dnd2024:glossary/knocking_out_a_creature",
@@ -23922,7 +23922,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "106a3ad9ef1287099a29dbbb4b78f3ed5956e9b5cd4633deb083bcee533b5d0a",
-      "sha256": "b90425ee4c0e57157176a2c807a14360fa2d458304d8972c0949b5bfaa3c2997"
+      "sha256": "c852a007f030b061522145d788cd7e21ff72e3921dabe43e30ae867c89ae4876"
     },
     {
       "key": "dnd2024:glossary/magic_action",
@@ -24524,7 +24524,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "3a9373c185ff8a7105324844facdfd444daeb0fe6a5f58bad6ce1646a2226320",
-      "sha256": "fd1b7ad6e3ebafeb4e79f51f3a8ae4855377791057ff7c027db233cabfcd6965"
+      "sha256": "5e37398dd31556cc7cc1f03a6aecc88f3bbb773f88ee4536c882d10a5cf0b634"
     },
     {
       "key": "dnd2024:glossary/simultaneous_effects",
@@ -24608,7 +24608,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "734edbb0eb0f0865c5224e25fd5810bef6e14c8569c9750896e6e9f092a6ab69",
-      "sha256": "bbea452af170defea686d10a3fc3e5d478349a3da76ec107f07088476b18cc61"
+      "sha256": "fc8b0d501d701661942d266dbcb727966ce50c7f300f6413e113c49239da1086"
     },
     {
       "key": "dnd2024:glossary/spell",
@@ -24943,7 +24943,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "4895c50e9e3e3d416a13643625f0952450caa56eb392e3497e038eef4216b137",
-      "sha256": "13248cc6a496b60df270142d340492c4ad1268415bd01550609a994e3d7945c1"
+      "sha256": "8df744ded59267528befc62473a4902d4f139a18743a710ad2d66fdbe117aadd"
     },
     {
       "key": "dnd2024:glossary/tremorsense",
@@ -25006,7 +25006,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/glossary.md",
       "specification_sha256": "69f546bce4a7f258965494b507b7fcd8e5318555e20eb6efb705d61c9f24e5b3",
-      "sha256": "288e58ab548a3871e6003fa16c99c290557cd72da59b72b380c2aeb64b3dabc6"
+      "sha256": "1489066bbf4f2da4f2087b16fcb41d8abf3b5f4bc36ab59e8b920e8b0063b4d8"
     },
     {
       "key": "dnd2024:glossary/unconscious_condition",
@@ -25234,7 +25234,7 @@
         "first": 66,
         "count": 17
       },
-      "sha256": "560da9fa46000e995457d379f385d18e19ca40e65d6e62c68d4aadeebf1e3501"
+      "sha256": "9fed9d30ae242e49a2a913a280226d13a830dac6a164bf7b9af5f1a6708ac06f"
     },
     {
       "key": "dnd2024:rules/the_six_abilities_ability_modifiers",
@@ -25704,7 +25704,7 @@
         "first": 315,
         "count": 11
       },
-      "sha256": "83dc4ff7c12632af6ad8cd57e358d4a467b5683f6d6ec94d22fd1d4965771140"
+      "sha256": "1283a184b6f580bdbb7857ba721e7c00df7c948ddc99b427e8ec3df1baabe40e"
     },
     {
       "key": "dnd2024:rules/d20_tests_interactions_with_rerolls",
@@ -25756,7 +25756,7 @@
         "first": 336,
         "count": 25
       },
-      "sha256": "3d855643aef5c42c3791e15581bbe9893db5339f22d207bc0429c8b174dc1466"
+      "sha256": "5b47547ad59668a41a2f63f29c6a524d00a4348c3858aed16012e51fa69cb317"
     },
     {
       "key": "dnd2024:rules/proficiency_the_bonus_doesn_t_stack",
@@ -26504,7 +26504,7 @@
         "first": 727,
         "count": 26
       },
-      "sha256": "038ad682b9f583a9d42e20b19f486d3ef38a5ac1a6e77e7e40ec932d95cd1c25"
+      "sha256": "1babca8927407d2602496daa31e068f73cf4f25e3205c612023141a67535f3b0"
     },
     {
       "key": "dnd2024:rules/exploration_vehicles",
@@ -26815,7 +26815,7 @@
         "first": 919,
         "count": 19
       },
-      "sha256": "4cd6267f11a4fb7065f52f4fcfd427e768590e2ff88f978c0c05b1a4e1a94052"
+      "sha256": "634165823d71db15b92af7c03d0ff17ec19ad905de2f6d11f55e6e6e5fa9f262"
     },
     {
       "key": "dnd2024:rules/combat_moving_around_other_creatures",
@@ -26894,7 +26894,7 @@
         "first": 983,
         "count": 24
       },
-      "sha256": "2239b1f13ece785c95992df48a0c06154e86b4ea6a6b67b5e476e8fcdaf9bf81"
+      "sha256": "63daf80866c44fc39ca656d6076775b2ecea47a4ea5fc18a819ed53ffdd9bba1"
     },
     {
       "key": "dnd2024:rules/combat_ranged_attacks",
@@ -27615,7 +27615,7 @@
         "first": 1227,
         "count": 17
       },
-      "sha256": "79214be3243886401fb2c538b5db599de1bfdd6b5be6ca91a66c4da08bd7f616"
+      "sha256": "3cab749c5329f17409f8e92f51c465d794f01b4848a3ffd3022f9624ac030248"
     },
     {
       "key": "dnd2024:rules/damage_and_healing_character_demise",
@@ -28179,7 +28179,7 @@
         "first": 1467,
         "count": 40
       },
-      "sha256": "cac88707f01596229bf180b72dbee5f7308906a8e18ea2d93555ba8c92b4d112"
+      "sha256": "a4f30d1726e385bee7d0b2a4de4f2543db9c84ac5668ab8bd5dec0bc02e96d0a"
     },
     {
       "key": "dnd2024:rules/create_your_character_step_3_ability_scores",
@@ -28283,7 +28283,7 @@
         "first": 1558,
         "count": 8
       },
-      "sha256": "3a28097f8818a9d8f6c5654cfe1584dc3c23a9f19e5aeacd5f963477610801e2"
+      "sha256": "b980ed57aa4e72ad4d41ad22919554c0b074aa95bf33e690549983be0a81553b"
     },
     {
       "key": "dnd2024:rules/create_your_character_determine_ability_modifiers",
@@ -28439,7 +28439,7 @@
         "first": 1645,
         "count": 88
       },
-      "sha256": "cd528337e5bb6a62e9cd7e8facf9e025aba08dd9a3946367e12797e8f0e51691"
+      "sha256": "13925e9164d45cd401f1063993ce4bbc546809c9b99142ef8c5387ed593acbf6"
     },
     {
       "key": "dnd2024:rules/level_advancement",
@@ -28465,7 +28465,7 @@
         "first": 1733,
         "count": 33
       },
-      "sha256": "3cc36901a34f77d86ae99e50ba987e356aff859cfd3b0e34b48daa0e493bc6f4"
+      "sha256": "871762cabcf73c1bedfc21f3684bc442412bee61149a3e9ff1048bc92b611459"
     },
     {
       "key": "dnd2024:rules/level_advancement_gaining_a_level",
@@ -28491,7 +28491,7 @@
         "first": 1766,
         "count": 45
       },
-      "sha256": "43ea59a683a863e12075f4fe9751067c87d87c1ae52cc3950f36424dd64fb593"
+      "sha256": "f61b5b13959408f3f866d6bdc6e9760b88f4d856634656b732a7067efff91719"
     },
     {
       "key": "dnd2024:rules/level_advancement_tiers_of_play",
@@ -28664,7 +28664,7 @@
         "first": 1855,
         "count": 27
       },
-      "sha256": "51f7369ecd5145038c49f4bb114e0f6d268cd4d5d4d455deb9bdf3af7fe4a68b"
+      "sha256": "7988400221057485ea445274b2bc267a7c2b4a630f1c83e0cecac4ba143d7db0"
     },
     {
       "key": "dnd2024:rules/starting_at_higher_levels_starting_equipment",
@@ -28690,7 +28690,7 @@
         "first": 1882,
         "count": 12
       },
-      "sha256": "f865457e9eec18713b945b8a9edde675a5999fe1f55578a6188a9d732862251f"
+      "sha256": "a527b278e51b514ff5585ef6079ef318ebec9e56f25372c073bc709ce2cca0fb"
     },
     {
       "key": "dnd2024:rules/multiclassing",
@@ -28952,7 +28952,7 @@
         "first": 1977,
         "count": 79
       },
-      "sha256": "3ecc3e2a8292e8fa047035840075c3c317d01e24dd2e3b786857445565e6404b"
+      "sha256": "b93d7aeed8fcc6b23d20e400fda7bdf28c6013ecda6f4de2f3ccbbaa5532579a"
     },
     {
       "key": "dnd2024:rules/trinkets",
@@ -29028,7 +29028,7 @@
         "first": 2207,
         "count": 15
       },
-      "sha256": "51723280e2d39d7ff9777630ea235040ce98053855e8214fdaa4aa4a0fcd256f"
+      "sha256": "13d11482a55b458f3b78d05626e8fbed294eea8c69d2634dbcebaff6b374fc44"
     },
     {
       "key": "dnd2024:rules/barbarian_becoming_a_barbarian",
@@ -29130,7 +29130,7 @@
         "first": 2257,
         "count": 5
       },
-      "sha256": "1b195aaaa666f8737643d312f6cd2fc23e84567ac5563e83e909f309c7f99548"
+      "sha256": "61fe302b4a1220549963b5c12e93423c9eb58df16d72da718b2c69f0c6268066"
     },
     {
       "key": "dnd2024:class_features/barbarian_level_1_rage",
@@ -29157,7 +29157,7 @@
         "first": 2262,
         "count": 58
       },
-      "sha256": "dae1deef6353bd33e8ec6adb3735b0b5cff6e9521cc9999029ca6d50cb59faf7"
+      "sha256": "9f4bd1c1ae186ebf53e3130acd3e6344c97e3d2fd9ff347cc365406d82773855"
     },
     {
       "key": "dnd2024:class_features/barbarian_level_1_unarmored_defense",
@@ -29652,7 +29652,7 @@
         "first": 2448,
         "count": 3
       },
-      "sha256": "6eaa4ea6959e93953b75bb849ce6f50fd5cfbf8888a0f0787872cd59798f189a"
+      "sha256": "9e4725f15f0a19371818f8bd608401df28f53cf851c19172e948d9cb5de37b79"
     },
     {
       "key": "dnd2024:rules/barbarian_barbarian_subclass",
@@ -29702,7 +29702,7 @@
         "first": 2452,
         "count": 7
       },
-      "sha256": "941436fc2aae590a2d6614e9423775ecdcfe8a4ec4925d300de0cc9c0a34a50f"
+      "sha256": "4397dc398e388b2e26d1143b5533e44aa600ecc7e4f98735ac59ab451f4d01ff"
     },
     {
       "key": "dnd2024:class_features/path_of_the_berserker_level_3_frenzy",
@@ -29831,7 +29831,7 @@
         "first": 2492,
         "count": 17
       },
-      "sha256": "98e48fb4bb66079fecb9a2b0f6435a7a7b2cc5fa99ceae5d5686ac18f1794629"
+      "sha256": "ee11827e21d7f4390f8b6a640d991cfc4ba58e7225a2e7a0faa6f8d3ef38d0b2"
     },
     {
       "key": "dnd2024:rules/bard_becoming_a_bard",
@@ -29881,7 +29881,7 @@
         "first": 2510,
         "count": 29
       },
-      "sha256": "33dd180f30252a21b2de6e34da2aed3241b3efb0d7214f8ce0e6ba162dbfb4fb"
+      "sha256": "064d0e547684e52df5351c0b179af2c0772ae8ff5b0ce09c1e0419699efe466d"
     },
     {
       "key": "dnd2024:rules/bard_as_a_multiclass_character",
@@ -29933,7 +29933,7 @@
         "first": 2549,
         "count": 4
       },
-      "sha256": "e35bc790210649e0c39b8aec31403fb45d3a81ba66e39ae024fe3b8c92e52f98"
+      "sha256": "ec8c0a6bddfe9646ea3e4155da4e5bdc5d242d18bb7e3bc4cc4414db980e6019"
     },
     {
       "key": "dnd2024:class_features/bard_level_1_bardic_inspiration",
@@ -30012,7 +30012,7 @@
         "first": 2647,
         "count": 7
       },
-      "sha256": "825103577c6c228fdd4b0aa3ec354a2b19cc7c764a0278e0d8460ccd540edddc"
+      "sha256": "26602f61467260fbb45d3001939900fdb0eb61805fa828fe92225c01b00bc9ae"
     },
     {
       "key": "dnd2024:class_features/bard_level_2_jack_of_all_trades",
@@ -30116,7 +30116,7 @@
         "first": 2674,
         "count": 6
       },
-      "sha256": "c78f3cbba227dd927f1672026c9b13a8aeeb824972dbd6634342c390030ea883"
+      "sha256": "7e580b4489c04dff07746d04cb2e7dd90a0f44aea6bb7a1b2e035c14020584d0"
     },
     {
       "key": "dnd2024:class_features/bard_level_7_countercharm",
@@ -30274,7 +30274,7 @@
         "first": 2713,
         "count": 158
       },
-      "sha256": "e8733e82f50cb861137a33b1d28a80ad9ad95defdb40f33fd2062cbe2e55fb28"
+      "sha256": "6e196ab64d761f86786a2916394649491bb9e1115e10177fa7206a13241989c0"
     },
     {
       "key": "dnd2024:rules/bard_bard_subclass",
@@ -30324,7 +30324,7 @@
         "first": 2872,
         "count": 10
       },
-      "sha256": "7a3e31d398c683621a1853185de3a0ba94e830fe94b6a64d08f564bcebf50d80"
+      "sha256": "e59761efd21ca1b2dcdfe35fce26027191ec23fb26b11c79ca35b61367ddd0b1"
     },
     {
       "key": "dnd2024:class_features/college_of_lore_level_3_bonus_proficiencies",
@@ -30453,7 +30453,7 @@
         "first": 2913,
         "count": 16
       },
-      "sha256": "403991278c95c2b591b38cae808e3329f55e42f869b66df67c16c6f69f34d403"
+      "sha256": "45b1a1882701c6e1731e1d094adc33609293b07c3c5c10020e7bdf306cc4386b"
     },
     {
       "key": "dnd2024:rules/cleric_becoming_a_cleric",
@@ -30503,7 +30503,7 @@
         "first": 2930,
         "count": 27
       },
-      "sha256": "729b1c72f88e9dea7acfd73df186108ec91bec2d6d291d87fcf59eea982dc1ae"
+      "sha256": "97aa6a0fbed932a947f6aa2b6f267d2b9e558c96cf60921d210a11e27ed2743f"
     },
     {
       "key": "dnd2024:rules/cleric_as_a_multiclass_character",
@@ -30555,7 +30555,7 @@
         "first": 2965,
         "count": 4
       },
-      "sha256": "4a02da30f28ce3bcc1db04800d3eecfdec61f90b841f868d9407b2c02654704f"
+      "sha256": "315d1310e884292837382999216b35482a9a5ed092b2de544b7b83ddb0c2407b"
     },
     {
       "key": "dnd2024:class_features/cleric_level_1_spellcasting",
@@ -30582,7 +30582,7 @@
         "first": 2969,
         "count": 70
       },
-      "sha256": "96825f1c56f07f9e168f2337f41d8f753fd86b18dbf9a0a14c093e14d7f51361"
+      "sha256": "09890e618d46c8c18c480250d4efbee5803d40f0820623de3a41953ffe977702"
     },
     {
       "key": "dnd2024:class_features/cleric_level_1_divine_order",
@@ -30608,7 +30608,7 @@
         "first": 3039,
         "count": 11
       },
-      "sha256": "bbf2b99e9a184199106235a81640994cdfde9bdd1fa16f20f846b5457f9c6608"
+      "sha256": "a4f4df8caa758a916ce3aabd9016870f5f7af49f14fe2bfed9cdab55974193e2"
     },
     {
       "key": "dnd2024:class_features/cleric_level_2_channel_divinity",
@@ -30634,7 +30634,7 @@
         "first": 3050,
         "count": 40
       },
-      "sha256": "20b44c17495fa9bde484fd088920f18d62d8ebf9cb180a2cf8c8c9c6bf46e1d4"
+      "sha256": "0dc614254480c9d3247dc1b4f9e30fa790160d68a98079e4302510c845c93bfc"
     },
     {
       "key": "dnd2024:class_features/cleric_level_3_cleric_subclass",
@@ -30870,7 +30870,7 @@
         "first": 3148,
         "count": 137
       },
-      "sha256": "cb476152a38bc32ab0dbca9b7a1ea5f3f426bbc8c14f094ca368571d9fb0f6d6"
+      "sha256": "c3292f6b1186dc9aa0b67a3e5059de118d6d9add15228824970de3ef7452e50d"
     },
     {
       "key": "dnd2024:subclasses/cleric_cleric_subclass_life_domain",
@@ -30896,7 +30896,7 @@
         "first": 3285,
         "count": 13
       },
-      "sha256": "c83cec022b1fbe94ee481d7e7c7cc5140d3f1776b9eb334a916e99c85786f847"
+      "sha256": "eb48dae071e3dcf5dbaeed14a02c7e1afbcaa4b7a5d255afb28033bd43b0b386"
     },
     {
       "key": "dnd2024:class_features/life_domain_level_3_disciple_of_life",
@@ -30948,7 +30948,7 @@
         "first": 3304,
         "count": 14
       },
-      "sha256": "8676986b3287b9749b9898a08771b300271814677550374a833484509f9d3b8b"
+      "sha256": "965dfda279da990ddad61e4410a2dd913902ba0071bfb9157d6b21fa684f1836"
     },
     {
       "key": "dnd2024:class_features/life_domain_level_3_preserve_life",
@@ -31051,7 +31051,7 @@
         "first": 3340,
         "count": 43
       },
-      "sha256": "5cc3818803dba6cb4416c4f4683385b6068efd1a8dd1e840fb6328045911f550"
+      "sha256": "328749ce335f0bd949a60e29c8cdb1a26baa81e8230eae5c54d176665852e3aa"
     },
     {
       "key": "dnd2024:rules/druid_becoming_a_druid",
@@ -31127,7 +31127,7 @@
         "first": 3388,
         "count": 8
       },
-      "sha256": "6bfca4346b87f9fb0958be0fc2db3e545246d6124aae03aa5b575ea83de5bfc7"
+      "sha256": "b4972b5c4367d6c9a53f9c70d72a9c3b482c007cde3aada2086a147c93839682"
     },
     {
       "key": "dnd2024:rules/druid_druid_class_features",
@@ -31180,7 +31180,7 @@
         "first": 3400,
         "count": 72
       },
-      "sha256": "337e35529897cf44ee60e72be036889cee3f51da1879471770b1a0eb699e705b"
+      "sha256": "f30b22893a1ed434eddb7341a29a887a80fe6d54f75b9aeaa84cee4f5bb91732"
     },
     {
       "key": "dnd2024:class_features/druid_level_1_druidic",
@@ -31259,7 +31259,7 @@
         "first": 3494,
         "count": 70
       },
-      "sha256": "e7e573e42a41120557da9779e53b0d1b017581d3674ee19bde2a99319e2ede50"
+      "sha256": "4a52bee28510fafe7ab6c074f59f189d5b540d0ede0a090b92546f16fa78d76a"
     },
     {
       "key": "dnd2024:class_features/druid_level_2_wild_companion",
@@ -31285,7 +31285,7 @@
         "first": 3564,
         "count": 7
       },
-      "sha256": "c09b05e8b4e45ca6c4cc6a0dba5b281425d33ea1a5fa2a649ddc980e8cf99066"
+      "sha256": "5bebe3a249176a9495ffd3477b9ad1d2ec4564ee30284da80823c4b098a9a232"
     },
     {
       "key": "dnd2024:class_features/druid_level_3_druid_subclass",
@@ -31520,7 +31520,7 @@
         "first": 3636,
         "count": 151
       },
-      "sha256": "9f3a231a69cc936f4441302bd77b6f8f36b97d787950b317de4ec43b10c96757"
+      "sha256": "5bb7d384351562fa5a71c968ec38d94f50771e191dc86ae1e4f71a38c981ec77"
     },
     {
       "key": "dnd2024:rules/druid_druid_subclass",
@@ -31570,7 +31570,7 @@
         "first": 3788,
         "count": 8
       },
-      "sha256": "d104d5c84633d1bff6d497c1d6ec33a8f83e6b85cc33974eeef8714caa42ec69"
+      "sha256": "822abab592a11d1ce3d35df5273bac95c30f3bf53082d76fc7761b5da4a400c3"
     },
     {
       "key": "dnd2024:class_features/circle_of_the_land_level_3_circle_of_the_land_spells",
@@ -31596,7 +31596,7 @@
         "first": 3796,
         "count": 30
       },
-      "sha256": "9cfe1149a4a87a8da789a5db69dcf8d1743ac16193bb1f1b4560aa9d85b6681a"
+      "sha256": "dc3d39abf0f29189fa73e656e77b081587ef0a759b31428e9a20dc3ed115cc19"
     },
     {
       "key": "dnd2024:class_features/circle_of_the_land_level_3_land_s_aid",
@@ -31725,7 +31725,7 @@
         "first": 3874,
         "count": 44
       },
-      "sha256": "4110dc5104990996f3af70843221295cd7b186df9827a2928610757b5a3c1f9c"
+      "sha256": "2c8492c6e3f673e1d5bcd316f30be409da301bdacda5bf9f5b797a0f6b352eed"
     },
     {
       "key": "dnd2024:rules/fighter_becoming_a_fighter",
@@ -31801,7 +31801,7 @@
         "first": 3923,
         "count": 7
       },
-      "sha256": "8d5c3f6b2922a4ba28120e6877c3bb7fd24f44ffef395d6d03f41b5c7782810f"
+      "sha256": "6afe07310b89e461a48ae769d24e7bc7a515cab3d93190ef74dae1ac345dfb4f"
     },
     {
       "key": "dnd2024:rules/fighter_fighter_class_features",
@@ -31879,7 +31879,7 @@
         "first": 3963,
         "count": 12
       },
-      "sha256": "4eb39cee7028a762973a1213103fe2bf395a215bcb5b30135a30582bbc042a2b"
+      "sha256": "c7142a8616ec773fcec295dc1c8e255500c9b9f099b4b0461230f62ee5feadcf"
     },
     {
       "key": "dnd2024:class_features/fighter_level_1_weapon_mastery",
@@ -32243,7 +32243,7 @@
         "first": 4048,
         "count": 9
       },
-      "sha256": "6b3328f01ee76eb3ea2773e7a09db68996a329f92d7b338112b261b49f679d95"
+      "sha256": "af02a45c21fb24d8c5f843948c9046b6de4b1de7b79760182f3e3fe01b330010"
     },
     {
       "key": "dnd2024:class_features/champion_level_3_improved_critical",
@@ -32295,7 +32295,7 @@
         "first": 4061,
         "count": 6
       },
-      "sha256": "e03316cd1632f8451bffa87748fd68fb0fbbf5f2fd5ff589c7a5d238ceb13eca"
+      "sha256": "79c46ba18fb68f6fdbc3f418c48b26a1dfeda89e7f7f5ca12265e957bd0e631a"
     },
     {
       "key": "dnd2024:class_features/champion_level_7_additional_fighting_style",
@@ -32424,7 +32424,7 @@
         "first": 4088,
         "count": 22
       },
-      "sha256": "c50ef2e90171655ef23d281ad2e4251213e28e0bb77079cfbb65e15db8a2b274"
+      "sha256": "6d0e67504492151560822c001e65ad0036c1cc310f6886a29d45d4b727a05558"
     },
     {
       "key": "dnd2024:rules/monk_becoming_a_monk",
@@ -32474,7 +32474,7 @@
         "first": 4111,
         "count": 4
       },
-      "sha256": "4788fe9c3d7db8264387fc1dd13f712cfd04de202e75db63f7e4a14b4a6af46c"
+      "sha256": "8f0067b6036f85ceb202fa79b057847bd8bd31a72e48037aa36dd9a5e2d39a1e"
     },
     {
       "key": "dnd2024:rules/monk_as_a_multiclass_character",
@@ -32527,7 +32527,7 @@
         "first": 4120,
         "count": 28
       },
-      "sha256": "0e7dafb56a413019e50be370791e16e38e16a459caa12648bad0e840c9007765"
+      "sha256": "748723f00b625562b9d81f96ee9c076896f15ea164a109d3f0d4abc03061103f"
     },
     {
       "key": "dnd2024:class_features/monk_level_1_martial_arts",
@@ -32553,7 +32553,7 @@
         "first": 4148,
         "count": 46
       },
-      "sha256": "7e3012ed1f7a6050e80e37aaf6b4b35f0b06e4c1dd9f749aaff1e9b87f308619"
+      "sha256": "8a92b7a1a1390e994cc16b882379663c582b4b5829e576950516f9631fdbcf14"
     },
     {
       "key": "dnd2024:class_features/monk_level_1_unarmored_defense",
@@ -32606,7 +32606,7 @@
         "first": 4198,
         "count": 28
       },
-      "sha256": "198b553e2e9e2f1a68b8763e9d0c4ccf8f342000326a711e3e7b53140fb77bdc"
+      "sha256": "f0ec5f21961980d6f8ed17ed7490a9238b38a34915a24349c4e2ed624128ee5e"
     },
     {
       "key": "dnd2024:class_features/monk_level_2_unarmored_movement",
@@ -32658,7 +32658,7 @@
         "first": 4231,
         "count": 7
       },
-      "sha256": "dfdab412625f821c72cd3c6dd464f1b93c1c92cea948ebc5664f9e597f9bb69d"
+      "sha256": "bada0a6646b00697939d219a8c75b3383f58753f6086ce7ae60027555f0ab2c4"
     },
     {
       "key": "dnd2024:class_features/monk_level_3_deflect_attacks",
@@ -32684,7 +32684,7 @@
         "first": 4238,
         "count": 16
       },
-      "sha256": "4a73722b0505c3f33440cb18232b1044589a080e12da602faf0b569efd7b3f47"
+      "sha256": "2fd284c446ff623b36bf786371df91d8306834e41cb4e54479bed0a574c46a7d"
     },
     {
       "key": "dnd2024:class_features/monk_level_3_monk_subclass",
@@ -33101,7 +33101,7 @@
         "first": 4346,
         "count": 4
       },
-      "sha256": "ba7c3ba2c772094b36438eda882071e0261d4ee7d9b8907d00e31b10cc55e16b"
+      "sha256": "7461ff57012516d1f66938827d3165f7a5d5a9d6da33d28449e5ecf738d8bd8a"
     },
     {
       "key": "dnd2024:subclasses/monk_monk_subclass_warrior_of_the_open_hand",
@@ -33127,7 +33127,7 @@
         "first": 4350,
         "count": 6
       },
-      "sha256": "b04ec592fbc4d069343cd137803c11bf426827baf2d1e24193968354e9387a66"
+      "sha256": "7208cf9b9b8a8d4eb86d9395614d22cea9e1c307187b07501fb14efb4b5479a7"
     },
     {
       "key": "dnd2024:class_features/warrior_of_the_open_hand_level_3_open_hand_technique",
@@ -33231,7 +33231,7 @@
         "first": 4380,
         "count": 18
       },
-      "sha256": "d0bd0cc0c1c03ff0b6cf86c09593a8fa5b37e75f7e1397f421f5e6a95a2d5a3f"
+      "sha256": "e39bad9c2d5359180747c69d98045c0ae46f73b2588683a05ac8cf1bdeeb7075"
     },
     {
       "key": "dnd2024:classes/paladin",
@@ -33256,7 +33256,7 @@
         "first": 4398,
         "count": 16
       },
-      "sha256": "312101ff1e60a0f811b6ad76914598787700fa20553df46a71d6fadc979366bc"
+      "sha256": "d21f100241b67c685a10c569c3fd28020ba8b1c18a5a059e663c4119644ec737"
     },
     {
       "key": "dnd2024:rules/paladin_becoming_a_paladin",
@@ -33358,7 +33358,7 @@
         "first": 4452,
         "count": 4
       },
-      "sha256": "3ebf92ab8b5f8fb75a636eac7de8ed67609ff654550e927a7412f61a3a7e70dd"
+      "sha256": "bce403f547ae78558709d32e1ad65b1b68365f7d8a9c97691652dd8ac9fe416a"
     },
     {
       "key": "dnd2024:class_features/paladin_level_1_lay_on_hands",
@@ -33411,7 +33411,7 @@
         "first": 4493,
         "count": 38
       },
-      "sha256": "72fa54c6cb561bf512d3b2f8caf10f5c9464110fe78cf5e146e2fccafd724b14"
+      "sha256": "1ccdfd2743b6e232e10210a9b1b66c1fc0ddeacbc9b93ebe27c7920fa29a033f"
     },
     {
       "key": "dnd2024:class_features/paladin_level_1_weapon_mastery",
@@ -33516,7 +33516,7 @@
         "first": 4557,
         "count": 37
       },
-      "sha256": "84cc423b46beb4d94921122f807795d6ea5ce6483d23465839f56de0d67abf2b"
+      "sha256": "57bfdade70120ea27a38244395cea7638d12d0fd374c7b031feadc30094fcb2c"
     },
     {
       "key": "dnd2024:class_features/paladin_level_3_paladin_subclass",
@@ -33855,7 +33855,7 @@
         "first": 4718,
         "count": 17
       },
-      "sha256": "685c661a33fc6cba47b7ef6af21ab8971d0fa1a6cca509de91095243f4979e07"
+      "sha256": "11789a3045eb5aee78f1b8c6b755076d302c7d418b8f89bdba31ba1758d1b031"
     },
     {
       "key": "dnd2024:class_features/oath_of_devotion_level_3_oath_of_devotion_spells",
@@ -33881,7 +33881,7 @@
         "first": 4735,
         "count": 14
       },
-      "sha256": "8fd1162385b1881e483fe75b105a07f814c9922ca08b71f31ba07fd56b5237b1"
+      "sha256": "ff79e207cfc8b0de98a115ab1320ae3cefb05319046a373db2f93861ef93c067"
     },
     {
       "key": "dnd2024:class_features/oath_of_devotion_level_3_sacred_weapon",
@@ -33985,7 +33985,7 @@
         "first": 4774,
         "count": 17
       },
-      "sha256": "33f40ee8e5c99344bc75f6b6ccb41d312d89a2085674dbded911c1b8345ad214"
+      "sha256": "382a7beb84904c7d6732d7cc3a90e5ffe4a9f020f9d20bef4238906e96bb3a54"
     },
     {
       "key": "dnd2024:classes/ranger",
@@ -34010,7 +34010,7 @@
         "first": 4791,
         "count": 19
       },
-      "sha256": "0aa21111a4f75fdc1ff9c23227d9192f8493895fd6750205581d40be47b530a1"
+      "sha256": "243823954d7e128e92b1d0b5477ba72e5a1ff011da27d75d4a28feff822c0ac0"
     },
     {
       "key": "dnd2024:rules/ranger_becoming_a_ranger",
@@ -34060,7 +34060,7 @@
         "first": 4811,
         "count": 4
       },
-      "sha256": "cff79d18b78ce4bd2024c49436895ba04fd2696859085321f35f94fcaceecd1d"
+      "sha256": "0c7e9e30f4722061d5b655beb67ad570556bf61eaa7af55cf4660885868a131c"
     },
     {
       "key": "dnd2024:rules/ranger_as_a_multiclass_character",
@@ -34112,7 +34112,7 @@
         "first": 4825,
         "count": 4
       },
-      "sha256": "df2782341fbd76d5f58b80a4aadfe46d012d413920c2405c09bb87c5e61bcfe5"
+      "sha256": "2a545652c86708a08577720bdabb59f0081edb8223da51ae29301483052fe623"
     },
     {
       "key": "dnd2024:class_features/ranger_level_1_spellcasting",
@@ -34582,7 +34582,7 @@
         "first": 5012,
         "count": 65
       },
-      "sha256": "5503e869ae5c70bb8b932ad46dd1814fa83480c2f1fef12811a13d032a147272"
+      "sha256": "0f12a69bb1a8bae43575e72a4e8919831cd54b566008eeb290ae1bffe0167017"
     },
     {
       "key": "dnd2024:subclasses/ranger_ranger_subclass_hunter",
@@ -34608,7 +34608,7 @@
         "first": 5077,
         "count": 6
       },
-      "sha256": "c03c06388c3e79430a040e0aca9a6e4a32d9fbbdd83b257bacd11309f974c22d"
+      "sha256": "363239d270eac44bb7be582bdd1b85c138753977336dd6754f105ce233dd1667"
     },
     {
       "key": "dnd2024:class_features/hunter_level_3_hunter_s_lore",
@@ -34686,7 +34686,7 @@
         "first": 5107,
         "count": 10
       },
-      "sha256": "fd2514a729ee7cf9cf4d2bbdd9bcc044d4698af9448b7ca2c520b189ab5deae2"
+      "sha256": "9374a8ad0ef02efe8f3ccd558182bdcc0a6c75bfbddf3579a94eb0109583e09c"
     },
     {
       "key": "dnd2024:class_features/hunter_level_11_superior_hunter_s_prey",
@@ -34763,7 +34763,7 @@
         "first": 5127,
         "count": 21
       },
-      "sha256": "cb6c79b3c5668bb9337472eb0727b768c48ba775c8ecbb0aa5e93d9a950f4f86"
+      "sha256": "09c75c8abb7fae4259b1734bd9ca3ca33380fd50122692fad14716ad9680b8f8"
     },
     {
       "key": "dnd2024:rules/rogue_becoming_a_rogue",
@@ -34839,7 +34839,7 @@
         "first": 5153,
         "count": 8
       },
-      "sha256": "aa45363ec7028967fe7246cb4202ab62ca257dc510e9a3e4ae9cb969333cbf59"
+      "sha256": "ceba3a5636450807170ffed977a58345ff88928a2c1e67d210757ec64f9fa552"
     },
     {
       "key": "dnd2024:rules/rogue_rogue_class_features",
@@ -34891,7 +34891,7 @@
         "first": 5165,
         "count": 6
       },
-      "sha256": "367a45f8f70a253a7e0e238d2f9a7131d28245173c8ab3ca1d2d6bda452c99ec"
+      "sha256": "a8e6a7833ad09b4d46b7b1121a330a8470d9c9701400c4ba29f2beed1fb71943"
     },
     {
       "key": "dnd2024:class_features/rogue_level_1_sneak_attack",
@@ -34918,7 +34918,7 @@
         "first": 5171,
         "count": 37
       },
-      "sha256": "5e453a55ab29dcbd9372abcf00c001e1c96b0e6aefda2bcacc4a524f7421ca8e"
+      "sha256": "97a437bdef7ddd7617b5e8d02e3ad97c4a479c7fbd3ff2b20811d5859be6a900"
     },
     {
       "key": "dnd2024:class_features/rogue_level_1_thieves_cant",
@@ -35334,7 +35334,7 @@
         "first": 5345,
         "count": 6
       },
-      "sha256": "e7e697c1b1d969b0fa80c8421e32ad9f0942c0688102fb80845fdaf1d0046590"
+      "sha256": "7f90299069ecb0d0d1ae29c0970e2317a8f84c084b4299ac82658ab175cf3198"
     },
     {
       "key": "dnd2024:subclasses/rogue_rogue_subclass_thief",
@@ -35360,7 +35360,7 @@
         "first": 5351,
         "count": 7
       },
-      "sha256": "c9afd6aa5febc50d900bab1d34c85c03142ebcae5fef68e6a58f9ea86d437421"
+      "sha256": "526a2b1f571e1df388ed7d6dbac647a7a41847b4bef2e1d7b9885176782a54d2"
     },
     {
       "key": "dnd2024:class_features/thief_level_3_fast_hands",
@@ -35515,7 +35515,7 @@
         "first": 5402,
         "count": 15
       },
-      "sha256": "c3daf8ea0c52295a65d3d6896869d0c07644d2f5cbf2502781185bfc07f2ac1c"
+      "sha256": "b4e1e2a41f127658a8eefca9fa94be7b4a4dbbf87a77dcbf36bb5a8ed0992fbf"
     },
     {
       "key": "dnd2024:rules/sorcerer_becoming_a_sorcerer",
@@ -35565,7 +35565,7 @@
         "first": 5418,
         "count": 5
       },
-      "sha256": "581f496e94633e4def499a13f0f40ef0b56a318f6438c72612e416f1485097e0"
+      "sha256": "d18260144a562003a32881b5a4ca8801af0fc7aa951cbaaed75b7486f2c67675"
     },
     {
       "key": "dnd2024:rules/sorcerer_as_a_multiclass_character",
@@ -35617,7 +35617,7 @@
         "first": 5430,
         "count": 4
       },
-      "sha256": "6feea6839eb756ae56348b119ed1e21d3738869437a188c2b996c05fdac43930"
+      "sha256": "10d42ce3895ba5ce09c0953b1a3e7a83640f14f48cbf1149dad23337d931d6c1"
     },
     {
       "key": "dnd2024:class_features/sorcerer_level_1_spellcasting",
@@ -35644,7 +35644,7 @@
         "first": 5434,
         "count": 100
       },
-      "sha256": "ef07633da0d80b19e7dd159d5bd34e7e0bcb3eef531270b0dda3bef4ae707873"
+      "sha256": "2e28d1fac9d212e3403fd27a986fa1a18ae682bf218f2bba089a542e6816ecbd"
     },
     {
       "key": "dnd2024:class_features/sorcerer_level_1_innate_sorcery",
@@ -35697,7 +35697,7 @@
         "first": 5545,
         "count": 34
       },
-      "sha256": "42752cb6f9fc39850963d7d226aec06e702be98baf261ccef2378e8b5c1df9ed"
+      "sha256": "971ee6a863e5fe1764b647a491b2c23a211c3888ba20715befe695956329fa27"
     },
     {
       "key": "dnd2024:class_features/sorcerer_level_2_metamagic",
@@ -35958,7 +35958,7 @@
         "first": 5643,
         "count": 7
       },
-      "sha256": "aaab00929cea837ec0e0c42eaec35da3c85bafb5a64163597ac716d85fd14c1e"
+      "sha256": "7602299179fd8dc08ff187f734a7e57d92f124eb0f43381e29dda7b490a9e820"
     },
     {
       "key": "dnd2024:rules/sorcerer_empowered_spell",
@@ -36194,7 +36194,7 @@
         "first": 5710,
         "count": 166
       },
-      "sha256": "b1aa127ba38d71f75176b5fb991237dfc7f34ea763a20db68fa9fc94906ace9d"
+      "sha256": "2a1b87244cc81429019f1374604ba0a99afae194b1efd91dbe4c055aeeabe022"
     },
     {
       "key": "dnd2024:subclasses/sorcerer_sorcerer_subclass_draconic_sorcery",
@@ -36220,7 +36220,7 @@
         "first": 5876,
         "count": 10
       },
-      "sha256": "2ed98bdf597d4d7f3701d0e7b3311d7d56e3ba519587792f40284cbedf2f7186"
+      "sha256": "c07fa8786d38707578ae8dcceb85498e8f2b19f519b454f1240edc0bc50b8ee9"
     },
     {
       "key": "dnd2024:class_features/draconic_sorcery_level_3_draconic_resilience",
@@ -36272,7 +36272,7 @@
         "first": 5895,
         "count": 12
       },
-      "sha256": "9c2f07398230d7bf2bf3426bd71d91a4fedee0e7d1654f9918c25fce0df20839"
+      "sha256": "9bee310dd5b76569cbdbcc28d4d55ed20e22211592f422173c5120780a62ba76"
     },
     {
       "key": "dnd2024:class_features/draconic_sorcery_level_6_elemental_affinity",
@@ -36375,7 +36375,7 @@
         "first": 5933,
         "count": 16
       },
-      "sha256": "b4517a202ee4e357d821b2221685464ffa7fed20828683201a64ab696413ac1f"
+      "sha256": "1f2604037b9de7d73cfbf8fafed57cb9ef395b6a36dee4dcc009ec5a97e9f17f"
     },
     {
       "key": "dnd2024:rules/warlock_becoming_a_warlock",
@@ -36477,7 +36477,7 @@
         "first": 5962,
         "count": 4
       },
-      "sha256": "02679875872a28a0c294a7faeca4681f50a876d5ef54711102dce91809f3a321"
+      "sha256": "49dad7c38f38bf407b9d582c155ce4424e5b1a0f22b6015152d61e720662b5c7"
     },
     {
       "key": "dnd2024:class_features/warlock_level_1_eldritch_invocations",
@@ -36531,7 +36531,7 @@
         "first": 6011,
         "count": 78
       },
-      "sha256": "18e277eb237c50d4f585ab59c1a3089b3f461b8b95177d34678811922cc3ccb4"
+      "sha256": "1f945ae4c6ab260153ae534ea58f718df2475b67e3b981bae4cdb64775bef251"
     },
     {
       "key": "dnd2024:class_features/warlock_level_2_magical_cunning",
@@ -36661,7 +36661,7 @@
         "first": 6118,
         "count": 16
       },
-      "sha256": "252c9bb19eaabb7ce9c8453faf34e476ca6dfa56f638a5079b4c639c274924e1"
+      "sha256": "9cafe6a5951f65711f07c127eda6a77f4ecf636aa5b3283ae057b6aa72df41f9"
     },
     {
       "key": "dnd2024:class_features/warlock_level_19_epic_boon",
@@ -37336,7 +37336,7 @@
         "first": 6326,
         "count": 17
       },
-      "sha256": "0e906414b8820b6ed08162a947f0353d456b1fffaa3e6f4a9cd8ec6d4ea7824e"
+      "sha256": "a0f3c04cb9061f53617c773e74dcbbc3be007db34277326a5be5ea8ff95b434f"
     },
     {
       "key": "dnd2024:rules/warlock_repelling_blast",
@@ -37494,7 +37494,7 @@
         "first": 6371,
         "count": 100
       },
-      "sha256": "b69151fa880c6171ebdc16b97eed2ede52dd5f77d15f1c728745fc73b0df44b4"
+      "sha256": "ae10358ab9f4d8ed731a8894b8db50fa20919543fb64c1fc394620beb7ef20cb"
     },
     {
       "key": "dnd2024:subclasses/warlock_warlock_subclass_fiend_patron",
@@ -37520,7 +37520,7 @@
         "first": 6471,
         "count": 9
       },
-      "sha256": "f19426bd72775a36f94ef00cb4d411a280a1e87569a78d87842d960bd64b6668"
+      "sha256": "6a8d13bd810575c816f15d129a416b5d8fe9040bf421cc9655e0263bd58ed358"
     },
     {
       "key": "dnd2024:class_features/fiend_patron_level_3_dark_one_s_blessing",
@@ -37546,7 +37546,7 @@
         "first": 6480,
         "count": 7
       },
-      "sha256": "d318c9ba4b5b75e988e12114f78e23bfc3d443189a590ea378e670de0b0a7a3c"
+      "sha256": "a8bd370f32c4b5d79496fa4ff2e9c20fb97e48051279b1c39c8be1949503b665"
     },
     {
       "key": "dnd2024:class_features/fiend_patron_level_3_fiend_spells",
@@ -37572,7 +37572,7 @@
         "first": 6487,
         "count": 12
       },
-      "sha256": "befde78a84d92b9d3e1444581596f8bae6cc17d0b4e8742ddb2291c625a6b2be"
+      "sha256": "77074c38208013079f1092e1df62167882f5a0875a327e8e70df4056813cb638"
     },
     {
       "key": "dnd2024:class_features/fiend_patron_level_6_dark_one_s_own_luck",
@@ -37675,7 +37675,7 @@
         "first": 6529,
         "count": 15
       },
-      "sha256": "8f3144931d080257d56173a1a74bcae9e3687a4367daf234f227d6ec196c8fc7"
+      "sha256": "399c2f2b9e6d5751ce0f364ff8e031b0de02c33b7849a4b4d72185d5a43f386e"
     },
     {
       "key": "dnd2024:rules/wizard_becoming_a_wizard",
@@ -37725,7 +37725,7 @@
         "first": 6545,
         "count": 28
       },
-      "sha256": "5b1ddf82464bb5d0162408f2f4c80749d3b6683d5675c35eced1ee9b926327df"
+      "sha256": "a9ad53f49966f27ac87454396fc61219f1d4a2cba71437aca18538bc2f8c8952"
     },
     {
       "key": "dnd2024:rules/wizard_as_a_multiclass_character",
@@ -37751,7 +37751,7 @@
         "first": 6573,
         "count": 7
       },
-      "sha256": "4eaeac09ec48ce05ee00b973e04c6e2a9a7ea2b1f7816c11204e4524114de759"
+      "sha256": "4ebbcc94c43439bbd65f5ce0ab700736a88b8ffbb6015a45cabd56af82cdeb44"
     },
     {
       "key": "dnd2024:rules/wizard_wizard_class_features",
@@ -37987,7 +37987,7 @@
         "first": 6737,
         "count": 11
       },
-      "sha256": "eff90ad1dae82fcd78e4bb17a6778d15937a67eaa633b04e244f4787f31cdfee"
+      "sha256": "9bd0afe8229f2072c1162b3c7356dc277062092a365456b688b4678eda501a71"
     },
     {
       "key": "dnd2024:class_features/wizard_level_19_epic_boon",
@@ -38039,7 +38039,7 @@
         "first": 6752,
         "count": 8
       },
-      "sha256": "4be2662bf6e32531f892b9fa868ec0215ae3f7d1fb6a15e42b6f0a63a8ab6fa3"
+      "sha256": "15f719b951f8d8e5bdd17480d8b82d8ae77439dca8e283f054a307c42aa1b0ac"
     },
     {
       "key": "dnd2024:rules/wizard_wizard_spell_list",
@@ -38068,7 +38068,7 @@
         "first": 6760,
         "count": 247
       },
-      "sha256": "e6620c7199bd1dae13d1e9bbba47baf33fb6a59a3708ca61e4431b15bdd38001"
+      "sha256": "58619b5c904d63f31e69b7f292bdbe1ee0f1d66144b90ba510bdc51cc24a2b51"
     },
     {
       "key": "dnd2024:subclasses/wizard_wizard_subclass_evoker",
@@ -38094,7 +38094,7 @@
         "first": 7007,
         "count": 9
       },
-      "sha256": "3b1795713d0d21ee60d5344f398b6757a7ae6d18658a6733d833b5257bd90ed5"
+      "sha256": "70c26e8d572f40c3a875d1f07391789618c3547f883861764a0f4f5c95bd54b8"
     },
     {
       "key": "dnd2024:class_features/evoker_level_3_evocation_savant",
@@ -38224,7 +38224,7 @@
         "first": 7046,
         "count": 13
       },
-      "sha256": "ce3121857def4a006489d798deb988a88605eb48b8b22ff5ce9d61234786e107"
+      "sha256": "d25ab4cdb4dac242b7428bf58013d6f1622254e996ed7c540187cbcc6192bc17"
     },
     {
       "key": "dnd2024:rules/character_origins",
@@ -38475,7 +38475,7 @@
         "first": 7087,
         "count": 8
       },
-      "sha256": "1ac6249b976627f3d369d32344cac506a383dc54ce84a015376d5e5406060785"
+      "sha256": "793ec97856091dfdfe67ae96ed0cff230ee5ecd9a032d935039619ca0035ba05"
     },
     {
       "key": "dnd2024:backgrounds/criminal",
@@ -38500,7 +38500,7 @@
         "first": 7095,
         "count": 8
       },
-      "sha256": "7094eafa296dc74c429d270973a48140d86c24c552be057af97112c7366e4662"
+      "sha256": "a9ae327684bfc0b8f964d6f47fbe57dba1417842302f496b35861c3ee90704a7"
     },
     {
       "key": "dnd2024:backgrounds/sage",
@@ -38525,7 +38525,7 @@
         "first": 7103,
         "count": 8
       },
-      "sha256": "bdfc431e08cd4b648742c42e46b0ad6c15de29eb85d6f59d2e5ba3f608413056"
+      "sha256": "a40556883d609e83c6cc31dd84db4c42e4f024a68089378219b1940b6693f22d"
     },
     {
       "key": "dnd2024:backgrounds/soldier",
@@ -38550,7 +38550,7 @@
         "first": 7111,
         "count": 9
       },
-      "sha256": "8748bdc157cef14d32a22449537bddb7d8b84c0a24442f32030b1216bfb0c2c8"
+      "sha256": "af893ea0a288df92289afcfd5f9d901f7e58bd5e5c366417d5bb699d6718618c"
     },
     {
       "key": "dnd2024:rules/character_species",
@@ -38754,7 +38754,7 @@
         "first": 7167,
         "count": 48
       },
-      "sha256": "3fc86802d1442d8f60b3de01189d0a950454807e6b4ffed1fe803f472df97aef"
+      "sha256": "93e161083f278c297ddeff5999c1de2fade7b41aa155889f5f63bac29421c873"
     },
     {
       "key": "dnd2024:species/dwarf",
@@ -38805,7 +38805,7 @@
         "first": 7237,
         "count": 39
       },
-      "sha256": "66629549bd064048d9c4240bf40873916f89d9ec2785c8bc9e4fc72fe9f36dec"
+      "sha256": "6ad7fb46573695177bcb13de05aa1694ecea3c113ee164212fe71aca8817ab0d"
     },
     {
       "key": "dnd2024:species/gnome",
@@ -38906,7 +38906,7 @@
         "first": 7382,
         "count": 20
       },
-      "sha256": "68cb000fd5e8869e49922f4a69b2931032f4b19413a10921024c91bf69d37208"
+      "sha256": "d6cd5e9e46038a7262fa3909604b8daac7568bd37a9dd3dcdc5eb55e43fb0a36"
     },
     {
       "key": "dnd2024:species/orc",
@@ -38931,7 +38931,7 @@
         "first": 7402,
         "count": 18
       },
-      "sha256": "879dbd2f649b9a31c95518bc41c32d892ee1d45163f3db632edf4f018a55c390"
+      "sha256": "13aaf86fd4e0773871e2aa4e892138286979cabb7ba3a94d3246781e3b1980af"
     },
     {
       "key": "dnd2024:species/tiefling",
@@ -38956,7 +38956,7 @@
         "first": 7420,
         "count": 30
       },
-      "sha256": "a2123c44616d4e4c5d4288288d0559b37ee9babbcbc17883a99c3e1d947faa57"
+      "sha256": "47da0bb72968a0271ae12dec255c58176822988840a0213d287ed21975802010"
     },
     {
       "key": "dnd2024:rules/feats",
@@ -39466,7 +39466,7 @@
         "first": 7586,
         "count": 11
       },
-      "sha256": "008c2c7d5c52d0e4ec33ea9939aa88b3a513e414e82148d0fdf8bd4ecb473526"
+      "sha256": "7434e5451950696ba753da138d8976b04c5bbb047c1574e20f2b9356f1f5b11b"
     },
     {
       "key": "dnd2024:feats/epic_boon_feats_boon_of_irresistible_offense",
@@ -39774,7 +39774,7 @@
         "first": 7711,
         "count": 5
       },
-      "sha256": "d4e061756a6bb24be8801f1735f3e109f0de208a7c46abc6366630d3cb9a6b19"
+      "sha256": "b7c9fc57bacdd8d8265ca189c67d3bd210a2c35eea61ae1f04f7d43086fdbe23"
     },
     {
       "key": "dnd2024:rules/weapons_light",
@@ -40217,7 +40217,7 @@
         "first": 7905,
         "count": 40
       },
-      "sha256": "5e4b654eff24585113906bb5005cbeb473fb69acb4de5da1212439eace627eca"
+      "sha256": "b832cf74ea4cf6f193356441293d19c76a6187f533d358ab1812e9de32c1d3ba"
     },
     {
       "key": "dnd2024:rules/armor_armor_training",
@@ -40321,7 +40321,7 @@
         "first": 7960,
         "count": 17
       },
-      "sha256": "ba3f83c26527399c53b7c98b11f12f5638e340e7fe77c2d81ce626244ce2bedb"
+      "sha256": "5acb06976f707663f85887b5c2516b7cee18b5d0e9a38a247ede62e2b8642326"
     },
     {
       "key": "dnd2024:rules/tools",
@@ -40944,7 +40944,7 @@
         "first": 8110,
         "count": 6
       },
-      "sha256": "a804c089e4392d3ee496bd4a690f87ef9d32e51bf787de711ddee68b4d66aa5d"
+      "sha256": "94215fd1dfe9977529a37ab141b0dd6bf6d2fd8695534b967750679a34c8ec15"
     },
     {
       "key": "dnd2024:equipment/other_tools_herbalism_kit_5_gp",
@@ -40996,7 +40996,7 @@
         "first": 8120,
         "count": 8
       },
-      "sha256": "3983e0ff6d5b732b7485d1e1f2a930efc277903b1dff5df310b0a3e89ffdb1fb"
+      "sha256": "0b3065f4f02cc941c5da7f644c108b7783652af1ac0565371152d008d8f04b8a"
     },
     {
       "key": "dnd2024:equipment/other_tools_navigator_s_tools_25_gp",
@@ -41187,7 +41187,7 @@
           "count": 7
         }
       ],
-      "sha256": "10458a55ffde326371cca8d9dd6c04d699bcf13d42f3f6f9d8301ed727782b99"
+      "sha256": "8eee98060185ada029a0820ea1e85dcb3cdb4e74c6765f429adaaedef3e36b98"
     },
     {
       "key": "dnd2024:equipment/antitoxin_50_gp",
@@ -41237,7 +41237,7 @@
         "first": 8265,
         "count": 12
       },
-      "sha256": "e15347b0a96c11ba5848ba961b63fb978ebf29c495d89ffa2df3d4c08cca81a6"
+      "sha256": "1a4e4bf80b170436429f745a56b2480d9db96bd308c233a94779896a5526e4df"
     },
     {
       "key": "dnd2024:equipment/backpack_2_gp",
@@ -41312,7 +41312,7 @@
         "first": 8288,
         "count": 3
       },
-      "sha256": "455ec4e1e72e1b161afc24e7578fb3992a27c634ac7d9c0038c008fb412a8f36"
+      "sha256": "afad518a937d1f0e05c67b72b9359a217d4361502d915711657ef72124fb65f4"
     },
     {
       "key": "dnd2024:equipment/basket_4_sp",
@@ -41537,7 +41537,7 @@
         "first": 8317,
         "count": 5
       },
-      "sha256": "a8c6dda86efd84eea310e87dde4b5481dc30945beb21bec752f240278194bc4e"
+      "sha256": "aca397e1868cd015d27f9fe0d76f0deab89aa64f6397bef0e23621042f375204"
     },
     {
       "key": "dnd2024:equipment/caltrops_1_gp",
@@ -41637,7 +41637,7 @@
         "first": 8335,
         "count": 3
       },
-      "sha256": "62a8ff825cb6da6a4e76c065d1828a64c9353196e1de3ac97b091c66543d2bc1"
+      "sha256": "0272c4db30e9be3f2c8b944626c7383f831ddca2e1fe04b44748e9847b523944"
     },
     {
       "key": "dnd2024:equipment/chain_5_gp",
@@ -41862,7 +41862,7 @@
         "first": 8378,
         "count": 5
       },
-      "sha256": "ca1b1ba07aebd5b60f2b00742b1f79b4376f88193b149a870d9d5bf145545854"
+      "sha256": "e829f2c121f50d141be2979db735fd273ea2047c21d984a3bc34ee94b7b0fa1f"
     },
     {
       "key": "dnd2024:equipment/druidic_focus_varies",
@@ -41887,7 +41887,7 @@
         "first": 8383,
         "count": 10
       },
-      "sha256": "b0be456e27ea5908319ccc5c0101df5fde036049eea32180d51d3b04c23f1d91"
+      "sha256": "a0a9ad4f1244595f849985556eb223129fb62bfcb25b5afe5dbf51614738ffe1"
     },
     {
       "key": "dnd2024:equipment/dungeoneer_s_pack_12_gp",
@@ -41912,7 +41912,7 @@
         "first": 8393,
         "count": 5
       },
-      "sha256": "6adcca29d46be540a8ff7aa28d54f52673dcb6a309cb4f5fcb7b41371f0439e4"
+      "sha256": "13ca2fd96dda9f225ae5bd95c7300cabf6310e9fed80142e541126f12793a53c"
     },
     {
       "key": "dnd2024:equipment/entertainer_s_pack_40_gp",
@@ -41937,7 +41937,7 @@
         "first": 8398,
         "count": 5
       },
-      "sha256": "888465f13948d313da2fcbdda658a3057e67bb856d1fb640cad56191d31416b9"
+      "sha256": "2ac4784fa885a4efa0846b06bfefa693c058976f4d3234139ad6b37feb0def12"
     },
     {
       "key": "dnd2024:equipment/explorer_s_pack_10_gp",
@@ -41962,7 +41962,7 @@
         "first": 8403,
         "count": 4
       },
-      "sha256": "507127245339b623ac4774810e713d44cb0b911db719b26c895f66bd81bdaf43"
+      "sha256": "0f23784d4c040ddfaa9aeb66f880af889c7aadb0b1b0a63bfe10da8754217f10"
     },
     {
       "key": "dnd2024:equipment/flask_2_cp",
@@ -42062,7 +42062,7 @@
         "first": 8420,
         "count": 13
       },
-      "sha256": "5b84072e09501bdf639f3723b7daca4b4a4609119703306a282ce428d94751d8"
+      "sha256": "7d464fe9feb69b103ba2bd2072d196e9e1237d7c2647c9a8990194d145bf02d4"
     },
     {
       "key": "dnd2024:equipment/holy_water_25_gp",
@@ -42564,7 +42564,7 @@
         "first": 8568,
         "count": 8
       },
-      "sha256": "7412ae61fa4e97d1f1094adce3d855f4cb85bc5c6655a63db22271b7ee3b7d57"
+      "sha256": "95e45f18b25d081fe73d405d349595e747cd2f0f96d7a4836b3193a864c57bfb"
     },
     {
       "key": "dnd2024:equipment/pole_5_cp",
@@ -42689,7 +42689,7 @@
         "first": 8593,
         "count": 4
       },
-      "sha256": "48c89bb6f321c7cf4412e3f40645981b706b75e6e4c5f9350dcc4639cfda4369"
+      "sha256": "43b8b60e1a11145e00c4a2cdfb0c95282a239d64246eb67ec78e6ef040d53053"
     },
     {
       "key": "dnd2024:equipment/quiver_1_gp",
@@ -42864,7 +42864,7 @@
         "first": 8626,
         "count": 4
       },
-      "sha256": "af85d6ce175e261610a55f3f90c54e7149accc89687562129059382f16f1ca44"
+      "sha256": "34783c829e3445be449dab8e1b0984c876fa0da5872baef6d65560ccf1e9ec11"
     },
     {
       "key": "dnd2024:equipment/shovel_2_gp",
@@ -42939,7 +42939,7 @@
         "first": 8638,
         "count": 12
       },
-      "sha256": "1428b993602190f5de25820c27184216e79b44eaef1a32911ad3035faa01afbb"
+      "sha256": "d983b56449e790e470eb36dc9462963bf0735b400b2b32d5048bdc49804bf31f"
     },
     {
       "key": "dnd2024:equipment/spikes_iron_1_gp",
@@ -43243,7 +43243,7 @@
         "first": 8701,
         "count": 29
       },
-      "sha256": "6f704b45c802dee2a34a91aa1b5dfe8dbd2e03b2893c8f1d91e4f0229177806f"
+      "sha256": "1ff598e5a71b35eb8ad292daf317082bc87613201da6d418bf36fec3d6293c89"
     },
     {
       "key": "dnd2024:rules/mounts_and_vehicles_large_vehicles",
@@ -43294,7 +43294,7 @@
         "first": 8734,
         "count": 20
       },
-      "sha256": "4855cd04a3a57239b0d21a6548e795d42fd8ab344b94a1ac1edfe6963d171bf7"
+      "sha256": "8e5032fcef48427c62e6cfe99fa5b4c6ea0907e7db95bca1ed5bf15220c051f4"
     },
     {
       "key": "dnd2024:rules/mounts_and_vehicles_crew",
@@ -43450,7 +43450,7 @@
         "first": 8789,
         "count": 12
       },
-      "sha256": "2f2da1986df02149e70d211751fd69c08e857289a925df69ea2eb58ba03a55ca"
+      "sha256": "6b66d0ff5fab7e09a9a28e7ea6ac97b7fbbdce2728b5c497a95a564187c4c289"
     },
     {
       "key": "dnd2024:rules/lifestyle_expenses_squalid_1_sp_per_day",
@@ -43659,7 +43659,7 @@
         "first": 8838,
         "count": 14
       },
-      "sha256": "bb5c12d9925f50343baf8167f94120c7b1206035693d186ca2bd3e8943a8822a"
+      "sha256": "d54888ef2d282d375598ae3fe677a4f512264821cd7aa0d9f5b8727dae6a9d1f"
     },
     {
       "key": "dnd2024:rules/spellcasting",
@@ -43685,7 +43685,7 @@
         "first": 8852,
         "count": 16
       },
-      "sha256": "d21316469827b625abf85f15d6c6275243fd631219294b8a60b7f73559681355"
+      "sha256": "bf81413378619bf05e310b7354dba738e2f7cb3e48114e980dda931d8df6929a"
     },
     {
       "key": "dnd2024:rules/magic_items",
@@ -44100,7 +44100,7 @@
         "first": 8999,
         "count": 6
       },
-      "sha256": "e3cffb580187e9e00af576d2cda39238776e08a747783f55290b239147ca69a6"
+      "sha256": "2c60800e87992c5dfed9c84b04cf80efc98670f53f7c5d8e123653ae3a4292a4"
     },
     {
       "key": "dnd2024:rules/scribing_spell_scrolls_prerequisites_for_the_scribe",
@@ -44152,7 +44152,7 @@
         "first": 9014,
         "count": 15
       },
-      "sha256": "b81be9a93a268c24d40e9c3bff95dff57b7642d7b634e73dfeed47a76ad45d6d"
+      "sha256": "c3cd59100e8b89132bf001610c82b3144fa42d6d40afbe2922065b52ffcb1fa3"
     },
     {
       "key": "dnd2024:rules/spells",
@@ -44228,7 +44228,7 @@
         "first": 9038,
         "count": 18
       },
-      "sha256": "765394d0b86e79bf16431d224a589eec4ab384ba43f7ec04ad7f24e7e420f062"
+      "sha256": "bae065209182f8c64181c81e641d649d8c2044925d206b72373b0b1bbc1ad3e1"
     },
     {
       "key": "dnd2024:rules/gaining_spells_always_prepared_spells",
@@ -44802,7 +44802,7 @@
         "first": 9299,
         "count": 7
       },
-      "sha256": "5d021f17e9c8be841234e3722669594f1fb95ff8190dbc7af89ee36020ddd31f"
+      "sha256": "d71374e56c8d07ff4d93c305cfe246852037ef88ac2fe27c406e903bac9ab2b3"
     },
     {
       "key": "dnd2024:rules/casting_spells_combining_spell_effects",
@@ -44878,7 +44878,7 @@
         "first": 9326,
         "count": 8
       },
-      "sha256": "49c3b7370cd3f069f77bc07bda588d67a0f097e5152b754f2bdb7986b588f102"
+      "sha256": "7618cb0066f0f9e8c3cd3126415d1e642a696b7a5320fa1822b1e83689838a43"
     },
     {
       "key": "dnd2024:rules/travel_pace_good_roads",
@@ -44982,7 +44982,7 @@
         "first": 9348,
         "count": 28
       },
-      "sha256": "9cf8730628bc8d44022cff528f54fabf98ea320bc211a3a19033bfff34dcd95d"
+      "sha256": "a9cc6d842eb5525c7f04d5aab2c99e962654409bbd0a70a5eaae1164963223c0"
     },
     {
       "key": "dnd2024:rules/travel_pace_vehicles",
@@ -45263,7 +45263,7 @@
         "first": 9443,
         "count": 9
       },
-      "sha256": "7fb275365f393982dc068345a37c24863d715a76ba36b20e45f74109fcb97545"
+      "sha256": "72c472ba878cda262cb7a3f535ef17a57c0313c7e5bcc3ea1060ea4d54fb3791"
     },
     {
       "key": "dnd2024:rules/magical_contagions_cursed_creatures",
@@ -45825,7 +45825,7 @@
         "first": 9693,
         "count": 31
       },
-      "sha256": "3cb45d956b8328e9af2b8008653898f98da0497c0e08b4663a15e0c9356016e7"
+      "sha256": "32f9b23955d2e8801cad414110f9044afd422c40337de345a96394e2203b23f2"
     },
     {
       "key": "dnd2024:rules/fear_and_mental_stress_mental_stress_effects",
@@ -45851,7 +45851,7 @@
         "first": 9724,
         "count": 24
       },
-      "sha256": "c309f98970a7bef75b1ab410104901a9b396c676bdc055fca3a65e7f28778ae6"
+      "sha256": "d0be6f2886a474db603c4149fa9e4c53c6805a2a5f29ff5caeafcc5ae59d4a1e"
     },
     {
       "key": "dnd2024:rules/fear_and_mental_stress_prolonged_effects",
@@ -46442,7 +46442,7 @@
         "first": 9970,
         "count": 29
       },
-      "sha256": "2653f3700fc3d59d195f14b54499036bf380509dd400bb6387ce116f50cf6611"
+      "sha256": "c324a6711bb79a6f046818e9cd8a5c2b048c9f75c36506df4eed51b2d065c9c1"
     },
     {
       "key": "dnd2024:rules/traps_falling_net",
@@ -46468,7 +46468,7 @@
         "first": 9999,
         "count": 35
       },
-      "sha256": "d72ba866b802a372b6a7e6ed523b389a322343153c76b6ef4eb885bc20008774"
+      "sha256": "9f3261a7ca4e11d37e1777f5520494195a6a763e2560e5921bfe9c25819af81c"
     },
     {
       "key": "dnd2024:rules/traps_fire_casting_statue",
@@ -46495,7 +46495,7 @@
         "first": 10034,
         "count": 37
       },
-      "sha256": "b2182563720914f37ac8c99c7b489e275d27b89b79244aa64fd292e3925e75be"
+      "sha256": "a2fb724e30d3720a06e827d83f306b6c4052b41108699516f0ea39c53c3186ab"
     },
     {
       "key": "dnd2024:rules/traps_hidden_pit",
@@ -46521,7 +46521,7 @@
         "first": 10071,
         "count": 32
       },
-      "sha256": "8714db38e0965c3ba981a1caf6ef0e4d169b463d5ab55c2d0375e40bd1ea39bb"
+      "sha256": "ff2ac4976fbf901eca30d065ca25125c802c85605c5c65a8cfd348794f6c3796"
     },
     {
       "key": "dnd2024:rules/traps_poisoned_darts",
@@ -46547,7 +46547,7 @@
         "first": 10103,
         "count": 30
       },
-      "sha256": "b3f0890ec86031a5ef716292f36cc9cafa49121c8a1930af3c4b37d0b73a118d"
+      "sha256": "9b1e0b6044e72a9eeefacac87a2271c033e68194633e1703b9af505c25c83afa"
     },
     {
       "key": "dnd2024:rules/traps_poisoned_needle",
@@ -46574,7 +46574,7 @@
         "first": 10133,
         "count": 30
       },
-      "sha256": "cde72ca86be439d04103746f7e548cf984747a0ef30816498a8015f0edbb4606"
+      "sha256": "4f36e66ea6488795517345d6fa275ed4cca9916e623bcdc7349947a2ee1a9100"
     },
     {
       "key": "dnd2024:rules/traps_rolling_stone",
@@ -46600,7 +46600,7 @@
         "first": 10163,
         "count": 41
       },
-      "sha256": "4b2141a6890a143b05c795d0ab9e00ab187b1072db05ea2edeb9a556bda7206b"
+      "sha256": "a6be7bd6af617d6fa8199f7b1f7c94b275db9605dc10d451c811be3a158343a0"
     },
     {
       "key": "dnd2024:rules/traps_spiked_pit",
@@ -46626,7 +46626,7 @@
         "first": 10204,
         "count": 39
       },
-      "sha256": "475319e030011b9b9930d77324e003d13cd1455df23bb052ba0dc0dda6778545"
+      "sha256": "d3eb37ab8f4b90bf1eb30ea8caffb173c2667dcd82aca7672eb82ef1399e5c6b"
     },
     {
       "key": "dnd2024:rules/combat_encounters",
@@ -46726,7 +46726,7 @@
         "first": 10287,
         "count": 29
       },
-      "sha256": "6d47db5ccab138a8e3dcd8858cbef403e435a032e03e3f39a88699e57415c68e"
+      "sha256": "21077deefa6f4bbd5ad59124950d7c4b345f10a583ddfacc436f80d1cfc83fb6"
     },
     {
       "key": "dnd2024:rules/combat_encounters_step_3_spend_your_budget",
@@ -46753,7 +46753,7 @@
         "first": 10316,
         "count": 29
       },
-      "sha256": "c1c888e65278ff9f7ec80038cf8071b523656bcc09620981e1cf897bfb81e514"
+      "sha256": "cdbce9ee245804192f912ee3b3761948c4c619f653c973476c9c52fbd96a4aa2"
     },
     {
       "key": "dnd2024:rules/combat_encounters_troubleshooting",
@@ -47129,7 +47129,7 @@
         "first": 10497,
         "count": 10
       },
-      "sha256": "df329aa6136065b333cee93c2cca287c61a0a4697a6b0de1ce9ae5c7b084d3bf"
+      "sha256": "4bd02fbb52bd57affb5e8657d026e997d63be9e608904b008f6d36bf505986cf"
     },
     {
       "key": "dnd2024:rules/magic_item_categories_wands",
@@ -47599,7 +47599,7 @@
         "first": 10698,
         "count": 35
       },
-      "sha256": "266933d915132c5678ec11f64c2e1b5affb2221247aadb6ce6cea0f04ee557a0"
+      "sha256": "611d7b4e90643973727d7fe4be099541777fafcadab29d75a7ef8f3d72bc16bd"
     },
     {
       "key": "dnd2024:rules/sentient_magic_items",
@@ -47701,7 +47701,7 @@
         "first": 10757,
         "count": 5
       },
-      "sha256": "5da0f95c0bc66812398785345cd505cc51098a895a23e8546eb62860e2431bcb"
+      "sha256": "a28f0ff45915ab70254eca5d0cf668bf62939119334f07c2bea90b3241af7c88"
     },
     {
       "key": "dnd2024:rules/sentient_magic_items_communication",
@@ -47727,7 +47727,7 @@
         "first": 10762,
         "count": 6
       },
-      "sha256": "699d21f5b962a0c56dc9cd4d14b1d7694d08a502d3cda74f89c816ee8b99f5c6"
+      "sha256": "d2bac8ff77d3c389dabee09664829c2c59e31d9c4ac00a31c4e2d5ab0012e349"
     },
     {
       "key": "dnd2024:rules/sentient_magic_items_senses",
@@ -47753,7 +47753,7 @@
         "first": 10768,
         "count": 4
       },
-      "sha256": "aab2a5280bf115ab839a29b2628d4cc567257815d95ab7891fc46e6e6d9e397a"
+      "sha256": "1747e57e3416cf204bd47642e0300071a3460f35df292c23604e4fd7f00fc142"
     },
     {
       "key": "dnd2024:rules/sentient_magic_items_special_purpose",
@@ -47779,7 +47779,7 @@
         "first": 10772,
         "count": 59
       },
-      "sha256": "71f5ee5d7cf3f1d0612749477e5cb677c9e1a2aa85f83c0f69fecf8aaf50e057"
+      "sha256": "9917a3a08bc1202843d75fcad0cd92f631243d68080a8d46798165eb406d5a64"
     },
     {
       "key": "dnd2024:rules/sentient_magic_items_conflict",
@@ -48057,7 +48057,7 @@
         "first": 10963,
         "count": 25
       },
-      "sha256": "00edcd1556d93fb9e6b7bc95b63fe491eb0311009d1d10f30d3cb23c96d03261"
+      "sha256": "1961dba6575ad29aef5ff48d051b8aca1f8af2d45a5781c3759863abe018c20a"
     },
     {
       "key": "dnd2024:rules/parts_of_a_stat_block_speed",
@@ -48135,7 +48135,7 @@
         "first": 10998,
         "count": 8
       },
-      "sha256": "d0c8615074594e46bcd8c840af1b2eb518af1c7d2fc4fab568beac669ed1e822"
+      "sha256": "ff007cce273a8d467d8d8e5ef67ac561ac2d80e5e982d86cd96b13da7de20997"
     },
     {
       "key": "dnd2024:rules/parts_of_a_stat_block_resistances_and_vulnerabilities",
@@ -48396,7 +48396,7 @@
         "first": 11084,
         "count": 29
       },
-      "sha256": "5c40828bbc2b3cf0b72e2529b509b26ac2d205918383bcfb2fe92939c2518166"
+      "sha256": "a14c46fc4de330938f9c91665614304dc4c3c057597389ae9876e1b3bd935912"
     },
     {
       "key": "dnd2024:rules/parts_of_a_stat_block_proficiency_bonus",
@@ -48422,7 +48422,7 @@
         "first": 11113,
         "count": 12
       },
-      "sha256": "fb630a2a6379d7a3f93d7b54f8b1c1ac692d4a07fb484ce4f862299e0930202e"
+      "sha256": "1fd5b29b185de7a6c49a07ef22b97fa2c99aac0cb13a71fc564c68fc497b7844"
     },
     {
       "key": "dnd2024:rules/parts_of_a_stat_block_traits",
@@ -49065,7 +49065,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "e2bfc39a21f9de17a134b3fea1f7faaea771872bfe1be24ae876dd8a339eea39",
-      "sha256": "6281a7200517aabce2530c0f2696338a74345a7cda3fed5b5fd992c1726a6ed6"
+      "sha256": "0f61c538c86f842a9bfeca3f3a74ff0760e99714373cb3d6f11828ca1e91c79c"
     },
     {
       "key": "dnd2024:equipment/greataxe",
@@ -49086,7 +49086,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "81d79a6895bea0e561c0c467165f338f271f676fa7ca16e50dba7bdea4dc94ac",
-      "sha256": "147ade9ca4be3614c1f33aaf3b30af66d0c81d7533596a0180a8f6c8911241cb"
+      "sha256": "cf4aa14e41eea80143148cfa25f7173a03bdb36b1235cf1f768b299b4d7ec934"
     },
     {
       "key": "dnd2024:equipment/greatsword",
@@ -49107,7 +49107,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "51fad0d320bdc8bd331beb17ebcf2c5d6f2d11c0e216ca7112f0a5f92b747f0b",
-      "sha256": "968d4d9d548a86c72361a606c9dcc3a3073bda67d97345081a6ec31b430ebf5e"
+      "sha256": "ebd04e973d1cbcdfaa2aa019f389f036ea596ea2f093cc658c4f3e58b086720a"
     },
     {
       "key": "dnd2024:equipment/halberd",
@@ -49128,7 +49128,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "c5044d8185e43a209a420bb43e12463c80d4fa80cf7c5bd6a8266e911910ca8b",
-      "sha256": "dab77afdc414bc762de6759088469722325f0d338cb364062c9e86f3fab256b6"
+      "sha256": "e3ac104f220a03aa312bc812d583e5c03f9c34054c4282c9d0f251cc83088653"
     },
     {
       "key": "dnd2024:equipment/lance",
@@ -49149,7 +49149,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "6ccaacef05effc93f62f76f6c59ed1e62d539b950378550496896966ff776299",
-      "sha256": "d252878832113dc889490de1f4875623f2c6455c089dccfcf642ee4d3902a663"
+      "sha256": "ff0cef147c0c91e5dfd1a0c1a4a156f7a7dced8104587b8d053ae4887df99dbb"
     },
     {
       "key": "dnd2024:equipment/longsword",
@@ -49191,7 +49191,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "c00667d95de31024eca633050832bd1a70550f4e83edab45bceac6689e538c6a",
-      "sha256": "77df0e73c7fc9a604657297889af97df9210fd0c910aa083b286ffefcb0c4014"
+      "sha256": "4504c0cd7e705ba6c7d5b926e4bfa49b8c42d30b8ffca165d509a34ec8e90976"
     },
     {
       "key": "dnd2024:equipment/morningstar",
@@ -49233,7 +49233,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "12c46bdec6ee41f02666bf24d44cff5ad9105c658302fb1400662b6a0991b21b",
-      "sha256": "0328698f1c0d3a30c725049a4e1149e3aa0d9a3e3bcbc6dc86c1d8ef5f3b5e41"
+      "sha256": "30425f0a9e3c1105802b5a637bdb97952f2f35fadeb362d9a99f37e8875c8785"
     },
     {
       "key": "dnd2024:equipment/rapier",
@@ -49275,7 +49275,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "9df0f9829fa632f97fc826acd242db5e51f02776e3f0479106038b2b163d81fb",
-      "sha256": "eb9ef19ddabfa7d55de9ebe58c2b9302032c8cb7d95d06767a5f111e3f24be13"
+      "sha256": "05a88bafcc530fc5f2d1ef17643e79c21592b8a82471377a0245c2ece8a0d62a"
     },
     {
       "key": "dnd2024:equipment/shortsword",
@@ -49296,7 +49296,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "00cc2b0a6fe2dc165a4489e63bc7412599dca41fe97ae436ab520bc4c1bfe8b1",
-      "sha256": "fcb88693009fca25415cb074aaace6f0c06d7b90baf68fd5321ccc8263dcd6d0"
+      "sha256": "a1283ba3f5e6ac676a95e1d8ebe5e42d9a3108d9d2392307773f3f018fecb09a"
     },
     {
       "key": "dnd2024:equipment/trident",
@@ -49380,7 +49380,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "f84cbc0bf769aeba7dfe83c5a9ed2706e2d1c236ac46ff0ab60a3964aa51dcdc",
-      "sha256": "1a863c4cdfac25a146d3af73c87a28ca14c2f185d21a191d6484eb58c9189e56"
+      "sha256": "bd89cb1d80239c4641a63c5a44dc8da3498b771807efd94bec26438369d5b373"
     },
     {
       "key": "dnd2024:equipment/blowgun",
@@ -49800,7 +49800,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "f1c67836986e4a06470b4783985047639fe284fc265dd3ee70c8919de2de2ff1",
-      "sha256": "427e7e455b4d15f675372d9728b49bc083fcb68f1ced020ec1ce9cbe937b8c36"
+      "sha256": "193823ac0be5b2e373e22caadf75fe5904407237c54d76a4a870e5714d2397e1"
     },
     {
       "key": "dnd2024:tables/bard_progression",
@@ -49884,7 +49884,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "854606242259ecd464f98697dc02151d17f4264b7025a9f1e976c6b4ae63e3ca",
-      "sha256": "e4f5a384ceccdca100ab283f8469a076364adf681d061d56940e231191d37a50"
+      "sha256": "c02926481781fb57450e13fe1846d3f871004113de9d5d21645b557352b6e4d3"
     },
     {
       "key": "dnd2024:tables/monk_progression",
@@ -49905,7 +49905,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "541a87b4c254b575f6cc618b79f1a58be0a990da386b479c808d9d04d93ae193",
-      "sha256": "13e5ac3824178cf34351c0ccf46287cb488ddd530827bc5f232b501c444488e3"
+      "sha256": "bcf0e0cd618602506db9e376aab17d13c0bd564e4e77652395c765faa5c14eb9"
     },
     {
       "key": "dnd2024:tables/paladin_progression",
@@ -49926,7 +49926,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "144fe61aeec82979426caafb34a00af4eb2bd6ccdb4838b4dae3f3300f52bafd",
-      "sha256": "6f9767df2b3bdba0eb065d054a3b9497e747ae88a7f0d2049b1377b3ef90ec8e"
+      "sha256": "cb762b68f7468ff04c3b8fa89b73cc8f26d24b29e8149a6a1df8ae94579fa405"
     },
     {
       "key": "dnd2024:tables/ranger_progression",
@@ -49947,7 +49947,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "821efecfa9a2f5be5825a25898020857c2f733ad12abf96343d4e6c45524834a",
-      "sha256": "87e1a2db82505e522d7e7d7ffdf98f6972f9d4d7f8d57c0560be05ed8286b73d"
+      "sha256": "0bc467bc66d6df44832433d3d9f6d6871dc3df1b2594501af64c1b51ed30198c"
     },
     {
       "key": "dnd2024:tables/rogue_progression",
@@ -49968,7 +49968,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "cd438835652d674cc7f23e50d6dd7a89bb7f5db907547335a36c2987be9af029",
-      "sha256": "8e193e353d8049826568f4a10e81b82096a2e663472f6d64d4f9dda4649b53ee"
+      "sha256": "56697cd367035afd300365bddbc3bd7406712e5d9543a4541073047d0e8c00fd"
     },
     {
       "key": "dnd2024:tables/sorcerer_progression",
@@ -50010,7 +50010,7 @@
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
       "specification_sha256": "40729e3a6870c2f4c82fc33d22831d07d271a696ad085bafe373a1940c8ea0e5",
-      "sha256": "a4c493da67a2dfcae2e58d12a400f0ad442afdf6bb942308f806b2d0cfabcb58"
+      "sha256": "739dd246749b3981e4d3988910cb4d54bf374fb1164c9b1167f1aec7d5d571e7"
     },
     {
       "key": "dnd2024:tables/wizard_progression",

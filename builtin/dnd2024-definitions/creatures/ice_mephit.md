@@ -156,33 +156,60 @@ trigger: self.dies
 
 ##### Claw
 
-<!-- splat:yaml path=splat_rule/parameters/features/claw -->
+<!-- splat:values path=splat_rule/parameters/features/claw -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/claw/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 3
-  reach_ft: 5
-hit:
-  damage:
-  - average: 3
-    roll:
-      count: 1
-      sides: 4
-      modifier: 1
-    type: slashing
-  - average: 2
-    roll:
-      count: 1
-      sides: 4
-      modifier: 0
-    type: cold
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 3
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/claw/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 3 ` | ` 1 ` | ` 4 ` | ` 1 ` | ` Slashing ` |
+| ` row_2 ` | ` 2 ` | ` 1 ` | ` 4 ` | ` 0 ` | ` Cold ` |
 
 ##### Fog cloud
 

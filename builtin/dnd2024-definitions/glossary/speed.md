@@ -76,16 +76,40 @@ Original layout: [[../../srd-5.2.1/pages/188|page 188]].
 
 #### On mode switch
 
-<!-- splat:yaml path=splat_rule/parameters/on_mode_switch -->
+<!-- splat:values path=splat_rule/parameters/on_mode_switch -->
 
-```yaml
-remaining:
-  op: subtract
-  args:
-  - var: new_speed
-  - var: distance_already_moved
-usable_if_remaining_greater_than: 0
-```
+| Field | Value |
+| --- | --- |
+| ` usable_if_remaining_greater_than ` | ` 0 ` |
+
+##### Remaining
+
+<!-- splat:values path=splat_rule/parameters/on_mode_switch/remaining -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` subtract ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/on_mode_switch/remaining/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Var:
+    path: var
+    type: symbol
+-->
+
+| Key | Var |
+| --- | --- |
+| ` row_1 ` | ` New speed ` |
+| ` row_2 ` | ` Distance already moved ` |
 
 #### Temporary speed changes
 

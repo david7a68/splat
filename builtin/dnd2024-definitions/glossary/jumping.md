@@ -37,25 +37,22 @@ Original layout: [[../../srd-5.2.1/pages/184|page 184]].
 
 #### Select one
 
-<!-- splat:rows path=splat_rule/parameters/select_one -->
+<!-- splat:table
+path: splat_rule/parameters/select_one
+key: Rule
+order:
+- long_jump
+- high_jump
+columns:
+  Rule:
+    path: rule
+    type: reference
+  Direction:
+    path: direction
+    type: symbol
+-->
 
-| Row | direction |
+| Rule | Direction |
 | --- | --- |
-| ` 0 ` | ` horizontal ` |
-| ` 1 ` | ` vertical ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/select_one/0/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:glossary/long_jump ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/select_one/1/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:glossary/high_jump ` |
+| [Long Jump](<long_jump.md> "dnd2024:glossary/long_jump") | ` Horizontal ` |
+| [High Jump](<high_jump.md> "dnd2024:glossary/high_jump") | ` Vertical ` |

@@ -93,34 +93,89 @@ From SRD 5.2.1 page 62.
 
 #### Rows
 
-<!-- splat:rows path=splat_rule/parameters/rows -->
+<!-- splat:table
+path: splat_rule/parameters/rows
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+- row_17
+- row_18
+- row_19
+- row_20
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Proficiency bonus:
+    path: proficiency_bonus
+    type: integer
+  Features text:
+    path: features_text
+    type: string
+  Sneak attack:
+    path: sneak_attack
+    type: string
+  Sneak attack dice dice count:
+    path: sneak_attack_dice/dice/count
+    type: integer
+  Sneak attack dice dice sides:
+    path: sneak_attack_dice/dice/sides
+    type: integer
+  Sneak attack dice bonus:
+    path: sneak_attack_dice/bonus
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | level | proficiency_bonus | features_text | sneak_attack |
-| --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 2 ` | ` Expertise, Sneak Attack, Thieves’ Cant, Weapon Mastery ` | ` 1d6 ` |
-| ` 1 ` | ` 2 ` | ` 2 ` | ` Cunning Action ` | ` 1d6 ` |
-| ` 2 ` | ` 3 ` | ` 2 ` | ` Rogue Subclass, Steady Aim ` | ` 2d6 ` |
-| ` 3 ` | ` 4 ` | ` 2 ` | ` Ability Score Improvement ` | ` 2d6 ` |
-| ` 4 ` | ` 5 ` | ` 3 ` | ` Cunning Strike, Uncanny Dodge ` | ` 3d6 ` |
-| ` 5 ` | ` 6 ` | ` 3 ` | ` Expertise ` | ` 3d6 ` |
-| ` 6 ` | ` 7 ` | ` 3 ` | ` Evasion, Reliable Talent ` | ` 4d6 ` |
-| ` 7 ` | ` 8 ` | ` 3 ` | ` Ability Score Improvement ` | ` 4d6 ` |
-| ` 8 ` | ` 9 ` | ` 4 ` | ` Subclass feature ` | ` 5d6 ` |
-| ` 9 ` | ` 10 ` | ` 4 ` | ` Ability Score Improvement ` | ` 5d6 ` |
-| ` 10 ` | ` 11 ` | ` 4 ` | ` Improved Cunning Strike ` | ` 6d6 ` |
-| ` 11 ` | ` 12 ` | ` 4 ` | ` Ability Score Improvement ` | ` 6d6 ` |
-| ` 12 ` | ` 13 ` | ` 5 ` | ` Subclass feature ` | ` 7d6 ` |
-| ` 13 ` | ` 14 ` | ` 5 ` | ` Devious Strikes ` | ` 7d6 ` |
-| ` 14 ` | ` 15 ` | ` 5 ` | ` Slippery Mind ` | ` 8d6 ` |
-| ` 15 ` | ` 16 ` | ` 5 ` | ` Ability Score Improvement ` | ` 8d6 ` |
-| ` 16 ` | ` 17 ` | ` 6 ` | ` Subclass feature ` | ` 9d6 ` |
-| ` 17 ` | ` 18 ` | ` 6 ` | ` Elusive ` | ` 9d6 ` |
-| ` 18 ` | ` 19 ` | ` 6 ` | ` Epic Boon ` | ` 10d6 ` |
-| ` 19 ` | ` 20 ` | ` 6 ` | ` Stroke of Luck ` | ` 10d6 ` |
+| Key | Level | Proficiency bonus | Features text | Sneak attack | Sneak attack dice dice count | Sneak attack dice dice sides | Sneak attack dice bonus | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 2 ` | ` Expertise, Sneak Attack, Thieves’ Cant, Weapon Mastery ` | ` 1d6 ` | ` 1 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_1 "section:row_1") |
+| ` row_2 ` | ` 2 ` | ` 2 ` | ` Cunning Action ` | ` 1d6 ` | ` 1 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_2 "section:row_2") |
+| ` row_3 ` | ` 3 ` | ` 2 ` | ` Rogue Subclass, Steady Aim ` | ` 2d6 ` | ` 2 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_3 "section:row_3") |
+| ` row_4 ` | ` 4 ` | ` 2 ` | ` Ability Score Improvement ` | ` 2d6 ` | ` 2 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_4 "section:row_4") |
+| ` row_5 ` | ` 5 ` | ` 3 ` | ` Cunning Strike, Uncanny Dodge ` | ` 3d6 ` | ` 3 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_5 "section:row_5") |
+| ` row_6 ` | ` 6 ` | ` 3 ` | ` Expertise ` | ` 3d6 ` | ` 3 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_6 "section:row_6") |
+| ` row_7 ` | ` 7 ` | ` 3 ` | ` Evasion, Reliable Talent ` | ` 4d6 ` | ` 4 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_7 "section:row_7") |
+| ` row_8 ` | ` 8 ` | ` 3 ` | ` Ability Score Improvement ` | ` 4d6 ` | ` 4 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_8 "section:row_8") |
+| ` row_9 ` | ` 9 ` | ` 4 ` | ` Subclass feature ` | ` 5d6 ` | ` 5 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_9 "section:row_9") |
+| ` row_10 ` | ` 10 ` | ` 4 ` | ` Ability Score Improvement ` | ` 5d6 ` | ` 5 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_10 "section:row_10") |
+| ` row_11 ` | ` 11 ` | ` 4 ` | ` Improved Cunning Strike ` | ` 6d6 ` | ` 6 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_11 "section:row_11") |
+| ` row_12 ` | ` 12 ` | ` 4 ` | ` Ability Score Improvement ` | ` 6d6 ` | ` 6 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_12 "section:row_12") |
+| ` row_13 ` | ` 13 ` | ` 5 ` | ` Subclass feature ` | ` 7d6 ` | ` 7 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_13 "section:row_13") |
+| ` row_14 ` | ` 14 ` | ` 5 ` | ` Devious Strikes ` | ` 7d6 ` | ` 7 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_14 "section:row_14") |
+| ` row_15 ` | ` 15 ` | ` 5 ` | ` Slippery Mind ` | ` 8d6 ` | ` 8 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_15 "section:row_15") |
+| ` row_16 ` | ` 16 ` | ` 5 ` | ` Ability Score Improvement ` | ` 8d6 ` | ` 8 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_16 "section:row_16") |
+| ` row_17 ` | ` 17 ` | ` 6 ` | ` Subclass feature ` | ` 9d6 ` | ` 9 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_17 "section:row_17") |
+| ` row_18 ` | ` 18 ` | ` 6 ` | ` Elusive ` | ` 9d6 ` | ` 9 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_18 "section:row_18") |
+| ` row_19 ` | ` 19 ` | ` 6 ` | ` Epic Boon ` | ` 10d6 ` | ` 10 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_19 "section:row_19") |
+| ` row_20 ` | ` 20 ` | ` 6 ` | ` Stroke of Luck ` | ` 10d6 ` | ` 10 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_20 "section:row_20") |
 
-##### Grants
+##### Row 1
 
-<!-- splat:rows path=splat_rule/parameters/rows/0/grants -->
+^splat-0f5cfe33-row_1
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_1/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -131,7 +186,7 @@ From SRD 5.2.1 page 62.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/0/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_1/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -139,7 +194,7 @@ From SRD 5.2.1 page 62.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/0/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_1/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -147,7 +202,7 @@ From SRD 5.2.1 page 62.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/0/grants/2/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_1/grants/2/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -155,26 +210,19 @@ From SRD 5.2.1 page 62.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/0/grants/3/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_1/grants/3/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_1_weapon_mastery ` |
 
-##### Sneak attack dice
+##### Row 2
 
-<!-- splat:yaml path=splat_rule/parameters/rows/0/sneak_attack_dice -->
+^splat-0f5cfe33-row_2
 
-```yaml
-dice:
-  count: 1
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/1/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_2/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -182,26 +230,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/1/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_2/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_2_cunning_action ` |
 
-##### Sneak attack dice
+##### Row 3
 
-<!-- splat:yaml path=splat_rule/parameters/rows/1/sneak_attack_dice -->
+^splat-0f5cfe33-row_3
 
-```yaml
-dice:
-  count: 1
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/2/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_3/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -210,7 +251,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/2/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_3/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -218,26 +259,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/2/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_3/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_3_steady_aim ` |
 
-##### Sneak attack dice
+##### Row 4
 
-<!-- splat:yaml path=splat_rule/parameters/rows/2/sneak_attack_dice -->
+^splat-0f5cfe33-row_4
 
-```yaml
-dice:
-  count: 2
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/3/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_4/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -245,26 +279,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/3/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_4/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_4_ability_score_improvement ` |
 
-##### Sneak attack dice
+##### Row 5
 
-<!-- splat:yaml path=splat_rule/parameters/rows/3/sneak_attack_dice -->
+^splat-0f5cfe33-row_5
 
-```yaml
-dice:
-  count: 2
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/4/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_5/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -273,7 +300,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/4/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_5/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -281,26 +308,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/4/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_5/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_5_uncanny_dodge ` |
 
-##### Sneak attack dice
+##### Row 6
 
-<!-- splat:yaml path=splat_rule/parameters/rows/4/sneak_attack_dice -->
+^splat-0f5cfe33-row_6
 
-```yaml
-dice:
-  count: 3
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/5/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_6/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -308,26 +328,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/5/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_6/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_1_expertise ` |
 
-##### Sneak attack dice
+##### Row 7
 
-<!-- splat:yaml path=splat_rule/parameters/rows/5/sneak_attack_dice -->
+^splat-0f5cfe33-row_7
 
-```yaml
-dice:
-  count: 3
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/6/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_7/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -336,7 +349,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/6/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_7/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -344,26 +357,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/6/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_7/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_7_reliable_talent ` |
 
-##### Sneak attack dice
+##### Row 8
 
-<!-- splat:yaml path=splat_rule/parameters/rows/6/sneak_attack_dice -->
+^splat-0f5cfe33-row_8
 
-```yaml
-dice:
-  count: 4
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/7/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_8/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -371,45 +377,31 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/7/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_8/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_4_ability_score_improvement ` |
 
-##### Sneak attack dice
+##### Row 9
 
-<!-- splat:yaml path=splat_rule/parameters/rows/7/sneak_attack_dice -->
+^splat-0f5cfe33-row_9
 
-```yaml
-dice:
-  count: 4
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/8/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_9/grants -->
 
 | Row | operation | class_level |
 | --- | --- | --- |
 | ` 0 ` | ` grant_selected_subclass_features ` | ` 9 ` |
 
-##### Sneak attack dice
+##### Row 10
 
-<!-- splat:yaml path=splat_rule/parameters/rows/8/sneak_attack_dice -->
+^splat-0f5cfe33-row_10
 
-```yaml
-dice:
-  count: 5
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/9/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_10/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -417,26 +409,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/9/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_10/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_4_ability_score_improvement ` |
 
-##### Sneak attack dice
+##### Row 11
 
-<!-- splat:yaml path=splat_rule/parameters/rows/9/sneak_attack_dice -->
+^splat-0f5cfe33-row_11
 
-```yaml
-dice:
-  count: 5
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/10/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_11/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -444,26 +429,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/10/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_11/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_11_improved_cunning_strike ` |
 
-##### Sneak attack dice
+##### Row 12
 
-<!-- splat:yaml path=splat_rule/parameters/rows/10/sneak_attack_dice -->
+^splat-0f5cfe33-row_12
 
-```yaml
-dice:
-  count: 6
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/11/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_12/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -471,45 +449,31 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/11/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_12/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_4_ability_score_improvement ` |
 
-##### Sneak attack dice
+##### Row 13
 
-<!-- splat:yaml path=splat_rule/parameters/rows/11/sneak_attack_dice -->
+^splat-0f5cfe33-row_13
 
-```yaml
-dice:
-  count: 6
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/12/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_13/grants -->
 
 | Row | operation | class_level |
 | --- | --- | --- |
 | ` 0 ` | ` grant_selected_subclass_features ` | ` 13 ` |
 
-##### Sneak attack dice
+##### Row 14
 
-<!-- splat:yaml path=splat_rule/parameters/rows/12/sneak_attack_dice -->
+^splat-0f5cfe33-row_14
 
-```yaml
-dice:
-  count: 7
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/13/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_14/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -517,26 +481,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/13/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_14/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_14_devious_strikes ` |
 
-##### Sneak attack dice
+##### Row 15
 
-<!-- splat:yaml path=splat_rule/parameters/rows/13/sneak_attack_dice -->
+^splat-0f5cfe33-row_15
 
-```yaml
-dice:
-  count: 7
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/14/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_15/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -544,26 +501,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/14/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_15/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_15_slippery_mind ` |
 
-##### Sneak attack dice
+##### Row 16
 
-<!-- splat:yaml path=splat_rule/parameters/rows/14/sneak_attack_dice -->
+^splat-0f5cfe33-row_16
 
-```yaml
-dice:
-  count: 8
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/15/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_16/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -571,45 +521,31 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/15/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_16/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_4_ability_score_improvement ` |
 
-##### Sneak attack dice
+##### Row 17
 
-<!-- splat:yaml path=splat_rule/parameters/rows/15/sneak_attack_dice -->
+^splat-0f5cfe33-row_17
 
-```yaml
-dice:
-  count: 8
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/16/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_17/grants -->
 
 | Row | operation | class_level |
 | --- | --- | --- |
 | ` 0 ` | ` grant_selected_subclass_features ` | ` 17 ` |
 
-##### Sneak attack dice
+##### Row 18
 
-<!-- splat:yaml path=splat_rule/parameters/rows/16/sneak_attack_dice -->
+^splat-0f5cfe33-row_18
 
-```yaml
-dice:
-  count: 9
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/17/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_18/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -617,26 +553,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/17/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_18/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_18_elusive ` |
 
-##### Sneak attack dice
+##### Row 19
 
-<!-- splat:yaml path=splat_rule/parameters/rows/17/sneak_attack_dice -->
+^splat-0f5cfe33-row_19
 
-```yaml
-dice:
-  count: 9
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/18/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_19/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -644,26 +573,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/18/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_19/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_19_epic_boon ` |
 
-##### Sneak attack dice
+##### Row 20
 
-<!-- splat:yaml path=splat_rule/parameters/rows/18/sneak_attack_dice -->
+^splat-0f5cfe33-row_20
 
-```yaml
-dice:
-  count: 10
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/19/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_20/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -671,22 +593,11 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/19/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_20/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/rogue_level_20_stroke_of_luck ` |
-
-##### Sneak attack dice
-
-<!-- splat:yaml path=splat_rule/parameters/rows/19/sneak_attack_dice -->
-
-```yaml
-dice:
-  count: 10
-  sides: 6
-bonus: 0
-```
 
 #### Class definition
 

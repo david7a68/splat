@@ -274,38 +274,103 @@ replacement:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 21 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- detect_magic
+- mind_spike
+- geas
+- modify_memory
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Resource scope | Recovery | Details |
+| --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-detect_magic "section:detect_magic") |
+| [Mind Spike](<../spells/mind_spike.md> "dnd2024:spells/mind_spike") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-mind_spike "section:mind_spike") |
+| [Geas](<../spells/geas.md> "dnd2024:spells/geas") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-geas "section:geas") |
+| [Modify Memory](<../spells/modify_memory.md> "dnd2024:spells/modify_memory") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | [Rules](#^splat-68a383d1-modify_memory "section:modify_memory") |
+
+###### Detect magic
+
+^splat-68a383d1-detect_magic
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@detect_magic/cast_level -->
 
 ```yaml
-economy: action
-op: cast_spell_choice
-ability: charisma
-spells:
-- spell:
-    key: dnd2024:spells/detect_magic
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/mind_spike
-  frequency: at_will
-  cast_level: 5
-- spell:
-    key: dnd2024:spells/geas
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/modify_memory
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- material
-save_dc: 21
+spell_minimum
+```
+
+###### Mind spike
+
+^splat-68a383d1-mind_spike
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@mind_spike/cast_level -->
+
+```yaml
+5
+```
+
+###### Geas
+
+^splat-68a383d1-geas
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@geas/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Modify memory
+
+^splat-68a383d1-modify_memory
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@modify_memory/cast_level -->
+
+```yaml
+spell_minimum
 ```
 
 ##### Noxious miasma
@@ -412,12 +477,27 @@ steps:
 
 ##### Special
 
-<!-- splat:rows path=splat_rule/parameters/senses/special -->
+<!-- splat:table
+path: splat_rule/parameters/senses/special
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range feet:
+    path: range_feet
+    type: integer
+-->
 
-| Row | sense | range_feet |
+| Key | Sense | Range feet |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 60 ` |
-| ` 1 ` | ` darkvision ` | ` 120 ` |
+| ` row_1 ` | ` Blindsight ` | ` 60 ` |
+| ` row_2 ` | ` Darkvision ` | ` 120 ` |
 
 #### Communication
 

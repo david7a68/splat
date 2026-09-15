@@ -237,63 +237,60 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-operation: spellcasting
-ability: charisma
-components_waived:
-- verbal
-- somatic
-- material
-save_dc: 14
-options:
-- spell:
-    key: dnd2024:spells/detect_evil_and_good
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/druidcraft
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/calm_emotions
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/dispel_evil_and_good
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/entangle
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/pass_without_trace
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/word_of_recall
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["verbal", "somatic", "material"] ` |
+| ` save_dc ` | ` 14 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- detect_evil_and_good
+- druidcraft
+- calm_emotions
+- dispel_evil_and_good
+- entangle
+- pass_without_trace
+- word_of_recall
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Use pool | Recovery |
+| --- | --- | --- | --- | --- |
+| [Detect Evil and Good](<../spells/detect_evil_and_good.md> "dnd2024:spells/detect_evil_and_good") | ` At will ` |  |  |  |
+| [Druidcraft](<../spells/druidcraft.md> "dnd2024:spells/druidcraft") | ` At will ` |  |  |  |
+| [Calm Emotions](<../spells/calm_emotions.md> "dnd2024:spells/calm_emotions") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Dispel Evil and Good](<../spells/dispel_evil_and_good.md> "dnd2024:spells/dispel_evil_and_good") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Entangle](<../spells/entangle.md> "dnd2024:spells/entangle") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Pass without Trace](<../spells/pass_without_trace.md> "dnd2024:spells/pass_without_trace") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Word of Recall](<../spells/word_of_recall.md> "dnd2024:spells/word_of_recall") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Unicorn s blessing
 
@@ -341,28 +338,67 @@ effects:
 
 ##### Shimmering shield
 
-<!-- splat:yaml path=splat_rule/parameters/features/shimmering_shield -->
+<!-- splat:values path=splat_rule/parameters/features/shimmering_shield -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` legendary_action ` |
+| ` legendary_cost ` | ` 1 ` |
+| ` cooldown_until ` | ` self.next_turn_start ` |
+| ` operation ` | ` grant_defense ` |
+| ` ac_bonus ` | ` 2 ` |
+| ` until ` | ` self.next_turn_end ` |
+
+###### Targets
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/features/shimmering_shield/targets/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Self:
+    path: self
+    type: boolean
+    optional: true
+  Kind:
+    path: kind
+    type: symbol
+    optional: true
+  Count:
+    path: count
+    type: integer
+    optional: true
+  Range ft:
+    path: range_ft
+    type: integer
+    optional: true
+  Visible:
+    path: visible
+    type: boolean
+    optional: true
+-->
+
+| Key | Self | Kind | Count | Range ft | Visible |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | true |  |  |  |  |
+| ` row_2 ` |  | ` Creature ` | ` 1 ` | ` 60 ` | true |
+
+###### Temporary hp
+
+<!-- splat:yaml path=splat_rule/parameters/features/shimmering_shield/temporary_hp -->
 
 ```yaml
-economy: legendary_action
-legendary_cost: 1
-cooldown_until: self.next_turn_start
-operation: grant_defense
-targets:
-  any_of:
-  - self: true
-  - kind: creature
-    count: 1
-    range_ft: 60
-    visible: true
-temporary_hp:
-  roll:
-    count: 3
-    sides: 6
-    modifier: 0
-  average: 10
-ac_bonus: 2
-until: self.next_turn_end
+roll:
+  count: 3
+  sides: 6
+  modifier: 0
+average: 10
 ```
 
 #### Senses

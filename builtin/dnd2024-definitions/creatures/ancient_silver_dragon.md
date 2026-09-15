@@ -203,33 +203,60 @@ replacements:
 
 ##### Rend
 
-<!-- splat:yaml path=splat_rule/parameters/features/rend -->
+<!-- splat:values path=splat_rule/parameters/features/rend -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/rend/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 17
-  reach_ft: 15
-hit:
-  damage:
-  - average: 19
-    roll:
-      count: 2
-      sides: 8
-      modifier: 10
-    type: slashing
-  - average: 9
-    roll:
-      count: 2
-      sides: 8
-      modifier: 0
-    type: cold
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 17
+reach_ft: 15
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/rend/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 19 ` | ` 2 ` | ` 8 ` | ` 10 ` | ` Slashing ` |
+| ` row_2 ` | ` 9 ` | ` 2 ` | ` 8 ` | ` 0 ` | ` Cold ` |
 
 ##### Cold breath
 
@@ -310,72 +337,83 @@ success:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-operation: spellcasting
-ability: charisma
-components_waived:
-- material
-save_dc: 23
-supplied_spell_attack_total: 15
-options:
-- spell:
-    key: dnd2024:spells/detect_magic
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/hold_monster
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/ice_knife
-  usage:
-    kind: at_will
-  cast_level: 2
-- spell:
-    key: dnd2024:spells/shapechange
-  usage:
-    kind: at_will
-  overrides:
-    allowed_types:
-    - beast
-    - humanoid
-    gain_temporary_hp: false
-    maintain_requires_concentration: false
-    maintain_requires_temporary_hp: false
-- spell:
-    key: dnd2024:spells/control_weather
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/ice_storm
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-  cast_level: 7
-- spell:
-    key: dnd2024:spells/teleport
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/zone_of_truth
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 23 ` |
+| ` supplied_spell_attack_total ` | ` 15 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- detect_magic
+- hold_monster
+- ice_knife
+- shapechange
+- control_weather
+- ice_storm
+- teleport
+- zone_of_truth
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+  Overrides allowed types:
+    path: overrides/allowed_types
+    type: yaml
+    optional: true
+  Overrides gain temporary hp:
+    path: overrides/gain_temporary_hp
+    type: boolean
+    optional: true
+  Overrides maintain requires concentration:
+    path: overrides/maintain_requires_concentration
+    type: boolean
+    optional: true
+  Overrides maintain requires temporary hp:
+    path: overrides/maintain_requires_temporary_hp
+    type: boolean
+    optional: true
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Cast level | Overrides allowed types | Overrides gain temporary hp | Overrides maintain requires concentration | Overrides maintain requires temporary hp | Uses | Use pool | Recovery |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  |  |  |  |  |  |
+| [Hold Monster](<../spells/hold_monster.md> "dnd2024:spells/hold_monster") | ` At will ` |  |  |  |  |  |  |  |  |
+| [Ice Knife](<../spells/ice_knife.md> "dnd2024:spells/ice_knife") | ` At will ` | ` 2 ` |  |  |  |  |  |  |  |
+| [Shapechange](<../spells/shapechange.md> "dnd2024:spells/shapechange") | ` At will ` |  | ` ["beast", "humanoid"] ` | false | false | false |  |  |  |
+| [Control Weather](<../spells/control_weather.md> "dnd2024:spells/control_weather") | ` Daily ` |  |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Ice Storm](<../spells/ice_storm.md> "dnd2024:spells/ice_storm") | ` Daily ` | ` 7 ` |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Teleport](<../spells/teleport.md> "dnd2024:spells/teleport") | ` Daily ` |  |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Zone of Truth](<../spells/zone_of_truth.md> "dnd2024:spells/zone_of_truth") | ` Daily ` |  |  |  |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Chill
 

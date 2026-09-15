@@ -142,70 +142,38 @@ condition_duration:
 
 #### Optional level scaling
 
-<!-- splat:rows path=splat_rule/parameters/optional_level_scaling -->
+<!-- splat:table
+path: splat_rule/parameters/optional_level_scaling
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Levels min:
+    path: levels/min
+    type: integer
+  Levels max:
+    path: levels/max
+    type: integer
+  Damage dice count:
+    path: damage/dice/count
+    type: integer
+  Damage dice sides:
+    path: damage/dice/sides
+    type: integer
+  Damage average:
+    path: damage/average
+    type: integer
+  Save dc:
+    path: save_dc
+    type: integer
+-->
 
-| Row | save_dc |
-| --- | --- |
-| ` 0 ` | ` 13 ` |
-| ` 1 ` | ` 15 ` |
-| ` 2 ` | ` 17 ` |
-
-##### Levels
-
-<!-- splat:values path=splat_rule/parameters/optional_level_scaling/0/levels -->
-
-| Field | Value |
-| --- | --- |
-| ` min ` | ` 5 ` |
-| ` max ` | ` 10 ` |
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/optional_level_scaling/0/damage -->
-
-```yaml
-dice:
-  count: 2
-  sides: 10
-average: 11
-```
-
-##### Levels
-
-<!-- splat:values path=splat_rule/parameters/optional_level_scaling/1/levels -->
-
-| Field | Value |
-| --- | --- |
-| ` min ` | ` 11 ` |
-| ` max ` | ` 16 ` |
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/optional_level_scaling/1/damage -->
-
-```yaml
-dice:
-  count: 4
-  sides: 10
-average: 22
-```
-
-##### Levels
-
-<!-- splat:values path=splat_rule/parameters/optional_level_scaling/2/levels -->
-
-| Field | Value |
-| --- | --- |
-| ` min ` | ` 17 ` |
-| ` max ` | ` 20 ` |
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/optional_level_scaling/2/damage -->
-
-```yaml
-dice:
-  count: 10
-  sides: 10
-average: 55
-```
+| Key | Levels min | Levels max | Damage dice count | Damage dice sides | Damage average | Save dc |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 5 ` | ` 10 ` | ` 2 ` | ` 10 ` | ` 11 ` | ` 13 ` |
+| ` row_2 ` | ` 11 ` | ` 16 ` | ` 4 ` | ` 10 ` | ` 22 ` | ` 15 ` |
+| ` row_3 ` | ` 17 ` | ` 20 ` | ` 10 ` | ` 10 ` | ` 55 ` | ` 17 ` |

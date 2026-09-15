@@ -63,10 +63,26 @@ Original layout: [[../../srd-5.2.1/pages/210|page 210]].
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Rarity:
+    path: rarity
+    type: symbol
+  Ac bonus:
+    path: ac_bonus
+    type: integer
+-->
 
-| Row | rarity | ac_bonus |
+| Key | Rarity | Ac bonus |
 | --- | --- | --- |
-| ` 0 ` | ` rare ` | ` 1 ` |
-| ` 1 ` | ` very_rare ` | ` 2 ` |
-| ` 2 ` | ` legendary ` | ` 3 ` |
+| ` row_1 ` | ` Rare ` | ` 1 ` |
+| ` row_2 ` | ` Very rare ` | ` 2 ` |
+| ` row_3 ` | ` Legendary ` | ` 3 ` |

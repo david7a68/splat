@@ -22,13 +22,6 @@ An Arcane Focus takes one of the forms in the\
 Arcane Focuses table and is bejeweled or carved to\
 channel arcane magic. A Sorcerer, Warlock, or Wiz-\
 ard can use such an item as a Spellcasting Focus.\
-Arcane Focuses\
-Focus Weight Cost\
-Crystal 1 lb. 10 GP\
-Orb 3 lb. 20 GP\
-Rod 2 lb. 10 GP\
-Staff (also a Quarterstaff) 4 lb. 5 GP\
-Wand 1 lb. 10 GP\
 
 ## Item
 
@@ -72,110 +65,38 @@ rule:
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Variant
+order:
+- crystal
+- orb
+- rod
+- staff
+- wand
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Weight:
+    path: mass
+    type: quantity
+  Cost:
+    path: price
+    type: quantity
+  Valid use states:
+    path: valid_use_states
+    type: yaml
+  Also weapon:
+    path: also_weapon
+    type: reference
+    optional: true
+-->
 
-| Row | id | valid_use_states |
-| --- | --- | --- |
-| ` 0 ` | ` crystal ` | ` ["held"] ` |
-| ` 1 ` | ` orb ` | ` ["held"] ` |
-| ` 2 ` | ` rod ` | ` ["held"] ` |
-| ` 3 ` | ` staff ` | ` ["held"] ` |
-| ` 4 ` | ` wand ` | ` ["held"] ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/0/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/0/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/1/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 3 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/1/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 20 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/2/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 2 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/2/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/3/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 4 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/3/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` gp ` |
-
-##### Also weapon
-
-<!-- splat:values path=splat_rule/parameters/variants/3/also_weapon -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/quarterstaff ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/4/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` lb ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/4/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 10 ` |
-| ` unit ` | ` gp ` |
+| Variant | Weight | Cost | Valid use states | Also weapon |
+| --- | --- | --- | --- | --- |
+| ` Crystal ` | ` 1 lb ` | ` 10 GP ` | ` ["held"] ` |  |
+| ` Orb ` | ` 3 lb ` | ` 20 GP ` | ` ["held"] ` |  |
+| ` Rod ` | ` 2 lb ` | ` 10 GP ` | ` ["held"] ` |  |
+| ` Staff ` | ` 4 lb ` | ` 5 GP ` | ` ["held"] ` | [Quarterstaff](<quarterstaff.md> "dnd2024:equipment/quarterstaff") |
+| ` Wand ` | ` 1 lb ` | ` 10 GP ` | ` ["held"] ` |  |

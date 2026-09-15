@@ -92,19 +92,47 @@ Original layout: [[../../srd-5.2.1/pages/110|page 110]], [[../../srd-5.2.1/pages
 
 #### Targeting
 
-<!-- splat:yaml path=splat_rule/parameters/targeting -->
+<!-- splat:values path=splat_rule/parameters/targeting -->
 
-```yaml
-options:
-- kind: creature
-  willing: true
-  mode: mask
-- kind: object
-  worn: false
-  carried: false
-  mode: false_aura
-touch: true
-```
+| Field | Value |
+| --- | --- |
+| ` touch ` | ` true ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/targeting/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Willing:
+    path: willing
+    type: boolean
+    optional: true
+  Mode:
+    path: mode
+    type: symbol
+  Worn:
+    path: worn
+    type: boolean
+    optional: true
+  Carried:
+    path: carried
+    type: boolean
+    optional: true
+-->
+
+| Key | Kind | Willing | Mode | Worn | Carried |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Creature ` | true | ` Mask ` |  |  |
+| ` row_2 ` | ` Object ` |  | ` False aura ` | false | false |
 
 #### Mask
 

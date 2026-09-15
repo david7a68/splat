@@ -80,87 +80,35 @@ crafting_rule:
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Variant
+order:
+- dice
+- dragonchess
+- playing_cards
+- three_dragon_ante
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Cost:
+    path: price
+    type: quantity
+  Mass value:
+    path: mass/value
+    type: integer
+  Mass unit:
+    path: mass/unit
+    type: symbol
+  Mass negligible:
+    path: mass/negligible
+    type: boolean
+-->
 
-| Row | id |
-| --- | --- |
-| ` 0 ` | ` dice ` |
-| ` 1 ` | ` dragonchess ` |
-| ` 2 ` | ` playing_cards ` |
-| ` 3 ` | ` three_dragon_ante ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/0/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` sp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/0/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0 ` |
-| ` unit ` | ` lb ` |
-| ` negligible ` | ` true ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/1/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/1/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0 ` |
-| ` unit ` | ` lb ` |
-| ` negligible ` | ` true ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/2/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 5 ` |
-| ` unit ` | ` sp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/2/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0 ` |
-| ` unit ` | ` lb ` |
-| ` negligible ` | ` true ` |
-
-##### Price
-
-<!-- splat:values path=splat_rule/parameters/variants/3/price -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 1 ` |
-| ` unit ` | ` gp ` |
-
-##### Mass
-
-<!-- splat:values path=splat_rule/parameters/variants/3/mass -->
-
-| Field | Value |
-| --- | --- |
-| ` value ` | ` 0 ` |
-| ` unit ` | ` lb ` |
-| ` negligible ` | ` true ` |
+| Variant | Cost | Mass value | Mass unit | Mass negligible |
+| --- | --- | --- | --- | --- |
+| ` Dice ` | ` 1 SP ` | ` 0 ` | ` Lb ` | true |
+| ` Dragonchess ` | ` 1 GP ` | ` 0 ` | ` Lb ` | true |
+| ` Playing cards ` | ` 5 SP ` | ` 0 ` | ` Lb ` | true |
+| ` Three dragon ante ` | ` 1 GP ` | ` 0 ` | ` Lb ` | true |

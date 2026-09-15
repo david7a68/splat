@@ -111,28 +111,79 @@ tertainer’s Pack, and 19 GP; or\
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
 
-```yaml
-count: 1
-options:
-- id: a
-  grants:
-  - item_type: leather_armor
-    quantity: 1
-  - item_type: dagger
-    quantity: 2
-  - item_type: musical_instrument_choice
-    quantity: 1
-  - item_type: entertainer_s_pack
-    quantity: 1
-  - item_type: gp
-    quantity: 19
-- id: b
-  grants:
-  - item_type: gp
-    quantity: 90
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options
+key: Variant
+order:
+- a
+- b
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
+
+| Variant | Details |
+| --- | --- |
+| ` A ` | [Rules](#^splat-93071aae-a "section:a") |
+| ` B ` | [Rules](#^splat-93071aae-b "section:b") |
+
+###### A
+
+^splat-93071aae-a
+
+###### Grants
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/@a/grants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Item type:
+    path: item_type
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Key | Item type | Quantity |
+| --- | --- | --- |
+| ` row_1 ` | ` Leather armor ` | ` 1 ` |
+| ` row_2 ` | ` Dagger ` | ` 2 ` |
+| ` row_3 ` | ` Musical instrument choice ` | ` 1 ` |
+| ` row_4 ` | ` Entertainer s pack ` | ` 1 ` |
+| ` row_5 ` | ` Gp ` | ` 19 ` |
+
+###### B
+
+^splat-93071aae-b
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/starting_equipment/options/@b/grants -->
+
+| Row | item_type | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` gp ` | ` 90 ` |
 
 #### Progression
 
@@ -144,115 +195,42 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- bard_level_10_magical_secrets
+- bard_level_18_superior_inspiration
+- bard_level_19_epic_boon
+- bard_level_1_bardic_inspiration
+- bard_level_1_spellcasting
+- bard_level_20_words_of_creation
+- bard_level_2_expertise
+- bard_level_2_jack_of_all_trades
+- bard_level_3_bard_subclass
+- bard_level_4_ability_score_improvement
+- bard_level_5_font_of_inspiration
+- bard_level_7_countercharm
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 18 ` |
-| ` 2 ` | ` 19 ` |
-| ` 3 ` | ` 1 ` |
-| ` 4 ` | ` 1 ` |
-| ` 5 ` | ` 20 ` |
-| ` 6 ` | ` 2 ` |
-| ` 7 ` | ` 2 ` |
-| ` 8 ` | ` 3 ` |
-| ` 9 ` | ` 4 ` |
-| ` 10 ` | ` 5 ` |
-| ` 11 ` | ` 7 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_10_magical_secrets ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_18_superior_inspiration ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_1_bardic_inspiration ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_20_words_of_creation ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_2_expertise ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_2_jack_of_all_trades ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_3_bard_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_5_font_of_inspiration ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/11/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/bard_level_7_countercharm ` |
+| [Level 10: Magical Secrets](<../class_features/bard_level_10_magical_secrets.md> "dnd2024:class_features/bard_level_10_magical_secrets") | ` 10 ` |
+| [Level 18: Superior Inspiration](<../class_features/bard_level_18_superior_inspiration.md> "dnd2024:class_features/bard_level_18_superior_inspiration") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/bard_level_19_epic_boon.md> "dnd2024:class_features/bard_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Bardic Inspiration](<../class_features/bard_level_1_bardic_inspiration.md> "dnd2024:class_features/bard_level_1_bardic_inspiration") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/bard_level_1_spellcasting.md> "dnd2024:class_features/bard_level_1_spellcasting") | ` 1 ` |
+| [Level 20: Words of Creation](<../class_features/bard_level_20_words_of_creation.md> "dnd2024:class_features/bard_level_20_words_of_creation") | ` 20 ` |
+| [Level 2: Expertise](<../class_features/bard_level_2_expertise.md> "dnd2024:class_features/bard_level_2_expertise") | ` 2 ` |
+| [Level 2: Jack of All Trades](<../class_features/bard_level_2_jack_of_all_trades.md> "dnd2024:class_features/bard_level_2_jack_of_all_trades") | ` 2 ` |
+| [Level 3: Bard Subclass](<../class_features/bard_level_3_bard_subclass.md> "dnd2024:class_features/bard_level_3_bard_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/bard_level_4_ability_score_improvement.md> "dnd2024:class_features/bard_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Font of Inspiration](<../class_features/bard_level_5_font_of_inspiration.md> "dnd2024:class_features/bard_level_5_font_of_inspiration") | ` 5 ` |
+| [Level 7: Countercharm](<../class_features/bard_level_7_countercharm.md> "dnd2024:class_features/bard_level_7_countercharm") | ` 7 ` |

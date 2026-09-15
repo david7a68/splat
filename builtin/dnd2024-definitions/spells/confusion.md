@@ -113,60 +113,126 @@ origin: chosen_point_within_range
 
 #### Save
 
-<!-- splat:yaml path=splat_rule/parameters/save -->
+<!-- splat:values path=splat_rule/parameters/save -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` wisdom ` |
+
+##### Dc
+
+<!-- splat:values path=splat_rule/parameters/save/dc -->
+
+| Field | Value |
+| --- | --- |
+| ` binding ` | ` save_dc ` |
+
+##### Failure
+
+<!-- splat:values path=splat_rule/parameters/save/failure -->
+
+| Field | Value |
+| --- | --- |
+| ` prohibit ` | ` ["bonus_action", "reaction"] ` |
+| ` duration ` | ` spell_duration ` |
+
+###### Turn start roll
+
+###### Dice
+
+<!-- splat:yaml path=splat_rule/parameters/save/failure/turn_start_roll/dice -->
 
 ```yaml
-ability: wisdom
-dc:
-  binding: save_dc
-failure:
-  prohibit:
-  - bonus_action
-  - reaction
-  duration: spell_duration
-  turn_start_roll:
-    dice:
-      dice:
-        count: 1
-        sides: 10
-        add: 0
-    table:
-    - range:
-      - 1
-      - 1
-      action: none
-      movement: all_available
-      direction_roll:
-        dice:
-          dice:
-            count: 1
-            sides: 4
-            add: 0
-        faces:
-          '1': north
-          '2': east
-          '3': south
-          '4': west
-    - range:
-      - 2
-      - 6
-      action: none
-      movement: none
-    - range:
-      - 7
-      - 8
-      movement: none
-      action: attack
-      melee_attacks: 1
-      target: random_creature_within_reach
-      without_target_action: none
-    - range:
-      - 9
-      - 10
-      behavior: target_choice
-  repeat_save:
-    event: target_turn_end
-    success: end_effect_on_target
-success:
-  effect: none
+dice:
+  count: 1
+  sides: 10
+  add: 0
 ```
+
+###### Table
+
+<!-- splat:table
+path: splat_rule/parameters/save/failure/turn_start_roll/table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Range:
+    path: range
+    type: yaml
+  Action:
+    path: action
+    type: symbol
+    optional: true
+  Movement:
+    path: movement
+    type: symbol
+    optional: true
+  Direction roll dice dice:
+    path: direction_roll/dice/dice
+    type: dice
+    optional: true
+  Melee attacks:
+    path: melee_attacks
+    type: integer
+    optional: true
+  Target:
+    path: target
+    type: symbol
+    optional: true
+  Without target action:
+    path: without_target_action
+    type: symbol
+    optional: true
+  Behavior:
+    path: behavior
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Range | Action | Movement | Direction roll dice dice | Melee attacks | Target | Without target action | Behavior | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` [1, 1] ` | ` None ` | ` All available ` | ` 1d4 ` |  |  |  |  | [Rules](#^splat-62be980c-row_1 "section:row_1") |
+| ` row_2 ` | ` [2, 6] ` | ` None ` | ` None ` |  |  |  |  |  |  |
+| ` row_3 ` | ` [7, 8] ` | ` Attack ` | ` None ` |  | ` 1 ` | ` Random creature within reach ` | ` None ` |  |  |
+| ` row_4 ` | ` [9, 10] ` |  |  |  |  |  |  | ` Target choice ` |  |
+
+###### Row 1
+
+^splat-62be980c-row_1
+
+###### Faces
+
+<!-- splat:yaml path=splat_rule/parameters/save/failure/turn_start_roll/table/@row_1/direction_roll/faces -->
+
+```yaml
+'1': north
+'2': east
+'3': south
+'4': west
+```
+
+###### Repeat save
+
+<!-- splat:values path=splat_rule/parameters/save/failure/repeat_save -->
+
+| Field | Value |
+| --- | --- |
+| ` event ` | ` target_turn_end ` |
+| ` success ` | ` end_effect_on_target ` |
+
+##### Success
+
+<!-- splat:values path=splat_rule/parameters/save/success -->
+
+| Field | Value |
+| --- | --- |
+| ` effect ` | ` none ` |

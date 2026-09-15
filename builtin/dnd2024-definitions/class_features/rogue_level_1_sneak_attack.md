@@ -86,18 +86,45 @@ Rogue Features table.\
 
 #### Requires
 
-<!-- splat:yaml path=splat_rule/parameters/requires -->
+<!-- splat:values path=splat_rule/parameters/requires -->
 
-```yaml
-weapon_any:
-- finesse_property
-- ranged_weapon
-any:
-- attack_advantage: true
-- attack_disadvantage: false
-  ally_within_target_feet: 5
-  ally_incapacitated: false
-```
+| Field | Value |
+| --- | --- |
+| ` weapon_any ` | ` ["finesse_property", "ranged_weapon"] ` |
+
+##### Any
+
+<!-- splat:table
+path: splat_rule/parameters/requires/any
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Attack advantage:
+    path: attack_advantage
+    type: boolean
+    optional: true
+  Attack disadvantage:
+    path: attack_disadvantage
+    type: boolean
+    optional: true
+  Ally within target feet:
+    path: ally_within_target_feet
+    type: integer
+    optional: true
+  Ally incapacitated:
+    path: ally_incapacitated
+    type: boolean
+    optional: true
+-->
+
+| Key | Attack advantage | Attack disadvantage | Ally within target feet | Ally incapacitated |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | true |  |  |  |
+| ` row_2 ` |  | false | ` 5 ` | false |
 
 #### Extra damage
 

@@ -102,25 +102,62 @@ Original layout: [[../../srd-5.2.1/pages/157|page 157]].
 
 #### Hit
 
-<!-- splat:yaml path=splat_rule/parameters/hit -->
+<!-- splat:values path=splat_rule/parameters/hit -->
 
-```yaml
-damage:
-  type: cold
-  dice:
-    sides: 8
-    counts_by_character_level:
-    - minimum_level: 1
-      count: 1
-    - minimum_level: 5
-      count: 2
-    - minimum_level: 11
-      count: 3
-    - minimum_level: 17
-      count: 4
-speed_modifier_feet: -10
-speed_modifier_until:
-  event: turn.start
-  subject: caster
-  occurrence: next
-```
+| Field | Value |
+| --- | --- |
+| ` speed_modifier_feet ` | ` -10 ` |
+
+##### Damage
+
+<!-- splat:values path=splat_rule/parameters/hit/damage -->
+
+| Field | Value |
+| --- | --- |
+| ` type ` | ` cold ` |
+
+###### Dice
+
+<!-- splat:values path=splat_rule/parameters/hit/damage/dice -->
+
+| Field | Value |
+| --- | --- |
+| ` sides ` | ` 8 ` |
+
+###### Counts by character level
+
+<!-- splat:table
+path: splat_rule/parameters/hit/damage/dice/counts_by_character_level
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum level:
+    path: minimum_level
+    type: integer
+  Count:
+    path: count
+    type: integer
+-->
+
+| Key | Minimum level | Count |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 1 ` |
+| ` row_2 ` | ` 5 ` | ` 2 ` |
+| ` row_3 ` | ` 11 ` | ` 3 ` |
+| ` row_4 ` | ` 17 ` | ` 4 ` |
+
+##### Speed modifier until
+
+<!-- splat:values path=splat_rule/parameters/hit/speed_modifier_until -->
+
+| Field | Value |
+| --- | --- |
+| ` event ` | ` turn.start ` |
+| ` subject ` | ` caster ` |
+| ` occurrence ` | ` next ` |

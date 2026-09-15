@@ -218,29 +218,69 @@ destination:
 
 ##### Healing touch
 
-<!-- splat:yaml path=splat_rule/parameters/features/healing_touch -->
+<!-- splat:values path=splat_rule/parameters/features/healing_touch -->
 
-```yaml
-economy: bonus_action
-resource:
-  capacity: 1
-  cost: 1
-  recovery: long_rest
-requires_type:
-- celestial
-targets:
-  kind: creature
-  count: 1
-  range_feet: 5
-op: heal
-amount:
-  add:
-  - dice:
-      count: 2
-      sides: 8
-    add: 0
-  - input: spell_level
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` requires_type ` | ` ["celestial"] ` |
+| ` op ` | ` heal ` |
+
+###### Resource
+
+<!-- splat:values path=splat_rule/parameters/features/healing_touch/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` capacity ` | ` 1 ` |
+| ` cost ` | ` 1 ` |
+| ` recovery ` | ` long_rest ` |
+
+###### Targets
+
+<!-- splat:values path=splat_rule/parameters/features/healing_touch/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` count ` | ` 1 ` |
+| ` range_feet ` | ` 5 ` |
+
+###### Amount
+
+###### Add
+
+<!-- splat:table
+path: splat_rule/parameters/features/healing_touch/amount/add
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice count:
+    path: dice/count
+    type: integer
+    optional: true
+  Dice sides:
+    path: dice/sides
+    type: integer
+    optional: true
+  Add:
+    path: add
+    type: integer
+    optional: true
+  Input:
+    path: input
+    type: symbol
+    optional: true
+-->
+
+| Key | Dice count | Dice sides | Add | Input |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 2 ` | ` 8 ` | ` 0 ` |  |
+| ` row_2 ` |  |  |  | ` Spell level ` |
 
 #### Defenses
 

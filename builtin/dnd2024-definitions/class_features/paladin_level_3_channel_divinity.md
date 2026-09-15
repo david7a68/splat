@@ -78,19 +78,68 @@ crated, as with the Hallow spell.\
 
 #### Resource
 
-<!-- splat:yaml path=splat_rule/parameters/resource -->
+<!-- splat:values path=splat_rule/parameters/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` id ` | ` paladin.channel_divinity ` |
+
+##### Maximum
+
+<!-- splat:yaml path=splat_rule/parameters/resource/maximum -->
 
 ```yaml
-id: paladin.channel_divinity
-maximum:
-  by_paladin_level:
-    '3': 2
-    '11': 3
-recovery:
-- event: rest.short_completed
-  amount: 1
-- event: rest.long_completed
-  amount: all
+by_paladin_level:
+  '3': 2
+  '11': 3
+```
+
+##### Recovery
+
+<!-- splat:table
+path: splat_rule/parameters/resource/recovery
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Event | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` rest.short_completed ` | [Rules](#^splat-d8de689e-row_1 "section:row_1") |
+| ` row_2 ` | ` rest.long_completed ` | [Rules](#^splat-d8de689e-row_2 "section:row_2") |
+
+###### Row 1
+
+^splat-d8de689e-row_1
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/resource/recovery/@row_1/amount -->
+
+```yaml
+1
+```
+
+###### Row 2
+
+^splat-d8de689e-row_2
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/resource/recovery/@row_2/amount -->
+
+```yaml
+all
 ```
 
 #### Save dc

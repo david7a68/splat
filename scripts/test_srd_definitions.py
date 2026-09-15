@@ -205,4 +205,36 @@ class MarkdownLayoutTests(unittest.TestCase):
         self.assertEqual(registry['format'], 2)
         self.assertTrue(all('specification' not in c for c in registry['contracts']))
 
+class MappedTableTests(unittest.TestCase):
+    def test_ammunition_variants_and_spell_lists_are_coherent_tables(self):
+        ammo=(OUTPUT/'equipment/ammunition_varies.md').read_text()
+        self.assertIn('| Variant | Quantity | Storage | Weight | Cost |',ammo)
+        self.assertIn('1½ lb',ammo)
+        self.assertNotIn('##### Storage',ammo)
+        self.assertNotIn('| Type | Amount | Storage | Weight | Cost |',ammo)
+        mage=(OUTPUT/'creatures/mage.md').read_text()
+        self.assertIn('| Spell | Frequency |',mage)
+        self.assertIn('"dnd2024:spells/fireball"',mage)
+        healing=(OUTPUT/'items/potions_of_healing.md').read_text()
+        self.assertIn('| Name | Rarity | Healing |',healing)
+        self.assertIn('10d4+20',healing)
+        self.assertNotIn('Potion HP Regained Rarity',healing)
+        frost=(OUTPUT/'items/staff_of_frost.md').read_text()
+        self.assertNotIn('Spell Cost Spell Cost',frost)
+        self.assertIn('Regaining Charges.',frost)
+
+    def test_plan_preserves_null_false_empty_maps_and_partial_objects(self):
+        from mapped_tables import plan,remove_path
+        rows=[{'id':'a','amount':None,'nested':{'amount':2,'rule':{'choices':[{'x':0}]}},'flag':False},
+              {'id':'b','amount':0,'nested':{'amount':4,'rule':{}},'flag':True}]
+        mapped=plan('splat_rule/parameters/options',rows)
+        amount=next(c for c in mapped['columns'].values() if c.get('path')=='amount')
+        self.assertTrue(amount['nullable'])
+        self.assertEqual(amount['type'],'integer')
+        self.assertEqual(mapped['order'],['a','b'])
+        self.assertIn('Details',mapped['columns'])
+        other={'value':0}
+        self.assertFalse(remove_path(other,'value/unused'))
+        self.assertEqual(other,{'value':0})
+
 if __name__=='__main__':unittest.main()

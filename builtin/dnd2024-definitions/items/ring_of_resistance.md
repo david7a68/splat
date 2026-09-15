@@ -74,20 +74,46 @@ Original layout: [[../../srd-5.2.1/pages/238|page 238]].
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+columns:
+  Key:
+    type: key
+  Roll:
+    path: roll
+    type: integer
+  Resistance:
+    path: resistance
+    type: symbol
+  Gemstone:
+    path: gemstone
+    type: symbol
+-->
 
-| Row | roll | resistance | gemstone |
+| Key | Roll | Resistance | Gemstone |
 | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` acid ` | ` pearl ` |
-| ` 1 ` | ` 2 ` | ` cold ` | ` tourmaline ` |
-| ` 2 ` | ` 3 ` | ` fire ` | ` garnet ` |
-| ` 3 ` | ` 4 ` | ` force ` | ` sapphire ` |
-| ` 4 ` | ` 5 ` | ` lightning ` | ` citrine ` |
-| ` 5 ` | ` 6 ` | ` necrotic ` | ` jet ` |
-| ` 6 ` | ` 7 ` | ` poison ` | ` amethyst ` |
-| ` 7 ` | ` 8 ` | ` psychic ` | ` jade ` |
-| ` 8 ` | ` 9 ` | ` radiant ` | ` topaz ` |
-| ` 9 ` | ` 10 ` | ` thunder ` | ` spinel ` |
+| ` row_1 ` | ` 1 ` | ` Acid ` | ` Pearl ` |
+| ` row_2 ` | ` 2 ` | ` Cold ` | ` Tourmaline ` |
+| ` row_3 ` | ` 3 ` | ` Fire ` | ` Garnet ` |
+| ` row_4 ` | ` 4 ` | ` Force ` | ` Sapphire ` |
+| ` row_5 ` | ` 5 ` | ` Lightning ` | ` Citrine ` |
+| ` row_6 ` | ` 6 ` | ` Necrotic ` | ` Jet ` |
+| ` row_7 ` | ` 7 ` | ` Poison ` | ` Amethyst ` |
+| ` row_8 ` | ` 8 ` | ` Psychic ` | ` Jade ` |
+| ` row_9 ` | ` 9 ` | ` Radiant ` | ` Topaz ` |
+| ` row_10 ` | ` 10 ` | ` Thunder ` | ` Spinel ` |
 
 #### Attunement
 

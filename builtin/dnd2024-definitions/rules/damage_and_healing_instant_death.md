@@ -48,22 +48,51 @@ then dies, since 12 equals their Hit Point maximum.\
 
 #### Death conditions
 
-<!-- splat:rows path=splat_rule/parameters/death_conditions -->
+<!-- splat:table
+path: splat_rule/parameters/death_conditions
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Subject:
+    path: subject
+    type: symbol
+    optional: true
+  Hp:
+    path: hp
+    type: integer
+    optional: true
+  Exception authority:
+    path: exception/authority
+    type: symbol
+    optional: true
+  Exception choice:
+    path: exception/choice
+    type: symbol
+    optional: true
+  Hp maximum:
+    path: hp_maximum
+    type: integer
+    optional: true
+  Hp reduced to:
+    path: hp_reduced_to
+    type: integer
+    optional: true
+  Remaining damage gte:
+    path: remaining_damage_gte
+    type: symbol
+    optional: true
+-->
 
-| Row | subject | hp | hp_maximum | hp_reduced_to | remaining_damage_gte |
-| --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` monster ` | ` 0 ` |  |  |  |
-| ` 1 ` |  |  | ` 0 ` |  |  |
-| ` 2 ` | ` character ` |  |  | ` 0 ` | ` hp_maximum ` |
-
-##### Exception
-
-<!-- splat:values path=splat_rule/parameters/death_conditions/0/exception -->
-
-| Field | Value |
-| --- | --- |
-| ` authority ` | ` gm ` |
-| ` choice ` | ` use_character_death_rules ` |
+| Key | Subject | Hp | Exception authority | Exception choice | Hp maximum | Hp reduced to | Remaining damage gte |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Monster ` | ` 0 ` | ` Gm ` | ` Use character death rules ` |  |  |  |
+| ` row_2 ` |  |  |  |  | ` 0 ` |  |  |
+| ` row_3 ` | ` Character ` |  |  |  |  | ` 0 ` | ` Hp maximum ` |
 
 #### Death rules
 

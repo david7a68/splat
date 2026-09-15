@@ -106,19 +106,48 @@ Original layout: [[../../srd-5.2.1/pages/148|page 148]], [[../../srd-5.2.1/pages
 
 #### Through solid objects
 
-<!-- splat:yaml path=splat_rule/parameters/through_solid_objects -->
+<!-- splat:values path=splat_rule/parameters/through_solid_objects -->
 
-```yaml
-requires:
-- caster_familiar_with_target
-- caster_knows_target_beyond_barrier
-blocked_by:
-- kind: magical_silence
-- materials:
-  - stone
-  - metal
-  - wood
-  minimum_thickness_feet: 1
-- material: lead
-  any_thin_sheet: true
-```
+| Field | Value |
+| --- | --- |
+| ` requires ` | ` ["caster_familiar_with_target", "caster_knows_target_beyond_barrier"] ` |
+
+##### Blocked by
+
+<!-- splat:table
+path: splat_rule/parameters/through_solid_objects/blocked_by
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+    optional: true
+  Materials:
+    path: materials
+    type: yaml
+    optional: true
+  Minimum thickness feet:
+    path: minimum_thickness_feet
+    type: integer
+    optional: true
+  Material:
+    path: material
+    type: symbol
+    optional: true
+  Any thin sheet:
+    path: any_thin_sheet
+    type: boolean
+    optional: true
+-->
+
+| Key | Kind | Materials | Minimum thickness feet | Material | Any thin sheet |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Magical silence ` |  |  |  |  |
+| ` row_2 ` |  | ` ["stone", "metal", "wood"] ` | ` 1 ` |  |  |
+| ` row_3 ` |  |  |  | ` Lead ` | true |

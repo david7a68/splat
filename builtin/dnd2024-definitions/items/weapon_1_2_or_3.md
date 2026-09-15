@@ -62,13 +62,32 @@ Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Rarity:
+    path: rarity
+    type: symbol
+  Attack bonus:
+    path: attack_bonus
+    type: integer
+  Damage bonus:
+    path: damage_bonus
+    type: integer
+-->
 
-| Row | rarity | attack_bonus | damage_bonus |
+| Key | Rarity | Attack bonus | Damage bonus |
 | --- | --- | --- | --- |
-| ` 0 ` | ` uncommon ` | ` 1 ` | ` 1 ` |
-| ` 1 ` | ` rare ` | ` 2 ` | ` 2 ` |
-| ` 2 ` | ` very_rare ` | ` 3 ` | ` 3 ` |
+| ` row_1 ` | ` Uncommon ` | ` 1 ` | ` 1 ` |
+| ` row_2 ` | ` Rare ` | ` 2 ` | ` 2 ` |
+| ` row_3 ` | ` Very rare ` | ` 3 ` | ` 3 ` |
 
 #### Attunement
 

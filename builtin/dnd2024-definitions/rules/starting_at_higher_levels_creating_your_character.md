@@ -66,91 +66,110 @@ level 10, you have 64,000 XP.\
 
 #### Starting equipment table
 
-<!-- splat:rows path=splat_rule/parameters/starting_equipment_table -->
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment_table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Base gp:
+    path: base_gp
+    type: integer
+  Magic items common:
+    path: magic_items/common
+    type: integer
+  Random gp op:
+    path: random_gp/op
+    type: symbol
+    optional: true
+  Magic items uncommon:
+    path: magic_items/uncommon
+    type: integer
+    optional: true
+  Magic items rare:
+    path: magic_items/rare
+    type: integer
+    optional: true
+  Magic items very rare:
+    path: magic_items/very_rare
+    type: integer
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | levels | base_gp | random_gp |
-| --- | --- | --- | --- |
-| ` 0 ` | ` [2, 4] ` | ` 0 ` | ` 0 ` |
-| ` 1 ` | ` [5, 10] ` | ` 500 ` |  |
-| ` 2 ` | ` [11, 16] ` | ` 5000 ` |  |
-| ` 3 ` | ` [17, 20] ` | ` 20000 ` |  |
+| Key | Levels | Base gp | Magic items common | Random gp op | Magic items uncommon | Magic items rare | Magic items very rare | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` [2, 4] ` | ` 0 ` | ` 1 ` |  |  |  |  | [Rules](#^splat-d91f87fa-row_1 "section:row_1") |
+| ` row_2 ` | ` [5, 10] ` | ` 500 ` | ` 1 ` | ` Multiply ` | ` 1 ` |  |  | [Rules](#^splat-d91f87fa-row_2 "section:row_2") |
+| ` row_3 ` | ` [11, 16] ` | ` 5000 ` | ` 2 ` | ` Multiply ` | ` 3 ` | ` 1 ` |  | [Rules](#^splat-d91f87fa-row_3 "section:row_3") |
+| ` row_4 ` | ` [17, 20] ` | ` 20000 ` | ` 2 ` | ` Multiply ` | ` 4 ` | ` 3 ` | ` 1 ` | [Rules](#^splat-d91f87fa-row_4 "section:row_4") |
 
-##### Magic items
+##### Row 1
 
-<!-- splat:values path=splat_rule/parameters/starting_equipment_table/0/magic_items -->
+^splat-d91f87fa-row_1
 
-| Field | Value |
-| --- | --- |
-| ` common ` | ` 1 ` |
+###### Random gp
 
-##### Random gp
-
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment_table/1/random_gp -->
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment_table/@row_1/random_gp -->
 
 ```yaml
-op: multiply
-args:
+0
+```
+
+##### Row 2
+
+^splat-d91f87fa-row_2
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment_table/@row_2/random_gp/args -->
+
+```yaml
 - dice:
     count: 1
     sides: 10
 - 25
 ```
 
-##### Magic items
+##### Row 3
 
-<!-- splat:values path=splat_rule/parameters/starting_equipment_table/1/magic_items -->
+^splat-d91f87fa-row_3
 
-| Field | Value |
-| --- | --- |
-| ` common ` | ` 1 ` |
-| ` uncommon ` | ` 1 ` |
+###### Args
 
-##### Random gp
-
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment_table/2/random_gp -->
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment_table/@row_3/random_gp/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 1
     sides: 10
 - 250
 ```
 
-##### Magic items
+##### Row 4
 
-<!-- splat:values path=splat_rule/parameters/starting_equipment_table/2/magic_items -->
+^splat-d91f87fa-row_4
 
-| Field | Value |
-| --- | --- |
-| ` common ` | ` 2 ` |
-| ` uncommon ` | ` 3 ` |
-| ` rare ` | ` 1 ` |
+###### Args
 
-##### Random gp
-
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment_table/3/random_gp -->
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment_table/@row_4/random_gp/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 1
     sides: 10
 - 250
 ```
-
-##### Magic items
-
-<!-- splat:values path=splat_rule/parameters/starting_equipment_table/3/magic_items -->
-
-| Field | Value |
-| --- | --- |
-| ` common ` | ` 2 ` |
-| ` uncommon ` | ` 4 ` |
-| ` rare ` | ` 3 ` |
-| ` very_rare ` | ` 1 ` |
 
 #### Level twenty bonus feats
 

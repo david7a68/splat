@@ -163,67 +163,79 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` intelligence ` |
+| ` save_dc ` | ` 14 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Components waived
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/components_waived -->
 
 ```yaml
-economy: action
-operation: spellcasting
-ability: intelligence
-components_waived: []
-save_dc: 14
-options:
-- spell:
-    key: dnd2024:spells/detect_magic
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/light
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/mage_armor
-  usage:
-    kind: at_will
-  included_in_header_ac: true
-- spell:
-    key: dnd2024:spells/mage_hand
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/prestidigitation
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/fireball
-  usage:
-    kind: daily
-    uses: 2
-    pool: per_spell
-    recovery: long_rest
-  cast_level: 4
-- spell:
-    key: dnd2024:spells/invisibility
-  usage:
-    kind: daily
-    uses: 2
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/cone_of_cold
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/fly
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
+[]
 ```
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- detect_magic
+- light
+- mage_armor
+- mage_hand
+- prestidigitation
+- fireball
+- invisibility
+- cone_of_cold
+- fly
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Included in header ac:
+    path: included_in_header_ac
+    type: boolean
+    optional: true
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+-->
+
+| Spell | Frequency | Included in header ac | Uses | Use pool | Recovery | Cast level |
+| --- | --- | --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  |  |  |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | ` At will ` |  |  |  |  |  |
+| [Mage Armor](<../spells/mage_armor.md> "dnd2024:spells/mage_armor") | ` At will ` | true |  |  |  |  |
+| [Mage Hand](<../spells/mage_hand.md> "dnd2024:spells/mage_hand") | ` At will ` |  |  |  |  |  |
+| [Prestidigitation](<../spells/prestidigitation.md> "dnd2024:spells/prestidigitation") | ` At will ` |  |  |  |  |  |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") | ` Daily ` |  | ` 2 ` | ` Per spell ` | ` Long rest ` | ` 4 ` |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") | ` Daily ` |  | ` 2 ` | ` Per spell ` | ` Long rest ` |  |
+| [Cone of Cold](<../spells/cone_of_cold.md> "dnd2024:spells/cone_of_cold") | ` Daily ` |  | ` 1 ` | ` Per spell ` | ` Long rest ` |  |
+| [Fly](<../spells/fly.md> "dnd2024:spells/fly") | ` Daily ` |  | ` 1 ` | ` Per spell ` | ` Long rest ` |  |
 
 ##### Misty step
 

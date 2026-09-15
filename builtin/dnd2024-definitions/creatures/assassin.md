@@ -140,13 +140,29 @@ Original layout: [[../../srd-5.2.1/pages/260|page 260]].
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Count:
+    path: count
+    type: integer
+-->
 
-| Row | item | count |
+| Key | Item | Count |
 | --- | --- | --- |
-| ` 0 ` | ` light_crossbow ` | ` 1 ` |
-| ` 1 ` | ` shortsword ` | ` 1 ` |
-| ` 2 ` | ` studded_leather_armor ` | ` 1 ` |
+| ` row_1 ` | ` Light crossbow ` | ` 1 ` |
+| ` row_2 ` | ` Shortsword ` | ` 1 ` |
+| ` row_3 ` | ` Studded leather armor ` | ` 1 ` |
 
 #### Senses
 

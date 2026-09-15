@@ -142,27 +142,64 @@ escape:
 
 #### Arrow of transport
 
-<!-- splat:yaml path=splat_rule/parameters/arrow_of_transport -->
+<!-- splat:values path=splat_rule/parameters/arrow_of_transport -->
 
-```yaml
-action: magic
-range_ft: 60
-target_seen: true
-eligible:
-  any_of:
-  - kind: creature
-    willing: true
-    maximum_size: medium
-  - kind: object
-    worn_or_carried: false
-    fits_cube_ft: 5
-destination:
-  range_from_user_ft: 10
-  seen: true
-  unoccupied: true
-effect: teleport
-attack_roll_required: false
-```
+| Field | Value |
+| --- | --- |
+| ` action ` | ` magic ` |
+| ` range_ft ` | ` 60 ` |
+| ` target_seen ` | ` true ` |
+| ` effect ` | ` teleport ` |
+| ` attack_roll_required ` | ` false ` |
+
+##### Eligible
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/arrow_of_transport/eligible/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Willing:
+    path: willing
+    type: boolean
+    optional: true
+  Maximum size:
+    path: maximum_size
+    type: symbol
+    optional: true
+  Worn or carried:
+    path: worn_or_carried
+    type: boolean
+    optional: true
+  Fits cube ft:
+    path: fits_cube_ft
+    type: integer
+    optional: true
+-->
+
+| Key | Kind | Willing | Maximum size | Worn or carried | Fits cube ft |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Creature ` | true | ` Medium ` |  |  |
+| ` row_2 ` | ` Object ` |  |  | false | ` 5 ` |
+
+##### Destination
+
+<!-- splat:values path=splat_rule/parameters/arrow_of_transport/destination -->
+
+| Field | Value |
+| --- | --- |
+| ` range_from_user_ft ` | ` 10 ` |
+| ` seen ` | ` true ` |
+| ` unoccupied ` | ` true ` |
 
 #### Energy ladder
 

@@ -93,34 +93,69 @@ armor_training: []
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
+
+| Field | Value |
+| --- | --- |
+| ` choose ` | ` 1 ` |
+
+##### Options
+
+###### Equipment
+
+###### Items
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/equipment/items
+key: Item
+order:
+- dagger
+- arcane_focus_varies
+- robe_1_gp
+- scholar_s_pack_40_gp
+columns:
+  Item:
+    path: definition
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Variant:
+    path: variant
+    type: symbol
+    optional: true
+-->
+
+| Item | Quantity | Variant |
+| --- | --- | --- |
+| [Dagger](<../equipment/dagger.md> "dnd2024:equipment/dagger") | ` 2 ` |  |
+| [Arcane Focus (Varies)](<../equipment/arcane_focus_varies.md> "dnd2024:equipment/arcane_focus_varies") | ` 1 ` | ` Quarterstaff ` |
+| [Robe (1 GP)](<../equipment/robe_1_gp.md> "dnd2024:equipment/robe_1_gp") | ` 1 ` |  |
+| [Scholar’s Pack (40 GP)](<../equipment/scholar_s_pack_40_gp.md> "dnd2024:equipment/scholar_s_pack_40_gp") | ` 1 ` |  |
+
+###### Currency
+
+<!-- splat:values path=splat_rule/parameters/starting_equipment/options/equipment/currency -->
+
+| Field | Value |
+| --- | --- |
+| ` gp ` | ` 5 ` |
+
+###### Additional items
+
+<!-- splat:rows path=splat_rule/parameters/starting_equipment/options/equipment/additional_items -->
+
+| Row | kind | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` spellbook ` | ` 1 ` |
+
+###### Currency
+
+<!-- splat:yaml path=splat_rule/parameters/starting_equipment/options/currency -->
 
 ```yaml
-choose: 1
-options:
-  equipment:
-    items:
-    - definition:
-        key: dnd2024:equipment/dagger
-      quantity: 2
-    - definition:
-        key: dnd2024:equipment/arcane_focus_varies
-      quantity: 1
-      variant: quarterstaff
-    - definition:
-        key: dnd2024:equipment/robe_1_gp
-      quantity: 1
-    - definition:
-        key: dnd2024:equipment/scholar_s_pack_40_gp
-      quantity: 1
-    currency:
-      gp: 5
-    additional_items:
-    - kind: spellbook
-      quantity: 1
-  currency:
-    currency:
-      gp: 55
+currency:
+  gp: 55
 ```
 
 #### Progression
@@ -133,97 +168,38 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- wizard_level_18_spell_mastery
+- wizard_level_19_epic_boon
+- wizard_level_1_arcane_recovery
+- wizard_level_1_ritual_adept
+- wizard_level_1_spellcasting
+- wizard_level_20_signature_spells
+- wizard_level_2_scholar
+- wizard_level_3_wizard_subclass
+- wizard_level_4_ability_score_improvement
+- wizard_level_5_memorize_spell
+columns:
+  Item:
+    path: definition
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Item | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 18 ` |
-| ` 1 ` | ` 19 ` |
-| ` 2 ` | ` 1 ` |
-| ` 3 ` | ` 1 ` |
-| ` 4 ` | ` 1 ` |
-| ` 5 ` | ` 20 ` |
-| ` 6 ` | ` 2 ` |
-| ` 7 ` | ` 3 ` |
-| ` 8 ` | ` 4 ` |
-| ` 9 ` | ` 5 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_18_spell_mastery ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_19_epic_boon ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_arcane_recovery ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_ritual_adept ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_1_spellcasting ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_20_signature_spells ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_2_scholar ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_3_wizard_subclass ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_4_ability_score_improvement ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/wizard_level_5_memorize_spell ` |
+| [Level 18: Spell Mastery](<../class_features/wizard_level_18_spell_mastery.md> "dnd2024:class_features/wizard_level_18_spell_mastery") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/wizard_level_19_epic_boon.md> "dnd2024:class_features/wizard_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Arcane Recovery](<../class_features/wizard_level_1_arcane_recovery.md> "dnd2024:class_features/wizard_level_1_arcane_recovery") | ` 1 ` |
+| [Level 1: Ritual Adept](<../class_features/wizard_level_1_ritual_adept.md> "dnd2024:class_features/wizard_level_1_ritual_adept") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/wizard_level_1_spellcasting.md> "dnd2024:class_features/wizard_level_1_spellcasting") | ` 1 ` |
+| [Level 20: Signature Spells](<../class_features/wizard_level_20_signature_spells.md> "dnd2024:class_features/wizard_level_20_signature_spells") | ` 20 ` |
+| [Level 2: Scholar](<../class_features/wizard_level_2_scholar.md> "dnd2024:class_features/wizard_level_2_scholar") | ` 2 ` |
+| [Level 3: Wizard Subclass](<../class_features/wizard_level_3_wizard_subclass.md> "dnd2024:class_features/wizard_level_3_wizard_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/wizard_level_4_ability_score_improvement.md> "dnd2024:class_features/wizard_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Memorize Spell](<../class_features/wizard_level_5_memorize_spell.md> "dnd2024:class_features/wizard_level_5_memorize_spell") | ` 5 ` |

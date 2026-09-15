@@ -180,44 +180,118 @@ steps:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` wisdom ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 12 ` |
+| ` spell_attack_bonus ` | ` 4 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- dancing_lights
+- disguise_self
+- invisibility
+- minor_illusion
+- ray_of_sickness
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Overrides duration hours:
+    path: overrides/duration/hours
+    type: integer
+    optional: true
+  Overrides targets:
+    path: overrides/targets
+    type: symbol
+    optional: true
+  Overrides while invisible leaves tracks:
+    path: overrides/while_invisible/leaves_tracks
+    type: boolean
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Spell | Frequency | Overrides duration hours | Overrides targets | Overrides while invisible leaves tracks | Details |
+| --- | --- | --- | --- | --- | --- |
+| [Dancing Lights](<../spells/dancing_lights.md> "dnd2024:spells/dancing_lights") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-dancing_lights "section:dancing_lights") |
+| [Disguise Self](<../spells/disguise_self.md> "dnd2024:spells/disguise_self") | ` At will ` | ` 24 ` |  |  | [Rules](#^splat-68a383d1-disguise_self "section:disguise_self") |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") | ` At will ` |  | ` Self ` | false | [Rules](#^splat-68a383d1-invisibility "section:invisibility") |
+| [Minor Illusion](<../spells/minor_illusion.md> "dnd2024:spells/minor_illusion") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-minor_illusion "section:minor_illusion") |
+| [Ray of Sickness](<../spells/ray_of_sickness.md> "dnd2024:spells/ray_of_sickness") | ` At will ` |  |  |  | [Rules](#^splat-68a383d1-ray_of_sickness "section:ray_of_sickness") |
+
+###### Dancing lights
+
+^splat-68a383d1-dancing_lights
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@dancing_lights/cast_level -->
 
 ```yaml
-economy: action
-op: cast_spell_choice
-ability: wisdom
-spells:
-- spell:
-    key: dnd2024:spells/dancing_lights
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/disguise_self
-  frequency: at_will
-  overrides:
-    duration:
-      hours: 24
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/invisibility
-  frequency: at_will
-  overrides:
-    targets: self
-    while_invisible:
-      leaves_tracks: false
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/minor_illusion
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/ray_of_sickness
-  frequency: at_will
-  cast_level: 3
-components_waived:
-- material
-save_dc: 12
-spell_attack_bonus: 4
+spell_minimum
+```
+
+###### Disguise self
+
+^splat-68a383d1-disguise_self
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@disguise_self/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Invisibility
+
+^splat-68a383d1-invisibility
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@invisibility/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Minor illusion
+
+^splat-68a383d1-minor_illusion
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@minor_illusion/cast_level -->
+
+```yaml
+spell_minimum
+```
+
+###### Ray of sickness
+
+^splat-68a383d1-ray_of_sickness
+
+###### Cast level
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/spells/@ray_of_sickness/cast_level -->
+
+```yaml
+3
 ```
 
 ##### Mimicry
@@ -238,68 +312,66 @@ discern:
 
 ##### Coven magic
 
-<!-- splat:yaml path=splat_rule/parameters/features/coven_magic -->
+<!-- splat:values path=splat_rule/parameters/features/coven_magic -->
 
-```yaml
-economy: spell_normal_casting_time
-requires:
-  hag_allies_within_feet: 30
-  minimum_hag_allies: 2
-op: cast_spell_choice
-ability: intelligence
-save_dc: 11
-components_waived:
-- material
-choices:
-- spell:
-    key: dnd2024:spells/augury
-  resource:
-    capacity: 1
-    cost: 1
-    recovery: long_rest
-    scope: per_spell
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/find_familiar
-  resource:
-    capacity: 1
-    cost: 1
-    recovery: long_rest
-    scope: per_spell
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/identify
-  resource:
-    capacity: 1
-    cost: 1
-    recovery: long_rest
-    scope: per_spell
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/locate_object
-  resource:
-    capacity: 1
-    cost: 1
-    recovery: long_rest
-    scope: per_spell
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/scrying
-  resource:
-    capacity: 1
-    cost: 1
-    recovery: long_rest
-    scope: per_spell
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/unseen_servant
-  resource:
-    capacity: 1
-    cost: 1
-    recovery: long_rest
-    scope: per_spell
-  cast_level: spell_minimum
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` spell_normal_casting_time ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` intelligence ` |
+| ` save_dc ` | ` 11 ` |
+| ` components_waived ` | ` ["material"] ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/coven_magic/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` hag_allies_within_feet ` | ` 30 ` |
+| ` minimum_hag_allies ` | ` 2 ` |
+
+###### Choices
+
+<!-- splat:table
+path: splat_rule/parameters/features/coven_magic/choices
+key: Spell
+order:
+- augury
+- find_familiar
+- identify
+- locate_object
+- scrying
+- unseen_servant
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Resource capacity:
+    path: resource/capacity
+    type: integer
+  Resource cost:
+    path: resource/cost
+    type: integer
+  Resource recovery:
+    path: resource/recovery
+    type: symbol
+  Resource scope:
+    path: resource/scope
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: symbol
+-->
+
+| Spell | Resource capacity | Resource cost | Resource recovery | Resource scope | Cast level |
+| --- | --- | --- | --- | --- | --- |
+| [Augury](<../spells/augury.md> "dnd2024:spells/augury") | ` 1 ` | ` 1 ` | ` Long rest ` | ` Per spell ` | ` Spell minimum ` |
+| [Find Familiar](<../spells/find_familiar.md> "dnd2024:spells/find_familiar") | ` 1 ` | ` 1 ` | ` Long rest ` | ` Per spell ` | ` Spell minimum ` |
+| [Identify](<../spells/identify.md> "dnd2024:spells/identify") | ` 1 ` | ` 1 ` | ` Long rest ` | ` Per spell ` | ` Spell minimum ` |
+| [Locate Object](<../spells/locate_object.md> "dnd2024:spells/locate_object") | ` 1 ` | ` 1 ` | ` Long rest ` | ` Per spell ` | ` Spell minimum ` |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` 1 ` | ` 1 ` | ` Long rest ` | ` Per spell ` | ` Spell minimum ` |
+| [Unseen Servant](<../spells/unseen_servant.md> "dnd2024:spells/unseen_servant") | ` 1 ` | ` 1 ` | ` Long rest ` | ` Per spell ` | ` Spell minimum ` |
 
 #### Skill totals
 

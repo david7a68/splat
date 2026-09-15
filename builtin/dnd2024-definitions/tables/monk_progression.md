@@ -92,34 +92,95 @@ From SRD 5.2.1 page 50.
 
 #### Rows
 
-<!-- splat:rows path=splat_rule/parameters/rows -->
+<!-- splat:table
+path: splat_rule/parameters/rows
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+- row_17
+- row_18
+- row_19
+- row_20
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Proficiency bonus:
+    path: proficiency_bonus
+    type: integer
+  Features text:
+    path: features_text
+    type: string
+  Martial arts:
+    path: martial_arts
+    type: string
+  Focus points:
+    path: focus_points
+    type: integer
+  Unarmored movement:
+    path: unarmored_movement
+    type: integer
+  Martial arts dice dice count:
+    path: martial_arts_dice/dice/count
+    type: integer
+  Martial arts dice dice sides:
+    path: martial_arts_dice/dice/sides
+    type: integer
+  Martial arts dice bonus:
+    path: martial_arts_dice/bonus
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | level | proficiency_bonus | features_text | martial_arts | focus_points | unarmored_movement |
-| --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 2 ` | ` Martial Arts, Unarmored Defense ` | ` 1d6 ` | ` 0 ` | ` 0 ` |
-| ` 1 ` | ` 2 ` | ` 2 ` | ` Monk’s Focus, Unarmored Movement, Uncanny Metabolism ` | ` 1d6 ` | ` 2 ` | ` 10 ` |
-| ` 2 ` | ` 3 ` | ` 2 ` | ` Deflect Attacks, Monk Subclass ` | ` 1d6 ` | ` 3 ` | ` 10 ` |
-| ` 3 ` | ` 4 ` | ` 2 ` | ` Ability Score Improvement, Slow Fall ` | ` 1d6 ` | ` 4 ` | ` 10 ` |
-| ` 4 ` | ` 5 ` | ` 3 ` | ` Extra Attack, Stunning Strike ` | ` 1d8 ` | ` 5 ` | ` 10 ` |
-| ` 5 ` | ` 6 ` | ` 3 ` | ` Empowered Strikes, Subclass feature ` | ` 1d8 ` | ` 6 ` | ` 15 ` |
-| ` 6 ` | ` 7 ` | ` 3 ` | ` Evasion ` | ` 1d8 ` | ` 7 ` | ` 15 ` |
-| ` 7 ` | ` 8 ` | ` 3 ` | ` Ability Score Improvement ` | ` 1d8 ` | ` 8 ` | ` 15 ` |
-| ` 8 ` | ` 9 ` | ` 4 ` | ` Acrobatic Movement ` | ` 1d8 ` | ` 9 ` | ` 15 ` |
-| ` 9 ` | ` 10 ` | ` 4 ` | ` Heightened Focus, Self-Restoration ` | ` 1d8 ` | ` 10 ` | ` 20 ` |
-| ` 10 ` | ` 11 ` | ` 4 ` | ` Subclass feature ` | ` 1d10 ` | ` 11 ` | ` 20 ` |
-| ` 11 ` | ` 12 ` | ` 4 ` | ` Ability Score Improvement ` | ` 1d10 ` | ` 12 ` | ` 20 ` |
-| ` 12 ` | ` 13 ` | ` 5 ` | ` Deflect Energy ` | ` 1d10 ` | ` 13 ` | ` 20 ` |
-| ` 13 ` | ` 14 ` | ` 5 ` | ` Disciplined Survivor ` | ` 1d10 ` | ` 14 ` | ` 25 ` |
-| ` 14 ` | ` 15 ` | ` 5 ` | ` Perfect Focus ` | ` 1d10 ` | ` 15 ` | ` 25 ` |
-| ` 15 ` | ` 16 ` | ` 5 ` | ` Ability Score Improvement ` | ` 1d10 ` | ` 16 ` | ` 25 ` |
-| ` 16 ` | ` 17 ` | ` 6 ` | ` Subclass feature ` | ` 1d12 ` | ` 17 ` | ` 25 ` |
-| ` 17 ` | ` 18 ` | ` 6 ` | ` Superior Defense ` | ` 1d12 ` | ` 18 ` | ` 30 ` |
-| ` 18 ` | ` 19 ` | ` 6 ` | ` Epic Boon ` | ` 1d12 ` | ` 19 ` | ` 30 ` |
-| ` 19 ` | ` 20 ` | ` 6 ` | ` Body and Mind ` | ` 1d12 ` | ` 20 ` | ` 30 ` |
+| Key | Level | Proficiency bonus | Features text | Martial arts | Focus points | Unarmored movement | Martial arts dice dice count | Martial arts dice dice sides | Martial arts dice bonus | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 2 ` | ` Martial Arts, Unarmored Defense ` | ` 1d6 ` | ` 0 ` | ` 0 ` | ` 1 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_1 "section:row_1") |
+| ` row_2 ` | ` 2 ` | ` 2 ` | ` Monk’s Focus, Unarmored Movement, Uncanny Metabolism ` | ` 1d6 ` | ` 2 ` | ` 10 ` | ` 1 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_2 "section:row_2") |
+| ` row_3 ` | ` 3 ` | ` 2 ` | ` Deflect Attacks, Monk Subclass ` | ` 1d6 ` | ` 3 ` | ` 10 ` | ` 1 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_3 "section:row_3") |
+| ` row_4 ` | ` 4 ` | ` 2 ` | ` Ability Score Improvement, Slow Fall ` | ` 1d6 ` | ` 4 ` | ` 10 ` | ` 1 ` | ` 6 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_4 "section:row_4") |
+| ` row_5 ` | ` 5 ` | ` 3 ` | ` Extra Attack, Stunning Strike ` | ` 1d8 ` | ` 5 ` | ` 10 ` | ` 1 ` | ` 8 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_5 "section:row_5") |
+| ` row_6 ` | ` 6 ` | ` 3 ` | ` Empowered Strikes, Subclass feature ` | ` 1d8 ` | ` 6 ` | ` 15 ` | ` 1 ` | ` 8 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_6 "section:row_6") |
+| ` row_7 ` | ` 7 ` | ` 3 ` | ` Evasion ` | ` 1d8 ` | ` 7 ` | ` 15 ` | ` 1 ` | ` 8 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_7 "section:row_7") |
+| ` row_8 ` | ` 8 ` | ` 3 ` | ` Ability Score Improvement ` | ` 1d8 ` | ` 8 ` | ` 15 ` | ` 1 ` | ` 8 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_8 "section:row_8") |
+| ` row_9 ` | ` 9 ` | ` 4 ` | ` Acrobatic Movement ` | ` 1d8 ` | ` 9 ` | ` 15 ` | ` 1 ` | ` 8 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_9 "section:row_9") |
+| ` row_10 ` | ` 10 ` | ` 4 ` | ` Heightened Focus, Self-Restoration ` | ` 1d8 ` | ` 10 ` | ` 20 ` | ` 1 ` | ` 8 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_10 "section:row_10") |
+| ` row_11 ` | ` 11 ` | ` 4 ` | ` Subclass feature ` | ` 1d10 ` | ` 11 ` | ` 20 ` | ` 1 ` | ` 10 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_11 "section:row_11") |
+| ` row_12 ` | ` 12 ` | ` 4 ` | ` Ability Score Improvement ` | ` 1d10 ` | ` 12 ` | ` 20 ` | ` 1 ` | ` 10 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_12 "section:row_12") |
+| ` row_13 ` | ` 13 ` | ` 5 ` | ` Deflect Energy ` | ` 1d10 ` | ` 13 ` | ` 20 ` | ` 1 ` | ` 10 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_13 "section:row_13") |
+| ` row_14 ` | ` 14 ` | ` 5 ` | ` Disciplined Survivor ` | ` 1d10 ` | ` 14 ` | ` 25 ` | ` 1 ` | ` 10 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_14 "section:row_14") |
+| ` row_15 ` | ` 15 ` | ` 5 ` | ` Perfect Focus ` | ` 1d10 ` | ` 15 ` | ` 25 ` | ` 1 ` | ` 10 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_15 "section:row_15") |
+| ` row_16 ` | ` 16 ` | ` 5 ` | ` Ability Score Improvement ` | ` 1d10 ` | ` 16 ` | ` 25 ` | ` 1 ` | ` 10 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_16 "section:row_16") |
+| ` row_17 ` | ` 17 ` | ` 6 ` | ` Subclass feature ` | ` 1d12 ` | ` 17 ` | ` 25 ` | ` 1 ` | ` 12 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_17 "section:row_17") |
+| ` row_18 ` | ` 18 ` | ` 6 ` | ` Superior Defense ` | ` 1d12 ` | ` 18 ` | ` 30 ` | ` 1 ` | ` 12 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_18 "section:row_18") |
+| ` row_19 ` | ` 19 ` | ` 6 ` | ` Epic Boon ` | ` 1d12 ` | ` 19 ` | ` 30 ` | ` 1 ` | ` 12 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_19 "section:row_19") |
+| ` row_20 ` | ` 20 ` | ` 6 ` | ` Body and Mind ` | ` 1d12 ` | ` 20 ` | ` 30 ` | ` 1 ` | ` 12 ` | ` 0 ` | [Rules](#^splat-0f5cfe33-row_20 "section:row_20") |
 
-##### Grants
+##### Row 1
 
-<!-- splat:rows path=splat_rule/parameters/rows/0/grants -->
+^splat-0f5cfe33-row_1
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/rows/@row_1/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -128,7 +189,7 @@ From SRD 5.2.1 page 50.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/0/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_1/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -136,26 +197,19 @@ From SRD 5.2.1 page 50.
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/0/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_1/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_1_unarmored_defense ` |
 
-##### Martial arts dice
+##### Row 2
 
-<!-- splat:yaml path=splat_rule/parameters/rows/0/martial_arts_dice -->
+^splat-0f5cfe33-row_2
 
-```yaml
-dice:
-  count: 1
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/1/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_2/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -165,7 +219,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/1/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_2/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -173,7 +227,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/1/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_2/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -181,26 +235,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/1/grants/2/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_2/grants/2/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_2_uncanny_metabolism ` |
 
-##### Martial arts dice
+##### Row 3
 
-<!-- splat:yaml path=splat_rule/parameters/rows/1/martial_arts_dice -->
+^splat-0f5cfe33-row_3
 
-```yaml
-dice:
-  count: 1
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/2/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_3/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -209,7 +256,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/2/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_3/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -217,26 +264,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/2/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_3/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_3_monk_subclass ` |
 
-##### Martial arts dice
+##### Row 4
 
-<!-- splat:yaml path=splat_rule/parameters/rows/2/martial_arts_dice -->
+^splat-0f5cfe33-row_4
 
-```yaml
-dice:
-  count: 1
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/3/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_4/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -245,7 +285,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/3/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_4/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -253,26 +293,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/3/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_4/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_4_slow_fall ` |
 
-##### Martial arts dice
+##### Row 5
 
-<!-- splat:yaml path=splat_rule/parameters/rows/3/martial_arts_dice -->
+^splat-0f5cfe33-row_5
 
-```yaml
-dice:
-  count: 1
-  sides: 6
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/4/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_5/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -281,7 +314,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/4/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_5/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -289,26 +322,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/4/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_5/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_5_stunning_strike ` |
 
-##### Martial arts dice
+##### Row 6
 
-<!-- splat:yaml path=splat_rule/parameters/rows/4/martial_arts_dice -->
+^splat-0f5cfe33-row_6
 
-```yaml
-dice:
-  count: 1
-  sides: 8
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/5/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_6/grants -->
 
 | Row | operation | at_class_level | class_level |
 | --- | --- | --- | --- |
@@ -317,26 +343,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/5/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_6/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_6_empowered_strikes ` |
 
-##### Martial arts dice
+##### Row 7
 
-<!-- splat:yaml path=splat_rule/parameters/rows/5/martial_arts_dice -->
+^splat-0f5cfe33-row_7
 
-```yaml
-dice:
-  count: 1
-  sides: 8
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/6/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_7/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -344,26 +363,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/6/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_7/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_7_evasion ` |
 
-##### Martial arts dice
+##### Row 8
 
-<!-- splat:yaml path=splat_rule/parameters/rows/6/martial_arts_dice -->
+^splat-0f5cfe33-row_8
 
-```yaml
-dice:
-  count: 1
-  sides: 8
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/7/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_8/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -371,26 +383,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/7/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_8/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_4_ability_score_improvement ` |
 
-##### Martial arts dice
+##### Row 9
 
-<!-- splat:yaml path=splat_rule/parameters/rows/7/martial_arts_dice -->
+^splat-0f5cfe33-row_9
 
-```yaml
-dice:
-  count: 1
-  sides: 8
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/8/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_9/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -398,26 +403,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/8/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_9/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_9_acrobatic_movement ` |
 
-##### Martial arts dice
+##### Row 10
 
-<!-- splat:yaml path=splat_rule/parameters/rows/8/martial_arts_dice -->
+^splat-0f5cfe33-row_10
 
-```yaml
-dice:
-  count: 1
-  sides: 8
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/9/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_10/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -426,7 +424,7 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/9/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_10/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
@@ -434,45 +432,31 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/9/grants/1/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_10/grants/1/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_10_self_restoration ` |
 
-##### Martial arts dice
+##### Row 11
 
-<!-- splat:yaml path=splat_rule/parameters/rows/9/martial_arts_dice -->
+^splat-0f5cfe33-row_11
 
-```yaml
-dice:
-  count: 1
-  sides: 8
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/10/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_11/grants -->
 
 | Row | operation | class_level |
 | --- | --- | --- |
 | ` 0 ` | ` grant_selected_subclass_features ` | ` 11 ` |
 
-##### Martial arts dice
+##### Row 12
 
-<!-- splat:yaml path=splat_rule/parameters/rows/10/martial_arts_dice -->
+^splat-0f5cfe33-row_12
 
-```yaml
-dice:
-  count: 1
-  sides: 10
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/11/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_12/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -480,26 +464,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/11/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_12/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_4_ability_score_improvement ` |
 
-##### Martial arts dice
+##### Row 13
 
-<!-- splat:yaml path=splat_rule/parameters/rows/11/martial_arts_dice -->
+^splat-0f5cfe33-row_13
 
-```yaml
-dice:
-  count: 1
-  sides: 10
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/12/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_13/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -507,26 +484,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/12/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_13/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_13_deflect_energy ` |
 
-##### Martial arts dice
+##### Row 14
 
-<!-- splat:yaml path=splat_rule/parameters/rows/12/martial_arts_dice -->
+^splat-0f5cfe33-row_14
 
-```yaml
-dice:
-  count: 1
-  sides: 10
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/13/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_14/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -534,26 +504,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/13/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_14/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_14_disciplined_survivor ` |
 
-##### Martial arts dice
+##### Row 15
 
-<!-- splat:yaml path=splat_rule/parameters/rows/13/martial_arts_dice -->
+^splat-0f5cfe33-row_15
 
-```yaml
-dice:
-  count: 1
-  sides: 10
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/14/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_15/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -561,26 +524,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/14/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_15/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_15_perfect_focus ` |
 
-##### Martial arts dice
+##### Row 16
 
-<!-- splat:yaml path=splat_rule/parameters/rows/14/martial_arts_dice -->
+^splat-0f5cfe33-row_16
 
-```yaml
-dice:
-  count: 1
-  sides: 10
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/15/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_16/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -588,45 +544,31 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/15/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_16/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_4_ability_score_improvement ` |
 
-##### Martial arts dice
+##### Row 17
 
-<!-- splat:yaml path=splat_rule/parameters/rows/15/martial_arts_dice -->
+^splat-0f5cfe33-row_17
 
-```yaml
-dice:
-  count: 1
-  sides: 10
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/16/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_17/grants -->
 
 | Row | operation | class_level |
 | --- | --- | --- |
 | ` 0 ` | ` grant_selected_subclass_features ` | ` 17 ` |
 
-##### Martial arts dice
+##### Row 18
 
-<!-- splat:yaml path=splat_rule/parameters/rows/16/martial_arts_dice -->
+^splat-0f5cfe33-row_18
 
-```yaml
-dice:
-  count: 1
-  sides: 12
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/17/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_18/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -634,26 +576,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/17/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_18/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_18_superior_defense ` |
 
-##### Martial arts dice
+##### Row 19
 
-<!-- splat:yaml path=splat_rule/parameters/rows/17/martial_arts_dice -->
+^splat-0f5cfe33-row_19
 
-```yaml
-dice:
-  count: 1
-  sides: 12
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/18/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_19/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -661,26 +596,19 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/18/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_19/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_19_epic_boon ` |
 
-##### Martial arts dice
+##### Row 20
 
-<!-- splat:yaml path=splat_rule/parameters/rows/18/martial_arts_dice -->
+^splat-0f5cfe33-row_20
 
-```yaml
-dice:
-  count: 1
-  sides: 12
-bonus: 0
-```
+###### Grants
 
-##### Grants
-
-<!-- splat:rows path=splat_rule/parameters/rows/19/grants -->
+<!-- splat:rows path=splat_rule/parameters/rows/@row_20/grants -->
 
 | Row | operation | at_class_level |
 | --- | --- | --- |
@@ -688,22 +616,11 @@ bonus: 0
 
 ###### Feature
 
-<!-- splat:values path=splat_rule/parameters/rows/19/grants/0/feature -->
+<!-- splat:values path=splat_rule/parameters/rows/@row_20/grants/0/feature -->
 
 | Field | Value |
 | --- | --- |
 | ` key ` | ` dnd2024:class_features/monk_level_20_body_and_mind ` |
-
-##### Martial arts dice
-
-<!-- splat:yaml path=splat_rule/parameters/rows/19/martial_arts_dice -->
-
-```yaml
-dice:
-  count: 1
-  sides: 12
-bonus: 0
-```
 
 #### Class definition
 

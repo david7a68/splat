@@ -155,32 +155,55 @@ maximum_distance_ft:
 
 #### Interaction
 
-<!-- splat:yaml path=splat_rule/parameters/interaction -->
+<!-- splat:values path=splat_rule/parameters/interaction -->
 
-```yaml
-trigger:
-- planar_portal_contact
-- extradimensional_space_contact
-die: 100
-rows:
-- range:
-  - 1
-  - 50
-  destroy_sphere: true
-- range:
-  - 51
-  - 85
-  sphere: passes_through_or_enters
-- range:
-  - 86
-  - 100
-  transport:
-  - sphere
-  - creatures
-  - objects
-  radius_ft: 180
-  destination_plane: random
-```
+| Field | Value |
+| --- | --- |
+| ` trigger ` | ` ["planar_portal_contact", "extradimensional_space_contact"] ` |
+| ` die ` | ` 100 ` |
+
+##### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/interaction/rows
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Range:
+    path: range
+    type: yaml
+  Destroy sphere:
+    path: destroy_sphere
+    type: boolean
+    optional: true
+  Sphere:
+    path: sphere
+    type: symbol
+    optional: true
+  Transport:
+    path: transport
+    type: yaml
+    optional: true
+  Radius ft:
+    path: radius_ft
+    type: integer
+    optional: true
+  Destination plane:
+    path: destination_plane
+    type: symbol
+    optional: true
+-->
+
+| Key | Range | Destroy sphere | Sphere | Transport | Radius ft | Destination plane |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` [1, 50] ` | true |  |  |  |  |
+| ` row_2 ` | ` [51, 85] ` |  | ` Passes through or enters ` |  |  |  |
+| ` row_3 ` | ` [86, 100] ` |  |  | ` ["sphere", "creatures", "objects"] ` | ` 180 ` | ` Random ` |
 
 #### On any sphere movement into creature space
 

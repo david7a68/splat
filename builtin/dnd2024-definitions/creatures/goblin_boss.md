@@ -241,14 +241,31 @@ new_target: chosen_ally
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item | quantity |
+| Key | Item | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` chain_shirt ` | ` 1 ` |
-| ` 1 ` | ` scimitar ` | ` 1 ` |
-| ` 2 ` | ` shield ` | ` 1 ` |
-| ` 3 ` | ` shortbow ` | ` 1 ` |
+| ` row_1 ` | ` Chain shirt ` | ` 1 ` |
+| ` row_2 ` | ` Scimitar ` | ` 1 ` |
+| ` row_3 ` | ` Shield ` | ` 1 ` |
+| ` row_4 ` | ` Shortbow ` | ` 1 ` |
 
 #### Senses
 

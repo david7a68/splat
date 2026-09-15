@@ -80,14 +80,32 @@ args:
 
 #### Normal miles per day
 
-<!-- splat:yaml path=splat_rule/parameters/normal_miles_per_day -->
+<!-- splat:values path=splat_rule/parameters/normal_miles_per_day -->
 
-```yaml
-op: multiply
-args:
-- variable: miles_per_hour
-- variable: hours_traveled
-```
+| Field | Value |
+| --- | --- |
+| ` op ` | ` multiply ` |
+
+##### Args
+
+<!-- splat:table
+path: splat_rule/parameters/normal_miles_per_day/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Variable:
+    path: variable
+    type: symbol
+-->
+
+| Key | Variable |
+| --- | --- |
+| ` row_1 ` | ` Miles per hour ` |
+| ` row_2 ` | ` Hours traveled ` |
 
 #### Fast miles per day
 
@@ -119,159 +137,220 @@ args:
 
 #### Terrain table
 
-<!-- splat:rows path=splat_rule/parameters/terrain_table -->
+<!-- splat:table
+path: splat_rule/parameters/terrain_table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+columns:
+  Key:
+    type: key
+  Terrain:
+    path: terrain
+    type: symbol
+  Maximum pace:
+    path: maximum_pace
+    type: symbol
+  Encounter distance feet op:
+    path: encounter_distance_feet/op
+    type: symbol
+  Foraging dc:
+    path: foraging_dc
+    type: integer
+  Navigation dc:
+    path: navigation_dc
+    type: integer
+  Search dc:
+    path: search_dc
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | terrain | maximum_pace | foraging_dc | navigation_dc | search_dc |
-| --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` arctic ` | ` fast ` | ` 20 ` | ` 10 ` | ` 10 ` |
-| ` 1 ` | ` coastal ` | ` normal ` | ` 10 ` | ` 5 ` | ` 15 ` |
-| ` 2 ` | ` desert ` | ` normal ` | ` 20 ` | ` 10 ` | ` 10 ` |
-| ` 3 ` | ` forest ` | ` normal ` | ` 10 ` | ` 15 ` | ` 15 ` |
-| ` 4 ` | ` grassland ` | ` fast ` | ` 15 ` | ` 5 ` | ` 15 ` |
-| ` 5 ` | ` hill ` | ` normal ` | ` 15 ` | ` 10 ` | ` 15 ` |
-| ` 6 ` | ` mountain ` | ` slow ` | ` 20 ` | ` 15 ` | ` 20 ` |
-| ` 7 ` | ` swamp ` | ` slow ` | ` 10 ` | ` 15 ` | ` 20 ` |
-| ` 8 ` | ` underdark ` | ` normal ` | ` 20 ` | ` 10 ` | ` 20 ` |
-| ` 9 ` | ` urban ` | ` normal ` | ` 20 ` | ` 15 ` | ` 15 ` |
-| ` 10 ` | ` waterborne ` | ` vehicle_speed ` | ` 15 ` | ` 10 ` | ` 15 ` |
+| Key | Terrain | Maximum pace | Encounter distance feet op | Foraging dc | Navigation dc | Search dc | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Arctic ` | ` Fast ` | ` Multiply ` | ` 20 ` | ` 10 ` | ` 10 ` | [Rules](#^splat-b87cf5e4-row_1 "section:row_1") |
+| ` row_2 ` | ` Coastal ` | ` Normal ` | ` Multiply ` | ` 10 ` | ` 5 ` | ` 15 ` | [Rules](#^splat-b87cf5e4-row_2 "section:row_2") |
+| ` row_3 ` | ` Desert ` | ` Normal ` | ` Multiply ` | ` 20 ` | ` 10 ` | ` 10 ` | [Rules](#^splat-b87cf5e4-row_3 "section:row_3") |
+| ` row_4 ` | ` Forest ` | ` Normal ` | ` Multiply ` | ` 10 ` | ` 15 ` | ` 15 ` | [Rules](#^splat-b87cf5e4-row_4 "section:row_4") |
+| ` row_5 ` | ` Grassland ` | ` Fast ` | ` Multiply ` | ` 15 ` | ` 5 ` | ` 15 ` | [Rules](#^splat-b87cf5e4-row_5 "section:row_5") |
+| ` row_6 ` | ` Hill ` | ` Normal ` | ` Multiply ` | ` 15 ` | ` 10 ` | ` 15 ` | [Rules](#^splat-b87cf5e4-row_6 "section:row_6") |
+| ` row_7 ` | ` Mountain ` | ` Slow ` | ` Multiply ` | ` 20 ` | ` 15 ` | ` 20 ` | [Rules](#^splat-b87cf5e4-row_7 "section:row_7") |
+| ` row_8 ` | ` Swamp ` | ` Slow ` | ` Multiply ` | ` 10 ` | ` 15 ` | ` 20 ` | [Rules](#^splat-b87cf5e4-row_8 "section:row_8") |
+| ` row_9 ` | ` Underdark ` | ` Normal ` | ` Multiply ` | ` 20 ` | ` 10 ` | ` 20 ` | [Rules](#^splat-b87cf5e4-row_9 "section:row_9") |
+| ` row_10 ` | ` Urban ` | ` Normal ` | ` Multiply ` | ` 20 ` | ` 15 ` | ` 15 ` | [Rules](#^splat-b87cf5e4-row_10 "section:row_10") |
+| ` row_11 ` | ` Waterborne ` | ` Vehicle speed ` | ` Multiply ` | ` 15 ` | ` 10 ` | ` 15 ` | [Rules](#^splat-b87cf5e4-row_11 "section:row_11") |
 
-##### Encounter distance feet
+##### Row 1
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/0/encounter_distance_feet -->
+^splat-b87cf5e4-row_1
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_1/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 6
     sides: 6
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 2
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/1/encounter_distance_feet -->
+^splat-b87cf5e4-row_2
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_2/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 2
     sides: 10
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 3
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/2/encounter_distance_feet -->
+^splat-b87cf5e4-row_3
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_3/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 6
     sides: 6
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 4
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/3/encounter_distance_feet -->
+^splat-b87cf5e4-row_4
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_4/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 2
     sides: 8
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 5
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/4/encounter_distance_feet -->
+^splat-b87cf5e4-row_5
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_5/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 6
     sides: 6
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 6
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/5/encounter_distance_feet -->
+^splat-b87cf5e4-row_6
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_6/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 2
     sides: 10
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 7
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/6/encounter_distance_feet -->
+^splat-b87cf5e4-row_7
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_7/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 4
     sides: 10
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 8
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/7/encounter_distance_feet -->
+^splat-b87cf5e4-row_8
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_8/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 2
     sides: 8
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 9
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/8/encounter_distance_feet -->
+^splat-b87cf5e4-row_9
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_9/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 2
     sides: 6
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 10
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/9/encounter_distance_feet -->
+^splat-b87cf5e4-row_10
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_10/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 2
     sides: 6
 - 10
 ```
 
-##### Encounter distance feet
+##### Row 11
 
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/10/encounter_distance_feet -->
+^splat-b87cf5e4-row_11
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/terrain_table/@row_11/encounter_distance_feet/args -->
 
 ```yaml
-op: multiply
-args:
 - dice:
     count: 6
     sides: 6

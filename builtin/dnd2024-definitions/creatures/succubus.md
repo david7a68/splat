@@ -225,23 +225,42 @@ after_save:
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
 
-```yaml
-economy: bonus_action
-op: shape_shift
-forms:
-- form: humanoid
-  size_choice:
-  - medium
-  - small
-  fly_speed_available: false
-- form: 'true'
-  fly_speed_available: true
-retain_statistics_except:
-- fly_speed
-equipment_transformed: false
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` op ` | ` shape_shift ` |
+| ` retain_statistics_except ` | ` ["fly_speed"] ` |
+| ` equipment_transformed ` | ` false ` |
+
+###### Forms
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/forms
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Form:
+    path: form
+    type: symbol
+  Size choice:
+    path: size_choice
+    type: yaml
+    optional: true
+  Fly speed available:
+    path: fly_speed_available
+    type: boolean
+-->
+
+| Key | Form | Size choice | Fly speed available |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Humanoid ` | ` ["medium", "small"] ` | false |
+| ` row_2 ` | ` True ` |  | true |
 
 ##### Incubus form
 

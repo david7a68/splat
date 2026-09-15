@@ -79,28 +79,67 @@ Original layout: [[../../srd-5.2.1/pages/132|page 132]].
 
 #### Attack
 
-<!-- splat:yaml path=splat_rule/parameters/attack -->
+<!-- splat:values path=splat_rule/parameters/attack -->
 
-```yaml
-kind: ranged_spell
-hit:
-  damage:
-    dice:
-      count:
-        by_caster_level:
-        - minimum: 1
-          count: 1
-        - minimum: 5
-          count: 2
-        - minimum: 11
-          count: 3
-        - minimum: 17
-          count: 4
-      sides: 10
-      add: 0
-    type: fire
-  ignite_if:
-    target_flammable: true
-    target_worn: false
-    target_carried: false
-```
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` ranged_spell ` |
+
+##### Hit
+
+###### Damage
+
+<!-- splat:values path=splat_rule/parameters/attack/hit/damage -->
+
+| Field | Value |
+| --- | --- |
+| ` type ` | ` fire ` |
+
+###### Dice
+
+<!-- splat:values path=splat_rule/parameters/attack/hit/damage/dice -->
+
+| Field | Value |
+| --- | --- |
+| ` sides ` | ` 10 ` |
+| ` add ` | ` 0 ` |
+
+###### Count
+
+###### By caster level
+
+<!-- splat:table
+path: splat_rule/parameters/attack/hit/damage/dice/count/by_caster_level
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum:
+    path: minimum
+    type: integer
+  Count:
+    path: count
+    type: integer
+-->
+
+| Key | Minimum | Count |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 1 ` |
+| ` row_2 ` | ` 5 ` | ` 2 ` |
+| ` row_3 ` | ` 11 ` | ` 3 ` |
+| ` row_4 ` | ` 17 ` | ` 4 ` |
+
+###### Ignite if
+
+<!-- splat:values path=splat_rule/parameters/attack/hit/ignite_if -->
+
+| Field | Value |
+| --- | --- |
+| ` target_flammable ` | ` true ` |
+| ` target_worn ` | ` false ` |
+| ` target_carried ` | ` false ` |

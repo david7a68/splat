@@ -81,45 +81,59 @@ those that know a different one.\
 
 #### Additional standard languages
 
-<!-- splat:yaml path=splat_rule/parameters/additional_standard_languages -->
+<!-- splat:values path=splat_rule/parameters/additional_standard_languages -->
 
-```yaml
-count: 2
-selection:
-- choose
-- roll
-dice:
-  count: 1
-  sides: 12
-table:
-- min: 1
-  max: 1
-  language: common_sign_language
-- min: 2
-  max: 2
-  language: draconic
-- min: 3
-  max: 4
-  language: dwarvish
-- min: 5
-  max: 6
-  language: elvish
-- min: 7
-  max: 7
-  language: giant
-- min: 8
-  max: 8
-  language: gnomish
-- min: 9
-  max: 9
-  language: goblin
-- min: 10
-  max: 11
-  language: halfling
-- min: 12
-  max: 12
-  language: orc
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 2 ` |
+| ` selection ` | ` ["choose", "roll"] ` |
+
+##### Dice
+
+<!-- splat:values path=splat_rule/parameters/additional_standard_languages/dice -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` sides ` | ` 12 ` |
+
+##### Table
+
+<!-- splat:table
+path: splat_rule/parameters/additional_standard_languages/table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+columns:
+  Key:
+    type: key
+  Roll:
+    path: ''
+    type: range
+  Language:
+    path: language
+    type: symbol
+-->
+
+| Key | Roll | Language |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` Common sign language ` |
+| ` row_2 ` | ` 2 ` | ` Draconic ` |
+| ` row_3 ` | ` 3–4 ` | ` Dwarvish ` |
+| ` row_4 ` | ` 5–6 ` | ` Elvish ` |
+| ` row_5 ` | ` 7 ` | ` Giant ` |
+| ` row_6 ` | ` 8 ` | ` Gnomish ` |
+| ` row_7 ` | ` 9 ` | ` Goblin ` |
+| ` row_8 ` | ` 10–11 ` | ` Halfling ` |
+| ` row_9 ` | ` 12 ` | ` Orc ` |
 
 #### Primordial
 

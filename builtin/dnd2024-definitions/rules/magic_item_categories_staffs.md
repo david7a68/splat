@@ -49,17 +49,30 @@ Focus.\
 
 #### Default uses
 
-<!-- splat:rows path=splat_rule/parameters/default_uses -->
+<!-- splat:table
+path: splat_rule/parameters/default_uses
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Weapon:
+    path: weapon
+    type: reference
+    optional: true
+  Magical weapon:
+    path: magical_weapon
+    type: boolean
+    optional: true
+  Focus:
+    path: focus
+    type: symbol
+    optional: true
+-->
 
-| Row | magical_weapon | focus |
-| --- | --- | --- |
-| ` 0 ` | ` false ` |  |
-| ` 1 ` |  | ` arcane ` |
-
-##### Weapon
-
-<!-- splat:values path=splat_rule/parameters/default_uses/0/weapon -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/quarterstaff ` |
+| Key | Weapon | Magical weapon | Focus |
+| --- | --- | --- | --- |
+| ` row_1 ` | [Quarterstaff](<../equipment/quarterstaff.md> "dnd2024:equipment/quarterstaff") | false |  |
+| ` row_2 ` |  |  | ` Arcane ` |

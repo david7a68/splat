@@ -69,30 +69,60 @@ passive_damage: 0
 
 #### Detonate
 
-<!-- splat:yaml path=splat_rule/parameters/detonate -->
+<!-- splat:values path=splat_rule/parameters/detonate -->
+
+| Field | Value |
+| --- | --- |
+| ` requires_same_plane ` | ` true ` |
+| ` ends_vibrations ` | ` true ` |
+
+##### Action options
+
+<!-- splat:table
+path: splat_rule/parameters/detonate/action_options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Action:
+    path: action
+    type: symbol
+  Requires action:
+    path: requires_action
+    type: symbol
+    optional: true
+  Turn:
+    path: turn
+    type: symbol
+    optional: true
+-->
+
+| Key | Action | Requires action | Turn |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Action ` |  |  |
+| ` row_2 ` | ` Replace one attack ` | ` Attack ` | ` Own ` |
+
+##### Save
+
+<!-- splat:yaml path=splat_rule/parameters/detonate/save -->
 
 ```yaml
-action_options:
-- action: action
-- action: replace_one_attack
-  requires_action: attack
-  turn: own
-requires_same_plane: true
-save:
-  ability: constitution
-  dc:
-    op: add
-    args:
-    - 8
-    - stat: abilities.wisdom.modifier
-    - stat: proficiency_bonus
-  failure_damage:
-    dice:
-      count: 10
-      sides: 12
-  success_damage_multiplier: 0.5
-  damage_type: force
-ends_vibrations: true
+ability: constitution
+dc:
+  op: add
+  args:
+  - 8
+  - stat: abilities.wisdom.modifier
+  - stat: proficiency_bonus
+failure_damage:
+  dice:
+    count: 10
+    sides: 12
+success_damage_multiplier: 0.5
+damage_type: force
 ```
 
 #### Dismiss

@@ -56,16 +56,65 @@ Original layout: [[../../srd-5.2.1/pages/181|page 181]].
 
 #### Qualifying any
 
-<!-- splat:rows path=splat_rule/parameters/qualifying_any -->
+<!-- splat:table
+path: splat_rule/parameters/qualifying_any
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+columns:
+  Key:
+    type: key
+  Creature present:
+    path: creature_present
+    type: boolean
+    optional: true
+  Creature not tiny:
+    path: creature_not_tiny
+    type: boolean
+    optional: true
+  Creature not ally:
+    path: creature_not_ally
+    type: boolean
+    optional: true
+  Furniture size at least:
+    path: furniture_size_at_least
+    type: symbol
+    optional: true
+  Terrain any:
+    path: terrain_any
+    type: yaml
+    optional: true
+  Liquid depth min:
+    path: liquid_depth_min
+    type: symbol
+    optional: true
+  Liquid depth max:
+    path: liquid_depth_max
+    type: symbol
+    optional: true
+  Narrow opening size difference:
+    path: narrow_opening_size_difference
+    type: integer
+    optional: true
+  Slope degrees min:
+    path: slope_degrees_min
+    type: integer
+    optional: true
+-->
 
-| Row | creature_present | creature_not_tiny | creature_not_ally | furniture_size_at_least | terrain_any | liquid_depth_min | liquid_depth_max | narrow_opening_size_difference | slope_degrees_min |
+| Key | Creature present | Creature not tiny | Creature not ally | Furniture size at least | Terrain any | Liquid depth min | Liquid depth max | Narrow opening size difference | Slope degrees min |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` true ` | ` true ` | ` true ` |  |  |  |  |  |  |
-| ` 1 ` |  |  |  | ` traveler_size ` |  |  |  |  |  |
-| ` 2 ` |  |  |  |  | ` ["heavy_snow", "ice", "rubble", "undergrowth"] ` |  |  |  |  |
-| ` 3 ` |  |  |  |  |  | ` shin ` | ` waist ` |  |  |
-| ` 4 ` |  |  |  |  |  |  |  | ` -1 ` |  |
-| ` 5 ` |  |  |  |  |  |  |  |  | ` 20 ` |
+| ` row_1 ` | true | true | true |  |  |  |  |  |  |
+| ` row_2 ` |  |  |  | ` Traveler size ` |  |  |  |  |  |
+| ` row_3 ` |  |  |  |  | ` ["heavy_snow", "ice", "rubble", "undergrowth"] ` |  |  |  |  |
+| ` row_4 ` |  |  |  |  |  | ` Shin ` | ` Waist ` |  |  |
+| ` row_5 ` |  |  |  |  |  |  |  | ` -1 ` |  |
+| ` row_6 ` |  |  |  |  |  |  |  |  | ` 20 ` |
 
 #### Similar terrain
 

@@ -43,160 +43,52 @@ features are listed in the Paladin Features table.\
 
 #### Grant when class level reached
 
-<!-- splat:rows path=splat_rule/parameters/grant_when_class_level_reached -->
+<!-- splat:table
+path: splat_rule/parameters/grant_when_class_level_reached
+key: Feature
+order:
+- paladin_level_10_aura_of_courage
+- paladin_level_11_radiant_strikes
+- paladin_level_14_restoring_touch
+- paladin_level_18_aura_expansion
+- paladin_level_19_epic_boon
+- paladin_level_1_lay_on_hands
+- paladin_level_1_spellcasting
+- paladin_level_1_weapon_mastery
+- paladin_level_2_fighting_style
+- paladin_level_2_paladin_s_smite
+- paladin_level_3_channel_divinity
+- paladin_level_3_paladin_subclass
+- paladin_level_4_ability_score_improvement
+- paladin_level_5_extra_attack
+- paladin_level_5_faithful_steed
+- paladin_level_6_aura_of_protection
+- paladin_level_9_abjure_foes
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 11 ` |
-| ` 2 ` | ` 14 ` |
-| ` 3 ` | ` 18 ` |
-| ` 4 ` | ` 19 ` |
-| ` 5 ` | ` 1 ` |
-| ` 6 ` | ` 1 ` |
-| ` 7 ` | ` 1 ` |
-| ` 8 ` | ` 2 ` |
-| ` 9 ` | ` 2 ` |
-| ` 10 ` | ` 3 ` |
-| ` 11 ` | ` 3 ` |
-| ` 12 ` | ` 4 ` |
-| ` 13 ` | ` 5 ` |
-| ` 14 ` | ` 5 ` |
-| ` 15 ` | ` 6 ` |
-| ` 16 ` | ` 9 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_10_aura_of_courage ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_11_radiant_strikes ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_14_restoring_touch ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_18_aura_expansion ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_1_lay_on_hands ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_1_weapon_mastery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_2_fighting_style ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_2_paladin_s_smite ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_3_channel_divinity ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/11/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_3_paladin_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/12/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/13/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_5_extra_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/14/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_5_faithful_steed ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/15/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_6_aura_of_protection ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/16/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/paladin_level_9_abjure_foes ` |
+| [Level 10: Aura of Courage](<../class_features/paladin_level_10_aura_of_courage.md> "dnd2024:class_features/paladin_level_10_aura_of_courage") | ` 10 ` |
+| [Level 11: Radiant Strikes](<../class_features/paladin_level_11_radiant_strikes.md> "dnd2024:class_features/paladin_level_11_radiant_strikes") | ` 11 ` |
+| [Level 14: Restoring Touch](<../class_features/paladin_level_14_restoring_touch.md> "dnd2024:class_features/paladin_level_14_restoring_touch") | ` 14 ` |
+| [Level 18: Aura Expansion](<../class_features/paladin_level_18_aura_expansion.md> "dnd2024:class_features/paladin_level_18_aura_expansion") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/paladin_level_19_epic_boon.md> "dnd2024:class_features/paladin_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Lay On Hands](<../class_features/paladin_level_1_lay_on_hands.md> "dnd2024:class_features/paladin_level_1_lay_on_hands") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/paladin_level_1_spellcasting.md> "dnd2024:class_features/paladin_level_1_spellcasting") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/paladin_level_1_weapon_mastery.md> "dnd2024:class_features/paladin_level_1_weapon_mastery") | ` 1 ` |
+| [Level 2: Fighting Style](<../class_features/paladin_level_2_fighting_style.md> "dnd2024:class_features/paladin_level_2_fighting_style") | ` 2 ` |
+| [Level 2: Paladin’s Smite](<../class_features/paladin_level_2_paladin_s_smite.md> "dnd2024:class_features/paladin_level_2_paladin_s_smite") | ` 2 ` |
+| [Level 3: Channel Divinity](<../class_features/paladin_level_3_channel_divinity.md> "dnd2024:class_features/paladin_level_3_channel_divinity") | ` 3 ` |
+| [Level 3: Paladin Subclass](<../class_features/paladin_level_3_paladin_subclass.md> "dnd2024:class_features/paladin_level_3_paladin_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/paladin_level_4_ability_score_improvement.md> "dnd2024:class_features/paladin_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Extra Attack](<../class_features/paladin_level_5_extra_attack.md> "dnd2024:class_features/paladin_level_5_extra_attack") | ` 5 ` |
+| [Level 5: Faithful Steed](<../class_features/paladin_level_5_faithful_steed.md> "dnd2024:class_features/paladin_level_5_faithful_steed") | ` 5 ` |
+| [Level 6: Aura of Protection](<../class_features/paladin_level_6_aura_of_protection.md> "dnd2024:class_features/paladin_level_6_aura_of_protection") | ` 6 ` |
+| [Level 9: Abjure Foes](<../class_features/paladin_level_9_abjure_foes.md> "dnd2024:class_features/paladin_level_9_abjure_foes") | ` 9 ` |

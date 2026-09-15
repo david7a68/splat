@@ -50,25 +50,22 @@ in the Monk Features table.\
 
 #### Features
 
-<!-- splat:rows path=splat_rule/parameters/features -->
+<!-- splat:table
+path: splat_rule/parameters/features
+key: Feature
+order:
+- monk_level_1_martial_arts
+- monk_level_1_unarmored_defense
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 1 ` |
-| ` 1 ` | ` 1 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_1_martial_arts ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/monk_level_1_unarmored_defense ` |
+| [Level 1: Martial Arts](<../class_features/monk_level_1_martial_arts.md> "dnd2024:class_features/monk_level_1_martial_arts") | ` 1 ` |
+| [Level 1: Unarmored Defense](<../class_features/monk_level_1_unarmored_defense.md> "dnd2024:class_features/monk_level_1_unarmored_defense") | ` 1 ` |

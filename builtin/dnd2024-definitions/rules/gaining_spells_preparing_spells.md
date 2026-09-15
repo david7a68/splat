@@ -55,18 +55,138 @@ of prepared spells, but the GM is free to alter them.\
 
 #### Class replacement rules
 
-<!-- splat:rows path=splat_rule/parameters/class_replacement_rules -->
+<!-- splat:table
+path: splat_rule/parameters/class_replacement_rules
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+columns:
+  Key:
+    type: key
+  Class:
+    path: class
+    type: symbol
+  Event:
+    path: event
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | class | event | maximum_replacements |
+| Key | Class | Event | Details |
 | --- | --- | --- | --- |
-| ` 0 ` | ` bard ` | ` level_gained ` | ` 1 ` |
-| ` 1 ` | ` cleric ` | ` long_rest_finished ` | ` any ` |
-| ` 2 ` | ` druid ` | ` long_rest_finished ` | ` any ` |
-| ` 3 ` | ` paladin ` | ` long_rest_finished ` | ` 1 ` |
-| ` 4 ` | ` ranger ` | ` long_rest_finished ` | ` 1 ` |
-| ` 5 ` | ` sorcerer ` | ` level_gained ` | ` 1 ` |
-| ` 6 ` | ` warlock ` | ` level_gained ` | ` 1 ` |
-| ` 7 ` | ` wizard ` | ` long_rest_finished ` | ` any ` |
+| ` row_1 ` | ` Bard ` | ` Level gained ` | [Rules](#^splat-f96eda1a-row_1 "section:row_1") |
+| ` row_2 ` | ` Cleric ` | ` Long rest finished ` | [Rules](#^splat-f96eda1a-row_2 "section:row_2") |
+| ` row_3 ` | ` Druid ` | ` Long rest finished ` | [Rules](#^splat-f96eda1a-row_3 "section:row_3") |
+| ` row_4 ` | ` Paladin ` | ` Long rest finished ` | [Rules](#^splat-f96eda1a-row_4 "section:row_4") |
+| ` row_5 ` | ` Ranger ` | ` Long rest finished ` | [Rules](#^splat-f96eda1a-row_5 "section:row_5") |
+| ` row_6 ` | ` Sorcerer ` | ` Level gained ` | [Rules](#^splat-f96eda1a-row_6 "section:row_6") |
+| ` row_7 ` | ` Warlock ` | ` Level gained ` | [Rules](#^splat-f96eda1a-row_7 "section:row_7") |
+| ` row_8 ` | ` Wizard ` | ` Long rest finished ` | [Rules](#^splat-f96eda1a-row_8 "section:row_8") |
+
+##### Row 1
+
+^splat-f96eda1a-row_1
+
+###### Maximum replacements
+
+<!-- splat:yaml path=splat_rule/parameters/class_replacement_rules/@row_1/maximum_replacements -->
+
+```yaml
+1
+```
+
+##### Row 2
+
+^splat-f96eda1a-row_2
+
+###### Maximum replacements
+
+<!-- splat:yaml path=splat_rule/parameters/class_replacement_rules/@row_2/maximum_replacements -->
+
+```yaml
+any
+```
+
+##### Row 3
+
+^splat-f96eda1a-row_3
+
+###### Maximum replacements
+
+<!-- splat:yaml path=splat_rule/parameters/class_replacement_rules/@row_3/maximum_replacements -->
+
+```yaml
+any
+```
+
+##### Row 4
+
+^splat-f96eda1a-row_4
+
+###### Maximum replacements
+
+<!-- splat:yaml path=splat_rule/parameters/class_replacement_rules/@row_4/maximum_replacements -->
+
+```yaml
+1
+```
+
+##### Row 5
+
+^splat-f96eda1a-row_5
+
+###### Maximum replacements
+
+<!-- splat:yaml path=splat_rule/parameters/class_replacement_rules/@row_5/maximum_replacements -->
+
+```yaml
+1
+```
+
+##### Row 6
+
+^splat-f96eda1a-row_6
+
+###### Maximum replacements
+
+<!-- splat:yaml path=splat_rule/parameters/class_replacement_rules/@row_6/maximum_replacements -->
+
+```yaml
+1
+```
+
+##### Row 7
+
+^splat-f96eda1a-row_7
+
+###### Maximum replacements
+
+<!-- splat:yaml path=splat_rule/parameters/class_replacement_rules/@row_7/maximum_replacements -->
+
+```yaml
+1
+```
+
+##### Row 8
+
+^splat-f96eda1a-row_8
+
+###### Maximum replacements
+
+<!-- splat:yaml path=splat_rule/parameters/class_replacement_rules/@row_8/maximum_replacements -->
+
+```yaml
+any
+```
 
 #### Monster prepared list change
 

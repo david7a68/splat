@@ -72,14 +72,31 @@ Original layout: [[../../srd-5.2.1/pages/219|page 219]].
 
 #### Attunement eligibility
 
-<!-- splat:yaml path=splat_rule/parameters/attunement_eligibility -->
+##### Any of
 
-```yaml
-any_of:
-- species: dwarf
-- attuned_item:
-    key: dnd2024:items/belt_of_dwarvenkind
-```
+<!-- splat:table
+path: splat_rule/parameters/attunement_eligibility/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Species:
+    path: species
+    type: symbol
+    optional: true
+  Attuned item:
+    path: attuned_item
+    type: reference
+    optional: true
+-->
+
+| Key | Species | Attuned item |
+| --- | --- | --- |
+| ` row_1 ` | ` Dwarf ` |  |
+| ` row_2 ` |  | [Belt of Dwarvenkind](<belt_of_dwarvenkind.md> "dnd2024:items/belt_of_dwarvenkind") |
 
 #### Thrown
 
@@ -117,13 +134,36 @@ giant:
 
 #### Attunement
 
-<!-- splat:yaml path=splat_rule/parameters/attunement -->
+<!-- splat:values path=splat_rule/parameters/attunement -->
 
-```yaml
-required: true
-eligibility:
-  any_of:
-  - species: dwarf
-  - attuned_item:
-      key: dnd2024:items/belt_of_dwarvenkind
-```
+| Field | Value |
+| --- | --- |
+| ` required ` | ` true ` |
+
+##### Eligibility
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/attunement/eligibility/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Species:
+    path: species
+    type: symbol
+    optional: true
+  Attuned item:
+    path: attuned_item
+    type: reference
+    optional: true
+-->
+
+| Key | Species | Attuned item |
+| --- | --- | --- |
+| ` row_1 ` | ` Dwarf ` |  |
+| ` row_2 ` |  | [Belt of Dwarvenkind](<belt_of_dwarvenkind.md> "dnd2024:items/belt_of_dwarvenkind") |

@@ -48,139 +48,60 @@ group’s travel pace.\
 
 #### Terrain table
 
-<!-- splat:rows path=splat_rule/parameters/terrain_table -->
+<!-- splat:table
+path: splat_rule/parameters/terrain_table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+columns:
+  Key:
+    type: key
+  Terrain:
+    path: terrain
+    type: symbol
+  Maximum pace:
+    path: maximum_pace
+    type: symbol
+  Encounter distance ft dice count:
+    path: encounter_distance_ft/dice/count
+    type: integer
+  Encounter distance ft dice sides:
+    path: encounter_distance_ft/dice/sides
+    type: integer
+  Encounter distance ft multiplier:
+    path: encounter_distance_ft/multiplier
+    type: integer
+  Foraging dc:
+    path: foraging_dc
+    type: integer
+  Navigation dc:
+    path: navigation_dc
+    type: integer
+  Search dc:
+    path: search_dc
+    type: integer
+-->
 
-| Row | terrain | maximum_pace | foraging_dc | navigation_dc | search_dc |
-| --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` arctic ` | ` fast ` | ` 20 ` | ` 10 ` | ` 10 ` |
-| ` 1 ` | ` coastal ` | ` normal ` | ` 10 ` | ` 5 ` | ` 15 ` |
-| ` 2 ` | ` desert ` | ` normal ` | ` 20 ` | ` 10 ` | ` 10 ` |
-| ` 3 ` | ` forest ` | ` normal ` | ` 10 ` | ` 15 ` | ` 15 ` |
-| ` 4 ` | ` grassland ` | ` fast ` | ` 15 ` | ` 5 ` | ` 15 ` |
-| ` 5 ` | ` hill ` | ` normal ` | ` 15 ` | ` 10 ` | ` 15 ` |
-| ` 6 ` | ` mountain ` | ` slow ` | ` 20 ` | ` 15 ` | ` 20 ` |
-| ` 7 ` | ` swamp ` | ` slow ` | ` 10 ` | ` 15 ` | ` 20 ` |
-| ` 8 ` | ` underdark ` | ` normal ` | ` 20 ` | ` 10 ` | ` 20 ` |
-| ` 9 ` | ` urban ` | ` normal ` | ` 20 ` | ` 15 ` | ` 15 ` |
-| ` 10 ` | ` waterborne ` | ` vehicle_speed ` | ` 15 ` | ` 10 ` | ` 15 ` |
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/0/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 6
-  sides: 6
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/1/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 2
-  sides: 10
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/2/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 6
-  sides: 6
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/3/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 2
-  sides: 8
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/4/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 6
-  sides: 6
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/5/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 2
-  sides: 10
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/6/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 4
-  sides: 10
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/7/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 2
-  sides: 8
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/8/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 2
-  sides: 6
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/9/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 2
-  sides: 6
-multiplier: 10
-```
-
-##### Encounter distance ft
-
-<!-- splat:yaml path=splat_rule/parameters/terrain_table/10/encounter_distance_ft -->
-
-```yaml
-dice:
-  count: 6
-  sides: 6
-multiplier: 10
-```
+| Key | Terrain | Maximum pace | Encounter distance ft dice count | Encounter distance ft dice sides | Encounter distance ft multiplier | Foraging dc | Navigation dc | Search dc |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Arctic ` | ` Fast ` | ` 6 ` | ` 6 ` | ` 10 ` | ` 20 ` | ` 10 ` | ` 10 ` |
+| ` row_2 ` | ` Coastal ` | ` Normal ` | ` 2 ` | ` 10 ` | ` 10 ` | ` 10 ` | ` 5 ` | ` 15 ` |
+| ` row_3 ` | ` Desert ` | ` Normal ` | ` 6 ` | ` 6 ` | ` 10 ` | ` 20 ` | ` 10 ` | ` 10 ` |
+| ` row_4 ` | ` Forest ` | ` Normal ` | ` 2 ` | ` 8 ` | ` 10 ` | ` 10 ` | ` 15 ` | ` 15 ` |
+| ` row_5 ` | ` Grassland ` | ` Fast ` | ` 6 ` | ` 6 ` | ` 10 ` | ` 15 ` | ` 5 ` | ` 15 ` |
+| ` row_6 ` | ` Hill ` | ` Normal ` | ` 2 ` | ` 10 ` | ` 10 ` | ` 15 ` | ` 10 ` | ` 15 ` |
+| ` row_7 ` | ` Mountain ` | ` Slow ` | ` 4 ` | ` 10 ` | ` 10 ` | ` 20 ` | ` 15 ` | ` 20 ` |
+| ` row_8 ` | ` Swamp ` | ` Slow ` | ` 2 ` | ` 8 ` | ` 10 ` | ` 10 ` | ` 15 ` | ` 20 ` |
+| ` row_9 ` | ` Underdark ` | ` Normal ` | ` 2 ` | ` 6 ` | ` 10 ` | ` 20 ` | ` 10 ` | ` 20 ` |
+| ` row_10 ` | ` Urban ` | ` Normal ` | ` 2 ` | ` 6 ` | ` 10 ` | ` 20 ` | ` 15 ` | ` 15 ` |
+| ` row_11 ` | ` Waterborne ` | ` Vehicle speed ` | ` 6 ` | ` 6 ` | ` 10 ` | ` 15 ` | ` 10 ` | ` 15 ` |

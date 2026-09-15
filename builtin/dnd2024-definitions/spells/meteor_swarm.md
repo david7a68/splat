@@ -116,12 +116,27 @@ Original layout: [[../../srd-5.2.1/pages/149|page 149]].
 
 #### Damage
 
-<!-- splat:rows path=splat_rule/parameters/damage -->
+<!-- splat:table
+path: splat_rule/parameters/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice:
+    path: dice
+    type: string
+  Type:
+    path: type
+    type: symbol
+-->
 
-| Row | dice | type |
+| Key | Dice | Type |
 | --- | --- | --- |
-| ` 0 ` | ` 20d6 ` | ` fire ` |
-| ` 1 ` | ` 20d6 ` | ` bludgeoning ` |
+| ` row_1 ` | ` 20d6 ` | ` Fire ` |
+| ` row_2 ` | ` 20d6 ` | ` Bludgeoning ` |
 
 #### Success damage scale
 

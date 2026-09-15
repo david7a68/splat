@@ -216,60 +216,123 @@ spider_climb:
 
 #### Actions
 
-<!-- splat:yaml path=splat_rule/parameters/actions -->
+##### Multiattack
+
+<!-- splat:yaml path=splat_rule/parameters/actions/multiattack -->
 
 ```yaml
-multiattack:
-  attack_count:
-    op: floor
+attack_count:
+  op: floor
+  args:
+  - op: multiply
     args:
-    - op: multiply
+    - binding: cast_level
+    - numerator: 1
+      denominator: 2
+choices:
+- poison_jab
+- web_bolt_if_spider
+```
+
+##### Poison jab
+
+<!-- splat:values path=splat_rule/parameters/actions/poison_jab -->
+
+| Field | Value |
+| --- | --- |
+| ` attack ` | ` melee ` |
+| ` reach_feet ` | ` 10 ` |
+
+###### Bonus
+
+<!-- splat:values path=splat_rule/parameters/actions/poison_jab/bonus -->
+
+| Field | Value |
+| --- | --- |
+| ` binding ` | ` spell_attack_modifier ` |
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/actions/poison_jab/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice count:
+    path: dice/count
+    type: integer
+  Dice sides:
+    path: dice/sides
+    type: integer
+  Dice add op:
+    path: dice/add/op
+    type: symbol
+    optional: true
+  Type:
+    path: type
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Dice count | Dice sides | Dice add op | Type | Details |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 6 ` | ` Add ` | ` Piercing ` | [Rules](#^splat-5d609e49-row_1 "section:row_1") |
+| ` row_2 ` | ` 1 ` | ` 4 ` |  | ` Poison ` | [Rules](#^splat-5d609e49-row_2 "section:row_2") |
+
+###### Row 1
+
+^splat-5d609e49-row_1
+
+###### Args
+
+<!-- splat:yaml path=splat_rule/parameters/actions/poison_jab/damage/@row_1/dice/add/args -->
+
+```yaml
+- 3
+- binding: cast_level
+```
+
+###### Row 2
+
+^splat-5d609e49-row_2
+
+###### Add
+
+<!-- splat:yaml path=splat_rule/parameters/actions/poison_jab/damage/@row_2/dice/add -->
+
+```yaml
+0
+```
+
+##### Web bolt
+
+<!-- splat:yaml path=splat_rule/parameters/actions/web_bolt -->
+
+```yaml
+form: spider
+attack: ranged
+bonus:
+  binding: spell_attack_modifier
+range_feet: 60
+damage:
+  dice:
+    count: 1
+    sides: 10
+    add:
+      op: add
       args:
+      - 3
       - binding: cast_level
-      - numerator: 1
-        denominator: 2
-  choices:
-  - poison_jab
-  - web_bolt_if_spider
-poison_jab:
-  attack: melee
-  bonus:
-    binding: spell_attack_modifier
-  reach_feet: 10
-  damage:
-  - dice:
-      count: 1
-      sides: 6
-      add:
-        op: add
-        args:
-        - 3
-        - binding: cast_level
-    type: piercing
-  - dice:
-      count: 1
-      sides: 4
-      add: 0
-    type: poison
-web_bolt:
-  form: spider
-  attack: ranged
-  bonus:
-    binding: spell_attack_modifier
-  range_feet: 60
-  damage:
-    dice:
-      count: 1
-      sides: 10
-      add:
-        op: add
-        args:
-        - 3
-        - binding: cast_level
-    type: bludgeoning
-  hit_effect:
-    speed: 0
-    until: insect_next_turn_start
+  type: bludgeoning
+hit_effect:
+  speed: 0
+  until: insect_next_turn_start
 ```
 
 #### Bonus actions

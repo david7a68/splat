@@ -108,28 +108,41 @@ amount:
 
 #### Properties
 
-<!-- splat:rows path=splat_rule/parameters/properties -->
+<!-- splat:table
+path: splat_rule/parameters/properties
+key: Variant
+order:
+- finesse
+- reach
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Rule:
+    path: rule
+    type: reference
+  Attack and damage ability choice:
+    path: attack_and_damage_ability_choice
+    type: yaml
+    optional: true
+  Same ability for both:
+    path: same_ability_for_both
+    type: boolean
+    optional: true
+  Reach bonus ft:
+    path: reach_bonus_ft
+    type: integer
+    optional: true
+  Applies to:
+    path: applies_to
+    type: yaml
+    optional: true
+-->
 
-| Row | id | attack_and_damage_ability_choice | same_ability_for_both | reach_bonus_ft | applies_to |
+| Variant | Rule | Attack and damage ability choice | Same ability for both | Reach bonus ft | Applies to |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` finesse ` | ` ["strength", "dexterity"] ` | ` true ` |  |  |
-| ` 1 ` | ` reach ` |  |  | ` 5 ` | ` ["attacks", "opportunity_attack_reach"] ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/0/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_finesse ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/1/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_reach ` |
+| ` Finesse ` | [Finesse](<../rules/weapons_finesse.md> "dnd2024:rules/weapons_finesse") | ` ["strength", "dexterity"] ` | true |  |  |
+| ` Reach ` | [Reach](<../rules/weapons_reach.md> "dnd2024:rules/weapons_reach") |  |  | ` 5 ` | ` ["attacks", "opportunity_attack_reach"] ` |
 
 #### Attack
 

@@ -100,15 +100,38 @@ Original layout: [[../../srd-5.2.1/pages/123|page 123]].
 
 #### Blocked by
 
-<!-- splat:rows path=splat_rule/parameters/blocked_by -->
+<!-- splat:table
+path: splat_rule/parameters/blocked_by
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Material:
+    path: material
+    type: symbol
+  Thickness inches:
+    path: thickness_inches
+    type: integer
+    optional: true
+  Thickness:
+    path: thickness
+    type: symbol
+    optional: true
+-->
 
-| Row | material | thickness_inches | thickness |
+| Key | Material | Thickness inches | Thickness |
 | --- | --- | --- | --- |
-| ` 0 ` | ` stone ` | ` 12 ` |  |
-| ` 1 ` | ` dirt ` | ` 12 ` |  |
-| ` 2 ` | ` wood ` | ` 12 ` |  |
-| ` 3 ` | ` metal ` | ` 1 ` |  |
-| ` 4 ` | ` lead ` |  | ` thin_sheet ` |
+| ` row_1 ` | ` Stone ` | ` 12 ` |  |
+| ` row_2 ` | ` Dirt ` | ` 12 ` |  |
+| ` row_3 ` | ` Wood ` | ` 12 ` |  |
+| ` row_4 ` | ` Metal ` | ` 1 ` |  |
+| ` row_5 ` | ` Lead ` |  | ` Thin sheet ` |
 
 #### Spell lifetime
 

@@ -52,10 +52,42 @@ table.\
 
 #### Table
 
-<!-- splat:rows path=splat_rule/parameters/table -->
+<!-- splat:table
+path: splat_rule/parameters/table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Roll:
+    path: ''
+    type: range
+  Modes:
+    path: modes
+    type: yaml
+  Recipient:
+    path: recipient
+    type: symbol
+    optional: true
+  Language count min:
+    path: language_count_min
+    type: integer
+    optional: true
+  Languages:
+    path: languages
+    type: symbol
+    optional: true
+  Telepathy recipient:
+    path: telepathy_recipient
+    type: symbol
+    optional: true
+-->
 
-| Row | min | max | modes | recipient | language_count_min | languages | telepathy_recipient |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 6 ` | ` ["transmit_emotions"] ` | ` carrying_or_wielding_creature ` |  |  |  |
-| ` 1 ` | ` 7 ` | ` 9 ` | ` ["speech"] ` |  | ` 1 ` | ` gm_choice ` |  |
-| ` 2 ` | ` 10 ` | ` 10 ` | ` ["speech", "telepathy"] ` |  | ` 1 ` | ` gm_choice ` | ` carrying_or_wielding_creature ` |
+| Key | Roll | Modes | Recipient | Language count min | Languages | Telepathy recipient |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1–6 ` | ` ["transmit_emotions"] ` | ` Carrying or wielding creature ` |  |  |  |
+| ` row_2 ` | ` 7–9 ` | ` ["speech"] ` |  | ` 1 ` | ` Gm choice ` |  |
+| ` row_3 ` | ` 10 ` | ` ["speech", "telepathy"] ` |  | ` 1 ` | ` Gm choice ` | ` Carrying or wielding creature ` |

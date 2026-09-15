@@ -55,20 +55,56 @@ Str 15 Disadvantage 65 lb. 1,500 GP\
 
 #### Armor table
 
-<!-- splat:rows path=splat_rule/parameters/armor_table -->
+<!-- splat:table
+path: splat_rule/parameters/armor_table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+columns:
+  Key:
+    type: key
+  Armor:
+    path: armor
+    type: symbol
+  Strength min:
+    path: strength_min
+    type: integer
+    nullable: true
+  Stealth disadvantage:
+    path: stealth_disadvantage
+    type: boolean
+  Weight lb:
+    path: weight_lb
+    type: integer
+  Cost gp:
+    path: cost_gp
+    type: integer
+-->
 
-| Row | armor | strength_min | stealth_disadvantage | weight_lb | cost_gp |
+| Key | Armor | Strength min | Stealth disadvantage | Weight lb | Cost gp |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` padded ` | ` null ` | ` true ` | ` 8 ` | ` 5 ` |
-| ` 1 ` | ` leather ` | ` null ` | ` false ` | ` 10 ` | ` 10 ` |
-| ` 2 ` | ` studded_leather ` | ` null ` | ` false ` | ` 13 ` | ` 45 ` |
-| ` 3 ` | ` hide ` | ` null ` | ` false ` | ` 12 ` | ` 10 ` |
-| ` 4 ` | ` chain_shirt ` | ` null ` | ` false ` | ` 20 ` | ` 50 ` |
-| ` 5 ` | ` scale_mail ` | ` null ` | ` true ` | ` 45 ` | ` 50 ` |
-| ` 6 ` | ` breastplate ` | ` null ` | ` false ` | ` 20 ` | ` 400 ` |
-| ` 7 ` | ` half_plate ` | ` null ` | ` true ` | ` 40 ` | ` 750 ` |
-| ` 8 ` | ` ring_mail ` | ` null ` | ` true ` | ` 40 ` | ` 30 ` |
-| ` 9 ` | ` chain_mail ` | ` 13 ` | ` true ` | ` 55 ` | ` 75 ` |
-| ` 10 ` | ` splint ` | ` 15 ` | ` true ` | ` 60 ` | ` 200 ` |
-| ` 11 ` | ` plate ` | ` 15 ` | ` true ` | ` 65 ` | ` 1500 ` |
-| ` 12 ` | ` shield ` | ` null ` | ` false ` | ` 6 ` | ` 10 ` |
+| ` row_1 ` | ` Padded ` | null | true | ` 8 ` | ` 5 ` |
+| ` row_2 ` | ` Leather ` | null | false | ` 10 ` | ` 10 ` |
+| ` row_3 ` | ` Studded leather ` | null | false | ` 13 ` | ` 45 ` |
+| ` row_4 ` | ` Hide ` | null | false | ` 12 ` | ` 10 ` |
+| ` row_5 ` | ` Chain shirt ` | null | false | ` 20 ` | ` 50 ` |
+| ` row_6 ` | ` Scale mail ` | null | true | ` 45 ` | ` 50 ` |
+| ` row_7 ` | ` Breastplate ` | null | false | ` 20 ` | ` 400 ` |
+| ` row_8 ` | ` Half plate ` | null | true | ` 40 ` | ` 750 ` |
+| ` row_9 ` | ` Ring mail ` | null | true | ` 40 ` | ` 30 ` |
+| ` row_10 ` | ` Chain mail ` | ` 13 ` | true | ` 55 ` | ` 75 ` |
+| ` row_11 ` | ` Splint ` | ` 15 ` | true | ` 60 ` | ` 200 ` |
+| ` row_12 ` | ` Plate ` | ` 15 ` | true | ` 65 ` | ` 1500 ` |
+| ` row_13 ` | ` Shield ` | null | false | ` 6 ` | ` 10 ` |

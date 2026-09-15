@@ -75,32 +75,203 @@ Wagon 400 lb. 35 GP\
 
 #### Mounts
 
-<!-- splat:rows path=splat_rule/parameters/mounts -->
+<!-- splat:table
+path: splat_rule/parameters/mounts
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Capacity lb:
+    path: capacity_lb
+    type: integer
+  Cost gp:
+    path: cost_gp
+    type: integer
+-->
 
-| Row | kind | capacity_lb | cost_gp |
+| Key | Kind | Capacity lb | Cost gp |
 | --- | --- | --- | --- |
-| ` 0 ` | ` camel ` | ` 450 ` | ` 50 ` |
-| ` 1 ` | ` elephant ` | ` 1320 ` | ` 200 ` |
-| ` 2 ` | ` draft_horse ` | ` 540 ` | ` 50 ` |
-| ` 3 ` | ` riding_horse ` | ` 480 ` | ` 75 ` |
-| ` 4 ` | ` mastiff ` | ` 195 ` | ` 25 ` |
-| ` 5 ` | ` mule ` | ` 420 ` | ` 8 ` |
-| ` 6 ` | ` pony ` | ` 225 ` | ` 30 ` |
-| ` 7 ` | ` warhorse ` | ` 540 ` | ` 400 ` |
+| ` row_1 ` | ` Camel ` | ` 450 ` | ` 50 ` |
+| ` row_2 ` | ` Elephant ` | ` 1320 ` | ` 200 ` |
+| ` row_3 ` | ` Draft horse ` | ` 540 ` | ` 50 ` |
+| ` row_4 ` | ` Riding horse ` | ` 480 ` | ` 75 ` |
+| ` row_5 ` | ` Mastiff ` | ` 195 ` | ` 25 ` |
+| ` row_6 ` | ` Mule ` | ` 420 ` | ` 8 ` |
+| ` row_7 ` | ` Pony ` | ` 225 ` | ` 30 ` |
+| ` row_8 ` | ` Warhorse ` | ` 540 ` | ` 400 ` |
 
 #### Tack and vehicles
 
-<!-- splat:rows path=splat_rule/parameters/tack_and_vehicles -->
+<!-- splat:table
+path: splat_rule/parameters/tack_and_vehicles
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Weight lb:
+    path: weight_lb
+    type: integer
+    nullable: true
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | kind | weight_lb | cost_gp |
+| Key | Kind | Weight lb | Details |
 | --- | --- | --- | --- |
-| ` 0 ` | ` carriage ` | ` 600 ` | ` 100 ` |
-| ` 1 ` | ` cart ` | ` 200 ` | ` 15 ` |
-| ` 2 ` | ` chariot ` | ` 100 ` | ` 250 ` |
-| ` 3 ` | ` feed_per_day ` | ` 10 ` | ` 0.05 ` |
-| ` 4 ` | ` exotic_saddle ` | ` 40 ` | ` 60 ` |
-| ` 5 ` | ` military_saddle ` | ` 30 ` | ` 20 ` |
-| ` 6 ` | ` riding_saddle ` | ` 25 ` | ` 10 ` |
-| ` 7 ` | ` sled ` | ` 300 ` | ` 20 ` |
-| ` 8 ` | ` stabling_per_day ` | ` null ` | ` 0.5 ` |
-| ` 9 ` | ` wagon ` | ` 400 ` | ` 35 ` |
+| ` row_1 ` | ` Carriage ` | ` 600 ` | [Rules](#^splat-b477bd65-row_1 "section:row_1") |
+| ` row_2 ` | ` Cart ` | ` 200 ` | [Rules](#^splat-b477bd65-row_2 "section:row_2") |
+| ` row_3 ` | ` Chariot ` | ` 100 ` | [Rules](#^splat-b477bd65-row_3 "section:row_3") |
+| ` row_4 ` | ` Feed per day ` | ` 10 ` | [Rules](#^splat-b477bd65-row_4 "section:row_4") |
+| ` row_5 ` | ` Exotic saddle ` | ` 40 ` | [Rules](#^splat-b477bd65-row_5 "section:row_5") |
+| ` row_6 ` | ` Military saddle ` | ` 30 ` | [Rules](#^splat-b477bd65-row_6 "section:row_6") |
+| ` row_7 ` | ` Riding saddle ` | ` 25 ` | [Rules](#^splat-b477bd65-row_7 "section:row_7") |
+| ` row_8 ` | ` Sled ` | ` 300 ` | [Rules](#^splat-b477bd65-row_8 "section:row_8") |
+| ` row_9 ` | ` Stabling per day ` | null | [Rules](#^splat-b477bd65-row_9 "section:row_9") |
+| ` row_10 ` | ` Wagon ` | ` 400 ` | [Rules](#^splat-b477bd65-row_10 "section:row_10") |
+
+##### Row 1
+
+^splat-b477bd65-row_1
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_1/cost_gp -->
+
+```yaml
+100
+```
+
+##### Row 2
+
+^splat-b477bd65-row_2
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_2/cost_gp -->
+
+```yaml
+15
+```
+
+##### Row 3
+
+^splat-b477bd65-row_3
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_3/cost_gp -->
+
+```yaml
+250
+```
+
+##### Row 4
+
+^splat-b477bd65-row_4
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_4/cost_gp -->
+
+```yaml
+0.05
+```
+
+##### Row 5
+
+^splat-b477bd65-row_5
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_5/cost_gp -->
+
+```yaml
+60
+```
+
+##### Row 6
+
+^splat-b477bd65-row_6
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_6/cost_gp -->
+
+```yaml
+20
+```
+
+##### Row 7
+
+^splat-b477bd65-row_7
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_7/cost_gp -->
+
+```yaml
+10
+```
+
+##### Row 8
+
+^splat-b477bd65-row_8
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_8/cost_gp -->
+
+```yaml
+20
+```
+
+##### Row 9
+
+^splat-b477bd65-row_9
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_9/cost_gp -->
+
+```yaml
+0.5
+```
+
+##### Row 10
+
+^splat-b477bd65-row_10
+
+###### Cost gp
+
+<!-- splat:yaml path=splat_rule/parameters/tack_and_vehicles/@row_10/cost_gp -->
+
+```yaml
+35
+```

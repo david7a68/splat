@@ -149,29 +149,66 @@ heal:
 
 ##### Berserk
 
-<!-- splat:yaml path=splat_rule/parameters/features/berserk -->
+<!-- splat:values path=splat_rule/parameters/features/berserk -->
 
-```yaml
-economy: trait
-operation: passive_rule
-trigger: self.turn_start
-requires:
-  self_bloodied: true
-roll:
-  die: 6
-  success_faces:
-  - 6
-on_success:
-  state: berserk
-while_berserk:
-  attack_priority:
-  - target: nearest_visible_creature
-    if_reachable_for_move_and_attack: true
-  - target: object
-ends_on:
-- self.destroyed
-- self.not_bloodied
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` trait ` |
+| ` operation ` | ` passive_rule ` |
+| ` trigger ` | ` self.turn_start ` |
+| ` ends_on ` | ` ["self.destroyed", "self.not_bloodied"] ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/berserk/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` self_bloodied ` | ` true ` |
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/features/berserk/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` die ` | ` 6 ` |
+| ` success_faces ` | ` [6] ` |
+
+###### On success
+
+<!-- splat:values path=splat_rule/parameters/features/berserk/on_success -->
+
+| Field | Value |
+| --- | --- |
+| ` state ` | ` berserk ` |
+
+###### While berserk
+
+###### Attack priority
+
+<!-- splat:table
+path: splat_rule/parameters/features/berserk/while_berserk/attack_priority
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Target:
+    path: target
+    type: symbol
+  If reachable for move and attack:
+    path: if_reachable_for_move_and_attack
+    type: boolean
+    optional: true
+-->
+
+| Key | Target | If reachable for move and attack |
+| --- | --- | --- |
+| ` row_1 ` | ` Nearest visible creature ` | true |
+| ` row_2 ` | ` Object ` |  |
 
 ##### Immutable form
 
@@ -212,35 +249,68 @@ sequence:
 
 ##### Slam
 
-<!-- splat:yaml path=splat_rule/parameters/features/slam -->
+<!-- splat:values path=splat_rule/parameters/features/slam -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/slam/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 9
-  reach_ft: 5
-hit:
-  damage:
-  - average: 10
-    roll:
-      count: 1
-      sides: 10
-      modifier: 5
-    type: bludgeoning
-  - average: 6
-    roll:
-      count: 1
-      sides: 12
-      modifier: 0
-    type: acid
-  maximum_hp_reduction:
-    equal: acid_damage_taken
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 9
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/slam/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 10 ` | ` 1 ` | ` 10 ` | ` 5 ` | ` Bludgeoning ` |
+| ` row_2 ` | ` 6 ` | ` 1 ` | ` 12 ` | ` 0 ` | ` Acid ` |
+
+###### Maximum hp reduction
+
+<!-- splat:values path=splat_rule/parameters/features/slam/hit/maximum_hp_reduction -->
+
+| Field | Value |
+| --- | --- |
+| ` equal ` | ` acid_damage_taken ` |
 
 ##### Hasten
 

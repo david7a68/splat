@@ -163,63 +163,127 @@ sequence:
 
 ##### Storm sword
 
-<!-- splat:yaml path=splat_rule/parameters/features/storm_sword -->
+<!-- splat:values path=splat_rule/parameters/features/storm_sword -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/storm_sword/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 14
-  reach_ft: 10
-hit:
-  damage:
-  - average: 23
-    roll:
-      count: 4
-      sides: 6
-      modifier: 9
-    type: slashing
-  - average: 13
-    roll:
-      count: 3
-      sides: 8
-      modifier: 0
-    type: lightning
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 14
+reach_ft: 10
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/storm_sword/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 23 ` | ` 4 ` | ` 6 ` | ` 9 ` | ` Slashing ` |
+| ` row_2 ` | ` 13 ` | ` 3 ` | ` 8 ` | ` 0 ` | ` Lightning ` |
 
 ##### Thunderbolt
 
-<!-- splat:yaml path=splat_rule/parameters/features/thunderbolt -->
+<!-- splat:values path=splat_rule/parameters/features/thunderbolt -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/thunderbolt/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: ranged
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 14
-  range_ft: 500
-  long_range_ft: null
-hit:
-  damage:
-  - average: 22
-    roll:
-      count: 2
-      sides: 12
-      modifier: 9
-    type: lightning
-  conditions:
-  - condition: blinded
-    until: self.next_turn_start
-  - condition: deafened
-    until: self.next_turn_start
+mode: ranged
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 14
+range_ft: 500
+long_range_ft: null
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:rows path=splat_rule/parameters/features/thunderbolt/hit/damage -->
+
+| Row | average | type |
+| --- | --- | --- |
+| ` 0 ` | ` 22 ` | ` lightning ` |
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/features/thunderbolt/hit/damage/0/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 2 ` |
+| ` sides ` | ` 12 ` |
+| ` modifier ` | ` 9 ` |
+
+###### Conditions
+
+<!-- splat:table
+path: splat_rule/parameters/features/thunderbolt/hit/conditions
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Condition:
+    path: condition
+    type: symbol
+  Until:
+    path: until
+    type: string
+-->
+
+| Key | Condition | Until |
+| --- | --- | --- |
+| ` row_1 ` | ` Blinded ` | ` self.next_turn_start ` |
+| ` row_2 ` | ` Deafened ` | ` self.next_turn_start ` |
 
 ##### Lightning storm
 
@@ -267,33 +331,52 @@ success:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-operation: spellcasting
-ability: wisdom
-components_waived:
-- material
-save_dc: 18
-options:
-- spell:
-    key: dnd2024:spells/detect_magic
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/light
-  usage:
-    kind: at_will
-- spell:
-    key: dnd2024:spells/control_weather
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` wisdom ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 18 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- detect_magic
+- light
+- control_weather
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Uses:
+    path: usage/uses
+    type: integer
+    optional: true
+  Use pool:
+    path: usage/pool
+    type: symbol
+    optional: true
+  Recovery:
+    path: usage/recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Use pool | Recovery |
+| --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | ` At will ` |  |  |  |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | ` At will ` |  |  |  |
+| [Control Weather](<../spells/control_weather.md> "dnd2024:spells/control_weather") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 #### Skill totals
 

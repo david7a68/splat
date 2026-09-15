@@ -109,30 +109,81 @@ Priest’s Pack, and 7 GP; or (B)\
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
 
-```yaml
-count: 1
-options:
-- id: a
-  grants:
-  - item_type: chain_shirt
-    quantity: 1
-  - item_type: shield
-    quantity: 1
-  - item_type: mace
-    quantity: 1
-  - item_type: holy_symbol
-    quantity: 1
-  - item_type: priest_s_pack
-    quantity: 1
-  - item_type: gp
-    quantity: 7
-- id: b
-  grants:
-  - item_type: gp
-    quantity: 110
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options
+key: Variant
+order:
+- a
+- b
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
+
+| Variant | Details |
+| --- | --- |
+| ` A ` | [Rules](#^splat-93071aae-a "section:a") |
+| ` B ` | [Rules](#^splat-93071aae-b "section:b") |
+
+###### A
+
+^splat-93071aae-a
+
+###### Grants
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/@a/grants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+columns:
+  Key:
+    type: key
+  Item type:
+    path: item_type
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Key | Item type | Quantity |
+| --- | --- | --- |
+| ` row_1 ` | ` Chain shirt ` | ` 1 ` |
+| ` row_2 ` | ` Shield ` | ` 1 ` |
+| ` row_3 ` | ` Mace ` | ` 1 ` |
+| ` row_4 ` | ` Holy symbol ` | ` 1 ` |
+| ` row_5 ` | ` Priest s pack ` | ` 1 ` |
+| ` row_6 ` | ` Gp ` | ` 7 ` |
+
+###### B
+
+^splat-93071aae-b
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/starting_equipment/options/@b/grants -->
+
+| Row | item_type | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` gp ` | ` 110 ` |
 
 #### Progression
 
@@ -144,106 +195,40 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- cleric_level_10_divine_intervention
+- cleric_level_14_improved_blessed_strikes
+- cleric_level_19_epic_boon
+- cleric_level_1_divine_order
+- cleric_level_1_spellcasting
+- cleric_level_20_greater_divine_intervention
+- cleric_level_2_channel_divinity
+- cleric_level_3_cleric_subclass
+- cleric_level_4_ability_score_improvement
+- cleric_level_5_sear_undead
+- cleric_level_7_blessed_strikes
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 14 ` |
-| ` 2 ` | ` 19 ` |
-| ` 3 ` | ` 1 ` |
-| ` 4 ` | ` 1 ` |
-| ` 5 ` | ` 20 ` |
-| ` 6 ` | ` 2 ` |
-| ` 7 ` | ` 3 ` |
-| ` 8 ` | ` 4 ` |
-| ` 9 ` | ` 5 ` |
-| ` 10 ` | ` 7 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_10_divine_intervention ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_14_improved_blessed_strikes ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_1_divine_order ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_20_greater_divine_intervention ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_2_channel_divinity ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_3_cleric_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_5_sear_undead ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/cleric_level_7_blessed_strikes ` |
+| [Level 10: Divine Intervention](<../class_features/cleric_level_10_divine_intervention.md> "dnd2024:class_features/cleric_level_10_divine_intervention") | ` 10 ` |
+| [Level 14: Improved Blessed Strikes](<../class_features/cleric_level_14_improved_blessed_strikes.md> "dnd2024:class_features/cleric_level_14_improved_blessed_strikes") | ` 14 ` |
+| [Level 19: Epic Boon](<../class_features/cleric_level_19_epic_boon.md> "dnd2024:class_features/cleric_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Divine Order](<../class_features/cleric_level_1_divine_order.md> "dnd2024:class_features/cleric_level_1_divine_order") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/cleric_level_1_spellcasting.md> "dnd2024:class_features/cleric_level_1_spellcasting") | ` 1 ` |
+| [Level 20: Greater Divine Intervention](<../class_features/cleric_level_20_greater_divine_intervention.md> "dnd2024:class_features/cleric_level_20_greater_divine_intervention") | ` 20 ` |
+| [Level 2: Channel Divinity](<../class_features/cleric_level_2_channel_divinity.md> "dnd2024:class_features/cleric_level_2_channel_divinity") | ` 2 ` |
+| [Level 3: Cleric Subclass](<../class_features/cleric_level_3_cleric_subclass.md> "dnd2024:class_features/cleric_level_3_cleric_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/cleric_level_4_ability_score_improvement.md> "dnd2024:class_features/cleric_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Sear Undead](<../class_features/cleric_level_5_sear_undead.md> "dnd2024:class_features/cleric_level_5_sear_undead") | ` 5 ` |
+| [Level 7: Blessed Strikes](<../class_features/cleric_level_7_blessed_strikes.md> "dnd2024:class_features/cleric_level_7_blessed_strikes") | ` 7 ` |

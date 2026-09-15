@@ -174,115 +174,182 @@ recovery:
 
 #### Variants
 
-<!-- splat:yaml path=splat_rule/parameters/variants -->
+##### Air
+
+###### Focus
+
+<!-- splat:values path=splat_rule/parameters/variants/air/focus -->
+
+| Field | Value |
+| --- | --- |
+| ` language ` | ` auran ` |
+| ` resistance ` | ` ["lightning"] ` |
+| ` fly_speed ` | ` walking_speed ` |
+| ` hover ` | ` true ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/variants/air/spells
+key: Spell
+order:
+- chain_lightning
+- feather_fall
+- gust_of_wind
+- wind_wall
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Cost:
+    path: cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: integer
+-->
+
+| Spell | Cost | Save dc |
+| --- | --- | --- |
+| [Chain Lightning](<../spells/chain_lightning.md> "dnd2024:spells/chain_lightning") | ` 3 ` | ` 18 ` |
+| [Feather Fall](<../spells/feather_fall.md> "dnd2024:spells/feather_fall") | ` 0 ` | ` 18 ` |
+| [Gust of Wind](<../spells/gust_of_wind.md> "dnd2024:spells/gust_of_wind") | ` 2 ` | ` 18 ` |
+| [Wind Wall](<../spells/wind_wall.md> "dnd2024:spells/wind_wall") | ` 1 ` | ` 18 ` |
+
+##### Earth
+
+###### Focus
+
+<!-- splat:yaml path=splat_rule/parameters/variants/earth/focus -->
 
 ```yaml
-air:
-  focus:
-    language: auran
-    resistance:
-    - lightning
-    fly_speed: walking_speed
-    hover: true
-  spells:
-  - spell:
-      key: dnd2024:spells/chain_lightning
-    cost: 3
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/feather_fall
-    cost: 0
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/gust_of_wind
-    cost: 2
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/wind_wall
-    cost: 1
-    save_dc: 18
-earth:
-  focus:
-    language: terran
-    resistance:
-    - acid
-    ignore_difficult_terrain_materials:
-    - rubble
-    - rocks
-    - dirt
-    earth_glide:
-      materials:
-      - solid_earth
-      - rock
-      movement_cost: difficult_terrain
-      disturb_material: false
-      if_end_turn_inside: shunt_to_nearest_unoccupied_space_last_occupied
-  spells:
-  - spell:
-      key: dnd2024:spells/earthquake
-    cost: 5
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/stone_shape
-    cost: 2
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/stoneskin
-    cost: 3
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/wall_of_stone
-    cost: 3
-    save_dc: 18
-fire:
-  focus:
-    language: ignan
-    immunity:
-    - fire
-  spells:
-  - spell:
-      key: dnd2024:spells/burning_hands
-    cost: 1
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/fireball
-    cost: 2
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/fire_storm
-    cost: 4
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/wall_of_fire
-    cost: 3
-    save_dc: 18
-water:
-  focus:
-    language: aquan
-    swim_speed_ft: 60
-    underwater_breathing: true
-  spells:
-  - spell:
-      key: dnd2024:spells/create_or_destroy_water
-    cost: 1
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/ice_storm
-    cost: 2
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/tsunami
-    cost: 5
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/wall_of_ice
-    cost: 3
-    save_dc: 18
-  - spell:
-      key: dnd2024:spells/water_walk
-    cost: 2
-    save_dc: 18
+language: terran
+resistance:
+- acid
+ignore_difficult_terrain_materials:
+- rubble
+- rocks
+- dirt
+earth_glide:
+  materials:
+  - solid_earth
+  - rock
+  movement_cost: difficult_terrain
+  disturb_material: false
+  if_end_turn_inside: shunt_to_nearest_unoccupied_space_last_occupied
 ```
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/variants/earth/spells
+key: Spell
+order:
+- earthquake
+- stone_shape
+- stoneskin
+- wall_of_stone
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Cost:
+    path: cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: integer
+-->
+
+| Spell | Cost | Save dc |
+| --- | --- | --- |
+| [Earthquake](<../spells/earthquake.md> "dnd2024:spells/earthquake") | ` 5 ` | ` 18 ` |
+| [Stone Shape](<../spells/stone_shape.md> "dnd2024:spells/stone_shape") | ` 2 ` | ` 18 ` |
+| [Stoneskin](<../spells/stoneskin.md> "dnd2024:spells/stoneskin") | ` 3 ` | ` 18 ` |
+| [Wall of Stone](<../spells/wall_of_stone.md> "dnd2024:spells/wall_of_stone") | ` 3 ` | ` 18 ` |
+
+##### Fire
+
+###### Focus
+
+<!-- splat:values path=splat_rule/parameters/variants/fire/focus -->
+
+| Field | Value |
+| --- | --- |
+| ` language ` | ` ignan ` |
+| ` immunity ` | ` ["fire"] ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/variants/fire/spells
+key: Spell
+order:
+- burning_hands
+- fireball
+- fire_storm
+- wall_of_fire
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Cost:
+    path: cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: integer
+-->
+
+| Spell | Cost | Save dc |
+| --- | --- | --- |
+| [Burning Hands](<../spells/burning_hands.md> "dnd2024:spells/burning_hands") | ` 1 ` | ` 18 ` |
+| [Fireball](<../spells/fireball.md> "dnd2024:spells/fireball") | ` 2 ` | ` 18 ` |
+| [Fire Storm](<../spells/fire_storm.md> "dnd2024:spells/fire_storm") | ` 4 ` | ` 18 ` |
+| [Wall of Fire](<../spells/wall_of_fire.md> "dnd2024:spells/wall_of_fire") | ` 3 ` | ` 18 ` |
+
+##### Water
+
+###### Focus
+
+<!-- splat:values path=splat_rule/parameters/variants/water/focus -->
+
+| Field | Value |
+| --- | --- |
+| ` language ` | ` aquan ` |
+| ` swim_speed_ft ` | ` 60 ` |
+| ` underwater_breathing ` | ` true ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/variants/water/spells
+key: Spell
+order:
+- create_or_destroy_water
+- ice_storm
+- tsunami
+- wall_of_ice
+- water_walk
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Cost:
+    path: cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: integer
+-->
+
+| Spell | Cost | Save dc |
+| --- | --- | --- |
+| [Create or Destroy Water](<../spells/create_or_destroy_water.md> "dnd2024:spells/create_or_destroy_water") | ` 1 ` | ` 18 ` |
+| [Ice Storm](<../spells/ice_storm.md> "dnd2024:spells/ice_storm") | ` 2 ` | ` 18 ` |
+| [Tsunami](<../spells/tsunami.md> "dnd2024:spells/tsunami") | ` 5 ` | ` 18 ` |
+| [Wall of Ice](<../spells/wall_of_ice.md> "dnd2024:spells/wall_of_ice") | ` 3 ` | ` 18 ` |
+| [Water Walk](<../spells/water_walk.md> "dnd2024:spells/water_walk") | ` 2 ` | ` 18 ` |
 
 #### Attunement
 

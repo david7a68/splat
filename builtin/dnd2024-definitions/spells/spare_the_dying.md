@@ -73,21 +73,41 @@ Original layout: [[../../srd-5.2.1/pages/163|page 163]].
 
 #### Targets
 
-<!-- splat:yaml path=splat_rule/parameters/targets -->
+<!-- splat:values path=splat_rule/parameters/targets -->
 
-```yaml
-kind: creature
-count: 1
-hp: 0
-dead: false
-maximum_range_feet:
-  by_caster_level:
-  - minimum: 1
-    value: 15
-  - minimum: 5
-    value: 30
-  - minimum: 11
-    value: 60
-  - minimum: 17
-    value: 120
-```
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` count ` | ` 1 ` |
+| ` hp ` | ` 0 ` |
+| ` dead ` | ` false ` |
+
+##### Maximum range feet
+
+###### By caster level
+
+<!-- splat:table
+path: splat_rule/parameters/targets/maximum_range_feet/by_caster_level
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum:
+    path: minimum
+    type: integer
+  Value:
+    path: value
+    type: integer
+-->
+
+| Key | Minimum | Value |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 15 ` |
+| ` row_2 ` | ` 5 ` | ` 30 ` |
+| ` row_3 ` | ` 11 ` | ` 60 ` |
+| ` row_4 ` | ` 17 ` | ` 120 ` |

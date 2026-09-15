@@ -99,153 +99,262 @@ vants and interests of a particular deity.\
 
 #### Alignment table
 
-<!-- splat:yaml path=splat_rule/parameters/alignment_table -->
+##### Roll
 
-```yaml
-roll:
-  count: 1
-  sides: 100
-  add: 0
-outcomes:
-- roll_min: 1
-  roll_max: 15
-  alignment: lawful_good
-- roll_min: 16
-  roll_max: 35
-  alignment: neutral_good
-- roll_min: 36
-  roll_max: 50
-  alignment: chaotic_good
-- roll_min: 51
-  roll_max: 63
-  alignment: lawful_neutral
-- roll_min: 64
-  roll_max: 73
-  alignment: neutral
-- roll_min: 74
-  roll_max: 85
-  alignment: chaotic_neutral
-- roll_min: 86
-  roll_max: 89
-  alignment: lawful_evil
-- roll_min: 90
-  roll_max: 96
-  alignment: neutral_evil
-- roll_min: 97
-  roll_max: 100
-  alignment: chaotic_evil
-```
+<!-- splat:values path=splat_rule/parameters/alignment_table/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` sides ` | ` 100 ` |
+| ` add ` | ` 0 ` |
+
+##### Outcomes
+
+<!-- splat:table
+path: splat_rule/parameters/alignment_table/outcomes
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+columns:
+  Key:
+    type: key
+  Roll min:
+    path: roll_min
+    type: integer
+  Roll max:
+    path: roll_max
+    type: integer
+  Alignment:
+    path: alignment
+    type: symbol
+-->
+
+| Key | Roll min | Roll max | Alignment |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 15 ` | ` Lawful good ` |
+| ` row_2 ` | ` 16 ` | ` 35 ` | ` Neutral good ` |
+| ` row_3 ` | ` 36 ` | ` 50 ` | ` Chaotic good ` |
+| ` row_4 ` | ` 51 ` | ` 63 ` | ` Lawful neutral ` |
+| ` row_5 ` | ` 64 ` | ` 73 ` | ` Neutral ` |
+| ` row_6 ` | ` 74 ` | ` 85 ` | ` Chaotic neutral ` |
+| ` row_7 ` | ` 86 ` | ` 89 ` | ` Lawful evil ` |
+| ` row_8 ` | ` 90 ` | ` 96 ` | ` Neutral evil ` |
+| ` row_9 ` | ` 97 ` | ` 100 ` | ` Chaotic evil ` |
 
 #### Communication table
 
-<!-- splat:yaml path=splat_rule/parameters/communication_table -->
+##### Roll
+
+<!-- splat:values path=splat_rule/parameters/communication_table/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` sides ` | ` 10 ` |
+| ` add ` | ` 0 ` |
+
+##### Outcomes
+
+<!-- splat:table
+path: splat_rule/parameters/communication_table/outcomes
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Roll min:
+    path: roll_min
+    type: integer
+  Roll max:
+    path: roll_max
+    type: integer
+  Recipient:
+    path: recipient
+    type: symbol
+    optional: true
+  Languages minimum:
+    path: languages_minimum
+    type: integer
+    optional: true
+  Telepathy recipient:
+    path: telepathy_recipient
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Roll min | Roll max | Recipient | Languages minimum | Telepathy recipient | Details |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 6 ` | ` Carrier or wielder ` |  |  | [Rules](#^splat-d5dd2f24-row_1 "section:row_1") |
+| ` row_2 ` | ` 7 ` | ` 9 ` |  | ` 1 ` |  | [Rules](#^splat-d5dd2f24-row_2 "section:row_2") |
+| ` row_3 ` | ` 10 ` | ` 10 ` |  | ` 1 ` | ` Carrier or wielder ` | [Rules](#^splat-d5dd2f24-row_3 "section:row_3") |
+
+###### Row 1
+
+^splat-d5dd2f24-row_1
+
+###### Mode
+
+<!-- splat:yaml path=splat_rule/parameters/communication_table/outcomes/@row_1/mode -->
 
 ```yaml
-roll:
-  count: 1
-  sides: 10
-  add: 0
-outcomes:
-- roll_min: 1
-  roll_max: 6
-  mode: transmit_emotions
-  recipient: carrier_or_wielder
-- roll_min: 7
-  roll_max: 9
-  mode: speech
-  languages_minimum: 1
-- roll_min: 10
-  roll_max: 10
-  mode:
-  - speech
-  - telepathy
-  languages_minimum: 1
-  telepathy_recipient: carrier_or_wielder
+transmit_emotions
+```
+
+###### Row 2
+
+^splat-d5dd2f24-row_2
+
+###### Mode
+
+<!-- splat:yaml path=splat_rule/parameters/communication_table/outcomes/@row_2/mode -->
+
+```yaml
+speech
+```
+
+###### Row 3
+
+^splat-d5dd2f24-row_3
+
+###### Mode
+
+<!-- splat:yaml path=splat_rule/parameters/communication_table/outcomes/@row_3/mode -->
+
+```yaml
+- speech
+- telepathy
 ```
 
 #### Senses table
 
-<!-- splat:yaml path=splat_rule/parameters/senses_table -->
+##### Roll
 
-```yaml
-roll:
-  count: 1
-  sides: 4
-  add: 0
-outcomes:
-- roll: 1
-  hearing_feet: 30
-  vision_feet: 30
-  vision_type: standard
-- roll: 2
-  hearing_feet: 60
-  vision_feet: 60
-  vision_type: standard
-- roll: 3
-  hearing_feet: 120
-  vision_feet: 120
-  vision_type: standard
-- roll: 4
-  hearing_feet: 120
-  vision_feet: 120
-  vision_type: darkvision
-```
+<!-- splat:values path=splat_rule/parameters/senses_table/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` sides ` | ` 4 ` |
+| ` add ` | ` 0 ` |
+
+##### Outcomes
+
+<!-- splat:table
+path: splat_rule/parameters/senses_table/outcomes
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Roll:
+    path: roll
+    type: integer
+  Hearing feet:
+    path: hearing_feet
+    type: integer
+  Vision feet:
+    path: vision_feet
+    type: integer
+  Vision type:
+    path: vision_type
+    type: symbol
+-->
+
+| Key | Roll | Hearing feet | Vision feet | Vision type |
+| --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 30 ` | ` 30 ` | ` Standard ` |
+| ` row_2 ` | ` 2 ` | ` 60 ` | ` 60 ` | ` Standard ` |
+| ` row_3 ` | ` 3 ` | ` 120 ` | ` 120 ` | ` Standard ` |
+| ` row_4 ` | ` 4 ` | ` 120 ` | ` 120 ` | ` Darkvision ` |
 
 #### Purpose table
 
-<!-- splat:yaml path=splat_rule/parameters/purpose_table -->
+##### Roll
 
-```yaml
-roll:
-  count: 1
-  sides: 10
-  add: 0
-outcomes:
-- roll: 1
-  id: aligned
-  objective: defeat_or_destroy_opposed_alignment
-  neutral_allowed: false
-- roll: 2
-  id: bane
-  objective: thwart_or_destroy
-  target_choice: creature_type
-- roll: 3
-  id: creator_seeker
-  objectives:
-  - find_creator
-  - understand_creation
-- roll: 4
-  id: destiny_seeker
-  objective: fulfill_item_and_bearer_future_roles
-- roll: 5
-  id: destroyer
-  objectives:
-  - destruction
-  - arbitrary_fighting
-- roll: 6
-  id: glory_seeker
-  objectives:
-  - greatest_item_renown
-  - user_fame_or_notoriety
-- roll: 7
-  id: lore_seeker
-  objective_choices:
-  - knowledge
-  - solve_mystery
-  - learn_secret
-  - decipher_prophecy
-- roll: 8
-  id: protector
-  objective: defend
-  target_choice: creature_kind
-- roll: 9
-  id: soulmate_seeker
-  objective: find_other_sentient_item
-- roll: 10
-  id: templar
-  objective: defend_servants_and_interests
-  target_choice: deity
-```
+<!-- splat:values path=splat_rule/parameters/purpose_table/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+| ` sides ` | ` 10 ` |
+| ` add ` | ` 0 ` |
+
+##### Outcomes
+
+<!-- splat:table
+path: splat_rule/parameters/purpose_table/outcomes
+key: Variant
+order:
+- aligned
+- bane
+- creator_seeker
+- destiny_seeker
+- destroyer
+- glory_seeker
+- lore_seeker
+- protector
+- soulmate_seeker
+- templar
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Roll:
+    path: roll
+    type: integer
+  Objective:
+    path: objective
+    type: symbol
+    optional: true
+  Neutral allowed:
+    path: neutral_allowed
+    type: boolean
+    optional: true
+  Target choice:
+    path: target_choice
+    type: symbol
+    optional: true
+  Objectives:
+    path: objectives
+    type: yaml
+    optional: true
+  Objective choices:
+    path: objective_choices
+    type: yaml
+    optional: true
+-->
+
+| Variant | Roll | Objective | Neutral allowed | Target choice | Objectives | Objective choices |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` Aligned ` | ` 1 ` | ` Defeat or destroy opposed alignment ` | false |  |  |  |
+| ` Bane ` | ` 2 ` | ` Thwart or destroy ` |  | ` Creature type ` |  |  |
+| ` Creator seeker ` | ` 3 ` |  |  |  | ` ["find_creator", "understand_creation"] ` |  |
+| ` Destiny seeker ` | ` 4 ` | ` Fulfill item and bearer future roles ` |  |  |  |  |
+| ` Destroyer ` | ` 5 ` |  |  |  | ` ["destruction", "arbitrary_fighting"] ` |  |
+| ` Glory seeker ` | ` 6 ` |  |  |  | ` ["greatest_item_renown", "user_fame_or_notoriety"] ` |  |
+| ` Lore seeker ` | ` 7 ` |  |  |  |  | ` ["knowledge", "solve_mystery", "learn_secret", "decipher_prophecy"] ` |
+| ` Protector ` | ` 8 ` | ` Defend ` |  | ` Creature kind ` |  |  |
+| ` Soulmate seeker ` | ` 9 ` | ` Find other sentient item ` |  |  |  |  |
+| ` Templar ` | ` 10 ` | ` Defend servants and interests ` |  | ` Deity ` |  |  |
 
 #### Conflict rules
 

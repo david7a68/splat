@@ -128,13 +128,29 @@ Original layout: [[../../srd-5.2.1/pages/316|page 316]].
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Count:
+    path: count
+    type: integer
+-->
 
-| Row | item | count |
+| Key | Item | Count |
 | --- | --- | --- |
-| ` 0 ` | ` chain_shirt ` | ` 1 ` |
-| ` 1 ` | ` holy_symbol ` | ` 1 ` |
-| ` 2 ` | ` mace ` | ` 1 ` |
+| ` row_1 ` | ` Chain shirt ` | ` 1 ` |
+| ` row_2 ` | ` Holy symbol ` | ` 1 ` |
+| ` row_3 ` | ` Mace ` | ` 1 ` |
 
 #### Senses
 
@@ -218,24 +234,50 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` wisdom ` |
+
+###### Waived components
+
+<!-- splat:yaml path=splat_rule/parameters/features/spellcasting/profile/waived_components -->
 
 ```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: wisdom
-  waived_components: []
-  spells:
-  - spell:
-      key: dnd2024:spells/light
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/thaumaturgy
-    uses:
-      unlimited: true
+[]
 ```
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- light
+- thaumaturgy
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+-->
+
+| Spell | Uses unlimited |
+| --- | --- |
+| [Light](<../spells/light.md> "dnd2024:spells/light") | true |
+| [Thaumaturgy](<../spells/thaumaturgy.md> "dnd2024:spells/thaumaturgy") | true |
 
 ##### Divine aid
 

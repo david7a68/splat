@@ -62,17 +62,194 @@ Warship 2½ mph 60 60 200\
 
 #### Vehicles
 
-<!-- splat:rows path=splat_rule/parameters/vehicles -->
+<!-- splat:table
+path: splat_rule/parameters/vehicles
+key: Variant
+order:
+- airship
+- galley
+- keelboat
+- longship
+- rowboat
+- sailing_ship
+- warship
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Crew:
+    path: crew
+    type: integer
+  Passengers:
+    path: passengers
+    type: integer
+  Ac:
+    path: ac
+    type: integer
+  Hp:
+    path: hp
+    type: integer
+  Damage threshold:
+    path: damage_threshold
+    type: integer
+    nullable: true
+  Cost gp:
+    path: cost_gp
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | id | speed_mph | crew | passengers | cargo_tons | ac | hp | damage_threshold | cost_gp |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` airship ` | ` 8 ` | ` 10 ` | ` 20 ` | ` 1 ` | ` 13 ` | ` 300 ` | ` null ` | ` 40000 ` |
-| ` 1 ` | ` galley ` | ` 4 ` | ` 80 ` | ` 0 ` | ` 150 ` | ` 15 ` | ` 500 ` | ` 20 ` | ` 30000 ` |
-| ` 2 ` | ` keelboat ` | ` 1 ` | ` 1 ` | ` 6 ` | ` 0.5 ` | ` 15 ` | ` 100 ` | ` 10 ` | ` 3000 ` |
-| ` 3 ` | ` longship ` | ` 3 ` | ` 40 ` | ` 150 ` | ` 10 ` | ` 15 ` | ` 300 ` | ` 15 ` | ` 10000 ` |
-| ` 4 ` | ` rowboat ` | ` 1.5 ` | ` 1 ` | ` 3 ` | ` 0 ` | ` 11 ` | ` 50 ` | ` null ` | ` 50 ` |
-| ` 5 ` | ` sailing_ship ` | ` 2 ` | ` 20 ` | ` 20 ` | ` 100 ` | ` 15 ` | ` 300 ` | ` 15 ` | ` 10000 ` |
-| ` 6 ` | ` warship ` | ` 2.5 ` | ` 60 ` | ` 60 ` | ` 200 ` | ` 15 ` | ` 500 ` | ` 20 ` | ` 25000 ` |
+| Variant | Crew | Passengers | Ac | Hp | Damage threshold | Cost gp | Details |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ` Airship ` | ` 10 ` | ` 20 ` | ` 13 ` | ` 300 ` | null | ` 40000 ` | [Rules](#^splat-e0c0ed34-airship "section:airship") |
+| ` Galley ` | ` 80 ` | ` 0 ` | ` 15 ` | ` 500 ` | ` 20 ` | ` 30000 ` | [Rules](#^splat-e0c0ed34-galley "section:galley") |
+| ` Keelboat ` | ` 1 ` | ` 6 ` | ` 15 ` | ` 100 ` | ` 10 ` | ` 3000 ` | [Rules](#^splat-e0c0ed34-keelboat "section:keelboat") |
+| ` Longship ` | ` 40 ` | ` 150 ` | ` 15 ` | ` 300 ` | ` 15 ` | ` 10000 ` | [Rules](#^splat-e0c0ed34-longship "section:longship") |
+| ` Rowboat ` | ` 1 ` | ` 3 ` | ` 11 ` | ` 50 ` | null | ` 50 ` | [Rules](#^splat-e0c0ed34-rowboat "section:rowboat") |
+| ` Sailing ship ` | ` 20 ` | ` 20 ` | ` 15 ` | ` 300 ` | ` 15 ` | ` 10000 ` | [Rules](#^splat-e0c0ed34-sailing_ship "section:sailing_ship") |
+| ` Warship ` | ` 60 ` | ` 60 ` | ` 15 ` | ` 500 ` | ` 20 ` | ` 25000 ` | [Rules](#^splat-e0c0ed34-warship "section:warship") |
+
+##### Airship
+
+^splat-e0c0ed34-airship
+
+###### Speed mph
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@airship/speed_mph -->
+
+```yaml
+8
+```
+
+###### Cargo tons
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@airship/cargo_tons -->
+
+```yaml
+1
+```
+
+##### Galley
+
+^splat-e0c0ed34-galley
+
+###### Speed mph
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@galley/speed_mph -->
+
+```yaml
+4
+```
+
+###### Cargo tons
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@galley/cargo_tons -->
+
+```yaml
+150
+```
+
+##### Keelboat
+
+^splat-e0c0ed34-keelboat
+
+###### Speed mph
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@keelboat/speed_mph -->
+
+```yaml
+1
+```
+
+###### Cargo tons
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@keelboat/cargo_tons -->
+
+```yaml
+0.5
+```
+
+##### Longship
+
+^splat-e0c0ed34-longship
+
+###### Speed mph
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@longship/speed_mph -->
+
+```yaml
+3
+```
+
+###### Cargo tons
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@longship/cargo_tons -->
+
+```yaml
+10
+```
+
+##### Rowboat
+
+^splat-e0c0ed34-rowboat
+
+###### Speed mph
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@rowboat/speed_mph -->
+
+```yaml
+1.5
+```
+
+###### Cargo tons
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@rowboat/cargo_tons -->
+
+```yaml
+0
+```
+
+##### Sailing ship
+
+^splat-e0c0ed34-sailing_ship
+
+###### Speed mph
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@sailing_ship/speed_mph -->
+
+```yaml
+2
+```
+
+###### Cargo tons
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@sailing_ship/cargo_tons -->
+
+```yaml
+100
+```
+
+##### Warship
+
+^splat-e0c0ed34-warship
+
+###### Speed mph
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@warship/speed_mph -->
+
+```yaml
+2.5
+```
+
+###### Cargo tons
+
+<!-- splat:yaml path=splat_rule/parameters/vehicles/@warship/cargo_tons -->
+
+```yaml
+200
+```
 
 #### No wind
 

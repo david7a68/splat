@@ -97,15 +97,50 @@ Original layout: [[../../srd-5.2.1/pages/137|page 137]].
 
 #### Choices
 
-<!-- splat:rows path=splat_rule/parameters/choices -->
+<!-- splat:table
+path: splat_rule/parameters/choices
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Kind:
+    path: kind
+    type: symbol
+  Levels:
+    path: levels
+    type: integer
+    optional: true
+  Choices:
+    path: choices
+    type: yaml
+    optional: true
+  Include:
+    path: include
+    type: symbol
+    optional: true
+  Ability count:
+    path: ability_count
+    type: integer
+    optional: true
+  Reduction:
+    path: reduction
+    type: symbol
+    optional: true
+-->
 
-| Row | kind | levels | choices | include | ability_count | reduction |
+| Key | Kind | Levels | Choices | Include | Ability count | Reduction |
 | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` exhaustion ` | ` 1 ` |  |  |  |  |
-| ` 1 ` | ` condition ` |  | ` ["charmed", "petrified"] ` |  |  |  |
-| ` 2 ` | ` curse ` |  |  | ` cursed_item_attunement ` |  |  |
-| ` 3 ` | ` ability_score_reduction ` |  |  |  | ` 1 ` | ` any ` |
-| ` 4 ` | ` hp_maximum_reduction ` |  |  |  |  | ` any ` |
+| ` row_1 ` | ` Exhaustion ` | ` 1 ` |  |  |  |  |
+| ` row_2 ` | ` Condition ` |  | ` ["charmed", "petrified"] ` |  |  |  |
+| ` row_3 ` | ` Curse ` |  |  | ` Cursed item attunement ` |  |  |
+| ` row_4 ` | ` Ability score reduction ` |  |  |  | ` 1 ` | ` Any ` |
+| ` row_5 ` | ` Hp maximum reduction ` |  |  |  |  | ` Any ` |
 
 #### Spell lifetime
 

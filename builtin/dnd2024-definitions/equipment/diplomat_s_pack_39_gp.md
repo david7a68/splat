@@ -77,109 +77,46 @@ sheets of Parchment, Perfume, and Tinderbox.\
 
 #### Contents
 
-<!-- splat:rows path=splat_rule/parameters/contents -->
+<!-- splat:table
+path: splat_rule/parameters/contents
+key: Item
+order:
+- chest_5_gp
+- clothes_fine_15_gp
+- ink_10_gp
+- ink_pen_2_cp
+- lamp_5_sp
+- case_map_or_scroll_1_gp
+- oil_1_sp
+- paper_2_sp
+- parchment_1_sp
+- perfume_5_gp
+- tinderbox_5_sp
+columns:
+  Item:
+    path: item
+    type: reference
+  Quantity:
+    path: quantity
+    type: integer
+  Unit:
+    path: unit
+    type: symbol
+-->
 
-| Row | quantity | unit |
+| Item | Quantity | Unit |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` purchase_unit ` |
-| ` 1 ` | ` 1 ` | ` purchase_unit ` |
-| ` 2 ` | ` 1 ` | ` purchase_unit ` |
-| ` 3 ` | ` 5 ` | ` purchase_unit ` |
-| ` 4 ` | ` 1 ` | ` purchase_unit ` |
-| ` 5 ` | ` 2 ` | ` purchase_unit ` |
-| ` 6 ` | ` 4 ` | ` purchase_unit ` |
-| ` 7 ` | ` 5 ` | ` purchase_unit ` |
-| ` 8 ` | ` 5 ` | ` purchase_unit ` |
-| ` 9 ` | ` 1 ` | ` purchase_unit ` |
-| ` 10 ` | ` 1 ` | ` purchase_unit ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/0/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/chest_5_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/1/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/clothes_fine_15_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/2/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/ink_10_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/3/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/ink_pen_2_cp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/4/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/lamp_5_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/5/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/case_map_or_scroll_1_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/6/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/oil_1_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/7/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/paper_2_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/8/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/parchment_1_sp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/9/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/perfume_5_gp ` |
-
-##### Item
-
-<!-- splat:values path=splat_rule/parameters/contents/10/item -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:equipment/tinderbox_5_sp ` |
+| [Chest (5 GP)](<chest_5_gp.md> "dnd2024:equipment/chest_5_gp") | ` 1 ` | ` Purchase unit ` |
+| [Clothes, Fine (15 GP)](<clothes_fine_15_gp.md> "dnd2024:equipment/clothes_fine_15_gp") | ` 1 ` | ` Purchase unit ` |
+| [Ink (10 GP)](<ink_10_gp.md> "dnd2024:equipment/ink_10_gp") | ` 1 ` | ` Purchase unit ` |
+| [Ink Pen (2 CP)](<ink_pen_2_cp.md> "dnd2024:equipment/ink_pen_2_cp") | ` 5 ` | ` Purchase unit ` |
+| [Lamp (5 SP)](<lamp_5_sp.md> "dnd2024:equipment/lamp_5_sp") | ` 1 ` | ` Purchase unit ` |
+| [Case, Map or Scroll (1 GP)](<case_map_or_scroll_1_gp.md> "dnd2024:equipment/case_map_or_scroll_1_gp") | ` 2 ` | ` Purchase unit ` |
+| [Oil (1 SP)](<oil_1_sp.md> "dnd2024:equipment/oil_1_sp") | ` 4 ` | ` Purchase unit ` |
+| [Paper (2 SP)](<paper_2_sp.md> "dnd2024:equipment/paper_2_sp") | ` 5 ` | ` Purchase unit ` |
+| [Parchment (1 SP)](<parchment_1_sp.md> "dnd2024:equipment/parchment_1_sp") | ` 5 ` | ` Purchase unit ` |
+| [Perfume (5 GP)](<perfume_5_gp.md> "dnd2024:equipment/perfume_5_gp") | ` 1 ` | ` Purchase unit ` |
+| [Tinderbox (5 SP)](<tinderbox_5_sp.md> "dnd2024:equipment/tinderbox_5_sp") | ` 1 ` | ` Purchase unit ` |
 
 #### Mass
 

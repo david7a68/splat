@@ -165,12 +165,38 @@ extra_damage:
 
 #### Slot duration
 
-<!-- splat:rows path=splat_rule/parameters/slot_duration -->
+<!-- splat:table
+path: splat_rule/parameters/slot_duration
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Seconds:
+    path: seconds
+    type: integer
+    optional: true
+  Concentration:
+    path: concentration
+    type: boolean
+  Until:
+    path: until
+    type: symbol
+    optional: true
+-->
 
-| Row | levels | seconds | concentration | until |
+| Key | Levels | Seconds | Concentration | Until |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` [3] ` | ` 60 ` | ` true ` |  |
-| ` 1 ` | ` [4] ` | ` 600 ` | ` true ` |  |
-| ` 2 ` | ` [5, 6] ` | ` 28800 ` | ` false ` |  |
-| ` 3 ` | ` [7, 8] ` | ` 86400 ` | ` false ` |  |
-| ` 4 ` | ` [9] ` |  | ` false ` | ` dispelled ` |
+| ` row_1 ` | ` [3] ` | ` 60 ` | true |  |
+| ` row_2 ` | ` [4] ` | ` 600 ` | true |  |
+| ` row_3 ` | ` [5, 6] ` | ` 28800 ` | false |  |
+| ` row_4 ` | ` [7, 8] ` | ` 86400 ` | false |  |
+| ` row_5 ` | ` [9] ` |  | false | ` Dispelled ` |

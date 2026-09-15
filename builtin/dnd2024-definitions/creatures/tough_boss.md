@@ -196,13 +196,29 @@ hit:
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item | quantity |
+| Key | Item | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` chain_mail ` | ` 1 ` |
-| ` 1 ` | ` heavy_crossbow ` | ` 1 ` |
-| ` 2 ` | ` warhammer ` | ` 1 ` |
+| ` row_1 ` | ` Chain mail ` | ` 1 ` |
+| ` row_2 ` | ` Heavy crossbow ` | ` 1 ` |
+| ` row_3 ` | ` Warhammer ` | ` 1 ` |
 
 #### Senses
 

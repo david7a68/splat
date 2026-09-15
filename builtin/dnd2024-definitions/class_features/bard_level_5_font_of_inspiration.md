@@ -37,21 +37,46 @@ Inspiration.\
 
 #### Resource recovery override
 
-<!-- splat:yaml path=splat_rule/parameters/resource_recovery_override -->
+<!-- splat:values path=splat_rule/parameters/resource_recovery_override -->
+
+| Field | Value |
+| --- | --- |
+| ` id ` | ` bard.bardic_inspiration ` |
+
+##### Maximum
+
+<!-- splat:yaml path=splat_rule/parameters/resource_recovery_override/maximum -->
 
 ```yaml
-id: bard.bardic_inspiration
-maximum:
-  op: max
-  args:
-  - 1
-  - var: actor.abilities.charisma.modifier
-recovery:
-- event: rest.short_completed
-  amount: all
-- event: rest.long_completed
-  amount: all
+op: max
+args:
+- 1
+- var: actor.abilities.charisma.modifier
 ```
+
+##### Recovery
+
+<!-- splat:table
+path: splat_rule/parameters/resource_recovery_override/recovery
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Amount:
+    path: amount
+    type: symbol
+-->
+
+| Key | Event | Amount |
+| --- | --- | --- |
+| ` row_1 ` | ` rest.short_completed ` | ` All ` |
+| ` row_2 ` | ` rest.long_completed ` | ` All ` |
 
 #### Conversion
 

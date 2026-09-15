@@ -66,52 +66,28 @@ of their communities.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- circle_of_the_land_level_10_nature_s_ward
+- circle_of_the_land_level_14_nature_s_sanctuary
+- circle_of_the_land_level_3_circle_of_the_land_spells
+- circle_of_the_land_level_3_land_s_aid
+- circle_of_the_land_level_6_natural_recovery
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 14 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 6 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/circle_of_the_land_level_10_nature_s_ward ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/circle_of_the_land_level_14_nature_s_sanctuary ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/circle_of_the_land_level_3_circle_of_the_land_spells ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/circle_of_the_land_level_3_land_s_aid ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/circle_of_the_land_level_6_natural_recovery ` |
+| [Level 10: Nature’s Ward](<../class_features/circle_of_the_land_level_10_nature_s_ward.md> "dnd2024:class_features/circle_of_the_land_level_10_nature_s_ward") | ` 10 ` |
+| [Level 14: Nature’s Sanctuary](<../class_features/circle_of_the_land_level_14_nature_s_sanctuary.md> "dnd2024:class_features/circle_of_the_land_level_14_nature_s_sanctuary") | ` 14 ` |
+| [Level 3: Circle of the Land Spells](<../class_features/circle_of_the_land_level_3_circle_of_the_land_spells.md> "dnd2024:class_features/circle_of_the_land_level_3_circle_of_the_land_spells") | ` 3 ` |
+| [Level 3: Land’s Aid](<../class_features/circle_of_the_land_level_3_land_s_aid.md> "dnd2024:class_features/circle_of_the_land_level_3_land_s_aid") | ` 3 ` |
+| [Level 6: Natural Recovery](<../class_features/circle_of_the_land_level_6_natural_recovery.md> "dnd2024:class_features/circle_of_the_land_level_6_natural_recovery") | ` 6 ` |

@@ -125,39 +125,62 @@ Original layout: [[../../srd-5.2.1/pages/152|page 152]].
 
 #### Service
 
-<!-- splat:yaml path=splat_rule/parameters/service -->
+<!-- splat:values path=splat_rule/parameters/service -->
+
+| Field | Value |
+| --- | --- |
+| ` compelled ` | ` false ` |
+| ` communication_required_for_bargain ` | ` true ` |
+| ` task_choice ` | ` caster ` |
+| ` acceptance_choice ` | ` summoned_creature ` |
+| ` payment_forms ` | ` ["gold", "magic_items", "sacrifice", "treasure", "quest"] ` |
+
+##### Price rates
+
+<!-- splat:table
+path: splat_rule/parameters/service/price_rates
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Unit:
+    path: unit
+    type: symbol
+  Gp:
+    path: gp
+    type: integer
+  Maximum duration days:
+    path: maximum_duration_days
+    type: integer
+    optional: true
+-->
+
+| Key | Unit | Gp | Maximum duration days |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Minute ` | ` 100 ` |  |
+| ` row_2 ` | ` Hour ` | ` 1000 ` |  |
+| ` row_3 ` | ` Day ` | ` 10000 ` | ` 10 ` |
+
+##### Gm adjustment
+
+<!-- splat:yaml path=splat_rule/parameters/service/gm_adjustment -->
 
 ```yaml
-compelled: false
-communication_required_for_bargain: true
-task_choice: caster
-acceptance_choice: summoned_creature
-payment_forms:
-- gold
-- magic_items
-- sacrifice
-- treasure
-- quest
-price_rates:
-- unit: minute
-  gp: 100
-- unit: hour
-  gp: 1000
-- unit: day
-  gp: 10000
-  maximum_duration_days: 10
-gm_adjustment:
-  decision: price_amount
-  context: casting_circumstances
-  ethos_aligned_options:
-  - half
-  - waived
-  - unchanged
-  nonhazardous_default_fraction:
-    numerator: 1
-    denominator: 2
-  especially_dangerous: greater_gift
-  suicidal_acceptance: rare
+decision: price_amount
+context: casting_circumstances
+ethos_aligned_options:
+- half
+- waived
+- unchanged
+nonhazardous_default_fraction:
+  numerator: 1
+  denominator: 2
+especially_dangerous: greater_gift
+suicidal_acceptance: rare
 ```
 
 #### Return home

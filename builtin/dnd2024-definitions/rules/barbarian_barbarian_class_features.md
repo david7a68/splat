@@ -44,187 +44,58 @@ table.\
 
 #### Grant when class level reached
 
-<!-- splat:rows path=splat_rule/parameters/grant_when_class_level_reached -->
+<!-- splat:table
+path: splat_rule/parameters/grant_when_class_level_reached
+key: Feature
+order:
+- barbarian_level_11_relentless_rage
+- barbarian_level_13_improved_brutal_strike
+- barbarian_level_15_persistent_rage
+- barbarian_level_17_improved_brutal_strike
+- barbarian_level_18_indomitable_might
+- barbarian_level_19_epic_boon
+- barbarian_level_1_rage
+- barbarian_level_1_unarmored_defense
+- barbarian_level_1_weapon_mastery
+- barbarian_level_20_primal_champion
+- barbarian_level_2_danger_sense
+- barbarian_level_2_reckless_attack
+- barbarian_level_3_barbarian_subclass
+- barbarian_level_3_primal_knowledge
+- barbarian_level_4_ability_score_improvement
+- barbarian_level_5_extra_attack
+- barbarian_level_5_fast_movement
+- barbarian_level_7_feral_instinct
+- barbarian_level_7_instinctive_pounce
+- barbarian_level_9_brutal_strike
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 11 ` |
-| ` 1 ` | ` 13 ` |
-| ` 2 ` | ` 15 ` |
-| ` 3 ` | ` 17 ` |
-| ` 4 ` | ` 18 ` |
-| ` 5 ` | ` 19 ` |
-| ` 6 ` | ` 1 ` |
-| ` 7 ` | ` 1 ` |
-| ` 8 ` | ` 1 ` |
-| ` 9 ` | ` 20 ` |
-| ` 10 ` | ` 2 ` |
-| ` 11 ` | ` 2 ` |
-| ` 12 ` | ` 3 ` |
-| ` 13 ` | ` 3 ` |
-| ` 14 ` | ` 4 ` |
-| ` 15 ` | ` 5 ` |
-| ` 16 ` | ` 5 ` |
-| ` 17 ` | ` 7 ` |
-| ` 18 ` | ` 7 ` |
-| ` 19 ` | ` 9 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_11_relentless_rage ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_13_improved_brutal_strike ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_15_persistent_rage ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_17_improved_brutal_strike ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_18_indomitable_might ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_1_rage ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_1_unarmored_defense ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_1_weapon_mastery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_20_primal_champion ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_2_danger_sense ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/11/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_2_reckless_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/12/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_3_barbarian_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/13/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_3_primal_knowledge ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/14/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/15/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_5_extra_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/16/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_5_fast_movement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/17/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_7_feral_instinct ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/18/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_7_instinctive_pounce ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/grant_when_class_level_reached/19/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_9_brutal_strike ` |
+| [Level 11: Relentless Rage](<../class_features/barbarian_level_11_relentless_rage.md> "dnd2024:class_features/barbarian_level_11_relentless_rage") | ` 11 ` |
+| [Level 13: Improved Brutal Strike](<../class_features/barbarian_level_13_improved_brutal_strike.md> "dnd2024:class_features/barbarian_level_13_improved_brutal_strike") | ` 13 ` |
+| [Level 15: Persistent Rage](<../class_features/barbarian_level_15_persistent_rage.md> "dnd2024:class_features/barbarian_level_15_persistent_rage") | ` 15 ` |
+| [Level 17: Improved Brutal Strike](<../class_features/barbarian_level_17_improved_brutal_strike.md> "dnd2024:class_features/barbarian_level_17_improved_brutal_strike") | ` 17 ` |
+| [Level 18: Indomitable Might](<../class_features/barbarian_level_18_indomitable_might.md> "dnd2024:class_features/barbarian_level_18_indomitable_might") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/barbarian_level_19_epic_boon.md> "dnd2024:class_features/barbarian_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Rage](<../class_features/barbarian_level_1_rage.md> "dnd2024:class_features/barbarian_level_1_rage") | ` 1 ` |
+| [Level 1: Unarmored Defense](<../class_features/barbarian_level_1_unarmored_defense.md> "dnd2024:class_features/barbarian_level_1_unarmored_defense") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/barbarian_level_1_weapon_mastery.md> "dnd2024:class_features/barbarian_level_1_weapon_mastery") | ` 1 ` |
+| [Level 20: Primal Champion](<../class_features/barbarian_level_20_primal_champion.md> "dnd2024:class_features/barbarian_level_20_primal_champion") | ` 20 ` |
+| [Level 2: Danger Sense](<../class_features/barbarian_level_2_danger_sense.md> "dnd2024:class_features/barbarian_level_2_danger_sense") | ` 2 ` |
+| [Level 2: Reckless Attack](<../class_features/barbarian_level_2_reckless_attack.md> "dnd2024:class_features/barbarian_level_2_reckless_attack") | ` 2 ` |
+| [Level 3: Barbarian Subclass](<../class_features/barbarian_level_3_barbarian_subclass.md> "dnd2024:class_features/barbarian_level_3_barbarian_subclass") | ` 3 ` |
+| [Level 3: Primal Knowledge](<../class_features/barbarian_level_3_primal_knowledge.md> "dnd2024:class_features/barbarian_level_3_primal_knowledge") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/barbarian_level_4_ability_score_improvement.md> "dnd2024:class_features/barbarian_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Extra Attack](<../class_features/barbarian_level_5_extra_attack.md> "dnd2024:class_features/barbarian_level_5_extra_attack") | ` 5 ` |
+| [Level 5: Fast Movement](<../class_features/barbarian_level_5_fast_movement.md> "dnd2024:class_features/barbarian_level_5_fast_movement") | ` 5 ` |
+| [Level 7: Feral Instinct](<../class_features/barbarian_level_7_feral_instinct.md> "dnd2024:class_features/barbarian_level_7_feral_instinct") | ` 7 ` |
+| [Level 7: Instinctive Pounce](<../class_features/barbarian_level_7_instinctive_pounce.md> "dnd2024:class_features/barbarian_level_7_instinctive_pounce") | ` 7 ` |
+| [Level 9: Brutal Strike](<../class_features/barbarian_level_9_brutal_strike.md> "dnd2024:class_features/barbarian_level_9_brutal_strike") | ` 9 ` |

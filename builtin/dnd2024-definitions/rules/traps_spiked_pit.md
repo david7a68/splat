@@ -98,32 +98,30 @@ Levels Pit Depth Damage\
 
 #### Damage
 
-<!-- splat:rows path=splat_rule/parameters/damage -->
+<!-- splat:table
+path: splat_rule/parameters/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Type:
+    path: type
+    type: symbol
+  Dice:
+    path: dice
+    type: dice
+  Average:
+    path: average
+    type: integer
+-->
 
-| Row | type | average |
-| --- | --- | --- |
-| ` 0 ` | ` bludgeoning ` | ` 3 ` |
-| ` 1 ` | ` piercing ` | ` 9 ` |
-
-##### Dice
-
-<!-- splat:values path=splat_rule/parameters/damage/0/dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 1 ` |
-| ` sides ` | ` 6 ` |
-| ` add ` | ` 0 ` |
-
-##### Dice
-
-<!-- splat:values path=splat_rule/parameters/damage/1/dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 2 ` |
-| ` sides ` | ` 8 ` |
-| ` add ` | ` 0 ` |
+| Key | Type | Dice | Average |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Bludgeoning ` | ` 1d6 ` | ` 3 ` |
+| ` row_2 ` | ` Piercing ` | ` 2d8 ` | ` 9 ` |
 
 #### Detection
 
@@ -157,127 +155,155 @@ target: lid_floor_section
 
 #### Scaling
 
-<!-- splat:rows path=splat_rule/parameters/scaling -->
+<!-- splat:table
+path: splat_rule/parameters/scaling
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Depth feet:
+    path: depth_feet
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | levels | depth_feet |
-| --- | --- | --- |
-| ` 0 ` | ` [1, 4] ` | ` 10 ` |
-| ` 1 ` | ` [5, 10] ` | ` 30 ` |
-| ` 2 ` | ` [11, 16] ` | ` 60 ` |
-| ` 3 ` | ` [17, 20] ` | ` 120 ` |
+| Key | Levels | Depth feet | Details |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` [1, 4] ` | ` 10 ` | [Rules](#^splat-c84e121e-row_1 "section:row_1") |
+| ` row_2 ` | ` [5, 10] ` | ` 30 ` | [Rules](#^splat-c84e121e-row_2 "section:row_2") |
+| ` row_3 ` | ` [11, 16] ` | ` 60 ` | [Rules](#^splat-c84e121e-row_3 "section:row_3") |
+| ` row_4 ` | ` [17, 20] ` | ` 120 ` | [Rules](#^splat-c84e121e-row_4 "section:row_4") |
 
-##### Damage
+##### Row 1
 
-<!-- splat:rows path=splat_rule/parameters/scaling/0/damage -->
+^splat-c84e121e-row_1
 
-| Row | type | average |
-| --- | --- | --- |
-| ` 0 ` | ` bludgeoning ` | ` 3 ` |
-| ` 1 ` | ` piercing ` | ` 9 ` |
+###### Damage
 
-###### Dice
+<!-- splat:table
+path: splat_rule/parameters/scaling/@row_1/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Type:
+    path: type
+    type: symbol
+  Dice:
+    path: dice
+    type: dice
+  Average:
+    path: average
+    type: integer
+-->
 
-<!-- splat:values path=splat_rule/parameters/scaling/0/damage/0/dice -->
+| Key | Type | Dice | Average |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Bludgeoning ` | ` 1d6 ` | ` 3 ` |
+| ` row_2 ` | ` Piercing ` | ` 2d8 ` | ` 9 ` |
 
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 1 ` |
-| ` sides ` | ` 6 ` |
-| ` add ` | ` 0 ` |
+##### Row 2
 
-###### Dice
+^splat-c84e121e-row_2
 
-<!-- splat:values path=splat_rule/parameters/scaling/0/damage/1/dice -->
+###### Damage
 
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 2 ` |
-| ` sides ` | ` 8 ` |
-| ` add ` | ` 0 ` |
+<!-- splat:table
+path: splat_rule/parameters/scaling/@row_2/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Type:
+    path: type
+    type: symbol
+  Dice:
+    path: dice
+    type: dice
+  Average:
+    path: average
+    type: integer
+-->
 
-##### Damage
+| Key | Type | Dice | Average |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Bludgeoning ` | ` 3d6 ` | ` 10 ` |
+| ` row_2 ` | ` Piercing ` | ` 3d8 ` | ` 13 ` |
 
-<!-- splat:rows path=splat_rule/parameters/scaling/1/damage -->
+##### Row 3
 
-| Row | type | average |
-| --- | --- | --- |
-| ` 0 ` | ` bludgeoning ` | ` 10 ` |
-| ` 1 ` | ` piercing ` | ` 13 ` |
+^splat-c84e121e-row_3
 
-###### Dice
+###### Damage
 
-<!-- splat:values path=splat_rule/parameters/scaling/1/damage/0/dice -->
+<!-- splat:table
+path: splat_rule/parameters/scaling/@row_3/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Type:
+    path: type
+    type: symbol
+  Dice:
+    path: dice
+    type: dice
+  Average:
+    path: average
+    type: integer
+-->
 
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 3 ` |
-| ` sides ` | ` 6 ` |
-| ` add ` | ` 0 ` |
+| Key | Type | Dice | Average |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Bludgeoning ` | ` 6d6 ` | ` 21 ` |
+| ` row_2 ` | ` Piercing ` | ` 8d8 ` | ` 36 ` |
 
-###### Dice
+##### Row 4
 
-<!-- splat:values path=splat_rule/parameters/scaling/1/damage/1/dice -->
+^splat-c84e121e-row_4
 
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 3 ` |
-| ` sides ` | ` 8 ` |
-| ` add ` | ` 0 ` |
+###### Damage
 
-##### Damage
+<!-- splat:table
+path: splat_rule/parameters/scaling/@row_4/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Type:
+    path: type
+    type: symbol
+  Dice:
+    path: dice
+    type: dice
+  Average:
+    path: average
+    type: integer
+-->
 
-<!-- splat:rows path=splat_rule/parameters/scaling/2/damage -->
-
-| Row | type | average |
-| --- | --- | --- |
-| ` 0 ` | ` bludgeoning ` | ` 21 ` |
-| ` 1 ` | ` piercing ` | ` 36 ` |
-
-###### Dice
-
-<!-- splat:values path=splat_rule/parameters/scaling/2/damage/0/dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 6 ` |
-| ` sides ` | ` 6 ` |
-| ` add ` | ` 0 ` |
-
-###### Dice
-
-<!-- splat:values path=splat_rule/parameters/scaling/2/damage/1/dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 8 ` |
-| ` sides ` | ` 8 ` |
-| ` add ` | ` 0 ` |
-
-##### Damage
-
-<!-- splat:rows path=splat_rule/parameters/scaling/3/damage -->
-
-| Row | type | average |
-| --- | --- | --- |
-| ` 0 ` | ` bludgeoning ` | ` 42 ` |
-| ` 1 ` | ` piercing ` | ` 57 ` |
-
-###### Dice
-
-<!-- splat:values path=splat_rule/parameters/scaling/3/damage/0/dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 12 ` |
-| ` sides ` | ` 6 ` |
-| ` add ` | ` 0 ` |
-
-###### Dice
-
-<!-- splat:values path=splat_rule/parameters/scaling/3/damage/1/dice -->
-
-| Field | Value |
-| --- | --- |
-| ` count ` | ` 13 ` |
-| ` sides ` | ` 8 ` |
-| ` add ` | ` 0 ` |
+| Key | Type | Dice | Average |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Bludgeoning ` | ` 12d6 ` | ` 42 ` |
+| ` row_2 ` | ` Piercing ` | ` 13d8 ` | ` 57 ` |

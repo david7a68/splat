@@ -56,46 +56,29 @@ in the Rogue Features table.\
 
 #### Features
 
-<!-- splat:rows path=splat_rule/parameters/features -->
+<!-- splat:table
+path: splat_rule/parameters/features
+key: Feature
+order:
+- rogue_level_1_expertise
+- rogue_level_1_sneak_attack
+- rogue_level_1_thieves_cant
+- rogue_level_1_weapon_mastery
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 1 ` |
-| ` 1 ` | ` 1 ` |
-| ` 2 ` | ` 1 ` |
-| ` 3 ` | ` 1 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_1_expertise ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_1_sneak_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_1_thieves_cant ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/rogue_level_1_weapon_mastery ` |
+| [Level 1: Expertise](<../class_features/rogue_level_1_expertise.md> "dnd2024:class_features/rogue_level_1_expertise") | ` 1 ` |
+| [Level 1: Sneak Attack](<../class_features/rogue_level_1_sneak_attack.md> "dnd2024:class_features/rogue_level_1_sneak_attack") | ` 1 ` |
+| [Level 1: Thieves’ Cant](<../class_features/rogue_level_1_thieves_cant.md> "dnd2024:class_features/rogue_level_1_thieves_cant") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/rogue_level_1_weapon_mastery.md> "dnd2024:class_features/rogue_level_1_weapon_mastery") | ` 1 ` |
 
 #### Skill choice
 

@@ -128,3 +128,9 @@ notes or remove unknown files. It does not write campaign data.
 are reported and still block execution. The proof command tests only its stated
 supported subset. Structural validation and a source audit do not replace
 future adapter tests for all possible rule interactions.
+
+Mapped tables now keep variants, pack contents, spell references and their usage
+limits, and simple roll results together. Stable row keys attach complex details.
+The reader reconstructs the same typed specifications; this is a presentation
+change and does not add engine implementations. Checked duplicate source tables
+are replaced by the authoritative table while citations and source files remain.

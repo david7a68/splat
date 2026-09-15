@@ -53,16 +53,41 @@ Alignment table.\
 
 #### Table
 
-<!-- splat:rows path=splat_rule/parameters/table -->
+<!-- splat:table
+path: splat_rule/parameters/table
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+columns:
+  Key:
+    type: key
+  Roll min:
+    path: roll_min
+    type: integer
+  Roll max:
+    path: roll_max
+    type: integer
+  Alignment:
+    path: alignment
+    type: symbol
+-->
 
-| Row | roll_min | roll_max | alignment |
+| Key | Roll min | Roll max | Alignment |
 | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 15 ` | ` lawful_good ` |
-| ` 1 ` | ` 16 ` | ` 35 ` | ` neutral_good ` |
-| ` 2 ` | ` 36 ` | ` 50 ` | ` chaotic_good ` |
-| ` 3 ` | ` 51 ` | ` 63 ` | ` lawful_neutral ` |
-| ` 4 ` | ` 64 ` | ` 73 ` | ` neutral ` |
-| ` 5 ` | ` 74 ` | ` 85 ` | ` chaotic_neutral ` |
-| ` 6 ` | ` 86 ` | ` 89 ` | ` lawful_evil ` |
-| ` 7 ` | ` 90 ` | ` 96 ` | ` neutral_evil ` |
-| ` 8 ` | ` 97 ` | ` 100 ` | ` chaotic_evil ` |
+| ` row_1 ` | ` 1 ` | ` 15 ` | ` Lawful good ` |
+| ` row_2 ` | ` 16 ` | ` 35 ` | ` Neutral good ` |
+| ` row_3 ` | ` 36 ` | ` 50 ` | ` Chaotic good ` |
+| ` row_4 ` | ` 51 ` | ` 63 ` | ` Lawful neutral ` |
+| ` row_5 ` | ` 64 ` | ` 73 ` | ` Neutral ` |
+| ` row_6 ` | ` 74 ` | ` 85 ` | ` Chaotic neutral ` |
+| ` row_7 ` | ` 86 ` | ` 89 ` | ` Lawful evil ` |
+| ` row_8 ` | ` 90 ` | ` 96 ` | ` Neutral evil ` |
+| ` row_9 ` | ` 97 ` | ` 100 ` | ` Chaotic evil ` |

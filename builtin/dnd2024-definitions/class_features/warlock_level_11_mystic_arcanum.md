@@ -54,14 +54,31 @@ lock spell of the same level.\
 
 #### Arcanum choices
 
-<!-- splat:rows path=splat_rule/parameters/arcanum_choices -->
+<!-- splat:table
+path: splat_rule/parameters/arcanum_choices
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Warlock level:
+    path: warlock_level
+    type: integer
+  Spell level:
+    path: spell_level
+    type: integer
+-->
 
-| Row | warlock_level | spell_level |
+| Key | Warlock level | Spell level |
 | --- | --- | --- |
-| ` 0 ` | ` 11 ` | ` 6 ` |
-| ` 1 ` | ` 13 ` | ` 7 ` |
-| ` 2 ` | ` 15 ` | ` 8 ` |
-| ` 3 ` | ` 17 ` | ` 9 ` |
+| ` row_1 ` | ` 11 ` | ` 6 ` |
+| ` row_2 ` | ` 13 ` | ` 7 ` |
+| ` row_3 ` | ` 15 ` | ` 8 ` |
+| ` row_4 ` | ` 17 ` | ` 9 ` |
 
 #### Each spell
 

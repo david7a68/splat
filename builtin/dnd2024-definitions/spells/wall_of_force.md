@@ -98,29 +98,66 @@ Original layout: [[../../srd-5.2.1/pages/172|page 172]].
 
 #### Wall
 
-<!-- splat:yaml path=splat_rule/parameters/wall -->
+<!-- splat:values path=splat_rule/parameters/wall -->
 
-```yaml
-invisible: true
-orientation: caster_choice_any
-support_choice:
-- free_floating
-- solid_surface
-shape_choices:
-- shape: hemispherical_dome
-  radius_max_feet: 10
-- shape: globe
-  radius_max_feet: 10
-- shape: flat_panels
-  count: 10
-  width_feet: 10
-  height_feet: 10
-  each_contiguous_with_another: true
-thickness_inches:
-  numerator: 1
-  denominator: 4
-duration: spell_duration
-```
+| Field | Value |
+| --- | --- |
+| ` invisible ` | ` true ` |
+| ` orientation ` | ` caster_choice_any ` |
+| ` support_choice ` | ` ["free_floating", "solid_surface"] ` |
+| ` duration ` | ` spell_duration ` |
+
+##### Shape choices
+
+<!-- splat:table
+path: splat_rule/parameters/wall/shape_choices
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Shape:
+    path: shape
+    type: symbol
+  Radius max feet:
+    path: radius_max_feet
+    type: integer
+    optional: true
+  Count:
+    path: count
+    type: integer
+    optional: true
+  Width feet:
+    path: width_feet
+    type: integer
+    optional: true
+  Height feet:
+    path: height_feet
+    type: integer
+    optional: true
+  Each contiguous with another:
+    path: each_contiguous_with_another
+    type: boolean
+    optional: true
+-->
+
+| Key | Shape | Radius max feet | Count | Width feet | Height feet | Each contiguous with another |
+| --- | --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Hemispherical dome ` | ` 10 ` |  |  |  |  |
+| ` row_2 ` | ` Globe ` | ` 10 ` |  |  |  |  |
+| ` row_3 ` | ` Flat panels ` |  | ` 10 ` | ` 10 ` | ` 10 ` | true |
+
+##### Thickness inches
+
+<!-- splat:values path=splat_rule/parameters/wall/thickness_inches -->
+
+| Field | Value |
+| --- | --- |
+| ` numerator ` | ` 1 ` |
+| ` denominator ` | ` 4 ` |
 
 #### Initial overlap
 

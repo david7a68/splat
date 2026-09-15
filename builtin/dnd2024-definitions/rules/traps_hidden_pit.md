@@ -100,18 +100,41 @@ damage_type: bludgeoning
 
 #### Disarm
 
-<!-- splat:yaml path=splat_rule/parameters/disarm -->
+<!-- splat:values path=splat_rule/parameters/disarm -->
 
-```yaml
-requires: detected
-options:
-- wedge: iron_spike_or_similar
-  result: lid_cannot_open
-- magic:
-    key: dnd2024:spells/arcane_lock
-  result: lid_held_shut
-crossing_after_disarm: safe
-```
+| Field | Value |
+| --- | --- |
+| ` requires ` | ` detected ` |
+| ` crossing_after_disarm ` | ` safe ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/disarm/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Wedge:
+    path: wedge
+    type: symbol
+    optional: true
+  Result:
+    path: result
+    type: symbol
+  Magic:
+    path: magic
+    type: reference
+    optional: true
+-->
+
+| Key | Wedge | Result | Magic |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Iron spike or similar ` | ` Lid cannot open ` |  |
+| ` row_2 ` |  | ` Lid held shut ` | [Arcane Lock](<../spells/arcane_lock.md> "dnd2024:spells/arcane_lock") |
 
 #### Escape
 
@@ -130,40 +153,35 @@ gm_easier_variant: cracks_for_handholds_and_footholds
 
 #### Higher level variants
 
-<!-- splat:rows path=splat_rule/parameters/higher_level_variants -->
+<!-- splat:table
+path: splat_rule/parameters/higher_level_variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Levels:
+    path: levels
+    type: yaml
+  Depth feet:
+    path: depth_feet
+    type: integer
+  Damage dice count:
+    path: damage/dice/count
+    type: integer
+  Damage dice sides:
+    path: damage/dice/sides
+    type: integer
+  Average:
+    path: average
+    type: integer
+-->
 
-| Row | levels | depth_feet | average |
-| --- | --- | --- | --- |
-| ` 0 ` | ` [5, 10] ` | ` 30 ` | ` 10 ` |
-| ` 1 ` | ` [11, 16] ` | ` 60 ` | ` 21 ` |
-| ` 2 ` | ` [17, 20] ` | ` 120 ` | ` 42 ` |
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/higher_level_variants/0/damage -->
-
-```yaml
-dice:
-  count: 3
-  sides: 6
-```
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/higher_level_variants/1/damage -->
-
-```yaml
-dice:
-  count: 6
-  sides: 6
-```
-
-##### Damage
-
-<!-- splat:yaml path=splat_rule/parameters/higher_level_variants/2/damage -->
-
-```yaml
-dice:
-  count: 12
-  sides: 6
-```
+| Key | Levels | Depth feet | Damage dice count | Damage dice sides | Average |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` [5, 10] ` | ` 30 ` | ` 3 ` | ` 6 ` | ` 10 ` |
+| ` row_2 ` | ` [11, 16] ` | ` 60 ` | ` 6 ` | ` 6 ` | ` 21 ` |
+| ` row_3 ` | ` [17, 20] ` | ` 120 ` | ` 12 ` | ` 6 ` | ` 42 ` |

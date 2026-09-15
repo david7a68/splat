@@ -391,38 +391,82 @@ success:
 
 ##### Toxic ink
 
-<!-- splat:yaml path=splat_rule/parameters/features/toxic_ink -->
+<!-- splat:values path=splat_rule/parameters/features/toxic_ink -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` legendary_action ` |
+| ` legendary_cost ` | ` 1 ` |
+| ` cooldown_until ` | ` self.next_turn_start ` |
+| ` operation ` | ` saving_throw ` |
+| ` ability ` | ` constitution ` |
+| ` dc ` | ` 23 ` |
+
+###### Targets
+
+<!-- splat:yaml path=splat_rule/parameters/features/toxic_ink/targets -->
 
 ```yaml
-economy: legendary_action
-legendary_cost: 1
-cooldown_until: self.next_turn_start
-operation: saving_throw
-ability: constitution
-dc: 23
-targets:
-  kind: creature
-  selection: each
-  area:
-    shape: emanation
-    size_ft: 15
-    origin: self
-failure:
-  conditions:
-  - condition: blinded
-    until: self.next_turn_end
-  - condition: poisoned
-    until: self.next_turn_end
-  then_move:
-    operation: move
-    maximum_ft:
-      multiply:
-      - stat: speed
-      - 1
-requires:
-  self_underwater: true
-success:
-  effects: []
+kind: creature
+selection: each
+area:
+  shape: emanation
+  size_ft: 15
+  origin: self
+```
+
+###### Failure
+
+###### Conditions
+
+<!-- splat:table
+path: splat_rule/parameters/features/toxic_ink/failure/conditions
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Condition:
+    path: condition
+    type: symbol
+  Until:
+    path: until
+    type: string
+-->
+
+| Key | Condition | Until |
+| --- | --- | --- |
+| ` row_1 ` | ` Blinded ` | ` self.next_turn_end ` |
+| ` row_2 ` | ` Poisoned ` | ` self.next_turn_end ` |
+
+###### Then move
+
+<!-- splat:yaml path=splat_rule/parameters/features/toxic_ink/failure/then_move -->
+
+```yaml
+operation: move
+maximum_ft:
+  multiply:
+  - stat: speed
+  - 1
+```
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/toxic_ink/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` self_underwater ` | ` true ` |
+
+###### Success
+
+<!-- splat:yaml path=splat_rule/parameters/features/toxic_ink/success -->
+
+```yaml
+effects: []
 ```
 
 #### Skill totals

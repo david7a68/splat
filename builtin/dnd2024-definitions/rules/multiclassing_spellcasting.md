@@ -146,34 +146,71 @@ Level 1 2 3 4 5 6 7 8 9\
 
 #### Slots by effective level
 
-<!-- splat:rows path=splat_rule/parameters/slots_by_effective_level -->
+<!-- splat:table
+path: splat_rule/parameters/slots_by_effective_level
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+- row_11
+- row_12
+- row_13
+- row_14
+- row_15
+- row_16
+- row_17
+- row_18
+- row_19
+- row_20
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | level |
-| --- | --- |
-| ` 0 ` | ` 1 ` |
-| ` 1 ` | ` 2 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 4 ` |
-| ` 4 ` | ` 5 ` |
-| ` 5 ` | ` 6 ` |
-| ` 6 ` | ` 7 ` |
-| ` 7 ` | ` 8 ` |
-| ` 8 ` | ` 9 ` |
-| ` 9 ` | ` 10 ` |
-| ` 10 ` | ` 11 ` |
-| ` 11 ` | ` 12 ` |
-| ` 12 ` | ` 13 ` |
-| ` 13 ` | ` 14 ` |
-| ` 14 ` | ` 15 ` |
-| ` 15 ` | ` 16 ` |
-| ` 16 ` | ` 17 ` |
-| ` 17 ` | ` 18 ` |
-| ` 18 ` | ` 19 ` |
-| ` 19 ` | ` 20 ` |
+| Key | Level | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | [Rules](#^splat-7b5019ca-row_1 "section:row_1") |
+| ` row_2 ` | ` 2 ` | [Rules](#^splat-7b5019ca-row_2 "section:row_2") |
+| ` row_3 ` | ` 3 ` | [Rules](#^splat-7b5019ca-row_3 "section:row_3") |
+| ` row_4 ` | ` 4 ` | [Rules](#^splat-7b5019ca-row_4 "section:row_4") |
+| ` row_5 ` | ` 5 ` | [Rules](#^splat-7b5019ca-row_5 "section:row_5") |
+| ` row_6 ` | ` 6 ` | [Rules](#^splat-7b5019ca-row_6 "section:row_6") |
+| ` row_7 ` | ` 7 ` | [Rules](#^splat-7b5019ca-row_7 "section:row_7") |
+| ` row_8 ` | ` 8 ` | [Rules](#^splat-7b5019ca-row_8 "section:row_8") |
+| ` row_9 ` | ` 9 ` | [Rules](#^splat-7b5019ca-row_9 "section:row_9") |
+| ` row_10 ` | ` 10 ` | [Rules](#^splat-7b5019ca-row_10 "section:row_10") |
+| ` row_11 ` | ` 11 ` | [Rules](#^splat-7b5019ca-row_11 "section:row_11") |
+| ` row_12 ` | ` 12 ` | [Rules](#^splat-7b5019ca-row_12 "section:row_12") |
+| ` row_13 ` | ` 13 ` | [Rules](#^splat-7b5019ca-row_13 "section:row_13") |
+| ` row_14 ` | ` 14 ` | [Rules](#^splat-7b5019ca-row_14 "section:row_14") |
+| ` row_15 ` | ` 15 ` | [Rules](#^splat-7b5019ca-row_15 "section:row_15") |
+| ` row_16 ` | ` 16 ` | [Rules](#^splat-7b5019ca-row_16 "section:row_16") |
+| ` row_17 ` | ` 17 ` | [Rules](#^splat-7b5019ca-row_17 "section:row_17") |
+| ` row_18 ` | ` 18 ` | [Rules](#^splat-7b5019ca-row_18 "section:row_18") |
+| ` row_19 ` | ` 19 ` | [Rules](#^splat-7b5019ca-row_19 "section:row_19") |
+| ` row_20 ` | ` 20 ` | [Rules](#^splat-7b5019ca-row_20 "section:row_20") |
 
-##### Slots
+##### Row 1
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/0/slots -->
+^splat-7b5019ca-row_1
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_1/slots -->
 
 ```yaml
 '1': 2
@@ -187,9 +224,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 2
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/1/slots -->
+^splat-7b5019ca-row_2
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_2/slots -->
 
 ```yaml
 '1': 3
@@ -203,9 +244,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 3
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/2/slots -->
+^splat-7b5019ca-row_3
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_3/slots -->
 
 ```yaml
 '1': 4
@@ -219,9 +264,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 4
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/3/slots -->
+^splat-7b5019ca-row_4
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_4/slots -->
 
 ```yaml
 '1': 4
@@ -235,9 +284,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 5
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/4/slots -->
+^splat-7b5019ca-row_5
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_5/slots -->
 
 ```yaml
 '1': 4
@@ -251,9 +304,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 6
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/5/slots -->
+^splat-7b5019ca-row_6
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_6/slots -->
 
 ```yaml
 '1': 4
@@ -267,9 +324,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 7
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/6/slots -->
+^splat-7b5019ca-row_7
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_7/slots -->
 
 ```yaml
 '1': 4
@@ -283,9 +344,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 8
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/7/slots -->
+^splat-7b5019ca-row_8
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_8/slots -->
 
 ```yaml
 '1': 4
@@ -299,9 +364,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 9
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/8/slots -->
+^splat-7b5019ca-row_9
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_9/slots -->
 
 ```yaml
 '1': 4
@@ -315,9 +384,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 10
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/9/slots -->
+^splat-7b5019ca-row_10
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_10/slots -->
 
 ```yaml
 '1': 4
@@ -331,25 +404,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 11
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/10/slots -->
+^splat-7b5019ca-row_11
 
-```yaml
-'1': 4
-'2': 3
-'3': 3
-'4': 3
-'5': 2
-'6': 1
-'7': 0
-'8': 0
-'9': 0
-```
+###### Slots
 
-##### Slots
-
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/11/slots -->
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_11/slots -->
 
 ```yaml
 '1': 4
@@ -363,9 +424,33 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 12
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/12/slots -->
+^splat-7b5019ca-row_12
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_12/slots -->
+
+```yaml
+'1': 4
+'2': 3
+'3': 3
+'4': 3
+'5': 2
+'6': 1
+'7': 0
+'8': 0
+'9': 0
+```
+
+##### Row 13
+
+^splat-7b5019ca-row_13
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_13/slots -->
 
 ```yaml
 '1': 4
@@ -379,9 +464,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 14
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/13/slots -->
+^splat-7b5019ca-row_14
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_14/slots -->
 
 ```yaml
 '1': 4
@@ -395,25 +484,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 15
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/14/slots -->
+^splat-7b5019ca-row_15
 
-```yaml
-'1': 4
-'2': 3
-'3': 3
-'4': 3
-'5': 2
-'6': 1
-'7': 1
-'8': 1
-'9': 0
-```
+###### Slots
 
-##### Slots
-
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/15/slots -->
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_15/slots -->
 
 ```yaml
 '1': 4
@@ -427,9 +504,33 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 0
 ```
 
-##### Slots
+##### Row 16
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/16/slots -->
+^splat-7b5019ca-row_16
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_16/slots -->
+
+```yaml
+'1': 4
+'2': 3
+'3': 3
+'4': 3
+'5': 2
+'6': 1
+'7': 1
+'8': 1
+'9': 0
+```
+
+##### Row 17
+
+^splat-7b5019ca-row_17
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_17/slots -->
 
 ```yaml
 '1': 4
@@ -443,9 +544,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 1
 ```
 
-##### Slots
+##### Row 18
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/17/slots -->
+^splat-7b5019ca-row_18
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_18/slots -->
 
 ```yaml
 '1': 4
@@ -459,9 +564,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 1
 ```
 
-##### Slots
+##### Row 19
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/18/slots -->
+^splat-7b5019ca-row_19
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_19/slots -->
 
 ```yaml
 '1': 4
@@ -475,9 +584,13 @@ Level 1 2 3 4 5 6 7 8 9\
 '9': 1
 ```
 
-##### Slots
+##### Row 20
 
-<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/19/slots -->
+^splat-7b5019ca-row_20
+
+###### Slots
+
+<!-- splat:yaml path=splat_rule/parameters/slots_by_effective_level/@row_20/slots -->
 
 ```yaml
 '1': 4

@@ -117,26 +117,77 @@ and 15 GP; or (B) 75 GP\
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
 
-```yaml
-count: 1
-options:
-- id: a
-  grants:
-  - item_type: greataxe
-    quantity: 1
-  - item_type: handaxe
-    quantity: 4
-  - item_type: explorer_s_pack
-    quantity: 1
-  - item_type: gp
-    quantity: 15
-- id: b
-  grants:
-  - item_type: gp
-    quantity: 75
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options
+key: Variant
+order:
+- a
+- b
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
+
+| Variant | Details |
+| --- | --- |
+| ` A ` | [Rules](#^splat-93071aae-a "section:a") |
+| ` B ` | [Rules](#^splat-93071aae-b "section:b") |
+
+###### A
+
+^splat-93071aae-a
+
+###### Grants
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/@a/grants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Item type:
+    path: item_type
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Key | Item type | Quantity |
+| --- | --- | --- |
+| ` row_1 ` | ` Greataxe ` | ` 1 ` |
+| ` row_2 ` | ` Handaxe ` | ` 4 ` |
+| ` row_3 ` | ` Explorer s pack ` | ` 1 ` |
+| ` row_4 ` | ` Gp ` | ` 15 ` |
+
+###### B
+
+^splat-93071aae-b
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/starting_equipment/options/@b/grants -->
+
+| Row | item_type | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` gp ` | ` 75 ` |
 
 #### Progression
 
@@ -148,187 +199,58 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- barbarian_level_11_relentless_rage
+- barbarian_level_13_improved_brutal_strike
+- barbarian_level_15_persistent_rage
+- barbarian_level_17_improved_brutal_strike
+- barbarian_level_18_indomitable_might
+- barbarian_level_19_epic_boon
+- barbarian_level_1_rage
+- barbarian_level_1_unarmored_defense
+- barbarian_level_1_weapon_mastery
+- barbarian_level_20_primal_champion
+- barbarian_level_2_danger_sense
+- barbarian_level_2_reckless_attack
+- barbarian_level_3_barbarian_subclass
+- barbarian_level_3_primal_knowledge
+- barbarian_level_4_ability_score_improvement
+- barbarian_level_5_extra_attack
+- barbarian_level_5_fast_movement
+- barbarian_level_7_feral_instinct
+- barbarian_level_7_instinctive_pounce
+- barbarian_level_9_brutal_strike
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 11 ` |
-| ` 1 ` | ` 13 ` |
-| ` 2 ` | ` 15 ` |
-| ` 3 ` | ` 17 ` |
-| ` 4 ` | ` 18 ` |
-| ` 5 ` | ` 19 ` |
-| ` 6 ` | ` 1 ` |
-| ` 7 ` | ` 1 ` |
-| ` 8 ` | ` 1 ` |
-| ` 9 ` | ` 20 ` |
-| ` 10 ` | ` 2 ` |
-| ` 11 ` | ` 2 ` |
-| ` 12 ` | ` 3 ` |
-| ` 13 ` | ` 3 ` |
-| ` 14 ` | ` 4 ` |
-| ` 15 ` | ` 5 ` |
-| ` 16 ` | ` 5 ` |
-| ` 17 ` | ` 7 ` |
-| ` 18 ` | ` 7 ` |
-| ` 19 ` | ` 9 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_11_relentless_rage ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_13_improved_brutal_strike ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_15_persistent_rage ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_17_improved_brutal_strike ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_18_indomitable_might ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_1_rage ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_1_unarmored_defense ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_1_weapon_mastery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_20_primal_champion ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_2_danger_sense ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/11/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_2_reckless_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/12/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_3_barbarian_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/13/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_3_primal_knowledge ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/14/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/15/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_5_extra_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/16/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_5_fast_movement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/17/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_7_feral_instinct ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/18/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_7_instinctive_pounce ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/19/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/barbarian_level_9_brutal_strike ` |
+| [Level 11: Relentless Rage](<../class_features/barbarian_level_11_relentless_rage.md> "dnd2024:class_features/barbarian_level_11_relentless_rage") | ` 11 ` |
+| [Level 13: Improved Brutal Strike](<../class_features/barbarian_level_13_improved_brutal_strike.md> "dnd2024:class_features/barbarian_level_13_improved_brutal_strike") | ` 13 ` |
+| [Level 15: Persistent Rage](<../class_features/barbarian_level_15_persistent_rage.md> "dnd2024:class_features/barbarian_level_15_persistent_rage") | ` 15 ` |
+| [Level 17: Improved Brutal Strike](<../class_features/barbarian_level_17_improved_brutal_strike.md> "dnd2024:class_features/barbarian_level_17_improved_brutal_strike") | ` 17 ` |
+| [Level 18: Indomitable Might](<../class_features/barbarian_level_18_indomitable_might.md> "dnd2024:class_features/barbarian_level_18_indomitable_might") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/barbarian_level_19_epic_boon.md> "dnd2024:class_features/barbarian_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Rage](<../class_features/barbarian_level_1_rage.md> "dnd2024:class_features/barbarian_level_1_rage") | ` 1 ` |
+| [Level 1: Unarmored Defense](<../class_features/barbarian_level_1_unarmored_defense.md> "dnd2024:class_features/barbarian_level_1_unarmored_defense") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/barbarian_level_1_weapon_mastery.md> "dnd2024:class_features/barbarian_level_1_weapon_mastery") | ` 1 ` |
+| [Level 20: Primal Champion](<../class_features/barbarian_level_20_primal_champion.md> "dnd2024:class_features/barbarian_level_20_primal_champion") | ` 20 ` |
+| [Level 2: Danger Sense](<../class_features/barbarian_level_2_danger_sense.md> "dnd2024:class_features/barbarian_level_2_danger_sense") | ` 2 ` |
+| [Level 2: Reckless Attack](<../class_features/barbarian_level_2_reckless_attack.md> "dnd2024:class_features/barbarian_level_2_reckless_attack") | ` 2 ` |
+| [Level 3: Barbarian Subclass](<../class_features/barbarian_level_3_barbarian_subclass.md> "dnd2024:class_features/barbarian_level_3_barbarian_subclass") | ` 3 ` |
+| [Level 3: Primal Knowledge](<../class_features/barbarian_level_3_primal_knowledge.md> "dnd2024:class_features/barbarian_level_3_primal_knowledge") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/barbarian_level_4_ability_score_improvement.md> "dnd2024:class_features/barbarian_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Extra Attack](<../class_features/barbarian_level_5_extra_attack.md> "dnd2024:class_features/barbarian_level_5_extra_attack") | ` 5 ` |
+| [Level 5: Fast Movement](<../class_features/barbarian_level_5_fast_movement.md> "dnd2024:class_features/barbarian_level_5_fast_movement") | ` 5 ` |
+| [Level 7: Feral Instinct](<../class_features/barbarian_level_7_feral_instinct.md> "dnd2024:class_features/barbarian_level_7_feral_instinct") | ` 7 ` |
+| [Level 7: Instinctive Pounce](<../class_features/barbarian_level_7_instinctive_pounce.md> "dnd2024:class_features/barbarian_level_7_instinctive_pounce") | ` 7 ` |
+| [Level 9: Brutal Strike](<../class_features/barbarian_level_9_brutal_strike.md> "dnd2024:class_features/barbarian_level_9_brutal_strike") | ` 9 ` |

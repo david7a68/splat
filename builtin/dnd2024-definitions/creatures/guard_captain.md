@@ -181,14 +181,31 @@ hit:
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Item:
+    path: item
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item | quantity |
+| Key | Item | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` breastplate ` | ` 1 ` |
-| ` 1 ` | ` javelins ` | ` 6 ` |
-| ` 2 ` | ` longsword ` | ` 1 ` |
-| ` 3 ` | ` shield ` | ` 1 ` |
+| ` row_1 ` | ` Breastplate ` | ` 1 ` |
+| ` row_2 ` | ` Javelins ` | ` 6 ` |
+| ` row_3 ` | ` Longsword ` | ` 1 ` |
+| ` row_4 ` | ` Shield ` | ` 1 ` |
 
 #### Senses
 

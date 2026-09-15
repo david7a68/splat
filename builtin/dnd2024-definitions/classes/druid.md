@@ -131,32 +131,83 @@ Wild Companion\
 
 #### Starting equipment
 
-<!-- splat:yaml path=splat_rule/parameters/starting_equipment -->
+<!-- splat:values path=splat_rule/parameters/starting_equipment -->
 
-```yaml
-count: 1
-options:
-- id: a
-  grants:
-  - item_type: leather_armor
-    quantity: 1
-  - item_type: shield
-    quantity: 1
-  - item_type: sickle
-    quantity: 1
-  - item_type: druidic_focus_quarterstaff
-    quantity: 1
-  - item_type: explorer_s_pack
-    quantity: 1
-  - item_type: herbalism_kit
-    quantity: 1
-  - item_type: gp
-    quantity: 9
-- id: b
-  grants:
-  - item_type: gp
-    quantity: 50
-```
+| Field | Value |
+| --- | --- |
+| ` count ` | ` 1 ` |
+
+##### Options
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options
+key: Variant
+order:
+- a
+- b
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Details:
+    type: section
+    optional: true
+-->
+
+| Variant | Details |
+| --- | --- |
+| ` A ` | [Rules](#^splat-93071aae-a "section:a") |
+| ` B ` | [Rules](#^splat-93071aae-b "section:b") |
+
+###### A
+
+^splat-93071aae-a
+
+###### Grants
+
+<!-- splat:table
+path: splat_rule/parameters/starting_equipment/options/@a/grants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+columns:
+  Key:
+    type: key
+  Item type:
+    path: item_type
+    type: symbol
+  Quantity:
+    path: quantity
+    type: integer
+-->
+
+| Key | Item type | Quantity |
+| --- | --- | --- |
+| ` row_1 ` | ` Leather armor ` | ` 1 ` |
+| ` row_2 ` | ` Shield ` | ` 1 ` |
+| ` row_3 ` | ` Sickle ` | ` 1 ` |
+| ` row_4 ` | ` Druidic focus quarterstaff ` | ` 1 ` |
+| ` row_5 ` | ` Explorer s pack ` | ` 1 ` |
+| ` row_6 ` | ` Herbalism kit ` | ` 1 ` |
+| ` row_7 ` | ` Gp ` | ` 9 ` |
+
+###### B
+
+^splat-93071aae-b
+
+###### Grants
+
+<!-- splat:rows path=splat_rule/parameters/starting_equipment/options/@b/grants -->
+
+| Row | item_type | quantity |
+| --- | --- | --- |
+| ` 0 ` | ` gp ` | ` 50 ` |
 
 #### Progression
 
@@ -168,124 +219,44 @@ options:
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- druid_level_15_improved_elemental_fury
+- druid_level_18_beast_spells
+- druid_level_19_epic_boon
+- druid_level_1_druidic
+- druid_level_1_primal_order
+- druid_level_1_spellcasting
+- druid_level_20_archdruid
+- druid_level_2_wild_companion
+- druid_level_2_wild_shape
+- druid_level_3_druid_subclass
+- druid_level_4_ability_score_improvement
+- druid_level_5_wild_resurgence
+- druid_level_7_elemental_fury
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 15 ` |
-| ` 1 ` | ` 18 ` |
-| ` 2 ` | ` 19 ` |
-| ` 3 ` | ` 1 ` |
-| ` 4 ` | ` 1 ` |
-| ` 5 ` | ` 1 ` |
-| ` 6 ` | ` 20 ` |
-| ` 7 ` | ` 2 ` |
-| ` 8 ` | ` 2 ` |
-| ` 9 ` | ` 3 ` |
-| ` 10 ` | ` 4 ` |
-| ` 11 ` | ` 5 ` |
-| ` 12 ` | ` 7 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_15_improved_elemental_fury ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_18_beast_spells ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_1_druidic ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_1_primal_order ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_20_archdruid ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_2_wild_companion ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_2_wild_shape ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_3_druid_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/11/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_5_wild_resurgence ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/12/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/druid_level_7_elemental_fury ` |
+| [Level 15: Improved Elemental Fury](<../class_features/druid_level_15_improved_elemental_fury.md> "dnd2024:class_features/druid_level_15_improved_elemental_fury") | ` 15 ` |
+| [Level 18: Beast Spells](<../class_features/druid_level_18_beast_spells.md> "dnd2024:class_features/druid_level_18_beast_spells") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/druid_level_19_epic_boon.md> "dnd2024:class_features/druid_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Druidic](<../class_features/druid_level_1_druidic.md> "dnd2024:class_features/druid_level_1_druidic") | ` 1 ` |
+| [Level 1: Primal Order](<../class_features/druid_level_1_primal_order.md> "dnd2024:class_features/druid_level_1_primal_order") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/druid_level_1_spellcasting.md> "dnd2024:class_features/druid_level_1_spellcasting") | ` 1 ` |
+| [Level 20: Archdruid](<../class_features/druid_level_20_archdruid.md> "dnd2024:class_features/druid_level_20_archdruid") | ` 20 ` |
+| [Level 2: Wild Companion](<../class_features/druid_level_2_wild_companion.md> "dnd2024:class_features/druid_level_2_wild_companion") | ` 2 ` |
+| [Level 2: Wild Shape](<../class_features/druid_level_2_wild_shape.md> "dnd2024:class_features/druid_level_2_wild_shape") | ` 2 ` |
+| [Level 3: Druid Subclass](<../class_features/druid_level_3_druid_subclass.md> "dnd2024:class_features/druid_level_3_druid_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/druid_level_4_ability_score_improvement.md> "dnd2024:class_features/druid_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Wild Resurgence](<../class_features/druid_level_5_wild_resurgence.md> "dnd2024:class_features/druid_level_5_wild_resurgence") | ` 5 ` |
+| [Level 7: Elemental Fury](<../class_features/druid_level_7_elemental_fury.md> "dnd2024:class_features/druid_level_7_elemental_fury") | ` 7 ` |

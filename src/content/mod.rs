@@ -10,6 +10,7 @@ pub mod builtin;
 pub mod contracts;
 pub mod definitions;
 mod markdown;
+mod table_mapping;
 
 #[cfg(test)]
 mod tests;

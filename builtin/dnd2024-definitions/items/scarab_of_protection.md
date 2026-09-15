@@ -83,19 +83,46 @@ Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
 #### Preservation
 
-<!-- splat:yaml path=splat_rule/parameters/preservation -->
+<!-- splat:values path=splat_rule/parameters/preservation -->
 
-```yaml
-action: reaction
-trigger: failed_saving_throw
-eligible_effect:
-  any_of:
-  - spell_school: necromancy
-  - origin_type: undead
-    harmful: true
-cost: 1
-replace_result: success
-```
+| Field | Value |
+| --- | --- |
+| ` action ` | ` reaction ` |
+| ` trigger ` | ` failed_saving_throw ` |
+| ` cost ` | ` 1 ` |
+| ` replace_result ` | ` success ` |
+
+##### Eligible effect
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/preservation/eligible_effect/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Spell school:
+    path: spell_school
+    type: symbol
+    optional: true
+  Origin type:
+    path: origin_type
+    type: symbol
+    optional: true
+  Harmful:
+    path: harmful
+    type: boolean
+    optional: true
+-->
+
+| Key | Spell school | Origin type | Harmful |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Necromancy ` |  |  |
+| ` row_2 ` |  | ` Undead ` | true |
 
 #### Attunement
 

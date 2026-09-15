@@ -130,52 +130,109 @@ Original layout: [[../../srd-5.2.1/pages/327|page 327]].
 
 ##### Rend
 
-<!-- splat:yaml path=splat_rule/parameters/features/rend -->
+<!-- splat:values path=splat_rule/parameters/features/rend -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/rend/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 5
-  reach_ft: 5
-hit:
-  damage:
-  - average: 5
-    roll:
-      count: 1
-      sides: 4
-      modifier: 3
-    type: slashing
-  - average: 7
-    roll:
-      count: 2
-      sides: 6
-      modifier: 0
-    type: radiant
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 5
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/rend/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 5 ` | ` 1 ` | ` 4 ` | ` 3 ` | ` Slashing ` |
+| ` row_2 ` | ` 7 ` | ` 2 ` | ` 6 ` | ` 0 ` | ` Radiant ` |
 
 ##### Burst of ingenuity
 
-<!-- splat:yaml path=splat_rule/parameters/features/burst_of_ingenuity -->
+<!-- splat:values path=splat_rule/parameters/features/burst_of_ingenuity -->
 
-```yaml
-economy: reaction
-resource:
-  kind: daily
-  uses: 2
-  recovery: long_rest
-operation: modify_roll
-trigger: ability_check_or_saving_throw
-targets:
-  any_of:
-  - self: true
-  - within_ft: 30
-bonus: 2
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` reaction ` |
+| ` operation ` | ` modify_roll ` |
+| ` trigger ` | ` ability_check_or_saving_throw ` |
+| ` bonus ` | ` 2 ` |
+
+###### Resource
+
+<!-- splat:values path=splat_rule/parameters/features/burst_of_ingenuity/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` daily ` |
+| ` uses ` | ` 2 ` |
+| ` recovery ` | ` long_rest ` |
+
+###### Targets
+
+###### Any of
+
+<!-- splat:table
+path: splat_rule/parameters/features/burst_of_ingenuity/targets/any_of
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Self:
+    path: self
+    type: boolean
+    optional: true
+  Within ft:
+    path: within_ft
+    type: integer
+    optional: true
+-->
+
+| Key | Self | Within ft |
+| --- | --- | --- |
+| ` row_1 ` | true |  |
+| ` row_2 ` |  | ` 30 ` |
 
 #### Skill totals
 

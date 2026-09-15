@@ -130,33 +130,60 @@ sequence:
 
 ##### Rend
 
-<!-- splat:yaml path=splat_rule/parameters/features/rend -->
+<!-- splat:values path=splat_rule/parameters/features/rend -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/rend/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 5
-  reach_ft: 5
-hit:
-  damage:
-  - average: 8
-    roll:
-      count: 1
-      sides: 10
-      modifier: 3
-    type: slashing
-  - average: 3
-    roll:
-      count: 1
-      sides: 6
-      modifier: 0
-    type: lightning
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 5
+reach_ft: 5
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/rend/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 8 ` | ` 1 ` | ` 10 ` | ` 3 ` | ` Slashing ` |
+| ` row_2 ` | ` 3 ` | ` 1 ` | ` 6 ` | ` 0 ` | ` Lightning ` |
 
 ##### Lightning breath
 

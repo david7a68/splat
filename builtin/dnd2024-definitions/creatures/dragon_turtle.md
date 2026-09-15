@@ -152,34 +152,61 @@ replacements:
 
 ##### Bite
 
-<!-- splat:yaml path=splat_rule/parameters/features/bite -->
+<!-- splat:values path=splat_rule/parameters/features/bite -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+| ` underwater_fire_resistance_applies ` | ` false ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/bite/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 13
-  reach_ft: 15
-hit:
-  damage:
-  - average: 23
-    roll:
-      count: 3
-      sides: 10
-      modifier: 7
-    type: piercing
-  - average: 7
-    roll:
-      count: 2
-      sides: 6
-      modifier: 0
-    type: fire
-underwater_fire_resistance_applies: false
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 13
+reach_ft: 15
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/bite/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 23 ` | ` 3 ` | ` 10 ` | ` 7 ` | ` Piercing ` |
+| ` row_2 ` | ` 7 ` | ` 2 ` | ` 6 ` | ` 0 ` | ` Fire ` |
 
 ##### Tail
 

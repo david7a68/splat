@@ -174,33 +174,60 @@ replacements:
 
 ##### Claw
 
-<!-- splat:yaml path=splat_rule/parameters/features/claw -->
+<!-- splat:values path=splat_rule/parameters/features/claw -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` attack ` |
+
+###### Attack
+
+<!-- splat:yaml path=splat_rule/parameters/features/claw/attack -->
 
 ```yaml
-economy: action
-operation: attack
-attack:
-  mode: melee
-  targets:
-    count: 1
-    kind: creature_or_object
-  supplied_attack_total: 7
-  reach_ft: 10
-hit:
-  damage:
-  - average: 10
-    roll:
-      count: 1
-      sides: 12
-      modifier: 4
-    type: slashing
-  - average: 9
-    roll:
-      count: 2
-      sides: 8
-      modifier: 0
-    type: necrotic
+mode: melee
+targets:
+  count: 1
+  kind: creature_or_object
+supplied_attack_total: 7
+reach_ft: 10
 ```
+
+###### Hit
+
+###### Damage
+
+<!-- splat:table
+path: splat_rule/parameters/features/claw/hit/damage
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Average:
+    path: average
+    type: integer
+  Roll count:
+    path: roll/count
+    type: integer
+  Roll sides:
+    path: roll/sides
+    type: integer
+  Roll modifier:
+    path: roll/modifier
+    type: integer
+  Type:
+    path: type
+    type: symbol
+-->
+
+| Key | Average | Roll count | Roll sides | Roll modifier | Type |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 10 ` | ` 1 ` | ` 12 ` | ` 4 ` | ` Slashing ` |
+| ` row_2 ` | ` 9 ` | ` 2 ` | ` 8 ` | ` 0 ` | ` Necrotic ` |
 
 ##### Nightmare ray
 
@@ -232,67 +259,122 @@ hit:
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` shape_shift ` |
+| ` statistics_preserved_except ` | ` ["size"] ` |
+| ` equipment_transformed ` | ` false ` |
+
+###### Forms
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/forms
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Type:
+    path: type
+    type: symbol
+    optional: true
+  Form:
+    path: form
+    type: symbol
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Type | Form | Details |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Humanoid ` |  | [Rules](#^splat-8910289c-row_1 "section:row_1") |
+| ` row_2 ` | ` Giant ` |  | [Rules](#^splat-8910289c-row_2 "section:row_2") |
+| ` row_3 ` |  | ` True form ` |  |
+
+###### Row 1
+
+^splat-8910289c-row_1
+
+###### Size
+
+<!-- splat:yaml path=splat_rule/parameters/features/shape_shift/forms/@row_1/size -->
 
 ```yaml
-economy: action
-operation: shape_shift
-forms:
-- type: humanoid
-  size:
-  - small
-  - medium
-- type: giant
-  size: large
-- form: true_form
-statistics_preserved_except:
-- size
-equipment_transformed: false
+- small
+- medium
+```
+
+###### Row 2
+
+^splat-8910289c-row_2
+
+###### Size
+
+<!-- splat:yaml path=splat_rule/parameters/features/shape_shift/forms/@row_2/size -->
+
+```yaml
+large
 ```
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-operation: spellcasting
-ability: charisma
-components_waived:
-- material
-save_dc: 13
-options:
-- spell:
-    key: dnd2024:spells/charm_person
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-  cast_level: 2
-- spell:
-    key: dnd2024:spells/darkness
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/gaseous_form
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-- spell:
-    key: dnd2024:spells/sleep
-  usage:
-    kind: daily
-    uses: 1
-    pool: per_spell
-    recovery: long_rest
-material_components_available: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 13 ` |
+| ` material_components_available ` | ` true ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/options
+key: Spell
+order:
+- charm_person
+- darkness
+- gaseous_form
+- sleep
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Uses:
+    path: usage/uses
+    type: integer
+  Use pool:
+    path: usage/pool
+    type: symbol
+  Recovery:
+    path: usage/recovery
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+-->
+
+| Spell | Frequency | Uses | Use pool | Recovery | Cast level |
+| --- | --- | --- | --- | --- | --- |
+| [Charm Person](<../spells/charm_person.md> "dnd2024:spells/charm_person") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` | ` 2 ` |
+| [Darkness](<../spells/darkness.md> "dnd2024:spells/darkness") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |  |
+| [Gaseous Form](<../spells/gaseous_form.md> "dnd2024:spells/gaseous_form") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |  |
+| [Sleep](<../spells/sleep.md> "dnd2024:spells/sleep") | ` Daily ` | ` 1 ` | ` Per spell ` | ` Long rest ` |  |
 
 ##### Invisibility
 

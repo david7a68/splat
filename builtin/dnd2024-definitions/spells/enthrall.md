@@ -100,12 +100,26 @@ Original layout: [[../../srd-5.2.1/pages/128|page 128]].
 
 #### Failure
 
-<!-- splat:yaml path=splat_rule/parameters/failure -->
+##### Modifiers
 
-```yaml
-modifiers:
-- selector: wisdom_perception_checks
-  add: -10
-- selector: passive_perception
-  add: -10
-```
+<!-- splat:table
+path: splat_rule/parameters/failure/modifiers
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Selector:
+    path: selector
+    type: symbol
+  Add:
+    path: add
+    type: integer
+-->
+
+| Key | Selector | Add |
+| --- | --- | --- |
+| ` row_1 ` | ` Wisdom perception checks ` | ` -10 ` |
+| ` row_2 ` | ` Passive perception ` | ` -10 ` |

@@ -53,160 +53,52 @@ features are listed in the Ranger Features table.\
 
 #### Feature unlocks
 
-<!-- splat:rows path=splat_rule/parameters/feature_unlocks -->
+<!-- splat:table
+path: splat_rule/parameters/feature_unlocks
+key: Feature
+order:
+- ranger_level_10_tireless
+- ranger_level_13_relentless_hunter
+- ranger_level_14_nature_s_veil
+- ranger_level_17_precise_hunter
+- ranger_level_18_feral_senses
+- ranger_level_19_epic_boon
+- ranger_level_1_favored_enemy
+- ranger_level_1_spellcasting
+- ranger_level_1_weapon_mastery
+- ranger_level_20_foe_slayer
+- ranger_level_2_deft_explorer
+- ranger_level_2_fighting_style
+- ranger_level_3_ranger_subclass
+- ranger_level_4_ability_score_improvement
+- ranger_level_5_extra_attack
+- ranger_level_6_roving
+- ranger_level_9_expertise
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Feature | Class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 13 ` |
-| ` 2 ` | ` 14 ` |
-| ` 3 ` | ` 17 ` |
-| ` 4 ` | ` 18 ` |
-| ` 5 ` | ` 19 ` |
-| ` 6 ` | ` 1 ` |
-| ` 7 ` | ` 1 ` |
-| ` 8 ` | ` 1 ` |
-| ` 9 ` | ` 20 ` |
-| ` 10 ` | ` 2 ` |
-| ` 11 ` | ` 2 ` |
-| ` 12 ` | ` 3 ` |
-| ` 13 ` | ` 4 ` |
-| ` 14 ` | ` 5 ` |
-| ` 15 ` | ` 6 ` |
-| ` 16 ` | ` 9 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_10_tireless ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_13_relentless_hunter ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_14_nature_s_veil ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_17_precise_hunter ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_18_feral_senses ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/5/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_19_epic_boon ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/6/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_favored_enemy ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/7/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_spellcasting ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/8/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_1_weapon_mastery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/9/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_20_foe_slayer ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/10/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_2_deft_explorer ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/11/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_2_fighting_style ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/12/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_3_ranger_subclass ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/13/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_4_ability_score_improvement ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/14/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_5_extra_attack ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/15/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_6_roving ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_unlocks/16/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/ranger_level_9_expertise ` |
+| [Level 10: Tireless](<../class_features/ranger_level_10_tireless.md> "dnd2024:class_features/ranger_level_10_tireless") | ` 10 ` |
+| [Level 13: Relentless Hunter](<../class_features/ranger_level_13_relentless_hunter.md> "dnd2024:class_features/ranger_level_13_relentless_hunter") | ` 13 ` |
+| [Level 14: Nature’s Veil](<../class_features/ranger_level_14_nature_s_veil.md> "dnd2024:class_features/ranger_level_14_nature_s_veil") | ` 14 ` |
+| [Level 17: Precise Hunter](<../class_features/ranger_level_17_precise_hunter.md> "dnd2024:class_features/ranger_level_17_precise_hunter") | ` 17 ` |
+| [Level 18: Feral Senses](<../class_features/ranger_level_18_feral_senses.md> "dnd2024:class_features/ranger_level_18_feral_senses") | ` 18 ` |
+| [Level 19: Epic Boon](<../class_features/ranger_level_19_epic_boon.md> "dnd2024:class_features/ranger_level_19_epic_boon") | ` 19 ` |
+| [Level 1: Favored Enemy](<../class_features/ranger_level_1_favored_enemy.md> "dnd2024:class_features/ranger_level_1_favored_enemy") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/ranger_level_1_spellcasting.md> "dnd2024:class_features/ranger_level_1_spellcasting") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/ranger_level_1_weapon_mastery.md> "dnd2024:class_features/ranger_level_1_weapon_mastery") | ` 1 ` |
+| [Level 20: Foe Slayer](<../class_features/ranger_level_20_foe_slayer.md> "dnd2024:class_features/ranger_level_20_foe_slayer") | ` 20 ` |
+| [Level 2: Deft Explorer](<../class_features/ranger_level_2_deft_explorer.md> "dnd2024:class_features/ranger_level_2_deft_explorer") | ` 2 ` |
+| [Level 2: Fighting Style](<../class_features/ranger_level_2_fighting_style.md> "dnd2024:class_features/ranger_level_2_fighting_style") | ` 2 ` |
+| [Level 3: Ranger Subclass](<../class_features/ranger_level_3_ranger_subclass.md> "dnd2024:class_features/ranger_level_3_ranger_subclass") | ` 3 ` |
+| [Level 4: Ability Score Improvement](<../class_features/ranger_level_4_ability_score_improvement.md> "dnd2024:class_features/ranger_level_4_ability_score_improvement") | ` 4 ` |
+| [Level 5: Extra Attack](<../class_features/ranger_level_5_extra_attack.md> "dnd2024:class_features/ranger_level_5_extra_attack") | ` 5 ` |
+| [Level 6: Roving](<../class_features/ranger_level_6_roving.md> "dnd2024:class_features/ranger_level_6_roving") | ` 6 ` |
+| [Level 9: Expertise](<../class_features/ranger_level_9_expertise.md> "dnd2024:class_features/ranger_level_9_expertise") | ` 9 ` |

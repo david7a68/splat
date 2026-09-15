@@ -53,18 +53,39 @@ Lesser Restoration\
 
 #### Always prepared by class level
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level -->
+<!-- splat:table
+path: splat_rule/parameters/always_prepared_by_class_level
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Level:
+    path: level
+    type: integer
+  Details:
+    type: section
+    optional: true
+-->
 
-| Row | level |
-| --- | --- |
-| ` 0 ` | ` 3 ` |
-| ` 1 ` | ` 5 ` |
-| ` 2 ` | ` 7 ` |
-| ` 3 ` | ` 9 ` |
+| Key | Level | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` 3 ` | [Rules](#^splat-a3ddf6f9-row_1 "section:row_1") |
+| ` row_2 ` | ` 5 ` | [Rules](#^splat-a3ddf6f9-row_2 "section:row_2") |
+| ` row_3 ` | ` 7 ` | [Rules](#^splat-a3ddf6f9-row_3 "section:row_3") |
+| ` row_4 ` | ` 9 ` | [Rules](#^splat-a3ddf6f9-row_4 "section:row_4") |
 
-##### Spells
+##### Row 1
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/0/spells -->
+^splat-a3ddf6f9-row_1
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_1/spells -->
 
 | Row | key |
 | --- | --- |
@@ -73,27 +94,39 @@ Lesser Restoration\
 | ` 2 ` | ` dnd2024:spells/cure_wounds ` |
 | ` 3 ` | ` dnd2024:spells/lesser_restoration ` |
 
-##### Spells
+##### Row 2
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/1/spells -->
+^splat-a3ddf6f9-row_2
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_2/spells -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:spells/mass_healing_word ` |
 | ` 1 ` | ` dnd2024:spells/revivify ` |
 
-##### Spells
+##### Row 3
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/2/spells -->
+^splat-a3ddf6f9-row_3
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_3/spells -->
 
 | Row | key |
 | --- | --- |
 | ` 0 ` | ` dnd2024:spells/aura_of_life ` |
 | ` 1 ` | ` dnd2024:spells/death_ward ` |
 
-##### Spells
+##### Row 4
 
-<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/3/spells -->
+^splat-a3ddf6f9-row_4
+
+###### Spells
+
+<!-- splat:rows path=splat_rule/parameters/always_prepared_by_class_level/@row_4/spells -->
 
 | Row | key |
 | --- | --- |

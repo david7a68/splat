@@ -77,22 +77,68 @@ Shield +2\
 
 #### Armor
 
-<!-- splat:rows path=splat_rule/parameters/armor -->
+<!-- splat:table
+path: splat_rule/parameters/armor
+key: Variant
+order:
+- padded_armor
+- leather_armor
+- studded_leather_armor
+- hide_armor
+- chain_shirt
+- scale_mail
+- breastplate
+- half_plate_armor
+- ring_mail
+- chain_mail
+- splint_armor
+- plate_armor
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Category:
+    path: category
+    type: symbol
+  Base ac:
+    path: base_ac
+    type: integer
+  Dexterity cap:
+    path: dexterity_cap
+    type: integer
+    nullable: true
+  Add dexterity:
+    path: add_dexterity
+    type: boolean
+  Strength minimum:
+    path: strength_minimum
+    type: integer
+    nullable: true
+  Stealth disadvantage:
+    path: stealth_disadvantage
+    type: boolean
+  Weight lb:
+    path: weight_lb
+    type: integer
+  Cost gp:
+    path: cost_gp
+    type: integer
+-->
 
-| Row | id | category | base_ac | dexterity_cap | add_dexterity | strength_minimum | stealth_disadvantage | weight_lb | cost_gp |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` padded_armor ` | ` light ` | ` 11 ` | ` null ` | ` true ` | ` null ` | ` true ` | ` 8 ` | ` 5 ` |
-| ` 1 ` | ` leather_armor ` | ` light ` | ` 11 ` | ` null ` | ` true ` | ` null ` | ` false ` | ` 10 ` | ` 10 ` |
-| ` 2 ` | ` studded_leather_armor ` | ` light ` | ` 12 ` | ` null ` | ` true ` | ` null ` | ` false ` | ` 13 ` | ` 45 ` |
-| ` 3 ` | ` hide_armor ` | ` medium ` | ` 12 ` | ` 2 ` | ` true ` | ` null ` | ` false ` | ` 12 ` | ` 10 ` |
-| ` 4 ` | ` chain_shirt ` | ` medium ` | ` 13 ` | ` 2 ` | ` true ` | ` null ` | ` false ` | ` 20 ` | ` 50 ` |
-| ` 5 ` | ` scale_mail ` | ` medium ` | ` 14 ` | ` 2 ` | ` true ` | ` null ` | ` true ` | ` 45 ` | ` 50 ` |
-| ` 6 ` | ` breastplate ` | ` medium ` | ` 14 ` | ` 2 ` | ` true ` | ` null ` | ` false ` | ` 20 ` | ` 400 ` |
-| ` 7 ` | ` half_plate_armor ` | ` medium ` | ` 15 ` | ` 2 ` | ` true ` | ` null ` | ` true ` | ` 40 ` | ` 750 ` |
-| ` 8 ` | ` ring_mail ` | ` heavy ` | ` 14 ` | ` 0 ` | ` false ` | ` null ` | ` true ` | ` 40 ` | ` 30 ` |
-| ` 9 ` | ` chain_mail ` | ` heavy ` | ` 16 ` | ` 0 ` | ` false ` | ` 13 ` | ` true ` | ` 55 ` | ` 75 ` |
-| ` 10 ` | ` splint_armor ` | ` heavy ` | ` 17 ` | ` 0 ` | ` false ` | ` 15 ` | ` true ` | ` 60 ` | ` 200 ` |
-| ` 11 ` | ` plate_armor ` | ` heavy ` | ` 18 ` | ` 0 ` | ` false ` | ` 15 ` | ` true ` | ` 65 ` | ` 1500 ` |
+| Variant | Category | Base ac | Dexterity cap | Add dexterity | Strength minimum | Stealth disadvantage | Weight lb | Cost gp |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ` Padded armor ` | ` Light ` | ` 11 ` | null | true | null | true | ` 8 ` | ` 5 ` |
+| ` Leather armor ` | ` Light ` | ` 11 ` | null | true | null | false | ` 10 ` | ` 10 ` |
+| ` Studded leather armor ` | ` Light ` | ` 12 ` | null | true | null | false | ` 13 ` | ` 45 ` |
+| ` Hide armor ` | ` Medium ` | ` 12 ` | ` 2 ` | true | null | false | ` 12 ` | ` 10 ` |
+| ` Chain shirt ` | ` Medium ` | ` 13 ` | ` 2 ` | true | null | false | ` 20 ` | ` 50 ` |
+| ` Scale mail ` | ` Medium ` | ` 14 ` | ` 2 ` | true | null | true | ` 45 ` | ` 50 ` |
+| ` Breastplate ` | ` Medium ` | ` 14 ` | ` 2 ` | true | null | false | ` 20 ` | ` 400 ` |
+| ` Half plate armor ` | ` Medium ` | ` 15 ` | ` 2 ` | true | null | true | ` 40 ` | ` 750 ` |
+| ` Ring mail ` | ` Heavy ` | ` 14 ` | ` 0 ` | false | null | true | ` 40 ` | ` 30 ` |
+| ` Chain mail ` | ` Heavy ` | ` 16 ` | ` 0 ` | false | ` 13 ` | true | ` 55 ` | ` 75 ` |
+| ` Splint armor ` | ` Heavy ` | ` 17 ` | ` 0 ` | false | ` 15 ` | true | ` 60 ` | ` 200 ` |
+| ` Plate armor ` | ` Heavy ` | ` 18 ` | ` 0 ` | false | ` 15 ` | true | ` 65 ` | ` 1500 ` |
 
 #### Don doff minutes
 

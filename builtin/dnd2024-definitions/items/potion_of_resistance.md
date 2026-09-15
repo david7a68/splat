@@ -23,12 +23,6 @@ When you drink this potion, you have Resistance to\
 one type of damage for 1 hour. The GM chooses the\
 type or determines it randomly by rolling on the\
 following table.\
-1d10 Damage Type 1d10 Damage Type\
-1 Acid 6 Necrotic\
-2 Cold 7 Poison\
-3 Fire 8 Psychic\
-4 Force 9 Radiant\
-5 Lightning 10 Thunder\
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 
@@ -82,59 +76,63 @@ Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 
 #### Resistance
 
-<!-- splat:yaml path=splat_rule/parameters/resistance -->
+<!-- splat:values path=splat_rule/parameters/resistance -->
 
-```yaml
-chooser: gm
-method:
-- choose
-- roll
-table:
-  roll:
-    expression: 1d10
-    scope: use
-  rows:
-  - min: 1
-    max: 1
-    result:
-      damage_type: acid
-  - min: 2
-    max: 2
-    result:
-      damage_type: cold
-  - min: 3
-    max: 3
-    result:
-      damage_type: fire
-  - min: 4
-    max: 4
-    result:
-      damage_type: force
-  - min: 5
-    max: 5
-    result:
-      damage_type: lightning
-  - min: 6
-    max: 6
-    result:
-      damage_type: necrotic
-  - min: 7
-    max: 7
-    result:
-      damage_type: poison
-  - min: 8
-    max: 8
-    result:
-      damage_type: psychic
-  - min: 9
-    max: 9
-    result:
-      damage_type: radiant
-  - min: 10
-    max: 10
-    result:
-      damage_type: thunder
-```
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` gm ` |
+| ` method ` | ` ["choose", "roll"] ` |
+
+##### Table
+
+###### Roll
+
+<!-- splat:values path=splat_rule/parameters/resistance/table/roll -->
+
+| Field | Value |
+| --- | --- |
+| ` expression ` | ` 1d10 ` |
+| ` scope ` | ` use ` |
+
+###### Rows
+
+<!-- splat:table
+path: splat_rule/parameters/resistance/table/rows
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+- row_9
+- row_10
+columns:
+  Key:
+    type: key
+  Roll:
+    path: ''
+    type: range
+  Damage type:
+    path: result/damage_type
+    type: symbol
+-->
+
+| Key | Roll | Damage type |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` Acid ` |
+| ` row_2 ` | ` 2 ` | ` Cold ` |
+| ` row_3 ` | ` 3 ` | ` Fire ` |
+| ` row_4 ` | ` 4 ` | ` Force ` |
+| ` row_5 ` | ` 5 ` | ` Lightning ` |
+| ` row_6 ` | ` 6 ` | ` Necrotic ` |
+| ` row_7 ` | ` 7 ` | ` Poison ` |
+| ` row_8 ` | ` 8 ` | ` Psychic ` |
+| ` row_9 ` | ` 9 ` | ` Radiant ` |
+| ` row_10 ` | ` 10 ` | ` Thunder ` |
 
 #### Attunement
 

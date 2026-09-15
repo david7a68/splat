@@ -217,26 +217,55 @@ success:
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
 
-```yaml
-economy: action
-operation: shape_shift
-forms:
-- form: bat
-  speed_ft: 10
-  fly_speed_ft: 40
-- form: centipede
-  speed_ft: 40
-  climb_speed_ft: 40
-- form: toad
-  speed_ft: 40
-  swim_speed_ft: 40
-- form: true_form
-statistics_preserved_except:
-- speed
-equipment_transformed: false
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` shape_shift ` |
+| ` statistics_preserved_except ` | ` ["speed"] ` |
+| ` equipment_transformed ` | ` false ` |
+
+###### Forms
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/forms
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Form:
+    path: form
+    type: symbol
+  Speed ft:
+    path: speed_ft
+    type: integer
+    optional: true
+  Fly speed ft:
+    path: fly_speed_ft
+    type: integer
+    optional: true
+  Climb speed ft:
+    path: climb_speed_ft
+    type: integer
+    optional: true
+  Swim speed ft:
+    path: swim_speed_ft
+    type: integer
+    optional: true
+-->
+
+| Key | Form | Speed ft | Fly speed ft | Climb speed ft | Swim speed ft |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` Bat ` | ` 10 ` | ` 40 ` |  |  |
+| ` row_2 ` | ` Centipede ` | ` 40 ` |  | ` 40 ` |  |
+| ` row_3 ` | ` Toad ` | ` 40 ` |  |  | ` 40 ` |
+| ` row_4 ` | ` True form ` |  |  |  |  |
 
 #### Skill totals
 

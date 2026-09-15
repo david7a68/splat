@@ -92,13 +92,35 @@ Original layout: [[../../srd-5.2.1/pages/235|page 235]].
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+columns:
+  Key:
+    type: key
+  Giant:
+    path: giant
+    type: symbol
+  Score:
+    path: score
+    type: integer
+  Rarity:
+    path: rarity
+    type: symbol
+-->
 
-| Row | giant | score | rarity |
+| Key | Giant | Score | Rarity |
 | --- | --- | --- | --- |
-| ` 0 ` | ` hill ` | ` 21 ` | ` uncommon ` |
-| ` 1 ` | ` frost ` | ` 23 ` | ` rare ` |
-| ` 2 ` | ` stone ` | ` 23 ` | ` rare ` |
-| ` 3 ` | ` fire ` | ` 25 ` | ` rare ` |
-| ` 4 ` | ` cloud ` | ` 27 ` | ` very_rare ` |
-| ` 5 ` | ` storm ` | ` 29 ` | ` legendary ` |
+| ` row_1 ` | ` Hill ` | ` 21 ` | ` Uncommon ` |
+| ` row_2 ` | ` Frost ` | ` 23 ` | ` Rare ` |
+| ` row_3 ` | ` Stone ` | ` 23 ` | ` Rare ` |
+| ` row_4 ` | ` Fire ` | ` 25 ` | ` Rare ` |
+| ` row_5 ` | ` Cloud ` | ` 27 ` | ` Very rare ` |
+| ` row_6 ` | ` Storm ` | ` 29 ` | ` Legendary ` |

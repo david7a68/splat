@@ -47,17 +47,36 @@ until you finish a Short or Long Rest.\
 
 #### Resource
 
-<!-- splat:yaml path=splat_rule/parameters/resource -->
+<!-- splat:values path=splat_rule/parameters/resource -->
 
-```yaml
-id: rogue.stroke_of_luck
-maximum: 1
-recovery:
-- event: rest.short_completed
-  amount: all
-- event: rest.long_completed
-  amount: all
-```
+| Field | Value |
+| --- | --- |
+| ` id ` | ` rogue.stroke_of_luck ` |
+| ` maximum ` | ` 1 ` |
+
+##### Recovery
+
+<!-- splat:table
+path: splat_rule/parameters/resource/recovery
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Amount:
+    path: amount
+    type: symbol
+-->
+
+| Key | Event | Amount |
+| --- | --- | --- |
+| ` row_1 ` | ` rest.short_completed ` | ` All ` |
+| ` row_2 ` | ` rest.long_completed ` | ` All ` |
 
 #### Class scope
 

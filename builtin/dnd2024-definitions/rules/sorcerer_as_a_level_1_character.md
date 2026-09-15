@@ -51,25 +51,22 @@ listed in the Sorcerer Features table.\
 
 #### Features
 
-<!-- splat:rows path=splat_rule/parameters/features -->
+<!-- splat:table
+path: splat_rule/parameters/features
+key: Feature
+order:
+- sorcerer_level_1_innate_sorcery
+- sorcerer_level_1_spellcasting
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 1 ` |
-| ` 1 ` | ` 1 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_1_innate_sorcery ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/sorcerer_level_1_spellcasting ` |
+| [Level 1: Innate Sorcery](<../class_features/sorcerer_level_1_innate_sorcery.md> "dnd2024:class_features/sorcerer_level_1_innate_sorcery") | ` 1 ` |
+| [Level 1: Spellcasting](<../class_features/sorcerer_level_1_spellcasting.md> "dnd2024:class_features/sorcerer_level_1_spellcasting") | ` 1 ` |

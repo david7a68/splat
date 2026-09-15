@@ -140,12 +140,40 @@ while_charmed:
 
 #### End target triggers
 
-<!-- splat:rows path=splat_rule/parameters/end_target_triggers -->
+<!-- splat:table
+path: splat_rule/parameters/end_target_triggers
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Subject:
+    path: subject
+    type: symbol
+    optional: true
+  Actor:
+    path: actor
+    type: symbol
+    optional: true
+  Action:
+    path: action
+    type: symbol
+    optional: true
+  Economy:
+    path: economy
+    type: symbol
+    optional: true
+-->
 
-| Row | event | subject | actor | action | economy |
+| Key | Event | Subject | Actor | Action | Economy |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` damage.applied ` | ` target ` |  |  |  |
-| ` 1 ` | ` action.completed ` |  | ` another_creature ` | ` shake_target_awake ` | ` action ` |
+| ` row_1 ` | ` damage.applied ` | ` Target ` |  |  |  |
+| ` row_2 ` | ` action.completed ` |  | ` Another creature ` | ` Shake target awake ` | ` Action ` |
 
 #### Spatial resolution
 

@@ -108,37 +108,51 @@ amount:
 
 #### Properties
 
-<!-- splat:rows path=splat_rule/parameters/properties -->
+<!-- splat:table
+path: splat_rule/parameters/properties
+key: Variant
+order:
+- heavy
+- reach
+- two_handed
+columns:
+  Variant:
+    path: id
+    type: symbol
+  Rule:
+    path: rule
+    type: reference
+  Required ability:
+    path: required_ability
+    type: symbol
+    optional: true
+  Minimum score:
+    path: minimum_score
+    type: integer
+    optional: true
+  Below minimum attack mode:
+    path: below_minimum_attack_mode
+    type: symbol
+    optional: true
+  Reach bonus ft:
+    path: reach_bonus_ft
+    type: integer
+    optional: true
+  Applies to:
+    path: applies_to
+    type: yaml
+    optional: true
+  Hands to attack:
+    path: hands_to_attack
+    type: integer
+    optional: true
+-->
 
-| Row | id | required_ability | minimum_score | below_minimum_attack_mode | reach_bonus_ft | applies_to | hands_to_attack |
+| Variant | Rule | Required ability | Minimum score | Below minimum attack mode | Reach bonus ft | Applies to | Hands to attack |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` heavy ` | ` strength ` | ` 13 ` | ` disadvantage ` |  |  |  |
-| ` 1 ` | ` reach ` |  |  |  | ` 5 ` | ` ["attacks", "opportunity_attack_reach"] ` |  |
-| ` 2 ` | ` two_handed ` |  |  |  |  |  | ` 2 ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/0/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_heavy ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/1/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_reach ` |
-
-##### Rule
-
-<!-- splat:values path=splat_rule/parameters/properties/2/rule -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:rules/weapons_two_handed ` |
+| ` Heavy ` | [Heavy](<../rules/weapons_heavy.md> "dnd2024:rules/weapons_heavy") | ` Strength ` | ` 13 ` | ` Disadvantage ` |  |  |  |
+| ` Reach ` | [Reach](<../rules/weapons_reach.md> "dnd2024:rules/weapons_reach") |  |  |  | ` 5 ` | ` ["attacks", "opportunity_attack_reach"] ` |  |
+| ` Two handed ` | [Two-Handed](<../rules/weapons_two_handed.md> "dnd2024:rules/weapons_two_handed") |  |  |  |  |  | ` 2 ` |
 
 #### Attack
 

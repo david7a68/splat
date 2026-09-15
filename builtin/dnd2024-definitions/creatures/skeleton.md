@@ -194,12 +194,27 @@ long_range_feet: 320
 
 #### Gear
 
-<!-- splat:rows path=splat_rule/parameters/gear -->
+<!-- splat:table
+path: splat_rule/parameters/gear
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Item name:
+    path: item_name
+    type: string
+  Quantity:
+    path: quantity
+    type: integer
+-->
 
-| Row | item_name | quantity |
+| Key | Item name | Quantity |
 | --- | --- | --- |
-| ` 0 ` | ` Shortbow ` | ` 1 ` |
-| ` 1 ` | ` Shortsword ` | ` 1 ` |
+| ` row_1 ` | ` Shortbow ` | ` 1 ` |
+| ` row_2 ` | ` Shortsword ` | ` 1 ` |
 
 #### Communication
 

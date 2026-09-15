@@ -53,46 +53,29 @@ and empower them.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- path_of_the_berserker_level_10_retaliation
+- path_of_the_berserker_level_14_intimidating_presence
+- path_of_the_berserker_level_3_frenzy
+- path_of_the_berserker_level_6_mindless_rage
+columns:
+  Item:
+    path: definition
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Item | Class level |
 | --- | --- |
-| ` 0 ` | ` 10 ` |
-| ` 1 ` | ` 14 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 6 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/path_of_the_berserker_level_10_retaliation ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/path_of_the_berserker_level_14_intimidating_presence ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/path_of_the_berserker_level_3_frenzy ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/path_of_the_berserker_level_6_mindless_rage ` |
+| [Level 10: Retaliation](<../class_features/path_of_the_berserker_level_10_retaliation.md> "dnd2024:class_features/path_of_the_berserker_level_10_retaliation") | ` 10 ` |
+| [Level 14: Intimidating Presence](<../class_features/path_of_the_berserker_level_14_intimidating_presence.md> "dnd2024:class_features/path_of_the_berserker_level_14_intimidating_presence") | ` 14 ` |
+| [Level 3: Frenzy](<../class_features/path_of_the_berserker_level_3_frenzy.md> "dnd2024:class_features/path_of_the_berserker_level_3_frenzy") | ` 3 ` |
+| [Level 6: Mindless Rage](<../class_features/path_of_the_berserker_level_6_mindless_rage.md> "dnd2024:class_features/path_of_the_berserker_level_6_mindless_rage") | ` 6 ` |
 
 #### Grant eligible features
 

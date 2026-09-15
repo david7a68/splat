@@ -213,47 +213,66 @@ steps:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: cast_spell_choice
-ability: charisma
-spells:
-- spell:
-    key: dnd2024:spells/animal_friendship
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/charm_monster
-  frequency: at_will
-  overrides:
-    duration:
-      hours: 24
-    ends_on: self_casts_same_spell_again
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/druidcraft
-  frequency: at_will
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/entangle
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-- spell:
-    key: dnd2024:spells/pass_without_trace
-  frequency: daily
-  uses: 1
-  resource_scope: per_spell
-  recovery: long_rest
-  cast_level: spell_minimum
-components_waived:
-- material
-save_dc: 14
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` cast_spell_choice ` |
+| ` ability ` | ` charisma ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` save_dc ` | ` 14 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/spells
+key: Spell
+order:
+- animal_friendship
+- charm_monster
+- druidcraft
+- entangle
+- pass_without_trace
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: frequency
+    type: symbol
+  Cast level:
+    path: cast_level
+    type: symbol
+  Overrides duration hours:
+    path: overrides/duration/hours
+    type: integer
+    optional: true
+  Overrides ends on:
+    path: overrides/ends_on
+    type: symbol
+    optional: true
+  Uses:
+    path: uses
+    type: integer
+    optional: true
+  Resource scope:
+    path: resource_scope
+    type: symbol
+    optional: true
+  Recovery:
+    path: recovery
+    type: symbol
+    optional: true
+-->
+
+| Spell | Frequency | Cast level | Overrides duration hours | Overrides ends on | Uses | Resource scope | Recovery |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [Animal Friendship](<../spells/animal_friendship.md> "dnd2024:spells/animal_friendship") | ` At will ` | ` Spell minimum ` |  |  |  |  |  |
+| [Charm Monster](<../spells/charm_monster.md> "dnd2024:spells/charm_monster") | ` At will ` | ` Spell minimum ` | ` 24 ` | ` Self casts same spell again ` |  |  |  |
+| [Druidcraft](<../spells/druidcraft.md> "dnd2024:spells/druidcraft") | ` At will ` | ` Spell minimum ` |  |  |  |  |  |
+| [Entangle](<../spells/entangle.md> "dnd2024:spells/entangle") | ` Daily ` | ` Spell minimum ` |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
+| [Pass without Trace](<../spells/pass_without_trace.md> "dnd2024:spells/pass_without_trace") | ` Daily ` | ` Spell minimum ` |  |  | ` 1 ` | ` Per spell ` | ` Long rest ` |
 
 ##### Speak with beasts and plants
 

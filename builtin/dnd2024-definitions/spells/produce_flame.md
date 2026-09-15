@@ -88,29 +88,67 @@ Original layout: [[../../srd-5.2.1/pages/156|page 156]].
 
 #### Hurl
 
-<!-- splat:yaml path=splat_rule/parameters/hurl -->
+<!-- splat:values path=splat_rule/parameters/hurl -->
 
-```yaml
-cost: magic_action
-available_until_spell_ends: true
-target:
-  kind: creature_or_object
-  maximum_distance_feet: 60
-attack: ranged_spell
-hit:
-  dice:
-    count:
-      by_caster_level:
-      - minimum: 1
-        count: 1
-      - minimum: 5
-        count: 2
-      - minimum: 11
-        count: 3
-      - minimum: 17
-        count: 4
-    sides: 8
-    add: 0
-  type: fire
-ends_spell: false
-```
+| Field | Value |
+| --- | --- |
+| ` cost ` | ` magic_action ` |
+| ` available_until_spell_ends ` | ` true ` |
+| ` attack ` | ` ranged_spell ` |
+| ` ends_spell ` | ` false ` |
+
+##### Target
+
+<!-- splat:values path=splat_rule/parameters/hurl/target -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature_or_object ` |
+| ` maximum_distance_feet ` | ` 60 ` |
+
+##### Hit
+
+<!-- splat:values path=splat_rule/parameters/hurl/hit -->
+
+| Field | Value |
+| --- | --- |
+| ` type ` | ` fire ` |
+
+###### Dice
+
+<!-- splat:values path=splat_rule/parameters/hurl/hit/dice -->
+
+| Field | Value |
+| --- | --- |
+| ` sides ` | ` 8 ` |
+| ` add ` | ` 0 ` |
+
+###### Count
+
+###### By caster level
+
+<!-- splat:table
+path: splat_rule/parameters/hurl/hit/dice/count/by_caster_level
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Minimum:
+    path: minimum
+    type: integer
+  Count:
+    path: count
+    type: integer
+-->
+
+| Key | Minimum | Count |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 1 ` |
+| ` row_2 ` | ` 5 ` | ` 2 ` |
+| ` row_3 ` | ` 11 ` | ` 3 ` |
+| ` row_4 ` | ` 17 ` | ` 4 ` |

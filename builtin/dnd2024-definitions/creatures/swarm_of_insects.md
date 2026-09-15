@@ -232,14 +232,37 @@ reach_feet: 5
 
 #### Movement variant
 
-<!-- splat:yaml path=splat_rule/parameters/movement_variant -->
+<!-- splat:values path=splat_rule/parameters/movement_variant -->
 
-```yaml
-chooser: gm
-choose_one:
-- climb_speed_feet: 20
-- fly_speed_feet: 20
-```
+| Field | Value |
+| --- | --- |
+| ` chooser ` | ` gm ` |
+
+##### Choose one
+
+<!-- splat:table
+path: splat_rule/parameters/movement_variant/choose_one
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Climb speed feet:
+    path: climb_speed_feet
+    type: integer
+    optional: true
+  Fly speed feet:
+    path: fly_speed_feet
+    type: integer
+    optional: true
+-->
+
+| Key | Climb speed feet | Fly speed feet |
+| --- | --- | --- |
+| ` row_1 ` | ` 20 ` |  |
+| ` row_2 ` |  | ` 20 ` |
 
 #### Stat block conventions
 

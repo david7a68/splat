@@ -91,61 +91,33 @@ recovery:
 
 #### Spells
 
-<!-- splat:rows path=splat_rule/parameters/spells -->
+<!-- splat:table
+path: splat_rule/parameters/spells
+key: Spell
+order:
+- mage_armor
+- shield
+- tiny_hut
+- private_sanctum
+- resilient_sphere
+- wall_of_force
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Charge cost:
+    path: charge_cost
+    type: integer
+  Save dc:
+    path: save_dc
+    type: integer
+-->
 
-| Row | charge_cost | save_dc |
+| Spell | Charge cost | Save dc |
 | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 17 ` |
-| ` 1 ` | ` 1 ` | ` 17 ` |
-| ` 2 ` | ` 3 ` | ` 17 ` |
-| ` 3 ` | ` 4 ` | ` 17 ` |
-| ` 4 ` | ` 4 ` | ` 17 ` |
-| ` 5 ` | ` 5 ` | ` 17 ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/0/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/mage_armor ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/1/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/shield ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/2/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/tiny_hut ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/3/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/private_sanctum ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/4/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/resilient_sphere ` |
-
-##### Spell
-
-<!-- splat:values path=splat_rule/parameters/spells/5/spell -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:spells/wall_of_force ` |
+| [Mage Armor](<../spells/mage_armor.md> "dnd2024:spells/mage_armor") | ` 1 ` | ` 17 ` |
+| [Shield](<../spells/shield.md> "dnd2024:spells/shield") | ` 1 ` | ` 17 ` |
+| [Tiny Hut](<../spells/tiny_hut.md> "dnd2024:spells/tiny_hut") | ` 3 ` | ` 17 ` |
+| [Private Sanctum](<../spells/private_sanctum.md> "dnd2024:spells/private_sanctum") | ` 4 ` | ` 17 ` |
+| [Resilient Sphere](<../spells/resilient_sphere.md> "dnd2024:spells/resilient_sphere") | ` 4 ` | ` 17 ` |
+| [Wall of Force](<../spells/wall_of_force.md> "dnd2024:spells/wall_of_force") | ` 5 ` | ` 17 ` |

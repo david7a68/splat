@@ -199,67 +199,117 @@ hit:
 
 ##### Whelm
 
-<!-- splat:yaml path=splat_rule/parameters/features/whelm -->
+<!-- splat:values path=splat_rule/parameters/features/whelm -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` operation ` | ` saving_throw ` |
+| ` ability ` | ` strength ` |
+| ` dc ` | ` 15 ` |
+
+###### Resource
+
+<!-- splat:values path=splat_rule/parameters/features/whelm/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` recharge ` |
+| ` die ` | ` 6 ` |
+| ` success_faces ` | ` [4, 5, 6] ` |
+| ` check ` | ` self.turn_start ` |
+| ` rest_recovery ` | ` ["short", "long"] ` |
+| ` capacity ` | ` 1 ` |
+| ` initial_uses ` | ` 1 ` |
+
+###### Targets
+
+<!-- splat:values path=splat_rule/parameters/features/whelm/targets -->
+
+| Field | Value |
+| --- | --- |
+| ` kind ` | ` creature ` |
+| ` selection ` | ` each ` |
+| ` location ` | ` self.space ` |
+
+###### Failure
+
+<!-- splat:yaml path=splat_rule/parameters/features/whelm/failure -->
 
 ```yaml
-economy: action
-resource:
-  kind: recharge
-  die: 6
-  success_faces:
-  - 4
-  - 5
-  - 6
-  check: self.turn_start
-  rest_recovery:
-  - short
-  - long
-  capacity: 1
-  initial_uses: 1
-operation: saving_throw
-ability: strength
-dc: 15
-targets:
-  kind: creature
-  selection: each
-  location: self.space
-failure:
-  damage:
-  - roll:
-      count: 4
-      sides: 8
-      modifier: 4
-    type: bludgeoning
-  grapple:
-    condition: grappled
-    source: self
-    escape_dc: 14
-    maximum_size: large
-    while_grappled:
-      conditions:
-      - restrained
-      suffocating_unless_water_breathing: true
-      damage_each_self_turn_start:
-      - roll:
-          count: 2
-          sides: 8
-          modifier: 0
-        type: bludgeoning
-success:
-  damage_multiplier: 0.5
-  other_effects: false
-capacity:
-  choose_one:
-  - size: large
-    count: 1
-  - maximum_size: medium
-    count: 2
-pull_out:
-  economy: action
-  actor_within_ft: 5
-  check: strength_athletics
-  dc: 14
+damage:
+- roll:
+    count: 4
+    sides: 8
+    modifier: 4
+  type: bludgeoning
+grapple:
+  condition: grappled
+  source: self
+  escape_dc: 14
+  maximum_size: large
+  while_grappled:
+    conditions:
+    - restrained
+    suffocating_unless_water_breathing: true
+    damage_each_self_turn_start:
+    - roll:
+        count: 2
+        sides: 8
+        modifier: 0
+      type: bludgeoning
 ```
+
+###### Success
+
+<!-- splat:values path=splat_rule/parameters/features/whelm/success -->
+
+| Field | Value |
+| --- | --- |
+| ` damage_multiplier ` | ` 0.5 ` |
+| ` other_effects ` | ` false ` |
+
+###### Capacity
+
+###### Choose one
+
+<!-- splat:table
+path: splat_rule/parameters/features/whelm/capacity/choose_one
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Size:
+    path: size
+    type: symbol
+    optional: true
+  Count:
+    path: count
+    type: integer
+  Maximum size:
+    path: maximum_size
+    type: symbol
+    optional: true
+-->
+
+| Key | Size | Count | Maximum size |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Large ` | ` 1 ` |  |
+| ` row_2 ` |  | ` 2 ` | ` Medium ` |
+
+###### Pull out
+
+<!-- splat:values path=splat_rule/parameters/features/whelm/pull_out -->
+
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` actor_within_ft ` | ` 5 ` |
+| ` check ` | ` strength_athletics ` |
+| ` dc ` | ` 14 ` |
 
 #### Senses
 

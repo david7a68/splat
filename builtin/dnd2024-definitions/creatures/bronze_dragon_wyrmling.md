@@ -271,12 +271,27 @@ success: []
 
 ##### Special
 
-<!-- splat:rows path=splat_rule/parameters/senses/special -->
+<!-- splat:table
+path: splat_rule/parameters/senses/special
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Sense:
+    path: sense
+    type: symbol
+  Range feet:
+    path: range_feet
+    type: integer
+-->
 
-| Row | sense | range_feet |
+| Key | Sense | Range feet |
 | --- | --- | --- |
-| ` 0 ` | ` blindsight ` | ` 10 ` |
-| ` 1 ` | ` darkvision ` | ` 60 ` |
+| ` row_1 ` | ` Blindsight ` | ` 10 ` |
+| ` row_2 ` | ` Darkvision ` | ` 60 ` |
 
 #### Communication
 

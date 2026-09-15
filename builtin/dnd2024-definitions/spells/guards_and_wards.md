@@ -128,21 +128,42 @@ Original layout: [[../../srd-5.2.1/pages/137|page 137]], [[../../srd-5.2.1/pages
 
 #### Area
 
-<!-- splat:yaml path=splat_rule/parameters/area -->
+<!-- splat:values path=splat_rule/parameters/area -->
 
-```yaml
-maximum_square_feet: 2500
-maximum_height_feet: 20
-shape_choices:
-- squares: 1
-  side_feet: 50
-- squares: 100
-  side_feet: 5
-  contiguous: true
-- squares: 25
-  side_feet: 10
-  contiguous: true
-```
+| Field | Value |
+| --- | --- |
+| ` maximum_square_feet ` | ` 2500 ` |
+| ` maximum_height_feet ` | ` 20 ` |
+
+##### Shape choices
+
+<!-- splat:table
+path: splat_rule/parameters/area/shape_choices
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Squares:
+    path: squares
+    type: integer
+  Side feet:
+    path: side_feet
+    type: integer
+  Contiguous:
+    path: contiguous
+    type: boolean
+    optional: true
+-->
+
+| Key | Squares | Side feet | Contiguous |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` 50 ` |  |
+| ` row_2 ` | ` 100 ` | ` 5 ` | true |
+| ` row_3 ` | ` 25 ` | ` 10 ` | true |
 
 #### Immunity
 

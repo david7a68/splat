@@ -42,9 +42,29 @@ your Dexterity score isn’t at least 13.\
 
 #### Disadvantage cases
 
-<!-- splat:rows path=splat_rule/parameters/disadvantage_cases -->
+<!-- splat:table
+path: splat_rule/parameters/disadvantage_cases
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Weapon category:
+    path: weapon_category
+    type: symbol
+  Strength below:
+    path: strength_below
+    type: integer
+    optional: true
+  Dexterity below:
+    path: dexterity_below
+    type: integer
+    optional: true
+-->
 
-| Row | weapon_category | strength_below | dexterity_below |
+| Key | Weapon category | Strength below | Dexterity below |
 | --- | --- | --- | --- |
-| ` 0 ` | ` melee ` | ` 13 ` |  |
-| ` 1 ` | ` ranged ` |  | ` 13 ` |
+| ` row_1 ` | ` Melee ` | ` 13 ` |  |
+| ` row_2 ` | ` Ranged ` |  | ` 13 ` |

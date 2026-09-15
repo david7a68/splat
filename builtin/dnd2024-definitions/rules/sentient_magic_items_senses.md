@@ -51,11 +51,36 @@ dice:
 
 #### Results
 
-<!-- splat:rows path=splat_rule/parameters/results -->
+<!-- splat:table
+path: splat_rule/parameters/results
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Roll:
+    path: roll
+    type: integer
+  Hearing feet:
+    path: hearing_feet
+    type: integer
+  Standard vision feet:
+    path: standard_vision_feet
+    type: integer
+    optional: true
+  Darkvision feet:
+    path: darkvision_feet
+    type: integer
+    optional: true
+-->
 
-| Row | roll | hearing_feet | standard_vision_feet | darkvision_feet |
+| Key | Roll | Hearing feet | Standard vision feet | Darkvision feet |
 | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 1 ` | ` 30 ` | ` 30 ` |  |
-| ` 1 ` | ` 2 ` | ` 60 ` | ` 60 ` |  |
-| ` 2 ` | ` 3 ` | ` 120 ` | ` 120 ` |  |
-| ` 3 ` | ` 4 ` | ` 120 ` |  | ` 120 ` |
+| ` row_1 ` | ` 1 ` | ` 30 ` | ` 30 ` |  |
+| ` row_2 ` | ` 2 ` | ` 60 ` | ` 60 ` |  |
+| ` row_3 ` | ` 3 ` | ` 120 ` | ` 120 ` |  |
+| ` row_4 ` | ` 4 ` | ` 120 ` |  | ` 120 ` |

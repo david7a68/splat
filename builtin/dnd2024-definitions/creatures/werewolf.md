@@ -265,23 +265,40 @@ allowed_forms:
 
 ##### Shape shift
 
-<!-- splat:yaml path=splat_rule/parameters/features/shape_shift -->
+<!-- splat:values path=splat_rule/parameters/features/shape_shift -->
 
-```yaml
-economy: bonus_action
-operation: shape_shift
-forms:
-- form: hybrid
-  size: large
-- form: wolf
-  size: medium
-- form: true_humanoid
-  size: original
-statistics_preserved_except:
-- size
-- form_specific_speed
-equipment_transformed: false
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` bonus_action ` |
+| ` operation ` | ` shape_shift ` |
+| ` statistics_preserved_except ` | ` ["size", "form_specific_speed"] ` |
+| ` equipment_transformed ` | ` false ` |
+
+###### Forms
+
+<!-- splat:table
+path: splat_rule/parameters/features/shape_shift/forms
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Form:
+    path: form
+    type: symbol
+  Size:
+    path: size
+    type: symbol
+-->
+
+| Key | Form | Size |
+| --- | --- | --- |
+| ` row_1 ` | ` Hybrid ` | ` Large ` |
+| ` row_2 ` | ` Wolf ` | ` Medium ` |
+| ` row_3 ` | ` True humanoid ` | ` Original ` |
 
 #### Skill totals
 

@@ -261,30 +261,59 @@ recheck_hit: true
 
 ##### Magic rope
 
-<!-- splat:yaml path=splat_rule/parameters/features/magic_rope -->
+<!-- splat:values path=splat_rule/parameters/features/magic_rope -->
 
-```yaml
-economy: passive
-op: equipment.special
-item: magic_rope
-ac: 20
-hp: 90
-damage_immunities:
-- poison
-- psychic
-grants_feature: entangling_rope
-requires_bearing: true
-destroy_when:
-- hp_at_most: 0
-- distance_from_actor_ft_at_least: 5
-  duration_at_least:
-    amount: 1
-    unit: hour
-- actor_dead: true
-restore_fully_after:
-- short_rest
-- long_rest
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` passive ` |
+| ` op ` | ` equipment.special ` |
+| ` item ` | ` magic_rope ` |
+| ` ac ` | ` 20 ` |
+| ` hp ` | ` 90 ` |
+| ` damage_immunities ` | ` ["poison", "psychic"] ` |
+| ` grants_feature ` | ` entangling_rope ` |
+| ` requires_bearing ` | ` true ` |
+| ` restore_fully_after ` | ` ["short_rest", "long_rest"] ` |
+
+###### Destroy when
+
+<!-- splat:table
+path: splat_rule/parameters/features/magic_rope/destroy_when
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Hp at most:
+    path: hp_at_most
+    type: integer
+    optional: true
+  Distance from actor ft at least:
+    path: distance_from_actor_ft_at_least
+    type: integer
+    optional: true
+  Duration at least amount:
+    path: duration_at_least/amount
+    type: integer
+    optional: true
+  Duration at least unit:
+    path: duration_at_least/unit
+    type: symbol
+    optional: true
+  Actor dead:
+    path: actor_dead
+    type: boolean
+    optional: true
+-->
+
+| Key | Hp at most | Distance from actor ft at least | Duration at least amount | Duration at least unit | Actor dead |
+| --- | --- | --- | --- | --- | --- |
+| ` row_1 ` | ` 0 ` |  |  |  |  |
+| ` row_2 ` |  | ` 5 ` | ` 1 ` | ` Hour ` |  |
+| ` row_3 ` |  |  |  |  | true |
 
 ##### Entangling rope
 
@@ -324,18 +353,40 @@ release_economy: bonus_action
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: multiattack
-sequence:
-- feature: withering_sword
-  count: 3
-- feature: entangling_rope
-  count: 1
-  optional: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` multiattack ` |
+
+###### Sequence
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/sequence
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Feature:
+    path: feature
+    type: symbol
+  Count:
+    path: count
+    type: integer
+  Optional:
+    path: optional
+    type: boolean
+    optional: true
+-->
+
+| Key | Feature | Count | Optional |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Withering sword ` | ` 3 ` |  |
+| ` row_2 ` | ` Entangling rope ` | ` 1 ` | true |
 
 #### Damage resolution
 

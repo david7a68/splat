@@ -135,64 +135,65 @@ Original layout: [[../../srd-5.2.1/pages/322|page 322]].
 
 ##### Coven magic
 
-<!-- splat:yaml path=splat_rule/parameters/features/coven_magic -->
+<!-- splat:values path=splat_rule/parameters/features/coven_magic -->
 
-```yaml
-economy: trait
-operation: spellcasting
-requires:
-  hag_allies_within_ft: 30
-  minimum_allies: 2
-ability: intelligence
-save_dc: 11
-components_waived:
-- material
-casting_time: spell_normal
-options:
-- spell:
-    key: dnd2024:spells/augury
-  usage:
-    kind: rest
-    uses: 1
-    recovery: long_rest
-    pool: per_spell
-- spell:
-    key: dnd2024:spells/find_familiar
-  usage:
-    kind: rest
-    uses: 1
-    recovery: long_rest
-    pool: per_spell
-- spell:
-    key: dnd2024:spells/identify
-  usage:
-    kind: rest
-    uses: 1
-    recovery: long_rest
-    pool: per_spell
-- spell:
-    key: dnd2024:spells/locate_object
-  usage:
-    kind: rest
-    uses: 1
-    recovery: long_rest
-    pool: per_spell
-- spell:
-    key: dnd2024:spells/scrying
-  usage:
-    kind: rest
-    uses: 1
-    recovery: long_rest
-    pool: per_spell
-- spell:
-    key: dnd2024:spells/unseen_servant
-  usage:
-    kind: rest
-    uses: 1
-    recovery: long_rest
-    pool: per_spell
-material_components_available: true
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` trait ` |
+| ` operation ` | ` spellcasting ` |
+| ` ability ` | ` intelligence ` |
+| ` save_dc ` | ` 11 ` |
+| ` components_waived ` | ` ["material"] ` |
+| ` casting_time ` | ` spell_normal ` |
+| ` material_components_available ` | ` true ` |
+
+###### Requires
+
+<!-- splat:values path=splat_rule/parameters/features/coven_magic/requires -->
+
+| Field | Value |
+| --- | --- |
+| ` hag_allies_within_ft ` | ` 30 ` |
+| ` minimum_allies ` | ` 2 ` |
+
+###### Options
+
+<!-- splat:table
+path: splat_rule/parameters/features/coven_magic/options
+key: Spell
+order:
+- augury
+- find_familiar
+- identify
+- locate_object
+- scrying
+- unseen_servant
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Frequency:
+    path: usage/kind
+    type: symbol
+  Uses:
+    path: usage/uses
+    type: integer
+  Recovery:
+    path: usage/recovery
+    type: symbol
+  Use pool:
+    path: usage/pool
+    type: symbol
+-->
+
+| Spell | Frequency | Uses | Recovery | Use pool |
+| --- | --- | --- | --- | --- |
+| [Augury](<../spells/augury.md> "dnd2024:spells/augury") | ` Rest ` | ` 1 ` | ` Long rest ` | ` Per spell ` |
+| [Find Familiar](<../spells/find_familiar.md> "dnd2024:spells/find_familiar") | ` Rest ` | ` 1 ` | ` Long rest ` | ` Per spell ` |
+| [Identify](<../spells/identify.md> "dnd2024:spells/identify") | ` Rest ` | ` 1 ` | ` Long rest ` | ` Per spell ` |
+| [Locate Object](<../spells/locate_object.md> "dnd2024:spells/locate_object") | ` Rest ` | ` 1 ` | ` Long rest ` | ` Per spell ` |
+| [Scrying](<../spells/scrying.md> "dnd2024:spells/scrying") | ` Rest ` | ` 1 ` | ` Long rest ` | ` Per spell ` |
+| [Unseen Servant](<../spells/unseen_servant.md> "dnd2024:spells/unseen_servant") | ` Rest ` | ` 1 ` | ` Long rest ` | ` Per spell ` |
 
 ##### Vile appearance
 

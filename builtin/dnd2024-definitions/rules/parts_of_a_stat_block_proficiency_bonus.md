@@ -49,15 +49,39 @@ CR PB CR PB\
 
 #### Proficiency bonus by cr
 
-<!-- splat:rows path=splat_rule/parameters/proficiency_bonus_by_cr -->
+<!-- splat:table
+path: splat_rule/parameters/proficiency_bonus_by_cr
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+- row_5
+- row_6
+- row_7
+- row_8
+columns:
+  Key:
+    type: key
+  Cr min:
+    path: cr_min
+    type: integer
+  Cr max:
+    path: cr_max
+    type: integer
+  Bonus:
+    path: bonus
+    type: integer
+-->
 
-| Row | cr_min | cr_max | bonus |
+| Key | Cr min | Cr max | Bonus |
 | --- | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` 4 ` | ` 2 ` |
-| ` 1 ` | ` 5 ` | ` 8 ` | ` 3 ` |
-| ` 2 ` | ` 9 ` | ` 12 ` | ` 4 ` |
-| ` 3 ` | ` 13 ` | ` 16 ` | ` 5 ` |
-| ` 4 ` | ` 17 ` | ` 20 ` | ` 6 ` |
-| ` 5 ` | ` 21 ` | ` 24 ` | ` 7 ` |
-| ` 6 ` | ` 25 ` | ` 28 ` | ` 8 ` |
-| ` 7 ` | ` 29 ` | ` 30 ` | ` 9 ` |
+| ` row_1 ` | ` 0 ` | ` 4 ` | ` 2 ` |
+| ` row_2 ` | ` 5 ` | ` 8 ` | ` 3 ` |
+| ` row_3 ` | ` 9 ` | ` 12 ` | ` 4 ` |
+| ` row_4 ` | ` 13 ` | ` 16 ` | ` 5 ` |
+| ` row_5 ` | ` 17 ` | ` 20 ` | ` 6 ` |
+| ` row_6 ` | ` 21 ` | ` 24 ` | ` 7 ` |
+| ` row_7 ` | ` 25 ` | ` 28 ` | ` 8 ` |
+| ` row_8 ` | ` 29 ` | ` 30 ` | ` 9 ` |

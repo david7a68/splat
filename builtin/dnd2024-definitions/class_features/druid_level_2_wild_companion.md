@@ -44,12 +44,31 @@ Fey and disappears when you finish a Long Rest.\
 
 #### Cost choice
 
-<!-- splat:rows path=splat_rule/parameters/cost_choice -->
+<!-- splat:table
+path: splat_rule/parameters/cost_choice
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Resource:
+    path: resource
+    type: string
+  Amount:
+    path: amount
+    type: integer
+  Minimum level:
+    path: minimum_level
+    type: integer
+    optional: true
+-->
 
-| Row | resource | amount | minimum_level |
+| Key | Resource | Amount | Minimum level |
 | --- | --- | --- | --- |
-| ` 0 ` | ` spell_slot ` | ` 1 ` | ` 1 ` |
-| ` 1 ` | ` druid.wild_shape ` | ` 1 ` |  |
+| ` row_1 ` | ` spell_slot ` | ` 1 ` | ` 1 ` |
+| ` row_2 ` | ` druid.wild_shape ` | ` 1 ` |  |
 
 #### Cast
 

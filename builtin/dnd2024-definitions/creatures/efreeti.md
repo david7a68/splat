@@ -279,57 +279,69 @@ hit:
 
 ##### Spellcasting
 
-<!-- splat:yaml path=splat_rule/parameters/features/spellcasting -->
+<!-- splat:values path=splat_rule/parameters/features/spellcasting -->
 
-```yaml
-economy: action
-op: spellcasting
-profile:
-  ability: charisma
-  waived_components:
-  - material
-  spells:
-  - spell:
-      key: dnd2024:spells/detect_magic
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/elementalism
-    uses:
-      unlimited: true
-  - spell:
-      key: dnd2024:spells/gaseous_form
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/invisibility
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/major_image
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/plane_shift
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/tongues
-    uses:
-      count: 1
-      recovery: long_rest
-  - spell:
-      key: dnd2024:spells/wall_of_fire
-    uses:
-      count: 1
-      recovery: long_rest
-    cast_level: 7
-  save_dc: 16
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` spellcasting ` |
+
+###### Profile
+
+<!-- splat:values path=splat_rule/parameters/features/spellcasting/profile -->
+
+| Field | Value |
+| --- | --- |
+| ` ability ` | ` charisma ` |
+| ` waived_components ` | ` ["material"] ` |
+| ` save_dc ` | ` 16 ` |
+
+###### Spells
+
+<!-- splat:table
+path: splat_rule/parameters/features/spellcasting/profile/spells
+key: Spell
+order:
+- detect_magic
+- elementalism
+- gaseous_form
+- invisibility
+- major_image
+- plane_shift
+- tongues
+- wall_of_fire
+columns:
+  Spell:
+    path: spell
+    type: reference
+  Uses unlimited:
+    path: uses/unlimited
+    type: boolean
+    optional: true
+  Uses count:
+    path: uses/count
+    type: integer
+    optional: true
+  Uses recovery:
+    path: uses/recovery
+    type: symbol
+    optional: true
+  Cast level:
+    path: cast_level
+    type: integer
+    optional: true
+-->
+
+| Spell | Uses unlimited | Uses count | Uses recovery | Cast level |
+| --- | --- | --- | --- | --- |
+| [Detect Magic](<../spells/detect_magic.md> "dnd2024:spells/detect_magic") | true |  |  |  |
+| [Elementalism](<../spells/elementalism.md> "dnd2024:spells/elementalism") | true |  |  |  |
+| [Gaseous Form](<../spells/gaseous_form.md> "dnd2024:spells/gaseous_form") |  | ` 1 ` | ` Long rest ` |  |
+| [Invisibility](<../spells/invisibility.md> "dnd2024:spells/invisibility") |  | ` 1 ` | ` Long rest ` |  |
+| [Major Image](<../spells/major_image.md> "dnd2024:spells/major_image") |  | ` 1 ` | ` Long rest ` |  |
+| [Plane Shift](<../spells/plane_shift.md> "dnd2024:spells/plane_shift") |  | ` 1 ` | ` Long rest ` |  |
+| [Tongues](<../spells/tongues.md> "dnd2024:spells/tongues") |  | ` 1 ` | ` Long rest ` |  |
+| [Wall of Fire](<../spells/wall_of_fire.md> "dnd2024:spells/wall_of_fire") |  | ` 1 ` | ` Long rest ` | ` 7 ` |
 
 ##### Multiattack
 

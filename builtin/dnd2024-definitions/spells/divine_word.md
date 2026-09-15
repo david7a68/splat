@@ -101,14 +101,43 @@ Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 
 #### Failure hp branches
 
-<!-- splat:rows path=splat_rule/parameters/failure_hp_branches -->
+<!-- splat:table
+path: splat_rule/parameters/failure_hp_branches
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+- row_4
+columns:
+  Key:
+    type: key
+  Hp min:
+    path: hp_min
+    type: integer
+  Hp max:
+    path: hp_max
+    type: integer
+  Effect:
+    path: effect
+    type: symbol
+    optional: true
+  Conditions:
+    path: conditions
+    type: yaml
+    optional: true
+  Duration minutes:
+    path: duration_minutes
+    type: integer
+    optional: true
+-->
 
-| Row | hp_min | hp_max | effect | conditions | duration_minutes |
+| Key | Hp min | Hp max | Effect | Conditions | Duration minutes |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 0 ` | ` 20 ` | ` death ` |  |  |
-| ` 1 ` | ` 21 ` | ` 30 ` |  | ` ["blinded", "deafened", "stunned"] ` | ` 60 ` |
-| ` 2 ` | ` 31 ` | ` 40 ` |  | ` ["blinded", "deafened"] ` | ` 10 ` |
-| ` 3 ` | ` 41 ` | ` 50 ` |  | ` ["deafened"] ` | ` 1 ` |
+| ` row_1 ` | ` 0 ` | ` 20 ` | ` Death ` |  |  |
+| ` row_2 ` | ` 21 ` | ` 30 ` |  | ` ["blinded", "deafened", "stunned"] ` | ` 60 ` |
+| ` row_3 ` | ` 31 ` | ` 40 ` |  | ` ["blinded", "deafened"] ` | ` 10 ` |
+| ` row_4 ` | ` 41 ` | ` 50 ` |  | ` ["deafened"] ` | ` 1 ` |
 
 #### Additional failure
 

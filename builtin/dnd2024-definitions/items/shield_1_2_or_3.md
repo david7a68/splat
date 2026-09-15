@@ -62,13 +62,32 @@ Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
 #### Variants
 
-<!-- splat:rows path=splat_rule/parameters/variants -->
+<!-- splat:table
+path: splat_rule/parameters/variants
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Rarity:
+    path: rarity
+    type: symbol
+  Ac bonus:
+    path: ac_bonus
+    type: integer
+  Additional to normal shield bonus:
+    path: additional_to_normal_shield_bonus
+    type: boolean
+-->
 
-| Row | rarity | ac_bonus | additional_to_normal_shield_bonus |
+| Key | Rarity | Ac bonus | Additional to normal shield bonus |
 | --- | --- | --- | --- |
-| ` 0 ` | ` uncommon ` | ` 1 ` | ` true ` |
-| ` 1 ` | ` rare ` | ` 2 ` | ` true ` |
-| ` 2 ` | ` very_rare ` | ` 3 ` | ` true ` |
+| ` row_1 ` | ` Uncommon ` | ` 1 ` | true |
+| ` row_2 ` | ` Rare ` | ` 2 ` | true |
+| ` row_3 ` | ` Very rare ` | ` 3 ` | true |
 
 #### Attunement
 

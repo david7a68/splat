@@ -71,52 +71,28 @@ the magic of this domain.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Feature
+order:
+- life_domain_level_17_supreme_healing
+- life_domain_level_3_disciple_of_life
+- life_domain_level_3_life_domain_spells
+- life_domain_level_3_preserve_life
+- life_domain_level_6_blessed_healer
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Minimum class level:
+    path: minimum_class_level
+    type: integer
+-->
 
-| Row | minimum_class_level |
+| Feature | Minimum class level |
 | --- | --- |
-| ` 0 ` | ` 17 ` |
-| ` 1 ` | ` 3 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 6 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/life_domain_level_17_supreme_healing ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/life_domain_level_3_disciple_of_life ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/life_domain_level_3_life_domain_spells ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/life_domain_level_3_preserve_life ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/life_domain_level_6_blessed_healer ` |
+| [Level 17: Supreme Healing](<../class_features/life_domain_level_17_supreme_healing.md> "dnd2024:class_features/life_domain_level_17_supreme_healing") | ` 17 ` |
+| [Level 3: Disciple of Life](<../class_features/life_domain_level_3_disciple_of_life.md> "dnd2024:class_features/life_domain_level_3_disciple_of_life") | ` 3 ` |
+| [Level 3: Life Domain Spells](<../class_features/life_domain_level_3_life_domain_spells.md> "dnd2024:class_features/life_domain_level_3_life_domain_spells") | ` 3 ` |
+| [Level 3: Preserve Life](<../class_features/life_domain_level_3_preserve_life.md> "dnd2024:class_features/life_domain_level_3_preserve_life") | ` 3 ` |
+| [Level 6: Blessed Healer](<../class_features/life_domain_level_6_blessed_healer.md> "dnd2024:class_features/life_domain_level_6_blessed_healer") | ` 6 ` |

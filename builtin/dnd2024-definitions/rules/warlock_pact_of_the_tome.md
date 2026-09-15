@@ -66,12 +66,37 @@ Spellcasting Focus.\
 
 #### On conjure choices
 
-<!-- splat:rows path=splat_rule/parameters/on_conjure_choices -->
+<!-- splat:table
+path: splat_rule/parameters/on_conjure_choices
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Count:
+    path: count
+    type: integer
+  Spell level:
+    path: spell_level
+    type: integer
+  Source:
+    path: source
+    type: symbol
+  Exclude already prepared:
+    path: exclude_already_prepared
+    type: boolean
+  Ritual:
+    path: ritual
+    type: boolean
+    optional: true
+-->
 
-| Row | count | spell_level | source | exclude_already_prepared | ritual |
+| Key | Count | Spell level | Source | Exclude already prepared | Ritual |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` 3 ` | ` 0 ` | ` any_class_spell_list ` | ` true ` |  |
-| ` 1 ` | ` 2 ` | ` 1 ` | ` any_class_spell_list ` | ` true ` | ` true ` |
+| ` row_1 ` | ` 3 ` | ` 0 ` | ` Any class spell list ` | true |  |
+| ` row_2 ` | ` 2 ` | ` 1 ` | ` Any class spell list ` | true | true |
 
 #### While book on person
 

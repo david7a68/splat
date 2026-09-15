@@ -56,55 +56,31 @@ dragon for an ancestor.\
 
 #### Feature grants
 
-<!-- splat:rows path=splat_rule/parameters/feature_grants -->
+<!-- splat:table
+path: splat_rule/parameters/feature_grants
+key: Item
+order:
+- draconic_sorcery_level_14_dragon_wings
+- draconic_sorcery_level_18_dragon_companion
+- draconic_sorcery_level_3_draconic_resilience
+- draconic_sorcery_level_3_draconic_spells
+- draconic_sorcery_level_6_elemental_affinity
+columns:
+  Item:
+    path: definition
+    type: reference
+  Class level:
+    path: class_level
+    type: integer
+-->
 
-| Row | class_level |
+| Item | Class level |
 | --- | --- |
-| ` 0 ` | ` 14 ` |
-| ` 1 ` | ` 18 ` |
-| ` 2 ` | ` 3 ` |
-| ` 3 ` | ` 3 ` |
-| ` 4 ` | ` 6 ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/0/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/draconic_sorcery_level_14_dragon_wings ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/1/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/draconic_sorcery_level_18_dragon_companion ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/2/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/draconic_sorcery_level_3_draconic_resilience ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/3/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/draconic_sorcery_level_3_draconic_spells ` |
-
-##### Definition
-
-<!-- splat:values path=splat_rule/parameters/feature_grants/4/definition -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/draconic_sorcery_level_6_elemental_affinity ` |
+| [Level 14: Dragon Wings](<../class_features/draconic_sorcery_level_14_dragon_wings.md> "dnd2024:class_features/draconic_sorcery_level_14_dragon_wings") | ` 14 ` |
+| [Level 18: Dragon Companion](<../class_features/draconic_sorcery_level_18_dragon_companion.md> "dnd2024:class_features/draconic_sorcery_level_18_dragon_companion") | ` 18 ` |
+| [Level 3: Draconic Resilience](<../class_features/draconic_sorcery_level_3_draconic_resilience.md> "dnd2024:class_features/draconic_sorcery_level_3_draconic_resilience") | ` 3 ` |
+| [Level 3: Draconic Spells](<../class_features/draconic_sorcery_level_3_draconic_spells.md> "dnd2024:class_features/draconic_sorcery_level_3_draconic_spells") | ` 3 ` |
+| [Level 6: Elemental Affinity](<../class_features/draconic_sorcery_level_6_elemental_affinity.md> "dnd2024:class_features/draconic_sorcery_level_6_elemental_affinity") | ` 6 ` |
 
 #### Grant eligible features
 

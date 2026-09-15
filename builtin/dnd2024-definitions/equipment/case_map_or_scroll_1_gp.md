@@ -68,17 +68,27 @@ or 5 sheets of parchment.\
 
 #### Capacity
 
-<!-- splat:yaml path=splat_rule/parameters/capacity -->
+##### Alternative capacities
 
-```yaml
-alternative_capacities:
-- item:
-    key: dnd2024:equipment/paper_2_sp
-  count: 10
-- item:
-    key: dnd2024:equipment/parchment_1_sp
-  count: 5
-```
+<!-- splat:table
+path: splat_rule/parameters/capacity/alternative_capacities
+key: Item
+order:
+- paper_2_sp
+- parchment_1_sp
+columns:
+  Item:
+    path: item
+    type: reference
+  Count:
+    path: count
+    type: integer
+-->
+
+| Item | Count |
+| --- | --- |
+| [Paper (2 SP)](<paper_2_sp.md> "dnd2024:equipment/paper_2_sp") | ` 10 ` |
+| [Parchment (1 SP)](<parchment_1_sp.md> "dnd2024:equipment/parchment_1_sp") | ` 5 ` |
 
 #### Mass
 

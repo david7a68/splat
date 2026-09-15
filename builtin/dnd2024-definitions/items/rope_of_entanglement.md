@@ -104,32 +104,85 @@ save:
 
 #### Release options
 
-<!-- splat:rows path=splat_rule/parameters/release_options -->
+<!-- splat:table
+path: splat_rule/parameters/release_options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Trigger:
+    path: trigger
+    type: symbol
+    optional: true
+  Rope location:
+    path: rope_location
+    type: symbol
+  Rope state:
+    path: rope_state
+    type: symbol
+  Action:
+    path: action
+    type: symbol
+    optional: true
+  Repeat command:
+    path: repeat_command
+    type: boolean
+    optional: true
+-->
 
-| Row | trigger | rope_location | rope_state | action | repeat_command |
+| Key | Trigger | Rope location | Rope state | Action | Repeat command |
 | --- | --- | --- | --- | --- | --- |
-| ` 0 ` | ` user_lets_go ` | ` target_space ` | ` coiled ` |  |  |
-| ` 1 ` |  | ` user_hand ` | ` coiled ` | ` bonus_action ` | ` true ` |
+| ` row_1 ` | ` User lets go ` | ` Target space ` | ` Coiled ` |  |  |
+| ` row_2 ` |  | ` User hand ` | ` Coiled ` | ` Bonus action ` | true |
 
 #### Escape
 
-<!-- splat:yaml path=splat_rule/parameters/escape -->
+<!-- splat:values path=splat_rule/parameters/escape -->
 
-```yaml
-action: action
-check_choice:
-- ability: strength
-  skill: athletics
-  dc: 15
-- ability: dexterity
-  skill: acrobatics
-  dc: 15
-success: end_restrained
-user_reaction:
-  requires: holding_rope
-  command: coil_into_user_hand
-otherwise_rope_location: target_space
-```
+| Field | Value |
+| --- | --- |
+| ` action ` | ` action ` |
+| ` success ` | ` end_restrained ` |
+| ` otherwise_rope_location ` | ` target_space ` |
+
+##### Check choice
+
+<!-- splat:table
+path: splat_rule/parameters/escape/check_choice
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Ability:
+    path: ability
+    type: symbol
+  Skill:
+    path: skill
+    type: symbol
+  Dc:
+    path: dc
+    type: integer
+-->
+
+| Key | Ability | Skill | Dc |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` Strength ` | ` Athletics ` | ` 15 ` |
+| ` row_2 ` | ` Dexterity ` | ` Acrobatics ` | ` 15 ` |
+
+##### User reaction
+
+<!-- splat:values path=splat_rule/parameters/escape/user_reaction -->
+
+| Field | Value |
+| --- | --- |
+| ` requires ` | ` holding_rope ` |
+| ` command ` | ` coil_into_user_hand ` |
 
 #### Object statistics
 

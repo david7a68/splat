@@ -427,19 +427,38 @@ recharge:
 
 ##### Multiattack
 
-<!-- splat:yaml path=splat_rule/parameters/features/multiattack -->
+<!-- splat:values path=splat_rule/parameters/features/multiattack -->
 
-```yaml
-economy: action
-op: multiattack
-sequence:
-- count: 1
-  feature: bite
-- count: 2
-  feature: devilish_claw
-- count: 1
-  feature: fiery_mace
-```
+| Field | Value |
+| --- | --- |
+| ` economy ` | ` action ` |
+| ` op ` | ` multiattack ` |
+
+###### Sequence
+
+<!-- splat:table
+path: splat_rule/parameters/features/multiattack/sequence
+key: Key
+order:
+- row_1
+- row_2
+- row_3
+columns:
+  Key:
+    type: key
+  Count:
+    path: count
+    type: integer
+  Feature:
+    path: feature
+    type: symbol
+-->
+
+| Key | Count | Feature |
+| --- | --- | --- |
+| ` row_1 ` | ` 1 ` | ` Bite ` |
+| ` row_2 ` | ` 2 ` | ` Devilish claw ` |
+| ` row_3 ` | ` 1 ` | ` Fiery mace ` |
 
 #### Damage resolution
 

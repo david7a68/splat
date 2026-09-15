@@ -55,34 +55,24 @@ listed in the Fighter Features table.\
 
 #### Features
 
-<!-- splat:rows path=splat_rule/parameters/features -->
+<!-- splat:table
+path: splat_rule/parameters/features
+key: Feature
+order:
+- fighter_level_1_fighting_style
+- fighter_level_1_second_wind
+- fighter_level_1_weapon_mastery
+columns:
+  Feature:
+    path: feature
+    type: reference
+  Level:
+    path: level
+    type: integer
+-->
 
-| Row | level |
+| Feature | Level |
 | --- | --- |
-| ` 0 ` | ` 1 ` |
-| ` 1 ` | ` 1 ` |
-| ` 2 ` | ` 1 ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/0/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_1_fighting_style ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/1/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_1_second_wind ` |
-
-##### Feature
-
-<!-- splat:values path=splat_rule/parameters/features/2/feature -->
-
-| Field | Value |
-| --- | --- |
-| ` key ` | ` dnd2024:class_features/fighter_level_1_weapon_mastery ` |
+| [Level 1: Fighting Style](<../class_features/fighter_level_1_fighting_style.md> "dnd2024:class_features/fighter_level_1_fighting_style") | ` 1 ` |
+| [Level 1: Second Wind](<../class_features/fighter_level_1_second_wind.md> "dnd2024:class_features/fighter_level_1_second_wind") | ` 1 ` |
+| [Level 1: Weapon Mastery](<../class_features/fighter_level_1_weapon_mastery.md> "dnd2024:class_features/fighter_level_1_weapon_mastery") | ` 1 ` |

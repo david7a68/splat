@@ -78,21 +78,70 @@ you die.\
 
 #### Resource
 
-<!-- splat:yaml path=splat_rule/parameters/resource -->
+<!-- splat:values path=splat_rule/parameters/resource -->
+
+| Field | Value |
+| --- | --- |
+| ` id ` | ` cleric.channel_divinity ` |
+
+##### Maximum
+
+<!-- splat:yaml path=splat_rule/parameters/resource/maximum -->
 
 ```yaml
-id: cleric.channel_divinity
-maximum:
-  table:
-    key: dnd2024:tables/cleric_progression
-  row:
-    var: actor.class_levels.cleric
-  column: channel_divinity
-recovery:
-- event: rest.short_completed
-  amount: 1
-- event: rest.long_completed
-  amount: all
+table:
+  key: dnd2024:tables/cleric_progression
+row:
+  var: actor.class_levels.cleric
+column: channel_divinity
+```
+
+##### Recovery
+
+<!-- splat:table
+path: splat_rule/parameters/resource/recovery
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Event:
+    path: event
+    type: string
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Event | Details |
+| --- | --- | --- |
+| ` row_1 ` | ` rest.short_completed ` | [Rules](#^splat-d8de689e-row_1 "section:row_1") |
+| ` row_2 ` | ` rest.long_completed ` | [Rules](#^splat-d8de689e-row_2 "section:row_2") |
+
+###### Row 1
+
+^splat-d8de689e-row_1
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/resource/recovery/@row_1/amount -->
+
+```yaml
+1
+```
+
+###### Row 2
+
+^splat-d8de689e-row_2
+
+###### Amount
+
+<!-- splat:yaml path=splat_rule/parameters/resource/recovery/@row_2/amount -->
+
+```yaml
+all
 ```
 
 #### Dc
@@ -109,57 +158,113 @@ args:
 
 #### Options
 
-<!-- splat:yaml path=splat_rule/parameters/options -->
+##### Divine spark
+
+<!-- splat:values path=splat_rule/parameters/options/divine_spark -->
+
+| Field | Value |
+| --- | --- |
+| ` action ` | ` magic ` |
+| ` requires_item ` | ` holy_symbol ` |
+| ` choice ` | ` ["heal", "damage"] ` |
+
+###### Target
+
+<!-- splat:values path=splat_rule/parameters/options/divine_spark/target -->
+
+| Field | Value |
+| --- | --- |
+| ` type ` | ` creature ` |
+| ` self ` | ` false ` |
+| ` visible ` | ` true ` |
+| ` range_feet ` | ` 30 ` |
+
+###### Amount
+
+<!-- splat:values path=splat_rule/parameters/options/divine_spark/amount -->
+
+| Field | Value |
+| --- | --- |
+| ` op ` | ` add ` |
+
+###### Args
+
+<!-- splat:table
+path: splat_rule/parameters/options/divine_spark/amount/args
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Dice sides:
+    path: dice/sides
+    type: integer
+    optional: true
+  Var:
+    path: var
+    type: string
+    optional: true
+  Details:
+    type: section
+    optional: true
+-->
+
+| Key | Dice sides | Var | Details |
+| --- | --- | --- | --- |
+| ` row_1 ` | ` 8 ` |  | [Rules](#^splat-ad2792df-row_1 "section:row_1") |
+| ` row_2 ` |  | ` actor.abilities.wisdom.modifier ` |  |
+
+###### Row 1
+
+^splat-ad2792df-row_1
+
+###### Count by cleric level
+
+<!-- splat:yaml path=splat_rule/parameters/options/divine_spark/amount/args/@row_1/dice/count_by_cleric_level -->
 
 ```yaml
-divine_spark:
-  action: magic
-  requires_item: holy_symbol
-  target:
-    type: creature
-    self: false
-    visible: true
-    range_feet: 30
-  amount:
-    op: add
-    args:
-    - dice:
-        count_by_cleric_level:
-          '2': 1
-          '7': 2
-          '13': 3
-          '18': 4
-        sides: 8
-    - var: actor.abilities.wisdom.modifier
-  choice:
-  - heal
-  - damage
-  damage:
-    types_choice:
-    - necrotic
-    - radiant
-    save: constitution
-    success_multiplier: 0.5
-    rounding: down
-turn_undead:
-  action: magic
-  requires_item: holy_symbol
-  targets:
-    type: undead
-    selection: actor_choice
-    range_feet: 30
-  save: wisdom
-  failure:
-    conditions:
-    - frightened
-    - incapacitated
-    duration:
-      minutes: 1
-    on_target_turn: move_as_far_as_possible_from_actor
-    ends_on:
-    - target.damage_taken
-    - actor.incapacitated
-    - actor.died
+'2': 1
+'7': 2
+'13': 3
+'18': 4
+```
+
+###### Damage
+
+<!-- splat:values path=splat_rule/parameters/options/divine_spark/damage -->
+
+| Field | Value |
+| --- | --- |
+| ` types_choice ` | ` ["necrotic", "radiant"] ` |
+| ` save ` | ` constitution ` |
+| ` success_multiplier ` | ` 0.5 ` |
+| ` rounding ` | ` down ` |
+
+##### Turn undead
+
+<!-- splat:yaml path=splat_rule/parameters/options/turn_undead -->
+
+```yaml
+action: magic
+requires_item: holy_symbol
+targets:
+  type: undead
+  selection: actor_choice
+  range_feet: 30
+save: wisdom
+failure:
+  conditions:
+  - frightened
+  - incapacitated
+  duration:
+    minutes: 1
+  on_target_turn: move_as_far_as_possible_from_actor
+  ends_on:
+  - target.damage_taken
+  - actor.incapacitated
+  - actor.died
 ```
 
 #### Class scope

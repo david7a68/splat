@@ -47,9 +47,24 @@ ability, while others prefer to increase a low score.\
 
 #### Options
 
-<!-- splat:rows path=splat_rule/parameters/options -->
+<!-- splat:table
+path: splat_rule/parameters/options
+key: Key
+order:
+- row_1
+- row_2
+columns:
+  Key:
+    type: key
+  Increases:
+    path: increases
+    type: yaml
+  Distinct abilities:
+    path: distinct_abilities
+    type: boolean
+-->
 
-| Row | increases | distinct_abilities |
+| Key | Increases | Distinct abilities |
 | --- | --- | --- |
-| ` 0 ` | ` [2, 1] ` | ` true ` |
-| ` 1 ` | ` [1, 1, 1] ` | ` true ` |
+| ` row_1 ` | ` [2, 1] ` | true |
+| ` row_2 ` | ` [1, 1, 1] ` | true |
