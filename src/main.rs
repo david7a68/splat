@@ -1,3 +1,6 @@
+pub mod auth;
+mod settings;
+
 use eframe::egui;
 
 fn main() -> eframe::Result {
@@ -11,6 +14,7 @@ fn main() -> eframe::Result {
 #[derive(Default)]
 struct Splat {
     tab: Tab,
+    settings: settings::Settings,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -20,10 +24,12 @@ enum Tab {
     Encounters,
     Creatures,
     Simulations,
+    Settings,
 }
 
 impl eframe::App for Splat {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        self.settings.poll(ctx);
         egui::SidePanel::left("navigation").show(ctx, |ui| {
             ui.heading("Splat");
             ui.label("D&D 2024");
@@ -36,9 +42,17 @@ impl eframe::App for Splat {
             ] {
                 ui.selectable_value(&mut self.tab, tab, label);
             }
+            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                ui.selectable_value(&mut self.tab, Tab::Settings, "⚙ Settings");
+            });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
+            if self.tab == Tab::Settings {
+                egui::ScrollArea::vertical().show(ui, |ui| self.settings.show(ui));
+                return;
+            }
             let (title, message) = match self.tab {
+                Tab::Settings => unreachable!(),
                 Tab::Party => ("Party", "No characters imported yet."),
                 Tab::Encounters => ("Encounters", "No encounters created yet."),
                 Tab::Creatures => ("Creatures", "No creatures created yet."),
