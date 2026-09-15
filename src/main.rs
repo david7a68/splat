@@ -1,4 +1,7 @@
 pub mod auth;
+mod credentials;
+mod persistence;
+mod projects;
 mod settings;
 
 use eframe::egui;
@@ -15,6 +18,7 @@ fn main() -> eframe::Result {
 struct Splat {
     tab: Tab,
     settings: settings::Settings,
+    projects: projects::Projects,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -33,6 +37,9 @@ impl eframe::App for Splat {
         egui::SidePanel::left("navigation").show(ctx, |ui| {
             ui.heading("Splat");
             ui.label("D&D 2024");
+            if let Some(name) = self.projects.active_name() {
+                ui.label(name);
+            }
             ui.separator();
             for (tab, label) in [
                 (Tab::Party, "Party"),
@@ -48,7 +55,12 @@ impl eframe::App for Splat {
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.tab == Tab::Settings {
-                egui::ScrollArea::vertical().show(ui, |ui| self.settings.show(ui));
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    self.settings.show(ui);
+                    ui.add_space(20.0);
+                    ui.separator();
+                    self.projects.show(ui);
+                });
                 return;
             }
             let (title, message) = match self.tab {

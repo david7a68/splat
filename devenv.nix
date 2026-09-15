@@ -4,7 +4,7 @@
   ...
 }: {
   imports = [./nix/rust-toolchain.nix];
-  packages = with pkgs; [git pkg-config alejandra];
+  packages = with pkgs; [git pkg-config alejandra dbus];
   languages.c.enable = false;
 
   env.LD_LIBRARY_PATH = lib.makeLibraryPath (with pkgs; [
