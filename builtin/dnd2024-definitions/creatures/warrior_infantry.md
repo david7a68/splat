@@ -57,18 +57,133 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/warrior_infantry
+  implementation: dnd2024:creature_warrior_infantry
+  parameters:
+    features:
+      pack_tactics:
+        economy: passive
+        advantage:
+          roll: attack
+          target_kind: creature
+          requires:
+            ally_distance_to_target_max_feet: 5
+            ally_incapacitated: false
+      spear:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        - ranged
+        attack_bonus: 3
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 4
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 1
+          damage_type: piercing
+        reach_feet: 5
+        range_feet: 20
+        long_range_feet: 60
+    defenses: {}
+    senses:
+      passive_perception: 10
+      special: []
+    gear:
+    - item_name: Chain Shirt
+      quantity: 1
+    - item_name: Spear
+      quantity: 1
+    communication:
+      speaks:
+      - common
+      understands:
+      - common
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_warrior_infantry
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: d3db9e2dbf274335f883bfef75233bdaa63c8501c3cff7e97ca50eeac8b8c32e
   source_path: builtin/srd-5.2.1/creature/warrior_infantry.md
   pages:
   - 336
   - 337
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_warrior_infantry
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: d0f63fcb4f4646083b4736f210d181d71d8dfcde4d668de1fab23d9e92df71a3
 splat_clauses:
 - key: source_rules
   text: '# Warrior Infantry Medium or Small Humanoid, Neutral AC 13 Initiative +0 (10) HP 9 (2d8) Speed
@@ -79,7 +194,8 @@ splat_clauses:
     condition. ### Actions Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or range 20/60 ft. Hit:
     4 (1d6 + 1) Piercing damage.'
   sha256: 86961d7ed034c408d746d116fe29388103730ceb8d3a34a867c594a2382db1ba
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Warrior Infantry

@@ -56,17 +56,283 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/unicorn
+  implementation: dnd2024:creature_unicorn
+  parameters:
+    features:
+      legendary_resistance:
+        economy: trait
+        resource:
+          kind: daily
+          uses: 3
+          recovery: long_rest
+        operation: replace_save_result
+        trigger: self.save_failed
+        optional: true
+        result: success
+      magic_resistance:
+        economy: trait
+        operation: passive_rule
+        saving_throw_advantage_against:
+        - spells
+        - magical_effects
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: hooves
+          count: 1
+        - operation: attack_sequence
+          feature: radiant_horn
+          count: 1
+      hooves:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 7
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 11
+            roll:
+              count: 2
+              sides: 6
+              modifier: 4
+            type: bludgeoning
+      radiant_horn:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 7
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 9
+            roll:
+              count: 1
+              sides: 10
+              modifier: 4
+            type: radiant
+      spellcasting:
+        economy: action
+        operation: spellcasting
+        ability: charisma
+        components_waived:
+        - verbal
+        - somatic
+        - material
+        save_dc: 14
+        options:
+        - spell:
+            key: dnd2024:spells/detect_evil_and_good
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/druidcraft
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/calm_emotions
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/dispel_evil_and_good
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/entangle
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/pass_without_trace
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/word_of_recall
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        material_components_available: true
+      unicorn_s_blessing:
+        economy: bonus_action
+        resource:
+          kind: daily
+          uses: 3
+          recovery: long_rest
+        operation: spell_choice
+        options:
+        - operation: cast_spell
+          spell:
+            key: dnd2024:spells/cure_wounds
+        - operation: cast_spell
+          spell:
+            key: dnd2024:spells/lesser_restoration
+        ability: charisma
+        targets:
+          another_creature: true
+          touch_with_horn: true
+      charging_horn:
+        economy: legendary_action
+        legendary_cost: 1
+        operation: sequence
+        effects:
+        - operation: move
+          maximum_ft:
+            multiply:
+            - stat: speed
+            - 0.5
+          provoke_opportunity_attacks: false
+        - operation: attack_sequence
+          feature: radiant_horn
+          count: 1
+      shimmering_shield:
+        economy: legendary_action
+        legendary_cost: 1
+        cooldown_until: self.next_turn_start
+        operation: grant_defense
+        targets:
+          any_of:
+          - self: true
+          - kind: creature
+            count: 1
+            range_ft: 60
+            visible: true
+        temporary_hp:
+          roll:
+            count: 3
+            sides: 6
+            modifier: 0
+          average: 10
+        ac_bonus: 2
+        until: self.next_turn_end
+    damage_immunities:
+    - poison
+    condition_immunities:
+    - charmed
+    - paralyzed
+    - poisoned
+    senses:
+      darkvision: 60
+      passive_perception: 13
+    languages:
+      speaks:
+      - celestial
+      - elvish
+      - sylvan
+      understands: []
+      telepathy_range_ft: 120
+    legendary_actions:
+      uses: 3
+      recovery: self.turn_start
+      trigger: other_creature.turn_end
+      cost_per_action: 1
+      requires:
+        not_incapacitated: true
+      maximum_actions_per_trigger: 1
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_unicorn
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - turn.ended
+  - rest.completed
+  - saving_throw.resolved
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spellcasting
+  - spatial_queries
+  - limited_resources
+  - legendary_actions
+  - hit_points
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 2fe24532ed0e4ba41447876550bdfe65e2bde6f3a705e72049982752715d0643
   source_path: builtin/srd-5.2.1/creature/unicorn.md
   pages:
   - 334
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_unicorn
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: ce22108071257a66e66fa6311e00aa6d7f9773f19126804ba14acca5d0431ac4
 splat_clauses:
 - key: source_rules
   text: '# Unicorn Large Celestial, Lawful Good AC 12 Initiative +8 (18) HP 97 (13d10 + 26) Speed 50 ft.
@@ -90,7 +356,8 @@ splat_clauses:
     (3d6) Temporary Hit Points, and its AC increases by 2 until the end of the unicorn’s next turn. The
     unicorn can’t take this action again until the start of its next turn.'
   sha256: 30cb5535efa79dda6ddab7272572d9f4627a11f76504fe6be5ef807c60218657
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Unicorn

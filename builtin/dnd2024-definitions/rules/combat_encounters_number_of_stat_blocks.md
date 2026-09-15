@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/combat_encounters_number_of_stat_blocks
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 203
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: f3aec9cbd34f397945de30b9d2c7fbf69feb7fae517958c5e8e9f4758e6c8bab
   parent_name: Combat Encounters
   line_span:
     first: 10370
@@ -35,7 +36,7 @@ splat_clauses:
     the encounter. Referencing more than two or three stat blocks for a single encounter can be daunting,
     particularly if the creatures are complex.'
   sha256: aa36ecc8c68e5234ebf9b11904a899715187365b5e665b89a36d0ff0316883ec
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Number of Stat Blocks

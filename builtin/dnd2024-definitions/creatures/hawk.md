@@ -59,18 +59,114 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/hawk
+  implementation: dnd2024:creature_hawk
+  parameters:
+    features:
+      talons:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 1
+          amount:
+            constant: 1
+          damage_type: slashing
+        reach_feet: 5
+    skill_totals:
+      perception: 6
+    defenses: {}
+    senses:
+      passive_perception: 16
+      special: []
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_hawk
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 3e840c22b144f2c12bfd6da711c3cb0cff2485fc308011ec6d5d4e0ab9a15482
   source_path: builtin/srd-5.2.1/creature/hawk.md
   pages:
   - 355
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_hawk
+  conversion_gaps: []
   execution_profiles:
   - dnd2024:creatures/hawk
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: b72dbf3df46660f8edcf2df1089b1b3e363bf629856d9c3c70678972facb9db7
 splat_clauses:
 - key: source_rules
   text: '# Hawk Tiny Beast, Unaligned AC 13 Initiative +3 (13) HP 1 (1d4 - 1) Speed 10 ft., Fly 60 ft.
@@ -78,7 +174,8 @@ splat_clauses:
     -2 Skills Perception +6 Senses Passive Perception 16 Languages None CR 0 (XP 10; PB +2) ### Actions
     Talons. Melee Attack Roll: +5, reach 5 ft. Hit: 1 Slashing damage.'
   sha256: ce1343c36aca2616015bedce9cfba57da0f21b56f2373f05f7623f5c3fece10c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hawk

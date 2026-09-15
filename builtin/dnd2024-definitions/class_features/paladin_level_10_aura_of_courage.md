@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/paladin_level_10_aura_of_courage
-  parameters: {}
+  parameters:
+    aura: own_aura_of_protection
+    targets:
+    - self
+    - allies
+    condition_immunity: frightened
+    existing_condition: suppressed_while_in_aura
+  implementation: dnd2024:class_features_paladin_level_10_aura_of_courage
+splat_contracts:
+- id: dnd2024:class_features_paladin_level_10_aura_of_courage
+  inputs:
+    actor:
+      type: participant
+      required: true
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - feature_state
+  - conditions
+  events:
+  - aura.membership_changed
+  - condition.pending
+  capabilities:
+  - auras
+  - conditions
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 55
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_paladin_level_10_aura_of_courage
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: f6b4ce06f51c5509e3113c76fc998505b2911967602eab5d3dc7bf960fdb2d00
   parent_name: Paladin
   line_span:
     first: 4637
@@ -34,7 +64,8 @@ splat_clauses:
     in your Aura of Protection. If a Frightened ally enters the aura, that condition has no effect on
     that ally while there.'
   sha256: 1dbd77a2655c9692220358a32170e8d490024618009818629777c6ede740237f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 10: Aura of Courage

@@ -12,18 +12,46 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_attack_notation
-  parameters: {}
+  parameters:
+    attack_fields:
+    - melee_or_ranged
+    - attack_bonus
+    - reach_or_range
+    - hit_effects
+    default_targets: 1
+    specific_target_count_overrides: true
+    notation_branches:
+      hit: only_on_hit
+      miss: only_on_miss
+      hit_or_miss: always_after_attack_roll
+  implementation: dnd2024:rules_parts_of_a_stat_block_attack_notation
+splat_contracts:
+- id: dnd2024:rules_parts_of_a_stat_block_attack_notation
+  inputs:
+    attack:
+      type: definition
+      required: true
+    resolution:
+      type: resolution
+      required: true
+  outputs:
+  - attack_effects
+  events: []
+  capabilities:
+  - monster_attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 256
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_parts_of_a_stat_block_attack_notation
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 92925a7f9d71279bd3f975ce6b61a2ecb661a12668e007ad6eaa86f661a5aadf
   parent_name: Parts of a Stat Block
   line_span:
     first: 11132
@@ -39,7 +67,8 @@ splat_clauses:
     an attack has an effect that occurs regardless of whether it hits or misses its target, that information
     follows the “Hit or Miss:” notation.'
   sha256: 9547fbf966f65cafd45b5cc0345498ec48ab7a34ef506289f0a92177a1936577
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Attack Notation

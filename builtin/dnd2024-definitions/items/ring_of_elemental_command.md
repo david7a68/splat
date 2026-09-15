@@ -15,18 +15,203 @@ splat_item:
   rarity: legendary
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/ring_of_elemental_command
+  implementation: dnd2024:item_ring_of_elemental_command
+  parameters:
+    equipment_state: worn
+    variant_selection:
+      method:
+      - gm_choice
+      - random
+      options:
+      - air
+      - earth
+      - fire
+      - water
+      random_distribution: uniform_four_planes
+    elemental_bane:
+      attacks_against_elementals: advantage
+      elemental_attacks_against_user: disadvantage
+    elemental_compulsion:
+      action: magic
+      target:
+        type: elemental
+        seen: true
+        range_ft: 60
+      save:
+        ability: wisdom
+        dc: 18
+      failure:
+        condition: charmed
+        duration: until_user_next_turn_start
+        user_controls_target_next_turn:
+        - move
+        - action
+    charges:
+      maximum: 5
+      initial: 5
+      recovery:
+        event: dawn
+        amount:
+          dice: 1
+          sides: 4
+          bonus: 1
+    variants:
+      air:
+        focus:
+          language: auran
+          resistance:
+          - lightning
+          fly_speed: walking_speed
+          hover: true
+        spells:
+        - spell:
+            key: dnd2024:spells/chain_lightning
+          cost: 3
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/feather_fall
+          cost: 0
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/gust_of_wind
+          cost: 2
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/wind_wall
+          cost: 1
+          save_dc: 18
+      earth:
+        focus:
+          language: terran
+          resistance:
+          - acid
+          ignore_difficult_terrain_materials:
+          - rubble
+          - rocks
+          - dirt
+          earth_glide:
+            materials:
+            - solid_earth
+            - rock
+            movement_cost: difficult_terrain
+            disturb_material: false
+            if_end_turn_inside: shunt_to_nearest_unoccupied_space_last_occupied
+        spells:
+        - spell:
+            key: dnd2024:spells/earthquake
+          cost: 5
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/stone_shape
+          cost: 2
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/stoneskin
+          cost: 3
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/wall_of_stone
+          cost: 3
+          save_dc: 18
+      fire:
+        focus:
+          language: ignan
+          immunity:
+          - fire
+        spells:
+        - spell:
+            key: dnd2024:spells/burning_hands
+          cost: 1
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/fireball
+          cost: 2
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/fire_storm
+          cost: 4
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/wall_of_fire
+          cost: 3
+          save_dc: 18
+      water:
+        focus:
+          language: aquan
+          swim_speed_ft: 60
+          underwater_breathing: true
+        spells:
+        - spell:
+            key: dnd2024:spells/create_or_destroy_water
+          cost: 1
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/ice_storm
+          cost: 2
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/tsunami
+          cost: 5
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/wall_of_ice
+          cost: 3
+          save_dc: 18
+        - spell:
+            key: dnd2024:spells/water_walk
+          cost: 2
+          save_dc: 18
+    attunement:
+      required: true
+splat_contracts:
+- id: dnd2024:item_ring_of_elemental_command
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  - spell.cast_completed
+  capabilities:
+  - equipment
+  - item_resources
+  - effects
+  - item_spellcasting
+  - spatial_queries
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 16ed103a280dd956c27d6939397d17419d4f02ecd9d1c09dfa6378e5227ac903
   source_path: builtin/srd-5.2.1/magic_item/ring_of_elemental_command.md
   pages:
   - 237
   - 238
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_ring_of_elemental_command
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: 01fa55e05b8f6ae97592f7731f9fa5d23d79d11ea5c889367290f29e03731db6
 splat_clauses:
 - key: source_rules
   text: '# Ring of Elemental Command Ring, Legendary (Requires Attunement) Each Ring of Elemental Command
@@ -55,7 +240,8 @@ splat_clauses:
     Fireball (2 charges), Fire Storm (4 charges), Wall of Fire (3 charges) Water Create or Destroy Water
     (1 charge), Ice Storm (2 charges), Tsunami (5 charges), Wall of Ice (3 charges), Water Walk (2 charges)'
   sha256: 7f4f45d18f78ea4ad8473812c7f4d170f4212551e93de24829eabf02a134f833
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ring of Elemental Command

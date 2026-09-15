@@ -12,18 +12,47 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/warlock_as_a_multiclass_character
-  parameters: {}
+  parameters:
+    class_definition:
+      key: dnd2024:classes/warlock
+    grant_core_fields:
+    - hit_point_die
+    weapon_proficiencies: []
+    armor_training:
+    - light
+    grant_features:
+      class_level: 1
+      from: class_definition
+    spell_slots: multiclass_spellcasting_rules
+  implementation: dnd2024:rules_warlock_as_a_multiclass_character
+splat_contracts:
+- id: dnd2024:rules_warlock_as_a_multiclass_character
+  inputs:
+    actor:
+      type: participant
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - character_updates
+  events: []
+  capabilities:
+  - character_creation
+  - progression
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 70
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_warlock_as_a_multiclass_character
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 0f467c55b075b56be0fa1e467307998ac477ca055d591c4b8320a45f1e84687e
   parent_name: Warlock
   line_span:
     first: 5954
@@ -35,7 +64,8 @@ splat_clauses:
     the Warlock Features table. See the multiclassing rules in “Character Creation” to determine your
     available spell slots.'
   sha256: c9193780b332526a9d411b71725dd605de0f4432f5eb991f0c8bd27f29969f22
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # As a Multiclass Character

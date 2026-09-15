@@ -24,18 +24,226 @@ splat_spell:
   ritual: false
   range:
     feet: 30
+splat_rule:
+  mechanic: dnd2024:spells/find_steed
+  implementation: dnd2024:spell_find_steed
+  parameters:
+    summon:
+      space:
+        unoccupied: true
+        within_spell_range: true
+        chooser: caster
+      replace_existing_steed_from_spell: true
+      appearance:
+        size: large
+        form: rideable_animal
+        chooser: caster
+      creature_type_choice:
+      - celestial
+      - fey
+      - fiend
+      alignment: neutral
+      ally_to:
+      - caster
+      - caster_allies
+      returning_steed_identity_choice:
+      - previous
+      - different
+    combat:
+      initiative: caster_count
+      while_ridden: controlled_mount
+      while_caster_incapacitated:
+        turn: immediately_after_caster
+        control: independent
+        priority: protect_caster
+    disappear:
+      triggers:
+      - steed_hp_zero
+      - caster_death
+      leave_worn_and_carried_items: true
+    statistics:
+      ac:
+        op: add
+        args:
+        - 12
+        - op: multiply
+          args:
+          - 1
+          - op: subtract
+            args:
+            - binding: cast_level
+            - 2
+      hp:
+        op: add
+        args:
+        - 25
+        - op: multiply
+          args:
+          - 10
+          - op: subtract
+            args:
+            - binding: cast_level
+            - 2
+      hit_dice:
+        dice:
+          count:
+            binding: cast_level
+          sides: 10
+          add: 0
+      speed_feet: 60
+      fly:
+        speed_feet: 60
+        minimum_cast_level: 4
+      abilities:
+        strength: 18
+        dexterity: 12
+        constitution: 14
+        intelligence: 6
+        wisdom: 12
+        charisma: 8
+      save_modifiers:
+        strength: 4
+        dexterity: 1
+        constitution: 2
+        intelligence: -2
+        wisdom: 1
+        charisma: -1
+      passive_perception: 11
+      telepathy:
+        miles: 1
+        only_with: caster
+      challenge_rating: null
+      xp: 0
+      proficiency_bonus:
+        binding: caster_proficiency_bonus
+    life_bond:
+      event: caster_regains_hp_from_level_1_plus_spell
+      caster_distance_maximum_feet: 5
+      steed_healing: same_hp_amount
+    actions:
+      otherworldly_slam:
+        attack: melee
+        attack_bonus:
+          binding: spell_attack_modifier
+        reach_feet: 5
+        damage:
+          dice:
+            count: 1
+            sides: 8
+            add:
+              binding: cast_level
+          type: creature_type_dependent
+        damage_type_by_creature_type:
+          celestial: radiant
+          fey: psychic
+          fiend: necrotic
+    bonus_actions:
+      fell_glare:
+        creature_type: fiend
+        uses: 1
+        recharge: long_rest
+        target:
+          count: 1
+          visible_to_steed: true
+          range_feet: 60
+        save:
+          ability: wisdom
+          dc:
+            binding: save_dc
+          failure:
+            condition: frightened
+            until: caster_next_turn_end
+          success:
+            effect: none
+      fey_step:
+        creature_type: fey
+        uses: 1
+        recharge: long_rest
+        teleport:
+          subjects:
+          - steed
+          - rider
+          range_feet: 60
+          destination_unoccupied: true
+          chooser: caster
+      healing_touch:
+        creature_type: celestial
+        uses: 1
+        recharge: long_rest
+        target:
+          count: 1
+          range_feet: 5
+        healing:
+          dice:
+            count: 2
+            sides: 8
+            add:
+              binding: cast_level
+splat_contracts:
+- id: dnd2024:spell_find_steed
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    caster_proficiency_bonus:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spell_attack_modifier:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  - attacks
+  - participants
+  events:
+  - spell.cast_completed
+  - rest.completed
+  - effect.ended
+  - movement.completed
+  - turn.end
+  - save.before
+  - save.after
+  - hp.changed
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - attacks
+  - spatial_relationships
+  - conditions
+  - saving_throws
+  - participant_lifecycle
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: b8933d57ff9a90e91579744e4bfa5af0e63ff62f270ea1d7761cc5c9a12ed85a
   source_path: builtin/srd-5.2.1/spell/find_steed.md
   pages:
   - 130
   - 131
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_find_steed
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 83c621288f39086625bbf6b2bebaf6c31160dcac356cac12580121be1bc773eb
 splat_clauses:
 - key: source_rules
   text: '# Find Steed Level 2 Conjuration (Paladin) Casting Time: Action Range: 30 feet Component: V,
@@ -67,7 +275,8 @@ splat_clauses:
     a Long Rest). One creature within 5 feet of the steed regains a number of Hit Points equal to 2d8
     plus the spell’s level.'
   sha256: f60e0557acf1491a37bbc14910ba4abe182d53f04e798161d462dee198330343
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Find Steed

@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/cleric_becoming_a_cleric
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 36
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 4a7fd4dd9bedb13e12405341aa7dc16c03a65638643a02400b625dc0b3bf6500
   parent_name: Cleric
   line_span:
     first: 2929
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Becoming a Cleric …'
   sha256: 247b4328786fb7848500ec99cbccd7bbd852b3f0eb60422f9b40c47d8b74bb7d
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Becoming a Cleric …

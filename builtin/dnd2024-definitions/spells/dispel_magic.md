@@ -31,17 +31,82 @@ splat_spell:
   ritual: false
   range:
     feet: 120
+splat_rule:
+  mechanic: dnd2024:spells/dispel_magic
+  implementation: dnd2024:spell_dispel_magic
+  parameters:
+    target:
+      kind: creature_object_or_magical_effect
+      count: 1
+      visible_to_caster: false
+    ongoing_spells:
+      each: true
+      automatic_end_max_level:
+        binding: cast_level
+      higher_level:
+        check_ability: spellcasting
+        dc:
+          op: add
+          args:
+          - 10
+          - binding: affected_spell_level
+        success: end_spell
+splat_contracts:
+- id: dnd2024:spell_dispel_magic
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+    affected_spell_level:
+      type: integer
+      required: true
+  outputs:
+  - checks
+  - ended_spells
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - inventory
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: a7613ef509554f37c461a40cea762282fa9e0cde0d9f8b501986568e4844dafb
   source_path: builtin/srd-5.2.1/spell/dispel_magic.md
   pages:
   - 124
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_dispel_magic
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: b77486b1fdb48f147543f6ad9bb971b8c549c0e36eac1a5e752828f68b3b79bf
 splat_clauses:
 - key: source_rules
   text: '# Dispel Magic Level 3 Abjuration (Bard, Cleric, Druid, Paladin, Ranger, Sorcerer, Warlock, Wizard)
@@ -52,7 +117,8 @@ splat_clauses:
     Spell Slot. You automatically end a spell on the target if the spell’s level is equal to or less than
     the level of the spell slot you use.'
   sha256: affde403e3e379c2bd8d63bc98841ff2c1dd7909fafdc22a555f97ab2d9f1989
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dispel Magic

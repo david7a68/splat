@@ -62,18 +62,189 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/bone_devil
+  implementation: dnd2024:creature_bone_devil
+  parameters:
+    skill_totals:
+      deception: 7
+      insight: 6
+    damage_resistances:
+    - cold
+    damage_immunities:
+    - fire
+    - poison
+    condition_immunities:
+    - poisoned
+    senses:
+    - sense: darkvision
+      range_ft: 120
+    passive_perception: 12
+    darkvision_ignores_magical_darkness: true
+    languages:
+      speak: true
+      known:
+      - infernal
+    telepathy:
+      range_ft: 120
+      two_way: true
+    features:
+      diabolical_restoration:
+        economy: passive
+        trigger: actor.died
+        when:
+          plane_not: nine_hells
+        body: disappears
+        revive:
+          new_body: true
+          plane: nine_hells
+          location_choice: gm
+          hp: maximum
+          delay:
+            amount: 0
+            unit: second
+      magic_resistance:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - saving_throw
+        against:
+        - spell
+        - magical_effect
+      claw:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 8
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 4
+            average: 13
+      infernal_sting:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 8
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 10
+              add: 4
+            average: 15
+          - type: poison
+            amount:
+              dice:
+                count: 4
+                sides: 8
+              add: 0
+            average: 18
+        - op: condition.apply
+          condition: poisoned
+          duration:
+            until: actor.next_turn_start
+          while_active:
+          - op: healing.prohibit
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: claw
+        - count: 1
+          feature: infernal_sting
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_bone_devil
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.died
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 6d5bb3bc2022f871b09072328f6e3f47871a5cb20439d5e0babc9bbd87e93bab
   source_path: builtin/srd-5.2.1/creature/bone_devil.md
   pages:
   - 267
   - 268
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_bone_devil
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 162247591adb1e645d751997eb63e588bcba383ae93c01e1551cf17c52f9a693
 splat_clauses:
 - key: source_rules
   text: '# Bone Devil Large Fiend (Devil), Lawful Evil AC 16 Initiative +7 (17) HP 161 (17d10 + 68) Speed
@@ -89,7 +260,8 @@ splat_clauses:
     Piercing damage plus 18 (4d8) Poison damage, and the target has the Poisoned condition until the start
     of the devil’s next turn. While Poisoned, the target can’t regain Hit Points.'
   sha256: 8d0952a1b0e519e3089121987a30205279936fac9cf3ea3bb86b41f68987ef23
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Bone Devil

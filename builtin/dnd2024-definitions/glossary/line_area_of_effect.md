@@ -12,18 +12,61 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/line_area_of_effect
-  parameters: {}
+  parameters:
+    shape: line
+    propagation: straight_lines
+    base_area_rule:
+      key: dnd2024:glossary/area_of_effect
+    origin: point
+    path: straight
+    length: effect_specified
+    width: effect_specified
+    origin_included:
+      chooser: creator
+      options:
+      - false
+      - true
+      default: false
+    geometry_provider: external_geometry
+  implementation: dnd2024:glossary_line_area_of_effect
+splat_contracts:
+- id: dnd2024:glossary_line_area_of_effect
+  inputs:
+    creator:
+      type: participant
+      required: true
+    origin:
+      type: location
+      required: true
+    dimensions:
+      type: choice
+      required: true
+    geometry:
+      type: resolution
+      required: true
+    include_origin:
+      required: false
+      type: boolean
+  outputs:
+  - area
+  - included_locations
+  events: []
+  capabilities:
+  - areas
+  - geometry
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: a81a93d4ee6d71d5f6e4e063c40a3159ec0cc4aab2b0b7353e14b7666c8a8250
   source_path: builtin/srd-5.2.1/glossary/line_area_of_effect.md
   pages:
   - 184
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_line_area_of_effect
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 574c1144211a63036551e73f048306500688fd36de0e10d58e7e4fa0a83dc726
 splat_clauses:
 - key: source_rules
   text: '# Line [Area of Effect] A Line is an area of effect that extends from a point of origin in a
@@ -31,7 +74,8 @@ splat_clauses:
     Line specifies its length and width. A Line’s point of origin isn’t included in the area of effect
     unless its creator decides otherwise.'
   sha256: e8ba913c9bc2adb5524296dff158df36a162029d7145df6be19105da40b4ee3c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Line [Area of Effect]

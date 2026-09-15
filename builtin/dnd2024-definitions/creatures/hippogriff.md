@@ -59,17 +59,113 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/hippogriff
+  implementation: dnd2024:creature_hippogriff
+  parameters:
+    skill_totals:
+      perception: 5
+    senses: []
+    passive_perception: 15
+    languages:
+      speak: true
+      known: []
+    features:
+      flyby:
+        economy: passive
+        op: opportunity_attack.suppress
+        trigger: actor.leaves_enemy_reach
+        movement_modes:
+        - fly
+      rend:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 3
+            average: 7
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: rend
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_hippogriff
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.leaves_enemy_reach
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: ddd87ecedc1e07ef3c7672dfcc80ece636e28515a68f29ddfc79f869b9b830ff
   source_path: builtin/srd-5.2.1/creature/hippogriff.md
   pages:
   - 298
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_hippogriff
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: f67364af6e48c2320edb38158015bcc97f6cd39023da2de6c459e5a4ee6d9c17
 splat_clauses:
 - key: source_rules
   text: '# Hippogriff Large Monstrosity, Unaligned AC 11 Initiative +1 (11) HP 26 (4d10 + 4) Speed 40
@@ -79,7 +175,8 @@ splat_clauses:
     an enemy’s reach. ### Actions Multiattack. The hippogriff makes two Rend attacks. Rend. Melee Attack
     Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage.'
   sha256: 217ed943cb9f85d10dc3c4a03574ee23f15b2bf56caa81555ed5445f0a323de1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hippogriff

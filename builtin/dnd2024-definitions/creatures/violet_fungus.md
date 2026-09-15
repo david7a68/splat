@@ -56,18 +56,113 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/violet_fungus
+  implementation: dnd2024:creature_violet_fungus
+  parameters:
+    damage_immunities: []
+    condition_immunities:
+    - blinded
+    - charmed
+    - deafened
+    - frightened
+    senses:
+    - sense: blindsight
+      range_ft: 30
+    passive_perception: 6
+    languages:
+      speak: true
+      known: []
+    features:
+      rotting_touch:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 2
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: necrotic
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 0
+            average: 4
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: rotting_touch
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_violet_fungus
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: d92fb0e84f95b1946ffc9d5c781a15736dca96c0fcc96f23c58984c8d0f20008
   source_path: builtin/srd-5.2.1/creature/violet_fungus.md
   pages:
   - 286
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_violet_fungus
+  conversion_gaps: []
   execution_profiles:
   - dnd2024:creatures/violet_fungus
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 2a9be711728a8ec79bb8cc3d9b8fd0a48ac781728ace3aef6c141b8992abf97d
 splat_clauses:
 - key: source_rules
   text: '# Violet Fungus Medium Plant, Unaligned AC 5 Initiative -5 (5) HP 18 (4d8) Speed 5 ft. MOD SAVE
@@ -76,7 +171,8 @@ splat_clauses:
     CR 1/4 (XP 50; PB +2) ### Actions Multiattack. The fungus makes two Rotting Touch attacks. Rotting
     Touch. Melee Attack Roll: +2, reach 10 ft. Hit: 4 (1d8) Necrotic damage.'
   sha256: 6a82cadc48ffd6622a037eefc7f859e4f2b99fe5fdd35000b2275f4c04cafb98
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Violet Fungus

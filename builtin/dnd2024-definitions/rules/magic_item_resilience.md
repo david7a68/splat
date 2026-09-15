@@ -12,18 +12,49 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_item_resilience
-  parameters: {}
+  parameters:
+    durability_minimum: nonmagical_equivalent
+    default_resistance: all_damage
+    default_resistance_exceptions:
+    - potions
+    - scrolls
+    artifact:
+      damage_immunity: true
+      destruction_requires: artifact_specific_method
+  implementation: dnd2024:rules_magic_item_resilience
+splat_contracts:
+- id: dnd2024:rules_magic_item_resilience
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - item_attributes
+  - actor_modifiers
+  events: []
+  capabilities:
+  - equipment
+  - armor_class
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 206
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_magic_item_resilience
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: af3721ca0eab0c4056be25d0fef7eaedb65ca605a33ca6099d90c5565bdb0376
   parent_name: Magic Item Resilience
   line_span:
     first: 10650
@@ -35,7 +66,8 @@ splat_clauses:
     destroyed only in some special way. Otherwise, it is impervious to damage. Learning how to destroy
     an Artifact usually requires research or the completion of a quest.'
   sha256: a89609548de113dbf96e9bc478333441e3ebbfc6ce8e8c46fd8ea01efbba7d96
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Magic Item Resilience

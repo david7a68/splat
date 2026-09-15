@@ -59,17 +59,156 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_octopus
+  implementation: dnd2024:creature_giant_octopus
+  parameters:
+    features:
+      water_breathing:
+        economy: trait
+        operation: passive_rule
+        breathing:
+        - water
+        hold_breath_outside_water_seconds: 3600
+      tentacles:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 10
+        hit:
+          damage:
+          - average: 10
+            roll:
+              count: 2
+              sides: 6
+              modifier: 3
+            type: bludgeoning
+          grapple:
+            condition: grappled
+            source: self
+            escape_dc: 13
+            maximum_size: medium
+            appendage_pool:
+              count: 8
+              type: tentacles
+              cost: 8
+            while_grappled:
+              conditions:
+              - restrained
+      ink_cloud:
+        economy: reaction
+        resource:
+          kind: daily
+          uses: 1
+          recovery: long_rest
+        operation: sequence
+        trigger: self.damage_taken
+        requires:
+          self_underwater: true
+        effects:
+        - operation: create_area
+          area:
+            shape: cube
+            size_ft: 10
+            center: self
+          obscurement: heavy
+          duration_seconds: 60
+          ends_on:
+          - strong_current
+          - similar_dispersal_effect
+        - operation: move
+          maximum_ft:
+            multiply:
+            - stat: swim_speed
+            - 1
+    skill_totals:
+      perception: 4
+      stealth: 5
+    senses:
+      darkvision: 60
+      passive_perception: 14
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_giant_octopus
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - damage.resolved
+  - rest.completed
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - conditions
+  - damage
+  - grappling
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 2e33b2d234b8e16bf875fcd935b2e25ef25d002ecbe1daab9e8f8a0ef967c482
   source_path: builtin/srd-5.2.1/creature/giant_octopus.md
   pages:
   - 352
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_octopus
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: f340944fecbc7a03921c82acd3f403ed49506cac3c92ec56a3656ba83abb1e2b
 splat_clauses:
 - key: source_rules
   text: '# Giant Octopus Large Beast, Unaligned AC 11 Initiative +1 (11) HP 45 (7d10 + 7) Speed 10 ft.,
@@ -84,7 +223,8 @@ splat_clauses:
     up to its Swim Speed. The Cube is Heavily Obscured for 1 minute or until a strong current or similar
     effect disperses the ink.'
   sha256: d23891c357f790ccc2f5b03e49fef668f567387b3317bf68bb0baf0344f1632c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Octopus

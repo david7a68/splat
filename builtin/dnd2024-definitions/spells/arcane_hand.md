@@ -29,17 +29,182 @@ splat_spell:
   material:
     description: an eggshell and a glove
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/arcane_hand
+  implementation: dnd2024:spell_arcane_hand
+  parameters:
+    creation:
+      kind: object
+      size: large
+      space:
+        unoccupied: true
+        visible: true
+        within_spell_range: true
+      ac: 20
+      hp:
+        binding: caster_hp_maximum
+      occupies_space: false
+      end_spell_at_hp: 0
+      duration: spell_duration
+      appearance: hand
+      movement_control: caster_hand_gestures
+      hit_point_maximum:
+        binding: caster_hp_maximum
+    activation:
+      initial: spell_cast
+      subsequent: bonus_action_on_caster_turn
+      move_feet_maximum: 60
+      then_choose_effect: 1
+    modes:
+      clenched_fist:
+        target:
+          kind: creature_or_object
+          distance_from_hand_feet: 5
+        attack: melee_spell
+        hit:
+          dice:
+            count:
+              op: add
+              args:
+              - 5
+              - op: multiply
+                args:
+                - 2
+                - op: subtract
+                  args:
+                  - binding: cast_level
+                  - 5
+            sides: 8
+            add: 0
+          type: force
+      forceful_hand:
+        target:
+          kind: creature
+          maximum_size: huge
+          distance_from_hand_feet: 5
+        save:
+          ability: strength
+          dc:
+            binding: save_dc
+          failure:
+            push_feet_maximum:
+              op: add
+              args:
+              - 5
+              - op: multiply
+                args:
+                - 5
+                - binding: spellcasting_modifier
+            hand_follows: true
+            hand_distance_from_target_maximum_feet: 5
+          success:
+            effect: none
+      grasping_hand:
+        target:
+          kind: creature
+          maximum_size: huge
+          distance_from_hand_feet: 5
+        save:
+          ability: dexterity
+          dc:
+            binding: save_dc
+          failure:
+            condition: grappled
+            escape_dc:
+              binding: save_dc
+          success:
+            effect: none
+        crush:
+          cost: bonus_action
+          requires: hand_grapples_target
+          damage:
+            dice:
+              count:
+                op: add
+                args:
+                - 4
+                - op: multiply
+                  args:
+                  - 2
+                  - op: subtract
+                    args:
+                    - binding: cast_level
+                    - 5
+              sides: 6
+              add:
+                binding: spellcasting_modifier
+            type: bludgeoning
+      interposing_hand:
+        caster_cover: half
+        cover_against:
+        - originates_in_hand_space
+        - passes_through_hand_space
+        hand_space_difficult_terrain_for: caster_enemies
+splat_contracts:
+- id: dnd2024:spell_arcane_hand
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    caster_hp_maximum:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spellcasting_modifier:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  - attacks
+  - participants
+  events:
+  - spell.cast_completed
+  - effect.ended
+  - movement.completed
+  - save.before
+  - save.after
+  - hp.changed
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - attacks
+  - spatial_relationships
+  - conditions
+  - saving_throws
+  - participant_lifecycle
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 3bf04ba1906050d747bd7e089ebcc2b94ce4835b482f7ae54d22da3798f65331
   source_path: builtin/srd-5.2.1/spell/arcane_hand.md
   pages:
   - 110
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_arcane_hand
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 68ddce6c246f2f27011d24b3ffd654d0344c216e33be1a13810359e1f3db23ea
 splat_clauses:
 - key: source_rules
   text: '# Arcane Hand Level 5 Evocation (Sorcerer, Wizard) Casting Time: Action Range: 120 feet Components:
@@ -63,7 +228,8 @@ splat_clauses:
     Spell Slot. The damage of the Clenched Fist increases by 2d8 and the damage of the Grasping Hand increases
     by 2d6 for each spell slot level above 5.'
   sha256: d5b10242324c97801863fb722d423ebcad122783f0b9c1b421646f0b8a3b75d4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Arcane Hand

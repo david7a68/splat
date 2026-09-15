@@ -12,18 +12,101 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/starting_at_higher_levels_creating_your_character
-  parameters: {}
+  parameters:
+    normal_character_creation_and_advancement: true
+    starting_xp: minimum_for_starting_level
+    normal_starting_equipment: true
+    starting_equipment_table:
+    - levels:
+      - 2
+      - 4
+      base_gp: 0
+      random_gp: 0
+      magic_items:
+        common: 1
+    - levels:
+      - 5
+      - 10
+      base_gp: 500
+      random_gp:
+        op: multiply
+        args:
+        - dice:
+            count: 1
+            sides: 10
+        - 25
+      magic_items:
+        common: 1
+        uncommon: 1
+    - levels:
+      - 11
+      - 16
+      base_gp: 5000
+      random_gp:
+        op: multiply
+        args:
+        - dice:
+            count: 1
+            sides: 10
+        - 250
+      magic_items:
+        common: 2
+        uncommon: 3
+        rare: 1
+    - levels:
+      - 17
+      - 20
+      base_gp: 20000
+      random_gp:
+        op: multiply
+        args:
+        - dice:
+            count: 1
+            sides: 10
+        - 250
+      magic_items:
+        common: 2
+        uncommon: 4
+        rare: 3
+        very_rare: 1
+    level_twenty_bonus_feats:
+      gm_option: true
+      xp_baseline: 355000
+      xp_per_feat: 30000
+      choice: any_qualified_feat
+      level_for_prerequisites: 20
+  implementation: dnd2024:rule_starting_at_higher_levels_creating_your_character
+splat_contracts:
+- id: dnd2024:rule_starting_at_higher_levels_creating_your_character
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - character_changes
+  events: []
+  capabilities:
+  - character_creation
+  - advancement
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 24
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_starting_at_higher_levels_creating_your_character
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: dc7626c338137baceac3929148b71dab266e9c780c43a625774799d0b5f28aed
   parent_name: Starting at Higher Levels
   line_span:
     first: 1855
@@ -42,7 +125,8 @@ splat_clauses:
     qualifies. in the “Level Advancement” section. You begin with the minimum amount of XP required to
     reach your starting level. For example, if the GM starts you at level 10, you have 64,000 XP.'
   sha256: 04975ced3a6f9f5c7933d49d4ff4b1fbd0490d6a59c6e7ffd17aa9f4ef2f6284
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Creating Your Character

@@ -25,17 +25,200 @@ splat_spell:
   ritual: false
   range:
     feet: 10
+splat_rule:
+  mechanic: dnd2024:spells/teleport
+  implementation: dnd2024:spell_teleport
+  parameters:
+    targets:
+      modes:
+        creatures:
+          caster: true
+          additional_maximum: 8
+          willing: true
+          visible: true
+          within_spell_range: true
+        object:
+          count: 1
+          visible: true
+          within_spell_range: true
+          maximum_size: large
+          held_or_carried_by_unwilling_creature: false
+          caster_transported: false
+    destination:
+      known_to_caster: true
+      same_plane_as_caster: true
+    familiarity:
+      permanent_circle:
+        known_sigil_sequence: true
+      linked_object:
+        caster_possesses_object_from_destination: true
+        taken_within_months: 6
+      very_familiar:
+        any:
+        - visited_often
+        - carefully_studied
+        - visible_at_cast
+      seen_casually:
+        seen_more_than_once: true
+        very_familiar: false
+      viewed_once_or_described:
+        any:
+        - seen_once
+        - seen_once_magically
+        - known_from_description
+        - known_from_map
+      false_destination:
+        exists: false
+    outcome_roll:
+      roller: gm
+      dice:
+        dice:
+          count: 1
+          sides: 100
+          add: 0
+      tables:
+        permanent_circle:
+          on_target:
+          - 1
+          - 100
+        linked_object:
+          on_target:
+          - 1
+          - 100
+        very_familiar:
+          mishap:
+          - 1
+          - 5
+          similar_area:
+          - 6
+          - 13
+          off_target:
+          - 14
+          - 24
+          on_target:
+          - 25
+          - 100
+        seen_casually:
+          mishap:
+          - 1
+          - 33
+          similar_area:
+          - 34
+          - 43
+          off_target:
+          - 44
+          - 53
+          on_target:
+          - 54
+          - 100
+        viewed_once_or_described:
+          mishap:
+          - 1
+          - 43
+          similar_area:
+          - 44
+          - 53
+          off_target:
+          - 54
+          - 73
+          on_target:
+          - 74
+          - 100
+        false_destination:
+          mishap:
+          - 1
+          - 50
+          similar_area:
+          - 51
+          - 100
+    outcomes:
+      mishap:
+        damage_to_each_teleporting_target:
+          dice:
+            count: 3
+            sides: 10
+            add: 0
+          type: force
+        reroll_same_table: true
+        repeated_mishaps_each_deal_damage: true
+      similar_area:
+        arrival: closest_visually_or_thematically_similar_area
+        chooser: gm
+        constraints:
+        - closest
+        - visually_or_thematically_similar
+      off_target:
+        distance_miles:
+          dice:
+            count: 2
+            sides: 12
+            add: 0
+        direction:
+          dice:
+            dice:
+              count: 1
+              sides: 8
+              add: 0
+          faces:
+            '1': east
+            '2': southeast
+            '3': south
+            '4': southwest
+            '5': west
+            '6': northwest
+            '7': north
+            '8': northeast
+      on_target:
+        arrival: intended_destination
+splat_contracts:
+- id: dnd2024:spell_teleport
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  events:
+  - spell.cast_completed
+  - movement.completed
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - spatial_relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: bdd50b98302f78d93ba3cb9d01de7cdcc7e0a966301e3c679dc2bc3435f0fe6c
   source_path: builtin/srd-5.2.1/spell/teleport.md
   pages:
   - 168
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_teleport
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: d14bda442b8fa2873817801c7ddce247b4de177331aeb377017be69c818acf9f
 splat_clauses:
 - key: source_rules
   text: '# Teleport Level 7 Conjuration (Bard, Sorcerer, Wizard) Casting Time: Action Range: 10 feet Components:
@@ -67,7 +250,8 @@ splat_clauses:
     3, south; 4, southwest; 5, west; 6, northwest; 7, north; or 8, northeast. On Target. You and your
     group (or the target object) appear where you intended.'
   sha256: d6946c79bd1e7781eb9c69a7f999c1f6c4b2838bf230277fe8b96d99de81d125
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Teleport

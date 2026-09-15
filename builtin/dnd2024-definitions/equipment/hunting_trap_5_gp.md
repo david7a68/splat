@@ -17,18 +17,105 @@ splat_item:
   price:
     value: 5
     unit: gp
+  mass:
+    value: 25.0
+    unit: lb
+splat_rule:
+  mechanic: dnd2024:equipment/hunting_trap_5_gp
+  implementation: dnd2024:equipment_hunting_trap_5_gp
+  parameters:
+    set:
+      action: utilize
+      anchor: immobile_object
+      trigger: creature_steps_on_pressure_plate
+      save:
+        ability: dexterity
+        dc: 13
+        success: no_effect
+        failure:
+          damage:
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              bonus: 0
+            type: piercing
+          speed_set: 0
+          speed_expiry: target_next_turn_start
+          afterward: movement_limited_to_chain_length
+      chain_length_ft:
+        default: 3
+        type: number
+        authority: item_instance
+    free:
+      economy: action
+      target: self_or_trapped_creature_in_reach
+      check:
+        ability: strength
+        skill: athletics
+        dc: 13
+      success: free_target
+      failure:
+        damage:
+          target: trapped_creature
+          amount: 1
+          type: piercing
+    mass:
+      value: 25.0
+      unit: lb
+splat_contracts:
+- id: dnd2024:equipment_hunting_trap_5_gp
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    operation:
+      required: false
+      type: choice
+    target:
+      required: false
+      type: participant
+    target_object:
+      required: false
+      type: object
+    location:
+      required: false
+      type: location
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - action_options
+  - check_requests
+  - item_effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - item_actions
+  - effects
+  - ability_checks
+  - consumables
 splat_conversion:
-  status: partial
+  status: specified
   category: equipment
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 97
   - 98
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:equipment_hunting_trap_5_gp
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: 2cffcf40584bea808a3c121f91b4fc4de1429c94a46b381aef39f0d3c53fbb4b
   line_span:
     first: 8441
     count: 17
@@ -43,7 +130,8 @@ splat_clauses:
     can use its action to make a DC 13 Strength (Athletics) check, freeing itself or another creature
     within its reach on a success. Each failed check deals 1 Piercing damage to the trapped creature.'
   sha256: 194f0d472e30d3518971a50339692ebc4e56648488f09271af3bfcc0c23cbdf0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hunting Trap (5 GP)

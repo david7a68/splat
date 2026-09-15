@@ -12,18 +12,39 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_half_damage
-  parameters: {}
+  parameters:
+    saving_throw_success_damage:
+      op: floor
+      args:
+      - op: divide
+        args:
+        - var: failed_save_damage
+        - 2
+  implementation: dnd2024:rules_damage_and_healing_half_damage
+splat_contracts:
+- id: dnd2024:rules_damage_and_healing_half_damage
+  inputs:
+    failed_save_damage:
+      type: integer
+      required: true
+  outputs:
+  - damage
+  events: []
+  capabilities:
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 16
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_damage_and_healing_half_damage
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 7641e82e8e7789d917b16d3701631d0a9c439187cb1c1028a032b27e8e803baf
   parent_name: Damage and Healing
   line_span:
     first: 1160
@@ -34,7 +55,8 @@ splat_clauses:
     succeeds on the saving throw. The halved damage is equal to half the damage that would be dealt on
     a failed save.'
   sha256: 70228121782008902c6d9fc28fa7daf966c9e58f7e7bdf6825ea2b4bdbfe2f35
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Half Damage

@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/exploration_vision_and_light
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 11
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: bfcfde24fb18d809e73191b418db7fd0f22c96ca8fec18f2520b26f8cfacecb1
   parent_name: Exploration
   line_span:
     first: 614
@@ -34,7 +35,7 @@ splat_clauses:
     certain spells—are affected by sight, so effects that obscure vision can hinder you, as explained
     below.'
   sha256: 19d00407ed8e7d4be8dec4fbd166401714d7d515ec7caa811af2c52b3ac5a76d
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Vision and Light

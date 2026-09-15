@@ -12,18 +12,74 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/druid_level_20_archdruid
-  parameters: {}
+  parameters:
+    evergreen_wild_shape:
+      trigger: initiative.rolled
+      requires:
+        wild_shape_uses: 0
+      restore_uses: 1
+    nature_magician:
+      action: none
+      resource:
+        id: archdruid.nature_magician
+        maximum: 1
+        recovery:
+        - event: rest.long_completed
+          amount: all
+      cost_uses: 1
+      convert:
+        resource: druid.wild_shape
+        choose_unexpended_count: true
+        minimum_use_count: 1
+        create_spell_slot_count: 1
+        slot_level:
+          op: multiply
+          args:
+          - 2
+          - var: chosen_use_count
+    aging:
+      body_years_per_elapsed_year: 0.1
+    class_scope:
+      class: druid
+      minimum_level: 20
+  implementation: dnd2024:class_features_druid_level_20_archdruid
+splat_contracts:
+- id: dnd2024:class_features_druid_level_20_archdruid
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - initiative.rolled
+  - resource.convert
+  - rest.long_completed
+  - time.elapsed
+  capabilities:
+  - character_features
+  - resources
+  - spellcasting
+  - initiative
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 43
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_druid_level_20_archdruid
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 3a5fbd2ccc916a81041293cc678619dbbb62d499957222e658ed0dc491b2fd68
   parent_name: Druid
   line_span:
     first: 3619
@@ -39,7 +95,8 @@ splat_clauses:
     until you finish a Long Rest. Longevity. The primal magic that you wield causes you to age more slowly.
     For every ten years that pass, your body ages only one year.'
   sha256: ebb662b313d593cbc91db0f94e17eaa38773a4acf18e0dd3e1c8fa1f590f795b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 20: Archdruid

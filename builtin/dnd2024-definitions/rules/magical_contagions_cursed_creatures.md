@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magical_contagions_cursed_creatures
-  parameters: {}
+  parameters:
+    curse_origin_interaction:
+      actor: gm
+      scope: remove_curse_on_accursed_origin_creature
+      choice: source_specific_curse_removal_effect
+    optional_mummy_rule:
+      enabled_by: gm
+      permanent_destruction_requires:
+        cast:
+          key: dnd2024:spells/remove_curse
+        target: corpse
+  implementation: dnd2024:rule_magical_contagions_cursed_creatures
+splat_contracts:
+- id: dnd2024:rule_magical_contagions_cursed_creatures
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events: []
+  capabilities:
+  - curses
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 193
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_magical_contagions_cursed_creatures
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: a06fbc7192241a96ae899dedbccd52cce778ddf8b77488243b86654189af1e23
   parent_name: Magical Contagions
   line_span:
     first: 9452
@@ -36,7 +66,8 @@ splat_clauses:
     was created through a curse and it can be destroyed permanently only by casting Remove Curse on its
     corpse.'
   sha256: 9b30faf9f31eff4a06be87f1980b0665ad75827dbc5995f559e0426d807a2b41
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Cursed Creatures

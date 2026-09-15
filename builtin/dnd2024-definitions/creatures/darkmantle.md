@@ -59,18 +59,151 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/darkmantle
+  implementation: dnd2024:creature_darkmantle
+  parameters:
+    features:
+      crush:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 6
+            roll:
+              count: 1
+              sides: 6
+              modifier: 3
+            type: bludgeoning
+          attach:
+            target: hit_target
+            covered_if:
+              maximum_size: medium
+              attack_had_advantage: true
+            while_covered:
+              conditions:
+              - blinded
+              suffocating: true
+            while_attached:
+              attack_targets:
+              - attached_target
+              attack_advantage: true
+              speed: 0
+              speed_bonuses: false
+              moves_with_target: true
+            detach_self:
+              economy: movement
+              cost_ft: 5
+              on_own_turn: true
+            detach_target:
+              economy: action
+              check: strength_athletics
+              dc: 13
+              actor: attached_target
+      darkness_aura:
+        economy: action
+        resource:
+          kind: daily
+          uses: 1
+          recovery: long_rest
+        operation: create_area
+        area:
+          shape: emanation
+          size_ft: 15
+          origin: self
+        magical_darkness: true
+        concentration: true
+        duration_seconds: 600
+        darkvision_penetrates: false
+        light_illuminates: false
+    skill_totals:
+      stealth: 3
+    senses:
+      blindsight: 60
+      passive_perception: 10
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_darkmantle
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - rest.completed
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 09388b33cedeeba676c6b8924203eab6ea0b4dba0b9b30c2df37487a13b643d9
   source_path: builtin/srd-5.2.1/creature/darkmantle.md
   pages:
   - 278
   - 279
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_darkmantle
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: cb1714577408a53a47237644023abe728af2836972c20d7eab7e4ac91f9ba70e
 splat_clauses:
 - key: source_rules
   text: '# Darkmantle Small Aberration, Unaligned AC 11 Initiative +3 (13) HP 22 (5d6 + 5) Speed 10 ft.,
@@ -88,7 +221,8 @@ splat_clauses:
     maintains Concentration on it, up to 10 minutes. Darkvision can’t penetrate this area, and no light
     can illuminate it.'
   sha256: aa3ea7614a0e1f1953500f72db598517859865f29aea7d7c30f16df48a08afe4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Darkmantle

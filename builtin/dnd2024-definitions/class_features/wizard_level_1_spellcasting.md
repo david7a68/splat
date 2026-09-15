@@ -12,19 +12,116 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/wizard_level_1_spellcasting
-  parameters: {}
+  parameters:
+    class: wizard
+    spell_list: wizard
+    ability: intelligence
+    focus_types:
+    - arcane_focus
+    - own_spellbook
+    slots:
+      progression:
+        key: dnd2024:tables/wizard_progression
+      columns_by_spell_level:
+        '1': spell_slots_1
+        '2': spell_slots_2
+        '3': spell_slots_3
+        '4': spell_slots_4
+        '5': spell_slots_5
+        '6': spell_slots_6
+        '7': spell_slots_7
+        '8': spell_slots_8
+        '9': spell_slots_9
+      recovery:
+        event: rest.long_rest_completed
+        amount: all_expended
+    prepared_spells:
+      initial_count: 4
+      initial_spell_level: 1
+      count:
+        table:
+          key: dnd2024:tables/wizard_progression
+        row:
+          stat: classes.wizard.level
+        column: prepared_spells
+      choose_on_count_increase: true
+      level_must_have_slot: true
+      replace:
+        event: rest.long_rest_completed
+        maximum: all
+        select_from: own_spellbook
+      other_class_feature_always_prepared:
+        counts_toward_limit: false
+        counts_as_class_spell: true
+      select_from: own_spellbook
+    cantrips:
+      initial_count: 3
+      spell_level: 0
+      count:
+        table:
+          key: dnd2024:tables/wizard_progression
+        row:
+          stat: classes.wizard.level
+        column: cantrips
+      gain_extra_at_levels:
+      - 4
+      - 10
+      replace:
+        event: rest.long_rest_completed
+        maximum: 1
+    spellbook:
+      size: tiny
+      weight_lb: 3
+      pages: 100
+      readers:
+      - owner
+      - identify_caster
+      appearance_and_materials:
+        authority: player
+        type: cosmetic_choice
+      initial_spells:
+        count: 6
+        list: wizard
+        spell_level: 1
+      add_per_wizard_level_after_1:
+        count: 2
+        list: wizard
+        level_must_have_slot_in_wizard_table: true
+      contains: known_level_1_plus_spells
+  implementation: dnd2024:class_features_wizard_level_1_spellcasting
+splat_contracts:
+- id: dnd2024:class_features_wizard_level_1_spellcasting
+  inputs:
+    actor:
+      type: participant
+      required: true
+  outputs:
+  - feature_state
+  - resource_changes
+  - spell_grants
+  events:
+  - character.class_level_gained
+  - rest.long_rest_completed
+  - spell.cast_pending
+  capabilities:
+  - spellcasting
+  - spellbooks
+  - spell_preparation
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 77
   - 78
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_wizard_level_1_spellcasting
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 19d36317e71402b981e6b83c1bd177d6fd0d5adf60227504604da42035190e99
   parent_name: Wizard
   line_span:
     first: 6584
@@ -67,7 +164,8 @@ splat_clauses:
     Ability. Intelligence is your spellcasting ability for your Wizard spells. Spellcasting Focus. You
     can use an Arcane Focus or your spellbook as a Spellcasting Focus for your Wizard spells.'
   sha256: 000e72750d1ff0c7decdd5f9bbf2ae731e8821cbdeda3c4cb52de4f97b4d9424
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Spellcasting

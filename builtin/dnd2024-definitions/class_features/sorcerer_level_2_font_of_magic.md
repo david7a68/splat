@@ -12,18 +12,78 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/sorcerer_level_2_font_of_magic
-  parameters: {}
+  parameters:
+    resource:
+      id: sorcerer.sorcery_points
+      maximum:
+        var: actor.class_levels.sorcerer
+      recovery:
+      - event: rest.long_completed
+        amount: all
+    cannot_exceed_maximum: true
+    slot_to_points:
+      action: none
+      expend_slot_count: 1
+      restore_points:
+        var: slot.level
+    points_to_slot:
+      action: bonus_action
+      create_slot_count: 1
+      options:
+      - slot_level: 1
+        point_cost: 2
+        minimum_sorcerer_level: 2
+      - slot_level: 2
+        point_cost: 3
+        minimum_sorcerer_level: 3
+      - slot_level: 3
+        point_cost: 5
+        minimum_sorcerer_level: 5
+      - slot_level: 4
+        point_cost: 6
+        minimum_sorcerer_level: 7
+      - slot_level: 5
+        point_cost: 7
+        minimum_sorcerer_level: 9
+      slot_expires: actor.rest.long_completed
+    class_scope:
+      class: sorcerer
+      minimum_level: 2
+  implementation: dnd2024:class_features_sorcerer_level_2_font_of_magic
+splat_contracts:
+- id: dnd2024:class_features_sorcerer_level_2_font_of_magic
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - resources
+  events:
+  - resource.convert
+  - action.bonus
+  - rest.long_completed
+  capabilities:
+  - character_features
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 66
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_sorcerer_level_2_font_of_magic
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 9ed777bcd40379096c1ba464086e993ebb34537c64aac10adf4b4e5c04833c4c
   parent_name: Sorcerer
   line_span:
     first: 5545
@@ -44,7 +104,8 @@ splat_clauses:
     with this feature vanishes when you finish a Long Rest. Creating Spell Slots Spell Slot Sorcery Point
     Min. Sorcerer Level Cost Level 1 2 2 2 3 3 3 5 5 4 6 7 5 7 9'
   sha256: 94d5d1386b178cf60473036a0f3fe16e555435eb9d2fb460785ee4c114ab1768
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 2: Font of Magic

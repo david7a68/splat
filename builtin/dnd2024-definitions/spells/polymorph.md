@@ -31,60 +31,81 @@ splat_spell:
   material:
     description: a caterpillar cocoon
     consumed: false
-splat_actions:
-  cast:
-    name: Cast Polymorph
-    activation:
-      economy: action
-      category: magic
-      timing: on_turn
-      cost_at: dnd2024:spell_slot_expenditure
+splat_rule:
+  mechanic: dnd2024:spells/polymorph
+  implementation: dnd2024:spell_polymorph
+  parameters:
+    targeting:
+      kind: creature
+      count: 1
+      visible: true
+      within_range: true
+    save:
+      ability: wisdom
+      failure: transform
+      success: no_effect
+    form:
+      chooser: caster
+      type: beast
+      maximum_cr: target_cr_or_level_if_no_cr
+      replace_stats: chosen_beast_stat_block
+      retain:
+      - alignment
+      - personality
+      - creature_type
+      - hit_points
+      - hit_point_dice
+      duration: spell_duration
+    temporary_hp:
+      amount: beast_form_hit_points
+      remainder_vanishes_on_spell_end: true
+      target_spell_ends_when: no_temporary_hp_remaining
+    restrictions:
+      actions: new_anatomy_limits
+      speech: forbidden
+      spellcasting: forbidden
+    equipment:
+      melds_into_form: true
+      use: forbidden
+      benefits: none
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 1
+        unit: hour
+splat_contracts:
+- id: dnd2024:spell_polymorph
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
     targets:
-      chosen:
-        kind: creature
-        count:
-          min: 1
-          max: 1
-        range:
-          feet: 60
-        visible: true
-    steps:
-    - key: transform
-      operation: dnd2024:polymorph_2024
-      target: chosen
-      parameters:
-        save_ability: wisdom
-        save_dc:
-          binding: save_dc
-        on_success: no_effect
-        form_type: beast
-        form_chooser: caster
-        form_cr_max: target_cr_else_level
-        retained:
-        - alignment
-        - personality
-        - creature_type
-        - hit_points
-        - hit_dice
-        replaced: remaining_game_statistics
-        temporary_hp: form_hit_points
-        end_early: target_has_no_temporary_hp
-        remove_remaining_temporary_hp_on_end: true
-        concentration: caster
-        maximum_duration:
-          value: 1
-          unit: hour
-        action_limit: form_anatomy
-        prohibited:
-        - speak
-        - cast_spells
-        equipment: meld_and_suppress_all_benefits
-splat_parameters:
-  save_dc:
-    type: integer
-    minimum: 1
-    maximum: 40
-    required: true
+      type: participant_list
+      required: true
+    forms:
+      type: definition_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - participants
+  events:
+  - spell.cast_completed
+  - health.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - participant_lifecycle
+  - forms
 splat_conversion:
   status: specified
   category: spell
@@ -94,9 +115,11 @@ splat_conversion:
   - 153
   - 154
   engine_gaps: &id001
-  - dnd2024:polymorph_2024
+  - dnd2024:spell_polymorph
   conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 1b05a9608dcb789f9abec1fa6f41d3480275a0e10653ef763f5c832eb2c1cf2c
 splat_clauses:
 - key: source_rules
   text: '# Polymorph Level 4 Transmutation (Bard, Druid, Sorcerer, Wizard) Casting Time: Action Range:

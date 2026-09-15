@@ -12,18 +12,36 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_reach
-  parameters: {}
+  parameters:
+    default_reach_ft: 5
+    attack_requires_within_reach: true
+    specific_attack_reach_overrides: true
+  implementation: dnd2024:rules_combat_reach
+splat_contracts:
+- id: dnd2024:rules_combat_reach
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - melee_reach
+  events: []
+  capabilities:
+  - attacks
+  - geometry
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 15
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_combat_reach
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: f74b690b10049b4aeefea0c7a8ae8aa54ed0b33bc1a0078a6d5b462b64ca7a5a
   parent_name: Combat
   line_span:
     first: 1036
@@ -34,7 +52,8 @@ splat_clauses:
     melee attack. Certain creatures have melee attacks with a reach greater than 5 feet, as noted in their
     descriptions.'
   sha256: 3ed1c3d8e7706503a3863908fd0c2669521ff51842d19d406aa5ed290bf7ce58
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Reach

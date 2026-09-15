@@ -58,17 +58,131 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/merfolk_skirmisher
+  implementation: dnd2024:creature_merfolk_skirmisher
+  parameters:
+    senses: []
+    passive_perception: 12
+    languages:
+      speak: true
+      known:
+      - common
+      - primordial
+      primordial_dialects:
+      - aquan
+    features:
+      amphibious:
+        economy: passive
+        op: breathing.allow
+        media:
+        - air
+        - water
+      ocean_spear:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        - ranged
+        attack_bonus: 2
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        range_ft:
+          normal: 20
+          long: 60
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            average: 3
+          - type: cold
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 0
+            average: 2
+        - op: speed.add
+          amount_ft: -10
+          duration:
+            until: target.next_turn_end
+          when:
+            target_kind: creature
+        after_attack:
+          when: ranged_attack_hit_or_miss
+          op: item.return
+          destination: actor_hand
+          magical: true
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_merfolk_skirmisher
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - item_state
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 32c7e1747f2eecaf407b1339680b938c04e9895f27937d4b7ffa5afcae7b8f13
   source_path: builtin/srd-5.2.1/creature/merfolk_skirmisher.md
   pages:
   - 308
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_merfolk_skirmisher
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 2cf4847057743b86b51495ea5b303a2f7c0e94767e3d7e4d024a2e97726954c2
 splat_clauses:
 - key: source_rules
   text: '# Merfolk Skirmisher Medium Elemental, Neutral AC 11 Initiative +1 (11) HP 11 (2d8 + 2) Speed
@@ -80,7 +194,8 @@ splat_clauses:
     its next turn. Hit or Miss: The spear magically returns to the merfolk’s hand immediately after a
     ranged attack.'
   sha256: 90d56794288f6d2d7ff4a50dfa54d0a3a3c35c39f47ed5b30a49e689759473b8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Merfolk Skirmisher

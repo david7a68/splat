@@ -31,17 +31,84 @@ splat_spell:
   material:
     description: a magnifying glass
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/sunbeam
+  implementation: dnd2024:spell_sunbeam
+  parameters:
+    targeting:
+      kind: creatures_in_area
+      shape: line
+      width_feet: 5
+      length_feet: 60
+      origin: caster
+    save:
+      ability: constitution
+      failure:
+        damage:
+          dice: 6d8
+          type: radiant
+        condition: blinded
+        until: caster_next_turn_start
+      success:
+        damage_fraction:
+          numerator: 1
+          denominator: 2
+    repeat:
+      economy: magic_action
+      new_line: true
+      duration: spell_duration
+    mote:
+      location: above_caster
+      bright_radius_feet: 30
+      additional_dim_feet: 30
+      sunlight: true
+      duration: spell_duration
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 1
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_sunbeam
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  events:
+  - spell.cast_completed
+  - turn.started
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - conditions
+  - spatial_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: ce4d665540dac73d8e8450fdb6d9b6d3f3db4bf5c82a01bcbcbfe210e3321022
   source_path: builtin/srd-5.2.1/spell/sunbeam.md
   pages:
   - 166
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_sunbeam
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: f64ce15df7a0ff870bddfdd17d48353189e8bc44c9e1a453b84444a03722fbe1
 splat_clauses:
 - key: source_rules
   text: '# Sunbeam Level 6 Evocation (Cleric, Druid, Sorcerer, Wizard) Casting Time: Action Range: Self
@@ -53,7 +120,8 @@ splat_clauses:
     radiance shines above you. It sheds Bright Light in a 30-foot radius and Dim Light for an additional
     30 feet. This light is sunlight.'
   sha256: 8266c26a52af5d69aa8999df7d1ecca9ea1d005cb71f1aa36b26dca8e653d2de
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Sunbeam

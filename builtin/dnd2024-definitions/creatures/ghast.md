@@ -57,17 +57,201 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ghast
+  implementation: dnd2024:creature_ghast
+  parameters:
+    features:
+      bite:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 3
+          damage_type: piercing
+        - op: damage
+          average: 9
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 0
+          damage_type: necrotic
+        reach_feet: 5
+      claw:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 10
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 3
+          damage_type: slashing
+        - op: if
+          test:
+            target_kind: creature
+            target_type_not: undead
+          then:
+          - op: save
+            ability: constitution
+            dc: 10
+            targets:
+              participant: target
+            failure:
+            - op: condition
+              condition: paralyzed
+              ends:
+                event: turn.end
+                participant: target
+                occurrence: next
+            success: []
+        reach_feet: 5
+      stench:
+        economy: passive
+        trigger: creature.turn.start
+        op: save
+        ability: constitution
+        dc: 10
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            size_feet: 5
+            origin: self
+        failure:
+        - op: condition
+          condition: poisoned
+          ends:
+            event: turn.start
+            participant: target
+            occurrence: next
+        success:
+        - op: feature_immunity
+          feature: stench
+          source: self
+          duration:
+            hours: 24
+    defenses:
+      resistances:
+        damage_types:
+        - necrotic
+      immunities:
+        damage_types:
+        - poison
+        conditions:
+        - charmed
+        - exhaustion
+        - poisoned
+    senses:
+      passive_perception: 10
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks:
+      - common
+      understands:
+      - common
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_ghast
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - creature.turn.start
+  - turn.end
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 6aa15f013f66af5305a209ed6ad3ca25cb4de569451b5ae746e16a9157b04fa7
   source_path: builtin/srd-5.2.1/creature/ghast.md
   pages:
   - 287
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ghast
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: e296275b5238a7a1b6f9a10b624f695e4610c448d281e201d84467fd83e275cf
 splat_clauses:
 - key: source_rules
   text: '# Ghast Medium Undead, Chaotic Evil AC 13 Initiative +3 (13) HP 36 (8d8) Speed 30 ft. MOD SAVE
@@ -82,7 +266,8 @@ splat_clauses:
     Constitution Saving Throw: DC 10. Failure: The target has the Paralyzed condition until the end of
     its next turn.'
   sha256: 8b77bbe80fe209aea45dda17c1eb4d6fb98f05fcf43e670f2a1ae3ee136ff5a7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ghast

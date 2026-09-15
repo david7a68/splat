@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/ranger_becoming_a_ranger
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 57
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 72ceafe8c47275881967f5f77f3aac6ae98b2963dbf23c0660f0e9ddef918a39
   parent_name: Ranger
   line_span:
     first: 4810
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Becoming a Ranger …'
   sha256: 3d2187af113426cacea7895c26a102bf2ca873e541add320be6661110abb725e
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Becoming a Ranger …

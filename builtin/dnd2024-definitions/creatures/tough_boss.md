@@ -57,17 +57,157 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/tough_boss
+  implementation: dnd2024:creature_tough_boss
+  parameters:
+    features:
+      pack_tactics:
+        economy: trait
+        operation: passive_rule
+        attack_advantage:
+          target_kind: creature
+          ally_within_target_ft: 5
+          ally_excludes_conditions:
+          - incapacitated
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_choice
+          count: 2
+          options:
+          - warhammer
+          - heavy_crossbow
+      warhammer:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 12
+            roll:
+              count: 2
+              sides: 8
+              modifier: 3
+            type: bludgeoning
+          push:
+            maximum_ft: 10
+            direction: straight_away_from_self
+            maximum_size: large
+      heavy_crossbow:
+        economy: action
+        operation: attack
+        attack:
+          mode: ranged
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          range_ft: 100
+          long_range_ft: 400
+        hit:
+          damage:
+          - average: 13
+            roll:
+              count: 2
+              sides: 10
+              modifier: 2
+            type: piercing
+    gear:
+    - item: chain_mail
+      quantity: 1
+    - item: heavy_crossbow
+      quantity: 1
+    - item: warhammer
+      quantity: 1
+    senses:
+      passive_perception: 10
+    languages:
+      speaks:
+      - common
+      understands: []
+      additional_languages:
+        count: 1
+        chooser: creator
+        can_speak: true
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_tough_boss
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: ceb9e444575f2604f10bea544783eb96bf6a9a65255b3debd19fcf16e1c0763f
   source_path: builtin/srd-5.2.1/creature/tough_boss.md
   pages:
   - 332
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_tough_boss
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: a0ebf034677da64f365a1eb9dff591fb0cdc7e0149622338194119703d2377b1
 splat_clauses:
 - key: source_rules
   text: '# Tough Boss Medium or Small Humanoid, Neutral AC 16 Initiative +2 (12) HP 82 (11d8 + 33) Speed
@@ -81,7 +221,8 @@ splat_clauses:
     pushes the target up to 10 feet straight away from itself. Heavy Crossbow. Ranged Attack Roll: +4,
     range 100/400 ft. Hit: 13 (2d10 + 2) Piercing damage.'
   sha256: e06d3670b269fef9a5745142892c90b8040ba2ea973929ce5ac134aa2a54b28b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tough Boss

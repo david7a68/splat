@@ -60,17 +60,193 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/salamander
+  implementation: dnd2024:creature_salamander
+  parameters:
+    damage_vulnerabilities:
+    - cold
+    damage_immunities:
+    - fire
+    condition_immunities: []
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 10
+    languages:
+      speak: true
+      known:
+      - primordial
+      primordial_dialects:
+      - ignan
+    features:
+      flame_spear:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        - ranged
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        range_ft:
+          normal: 20
+          long: 60
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 4
+            average: 13
+          - type: fire
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 0
+            average: 7
+        after_attack:
+          when: ranged_attack_hit_or_miss
+          op: item.return
+          destination: actor_hand
+          magical: true
+      fire_aura:
+        economy: passive
+        trigger: actor.turn_end
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            origin: actor
+            size_ft: 5
+          actor_selects: true
+        effects:
+        - op: damage
+          components:
+          - type: fire
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 0
+            average: 7
+      constrict:
+        economy: action
+        op: saving_throw
+        ability: strength
+        dc: 15
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 10
+          maximum_size: large
+          visible_to_actor: true
+        failure:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 4
+            average: 11
+          - type: fire
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 0
+            average: 7
+        - op: grapple
+          escape_dc: 14
+          while_grappled:
+          - op: condition.apply
+            condition: restrained
+        success: []
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: flame_spear
+        replace_attack:
+          maximum: 1
+          choices:
+          - op: feature.use
+            feature: constrict
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_salamander
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_end
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - item_state
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 015920bea6b0280afc1a26555683fb2e62c47b4e5d86b774289658ac4e2d9043
   source_path: builtin/srd-5.2.1/creature/salamander.md
   pages:
   - 321
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_salamander
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 7855a5aad93118d8c666cabcbb0a7c09c0383c155763f5b8122caa82d9c8871a
 splat_clauses:
 - key: source_rules
   text: '# Salamander Large Elemental, Neutral Evil AC 15 Initiative +2 (12) HP 90 (12d10 + 24) Speed
@@ -86,7 +262,8 @@ splat_clauses:
     10 feet. Failure: 11 (2d6 + 4) Bludgeoning damage plus 7 (2d6) Fire damage. The target has the Grappled
     condition (escape DC 14), and it has the Restrained condition until the grapple ends.'
   sha256: 316ff08bf58ae974230e7783ecaef4eb07db415c11e4004a462ae15101cbe208
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Salamander

@@ -30,17 +30,95 @@ splat_spell:
   material:
     description: a chip of mica
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/shatter
+  implementation: dnd2024:spell_shatter
+  parameters:
+    targeting:
+      kind: creatures_in_area
+      shape: sphere
+      radius_feet: 10
+      origin: chosen_point_in_range
+    save:
+      ability: constitution
+      disadvantage_types:
+      - construct
+      failure:
+        damage:
+          dice: 3d8
+          type: thunder
+      success:
+        damage_fraction:
+          numerator: 1
+          denominator: 2
+    object_damage:
+      within_area: true
+      magical: false
+      worn: false
+      carried: false
+      damage:
+        dice: 3d8
+        type: thunder
+      save: none
+    sound: loud_noise
+    slot_scaling:
+      above: 2
+      damage_per_level: 1d8
+      applies_to:
+      - creatures
+      - objects
+    spell_lifetime:
+      concentration: false
+      maximum:
+        kind: instantaneous
+splat_contracts:
+- id: dnd2024:spell_shatter
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      type: location_list
+      required: true
+    objects:
+      required: false
+      type: object_list
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - locations
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - spatial_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: f7450ffdafbcbfb9ecdc0c5db6a72cf9c7efaf11c2da20d0c5ebcf0433f074ef
   source_path: builtin/srd-5.2.1/spell/shatter.md
   pages:
   - 161
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_shatter
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 07b917b03854bbbb5a995e68055d6137f37628bc9e6eb5d7d746b6e6bdea91c5
 splat_clauses:
 - key: source_rules
   text: '# Shatter Level 2 Evocation (Bard, Sorcerer, Wizard) Casting Time: Action Range: 60 feet Components:
@@ -51,7 +129,8 @@ splat_clauses:
     damage if it’s in the spell’s area. Using a Higher-Level Spell Slot. The damage increases by 1d8 for
     each spell slot level above 2.'
   sha256: 3f0a5bea1068156b489569a39061073179c5bd385288aa594af6e168f60877aa
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Shatter

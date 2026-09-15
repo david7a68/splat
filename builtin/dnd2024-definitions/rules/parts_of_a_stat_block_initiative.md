@@ -12,18 +12,43 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_initiative
-  parameters: {}
+  parameters:
+    initiative_entry:
+      first: modifier
+      parenthetical: score
+    resolution_choice:
+    - roll_with_modifier
+    - use_fixed_score
+    default_modifier: dexterity_modifier
+    additional_modifiers: stat_block
+  implementation: dnd2024:rules_parts_of_a_stat_block_initiative
+splat_contracts:
+- id: dnd2024:rules_parts_of_a_stat_block_initiative
+  inputs:
+    monster:
+      type: participant
+      required: true
+    mode:
+      type: choice
+      required: true
+  outputs:
+  - initiative
+  events: []
+  capabilities:
+  - initiative
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 254
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_parts_of_a_stat_block_initiative
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 929cd452e0ab7ac291f365f5a75f6ba165d96d7243c878ed176f08384822764b
   parent_name: Parts of a Stat Block
   line_span:
     first: 10950
@@ -37,7 +62,8 @@ splat_clauses:
     want to roll a monster’s Initiative, use the Initiative score as the monster’s Initiative in combat.
     Initiative is further detailed in “Playing the Game.”'
   sha256: fd7d0a70fdec2bf42ad76c951f0664dc0ac0e407c5bbd4b038bef5a5d6ff9fd1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Initiative

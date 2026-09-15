@@ -15,17 +15,85 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/nine_lives_stealer
+  implementation: dnd2024:item_nine_lives_stealer
+  parameters:
+    weapon_bonus:
+      attack: 2
+      damage: 2
+    charges:
+      initial:
+        dice: 1
+        sides: 8
+        bonus: 1
+      recovery: null
+      on_zero: lose_life_stealing
+    life_stealing:
+      requires: charges_positive
+      trigger:
+        event: attack_roll
+        natural_d20: 20
+        target_kind: creature
+        target_current_hp_less_than: 100
+      save:
+        ability: constitution
+        dc: 15
+        automatic_success_types:
+        - construct
+        - undead
+      failure:
+        effect: instant_death
+        charge_cost: 1
+      success_charge_cost: 0
+    attunement:
+      required: true
+splat_contracts:
+- id: dnd2024:item_nine_lives_stealer
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    event:
+      required: false
+      type: event
+  outputs:
+  - modifiers
+  - effects
+  - damage
+  - item_state
+  events:
+  - equipment.state_changed
+  - attack.resolved
+  - saving_throw.resolved
+  capabilities:
+  - equipment
+  - combat_reactions
+  - effects
+  - damage
+  - item_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: aef25cf94bcf1827ead3742917b9b558787fe381007e1ed2730832753abcb5f2
   source_path: builtin/srd-5.2.1/magic_item/nine_lives_stealer.md
   pages:
   - 233
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_nine_lives_stealer
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: 4e75a8617cad186d6921214205a8f9a7ee8a5395a98d997f7b0c191249cf690d
 splat_clauses:
 - key: source_rules
   text: '# Nine Lives Stealer Weapon (Any Simple or Martial), Very Rare (Requires Attunement) You gain
@@ -36,7 +104,8 @@ splat_clauses:
     succeed on the save automatically. The weapon loses 1 charge if the creature is slain. When the weapon
     has no charges remaining, it loses this property.'
   sha256: c7bc0e54b6adbc337c18f40f6d7e84df03bc1ed063952e8b5a0468a437d6a025
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Nine Lives Stealer

@@ -64,17 +64,164 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/young_red_dragon
+  implementation: dnd2024:creature_young_red_dragon
+  parameters:
+    skill_totals:
+      perception: 8
+      stealth: 4
+    damage_immunities:
+    - fire
+    condition_immunities: []
+    senses:
+    - sense: blindsight
+      range_ft: 30
+    - sense: darkvision
+      range_ft: 120
+    passive_perception: 18
+    languages:
+      speak: true
+      known:
+      - common
+      - draconic
+    features:
+      rend:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 10
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 6
+            average: 13
+          - type: fire
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            average: 3
+      fire_breath:
+        economy: action
+        op: saving_throw
+        ability: dexterity
+        dc: 17
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            origin: actor
+            size_ft: 30
+        failure:
+        - op: damage
+          components:
+          - type: fire
+            amount:
+              dice:
+                count: 16
+                sides: 6
+              add: 0
+            average: 56
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+        recharge:
+          die_sides: 6
+          success_min: 5
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 3
+          feature: rend
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_young_red_dragon
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 1cc635c18a5dfe3762d65a8167746dc6bca8c6898cec616cca9b6c992628727e
   source_path: builtin/srd-5.2.1/creature/young_red_dragon.md
   pages:
   - 318
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_young_red_dragon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 2cb5cc9a6662c7220c7fa30db35ed3b35fa40157301a4b7bca00c17a572ce1ca
 splat_clauses:
 - key: source_rules
   text: '# Young Red Dragon Large Dragon (Chromatic), Chaotic Evil AC 18 Initiative +4 (14) HP 178 (17d10
@@ -86,7 +233,8 @@ splat_clauses:
     5–6). Dexterity Saving Throw: DC 17, each creature in a 30-foot Cone. Failure: 56 (16d6) Fire damage.
     Success: Half damage.'
   sha256: 6e62ef9e75c666e5824abe27dc3f21bf5286bf3a6218a8cfee763ebc5ea44796
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Young Red Dragon

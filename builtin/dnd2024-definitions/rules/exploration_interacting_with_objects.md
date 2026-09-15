@@ -14,7 +14,7 @@ splat_rule:
   mechanic: dnd2024:rules/exploration_interacting_with_objects
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
@@ -22,9 +22,10 @@ splat_conversion:
   - 11
   - 12
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: d1b6cc388ae458b1a6d8a8d86200837881f5f918867027307e316b3d5b376cc0
   parent_name: Exploration
   line_span:
     first: 660
@@ -36,7 +37,7 @@ splat_clauses:
     GM describes what happens. Sometimes, however, rules govern what you can do with an object, as detailed
     in the following sections.'
   sha256: 15613af31c54e35733f23180b01df045181cff8d3d84b9d5de643de853753d4b
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Interacting with Objects

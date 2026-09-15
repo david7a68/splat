@@ -30,17 +30,128 @@ splat_spell:
   material:
     description: one 150+ GP black onyx stone for each corpse
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/create_undead
+  implementation: dnd2024:spell_create_undead
+  parameters:
+    requires:
+      time: night
+    modes:
+    - animate
+    - reassert_control
+    targets:
+      animate:
+        kind: corpse
+        former_type: humanoid
+        sizes:
+        - medium
+        - small
+        within_spell_range: true
+      reassert_control:
+        kind: creature_animated_by_this_spell
+        control_not_expired: true
+        within_spell_range: true
+    slot_options:
+      '6':
+      - kind: ghoul
+        maximum: 3
+      '7':
+      - kind: ghoul
+        maximum: 4
+      '8':
+      - kind: ghoul
+        maximum: 5
+      - kinds:
+        - ghast
+        - wight
+        maximum: 2
+      '9':
+      - kind: ghoul
+        maximum: 6
+      - kinds:
+        - ghast
+        - wight
+        maximum: 3
+      - kind: mummy
+        maximum: 2
+    control:
+      duration_hours: 24
+      renew_duration_hours: 24
+      expiry: stop_obeying_orders
+      command:
+        cost: bonus_action
+        event: caster_turn
+        range_feet: 120
+        communication: mental
+        multiple_targets_same_command: true
+        choices:
+        - next_turn_action_and_movement
+        - general_task
+        persists_until: task_complete
+      no_command:
+        action: dodge
+        movement: avoid_harm_only
+    stat_blocks:
+      ghoul:
+        key: dnd2024:creatures/ghoul
+      ghast:
+        key: dnd2024:creatures/ghast
+      wight:
+        key: dnd2024:creatures/wight
+      mummy:
+        key: dnd2024:creatures/mummy
+splat_contracts:
+- id: dnd2024:spell_create_undead
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    choices:
+      required: false
+      type: choice
+    items:
+      required: false
+      type: item_list
+  outputs:
+  - effects
+  - participants
+  - items
+  events:
+  - spell.cast_completed
+  - rest.completed
+  - movement.completed
+  - time.elapsed
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_relationships
+  - participant_lifecycle
+  - inventory
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 536e13662c32e24f5f4a6d137e9efd85f4253af4d2e24e9153a6427f293e9cd6
   source_path: builtin/srd-5.2.1/spell/create_undead.md
   pages:
   - 121
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_create_undead
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 1688dec0394fe25426a527e3e155cea808e7f3c383e003921fe9b7949f4335ff
 splat_clauses:
 - key: source_rules
   text: '# Create Undead Level 6 Necromancy (Cleric, Warlock, Wizard) Casting Time: 1 minute Range: 10
@@ -62,7 +173,8 @@ splat_clauses:
     If you use a level 9 spell slot, you can animate or reassert control over six Ghouls, three Ghasts
     or Wights, or two Mummies. See “Monsters” for these stat blocks.'
   sha256: 12bbf976f1baea7347bfd480df0cfb505948a7fad5501fb56016ce0f8f4e56ed
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Create Undead

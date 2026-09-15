@@ -12,18 +12,35 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/proficiency_determining_skills
-  parameters: {}
+  parameters:
+    skill_proficiencies_source:
+      player_character: character_creation_choices
+      monster: stat_block
+  implementation: dnd2024:rules_proficiency_determining_skills
+splat_contracts:
+- id: dnd2024:rules_proficiency_determining_skills
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - skill_proficiencies
+  events: []
+  capabilities:
+  - proficiency
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 9
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_proficiency_determining_skills
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 98b3750826721329a0fed8b84df2694382a252af420d06265472888a20b9ff05
   parent_name: Proficiency
   line_span:
     first: 419
@@ -33,7 +50,8 @@ splat_clauses:
   text: '# Determining Skills A character’s starting skill proficiencies are determined at character creation,
     and a monster’s skill proficiencies appear in its stat block.'
   sha256: 772c50443b87a24ffe1831eca026ff30179931e519de379e6cd9a783e3044656
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Determining Skills

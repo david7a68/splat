@@ -12,18 +12,39 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/warlock_lessons_of_the_first_ones
-  parameters: {}
+  parameters:
+    prerequisites:
+      warlock_level_min: 2
+    feat_choice:
+      count: 1
+      category: origin
+    repeatable: true
+    repeat_selection: different_origin_feat
+  implementation: dnd2024:rules_warlock_lessons_of_the_first_ones
+splat_contracts:
+- id: dnd2024:rules_warlock_lessons_of_the_first_ones
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - feat_grant
+  events: []
+  capabilities:
+  - character_options
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 73
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_warlock_lessons_of_the_first_ones
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 983911e3978bae22fbfcb13d73dc7fd99a3ba676051b298b3035e50fa18a5ec7
   parent_name: Warlock
   line_span:
     first: 6255
@@ -35,7 +56,8 @@ splat_clauses:
     Repeatable. You can gain this invocation more than once. Each time you do so, choose a different Origin
     feat.'
   sha256: 540a9d342e13c9f1eeabf492060d47992db282a0a3db86daa8de2f22fc4bf9c8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Lessons of the First Ones

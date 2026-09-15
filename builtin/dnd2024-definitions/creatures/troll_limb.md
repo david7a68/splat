@@ -55,17 +55,162 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/troll_limb
+  implementation: dnd2024:creature_troll_limb
+  parameters:
+    features:
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 6
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 9
+          amount:
+            dice:
+              count: 2
+              sides: 4
+            add: 4
+          damage_type: slashing
+        reach_feet: 5
+      regeneration:
+        economy: passive
+        trigger: self.turn.start
+        op: heal
+        amount:
+          constant: 5
+        suppression:
+          trigger: self.damage_taken
+          damage_type_any:
+          - acid
+          - fire
+          skip: next_turn
+        death:
+          trigger: self.turn.start
+          requires:
+            hit_points: 0
+            regeneration_occurs: false
+          exclusive: true
+      troll_spawn:
+        economy: passive
+        senses_as:
+          key: dnd2024:creatures/troll
+        trigger: self.exists_for_24_hours
+        requires:
+          not_destroyed: true
+        roll:
+          dice:
+            count: 1
+            sides: 12
+          add: 0
+        table:
+        - roll_min: 12
+          roll_max: 12
+          effect:
+            op: replace_stat_block
+            definition:
+              key: dnd2024:creatures/troll
+        - roll_min: 1
+          roll_max: 11
+          effect:
+            op: wither_away
+    defenses: {}
+    senses:
+      passive_perception: 9
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_troll_limb
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - self.damage_taken
+  - self.exists_for_24_hours
+  - self.turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - hit_points
+  - resources
+  - stat_block_replacement
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 6fa88395c916648adf081b64edbdeb0cb0f45f55b902f48206af73d49eb6d6c8
   source_path: builtin/srd-5.2.1/creature/troll_limb.md
   pages:
   - 333
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_troll_limb
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 56f9544e0381d7b301c02906dd543d529ad323b8a4f8d661d926bfef6de0bfaa
 splat_clauses:
 - key: source_rules
   text: '# Troll Limb Small Giant, Chaotic Evil AC 13 Initiative +1 (11) HP 14 (4d6) Speed 20 ft. MOD
@@ -78,7 +223,8 @@ splat_clauses:
     Otherwise, the limb withers away. ### Actions Rend. Melee Attack Roll: +6, reach 5 ft. Hit: 9 (2d4
     + 4) Slashing damage.'
   sha256: 0c74f2bd438f27ff1be87a30af8fac7a39224798c722e7a63307df506f1111d9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Troll Limb

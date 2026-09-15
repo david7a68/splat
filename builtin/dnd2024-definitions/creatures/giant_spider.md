@@ -59,18 +59,167 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_spider
+  implementation: dnd2024:creature_giant_spider
+  parameters:
+    features:
+      spider_climb:
+        economy: trait
+        operation: passive_rule
+        climb_difficult_surfaces: true
+        climb_ceilings: true
+        ability_check_required: false
+      web_walker:
+        economy: trait
+        operation: passive_rule
+        ignore_web_movement_restrictions: true
+        locate_creatures_on_same_web: true
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 7
+            roll:
+              count: 1
+              sides: 8
+              modifier: 3
+            type: piercing
+          - average: 7
+            roll:
+              count: 2
+              sides: 6
+              modifier: 0
+            type: poison
+      web:
+        economy: action
+        resource:
+          kind: recharge
+          die: 6
+          success_faces:
+          - 5
+          - 6
+          check: self.turn_start
+          rest_recovery:
+          - short
+          - long
+          capacity: 1
+          initial_uses: 1
+        operation: saving_throw
+        ability: dexterity
+        dc: 13
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 60
+          visible: true
+        failure:
+          conditions:
+          - condition: restrained
+            until: web.destroyed
+          web_object:
+            ac: 10
+            hp: 5
+            damage_vulnerabilities:
+            - fire
+            damage_immunities:
+            - poison
+            - psychic
+        success:
+          effects: []
+    skill_totals:
+      perception: 4
+      stealth: 7
+    senses:
+      darkvision: 60
+      passive_perception: 14
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_giant_spider
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
+  - hit_points
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: b306725f61da9def8dca3cf4f3ef480bfbd27bc3677991b0f1e02b668406aacb
   source_path: builtin/srd-5.2.1/creature/giant_spider.md
   pages:
   - 353
   - 354
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_spider
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: f507a546b8cf6dc54184df5fb368417a51b04ca77feeb6505874e1446284b698
 splat_clauses:
 - key: source_rules
   text: '# Giant Spider Large Beast, Unaligned AC 14 Initiative +3 (13) HP 26 (4d10 + 4) Speed 30 ft.,
@@ -84,7 +233,8 @@ splat_clauses:
     can see within 60 feet. Failure: The target has the Restrained condition until the web is destroyed
     (AC 10; HP 5; Vulnerability to Fire damage; Immunity to Poison and Psychic damage).'
   sha256: a6c981f1e67aa74b0fa00997f568f000b3205ad5cb941e90e04e7df88c040556
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Spider

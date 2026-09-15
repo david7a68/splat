@@ -29,17 +29,101 @@ splat_spell:
   material:
     description: a miniature door worth 15+ GP
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/magnificent_mansion
+  implementation: dnd2024:spell_magnificent_mansion
+  parameters:
+    targeting:
+      kind: doorway_location
+      within_range: true
+    doorway:
+      width_feet: 5
+      height_feet: 10
+      duration: spell_duration
+      entry_allowed: caster_and_creatures_designated_at_cast
+      entry_requires: open
+      open_close:
+        economy: none
+        caster_range_feet: 30
+      closed: imperceptible
+    dwelling:
+      extradimensional: true
+      air:
+      - clean
+      - fresh
+      - warm
+      floor_plan: caster_choice
+      max_contiguous_cubes: 50
+      cube_side_feet: 10
+      furnishings: caster_choice
+      banquet:
+        courses: 9
+        people: 100
+      created_objects_removed: dissipate_into_smoke
+    servants:
+      count: 100
+      appearance_and_attire: caster_choice
+      near_transparent: true
+      invulnerable: true
+      obeys: caster_commands
+      tasks: human_capable
+      forbidden:
+      - attack
+      - directly_harm_creature
+      - leave_dwelling
+      serves: all_entrants
+    end:
+      expel: all_remaining_creatures_and_objects
+      destination: nearest_unoccupied_spaces_to_entrance
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 24
+        unit: hour
+splat_contracts:
+- id: dnd2024:spell_magnificent_mansion
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      type: location_list
+      required: true
+    choices:
+      type: choice
+      required: true
+    campaign:
+      type: campaign
+      required: true
+  outputs:
+  - effects
+  - locations
+  events:
+  - spell.cast_completed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_effects
+  - campaign_state
+  - planar_travel
+  - controlled_participants
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 51e2d311fbbda0ceebd867c9842f3eb1c5cde5efabcffac93dc25bca09c1c13f
   source_path: builtin/srd-5.2.1/spell/magnificent_mansion.md
   pages:
   - 147
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_magnificent_mansion
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 9f51d12d3759999dfa0ff4b3dc1f2793b6cdac6912bd16f79aa69e2e512957a1
 splat_clauses:
 - key: source_rules
   text: '# Magnificent Mansion Level 7 Conjuration (Bard, Wizard) Casting Time: 1 minute Range: 300 feet
@@ -60,7 +144,8 @@ splat_clauses:
     ends, any creatures or objects left inside the extradimensional space are expelled into the unoccupied
     spaces nearest to the entrance.'
   sha256: 114c6ef24a297644a199b0c45e9f5bc06922705e7028ce8c0d5bc0fb5ab3589b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Magnificent Mansion

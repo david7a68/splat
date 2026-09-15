@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/spells
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 104
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: ff38fa0c50ee1733f576467ba67e0eeeb102dee674134475284b08e533ecfd1e
   parent_name: Spells
   line_span:
     first: 9029
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Spells'
   sha256: af3a3c0c261a7c4f50c1fa4198819b3a34cb3bf00e170ac4723a693af6fd1d35
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Spells

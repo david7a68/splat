@@ -15,18 +15,182 @@ splat_item:
   rarity: legendary
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/rod_of_lordly_might
+  implementation: dnd2024:item_rod_of_lordly_might
+  parameters:
+    normal_form:
+      weapon:
+        key: dnd2024:equipment/mace
+      attack_bonus: 3
+      damage_bonus: 3
+      magical: true
+    buttons:
+      action: bonus_action
+      duration: until_same_or_different_button_pressed
+      repeat_same_button: normal_form
+      options:
+        '1':
+          weapon_choice:
+          - key: dnd2024:equipment/longsword
+          - key: dnd2024:equipment/shortsword
+          magical: true
+          extra_hit_damage:
+            roll:
+              dice: 2
+              sides: 6
+              bonus: 0
+            type: fire
+          light:
+            bright_radius_ft: 40
+            additional_dim_ft: 40
+          attack_bonus: 0
+          damage_bonus: 0
+        '2':
+          weapon:
+            key: dnd2024:equipment/battleaxe
+          attack_bonus: 3
+          damage_bonus: 3
+          magical: true
+        '3':
+          weapon:
+            key: dnd2024:equipment/spear
+          attack_bonus: 3
+          damage_bonus: 3
+          magical: true
+          length_ft: 6
+        '4':
+          kind: climbing_pole
+          length:
+            maximum_ft: 50
+            chooser: user
+          buttons_remain_reachable: true
+          anchors:
+            bottom_spikes: 1
+            top_hooks: 3
+            maximum_surface_hardness: granite
+          rungs:
+            length_inches: 3
+            spacing_ft: 1
+          maximum_load_lb: 4000
+          revert_if:
+          - overloaded
+          - not_solidly_anchored
+        '5':
+          kind: handheld_battering_ram
+          checks:
+            ability: strength
+            skill: athletics
+            bonus: 10
+            purpose: break_doors_barricades_or_barriers
+        '6':
+          form: normal
+          information:
+          - magnetic_north
+          - approximate_depth_or_height_relative_to_ground
+          north_requires: magnetic_north_exists
+    drain_life:
+      trigger: melee_hit_with_rod_against_creature
+      optional: true
+      resource:
+        uses: 1
+        recovery: dawn
+      save:
+        ability: constitution
+        dc: 17
+      failure:
+        damage:
+          roll:
+            dice: 4
+            sides: 6
+            bonus: 0
+          type: necrotic
+        user_healing:
+          fraction_of_necrotic_damage: 0.5
+    paralyze:
+      trigger: melee_hit_with_rod_against_creature
+      optional: true
+      resource:
+        uses: 1
+        recovery: dawn
+      save:
+        ability: constitution
+        dc: 17
+      failure:
+        condition: paralyzed
+        duration:
+          value: 1
+          unit: minute
+      repeat_save: target_turn_end
+      success: end_condition
+    terrify:
+      requires: held
+      action: magic
+      resource:
+        uses: 1
+        recovery: dawn
+      targets:
+        kind: creatures
+        seen: true
+        range_ft: 30
+        count: all
+      save:
+        ability: wisdom
+        dc: 17
+      failure:
+        condition: frightened
+        duration:
+          value: 1
+          unit: minute
+      repeat_save: target_turn_end
+      success: end_condition
+    attunement:
+      required: true
+splat_contracts:
+- id: dnd2024:item_rod_of_lordly_might
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    locations:
+      required: false
+      type: location_list
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - equipment
+  - item_resources
+  - effects
+  - spatial_queries
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 06fb26beebb65bb04bff915674f97931252833b1656648f14b74905f06aa2657
   source_path: builtin/srd-5.2.1/magic_item/rod_of_lordly_might.md
   pages:
   - 241
   - 242
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_rod_of_lordly_might
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: 923dc553e25c1fb7b982f48681cb7e0e309afed75186315e570d2c944ae8b80b
 splat_clauses:
 - key: source_rules
   text: '# Rod of Lordly Might Rod, Legendary (Requires Attunement) This rod has a flanged head, and it
@@ -64,7 +228,8 @@ splat_clauses:
     of its turns, ending the effect on itself on a success. Once used, this property can’t be used again
     until the next dawn.'
   sha256: 85d57a040490b71686dccf7d350d28a513e2eaaa678c61e9cad5c051dec50dac
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Rod of Lordly Might

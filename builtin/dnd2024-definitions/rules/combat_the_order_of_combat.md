@@ -12,18 +12,39 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_the_order_of_combat
-  parameters: {}
+  parameters:
+    round_seconds: 6
+    turns_per_round_per_participant: 1
+    initial_order: initiative
+    repeat_rounds_until: side_defeated
+  implementation: dnd2024:rule_combat_the_order_of_combat
+splat_contracts:
+- id: dnd2024:rule_combat_the_order_of_combat
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - turn_state
+  events: []
+  capabilities:
+  - turns
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 13
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_combat_the_order_of_combat
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: f5e82b825a6eabb30874548308634d5ba3c60a58ed9750c8ed84dff486ad95c7
   parent_name: Combat
   line_span:
     first: 765
@@ -37,7 +58,8 @@ splat_clauses:
     rolls Initiative. Once everyone has taken a turn, the fight continues to the next round if neither
     side is defeated.'
   sha256: 8288e3d668737e4e294051430e03f64108a78dd09968b800c27388529467cdc2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # The Order of Combat

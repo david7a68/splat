@@ -12,18 +12,49 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_items_attunement
-  parameters: {}
+  parameters:
+    requires_attunement_item:
+      magical_benefits_require_attunement: true
+      nonmagical_benefits_require_attunement: false
+      item_specific_exception_allowed: true
+  implementation: dnd2024:rules_magic_items_attunement
+splat_contracts:
+- id: dnd2024:rules_magic_items_attunement
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+  outputs:
+  - item_updates
+  - cost
+  - effects
+  events: []
+  capabilities:
+  - items
+  - attunement
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 102
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_magic_items_attunement
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 35c60a195b8220e33cbbe1a742ea53bb179b8c16adf3df84668ce1d709402089
   parent_name: Magic Items
   line_span:
     first: 8899
@@ -36,7 +67,8 @@ splat_clauses:
     a magic Shield that requires Attunement provides the benefits of a normal Shield if you aren’t attuned
     to it, but none of its magical properties.'
   sha256: 2e53cd73d5e92a10dbc26dc4b1fe3abce1bb55e92936293538d4ca32a92e8288
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Attunement

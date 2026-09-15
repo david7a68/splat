@@ -60,17 +60,147 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ochre_jelly
+  implementation: dnd2024:creature_ochre_jelly
+  parameters:
+    damage_resistances:
+    - acid
+    damage_immunities:
+    - lightning
+    - slashing
+    condition_immunities:
+    - charmed
+    - deafened
+    - exhaustion
+    - frightened
+    - grappled
+    - prone
+    - restrained
+    senses:
+    - sense: blindsight
+      range_ft: 60
+    passive_perception: 8
+    languages:
+      speak: true
+      known: []
+    features:
+      amorphous:
+        economy: passive
+        op: movement.form
+        minimum_opening_inches: 1
+        extra_movement_cost: 0
+      spider_climb:
+        economy: passive
+        op: movement.climb
+        difficult_surfaces: true
+        ceilings: true
+        ability_check_required: false
+      pseudopod:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: acid
+            amount:
+              dice:
+                count: 3
+                sides: 6
+              add: 2
+            average: 12
+      split:
+        economy: reaction
+        trigger_any:
+        - actor.becomes_bloodied
+        - actor.subjected_to_lightning_damage
+        - actor.subjected_to_slashing_damage
+        requires:
+          sizes:
+          - large
+          - medium
+          hp_at_least: 10
+        op: actor.replace_with_creatures
+        definition:
+          key: dnd2024:creatures/ochre_jelly
+        count: 2
+        each:
+          size_steps: -1
+          initiative: original_actor
+          hp:
+            divide:
+            - actor_stat: hp
+            - 2
+            round: down
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_ochre_jelly
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 1341280091353ed0b1b2533220d55995f3fe70d9f85d92f5c13de68ae85d9e78
   source_path: builtin/srd-5.2.1/creature/ochre_jelly.md
   pages:
   - 312
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ochre_jelly
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: fcb80700f01f2f5070000c786e9b4dae93c232f802a626656b74eea77c465173
 splat_clauses:
 - key: source_rules
   text: '# Ochre Jelly Large Ooze, Unaligned AC 8 Initiative -2 (8) HP 52 (7d10 + 14) Speed 20 ft., Climb
@@ -86,7 +216,8 @@ splat_clauses:
     jelly and acts on its Initiative. The original jelly’s Hit Points are divided evenly between the new
     jellies (round down).'
   sha256: ccff5f6fd52bec7ce5cf56475d512c1c0cc0eb4b4a39e8b9270b72194078ecdd
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ochre Jelly

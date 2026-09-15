@@ -12,18 +12,46 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/monk_level_20_body_and_mind
-  parameters: {}
+  parameters:
+    ability_increases:
+    - ability: dexterity
+      amount: 4
+      maximum: 25
+    - ability: wisdom
+      amount: 4
+      maximum: 25
+    class_scope:
+      class: monk
+      minimum_level: 20
+  implementation: dnd2024:class_features_monk_level_20_body_and_mind
+splat_contracts:
+- id: dnd2024:class_features_monk_level_20_body_and_mind
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - character.feature_acquired
+  capabilities:
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 52
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_monk_level_20_body_and_mind
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: a9238874937527cb8799204923349a32c3cbe004e063115963add77a90d29788
   parent_name: Monk
   line_span:
     first: 4346
@@ -33,7 +61,8 @@ splat_clauses:
   text: '# Level 20: Body and Mind You have developed your body and mind to new heights. Your Dexterity
     and Wisdom scores increase by 4, to a maximum of 25.'
   sha256: d68d3788b282f41a8554d43a7489298e3a0c2e311125758665c7845a1375c117
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 20: Body and Mind

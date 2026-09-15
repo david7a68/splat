@@ -56,17 +56,215 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/stone_giant
+  implementation: dnd2024:creature_stone_giant
+  parameters:
+    features:
+      stone_club:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 9
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 22
+          amount:
+            dice:
+              count: 3
+              sides: 10
+            add: 6
+          damage_type: bludgeoning
+        reach_feet: 15
+      boulder:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 9
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 15
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 6
+          damage_type: bludgeoning
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+          then:
+          - op: condition
+            condition: prone
+        range_feet: 60
+        long_range_feet: 240
+      multiattack:
+        economy: action
+        op: repeat_choice
+        count: 2
+        choices:
+        - feature: stone_club
+        - feature: boulder
+      deflect_missile:
+        economy: reaction
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        trigger: ranged_attack.hits_self_and_deals_damage
+        requires:
+          damage_type_any:
+          - bludgeoning
+          - piercing
+          - slashing
+        effects:
+        - op: reduce_damage
+          average: 11
+          amount:
+            dice:
+              count: 1
+              sides: 10
+            add: 6
+        - op: if
+          test:
+            remaining_attack_damage: 0
+          then:
+          - op: optional
+            effect:
+              op: save
+              ability: dexterity
+              dc: 17
+              targets:
+                kind: creature
+                count: 1
+                range_feet: 60
+                visible_to: self
+              failure:
+              - op: damage
+                average: 11
+                amount:
+                  dice:
+                    count: 1
+                    sides: 10
+                  add: 6
+                damage_type: force
+              success: []
+    skill_totals:
+      athletics: 12
+      perception: 4
+      stealth: 5
+    defenses: {}
+    senses:
+      passive_perception: 14
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks:
+      - giant
+      understands:
+      - giant
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_stone_giant
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - ranged_attack.hits_self_and_deals_damage
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: ef86f39112946feddd880874e0723bf53bbc4b70c9a0dca8c0ed8b4cd7687bcb
   source_path: builtin/srd-5.2.1/creature/stone_giant.md
   pages:
   - 330
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_stone_giant
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 610c40e9faf8e0322c382953383e08d82052bc2ef0696e27b7d6e68fe76d9fe4
 splat_clauses:
 - key: source_rules
   text: '# Stone Giant Huge Giant, Neutral AC 17 Initiative +5 (15) HP 126 (11d12 + 55) Speed 40 ft. MOD
@@ -82,7 +280,8 @@ splat_clauses:
     Dexterity Saving Throw: DC 17, one creature the giant can see within 60 feet. Failure: 11 (1d10 +
     6) Force damage.'
   sha256: 432f0e370c3c581417ddc59e6c33b508a2be776d91d443f8148ce014ac5185ae
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Stone Giant

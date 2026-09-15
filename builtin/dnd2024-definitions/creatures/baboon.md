@@ -58,17 +58,108 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/baboon
+  implementation: dnd2024:creature_baboon
+  parameters:
+    senses: []
+    passive_perception: 11
+    languages:
+      speak: true
+      known: []
+    features:
+      pack_tactics:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - attack
+        target_kind: creature
+        when:
+          ally_within_target_ft: 5
+          ally_excluded_conditions:
+          - incapacitated
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 1
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: -1
+            average: 1
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_baboon
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 09da717970cd6e3c14a28c014336c2b5571033a63a4c15820e0eaa6da206438b
   source_path: builtin/srd-5.2.1/creature/baboon.md
   pages:
   - 345
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_baboon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 4a9a346c971752bc66d7c67f6faa0538300cd94df6ddb09105a272b623afe8b5
 splat_clauses:
 - key: source_rules
   text: '# Baboon Small Beast, Unaligned AC 12 Initiative +2 (12) HP 3 (1d6) Speed 30 ft., Climb 30 ft.
@@ -78,7 +169,8 @@ splat_clauses:
     5 feet of the creature and the ally doesn’t have the Incapacitated condition. ### Actions Bite. Melee
     Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 - 1) Piercing damage.'
   sha256: be8eb0f7f81f0d3a2819695026a2a1a483a62ad734a4b78984717d19a04ffc86
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Baboon

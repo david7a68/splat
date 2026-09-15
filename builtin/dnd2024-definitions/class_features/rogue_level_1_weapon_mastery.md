@@ -12,18 +12,46 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/rogue_level_1_weapon_mastery
-  parameters: {}
+  parameters:
+    mastery_choices:
+      count: 2
+      eligible:
+        actor_proficient: true
+      replacement:
+        event: rest.long_completed
+        maximum: 2
+    class_scope:
+      class: rogue
+      minimum_level: 1
+  implementation: dnd2024:class_features_rogue_level_1_weapon_mastery
+splat_contracts:
+- id: dnd2024:class_features_rogue_level_1_weapon_mastery
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - rest.long_completed
+  capabilities:
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 62
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_rogue_level_1_weapon_mastery
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 16a77e521177e6e173b5561f2be988b0d3ab844ec81a3dd6b3df3a3285e8546d
   parent_name: Rogue
   line_span:
     first: 5214
@@ -36,7 +64,8 @@ splat_clauses:
     you finish a Long Rest, you can change the kinds of weapons you chose. For example, you could switch
     to using the mastery properties of Scimitars and Shortswords.'
   sha256: c9526f04fbfb98c22d54c2e47c0cde6943911bd5d5af3fff2ba4bba11b65c338
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Weapon Mastery

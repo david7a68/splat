@@ -30,18 +30,81 @@ splat_spell:
   material:
     description: a bit of phosphorus
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/dancing_lights
+  implementation: dnd2024:spell_dancing_lights
+  parameters:
+    targeting:
+      kind: locations
+      within_range: true
+    lights:
+      max_count: 4
+      size: torch
+      appearance_choice:
+      - torch
+      - lantern
+      - glowing_orb
+      hover: true
+      alternative_combined_form:
+        count: 1
+        size: medium
+        shape: vaguely_humanlike
+      illumination_each:
+        kind: dim
+        radius_feet: 10
+      duration: spell_duration
+    move:
+      economy: bonus_action
+      max_feet: 60
+      destination_within_range: true
+    constraints:
+      max_distance_to_another_light_feet: 20
+      beyond_spell_range: light_vanishes
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 1
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_dancing_lights
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      type: location_list
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - locations
+  events:
+  - spell.cast_completed
+  - position.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 93d71aed860a5d80e428a9cab2f3c2fd374a796255b5f55e4b74251df53e2235
   source_path: builtin/srd-5.2.1/spell/dancing_lights.md
   pages:
   - 121
   - 122
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_dancing_lights
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: a722d4570894e6677b1bc78af1e53cd43beed14d5fcd02b4e0e868f131c0d8e2
 splat_clauses:
 - key: source_rules
   text: '# Dancing Lights Illusion Cantrip (Bard, Sorcerer, Wizard) Casting Time: Action Range: 120 feet
@@ -53,7 +116,8 @@ splat_clauses:
     within 20 feet of another light created by this spell, and a light vanishes if it exceeds the spell’s
     range.'
   sha256: f157341665845876445268412b2dd858a26bb65a18e25c3c9fc630b6b576f657
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dancing Lights

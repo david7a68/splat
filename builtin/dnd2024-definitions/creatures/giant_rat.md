@@ -59,17 +59,112 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_rat
+  implementation: dnd2024:creature_giant_rat
+  parameters:
+    skill_totals:
+      perception: 2
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 12
+    languages:
+      speak: true
+      known: []
+    features:
+      pack_tactics:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - attack
+        target_kind: creature
+        when:
+          ally_within_target_ft: 5
+          ally_excluded_conditions:
+          - incapacitated
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 3
+            average: 5
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_giant_rat
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 056b16ea46f71adddd4908b48fb77a5367dd620415d6581aaa4c2d1052a5a09c
   source_path: builtin/srd-5.2.1/creature/giant_rat.md
   pages:
   - 353
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_rat
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 9243bb78d1c2c7434c04cfc1daa9d499b776dea85fa755060ce342ce5536cad4
 splat_clauses:
 - key: source_rules
   text: '# Giant Rat Small Beast, Unaligned AC 13 Initiative +3 (13) HP 7 (2d6) Speed 30 ft., Climb 30
@@ -80,7 +175,8 @@ splat_clauses:
     Incapacitated condition. ### Actions Bite. Melee Attack Roll: +5, reach 5 feet. Hit: 5 (1d4 + 3) Piercing
     damage.'
   sha256: f87170bc20c02ac11ecd24a7b82f5d8482fbe1e7ad722f37a26905b5246dd4e1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Rat

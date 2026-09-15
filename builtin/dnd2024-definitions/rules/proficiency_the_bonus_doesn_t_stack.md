@@ -12,18 +12,38 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/proficiency_the_bonus_doesn_t_stack
-  parameters: {}
+  parameters:
+    proficiency_additions_max: 1
+    proficiency_multiplications_max: 1
+    proficiency_divisions_max: 1
+    alternative_skill_proficiencies: any_qualifying_skill
+    multiple_qualifying_proficiencies: one_bonus
+  implementation: dnd2024:rules_proficiency_the_bonus_doesn_t_stack
+splat_contracts:
+- id: dnd2024:rules_proficiency_the_bonus_doesn_t_stack
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - check.calculate
+  capabilities:
+  - proficiency
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 8
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_proficiency_the_bonus_doesn_t_stack
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 468c1bdb0d6fe615a6bfa5808d2b3056a3b941a87bfaae93a5f645f15ff3618e
   parent_name: Proficiency
   line_span:
     first: 361
@@ -38,7 +58,8 @@ splat_clauses:
     Glossary”) doubles the Proficiency Bonus for certain ability checks. Whenever the bonus is used, it
     can be multiplied only once and divided only once.'
   sha256: 020c4deded53d1cf12395935cc94bca8c286551e3da2f319be48ab1ba4b33a86
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # The Bonus Doesn’t Stack

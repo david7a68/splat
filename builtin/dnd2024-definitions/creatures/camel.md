@@ -55,18 +55,106 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/camel
+  implementation: dnd2024:creature_camel
+  parameters:
+    features:
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 4
+            roll:
+              count: 1
+              sides: 4
+              modifier: 2
+            type: bludgeoning
+    senses:
+      darkvision: 60
+      passive_perception: 10
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_camel
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 0f462cb9a869d48dc27d978ba7bc6a4647622cc519d68df52ca4f0954f579b2a
   source_path: builtin/srd-5.2.1/creature/camel.md
   pages:
   - 346
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_camel
+  conversion_gaps: []
   execution_profiles:
   - dnd2024:creatures/camel
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: a9d64d2992a963928d7de15f7c1c68a2d7786ff5fa8d29aebd0df83760a042c7
 splat_clauses:
 - key: source_rules
   text: '# Camel Large Beast, Unaligned AC 10 Initiative -1 (9) HP 17 (2d10 + 6) Speed 50 ft. MOD SAVE
@@ -74,7 +162,8 @@ splat_clauses:
     Darkvision 60 ft.; Passive Perception 10 Languages None CR 1/8 (XP 25; PB +2) ### Actions Bite. Melee
     Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Bludgeoning damage.'
   sha256: 3ceecca83fadc8751cdac62068f774a0cbcab9b233d326d025a0dc7f70f57c74
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Camel

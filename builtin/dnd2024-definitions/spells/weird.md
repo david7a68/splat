@@ -25,17 +25,86 @@ splat_spell:
   ritual: false
   range:
     feet: 120
+splat_rule:
+  mechanic: dnd2024:spells/weird
+  implementation: dnd2024:spell_weird
+  parameters:
+    targeting:
+      kind: chosen_creatures_in_area
+      shape: sphere
+      radius_feet: 30
+      origin: chosen_point_in_range
+    initial_save:
+      ability: wisdom
+      failure:
+        damage:
+          dice: 10d10
+          type: psychic
+        condition: frightened
+        duration: spell_duration
+      success:
+        damage_fraction:
+          numerator: 1
+          denominator: 2
+    repeat:
+      event: frightened_target.turn_ended
+      save:
+        ability: wisdom
+        failure:
+          damage:
+            dice: 5d10
+            type: psychic
+        success:
+          end_spell_on_target: true
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 1
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_weird
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  events:
+  - spell.cast_completed
+  - turn.ended
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - conditions
+  - spatial_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 7cada96a5180aba9458df73b6d23701ba7075d963a61ab3ea425f6531ea6edff
   source_path: builtin/srd-5.2.1/spell/weird.md
   pages:
   - 174
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_weird
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 8d824bd53f9f15e20a1fb3bd7e5cd883e528f0d8e9549cc7876953505181bd18
 splat_clauses:
 - key: source_rules
   text: '# Weird Level 9 Illusion (Warlock, Wizard) Casting Time: Action Range: 120 feet Components: V,
@@ -46,7 +115,8 @@ splat_clauses:
     makes a Wisdom saving throw at the end of each of its turns. On a failed save, it takes 5d10 Psychic
     damage. On a successful save, the spell ends on that target.'
   sha256: 7fb2a82e75e0ca715d4ed6e69334925353e0f91c696747077998e95e3c743107
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Weird

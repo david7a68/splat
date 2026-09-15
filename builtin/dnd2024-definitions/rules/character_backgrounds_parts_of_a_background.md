@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/character_backgrounds_parts_of_a_background
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 83
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 21921dfac27f05d787bb2abe77518ae9e10266ac3d4fecb20729764d281d72ea
   parent_name: Character Backgrounds
   line_span:
     first: 7065
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Parts of a Background A background includes the following parts.'
   sha256: 7ea691620e2097edf4c55a5e2ee77267a95e825c2040714cb6a5b116a65f75ff
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Parts of a Background

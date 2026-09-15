@@ -59,17 +59,147 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/nightmare
+  implementation: dnd2024:creature_nightmare
+  parameters:
+    features:
+      confer_fire_resistance:
+        economy: trait
+        operation: passive_rule
+        optional: true
+        grant:
+          damage_resistances:
+          - fire
+          target: rider
+          while: mounted_on_self
+      illumination:
+        economy: trait
+        operation: passive_rule
+        bright_radius_ft: 10
+        additional_dim_radius_ft: 10
+      hooves:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 6
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 13
+            roll:
+              count: 2
+              sides: 8
+              modifier: 4
+            type: bludgeoning
+          - average: 10
+            roll:
+              count: 3
+              sides: 6
+              modifier: 0
+            type: fire
+      ethereal_stride:
+        economy: action
+        operation: planar_teleport
+        targets:
+          self: true
+          additional:
+            count_maximum: 3
+            willing: true
+            range_ft: 5
+        plane_pairs:
+        - - material
+          - ethereal
+        - - ethereal
+          - material
+    damage_immunities:
+    - fire
+    condition_immunities: []
+    senses:
+      passive_perception: 11
+    languages:
+      speaks: []
+      understands:
+      - abyssal
+      - common
+      - infernal
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_nightmare
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - conditions
+  - damage
+  - teleportation
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 367f7f597f2a2bea3105a677683199cd06f7f117f375fd28b6d76a6e0847d14c
   source_path: builtin/srd-5.2.1/creature/nightmare.md
   pages:
   - 311
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_nightmare
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: c1db638d65bbac9e6864667f5a5d670f27bf282cafccf908fc5330af457d7ba9
 splat_clauses:
 - key: source_rules
   text: '# Nightmare Large Fiend, Neutral Evil AC 13 Initiative +2 (12) HP 68 (8d10 + 24) Speed 60 ft.,
@@ -82,7 +212,8 @@ splat_clauses:
     Ethereal Stride. The nightmare and up to three willing creatures within 5 feet of it teleport to the
     Ethereal Plane from the Material Plane or vice versa.'
   sha256: b0ed60214708166cbcb099852122361c5e98f233f0cc9d427fdff2aa49047eb5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Nightmare

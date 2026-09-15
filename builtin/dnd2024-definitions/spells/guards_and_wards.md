@@ -29,18 +29,167 @@ splat_spell:
   material:
     description: a silver rod worth 10+ GP
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/guards_and_wards
+  implementation: dnd2024:spell_guards_and_wards
+  parameters:
+    spell_lifetime:
+      concentration: false
+      maximum_seconds: 86400
+    area:
+      maximum_square_feet: 2500
+      maximum_height_feet: 20
+      shape_choices:
+      - squares: 1
+        side_feet: 50
+      - squares: 100
+        side_feet: 5
+        contiguous: true
+      - squares: 25
+        side_feet: 10
+        contiguous: true
+    immunity:
+      designated_individuals:
+        chooser: caster
+        timing: cast
+      password:
+        chooser: caster
+        spoken_aloud: true
+        within_area_feet: 5
+        grant_to: speaker
+    dispelling:
+      whole_spell_targetable_by_dispel_magic: false
+      independently_dispellable_effect_groups:
+      - corridors
+      - doors
+      - stairs
+      - other_spell_effect
+      all_four_removed: end_spell
+    permanence:
+      repeat_casts: 365
+      frequency: daily
+      same_area: true
+      result_duration: until_all_effect_groups_dispelled
+    corridors:
+      scope: all_warded_corridors
+      fog_obscurement: heavy
+      misdirection:
+        at: intersection_or_branch_with_direction_choice
+        exclude_caster: true
+        probability_percent: 50
+        perceived_direction: opposite_chosen_direction
+    doors:
+      scope: all_warded_doors
+      lock_spell:
+        key: dnd2024:spells/arcane_lock
+      concealed_doors:
+        chooser: caster
+        maximum: 10
+        appearance: plain_wall
+    stairs:
+      scope: all_warded_stairs_top_to_bottom
+      effect_spell:
+        key: dnd2024:spells/web
+      destroyed_web_regrowth_seconds: 600
+      regrowth_requires_spell_active: true
+    other_spell_effect:
+      choose_count: 1
+      chooser: caster
+      options:
+        dancing_lights:
+          spell:
+            key: dnd2024:spells/dancing_lights
+          locations: 4
+          location_kind: corridor
+          behavior: repeated_simple_program
+          duration: guards_and_wards
+        magic_mouth:
+          spell:
+            key: dnd2024:spells/magic_mouth
+          locations: 2
+        stinking_cloud:
+          spell:
+            key: dnd2024:spells/stinking_cloud
+          locations: 2
+          dispersed_vapor_return_seconds_max: 600
+          return_requires_spell_active: true
+        gust_of_wind:
+          spell:
+            key: dnd2024:spells/gust_of_wind
+          locations: 1
+          location_kinds:
+          - corridor
+          - room
+          wind: continuous_for_duration
+        suggestion:
+          spell:
+            key: dnd2024:spells/suggestion
+          square_side_feet: 5
+          event: creature.entered_area
+          delivery: mental
+    nested_spell_invocation:
+      additional_casting_actions: false
+      additional_spell_slots: false
+      concentration_owner: guards_and_wards_lifetime
+      parent_exemptions_apply: true
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_guards_and_wards
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    area:
+      type: location_list
+      required: true
+    exempt_creatures:
+      type: participant_list
+      required: true
+    password:
+      required: false
+      type: text
+    spell_options:
+      type: choice
+      required: true
+    campaign:
+      type: campaign
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - objects
+  events:
+  - creature.entered_area
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - illusions
+  - world_objects
+  - areas
+  - campaign_time
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 82fa68867dd02b81668bf1009099218c85e649c068ac8ab1b982bf92a2f2eab7
   source_path: builtin/srd-5.2.1/spell/guards_and_wards.md
   pages:
   - 137
   - 138
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_guards_and_wards
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 49727515016da8ba008427f2adab5ae2ea167e826f320921484de565dc910033
 splat_clauses:
 - key: source_rules
   text: '# Guards and Wards Level 6 Abjuration (Bard, Wizard) Casting Time: 1 hour Range: Touch Components:
@@ -66,7 +215,8 @@ splat_clauses:
     of Wind in one corridor or room (the wind blows continuously while the spell lasts) • Suggestion in
     one 5-foot square; any creature that enters that square receives the suggestion mentally'
   sha256: c17e156b5d4bb961dc923e9d736a553ef4812c3de69a0e61dc86df97904b57e2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Guards and Wards

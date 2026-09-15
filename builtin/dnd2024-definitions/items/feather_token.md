@@ -15,17 +15,202 @@ splat_item:
   rarity: rarity_varies
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/feather_token
+  implementation: dnd2024:item_feather_token
+  parameters:
+    single_use: true
+    selection: gm_choice_or_roll
+    variant_die: 100
+    variants:
+    - name: anchor
+      roll:
+      - 1
+      - 20
+      rarity: uncommon
+      action: magic
+      target: boat_or_ship
+      range: touch
+      effect:
+        immovable_by_any_means: true
+        duration:
+          amount: 24
+          unit: hours
+        early_end: token_touches_vessel_again
+      consumed_on: effect_end
+    - name: bird
+      roll:
+      - 21
+      - 35
+      rarity: rare
+      action: magic
+      toss_height_ft: 5
+      consumed_on: activation
+      summon:
+        key: dnd2024:creatures/roc
+      overrides:
+        can_attack: false
+        obeys: simple_commands
+        flight:
+          normal_capacity_lb: 500
+          normal_speed_mph: 16
+          maximum_distance_per_day_miles: 144
+          rest_hours: 1
+          rest_after_flight_hours: 3
+          maximum_capacity_lb: 1000
+          over_normal_capacity_speed_multiplier: 0.5
+      ends_on:
+      - daily_maximum_distance_flown
+      - zero_hp
+      - magic_action_dismissal
+    - name: fan
+      roll:
+      - 36
+      - 50
+      rarity: uncommon
+      action: magic
+      requires: aboard_boat_or_ship
+      toss_height_max_ft: 10
+      consumed_on: activation
+      floating: true
+      wind: strong
+      ship_count: 1
+      sailing_speed_bonus_mph: 5
+      duration:
+        amount: 8
+        unit: hours
+      dismiss_action: magic
+    - name: swan_boat
+      roll:
+      - 51
+      - 65
+      rarity: rare
+      action: magic
+      target:
+        body_of_water_minimum_diameter_ft: 60
+      range: touch
+      consumed_on: activation
+      boat:
+        length_ft: 50
+        width_ft: 20
+        self_propelled: true
+        water_speed_mph: 6
+      command:
+        action: magic
+        requires: aboard
+        options:
+        - move
+        - turn
+        maximum_turn_degrees: 90
+      duration:
+        amount: 24
+        unit: hours
+      dismiss_action: magic
+    - name: tree
+      roll:
+      - 66
+      - 90
+      rarity: uncommon
+      action: magic
+      requires: outdoors
+      target:
+        unoccupied: true
+        ground: true
+      range: touch
+      consumed_on: activation
+      create:
+        type: oak_tree
+        magical: false
+        height_ft: 60
+        trunk_diameter_ft: 5
+        top_branch_radius_ft: 20
+    - name: whip
+      roll:
+      - 91
+      - 100
+      rarity: rare
+      action: magic
+      throw_range_ft: 10
+      consumed_on: activation
+      floating: true
+      attack:
+        action: bonus_action
+        type: melee_spell
+        bonus: 9
+        target_count: 1
+        target_range_from_whip_ft: 10
+        damage:
+          amount:
+            roll:
+              count: 1
+              sides: 6
+              add: 5
+          type: force
+        movement_max_ft: 20
+      duration:
+        amount: 1
+        unit: hours
+      ends_on:
+      - magic_action_dismissal
+      - user_death
+      - user_incapacitated
+    attunement_required: false
+splat_contracts:
+- id: dnd2024:item_feather_token
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.activation_requested
+  - time.elapsed
+  - participant.died
+  - condition.changed
+  - movement.completed
+  - damage.resolved
+  capabilities:
+  - item_effects
+  - dice
+  - item_spellcasting
+  - effect_duration
+  - spatial_targeting
+  - summoning
+  - item_variants
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: a00aa0c06fbbce78a4e49be148b7d7fddfc1fd165b34c56561f802a3ec67ed5a
   source_path: builtin/srd-5.2.1/magic_item/feather_token.md
   pages:
   - 221
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_feather_token
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 8c88c659abb4cd1599df82e73c8d8e31ea46b9ee843ab23b0d232596c50d0188
 splat_clauses:
 - key: source_rules
   text: '# Feather Token Wondrous Item, Rarity Varies This object looks like a feather. Different types
@@ -60,7 +245,8 @@ splat_clauses:
     the Incapacitated condition. Feather Tokens 1d100 Token Rarity 01–20 Anchor Uncommon 21–35 Bird Rare
     36–50 Fan Uncommon 51–65 Swan boat Rare 66–90 Tree Uncommon 91–00 Whip Rare'
   sha256: 879c9193716dc0406e3a3a4025405c22be397d68c5c53ec579cd7f149a306228
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Feather Token

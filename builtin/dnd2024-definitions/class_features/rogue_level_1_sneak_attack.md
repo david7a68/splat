@@ -12,19 +12,69 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/rogue_level_1_sneak_attack
-  parameters: {}
+  parameters:
+    limit:
+      count: 1
+      period: turn
+    trigger: actor.attack_hits_creature
+    requires:
+      weapon_any:
+      - finesse_property
+      - ranged_weapon
+      any:
+      - attack_advantage: true
+      - attack_disadvantage: false
+        ally_within_target_feet: 5
+        ally_incapacitated: false
+    extra_damage:
+      dice:
+        count:
+          op: ceil
+          args:
+          - op: divide
+            args:
+            - var: actor.class_levels.rogue
+            - 2
+        sides: 6
+      type: weapon.damage_type
+    class_scope:
+      class: rogue
+      minimum_level: 1
+  implementation: dnd2024:class_features_rogue_level_1_sneak_attack
+splat_contracts:
+- id: dnd2024:class_features_rogue_level_1_sneak_attack
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - attack.hit
+  capabilities:
+  - character_features
+  - damage
+  - d20_tests
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 61
   - 62
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_rogue_level_1_sneak_attack
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: d7e287c7f552b79643a7d7aa0d2f1f82fa579f3553cadcab19ed70d86b60088b
   parent_name: Rogue
   line_span:
     first: 5171
@@ -45,7 +95,8 @@ splat_clauses:
     on the attack roll. The extra damage increases as you gain Rogue levels, as shown in the Sneak Attack
     column of the Rogue Features table.'
   sha256: 46e66abcad1e5dd01f452c772cbe14432e541c9da7de5b457c2966cdf5aa8004
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Sneak Attack

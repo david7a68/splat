@@ -12,18 +12,61 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/petrified_condition
-  parameters: {}
+  parameters:
+    condition: petrified
+    grants_condition: incapacitated
+    automatic_save_failure_abilities:
+    - strength
+    - dexterity
+    incoming_attack_rolls: advantage
+    speed: 0
+    speed_can_increase: false
+    transform:
+      targets:
+      - self
+      - worn_nonmagical_objects
+      - carried_nonmagical_objects
+      substance: solid_inanimate
+      default_substance: stone
+      weight_multiplier: 10
+      aging_stops: true
+    damage_resistance: all
+    condition_immunity:
+    - poisoned
+  implementation: dnd2024:glossary_petrified_condition
+splat_contracts:
+- id: dnd2024:glossary_petrified_condition
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - condition_effects
+  events:
+  - condition.applied
+  - condition.ended
+  - attack.pending
+  - saving_throw.pending
+  - speed.calculated
+  capabilities:
+  - conditions
+  - checks
+  - attacks
+  - movement
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: ac538c4eb366ece11705f1d2e370e413be8bd3dae4f66e5e893467e3456823d2
   source_path: builtin/srd-5.2.1/glossary/petrified_condition.md
   pages:
   - 186
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_petrified_condition
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 4f220a593f29a86537746b15dd07cfff99313f49682bf6d50e2059cc4df0cdaf
 splat_clauses:
 - key: source_rules
   text: '# Petrified [Condition] While you have the Petrified condition, you experience the following
@@ -34,7 +77,8 @@ splat_clauses:
     Saving Throws Affected. You automatically fail Strength and Dexterity saving throws. Resist Damage.
     You have Resistance to all damage. Poison Immunity. You have Immunity to the Poisoned condition.'
   sha256: c1db9d7dbba71f6ae986a695b06b33c944013e363837ec3287832389424e6e24
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Petrified [Condition]

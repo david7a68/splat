@@ -26,18 +26,176 @@ splat_spell:
   ritual: false
   range:
     feet: 120
+splat_rule:
+  mechanic: dnd2024:spells/animate_objects
+  implementation: dnd2024:spell_animate_objects
+  parameters:
+    targeting:
+      kind: objects
+      magical: false
+      worn: false
+      carried: false
+      fixed_to_surface: false
+      excluded_sizes:
+      - gargantuan
+      selection_budget:
+        stat: spellcasting_ability_modifier
+      costs:
+        tiny: 1
+        small: 1
+        medium: 1
+        large: 2
+        huge: 3
+    animation:
+      creature_type: construct
+      alignment: unaligned
+      sprouts_legs: true
+      ally_of:
+      - caster
+      - caster_allies
+      duration:
+        until_any:
+        - spell_ends
+        - zero_hit_points
+      initiative:
+        same_count_as: caster
+        turn_order: immediately_after_caster
+      control:
+        economy: bonus_action
+        channel: mental
+        range_feet: 500
+        targets: any_subset
+        shared_command: true
+        no_command:
+          action: dodge
+          movement: avoid_harm_only
+      reversion_at_zero_hp:
+        form: original_object
+        excess_damage: carries_over
+      stats:
+        ac: 15
+        hp_by_size:
+          tiny: 10
+          small: 10
+          medium: 10
+          large: 20
+          huge: 40
+        speed_feet: 30
+        abilities:
+          strength: 16
+          dexterity: 10
+          constitution: 10
+          intelligence: 3
+          wisdom: 3
+          charisma: 1
+        saving_throw_modifiers:
+          strength: 3
+          dexterity: 0
+          constitution: 0
+          intelligence: -4
+          wisdom: -4
+          charisma: -5
+        damage_immunities:
+        - poison
+        - psychic
+        condition_immunities:
+        - charmed
+        - exhaustion
+        - frightened
+        - paralyzed
+        - poisoned
+        blindsight_feet: 30
+        passive_perception: 6
+        understands_languages: caster_known
+        challenge_rating: null
+        xp: 0
+        proficiency_bonus:
+          stat: caster_proficiency_bonus
+      slam:
+        economy: action
+        attack:
+          kind: melee
+          modifier: caster_spell_attack_modifier
+          reach_feet: 5
+        damage_type: force
+        damage_by_size:
+          medium_or_smaller:
+            dice: 1d4
+            add: 3
+            extra_dice_per_slot_above_5: 1d4
+          large:
+            dice: 2d6
+            add:
+              op: add
+              args:
+              - 3
+              - stat: caster_spellcasting_ability_modifier
+            extra_dice_per_slot_above_5: 1d6
+          huge:
+            dice: 2d12
+            add:
+              op: add
+              args:
+              - 3
+              - stat: caster_spellcasting_ability_modifier
+            extra_dice_per_slot_above_5: 1d12
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 1
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_animate_objects
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      type: location_list
+      required: true
+    objects:
+      type: object_list
+      required: true
+    forms:
+      type: definition_list
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - participants
+  - locations
+  events:
+  - spell.cast_completed
+  - health.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - attacks
+  - conditions
+  - spatial_effects
+  - participant_lifecycle
+  - forms
+  - perception
+  - controlled_participants
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: d70dd02fbc86a3ea3cd72a4c11361e1225fc5bf4220091a35e0e8c8d3545ca29
   source_path: builtin/srd-5.2.1/spell/animate_objects.md
   pages:
   - 108
   - 109
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_animate_objects
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: aa6f752790024204ff8877b411ef5a46831b8494546aafa59cbddedbbac2b503
 splat_clauses:
 - key: source_rules
   text: '# Animate Objects Level 5 Transmutation (Bard, Sorcerer, Wizard) Casting Time: Action Range:
@@ -64,7 +222,8 @@ splat_clauses:
     equal to 1d4 + 3 (Medium or smaller), 2d6 + 3 + your spellcasting ability modifier (Large), or 2d12
     + 3 + your spellcasting ability modifier (Huge).'
   sha256: 27af994d787f4af62e1d974acb4d798c0fe9f57248af39948daa022a27676410
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Animate Objects

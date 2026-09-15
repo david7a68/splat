@@ -55,17 +55,140 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/mammoth
+  implementation: dnd2024:creature_mammoth
+  parameters:
+    features:
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: gore
+          count: 2
+      gore:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 10
+          reach_ft: 10
+        hit:
+          damage:
+          - average: 18
+            roll:
+              count: 2
+              sides: 10
+              modifier: 7
+            type: piercing
+          prone:
+            condition: prone
+            maximum_size: huge
+            requires:
+              immediately_preceding_straight_movement_toward_target_ft: 20
+      trample:
+        economy: bonus_action
+        operation: saving_throw
+        ability: dexterity
+        dc: 18
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 5
+          required_conditions:
+          - prone
+        failure:
+          damage:
+          - average: 29
+            roll:
+              count: 4
+              sides: 10
+              modifier: 7
+            type: bludgeoning
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+    senses:
+      passive_perception: 10
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_mammoth
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 0d93fa0f85af7151a945f0abb87781c414b49096b0094e848fdb85d04f3e2e7f
   source_path: builtin/srd-5.2.1/creature/mammoth.md
   pages:
   - 357
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_mammoth
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 3cd392922e383b7b1762532de8996998147e700a5b6bf4341f71bb91565b55fb
 splat_clauses:
 - key: source_rules
   text: '# Mammoth Huge Beast, Unaligned AC 13 Initiative +2 (12) HP 126 (11d12 + 55) Speed 50 ft. MOD
@@ -77,7 +200,8 @@ splat_clauses:
     DC 18, one creature within 5 feet that has the Prone condition. Failure: 29 (4d10 + 7) Bludgeoning
     damage. Success: Half damage.'
   sha256: 62f0ee3744196325f283d0a3e05c7405e1d68b4628fac55f688ba9d4e6bd43a5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Mammoth

@@ -62,17 +62,149 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/swarm_of_crawling_claws
+  implementation: dnd2024:creature_swarm_of_crawling_claws
+  parameters:
+    features:
+      swarm:
+        economy: trait
+        operation: passive_rule
+        share_creature_spaces: true
+        minimum_opening_size: tiny
+        can_regain_hp: false
+        can_gain_temporary_hp: false
+      swarm_of_grasping_hands:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+            if:
+              self_bloodied: true
+            then:
+            - average: 11
+              roll:
+                count: 2
+                sides: 8
+                modifier: 2
+              type: necrotic
+            else:
+            - average: 20
+              roll:
+                count: 4
+                sides: 8
+                modifier: 2
+              type: necrotic
+          prone:
+            condition: prone
+            maximum_size: medium
+    damage_resistances:
+    - bludgeoning
+    - piercing
+    - slashing
+    damage_immunities:
+    - necrotic
+    - poison
+    condition_immunities:
+    - charmed
+    - exhaustion
+    - frightened
+    - grappled
+    - incapacitated
+    - paralyzed
+    - petrified
+    - poisoned
+    - prone
+    - restrained
+    - stunned
+    senses:
+      blindsight: 30
+      passive_perception: 10
+    languages:
+      speaks: []
+      understands:
+      - common
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_swarm_of_crawling_claws
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - conditions
+  - damage
+  - grappling
+  - spatial_queries
+  - limited_resources
+  - hit_points
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f7d3c9cd88f0ab7591c1653651b3933ad0f4fb26c5f68afdd3b4d199ded75ee7
   source_path: builtin/srd-5.2.1/creature/swarm_of_crawling_claws.md
   pages:
   - 278
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_swarm_of_crawling_claws
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: ca85ddd9afeb6bf3fad810c2f87ed42eca77520b0170162d8a51147e95e45687
 splat_clauses:
 - key: source_rules
   text: '# Swarm of Crawling Claws Medium Swarm of Tiny Undead, Neutral Evil AC 12 Initiative +2 (12)
@@ -86,7 +218,8 @@ splat_clauses:
     Melee Attack Roll: +4, reach 5 ft. Hit: 20 (4d8 + 2) Necrotic damage, or 11 (2d8 + 2) Necrotic damage
     if the swarm is Bloodied. If the target is a Medium or smaller creature, it has the Prone condition.'
   sha256: 272acae17a411569f1c513c8907693f68990c56e59a787c89cf216141270038d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Swarm of Crawling Claws

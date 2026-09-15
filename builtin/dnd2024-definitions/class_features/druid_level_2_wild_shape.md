@@ -12,19 +12,146 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/druid_level_2_wild_shape
-  parameters: {}
+  parameters:
+    action: bonus_action
+    resource:
+      id: wild_shape
+      initial_maximum: 2
+      maximum_by_class_level:
+        '2': 2
+        '6': 3
+        '17': 4
+      recover:
+      - event: rest.short_rest_completed
+        amount: 1
+      - event: rest.long_rest_completed
+        amount: all_expended
+    cost: 1
+    form_choice:
+      from: known_beast_forms
+      known_count_by_druid_level:
+        '2': 4
+        '4': 6
+        '8': 8
+      maximum_challenge_rating_by_druid_level:
+        '2': 0.25
+        '4': 0.5
+        '8': 1
+      fly_speed_allowed_minimum_druid_level: 8
+      replace:
+        event: rest.long_rest_completed
+        maximum: 1
+        must_remain_eligible: true
+      other_source_beasts:
+        choice_authority: game_master
+        type: allow_source
+        required: true
+    duration:
+      hours:
+        op: divide
+        args:
+        - stat: classes.druid.level
+        - 2
+    ends_on:
+    - wild_shape.used_again
+    - condition.incapacitated
+    - death
+    end_voluntarily:
+      action: bonus_action
+    temporary_hit_points:
+      stat: classes.druid.level
+    statistics:
+      replace_with: beast_stat_block
+      retain:
+      - personality
+      - memories
+      - speech
+      - creature_type
+      - hit_points
+      - hit_point_dice
+      - intelligence
+      - wisdom
+      - charisma
+      - class_features
+      - languages
+      - feats
+      proficiencies:
+        retain:
+        - skills
+        - saving_throws
+        use_own_proficiency_bonus: true
+        gain_beast_proficiencies: true
+        modifier_rule: higher_of_own_and_beast
+    spellcasting:
+      can_cast: false
+      concentration_preserved: true
+      existing_spells_unaffected: true
+    objects:
+      handling_depends_on: form_limbs
+      equipment_choice_per_item:
+      - drop_in_space
+      - merge
+      - wear
+      wearing_eligibility:
+        authority: game_master
+        decision_type: boolean
+        criteria:
+        - size
+        - shape
+      equipment_resizes: false
+      unwearable_choices:
+      - drop_in_space
+      - merge
+      merged_equipment_effects_active: false
+      worn_equipment_effects_active: true
+  implementation: dnd2024:class_features_druid_level_2_wild_shape
+splat_contracts:
+- id: dnd2024:class_features_druid_level_2_wild_shape
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+    form:
+      type: definition
+      required: true
+    equipment_decisions:
+      type: choice
+      required: true
+  outputs:
+  - feature_state
+  - choices
+  - resource_changes
+  - spell_grants
+  events:
+  - action.bonus
+  - rest.short_rest_completed
+  - rest.long_rest_completed
+  - condition.applied
+  - death
+  - character.class_level_gained
+  capabilities:
+  - shapechanging
+  - character_choices
+  - resources
+  - equipment
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 42
   - 43
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_druid_level_2_wild_shape
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 985a6fa5d6d3d78be9e0bc37df09cba2f558fcc6be37cb1be3ff9aa24376f254
   parent_name: Druid
   line_span:
     first: 3494
@@ -63,7 +190,8 @@ splat_clauses:
     can’t wear must either fall to the ground or merge with the form. Equipment that merges with the form
     has no effect while you’re in that form.'
   sha256: 33e236ecac7a9a06de6208b981fc2225256125110c4fbbf66d6a22ec467b5faa
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 2: Wild Shape

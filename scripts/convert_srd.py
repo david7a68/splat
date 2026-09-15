@@ -130,10 +130,10 @@ def main():
                 # Full source prose stays with the typed note for review of the profile.
                 data='---\n'+yaml.safe_dump(front,sort_keys=False,allow_unicode=True)+'---\n\n'+body.strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')+'\n'
                 outputs[path.stem+'.md']=data;record.update(status='converted_attack_profile',definitions=[key])
-            except Unsupported as error:record.update(status='pending_conversion',reason=str(error))
-        else:record.update(status='pending_conversion',reason='Rule/feature clauses require further typed conversion')
+            except Unsupported as error:record.update(status='outside_execution_profile',reason=str(error))
+        else:record.update(status='outside_execution_profile',reason='Outside the bounded execution profile; see the full definition catalogue for typed rules and engine gaps')
         records.append(record)
-    coverage={'format':1,'source_version':'SRD 5.2.1','boundary':'Execution profiles cover fixed stat-block combat configuration, not all creature ecology or gear transitions. Pending entries have no executable conversion. Page records retain coverage for classes, feats, equipment and other sections.','counts':{status:sum(r['status']==status for r in records) for status in ['reviewed_execution_slice','converted_attack_profile','pending_conversion']},'entries':records}
+    coverage={'format':1,'source_version':'SRD 5.2.1','boundary':'Execution profiles cover fixed stat-block combat configuration, not all creature ecology or gear transitions. Entries outside this profile are not supported by the bounded interpreter; the full definition catalogue tracks their rules and engine gaps separately. Page records retain coverage for classes, feats, equipment and other sections.','counts':{status:sum(r['status']==status for r in records) for status in ['reviewed_execution_slice','converted_attack_profile','outside_execution_profile']},'entries':records}
     report=json.dumps(coverage,indent=2,ensure_ascii=False)+'\n';outputs['coverage.json']=report
     if args.check:
         actual={p.name:p.read_text() for p in OUTPUT.glob('*') if p.is_file()}

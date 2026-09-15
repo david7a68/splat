@@ -59,17 +59,166 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/sprite
+  implementation: dnd2024:creature_sprite
+  parameters:
+    features:
+      needle_sword:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 6
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 6
+            roll:
+              count: 1
+              sides: 4
+              modifier: 4
+            type: piercing
+      enchanting_bow:
+        economy: action
+        operation: attack
+        attack:
+          mode: ranged
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 6
+          range_ft: 40
+          long_range_ft: 160
+        hit:
+          damage:
+          - average: 1
+            roll:
+              constant: 1
+            type: piercing
+          conditions:
+          - condition: charmed
+            until: self.next_turn_start
+      heart_sight:
+        economy: action
+        operation: saving_throw
+        ability: charisma
+        dc: 10
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 5
+          visible: true
+        failure:
+          learn:
+          - target.emotions
+          - target.alignment
+        automatic_failure_types:
+        - celestial
+        - fiend
+        - undead
+        success:
+          effects: []
+      invisibility:
+        economy: action
+        operation: cast_spell
+        spell:
+          key: dnd2024:spells/invisibility
+        ability: charisma
+        targets:
+        - self
+        components_waived:
+        - verbal
+        - somatic
+        - material
+    skill_totals:
+      perception: 3
+      stealth: 8
+    senses:
+      passive_perception: 13
+    languages:
+      speaks:
+      - common
+      - elvish
+      - sylvan
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_sprite
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spellcasting
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 1f4b677ff8efafac0ae17aeeb83c15170970dd15916f24f72cdcb9095fe33824
   source_path: builtin/srd-5.2.1/creature/sprite.md
   pages:
   - 329
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_sprite
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 05aa8f0a97857f56fee13775ead33147cbb0f02a79b022ace1f93209a293a0ad
 splat_clauses:
 - key: source_rules
   text: '# Sprite Tiny Fey, Neutral Good AC 15 Initiative +4 (14) HP 10 (4d4) Speed 10 ft., Fly 40 ft.
@@ -83,7 +232,8 @@ splat_clauses:
     The sprite casts Invisibility on itself, requiring no spell components and using Charisma as the spellcasting
     ability.'
   sha256: 92e8d98f979affe55d0fd9200a0ce859ed55d52b0783a19309322c45e1efd915
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Sprite

@@ -12,18 +12,47 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_items_paired_items
-  parameters: {}
+  parameters:
+    paired_item_benefits_require_both_worn: true
+    mixed_pairs_grant_benefits: false
+  implementation: dnd2024:rules_magic_items_paired_items
+splat_contracts:
+- id: dnd2024:rules_magic_items_paired_items
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+  outputs:
+  - item_updates
+  - cost
+  - effects
+  events: []
+  capabilities:
+  - items
+  - attunement
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 103
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_magic_items_paired_items
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 47bed7a8535c4634b7b0be69ffd03d3fe0a4fd52f54d6036a9fc1c35031e8d63
   parent_name: Magic Items
   line_span:
     first: 8953
@@ -35,7 +64,8 @@ splat_clauses:
     Striding and Springing on one foot and a Boot of Elvenkind on the other foot gains no benefit from
     either.'
   sha256: ade1c803404cac77254ae805260d2084610b1b24ace61abe876a752bd5914112
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Paired Items

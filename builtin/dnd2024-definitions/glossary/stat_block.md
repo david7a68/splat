@@ -12,19 +12,103 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/stat_block
-  parameters: {}
+  parameters:
+    schema:
+      size: size_category
+      creature_type: creature_type_and_tags
+      alignment:
+        default: suggested
+        actual_chooser: gm
+      armor_class: integer
+      initiative:
+        modifier: integer
+        score: integer
+      hit_points:
+        static: integer
+        dice: dice_expression
+        constitution_contribution: integer
+      speed: feet_by_mode
+      abilities: scores_modifiers_and_save_modifiers
+      skills: proficiencies
+      resistances: damage_type_list
+      vulnerabilities: damage_type_list
+      immunities: damage_and_condition_lists
+      gear: giveable_or_retrievable_equipment
+      senses: special_senses_and_passive_perception
+      languages: known_languages
+      challenge_rating:
+        rating: number
+        experience_points: integer
+        proficiency_bonus: integer
+      traits: always_or_conditionally_active_features
+      actions: additional_to_glossary_actions
+      bonus_actions: available_bonus_actions
+      reactions: available_special_reactions
+    magically_created_creature_optional_fields:
+    - hit_dice
+    - initiative
+    - challenge_rating
+    attack:
+      fields:
+      - melee_or_ranged
+      - attack_bonus
+      - reach_or_range
+      - on_hit
+      default_target_count: 1
+    save_effect:
+      fields:
+      - save_ability
+      - dc
+      - eligible_creatures
+      - failure_result
+      - success_result
+    damage:
+      mode_choice:
+        chooser: gm
+        options:
+        - static
+        - dice
+      use_both: false
+  implementation: dnd2024:glossary_stat_block
+splat_contracts:
+- id: dnd2024:glossary_stat_block
+  inputs:
+    monster:
+      type: participant
+      required: true
+    stat_block:
+      type: definition
+      required: true
+    gm_alignment:
+      type: choice
+      required: true
+    gm_damage_mode:
+      type: choice
+      required: true
+  outputs:
+  - monster_statistics
+  - attack_defaults
+  - damage_mode
+  events: []
+  capabilities:
+  - statistics
+  - attacks
+  - damage
+  - gm_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 8bebfcd9defb3d948fc0aa73f40de4baaf3e9c9a1daac851d14e7f0b060362e1
   source_path: builtin/srd-5.2.1/glossary/stat_block.md
   pages:
   - 188
   - 189
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_stat_block
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: d7cd805b8babef5955d4ccd6384879a85999c7f2f43ca8b3fe0079fbeda01308
 splat_clauses:
 - key: source_rules
   text: '# Stat Block A stat block contains the game statistics of a monster. Each stat block includes
@@ -63,7 +147,8 @@ splat_clauses:
     on a hit. The GM determines whether you use the static number or the die expression in parentheses;
     you don’t use both.'
   sha256: 5e8fa00464e3c6ac9869a2f3cdd597706ba000f6261125ac69e29f25cafac46d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Stat Block

@@ -58,17 +58,103 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/lizard
+  implementation: dnd2024:creature_lizard
+  parameters:
+    senses:
+    - sense: darkvision
+      range_ft: 30
+    passive_perception: 9
+    languages:
+      speak: true
+      known: []
+    features:
+      spider_climb:
+        economy: passive
+        op: movement.climb
+        difficult_surfaces: true
+        ceilings: true
+        ability_check_required: false
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 2
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              constant: 1
+            average: 1
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_lizard
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 132b44f8c43e107e952d7029a281c1e2d620a6454518c8b04e56d5a43cbbcbba
   source_path: builtin/srd-5.2.1/creature/lizard.md
   pages:
   - 357
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_lizard
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 515eee6087b0ca56484c8ef7a2727f03d327db8dd7e5ff26518fdedbae1d5c79
 splat_clauses:
 - key: source_rules
   text: '# Lizard Tiny Beast, Unaligned AC 10 Initiative +0 (10) HP 2 (1d4) Speed 20 ft., Climb 20 ft.
@@ -77,7 +163,8 @@ splat_clauses:
     Climb. The lizard can climb difficult surfaces, including along ceilings, without needing to make
     an ability check. ### Actions Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Piercing damage.'
   sha256: 144656236e09bac53252a53e996d0c4e7c75c5fe21402ee25db30c709113d6e7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Lizard

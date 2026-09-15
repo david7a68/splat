@@ -12,18 +12,51 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/activating_a_magic_item_command_word
-  parameters: {}
+  parameters:
+    command_word_modes:
+    - spoken
+    - signed
+    spoken:
+      audible_required: true
+      sound_suppression_prevents_activation: true
+  implementation: dnd2024:rules_activating_a_magic_item_command_word
+splat_contracts:
+- id: dnd2024:rules_activating_a_magic_item_command_word
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+  outputs:
+  - item_updates
+  - cost
+  - effects
+  events: []
+  capabilities:
+  - items
+  - attunement
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 206
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_activating_a_magic_item_command_word
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 8657194695cfa0798b443333ab380dd6b4b9168d647ee4b6101566660f3c9e9b
   parent_name: Activating a Magic Item
   line_span:
     first: 10598
@@ -34,7 +67,8 @@ splat_clauses:
     item to work. Spoken command words must be audible and fail to work in areas where all sound is suppressed,
     as in the area of the Silence spell.'
   sha256: 4e394f023febd797f4973097ab6418c33830dac5486841714fbe56f813ac60f7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Command Word

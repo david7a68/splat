@@ -62,17 +62,252 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/planetar
+  implementation: dnd2024:creature_planetar
+  parameters:
+    features:
+      divine_awareness:
+        economy: trait
+        operation: passive_rule
+        detect_lies:
+          requires: heard
+      exalted_restoration:
+        economy: trait
+        operation: passive_rule
+        trigger: self.dies
+        unless:
+          plane: mount_celestia
+        remove_old_body: true
+        new_body:
+          delay_seconds: 0
+          plane: mount_celestia
+          hp: maximum
+      magic_resistance:
+        economy: trait
+        operation: passive_rule
+        saving_throw_advantage_against:
+        - spells
+        - magical_effects
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: choice
+          options:
+          - operation: attack_sequence
+            feature: radiant_sword
+            count: 3
+          - operation: repeat
+            count: 2
+            effect:
+              operation: use_feature
+              feature: holy_burst
+      radiant_sword:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 12
+          reach_ft: 10
+        hit:
+          damage:
+          - average: 14
+            roll:
+              count: 2
+              sides: 6
+              modifier: 7
+            type: slashing
+          - average: 18
+            roll:
+              count: 4
+              sides: 8
+              modifier: 0
+            type: radiant
+      holy_burst:
+        economy: action
+        operation: saving_throw
+        ability: dexterity
+        dc: 20
+        targets:
+          kind: enemy
+          selection: each
+          area:
+            shape: sphere
+            radius_ft: 20
+            center:
+              visible: true
+              range_ft: 120
+        failure:
+          damage:
+          - average: 24
+            roll:
+              count: 7
+              sides: 6
+              modifier: 0
+            type: radiant
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+      spellcasting:
+        economy: action
+        operation: spellcasting
+        ability: charisma
+        components_waived:
+        - material
+        save_dc: 20
+        options:
+        - spell:
+            key: dnd2024:spells/detect_evil_and_good
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/commune
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/control_weather
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/dispel_evil_and_good
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/raise_dead
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        material_components_available: true
+      divine_aid:
+        economy: bonus_action
+        resource:
+          kind: daily
+          uses: 2
+          recovery: long_rest
+        operation: spell_choice
+        options:
+        - operation: cast_spell
+          spell:
+            key: dnd2024:spells/cure_wounds
+        - operation: cast_spell
+          spell:
+            key: dnd2024:spells/invisibility
+        - operation: cast_spell
+          spell:
+            key: dnd2024:spells/lesser_restoration
+        - operation: cast_spell
+          spell:
+            key: dnd2024:spells/remove_curse
+        ability: charisma
+    skill_totals:
+      perception: 11
+    damage_resistances:
+    - radiant
+    damage_immunities: []
+    condition_immunities:
+    - charmed
+    - exhaustion
+    - frightened
+    senses:
+      truesight: 120
+      passive_perception: 21
+    languages:
+      speaks: all
+      understands: []
+      telepathy_range_ft: 120
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_planetar
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - creature.died
+  - rest.completed
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spellcasting
+  - spatial_queries
+  - limited_resources
+  - curses
+  - hit_points
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: c9a4a77f021406da9d002eabe646ab6fcf6da4fdd84a8a0aaf6b9ceb76f19bbb
   source_path: builtin/srd-5.2.1/creature/planetar.md
   pages:
   - 315
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_planetar
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: b33857fc15bb227298c033d1bc4b1907ed172505f2dbf08f15516ef9e7e77adf
 splat_clauses:
 - key: source_rules
   text: '# Planetar Large Celestial (Angel), Lawful Good AC 19 Initiative +10 (20) HP 262 (21d10 + 147)
@@ -93,7 +328,8 @@ splat_clauses:
     Cure Wounds, Invisibility, Lesser Restoration, or Remove Curse, using the same spellcasting ability
     as Spellcasting.'
   sha256: fb533310c5247c874cb46126ce237c0f426350780338e22760a8f1ca0319d110
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Planetar

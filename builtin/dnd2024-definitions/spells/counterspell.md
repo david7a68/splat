@@ -26,48 +26,65 @@ splat_spell:
   ritual: false
   range:
     feet: 60
-splat_actions:
-  cast:
-    name: Cast Counterspell
-    activation:
-      economy: reaction
-      category: magic
-      timing: dnd2024:spell.cast_pending
-      cost_at: dnd2024:spell_slot_expenditure
-    targets:
-      caster:
-        kind: creature
-        count:
-          min: 1
-          max: 1
-        range:
-          feet: 60
-        visible: true
-    steps:
-    - key: interrupt
-      operation: dnd2024:counterspell_2024
-      target: caster
-      parameters:
-        triggering_components_any:
-        - verbal
-        - somatic
-        - material
-        save_ability: constitution
-        save_dc:
-          binding: save_dc
-        failure:
-          spell_effect: dissipate
-          casting_economy: wasted
-          spell_slot: not_expended
-        success: continue_cast
-        bind_to: event.use
-        other_costs: follow_own_rule
-splat_parameters:
-  save_dc:
-    type: integer
-    minimum: 1
-    maximum: 40
-    required: true
+splat_rule:
+  mechanic: dnd2024:spells/counterspell
+  implementation: dnd2024:spell_counterspell
+  parameters:
+    spell_lifetime:
+      concentration: false
+      instantaneous: true
+    trigger:
+      event: spell.cast_pending
+      creature_visible: true
+      distance_feet_max: 60
+      component_any:
+      - verbal
+      - somatic
+      - material
+    target: triggering_caster
+    save:
+      ability: constitution
+      dc: spell_save_dc
+      success: casting_continues
+    failure:
+      spell_effect: dissipate_without_effect
+      casting_economy: wasted
+      applicable_economy:
+      - action
+      - bonus_action
+      - reaction
+      slot_cast:
+        spell_slot: not_expended
+splat_contracts:
+- id: dnd2024:spell_counterspell
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    target:
+      type: participant
+      required: true
+    triggering_cast:
+      type: resolution
+      required: true
+    save_dc:
+      type: integer
+      required: true
+  outputs:
+  - save_result
+  - casting_outcome
+  - cost_disposition
+  events:
+  - save.completed
+  - spell.cast_pending
+  capabilities:
+  - spellcasting
+  - effects
+  - magic_suppression
+  - tests
 splat_conversion:
   status: specified
   category: spell
@@ -76,9 +93,11 @@ splat_conversion:
   pages:
   - 120
   engine_gaps: &id001
-  - dnd2024:counterspell_2024
+  - dnd2024:spell_counterspell
   conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 1c0ca1a11a166143344fbaea6b4a132b67c988b60fb3f65fdc0511e84bfa6cba
 splat_clauses:
 - key: source_rules
   text: '# Counterspell Level 3 Abjuration (Sorcerer, Warlock, Wizard) Casting Time: Reaction, which you

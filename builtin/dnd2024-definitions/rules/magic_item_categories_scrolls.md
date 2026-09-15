@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_item_categories_scrolls
-  parameters: {}
+  parameters:
+    category: scroll
+    consumable: true
+    activation_requires: read_scroll
+    reader_eligibility: understands_any_written_language
+    item_specific_eligibility_overrides: true
+    on_magic_invoked:
+      reuse_prohibited: true
+      destruction_modes:
+      - words_fade
+      - crumble_to_dust
+  implementation: dnd2024:rules_magic_item_categories_scrolls
+splat_contracts:
+- id: dnd2024:rules_magic_item_categories_scrolls
+  inputs:
+    subject:
+      type: participant
+      required: true
+    scroll:
+      type: item_instance
+      required: true
+  outputs:
+  - activation_eligibility
+  - consumed_item
+  events:
+  - scroll.activated
+  capabilities:
+  - scrolls
+  - languages
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 205
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_magic_item_categories_scrolls
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 9a370e426284e6e62d5a6fcc1752c9ba9c428fa3f9688f08c132299fa00dd12a
   parent_name: Magic Item Categories
   line_span:
     first: 10483
@@ -38,7 +68,8 @@ splat_clauses:
     Any creature that can understand a written language can read a scroll and attempt to activate it unless
     its description notes otherwise.'
   sha256: 4ea5b2b2546a177764824208febf11fbd152c79a86766e71cafeb132968186f1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Scrolls

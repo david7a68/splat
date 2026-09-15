@@ -12,18 +12,52 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/champion_level_3_remarkable_athlete
-  parameters: {}
+  parameters:
+    advantage_on:
+    - roll: initiative
+    - roll: ability_check
+      ability: strength
+      skill: athletics
+    after_critical_hit:
+      optional_move_maximum_feet:
+        op: divide
+        args:
+        - stat: speed
+        - 2
+      provokes_opportunity_attacks: false
+  implementation: dnd2024:class_features_champion_level_3_remarkable_athlete
+splat_contracts:
+- id: dnd2024:class_features_champion_level_3_remarkable_athlete
+  inputs:
+    actor:
+      type: participant
+      required: true
+    destination:
+      required: false
+      type: location
+  outputs:
+  - feature_state
+  - movement
+  events:
+  - initiative.pending
+  - ability_check.pending
+  - attack.critical_hit
+  capabilities:
+  - roll_modifiers
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 49
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_champion_level_3_remarkable_athlete
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: eac3bdc43b3697709be1acd5f984efa00a679aa6419dd7338140cb3db58e9470
   parent_name: Champion
   line_span:
     first: 4061
@@ -34,7 +68,8 @@ splat_clauses:
     and Strength (Athletics) checks. In addition, immediately after you score a Critical Hit, you can
     move up to half your Speed without provoking Opportunity Attacks.'
   sha256: 1d26ee09d5aba253aedc95b8702dc27cd4f64fbba68041e3abc66f0e7a3032df
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Remarkable Athlete

@@ -26,17 +26,84 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/zone_of_truth
+  implementation: dnd2024:spell_zone_of_truth
+  parameters:
+    area:
+      shape: sphere
+      radius_feet: 15
+      origin: chosen_point_within_range
+      duration: spell_duration
+    save_triggers:
+    - creature_enters_area_first_time_on_turn
+    - creature_starts_turn_in_area
+    save:
+      ability: charisma
+      dc:
+        binding: save_dc
+      failure:
+        cannot_speak_deliberate_lie: true
+        restriction_only_in_radius: true
+        aware_of_spell: true
+        may_refuse_answer: true
+        may_evade_truthfully: true
+      success:
+        effect: none
+    caster_knows_each_save_outcome: true
+splat_contracts:
+- id: dnd2024:spell_zone_of_truth
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - knowledge
+  events:
+  - spell.cast_completed
+  - turn.start
+  - movement.completed
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - spatial_relationships
+  - saving_throws
+  - knowledge
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: d3ce95cdeb67f455db6528efd98013c00d04a8660dd940de03aa5a9a5fa9c3c9
   source_path: builtin/srd-5.2.1/spell/zone_of_truth.md
   pages:
   - 175
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_zone_of_truth
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 49d741b4401d57230a61cbf9223355891508c4966a8e928fece3153c65071cdf
 splat_clauses:
 - key: source_rules
   text: '# Zone of Truth Level 2 Enchantment (Bard, Cleric, Paladin) Casting Time: Action Range: 60 feet
@@ -48,7 +115,8 @@ splat_clauses:
     answering questions to which it would normally respond with a lie. Such a creature can be evasive
     yet must be truthful.'
   sha256: ce26cfa72bb6944fd540d0516eafad12d77fdcc779a898e2f8b3362a4ea3de5f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Zone of Truth

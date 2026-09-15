@@ -12,18 +12,46 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_item_categories_staffs
-  parameters: {}
+  parameters:
+    category: staff
+    weight_pounds_range:
+    - 2
+    - 7
+    default_uses:
+    - weapon:
+        key: dnd2024:equipment/quarterstaff
+      magical_weapon: false
+    - focus: arcane
+    description_exception_overrides: true
+  implementation: dnd2024:rule_magic_item_categories_staffs
+splat_contracts:
+- id: dnd2024:rule_magic_item_categories_staffs
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - item_changes
+  events: []
+  capabilities:
+  - magic_items
+  - equipment
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 205
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_magic_item_categories_staffs
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 211ba2f579712e072d1c61fbb0b9a01e2aab3be56a4662112eec2476e69aa575
   parent_name: Magic Item Categories
   line_span:
     first: 10497
@@ -36,7 +64,8 @@ splat_clauses:
     or cane. Unless its description notes otherwise, a staff can be used as a nonmagical Quarterstaff
     and an Arcane Focus.'
   sha256: 81df51ea5e05976a0485c1b40eb97f70ede34d7f9ca9bf92edc9e8e76fc72d73
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Staffs

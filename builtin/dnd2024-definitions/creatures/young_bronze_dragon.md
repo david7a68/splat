@@ -64,17 +64,210 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/young_bronze_dragon
+  implementation: dnd2024:creature_young_bronze_dragon
+  parameters:
+    features:
+      amphibious:
+        economy: passive
+        breathing_media:
+        - air
+        - water
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 8
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 16
+          amount:
+            dice:
+              count: 2
+              sides: 10
+            add: 5
+          damage_type: slashing
+        reach_feet: 10
+      lightning_breath:
+        economy: action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: save
+        ability: dexterity
+        dc: 15
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: line
+            size_feet: 60
+            origin: self
+            width_feet: 5
+        failure:
+        - op: damage
+          average: 49
+          amount:
+            dice:
+              count: 9
+              sides: 10
+            add: 0
+          damage_type: lightning
+        success:
+        - op: damage_fraction
+          numerator: 1
+          denominator: 2
+          round: down
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: rend
+          count: 3
+        replacement:
+          max_attacks: 1
+          choices:
+          - feature: repulsion_breath
+      repulsion_breath:
+        economy: action
+        op: save
+        ability: strength
+        dc: 15
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            size_feet: 30
+            origin: self
+        failure:
+        - op: push
+          distance_max_feet: 40
+          direction: straight_away_from_self
+        - op: condition
+          condition: prone
+        success: []
+    skill_totals:
+      insight: 4
+      perception: 7
+      stealth: 3
+    defenses:
+      immunities:
+        damage_types:
+        - lightning
+    senses:
+      passive_perception: 17
+      special:
+      - sense: blindsight
+        range_feet: 30
+      - sense: darkvision
+        range_feet: 120
+    communication:
+      speaks:
+      - common
+      - draconic
+      understands:
+      - common
+      - draconic
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_young_bronze_dragon
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: b6d2dec4279d5abe8b1230954f39eb839b6a8fbd7ba8a4d3cc1adb07fd92bc96
   source_path: builtin/srd-5.2.1/creature/young_bronze_dragon.md
   pages:
   - 270
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_young_bronze_dragon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 2514c0349cdf7dfb0ee7ea23a6969d68fc54daaf226654384fa1d26042060291
 splat_clauses:
 - key: source_rules
   text: '# Young Bronze Dragon Large Dragon (Metallic), Lawful Good AC 17 Initiative +3 (13) HP 142 (15d10
@@ -89,7 +282,8 @@ splat_clauses:
     creature in a 30-foot Cone. Failure: The target is pushed up to 40 feet straight away from the dragon
     and has the Prone condition.'
   sha256: a314431894742e996a93dbbff75679a16f616fd9754b96b31d9abbcbf3cd01e6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Young Bronze Dragon

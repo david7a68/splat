@@ -12,18 +12,57 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/paladin_level_2_fighting_style
-  parameters: {}
+  parameters:
+    choose: 1
+    options:
+      fighting_style:
+        feat_category: fighting_style
+        count: 1
+      blessed_warrior:
+        cantrips:
+          count: 2
+          list: cleric
+        counts_as_class: paladin
+        ability: charisma
+        replace:
+          event: paladin.level_gained
+          maximum: 1
+          list: cleric
+          spell_level: 0
+    class_scope:
+      class: paladin
+      minimum_level: 2
+  implementation: dnd2024:class_features_paladin_level_2_fighting_style
+splat_contracts:
+- id: dnd2024:class_features_paladin_level_2_fighting_style
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - feat_or_spell_grants
+  events:
+  - character.feature_acquired
+  - character.level_gained
+  capabilities:
+  - character_features
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 54
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_paladin_level_2_fighting_style
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: c96dbebccb02f3b7d8c0e67942700f29f4b832b4f2c6f66e120b80235180cdce
   parent_name: Paladin
   line_span:
     first: 4540
@@ -37,7 +76,8 @@ splat_clauses:
     is your spellcasting ability for them. Whenever you gain a Paladin level, you can replace one of these
     cantrips with another Cleric cantrip.'
   sha256: 6155bea7b351bf3795ba2dd6ba736fcc1c241a7f68235b53038e7ae7b1701720
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 2: Fighting Style

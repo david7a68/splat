@@ -12,18 +12,78 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/hunter_level_3_hunter_s_prey
-  parameters: {}
+  parameters:
+    choose: 1
+    replacement:
+      events:
+      - rest.short_completed
+      - rest.long_completed
+      choose_other_option: true
+    options:
+      colossus_slayer:
+        trigger: actor.weapon_hits_creature
+        requires:
+          target_missing_hit_points: true
+        extra_damage:
+          dice:
+            count: 1
+            sides: 8
+          type: weapon.damage_type
+        limit:
+          count: 1
+          period: turn
+      horde_breaker:
+        trigger: actor.weapon_attack
+        limit:
+          count: 1
+          period: actor.turn
+        extra_attack:
+          weapon: same
+          target:
+            type: creature
+            different_from_original: true
+            within_original_target_feet: 5
+            within_weapon_range: true
+            not_attacked_by_actor_this_turn: true
+    class_scope:
+      class: ranger
+      minimum_level: 3
+  implementation: dnd2024:class_features_hunter_level_3_hunter_s_prey
+splat_contracts:
+- id: dnd2024:class_features_hunter_level_3_hunter_s_prey
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - rest.short_completed
+  - rest.long_completed
+  - attack.hit
+  - attack.roll
+  capabilities:
+  - character_features
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 61
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_hunter_level_3_hunter_s_prey
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: eed344169a27adfbbdb3991c09dc272b8a4e53063a81081265f146da91a03ff8
   parent_name: Hunter
   line_span:
     first: 5090
@@ -39,7 +99,8 @@ splat_clauses:
     is within 5 feet of the original target, that is within the weapon’s range, and that you haven’t attacked
     this turn.'
   sha256: 336947ba39ac729a4c9b2303210baf3cbec6416bf2bc5c102e2eb5a29bed9058
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Hunter’s Prey

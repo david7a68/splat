@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_gear
-  parameters: {}
+  parameters:
+    monster_proficient_with_equipment: true
+    retrievable_items_source: gear_entry
+    monster_special_item_rules_apply_only_to_original_monster: true
+    other_user_uses: equipment_definition_rules
+    gear_list_not_exhaustive_for_incidental_clothing: true
+    equipment_outside_gear_entry:
+      supernatural_or_specialized: true
+      usable_after_monster_defeat: false
+  implementation: dnd2024:rule_parts_of_a_stat_block_gear
+splat_contracts:
+- id: dnd2024:rule_parts_of_a_stat_block_gear
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - monster_parameters
+  events: []
+  capabilities:
+  - monsters
+  - equipment
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 255
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_parts_of_a_stat_block_gear
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 43d286ac39275d2d989de91326165c57e7e0161faf0e39f42da1c536e0e647e8
   parent_name: Parts of a Stat Block
   line_span:
     first: 11031
@@ -39,7 +65,8 @@ splat_clauses:
     and those clothes aren’t in this entry. Equipment mentioned outside the Gear entry is considered to
     be supernatural or highly specialized, and it is unusable when the monster is defeated.'
   sha256: e6524331e02bacd7167bd9bb6d019bb43d0b9217919600f5f78eca1dfe824303
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Gear

@@ -11,7 +11,7 @@ splat_sources:
   locator: pp. 50
   url: https://www.dndbeyond.com/srd
 splat_rule:
-  mechanic: dnd2024:class_progression
+  mechanic: dnd2024:tables/monk_progression
   parameters:
     class: monk
     rows:
@@ -21,131 +21,422 @@ splat_rule:
       martial_arts: 1d6
       focus_points: 0
       unarmored_movement: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_1_martial_arts
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_1_unarmored_defense
+        at_class_level: 1
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 6
+        bonus: 0
     - level: 2
       proficiency_bonus: 2
       features_text: Monk’s Focus, Unarmored Movement, Uncanny Metabolism
       martial_arts: 1d6
       focus_points: 2
       unarmored_movement: 10
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_2_monk_s_focus
+        at_class_level: 2
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_2_unarmored_movement
+        at_class_level: 2
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_2_uncanny_metabolism
+        at_class_level: 2
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 6
+        bonus: 0
     - level: 3
       proficiency_bonus: 2
       features_text: Deflect Attacks, Monk Subclass
       martial_arts: 1d6
       focus_points: 3
       unarmored_movement: 10
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_3_deflect_attacks
+        at_class_level: 3
+      - operation: choose_subclass
+        feature:
+          key: dnd2024:class_features/monk_level_3_monk_subclass
+        at_class_level: 3
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 6
+        bonus: 0
     - level: 4
       proficiency_bonus: 2
       features_text: Ability Score Improvement, Slow Fall
       martial_arts: 1d6
       focus_points: 4
       unarmored_movement: 10
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_4_ability_score_improvement
+        at_class_level: 4
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_4_slow_fall
+        at_class_level: 4
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 6
+        bonus: 0
     - level: 5
       proficiency_bonus: 3
       features_text: Extra Attack, Stunning Strike
       martial_arts: 1d8
       focus_points: 5
       unarmored_movement: 10
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_5_extra_attack
+        at_class_level: 5
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_5_stunning_strike
+        at_class_level: 5
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 8
+        bonus: 0
     - level: 6
       proficiency_bonus: 3
       features_text: Empowered Strikes, Subclass feature
       martial_arts: 1d8
       focus_points: 6
       unarmored_movement: 15
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_6_empowered_strikes
+        at_class_level: 6
+      - operation: grant_selected_subclass_features
+        class_level: 6
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 8
+        bonus: 0
     - level: 7
       proficiency_bonus: 3
       features_text: Evasion
       martial_arts: 1d8
       focus_points: 7
       unarmored_movement: 15
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_7_evasion
+        at_class_level: 7
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 8
+        bonus: 0
     - level: 8
       proficiency_bonus: 3
       features_text: Ability Score Improvement
       martial_arts: 1d8
       focus_points: 8
       unarmored_movement: 15
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_4_ability_score_improvement
+        at_class_level: 8
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 8
+        bonus: 0
     - level: 9
       proficiency_bonus: 4
       features_text: Acrobatic Movement
       martial_arts: 1d8
       focus_points: 9
       unarmored_movement: 15
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_9_acrobatic_movement
+        at_class_level: 9
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 8
+        bonus: 0
     - level: 10
       proficiency_bonus: 4
       features_text: Heightened Focus, Self-Restoration
       martial_arts: 1d8
       focus_points: 10
       unarmored_movement: 20
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_10_heightened_focus
+        at_class_level: 10
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_10_self_restoration
+        at_class_level: 10
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 8
+        bonus: 0
     - level: 11
       proficiency_bonus: 4
       features_text: Subclass feature
       martial_arts: 1d10
       focus_points: 11
       unarmored_movement: 20
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 11
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 10
+        bonus: 0
     - level: 12
       proficiency_bonus: 4
       features_text: Ability Score Improvement
       martial_arts: 1d10
       focus_points: 12
       unarmored_movement: 20
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_4_ability_score_improvement
+        at_class_level: 12
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 10
+        bonus: 0
     - level: 13
       proficiency_bonus: 5
       features_text: Deflect Energy
       martial_arts: 1d10
       focus_points: 13
       unarmored_movement: 20
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_13_deflect_energy
+        at_class_level: 13
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 10
+        bonus: 0
     - level: 14
       proficiency_bonus: 5
       features_text: Disciplined Survivor
       martial_arts: 1d10
       focus_points: 14
       unarmored_movement: 25
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_14_disciplined_survivor
+        at_class_level: 14
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 10
+        bonus: 0
     - level: 15
       proficiency_bonus: 5
       features_text: Perfect Focus
       martial_arts: 1d10
       focus_points: 15
       unarmored_movement: 25
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_15_perfect_focus
+        at_class_level: 15
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 10
+        bonus: 0
     - level: 16
       proficiency_bonus: 5
       features_text: Ability Score Improvement
       martial_arts: 1d10
       focus_points: 16
       unarmored_movement: 25
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_4_ability_score_improvement
+        at_class_level: 16
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 10
+        bonus: 0
     - level: 17
       proficiency_bonus: 6
       features_text: Subclass feature
       martial_arts: 1d12
       focus_points: 17
       unarmored_movement: 25
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 17
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 12
+        bonus: 0
     - level: 18
       proficiency_bonus: 6
       features_text: Superior Defense
       martial_arts: 1d12
       focus_points: 18
       unarmored_movement: 30
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_18_superior_defense
+        at_class_level: 18
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 12
+        bonus: 0
     - level: 19
       proficiency_bonus: 6
       features_text: Epic Boon
       martial_arts: 1d12
       focus_points: 19
       unarmored_movement: 30
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_19_epic_boon
+        at_class_level: 19
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 12
+        bonus: 0
     - level: 20
       proficiency_bonus: 6
       features_text: Body and Mind
       martial_arts: 1d12
       focus_points: 20
       unarmored_movement: 30
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/monk_level_20_body_and_mind
+        at_class_level: 20
+      martial_arts_dice:
+        dice:
+          count: 1
+          sides: 12
+        bonus: 0
+    class_definition:
+      key: dnd2024:classes/monk
+    lookup:
+      input: class_level
+      minimum: 1
+      maximum: 20
+      match: exact
+      numeric_columns: current_capacity_or_value
+      feature_grants: all_crossed_levels
+      repeat_application: idempotent_per_class_level_and_feature
+    multiclass:
+      proficiency_bonus_source: total_character_level
+      spell_slot_override_rule:
+        key: dnd2024:rules/multiclassing_spellcasting
+      pact_magic_pool_separate: true
+    column_semantics:
+      focus_points:
+        kind: resource_capacity
+        resource: focus_points
+        recovery: owning_feature_contract
+        level_change_refills: false
+      martial_arts:
+        kind: dice_expression
+        applies_to: martial_arts
+      proficiency_bonus:
+        kind: bonus
+        applies_to: proficiency
+        use_class_row_only_if_single_class: true
+      unarmored_movement:
+        kind: speed_bonus
+        unit: ft
+        requires: unarmored_movement_feature_eligibility
+  implementation: dnd2024:class_progression_monk_progression
+splat_contracts:
+- id: dnd2024:class_progression_monk_progression
+  inputs:
+    actor:
+      type: participant
+      required: true
+    class_level:
+      type: integer
+      required: true
+    previous_class_level:
+      required: false
+      type: integer
+    selected_subclass:
+      required: false
+      type: definition
+    choices:
+      required: false
+      type: definition_list
+  outputs:
+  - feature_grants
+  - selection_capacities
+  - resource_capacities
+  - class_values
+  events:
+  - character.class_level_changed
+  capabilities:
+  - class_progression
+  - feature_grants
+  - resource_capacities
+  - character_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: table
   source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
   source_path: builtin/srd-5.2.1/source.txt
   pages:
   - 50
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_progression_monk_progression
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: 541a87b4c254b575f6cc618b79f1a58be0a990da386b479c808d9d04d93ae193
 splat_clauses:
 - key: source_rules
   text: '# Monk Progression From SRD 5.2.1 page 50. Monk Features Proficiency Martial Focus Unarmored
@@ -181,7 +472,8 @@ splat_clauses:
     Bonus Action. Strength modifier to determine the save DC. Patient Defense. You can take the Disengage
     action as a Bonus Action. Alternatively, you can 50 System Reference Document 5.2.1'
   sha256: c7101828b3629b4092a71431e970e46d4077d6686eb21b9812d1c3dfb9b948d9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Monk Progression

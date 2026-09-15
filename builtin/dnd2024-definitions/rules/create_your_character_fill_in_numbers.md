@@ -12,19 +12,118 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/create_your_character_fill_in_numbers
-  parameters: {}
+  parameters:
+    saving_throw_and_skill_modifier:
+      op: add
+      args:
+      - variable: ability_modifier
+      - if: proficient
+        then:
+          variable: proficiency_bonus
+        else: 0
+    passive_perception:
+      op: add
+      args:
+      - 10
+      - variable: total_wisdom_perception_modifier
+    level_one_hp:
+      base_by_class:
+        barbarian: 12
+        fighter: 10
+        paladin: 10
+        ranger: 10
+        bard: 8
+        cleric: 8
+        druid: 8
+        monk: 8
+        rogue: 8
+        warlock: 8
+        sorcerer: 6
+        wizard: 6
+      add: constitution_modifier
+    level_one_hit_dice: 1
+    hit_die_type_source: class
+    initiative: dexterity_modifier
+    unarmored_unshielded_ac:
+      op: add
+      args:
+      - 10
+      - variable: dexterity_modifier
+    armor_and_feature_ac_override: true
+    proficient_weapon_attack:
+      melee:
+        op: add
+        args:
+        - variable: strength_modifier
+        - variable: proficiency_bonus
+      ranged:
+        op: add
+        args:
+        - variable: dexterity_modifier
+        - variable: proficiency_bonus
+      property_override: true
+    weapon_damage_add: attack_ability_modifier
+    spell_save_dc:
+      op: add
+      args:
+      - 8
+      - variable: spellcasting_ability_modifier
+      - variable: proficiency_bonus
+    spell_attack:
+      op: add
+      args:
+      - variable: spellcasting_ability_modifier
+      - variable: proficiency_bonus
+    spellcasting_ability_source: granting_feature
+    spell_slots_cantrips_prepared_limits: class_feature_table
+  implementation: dnd2024:rule_create_your_character_fill_in_numbers
+splat_contracts:
+- id: dnd2024:rule_create_your_character_fill_in_numbers
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    ability_modifier:
+      type: number
+      required: true
+    dexterity_modifier:
+      type: number
+      required: true
+    proficiency_bonus:
+      type: number
+      required: true
+    spellcasting_ability_modifier:
+      type: number
+      required: true
+    strength_modifier:
+      type: number
+      required: true
+    total_wisdom_perception_modifier:
+      type: number
+      required: true
+  outputs:
+  - character_changes
+  events: []
+  capabilities:
+  - character_creation
+  - statistics
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 22
   - 23
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_create_your_character_fill_in_numbers
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 2cf13b25560f7626c083f52313b86bbf357c59405baa9b434ffa405068375e43
   parent_name: Create Your Character
   line_span:
     first: 1645
@@ -71,7 +170,8 @@ splat_clauses:
     prepare. Choose your cantrips and prepared spells, and note them—along with your number of spell slots—on
     your character sheet.'
   sha256: 2fa6443994167424ee2c5ffc20a4d0fbd081b9a96624fb3e174c86a355ff01cb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Fill In Numbers

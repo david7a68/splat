@@ -15,17 +15,76 @@ splat_item:
   rarity: uncommon
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/eyes_of_charming
+  implementation: dnd2024:item_eyes_of_charming
+  parameters:
+    equipped: worn
+    charges:
+      initial: 3
+      maximum: 3
+      recovery:
+        event: time.dawn
+        amount: all
+        cap_at_maximum: true
+    spells:
+    - spell:
+        key: dnd2024:spells/charm_person
+      save_dc: 13
+      charge_choice:
+        min: 1
+        max: available_charges
+      cast_level: charges_spent
+    attunement_required: true
+splat_contracts:
+- id: dnd2024:item_eyes_of_charming
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - spell.cast_pending
+  - time.dawn
+  - item.attunement_completed
+  - item.attunement_ended
+  capabilities:
+  - item_effects
+  - item_spellcasting
+  - item_charges
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 0d5f5e2c411a93a2070161983bea61e4fc6fd91801769e06cff69bf903760b8c
   source_path: builtin/srd-5.2.1/magic_item/eyes_of_charming.md
   pages:
   - 221
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_eyes_of_charming
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 1ea27a951ac5a395b22c4d16895fa9f8cfea7c0701e2b598ce5ad8393d7f336a
 splat_clauses:
 - key: source_rules
   text: '# Eyes of Charming Wondrous Item, Uncommon (Requires Attunement) These crystal lenses fit over
@@ -34,7 +93,8 @@ splat_clauses:
     level by one for each additional charge you expend. The lenses regain all expended charges daily at
     dawn.'
   sha256: 9b41f9690b84375472658e06b7b5af0019a986ea281d884ecce1a70ac90d25c6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Eyes of Charming

@@ -28,18 +28,99 @@ splat_spell:
   material:
     description: powdered ruby worth 1,500+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/simulacrum
+  implementation: dnd2024:spell_simulacrum
+  parameters:
+    targeting:
+      kind: creature
+      count: 1
+      types:
+      - beast
+      - humanoid
+      within_caster_feet_for_entire_cast: 10
+      final_touch:
+      - target
+      - same_size_ice_or_snow_pile
+    creation:
+      transforms: ice_or_snow_pile
+      statistics: original_at_casting
+      replace_type: construct
+      hp_maximum_fraction:
+        numerator: 1
+        denominator: 2
+      cannot_cast: simulacrum
+      duration: spell_duration
+    behavior:
+      attitude: friendly
+      friendly_toward: caster_and_designated_creatures
+      obeys: caster_commands
+      combat_turn: caster_turn
+    restrictions:
+      gain_levels: false
+      short_rest: false
+      long_rest: false
+    repair:
+      only_hp_restoration_method: true
+      timing: caster_long_rest
+      consumed_component_gp_per_hp: 100
+      distance_to_caster_max_feet: 5
+      throughout_repair: true
+    termination:
+      zero_hp: revert_to_snow_and_melt
+      caster_recasts_spell: instantly_destroy_previous_simulacra
+    spell_lifetime:
+      concentration: false
+      maximum:
+        kind: until_dispelled
+splat_contracts:
+- id: dnd2024:spell_simulacrum
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    objects:
+      type: object_list
+      required: true
+    forms:
+      type: definition_list
+      required: true
+  outputs:
+  - effects
+  - participants
+  events:
+  - spell.cast_completed
+  - rest.completed
+  - time.elapsed
+  - health.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - participant_lifecycle
+  - forms
+  - rest_lifecycle
+  - controlled_participants
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 94181e898b1accb1115496079452269124ca6bc1aad5d01156599610d44bebd4
   source_path: builtin/srd-5.2.1/spell/simulacrum.md
   pages:
   - 162
   - 163
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_simulacrum
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 5218eb9c2655f905ebe0c807b4455699ce484183bcb4f7c8f9a8a0c5dd2c1fe7
 splat_clauses:
 - key: source_rules
   text: '# Simulacrum Level 7 Illusion (Wizard) Casting Time: 12 hours Range: Touch Components: V, S,
@@ -56,7 +137,8 @@ splat_clauses:
     it drops to 0 Hit Points, at which point it reverts to snow and melts away. If you cast this spell
     again, any simulacrum you created with this spell is instantly destroyed.'
   sha256: ebb6b7669590c0dc1f783e5bcdc0cbb9386f186bbc8504d903bfffc3f6ae8828
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Simulacrum

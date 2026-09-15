@@ -12,18 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/hirelings
-  parameters: {}
+  parameters:
+    services:
+    - service: skilled_hireling
+      requires_any_proficiency:
+      - weapon
+      - tool
+      - skill
+      minimum_gp_per_day: 2
+    - service: untrained_hireling
+      requires_proficiency: false
+      minimum_sp_per_day: 2
+    - service: messenger
+      cp_per_mile: 2
+    expert_price_increase:
+      actor: gm
+      optional: true
+  implementation: dnd2024:rule_hirelings
+splat_contracts:
+- id: dnd2024:rule_hirelings
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - costs
+  events: []
+  capabilities:
+  - economy
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 102
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_hirelings
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 3c8471195184361e59bbe65f13997acc5160d0f09642dcb90e8fda0c8eee72a5
   parent_name: Hirelings
   line_span:
     first: 8838
@@ -36,7 +71,8 @@ splat_clauses:
     hired for work that requires no particular proficiencies; they include laborers and porters. Hirelings
     Service Cost Skilled hireling 2 GP per day Untrained hireling 2 SP per day Messenger 2 CP per mile'
   sha256: f46f7f1b34090da6aa88e462e1258231a03fd37abf9768fac52be349b2c2a3e8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hirelings

@@ -12,17 +12,61 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule_group:
   category: subclass
+splat_rule:
+  mechanic: dnd2024:subclasses/bard_college_of_lore
+  implementation: dnd2024:subclasses_bard_college_of_lore
+  parameters:
+    class: bard
+    minimum_class_level: 3
+    feature_grants:
+    - class_level: 14
+      definition:
+        key: dnd2024:class_features/college_of_lore_level_14_peerless_skill
+    - class_level: 3
+      definition:
+        key: dnd2024:class_features/college_of_lore_level_3_bonus_proficiencies
+    - class_level: 3
+      definition:
+        key: dnd2024:class_features/college_of_lore_level_3_cutting_words
+    - class_level: 6
+      definition:
+        key: dnd2024:class_features/college_of_lore_level_6_magical_discoveries
+    grant_eligible_features:
+      'on':
+      - subclass.selected
+      - character.level_gained
+      comparison: class_level_at_least_threshold
+      persistent: true
+splat_contracts:
+- id: dnd2024:subclasses_bard_college_of_lore
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - feature_grants
+  events:
+  - subclass.selected
+  - character.level_gained
+  capabilities:
+  - character_features
+  - proficiencies
 splat_conversion:
-  status: partial
+  status: specified
   category: subclass
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 35
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:subclasses_bard_college_of_lore
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 0e12f88aadd8b136b28ae4f4b6db6111ed3583d22e37b05eb23f223ba80a9e1a
   parent_name: Bard
   line_span:
     first: 2872
@@ -35,7 +79,8 @@ splat_clauses:
     also meet at festivals or affairs of state, where they can expose corruption, unravel lies, and poke
     fun at self-important figures of authority.'
   sha256: 534df38a0b7afb91b49baabe7eceadc584a0cd976a017b35ed707219b71bfc93
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # College of Lore

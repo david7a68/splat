@@ -56,17 +56,118 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/wolf
+  implementation: dnd2024:creature_wolf
+  parameters:
+    skill_totals:
+      perception: 5
+      stealth: 4
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 15
+    languages:
+      speak: true
+      known: []
+    features:
+      pack_tactics:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - attack
+        target_kind: creature
+        when:
+          ally_within_target_ft: 5
+          ally_excluded_conditions:
+          - incapacitated
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 2
+            average: 5
+        - op: condition.apply
+          condition: prone
+          when:
+            target_kind: creature
+            target_maximum_size: medium
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_wolf
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 44172927fa655c0d56415dec18d56f7c428c082aba0b565e3ddba4529a4d8d42
   source_path: builtin/srd-5.2.1/creature/wolf.md
   pages:
   - 364
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_wolf
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 4e24aee21eb40be632c587aaf51b71563828350926444b60e66a6e417400d9ca
 splat_clauses:
 - key: source_rules
   text: '# Wolf Medium Beast, Unaligned AC 12 Initiative +2 (12) HP 11 (2d8 + 2) Speed 40 ft. MOD SAVE
@@ -77,7 +178,8 @@ splat_clauses:
     condition. ### Actions Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage.
     If the target is a Medium or smaller creature, it has the Prone condition.'
   sha256: e83300094739959e5cf0d8abae120dc67eaaf82ac64a9a6d94c9e0722606be2f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wolf

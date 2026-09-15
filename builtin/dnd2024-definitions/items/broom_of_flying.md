@@ -15,17 +15,84 @@ splat_item:
   rarity: uncommon
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/broom_of_flying
+  implementation: dnd2024:item_broom_of_flying
+  parameters:
+    default_mode: mundane_broom
+    activate:
+      action: magic
+      must_stand_astride: true
+      mode: hovering_ridable
+    fly_speed_ft: 50
+    capacity_lb: 400
+    encumbered:
+      over_lb: 200
+      fly_speed_ft: 30
+    hover_ends_on:
+    - landing
+    - dismounted
+    send:
+      action: magic
+      destination:
+        familiar: true
+        named: true
+        maximum_distance_miles: 1
+      travels_alone: true
+    recall:
+      action: magic
+      command_word: true
+      maximum_distance_miles: 1
+      destination: actor
+    attunement_required: true
+splat_contracts:
+- id: dnd2024:item_broom_of_flying
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.activation_requested
+  - movement.completed
+  - item.rider_changed
+  - item.attunement_completed
+  - item.attunement_ended
+  capabilities:
+  - item_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: d61c60634a637c90e91e90367bd82810f966bb75c8c89647a3c8c7efbcc63c51
   source_path: builtin/srd-5.2.1/magic_item/broom_of_flying.md
   pages:
   - 214
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_broom_of_flying
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 783e953c19acd436f3199bbc29797f5ce622b55b00719e6e2e44cc1d01e921cb
 splat_clauses:
 - key: source_rules
   text: '# Broom of Flying Wondrous Item, Uncommon (Requires Attunement) This wooden broom functions like
@@ -37,7 +104,8 @@ splat_clauses:
     comes back to you when you take a Magic action and use a command word if the broom is still within
     1 mile of you.'
   sha256: 780336fa73fca80936c8818dec3d75859fbdfcbe33af8dee5a4f937e67767000
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Broom of Flying

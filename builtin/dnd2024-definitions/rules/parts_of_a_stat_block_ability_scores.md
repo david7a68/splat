@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_ability_scores
-  parameters: {}
+  parameters:
+    abilities:
+    - strength
+    - dexterity
+    - constitution
+    - intelligence
+    - wisdom
+    - charisma
+    each_has:
+    - score
+    - ability_modifier
+    - saving_throw_modifier
+    source: stat_block
+  implementation: dnd2024:rules_parts_of_a_stat_block_ability_scores
+splat_contracts:
+- id: dnd2024:rules_parts_of_a_stat_block_ability_scores
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - ability_statistics
+  events: []
+  capabilities:
+  - monster_statistics
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 255
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_parts_of_a_stat_block_ability_scores
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 27ae23d74f65a8436780f5ae75632370722249beced5016d59fa549a6689414d
   parent_name: Parts of a Stat Block
   line_span:
     first: 10993
@@ -34,7 +60,8 @@ splat_clauses:
     modifiers and saving throw modifiers. For more information on ability scores and saving throws, see
     “Playing the Game.”'
   sha256: 926657cb0071b04a97ae7972c2387b1107acdbf15321e7cb17c20ad0c10637ca
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ability Scores

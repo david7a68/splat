@@ -12,18 +12,49 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/monk_level_2_unarmored_movement
-  parameters: {}
+  parameters:
+    requires:
+      armor_worn: false
+      shield_wielded: false
+    speed_bonus_feet:
+      table:
+        key: dnd2024:tables/monk_progression
+      row:
+        var: actor.class_levels.monk
+      column: unarmored_movement
+    class_scope:
+      class: monk
+      minimum_level: 2
+  implementation: dnd2024:class_features_monk_level_2_unarmored_movement
+splat_contracts:
+- id: dnd2024:class_features_monk_level_2_unarmored_movement
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - speed.calculate
+  capabilities:
+  - character_features
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 51
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_monk_level_2_unarmored_movement
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 1ce9367c3785b2ace608591cb2d6f525833e35d85ca5d7d0b5a8c6304a55f3a4
   parent_name: Monk
   line_span:
     first: 4226
@@ -34,7 +65,8 @@ splat_clauses:
     or wielding a Shield. This bonus increases when you reach certain Monk levels, as shown on the Monk
     Features table.'
   sha256: 483b8a7b0c2738e98443df5b36cde6a5a38881fb3e75bfb14502d8bff2887a5c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 2: Unarmored Movement

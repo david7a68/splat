@@ -15,18 +15,278 @@ splat_item:
   rarity: rarity_varies
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/figurine_of_wondrous_power
+  implementation: dnd2024:item_figurine_of_wondrous_power
+  parameters:
+    activation:
+      action: magic
+      operation: throw_to_ground
+      range_ft: 60
+      requires:
+        space_unoccupied_by:
+        - creatures
+        - objects
+        sufficient_space_for_creature: true
+      invalid_space: no_transformation
+    creature_behavior:
+      attitude_to_user_and_allies: friendly
+      understands: user_languages
+      commands: obey
+      initiative: immediately_after_user_same_count
+      without_commands: defend_self_only
+    reversion:
+      'on':
+      - duration_expires
+      - creature_hp_zero
+      - user_magic_action_while_touching_creature
+      starts: variant_recovery
+    variants:
+      bronze_griffon:
+        creature:
+          key: dnd2024:creatures/griffon
+        duration:
+          value: 6
+          unit: hour
+        recovery:
+          value: 5
+          unit: day
+        rarity: rare
+      ebony_fly:
+        creature:
+          key: dnd2024:creatures/giant_fly
+        duration:
+          value: 12
+          unit: hour
+        recovery:
+          value: 2
+          unit: day
+        rarity: rare
+        mount: true
+        creature_definition_owns_embedded_stat_block: true
+      golden_lions:
+        creature:
+          key: dnd2024:creatures/lion
+        duration:
+          value: 1
+          unit: hour
+        recovery:
+          value: 7
+          unit: day
+        rarity: rare
+        set_count: 2
+        activation_count_choices:
+        - 1
+        - 2
+        resource_scope: each_figurine
+      ivory_goats:
+        rarity: rare
+        set_count: 3
+        members:
+          terror:
+            creature:
+              key: dnd2024:creatures/giant_goat
+            duration:
+              value: 3
+              unit: hour
+            recovery:
+              value: 15
+              unit: day
+            can_attack: false
+            horns:
+              remove_action: magic
+              harmless_removal: true
+              weapons:
+              - base:
+                  key: dnd2024:equipment/lance
+                bonus: 1
+              - base:
+                  key: dnd2024:equipment/longsword
+                bonus: 2
+              on_revert:
+                weapons: disappear
+                horns: return
+            fear:
+              requires: user_riding_goat
+              shape: emanation
+              radius_ft: 30
+              origin: goat
+              trigger: hostile_creature_turn_start
+              save:
+                ability: wisdom
+                dc: 15
+              failure:
+                condition: frightened
+                duration:
+                  value: 1
+                  unit: minute
+                end_on:
+                - rider_dismounts
+                - goat_reverts
+              repeat_save: target_turn_end
+              success:
+                end_effect: true
+                immunity:
+                  value: 24
+                  unit: hour
+          traveling:
+            creature:
+              key: dnd2024:creatures/riding_horse
+            appearance: goat
+            size: large
+            charges:
+              maximum: 24
+              initial: 24
+              cost:
+                per:
+                  value: 1
+                  unit: hour
+                partial_interval_rounding: up
+              multiple_activations: true
+              on_zero:
+                revert: true
+                unavailable_for:
+                  value: 7
+                  unit: day
+                then_recover: all_charges
+          travail:
+            creature:
+              key: dnd2024:creatures/giant_goat
+            duration:
+              value: 3
+              unit: hour
+            recovery:
+              value: 30
+              unit: day
+      marble_elephant:
+        creature:
+          key: dnd2024:creatures/elephant
+        duration:
+          value: 24
+          unit: hour
+        recovery:
+          value: 7
+          unit: day
+        rarity: rare
+      obsidian_steed:
+        creature:
+          key: dnd2024:creatures/nightmare
+        duration:
+          value: 24
+          unit: hour
+        recovery:
+          value: 5
+          unit: day
+        rarity: very_rare
+        combat: self_defense_only
+        disobedience:
+          probability_per_activation: 0.1
+          ignores:
+          - orders
+          - revert_command
+          if_mounted:
+            transport:
+            - rider
+            - nightmare
+            destination:
+              plane: hades
+              location: random
+            then: revert
+      onyx_dog:
+        creature:
+          key: dnd2024:creatures/mastiff
+        duration:
+          value: 6
+          unit: hour
+        recovery:
+          value: 7
+          unit: day
+        rarity: rare
+        overrides:
+          intelligence: 8
+          languages:
+          - common
+          blindsight_ft: 60
+      serpentine_owl:
+        creature:
+          key: dnd2024:creatures/giant_owl
+        duration:
+          value: 8
+          unit: hour
+        recovery:
+          value: 2
+          unit: day
+        rarity: rare
+        telepathy:
+          with: user
+          range: unlimited
+          same_plane_required: true
+      silver_raven:
+        creature:
+          key: dnd2024:creatures/raven
+        duration:
+          value: 12
+          unit: hour
+        recovery:
+          value: 2
+          unit: day
+        rarity: uncommon
+        spells:
+        - spell:
+            key: dnd2024:spells/animal_messenger
+          target: this_creature
+          requires: raven_form
+    attunement:
+      required: false
+splat_contracts:
+- id: dnd2024:item_figurine_of_wondrous_power
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - summoned_creatures
+  - item_state
+  events:
+  - item.used
+  - turn.started
+  - creature.died
+  - spell.cast_completed
+  capabilities:
+  - summoning
+  - initiative
+  - item_resources
+  - item_spellcasting
+  - spatial_queries
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 0aa7f9fac44e3ca646eb99aa6f8779b88569a8cb587fb495fd5077213a4e88e8
   source_path: builtin/srd-5.2.1/magic_item/figurine_of_wondrous_power.md
   pages:
   - 221
   - 222
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_figurine_of_wondrous_power
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: df18c29adbb204e52caba96c12866d6e7761a81a805b154231a568459a7f86b8
 splat_clauses:
 - key: source_rules
   text: '# Figurine of Wondrous Power Wondrous Item, Rarity Varies A Figurine of Wondrous Power is a statuette
@@ -84,7 +344,8 @@ splat_clauses:
     hours. Once it has been used, it can’t be used again until 2 days have passed. While in raven form,
     the figurine grants you the ability to cast Animal Messenger on it.'
   sha256: 8b1cd3044448809921689f7d874135de257206dec0c6127d105078e5e7dff03e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Figurine of Wondrous Power

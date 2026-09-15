@@ -12,18 +12,57 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/college_of_lore_level_6_magical_discoveries
-  parameters: {}
+  parameters:
+    spell_choice:
+      count: 2
+      lists:
+      - cleric
+      - druid
+      - wizard
+      mix_lists: true
+      allowed_level:
+        cantrip: true
+        otherwise_has_bard_progression_slot: true
+    always_prepared: true
+    counts_as_class_spell: bard
+    counts_toward_bard_prepared_limit: false
+    replace:
+      event: character.bard_level_gained
+      maximum: 1
+      same_eligibility: true
+  implementation: dnd2024:class_features_college_of_lore_level_6_magical_discoveries
+splat_contracts:
+- id: dnd2024:class_features_college_of_lore_level_6_magical_discoveries
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+  outputs:
+  - feature_state
+  - choices
+  - spell_grants
+  events:
+  - character.feature_gained
+  - character.class_level_gained
+  capabilities:
+  - spellcasting
+  - character_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 35
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_college_of_lore_level_6_magical_discoveries
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: f21f4f784d0de6b58e3a02af60c4928ac5d74f63633efd9cad404287e6f6d753
   parent_name: College of Lore
   line_span:
     first: 2895
@@ -36,7 +75,8 @@ splat_clauses:
     in the Bard Features table. You always have the chosen spells prepared, and whenever you gain a Bard
     level, you can replace one of the spells with another spell that meets these requirements.'
   sha256: f91435c8a0be1d5f7abc637398d39ada351d6e20b25947848339b3b00c1524b3
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 6: Magical Discoveries

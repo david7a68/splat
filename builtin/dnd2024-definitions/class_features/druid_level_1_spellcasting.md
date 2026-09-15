@@ -12,19 +12,106 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/druid_level_1_spellcasting
-  parameters: {}
+  parameters:
+    class: druid
+    spellcasting_ability: wisdom
+    spellcasting_focus: druidic_focus
+    save_dc:
+      op: add
+      args:
+      - 8
+      - var: actor.abilities.wisdom.modifier
+      - var: actor.proficiency_bonus
+    spell_attack_bonus:
+      op: add
+      args:
+      - var: actor.proficiency_bonus
+      - var: actor.abilities.wisdom.modifier
+    slots:
+      progression:
+        key: dnd2024:tables/druid_progression
+      recovery:
+      - rest.long_completed
+      recover: all
+      pool: spellcasting
+    prepared_spells:
+      initial_count: 4
+      initial_spell_level: 1
+      progression:
+        table:
+          key: dnd2024:tables/druid_progression
+        row:
+          var: actor.class_levels.druid
+        column: prepared_spells
+      eligible_list: druid
+      eligible_levels:
+        minimum: 1
+        maximum: available_class_slot_level
+      on_count_increase: choose_until_count_met
+      replacement:
+        event: rest.long_completed
+        class: druid
+        maximum: all
+      always_prepared_from_other_class_features:
+        counts_against_limit: false
+        counts_as_class_spell: druid
+    cantrips:
+      initial_count: 2
+      list: druid
+      additional_levels:
+      - 4
+      - 10
+      additional_each: 1
+      replace:
+        event: character.level_gained
+        class: druid
+        maximum: 1
+        same_list: true
+    class_scope:
+      class: druid
+      minimum_level: 1
+  implementation: dnd2024:class_features_druid_level_1_spellcasting
+splat_contracts:
+- id: dnd2024:class_features_druid_level_1_spellcasting
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - spellcasting
+  - prepared_spells
+  - resources
+  events:
+  - character.level_gained
+  - rest.long_completed
+  - rest.short_completed
+  - spell.prepare
+  - spell.cast
+  capabilities:
+  - character_features
+  - spellcasting
+  - proficiencies
+  - d20_tests
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 41
   - 42
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_druid_level_1_spellcasting
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: d768543da335ca85f432cf3be0ad796498000ad4de9b7abad4a3366d2e2bcc4e
   parent_name: Druid
   line_span:
     first: 3400
@@ -60,7 +147,8 @@ splat_clauses:
     Wisdom is your spellcasting ability for your Druid spells. Spellcasting Focus. You can use a Druidic
     Focus as a Spellcasting Focus for your Druid spells.'
   sha256: f5a4a099271e0d861ea4db0e7572f195d12ea93f53606e223aed615116947ba7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Spellcasting

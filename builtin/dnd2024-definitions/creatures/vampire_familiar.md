@@ -63,17 +63,157 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/vampire_familiar
+  implementation: dnd2024:creature_vampire_familiar
+  parameters:
+    skill_totals:
+      perception: 4
+      persuasion: 4
+      stealth: 7
+    damage_resistances:
+    - necrotic
+    damage_immunities: []
+    condition_immunities:
+    - condition: charmed
+      except_source: vampire_master
+    gear:
+    - item: daggers
+      count: 10
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 14
+    languages:
+      speak: true
+      known:
+      - common
+      additional_choice_count: 1
+    features:
+      umbral_dagger:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        - ranged
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        range_ft:
+          normal: 20
+          long: 60
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 3
+            average: 5
+          - type: necrotic
+            amount:
+              dice:
+                count: 3
+                sides: 4
+              add: 0
+            average: 7
+        on_reduce_target_to_zero_hp:
+          effects:
+          - op: stable.set
+            value: true
+          - op: condition.apply
+            condition: poisoned
+            duration:
+              amount: 1
+              unit: hour
+            while_active:
+            - op: condition.apply
+              condition: paralyzed
+      deathless_agility:
+        economy: bonus_action
+        op: action.choose
+        choices:
+        - dash
+        - disengage
+      vampiric_connection:
+        economy: passive
+        when:
+          same_plane_as: vampire_master
+        master_can:
+          telepathic_communication: true
+          perceive_through_actor_senses: true
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: umbral_dagger
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_vampire_familiar
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: d15ed621ec87a76fc0d7bb1524da668cba93ffba8ea329de899788f2363caf7c
   source_path: builtin/srd-5.2.1/creature/vampire_familiar.md
   pages:
   - 334
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_vampire_familiar
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 28af8cc4524a15ed65bb54f6acf70b957887a8e0b6fbd034a93fc96cf642e20a
 splat_clauses:
 - key: source_rules
   text: '# Vampire Familiar Medium or Small Humanoid, Neutral Evil AC 15 Initiative +5 (15) HP 65 (10d8
@@ -90,7 +230,8 @@ splat_clauses:
     the target has the Paralyzed condition. ### Bonus Actions Deathless Agility. The familiar takes the
     Dash or Disengage action.'
   sha256: 8765346c6e2e5e442b42942a0f3eac81cff046beed3594240e6306ed6bacead7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Vampire Familiar

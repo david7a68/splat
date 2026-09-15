@@ -24,17 +24,85 @@ splat_spell:
   ritual: true
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/contact_other_plane
+  implementation: dnd2024:spell_contact_other_plane
+  parameters:
+    targeting:
+      kind: self
+      contact: knowledgeable_extraplanar_entity
+    save:
+      ability: intelligence
+      dc: 15
+      success:
+        questions_max: 5
+        deadline: spell_end
+        responder: gm
+        answer_words: 1
+        unknown_answer: unclear
+        misleading_one_word: short_phrase_allowed
+      failure:
+        damage:
+          dice: 6d6
+          type: psychic
+        condition: incapacitated
+        ends_on:
+        - long_rest_finished
+        - greater_restoration_applied
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 1
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_contact_other_plane
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+    campaign:
+      type: campaign
+      required: true
+    questions:
+      type: text
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - information
+  events:
+  - spell.cast_completed
+  - rest.completed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - conditions
+  - campaign_state
+  - rest_lifecycle
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 8774bc9cedfb8d4c1b2b802fc697575d3b92b7fa3c94103b67a528dc6365ea0b
   source_path: builtin/srd-5.2.1/spell/contact_other_plane.md
   pages:
   - 119
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_contact_other_plane
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 90e381c908e2fdc5f8faff10bb98cf6d276639d41ab509c4825f23f2158e5a22
 splat_clauses:
 - key: source_rules
   text: '# Contact Other Plane Level 5 Divination (Warlock, Wizard) Casting Time: 1 minute or Ritual Range:
@@ -48,7 +116,8 @@ splat_clauses:
     and have the Incapacitated condition until you finish a Long Rest. A Greater Restoration spell cast
     on you ends this effect.'
   sha256: 50002e91585acb526958264057ec44d27c8077add107b0225cc49115049c21cf
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Contact Other Plane

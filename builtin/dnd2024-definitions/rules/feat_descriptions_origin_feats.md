@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/feat_descriptions_origin_feats
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 87
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 3eaf510d959dfc0baa79471e92c0b4d7021f89605724b17ebe740fc9e0eb1913
   parent_name: Feat Descriptions
   line_span:
     first: 7476
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Origin Feats'
   sha256: 6981f8e220b6fb86047bfc905c73c273d73cfb3536d051dc8928cde54fc84060
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Origin Feats

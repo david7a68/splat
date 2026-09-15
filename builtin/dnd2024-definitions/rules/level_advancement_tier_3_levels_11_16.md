@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/level_advancement_tier_3_levels_11_16
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 24
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 183a63791c700bcc6f211fe81f4f73c78f9a066fa1993ed4398ec88175a95f56
   parent_name: Level Advancement
   line_span:
     first: 1837
@@ -35,7 +36,7 @@ splat_clauses:
     gain features that allow them to make more attacks or to do more impressive things with those attacks.
     These adventurers often confront threats to whole regions.'
   sha256: a880d14ff479529c136f56f78e69e8da69b987a3c0d17409b8a8d76b65f19c0f
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Tier 3 (Levels 11–16)

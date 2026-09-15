@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/monk_level_3_monk_subclass
-  parameters: {}
+  parameters:
+    subclass_choice:
+      count: 1
+      class: monk
+      srd_options:
+      - key: dnd2024:subclasses/monk_monk_subclass_warrior_of_the_open_hand
+    grant_features:
+      from: selected_subclass
+      when_required_class_level_lte_current: true
+      reevaluate_on_class_level_gain: true
+  implementation: dnd2024:class_features_monk_level_3_monk_subclass
+splat_contracts:
+- id: dnd2024:class_features_monk_level_3_monk_subclass
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+  outputs:
+  - feature_state
+  - choices
+  events:
+  - character.feature_gained
+  - character.level_gained
+  capabilities:
+  - character_choices
+  - class_progression
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 51
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_monk_level_3_monk_subclass
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 9ff71d0a4b0458c232a5ff21a1d1f4cd74f935be7afdb7c2b1ea7b7738d3200e
   parent_name: Monk
   line_span:
     first: 4254
@@ -35,7 +65,8 @@ splat_clauses:
     features at certain Monk levels. For the rest of your career, you gain each of your subclass’s features
     that are of your Monk level or lower.'
   sha256: 90a9ca4ebd3f79c07a499574430836972c9ddab6d24c8f08f5a6878b7a117ff7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Monk Subclass

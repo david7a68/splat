@@ -12,19 +12,124 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/warlock_level_1_pact_magic
-  parameters: {}
+  parameters:
+    class: warlock
+    spellcasting_ability: charisma
+    spellcasting_focus: arcane_focus
+    save_dc:
+      op: add
+      args:
+      - 8
+      - var: actor.abilities.charisma.modifier
+      - var: actor.proficiency_bonus
+    spell_attack_bonus:
+      op: add
+      args:
+      - var: actor.proficiency_bonus
+      - var: actor.abilities.charisma.modifier
+    slots:
+      progression:
+        key: dnd2024:tables/warlock_progression
+      recovery:
+      - rest.short_completed
+      - rest.long_completed
+      recover: all
+      pool: pact_magic
+      count:
+        table:
+          key: dnd2024:tables/warlock_progression
+        row:
+          var: actor.class_levels.warlock
+        column: pact_slots
+      level:
+        table:
+          key: dnd2024:tables/warlock_progression
+        row:
+          var: actor.class_levels.warlock
+        column: pact_slot_level
+      uniform_level: true
+      spell_level_range:
+      - 1
+      - 5
+      cast_at_slot_level: true
+    prepared_spells:
+      initial_count: 2
+      initial_spell_level: 1
+      progression:
+        table:
+          key: dnd2024:tables/warlock_progression
+        row:
+          var: actor.class_levels.warlock
+        column: prepared_spells
+      eligible_list: warlock
+      eligible_levels:
+        minimum: 1
+        maximum: pact_slot_level
+      on_count_increase: choose_until_count_met
+      replacement:
+        event: character.level_gained
+        class: warlock
+        maximum: 1
+      always_prepared_from_other_class_features:
+        counts_against_limit: false
+        counts_as_class_spell: warlock
+    cantrips:
+      initial_count: 2
+      list: warlock
+      additional_levels:
+      - 4
+      - 10
+      additional_each: 1
+      replace:
+        event: character.level_gained
+        class: warlock
+        maximum: 1
+        same_list: true
+    class_scope:
+      class: warlock
+      minimum_level: 1
+  implementation: dnd2024:class_features_warlock_level_1_pact_magic
+splat_contracts:
+- id: dnd2024:class_features_warlock_level_1_pact_magic
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - spellcasting
+  - prepared_spells
+  - resources
+  events:
+  - character.level_gained
+  - rest.long_completed
+  - rest.short_completed
+  - spell.prepare
+  - spell.cast
+  capabilities:
+  - character_features
+  - spellcasting
+  - proficiencies
+  - d20_tests
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 71
   - 72
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_warlock_level_1_pact_magic
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 3d334247bf017f13a03cf9cd4b0a0c897dd41bfb9768299cd16563c63ffa5e36
   parent_name: Warlock
   line_span:
     first: 6011
@@ -61,7 +166,8 @@ splat_clauses:
     ability for your Warlock spells. Spellcasting Focus. You can use an Arcane Focus as a Spellcasting
     Focus for your Warlock spells.'
   sha256: aac3f4841718001d46fdde6130dca26a928ec0e6d9fbbe0e77acb59db99ad770
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Pact Magic

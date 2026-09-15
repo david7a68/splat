@@ -25,17 +25,91 @@ splat_spell:
   ritual: false
   range:
     feet: 90
+splat_rule:
+  mechanic: dnd2024:spells/entangle
+  implementation: dnd2024:spell_entangle
+  parameters:
+    area:
+      shape: square
+      side_feet: 20
+      origin: ground_within_spell_range
+      terrain: difficult
+      duration: spell_duration
+      plants_disappear_on_end: true
+    targets:
+      kind: creature
+      in_area_at_cast: true
+      exclude_caster: true
+    save:
+      ability: strength
+      dc:
+        binding: save_dc
+      failure:
+        condition: restrained
+        until: spell_ends
+      success:
+        effect: none
+    escape:
+      cost: action
+      check:
+        ability: strength
+        skill: athletics
+        dc:
+          binding: save_dc
+      success: end_restrained_from_spell
+splat_contracts:
+- id: dnd2024:spell_entangle
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - turn.end
+  - effect.ended
+  - movement.completed
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - spatial_relationships
+  - conditions
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: c15b00312429fb26eca412b0579e05df2400caa4a4ece5e2003d81080f0f2710
   source_path: builtin/srd-5.2.1/spell/entangle.md
   pages:
   - 128
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_entangle
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 0892ff3845df5328433c1c084642dfc5076a87091c7eda4470f61581247559f0
 splat_clauses:
 - key: source_rules
   text: '# Entangle Level 1 Conjuration (Druid, Ranger) Casting Time: Action Range: 90 feet Components:
@@ -46,7 +120,8 @@ splat_clauses:
     creature can take an action to make a Strength (Athletics) check against your spell save DC. On a
     success, it frees itself from the grasping plants and is no longer Restrained by them.'
   sha256: e4c8326ea85a6cf68220ca0c773097d244f43d61e5c2127ab0d4a62654eac187
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Entangle

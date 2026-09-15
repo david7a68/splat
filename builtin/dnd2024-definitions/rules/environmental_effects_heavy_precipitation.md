@@ -12,18 +12,42 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/environmental_effects_heavy_precipitation
-  parameters: {}
+  parameters:
+    weather:
+    - heavy_rain
+    - heavy_snow
+    area_obscurity: lightly_obscured
+    wisdom_perception_checks: disadvantage
+    heavy_rain_extinguishes_open_flames: true
+  implementation: dnd2024:rule_environmental_effects_heavy_precipitation
+splat_contracts:
+- id: dnd2024:rule_environmental_effects_heavy_precipitation
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - effects
+  events: []
+  capabilities:
+  - environment
+  - senses
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 195
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_environmental_effects_heavy_precipitation
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: b8cad774fef4ea7ea19379aaac46a177f7e90ef7d3414a7001dc2e859448870c
   parent_name: Environmental Effects
   line_span:
     first: 9646
@@ -34,7 +58,8 @@ splat_clauses:
     and creatures in the area have Disadvantage on all Wisdom (Perception) checks. Heavy rain also extinguishes
     open flames.'
   sha256: c40fdbb7214bad4473bbcad4f770f9f6c65400de7366884a2dc63874e7a38649
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Heavy Precipitation

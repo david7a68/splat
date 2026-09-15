@@ -58,17 +58,144 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/manticore
+  implementation: dnd2024:creature_manticore
+  parameters:
+    features:
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 3
+          damage_type: slashing
+        reach_feet: 5
+      tail_spike:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 3
+          damage_type: piercing
+        range_feet: 100
+        long_range_feet: 200
+      multiattack:
+        economy: action
+        op: repeat_choice
+        count: 3
+        choices:
+        - feature: rend
+        - feature: tail_spike
+    defenses: {}
+    senses:
+      passive_perception: 11
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks:
+      - common
+      understands:
+      - common
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_manticore
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 29b953b54b0215a2f4cc24eeb0d56e837c8a45e916793b398fef845bd636de79
   source_path: builtin/srd-5.2.1/creature/manticore.md
   pages:
   - 306
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_manticore
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: b3cff8c97c69e4ab82c371ed9cfc76076804e57214126a68d5bcbcc7624b1e52
 splat_clauses:
 - key: source_rules
   text: '# Manticore Large Monstrosity, Lawful Evil AC 14 Initiative +3 (13) HP 68 (8d10 + 24) Speed 30
@@ -78,7 +205,8 @@ splat_clauses:
     combination. Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage. Tail Spike.
     Ranged Attack Roll: +5, range 100/200 ft. Hit: 7 (1d8 + 3) Piercing damage.'
   sha256: 712d665c84e91334d441f85c57811b3dc9acb29e0cab4ecdcfd3fde97fb4a2c2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Manticore

@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/combat_encounters
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 202
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: f663704f7b0df6a028c92410df6c7bf4cb7ec7f58177e6ab25a0b66814104b40
   parent_name: Combat Encounters
   line_span:
     first: 10243
@@ -40,7 +41,7 @@ splat_clauses:
     and their enemies to move around, such as chandeliers, kegs of gunpowder or oil, and rolling stone
     traps.'
   sha256: 48f11e41c9d53eeea99f4f27ba358c46a9cae3bcb02f852fb10169da6e7add05
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Combat Encounters

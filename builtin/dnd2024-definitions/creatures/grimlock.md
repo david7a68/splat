@@ -59,17 +59,128 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/grimlock
+  implementation: dnd2024:creature_grimlock
+  parameters:
+    features:
+      bone_cudgel:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 6
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 3
+          damage_type: bludgeoning
+        - op: damage
+          average: 2
+          amount:
+            dice:
+              count: 1
+              sides: 4
+            add: 0
+          damage_type: psychic
+        reach_feet: 5
+    skill_totals:
+      athletics: 5
+      perception: 3
+      stealth: 5
+    defenses: {}
+    senses:
+      passive_perception: 13
+      special:
+      - sense: blindsight
+        range_feet: 30
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_grimlock
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f4d662872c3d17293b252ffc6f8f8c16ec7d07b2b7eee723eb58c2794a18b3dc
   source_path: builtin/srd-5.2.1/creature/grimlock.md
   pages:
   - 296
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_grimlock
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: e7326837a239928191ade517e789fb530e2ee902ffc44eafff916e37b3c81ada
 splat_clauses:
 - key: source_rules
   text: '# Grimlock Medium Aberration, Neutral Evil AC 11 Initiative +1 (11) HP 11 (2d8 + 2) Speed 30
@@ -78,7 +189,8 @@ splat_clauses:
     Perception 13 Languages None CR 1/4 (XP 50; PB +2) ### Actions Bone Cudgel. Melee Attack Roll: +5,
     reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage plus 2 (1d4) Psychic damage.'
   sha256: 6f424c6d53d45b0dd26c9ccb70646c73936361a10dd9a034b488ef09a564699a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Grimlock

@@ -12,18 +12,56 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/armor_training
-  parameters: {}
+  parameters:
+    categories:
+    - light
+    - medium
+    - heavy
+    - shield
+    untrained_armor:
+      categories:
+      - light
+      - medium
+      - heavy
+      d20_disadvantage_abilities:
+      - strength
+      - dexterity
+      spellcasting_allowed: false
+    untrained_shield:
+      shield_ac_bonus: 0
+  implementation: dnd2024:glossary_armor_training
+splat_contracts:
+- id: dnd2024:glossary_armor_training
+  inputs:
+    subject:
+      type: participant
+      required: true
+    armor:
+      type: item_instance
+      required: true
+  outputs:
+  - drawbacks
+  events:
+  - equipment.changed
+  - d20_test.pending
+  - spell.cast_pending
+  capabilities:
+  - equipment
+  - checks
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: e1d2a9de1e1ef63e0ffb6892deefeec73b033ea6c0d6f0d0f375cfd4cf1adc19
   source_path: builtin/srd-5.2.1/glossary/armor_training.md
   pages:
   - 177
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_armor_training
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 0e0d14fd8b265b8fdef966285155d4e81308ff67ec3c1e2a1ff59256521033e4
 splat_clauses:
 - key: source_rules
   text: '# Armor Training Armor training allows you to use armor of a certain category without the following
@@ -31,7 +69,8 @@ splat_clauses:
     on any D20 Test that involves Strength or Dexterity, and you can’t cast spells. If you use a Shield
     and lack training with it, you don’t gain its AC bonus. See also “Disadvantage” and “Equipment” (“Armor”).'
   sha256: 28061d88efae76bdff99e5f73188011cb6055627bf0befe739f2d32bfa95d66c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Armor Training

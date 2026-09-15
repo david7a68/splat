@@ -59,17 +59,185 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/roper
+  implementation: dnd2024:creature_roper
+  parameters:
+    features:
+      spider_climb:
+        economy: passive
+        climb_ability_check_required: false
+        surfaces:
+        - difficult
+        - ceiling
+      bite:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 7
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 17
+          amount:
+            dice:
+              count: 3
+              sides: 8
+            add: 4
+          damage_type: piercing
+        reach_feet: 5
+      tentacle:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 7
+        targets:
+          count: 1
+        hit:
+        - op: condition
+          condition: grappled
+          escape_dc: 14
+          source: self
+          appendages:
+            kind: tentacle
+            available: 6
+            used: 1
+        - op: condition
+          condition: poisoned
+          ends:
+            event: grapple.end
+            source: self
+        reach_feet: 60
+        appendage:
+          ac: 20
+          hp: 10
+          damage_immunities:
+          - poison
+          - psychic
+          on_destroyed:
+          - free_grappled_creature
+          damage_transferred_to_self: false
+          regrow:
+            event: turn.start
+            participant: self
+            occurrence: next
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: tentacle
+          count: 2
+        - op: use_feature
+          feature: reel
+          count: 1
+        - op: use_feature
+          feature: bite
+          count: 2
+      reel:
+        economy: action
+        op: pull
+        targets:
+          count: all
+          grappled_by: self
+        distance_max_feet: 30
+        direction: straight_toward_self
+    skill_totals:
+      perception: 6
+      stealth: 5
+    defenses: {}
+    senses:
+      passive_perception: 16
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_roper
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - grapple.end
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - grappling
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 88c8b85a1319a8f6b0e75fc6b92c5667ed51145639ee988bc8ed413c5b4fc616
   source_path: builtin/srd-5.2.1/creature/roper.md
   pages:
   - 320
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_roper
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 56da6f520278b51fc46c2e298c453fd9efb5a84c4bbf9338b4b9e8e99756c2ee
 splat_clauses:
 - key: source_rules
   text: '# Roper Large Aberration, Neutral Evil AC 20 Initiative +5 (15) HP 93 (11d10 + 33) Speed 10 ft.,
@@ -85,7 +253,8 @@ splat_clauses:
     no damage to the roper, and a destroyed tentacle regrows at the start of the roper’s next turn. Reel.
     The roper pulls each creature Grappled by it up to 30 feet straight toward it.'
   sha256: 1c9014364052f94c08279d1d5794cb40b1b57f95d1bc026c9bf354f26e5561c2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Roper

@@ -12,19 +12,91 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/paladin_level_3_channel_divinity
-  parameters: {}
+  parameters:
+    resource:
+      id: paladin.channel_divinity
+      maximum:
+        by_paladin_level:
+          '3': 2
+          '11': 3
+      recovery:
+      - event: rest.short_completed
+        amount: 1
+      - event: rest.long_completed
+        amount: all
+    choose_effect_each_use: 1
+    cost_each_use: 1
+    save_dc:
+      op: add
+      args:
+      - 8
+      - var: actor.abilities.charisma.modifier
+      - var: actor.proficiency_bonus
+    divine_sense:
+      action: bonus_action
+      duration:
+        minutes: 10
+      ends_on:
+      - actor.incapacitated
+      radius_feet: 60
+      detect_creatures:
+        types:
+        - celestial
+        - fiend
+        - undead
+        reveal:
+        - location
+        - creature_type
+      detect_objects_and_places:
+        tags_any:
+        - consecrated
+        - desecrated
+        reveal:
+        - presence
+    class_scope:
+      class: paladin
+      minimum_level: 3
+  implementation: dnd2024:class_features_paladin_level_3_channel_divinity
+splat_contracts:
+- id: dnd2024:class_features_paladin_level_3_channel_divinity
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - action.bonus
+  - rest.short_completed
+  - rest.long_completed
+  - condition.applied
+  - participant.moved
+  capabilities:
+  - character_features
+  - resources
+  - proficiencies
+  - d20_tests
+  - senses
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 54
   - 55
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_paladin_level_3_channel_divinity
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: acef17f09bf96d574f711411e03c3ae0a3100a3d4756729300648b4b439de17f
   parent_name: Paladin
   line_span:
     first: 4557
@@ -49,7 +121,8 @@ splat_clauses:
     of yourself, and you know its creature type. Within the same radius, you also detect the presence
     of any place or object that has been consecrated or desecrated, as with the Hallow spell.'
   sha256: 9644a7978adc879b75b09daa4a821bb3cab2cdf77d05077f59209dbc25256329
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Channel Divinity

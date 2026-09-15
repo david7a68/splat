@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/combat_encounters_powerful_creatures
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 203
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 7095030b2c27510379df59e36a2f5b74f06a6881db4397fdbcbfa876fe7ea13f
   parent_name: Combat Encounters
   line_span:
     first: 10378
@@ -34,7 +35,7 @@ splat_clauses:
     party’s level, be aware that such a creature might deal enough damage with a single action to take
     out one or more characters. For example, an Ogre (CR 2) can kill a level 1 Wizard with a single blow.'
   sha256: 9df46fdd079cb8445baacf0da441dca978fb056a81e65a89e015822ebaadedac
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Powerful Creatures

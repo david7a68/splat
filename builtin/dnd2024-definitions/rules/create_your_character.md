@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/create_your_character
-  parameters: {}
+  parameters:
+    sequence:
+    - choose_class
+    - choose_background
+    - choose_species
+    - choose_languages
+    - assign_six_ability_scores
+    - choose_alignment
+    - fill_character_details
+    class_count_at_creation: 1
+    origin_components:
+    - background
+    - species
+  implementation: dnd2024:rules_create_your_character
+splat_contracts:
+- id: dnd2024:rules_create_your_character
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - creation_steps
+  events: []
+  capabilities:
+  - character_creation
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 19
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_create_your_character
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 0d431cbc6e85709c43535fa02e13669b73df6d2580d9e62792c5d3166ce9e862
   parent_name: Create Your Character
   line_span:
     first: 1328
@@ -39,7 +65,8 @@ splat_clauses:
     4: Choose an Alignment. Alignment is a shorthand for your character’s moral compass. 5: Fill in Details.
     Using the choices you’ve made, fill in the remaining details on your character sheet.'
   sha256: ce600864a83139487a483bfc531b51c1558b17e49f85dd746759355339e1d9b4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Create Your Character

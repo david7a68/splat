@@ -15,18 +15,550 @@ splat_item:
   rarity: legendary
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/mysterious_deck
+  implementation: dnd2024:item_mysterious_deck
+  parameters:
+    deck_size_roll:
+      die: 100
+      rows:
+      - range:
+        - 1
+        - 75
+        size: 13
+      - range:
+        - 76
+        - 100
+        size: 22
+    draw_procedure:
+      declare_count_before_draw: true
+      draw_randomly: true
+      excess_declared_draws: no_effect
+      effect_timing: immediate_on_draw
+      maximum_interval:
+        amount: 1
+        unit: hours
+      missed_remaining_draws: fly_out_and_all_resolve_simultaneously
+      drawn_card_disappears: true
+      return_to_deck_except:
+      - fool
+      - jester
+      removed_card_rolled_again: reroll
+    tables:
+      die: 100
+      deck_22:
+      - range:
+        - 1
+        - 5
+        card: balance
+      - range:
+        - 6
+        - 10
+        card: comet
+      - range:
+        - 11
+        - 14
+        card: donjon
+      - range:
+        - 15
+        - 18
+        card: euryale
+      - range:
+        - 19
+        - 23
+        card: fates
+      - range:
+        - 24
+        - 27
+        card: flames
+      - range:
+        - 28
+        - 31
+        card: fool
+      - range:
+        - 32
+        - 36
+        card: gem
+      - range:
+        - 37
+        - 41
+        card: jester
+      - range:
+        - 42
+        - 46
+        card: key
+      - range:
+        - 47
+        - 51
+        card: knight
+      - range:
+        - 52
+        - 56
+        card: moon
+      - range:
+        - 57
+        - 60
+        card: puzzle
+      - range:
+        - 61
+        - 64
+        card: rogue
+      - range:
+        - 65
+        - 68
+        card: ruin
+      - range:
+        - 69
+        - 73
+        card: sage
+      - range:
+        - 74
+        - 77
+        card: skull
+      - range:
+        - 78
+        - 82
+        card: star
+      - range:
+        - 83
+        - 87
+        card: sun
+      - range:
+        - 88
+        - 91
+        card: talons
+      - range:
+        - 92
+        - 96
+        card: throne
+      - range:
+        - 97
+        - 100
+        card: void
+      deck_13:
+      - range:
+        - 1
+        - 8
+        card: euryale
+      - range:
+        - 9
+        - 16
+        card: flames
+      - range:
+        - 17
+        - 24
+        card: jester
+      - range:
+        - 25
+        - 32
+        card: key
+      - range:
+        - 33
+        - 40
+        card: knight
+      - range:
+        - 41
+        - 48
+        card: moon
+      - range:
+        - 49
+        - 56
+        card: rogue
+      - range:
+        - 57
+        - 64
+        card: ruin
+      - range:
+        - 65
+        - 72
+        card: skull
+      - range:
+        - 73
+        - 80
+        card: star
+      - range:
+        - 81
+        - 88
+        card: sun
+      - range:
+        - 89
+        - 96
+        card: throne
+      - range:
+        - 97
+        - 100
+        card: void
+    cards:
+      balance:
+        optional: true
+        increase:
+          ability_choice: true
+          amount: 2
+          maximum: 22
+        required_decrease:
+          different_ability: true
+          amount: 2
+          pre_score_minimum: 6
+      comet:
+        trigger: next_combat_with_hostile_creatures
+        choose_foe_at: initiative_roll
+        foe_choice: one_hostile_combatant
+        success_trigger: user_reduces_chosen_foe_to_zero_hp_in_that_combat
+        success:
+          advantage:
+          - death_saving_throws
+          duration:
+            amount: 1
+            unit: years
+        no_effect_if:
+        - foe_not_chosen
+        - another_creature_reduces_foe_to_zero_hp
+      donjon:
+        teleport: extradimensional_sphere
+        state: suspended_animation
+        inventory: accompanies_user_except_artifacts
+        artifacts: remain_original_space
+        end: found_and_removed_from_sphere
+        cannot_be_located_by: divination_magic
+        location_reveal_exception:
+          spell:
+            key: dnd2024:spells/wish
+        stop_drawing: true
+      euryale:
+        curse: true
+        saving_throw_bonus: -2
+        ends_only_on:
+        - god_intervention
+        - fates_card
+      fates:
+        resource_uses: 1
+        expiry: user_death
+        activation: any_time_including_draw
+        effect:
+          event_choice: user
+          operation: avoid_or_erase_as_never_happened
+      flames:
+        enemy:
+          type: powerful_devil
+          choice: gm
+        behavior:
+        - seek_user_ruin
+        - torment_user
+        - eventually_attempt_slay_user
+        ends_on:
+        - user_death
+        - devil_death
+      fool:
+        disadvantage:
+        - d20_tests
+        duration:
+          amount: 72
+          unit: hours
+        additional_draw:
+          count: 1
+          mandatory: true
+          counts_against_declared: false
+      gem:
+        create_at: user_feet
+        selection:
+          options:
+          - kind: jewelry
+            count: 25
+            value_each_gp: 2000
+          - kind: gem
+            count: 50
+            value_each_gp: 1000
+      jester:
+        choice:
+        - advantage:
+          - d20_tests
+          duration:
+            amount: 72
+            unit: hours
+        - additional_draw:
+            count: 2
+            counts_against_declared: false
+      key:
+        create_at: user_person
+        item_choice: gm
+        constraints:
+          magic_weapon: true
+          rarity_minimum: rare
+          user_proficient: true
+      knight:
+        summon:
+          key: dnd2024:creatures/knight
+        stat_block_override:
+          choice: gm
+          type: creature_definition
+        space:
+          unoccupied: true
+          range_ft: 30
+          choice: user
+        alignment: user_alignment
+        loyal_service_until: death
+        name_backstory_choice:
+        - user
+        - gm
+      moon:
+        spell_grant:
+          spell:
+            key: dnd2024:spells/wish
+          uses:
+            roll:
+              count: 1
+              sides: 3
+      puzzle:
+        ability_choice:
+        - intelligence
+        - wisdom
+        permanent_decrease:
+          roll:
+            count: 1
+            sides: 4
+            add: 1
+        minimum_score: 1
+        additional_draw:
+          count: 1
+          optional: true
+          counts_against_declared: false
+      rogue:
+        npc_choice: gm
+        attitude: hostile
+        identity_secret_until_revealed: true
+        ends_only_on:
+        - spell:
+            key: dnd2024:spells/wish
+        - divine_intervention
+      ruin:
+        wealth_scope: all_carried_or_owned
+        exclude:
+        - magic_items
+        portable_property: vanish
+        business_buildings_land: ownership_lost
+        reality_change_constraint: minimum_necessary
+        ownership_documents: vanish
+      sage:
+        uses: 1
+        expiry:
+          amount: 1
+          unit: years
+        activation: meditate
+        question_choice: user
+        answer:
+          delivery: mental
+          truthful: true
+      skull:
+        summon:
+          key: dnd2024:creatures/avatar_of_death
+        placement: nearest_unoccupied_space_to_user
+        attack_targets: summoner_only
+        despawn_on:
+        - avatar_zero_hp
+        - summoner_death
+        ally_damage_trigger:
+          summon_another_avatar: true
+          summoner: damaging_ally
+          placement: nearest_unoccupied_space_to_damaging_ally
+          attack_target: damaging_ally
+        maximum_per_creature_per_draw: 1
+        slain_by_avatar:
+          can_restore_to_life: false
+      star:
+        ability_choice: true
+        increase: 2
+        maximum: 24
+      sun:
+        create_magic_item:
+          choice: gm
+          location: user_person
+        temporary_hp:
+          amount: 10
+          event: time.dawn
+          ends: user_death
+      talons:
+        items_scope: worn_or_carried_magic_items
+        non_artifacts: disintegrate
+        artifacts: vanish
+      throne:
+        skill_choice:
+        - history
+        - insight
+        - intimidation
+        - persuasion
+        grant:
+        - proficiency
+        - expertise
+        small_keep:
+          rightful_ownership: true
+          location: gm_choice
+          inhabited_by:
+            monster_count_min: 1
+            choice: gm
+          claim_requires: clear_monsters
+      void:
+        soul:
+          contained_in: object
+          location_choice: gm
+          guardians:
+            powerful: true
+            minimum_count: 1
+        body:
+          inert: true
+          ages: false
+          requires:
+            food: false
+            air: false
+            water: false
+        wish:
+          return_soul: false
+          reveal_object_location: true
+        stop_drawing: true
+    avatar_dynamic_statistics:
+      definition:
+        key: dnd2024:creatures/avatar_of_death
+      hp_maximum:
+        floor:
+          multiply:
+          - summoner.hp_maximum
+          - 0.5
+      proficiency_bonus: summoner.proficiency_bonus
+      languages: summoner.languages
+      multiattack_count:
+        ceil:
+          multiply:
+          - summoner.proficiency_bonus
+          - 0.5
+      size: medium
+      creature_type: undead
+      alignment: neutral_evil
+      ac: 20
+      initiative_bonus: 3
+      initiative_score: 13
+      speed_ft: 60
+      fly_speed_ft: 60
+      hover: true
+      abilities:
+        strength: 16
+        dexterity: 16
+        constitution: 16
+        intelligence: 16
+        wisdom: 16
+        charisma: 16
+      saving_throw_bonuses:
+        strength: 3
+        dexterity: 3
+        constitution: 3
+        intelligence: 3
+        wisdom: 3
+        charisma: 3
+      damage_immunities:
+      - necrotic
+      - poison
+      condition_immunities:
+      - charmed
+      - exhaustion
+      - frightened
+      - paralyzed
+      - petrified
+      - poisoned
+      - unconscious
+      truesight_ft: 60
+      passive_perception: 13
+      challenge_rating: null
+      xp: 0
+      incorporeal_movement:
+        through:
+        - creatures
+        - objects
+        cost: difficult_terrain
+        end_turn_inside_object:
+          damage:
+            amount:
+              roll:
+                count: 1
+                sides: 10
+            type: force
+            average: 5
+      reaping_scythe:
+        type: melee
+        automatic_hit: true
+        reach_ft: 5
+        damage:
+        - type: slashing
+          amount:
+            roll:
+              count: 1
+              sides: 8
+              add: 3
+          average: 7
+        - type: necrotic
+          amount:
+            roll:
+              count: 1
+              sides: 8
+          average: 4
+    attunement_required: false
+splat_contracts:
+- id: dnd2024:item_mysterious_deck
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.card_drawn
+  - time.elapsed
+  - initiative.rolled
+  - hp.changed
+  - participant.died
+  - damage.resolved
+  - time.dawn
+  - item.activation_requested
+  capabilities:
+  - item_effects
+  - dice
+  - item_spellcasting
+  - effect_duration
+  - curses
+  - spatial_targeting
+  - summoning
+  - damage
+  - conditions
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 9d70bb6127f8f82c97d75ae1d815f1bb05b515a3e2e90acaaf0f02a12ca5e4fa
   source_path: builtin/srd-5.2.1/magic_item/mysterious_deck.md
   pages:
   - 231
   - 232
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_mysterious_deck
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: ae8a79b7a5782a1208d1cc46ef08797d878503689122279d8489bdba3e17b8e0
 splat_clauses:
 - key: source_rules
   text: '# Mysterious Deck Wondrous Item, Legendary Usually found in a box or pouch, this deck contains
@@ -107,7 +639,8 @@ splat_clauses:
     up). Reaping Scythe. Melee Attack Roll: Automatic hit, reach 5 ft. Hit: 7 (1d8 + 3) Slashing damage
     plus 4 (1d8) Necrotic damage.'
   sha256: f051d6affb6c731bcec4dadcfd0f3def3d4155217cdda7b12253595fc77aab7d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Mysterious Deck

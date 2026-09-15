@@ -24,17 +24,82 @@ splat_spell:
   ritual: true
   range:
     feet: 30
+splat_rule:
+  mechanic: dnd2024:spells/phantom_steed
+  implementation: dnd2024:spell_phantom_steed
+  parameters:
+    spell_lifetime:
+      concentration: false
+      maximum_seconds: 3600
+    steed:
+      size: large
+      creature_kind: quasi_real_horselike
+      space:
+        ground: true
+        unoccupied: true
+        range_feet: 30
+      appearance: caster_choice
+      stat_block:
+        key: dnd2024:creatures/riding_horse
+      speed_feet: 100
+      travel_miles_per_hour: 13
+    equipment:
+      grants:
+      - saddle
+      - bit
+      - bridle
+      vanishes_if_distance_from_steed_greater_than_feet: 10
+    rider:
+      caster_or_chosen_creature: true
+    end_early:
+      event: damage.applied
+      subject: steed
+      minimum_damage: 1
+    spell_end:
+      fade_seconds: 60
+      rider_dismount_seconds: 60
+splat_contracts:
+- id: dnd2024:spell_phantom_steed
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    origin:
+      type: location
+      required: true
+    appearance:
+      type: choice
+      required: true
+    rider:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  - objects
+  events:
+  - damage.applied
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - world_objects
+  - inventory
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: a7ec8b3ffd8e390cebdbc78929a13c512698d97185003bf6e4746955fc13c65a
   source_path: builtin/srd-5.2.1/spell/phantom_steed.md
   pages:
   - 152
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_phantom_steed
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: f5fbb89c2e69517757fae4ac7008155f6217fa4049e3879b9e1a9452f691547a
 splat_clauses:
 - key: source_rules
   text: '# Phantom Steed Level 3 Illusion (Wizard) Casting Time: 1 minute or Ritual Range: 30 feet Components:
@@ -46,7 +111,8 @@ splat_clauses:
     of 100 feet and can travel 13 miles in an hour. When the spell ends, the steed gradually fades, giving
     the rider 1 minute to dismount. The spell ends early if the steed takes any damage.'
   sha256: 80f388673a607128d571fb9fa03d3b9cc43d5483acbdcdf7d832a8acc4136fc8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Phantom Steed

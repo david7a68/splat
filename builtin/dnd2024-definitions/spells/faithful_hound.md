@@ -28,17 +28,94 @@ splat_spell:
   material:
     description: a silver whistle
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/faithful_hound
+  implementation: dnd2024:spell_faithful_hound
+  parameters:
+    targeting:
+      kind: location
+      unoccupied: true
+      visible: true
+      within_range: true
+    hound:
+      visible_to: caster_only
+      intangible: true
+      invulnerable: true
+      truesight_feet: 30
+      until_any:
+      - spell_duration
+      - caster_distance_exceeds_300_feet
+    alarm:
+      creature_size_min: small
+      proximity_feet: 30
+      exemption: previously_spoken_caster_specified_password
+      effect: loud_barking
+    bite:
+      event: caster.turn_started
+      target: one_enemy
+      reach_feet: 5
+      save:
+        ability: dexterity
+        failure:
+          damage:
+            dice: 4d8
+            type: force
+        success: no_effect
+    move:
+      economy: magic_action
+      timing: later_caster_turns
+      max_feet: 30
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 8
+        unit: hour
+splat_contracts:
+- id: dnd2024:spell_faithful_hound
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      type: location_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - locations
+  events:
+  - spell.cast_completed
+  - turn.started
+  - area.entered
+  - position.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - spatial_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 2e911f80affcb705d0bf616a0b72cd2bed9867f044cb6477bc63d6b0f529e0ca
   source_path: builtin/srd-5.2.1/spell/faithful_hound.md
   pages:
   - 129
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_faithful_hound
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: af2a452b9bd3f53d2da5c8af8ff3734d67f63caf69d301a0300c62b4c32ae194
 splat_clauses:
 - key: source_rules
   text: '# Faithful Hound Level 4 Conjuration (Wizard) Casting Time: Action Range: 30 feet Components:
@@ -51,7 +128,8 @@ splat_clauses:
     5 feet of it. That enemy must succeed on a Dexterity saving throw or take 4d8 Force damage. On your
     later turns, you can take a Magic action to move the hound up to 30 feet.'
   sha256: 3056d8a3813ac18730f336d58f5d385984c9c0b2b1721378dcccf2923557bf6a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Faithful Hound

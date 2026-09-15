@@ -59,17 +59,113 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/raven
+  implementation: dnd2024:creature_raven
+  parameters:
+    features:
+      mimicry:
+        economy: trait
+        operation: passive_rule
+        sounds:
+          complexity: simple
+          previously_heard: true
+        detect_imitation:
+          check: wisdom_insight
+          dc: 10
+      beak:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 1
+            roll:
+              constant: 1
+            type: piercing
+    skill_totals:
+      perception: 3
+    senses:
+      passive_perception: 13
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_raven
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: d07ae7ac85ba41d20246a7084bb86ff3f08f10f4334a8f34bb8b1c8ef6e95c9b
   source_path: builtin/srd-5.2.1/creature/raven.md
   pages:
   - 359
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_raven
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: e69b088c95ba3f31eb8c08e5a19ad2978999748946a675c279c94c757e979bec
 splat_clauses:
 - key: source_rules
   text: '# Raven Tiny Beast, Unaligned AC 12 Initiative +2 (12) HP 2 (1d4) Speed 10 ft., Fly 50 ft. MOD
@@ -79,7 +175,8 @@ splat_clauses:
     the sounds are imitations with a successful DC 10 Wisdom (Insight) check. ### Actions Beak. Melee
     Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage.'
   sha256: 614e3e3b65f0a2be540609d0bad31688aeaff9822396087ecefb263a2ee0b54d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Raven

@@ -24,17 +24,69 @@ splat_spell:
   ritual: false
   range:
     feet: 30
+splat_rule:
+  mechanic: dnd2024:spells/prayer_of_healing
+  implementation: dnd2024:spell_prayer_of_healing
+  parameters:
+    targeting:
+      kind: creatures
+      max_count: 5
+      chosen: true
+      within_range_for_entire_cast: true
+      eligibility: no_benefit_since_last_long_rest
+    benefits:
+      short_rest: true
+      healing:
+        dice: 2d8
+    repeat_limit:
+      scope: each_target
+      reset: target_long_rest_finished
+    slot_scaling:
+      above: 2
+      healing_per_level: 1d8
+    spell_lifetime:
+      concentration: false
+      maximum:
+        kind: instantaneous
+splat_contracts:
+- id: dnd2024:spell_prayer_of_healing
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - healing_results
+  events:
+  - spell.cast_completed
+  - rest.completed
+  capabilities:
+  - spellcasting
+  - effects
+  - rest_lifecycle
+  - healing
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: df26ba38ed855dea4528e5dc7212528e00c0023371e6aa922881a106b20b9fa1
   source_path: builtin/srd-5.2.1/spell/prayer_of_healing.md
   pages:
   - 154
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_prayer_of_healing
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 391d30a411fa54423377c91ad9c66db75416ac527c2991d7f924a53ad9f01e1a
 splat_clauses:
 - key: source_rules
   text: '# Prayer of Healing Level 2 Abjuration (Cleric, Paladin) Casting Time: 10 minutes Range: 30 feet
@@ -43,7 +95,8 @@ splat_clauses:
     creature can’t be affected by this spell again until that creature finishes a Long Rest. Using a Higher-Level
     Spell Slot. The healing increases by 1d8 for each spell slot level above 2.'
   sha256: 19beaeb9bad958b19808bce88dc68e1684a114b91bfe7594ad4152c6f9c19f2e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Prayer of Healing

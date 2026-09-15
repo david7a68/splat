@@ -12,19 +12,54 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/creating_a_background_1_choose_abilities
-  parameters: {}
+  parameters:
+    background_ability_choice:
+      count: 3
+      distinct: true
+      options:
+      - strength
+      - dexterity
+      - constitution
+      - intelligence
+      - wisdom
+      - charisma
+      criterion: appropriate_to_background
+    interleaved_terrain_dc_columns:
+      source:
+        key: dnd2024:rules/travel_pace_special_movement
+      field: terrain_table
+  implementation: dnd2024:rule_creating_a_background_1_choose_abilities
+splat_contracts:
+- id: dnd2024:rule_creating_a_background_1_choose_abilities
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - background_definition
+  events: []
+  capabilities:
+  - background_creation
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 192
   - 193
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_creating_a_background_1_choose_abilities
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 1bf4afd8ee055322e07f33e35e85a7ff9829e80b02409746af5c597389a15dda
   parent_name: Creating a Background
   line_span:
     first: 9392
@@ -39,7 +74,8 @@ splat_clauses:
     focuses on cerebral or spiritual matters. Charisma. This ability is ideal for a background that involves
     performance or social interaction.'
   sha256: ab2c9c20c77e0e98d1221ff1ba47b467599c1723192f9266e5f34a20d652ea08
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # 1: Choose Abilities

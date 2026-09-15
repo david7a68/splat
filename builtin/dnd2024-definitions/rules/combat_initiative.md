@@ -12,18 +12,55 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_initiative
-  parameters: {}
+  parameters:
+    check:
+      ability: dexterity
+      kind: ability_check
+    roll_controller:
+      player_character: player
+      monster: gm
+    identical_monster_group: one_shared_roll
+    surprised:
+      initiative_disadvantage: true
+    order: descending_check_total
+    order_persists_each_round: true
+    ties:
+      monsters_only: gm_choice
+      characters_only: players_choice
+      mixed: gm_choice
+  implementation: dnd2024:rules_combat_initiative
+splat_contracts:
+- id: dnd2024:rules_combat_initiative
+  inputs:
+    combatants:
+      type: participant_list
+      required: true
+    surprised:
+      type: participant_list
+      required: true
+    ties:
+      required: false
+      type: choice
+  outputs:
+  - initiative_order
+  events:
+  - combat.started
+  capabilities:
+  - initiative
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 13
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_combat_initiative
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: a5f31a68b017eb7a39beaee68e10d4112845c7c57b0515d219d307f5e193690d
   parent_name: Combat
   line_span:
     first: 791
@@ -42,7 +79,8 @@ splat_clauses:
     GM decides the order among tied monsters, and the players decide the order among tied characters.
     The GM decides the order if the tie is between a monster and a player character.'
   sha256: 0a26cfc5d19c5906709bdbe5adea974cd194857a04bb717079aa4891530191ef
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Initiative

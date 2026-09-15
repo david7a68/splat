@@ -28,17 +28,91 @@ splat_spell:
   material:
     description: a shard of glass
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/wall_of_force
+  implementation: dnd2024:spell_wall_of_force
+  parameters:
+    targeting:
+      kind: chosen_point_in_range
+    wall:
+      invisible: true
+      orientation: caster_choice_any
+      support_choice:
+      - free_floating
+      - solid_surface
+      shape_choices:
+      - shape: hemispherical_dome
+        radius_max_feet: 10
+      - shape: globe
+        radius_max_feet: 10
+      - shape: flat_panels
+        count: 10
+        width_feet: 10
+        height_feet: 10
+        each_contiguous_with_another: true
+      thickness_inches:
+        numerator: 1
+        denominator: 4
+      duration: spell_duration
+    initial_overlap:
+      targets: creatures_cut_by_wall
+      push_to_side: caster_choice
+    barrier:
+      physical_passage: forbidden
+      damage_immunity: all
+      dispel_magic: ineffective
+      disintegrate: instant_destruction
+      extends_into: ethereal_plane
+      ethereal_passage: forbidden
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 10
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_wall_of_force
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      type: location_list
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - locations
+  events:
+  - spell.cast_completed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - spatial_effects
+  - planar_travel
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 0fc382f11903de45503d9b620d182d8d2d103cd27265f712de7994ff495f7fe2
   source_path: builtin/srd-5.2.1/spell/wall_of_force.md
   pages:
   - 172
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_wall_of_force
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 6be06e9a473a22bd84b458ff4f77a246c0bcc8cb6ab94e075be4ebe3ff422f87
 splat_clauses:
 - key: source_rules
   text: '# Wall of Force Level 5 Evocation (Wizard) Casting Time: Action Range: 120 feet Components: V,
@@ -53,7 +127,8 @@ splat_clauses:
     dispelled by Dispel Magic. A Disintegrate spell destroys the wall instantly, however. The wall also
     extends into the Ethereal Plane and blocks ethereal travel through the wall.'
   sha256: 963f2efe6bb2e5a96a1fd4ddb1d636474a12247a353a7b484c848cd8b2256d12
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wall of Force

@@ -24,17 +24,115 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/planar_ally
+  implementation: dnd2024:spell_planar_ally
+  parameters:
+    patron:
+      known_to_caster: true
+      kind: cosmic_power_entity
+    summon:
+      creature_types:
+      - celestial
+      - elemental
+      - fiend
+      loyal_to_patron: true
+      destination: unoccupied_in_range
+      specific_name_request_optional: true
+      final_creature_chooser: gm
+    service:
+      compelled: false
+      communication_required_for_bargain: true
+      task_choice: caster
+      acceptance_choice: summoned_creature
+      payment_forms:
+      - gold
+      - magic_items
+      - sacrifice
+      - treasure
+      - quest
+      price_rates:
+      - unit: minute
+        gp: 100
+      - unit: hour
+        gp: 1000
+      - unit: day
+        gp: 10000
+        maximum_duration_days: 10
+      gm_adjustment:
+        decision: price_amount
+        context: casting_circumstances
+        ethos_aligned_options:
+        - half
+        - waived
+        - unchanged
+        nonhazardous_default_fraction:
+          numerator: 1
+          denominator: 2
+        especially_dangerous: greater_gift
+        suicidal_acceptance: rare
+    return_home:
+      events:
+      - task_completed
+      - agreed_duration_expired
+      report_to_caster_first_if_possible: true
+      destination: home_plane
+      no_price_agreement: immediate_return
+splat_contracts:
+- id: dnd2024:spell_planar_ally
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - summoned_creature
+  - service_agreement
+  - payment
+  - return
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - forms
+  - summoning
+  - choices
+  - time
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: ab7028e2c1da2d516a9042e54d2181c4d0c7a0aba3ca6f39598fe1e682c41b57
   source_path: builtin/srd-5.2.1/spell/planar_ally.md
   pages:
   - 152
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_planar_ally
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 876ca00988ac9a0a3432cf82450ba207edaa9bd96f87b504a8305adc57ee3afb
 splat_clauses:
 - key: source_rules
   text: '# Planar Ally Level 6 Conjuration (Cleric) Casting Time: 10 minutes Range: 60 feet Components:
@@ -60,7 +158,8 @@ splat_clauses:
     after reporting back to you if possible. If you are unable to agree on a price for the creature’s
     service, the creature immediately returns to its home plane.'
   sha256: 1a5f67ad3365e9b31c11b8cf878013932e3587c7f09c4d6b4bfaac8848b79175
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Planar Ally

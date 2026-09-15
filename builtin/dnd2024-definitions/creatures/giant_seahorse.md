@@ -58,17 +58,145 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_seahorse
+  implementation: dnd2024:creature_giant_seahorse
+  parameters:
+    features:
+      water_breathing:
+        economy: passive
+        breathing_media:
+        - water
+      ram:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: choose_by_predicate
+          test:
+            immediately_preceding_movement:
+              minimum_feet: 20
+              direction: straight_toward_target
+          then:
+          - op: damage
+            average: 11
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 2
+            damage_type: bludgeoning
+          else:
+          - op: damage
+            average: 9
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 2
+            damage_type: bludgeoning
+        reach_feet: 5
+      bubble_dash:
+        economy: bonus_action
+        requires:
+          underwater: true
+        op: move
+        distance_max:
+          multiply:
+          - stat: swim_speed
+          - numerator: 1
+            denominator: 2
+        provokes_opportunity_attacks: false
+    defenses: {}
+    senses:
+      passive_perception: 11
+      special: []
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_giant_seahorse
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - movement
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: c0e415697a0f66934d9432514817fe6a8123815a9cd0844cd160f75ab1ffb08e
   source_path: builtin/srd-5.2.1/creature/giant_seahorse.md
   pages:
   - 353
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_seahorse
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: ba170fe78028a7f1e47584c5c8f901de4dbc084dbf44f125db6e48c07315656d
 splat_clauses:
 - key: source_rules
   text: '# Giant Seahorse Large Beast, Unaligned AC 14 Initiative +1 (11) HP 16 (3d10) Speed 5 ft., Swim
@@ -79,7 +207,8 @@ splat_clauses:
     straight toward the target immediately before the hit. ### Bonus Actions Bubble Dash. While underwater,
     the seahorse moves up to half its Swim Speed without provoking Opportunity Attacks.'
   sha256: 6e85f7f740631d9252337e2591a0a2aae30a087415d26d9148c066ac8fcd86f8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Seahorse

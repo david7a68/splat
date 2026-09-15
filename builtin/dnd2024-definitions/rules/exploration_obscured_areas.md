@@ -12,18 +12,40 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/exploration_obscured_areas
-  parameters: {}
+  parameters:
+    lightly_obscured:
+      sight_based_wisdom_perception: disadvantage
+    heavily_obscured:
+      opaque: true
+      condition_when_attempting_to_see_inside: blinded
+  implementation: dnd2024:rule_exploration_obscured_areas
+splat_contracts:
+- id: dnd2024:rule_exploration_obscured_areas
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - perception_modifiers
+  events: []
+  capabilities:
+  - senses
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 11
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_exploration_obscured_areas
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 7e438faa365bf5e9e140d7cefb68f1c76603226dda4e5af3ca358061f8460acf
   parent_name: Exploration
   line_span:
     first: 619
@@ -36,7 +58,8 @@ splat_clauses:
     foliage—is opaque. You have the Blinded condition (see “Rules Glossary”) when trying to see something
     there.'
   sha256: 7039f1e5b247643430bb2d2e0999b1058b1c72cb58605ea0d33f2387cd9ed692
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Obscured Areas

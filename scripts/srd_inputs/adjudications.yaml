@@ -1,0 +1,61 @@
+format: 1
+cases:
+- key: dnd2024:creatures/young_white_dragon
+  subject: intelligence_save
+  status: resolved_project_ruling
+  base_save_total: 2
+  calculation: supplied_total_before_additional_modifiers
+  source_token: '2'
+  source_pages:
+  - 340
+  evidence: docs/research/young-white-dragon-save.md
+- key: dnd2024:spells/creation
+  subject: unlisted_mineral_duration
+  status: required_case_input
+  when: material_not_in_source_duration_table
+  input: material_duration_resolution
+  source_pages:
+  - 121
+- key: dnd2024:spells/flesh_to_stone
+  subject: initial_failure_count
+  status: required_case_input
+  input: initial_failure_counts
+  options:
+  - true
+  - false
+  source_pages:
+  - 133
+- key: dnd2024:spells/control_weather
+  subject: weather_restoration_time
+  status: required_case_input
+  when: spell_ends
+  input: transition_duration
+  source_pages:
+  - 120
+- key: dnd2024:items/ioun_stone
+  subject: absorption_exceeds_remaining_budget
+  status: required_case_input
+  when: spell_level_exceeds_remaining_lifetime_budget
+  input: absorption_remaining_budget_policy
+  options:
+  - reject_absorption
+  - absorb_and_burn_out
+  source_pages:
+  - 227
+  - 228
+- key: dnd2024:rules/travel_pace_vehicles
+  related: dnd2024:rules/exploration_vehicles
+  subject: land_vehicle_travel_pace
+  status: required_rule_selection
+  options:
+  - land_vehicle_pace_choice
+  - listed_vehicle_miles_per_hour
+  source_pages:
+  - 12
+  - 192
+- key: dnd2024:spells/telekinesis
+  subject: truncated_fine_control_example
+  status: no_mechanical_default_added
+  source_pages:
+  - 167
+  - 168

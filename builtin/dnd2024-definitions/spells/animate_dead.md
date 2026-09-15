@@ -29,17 +29,103 @@ splat_spell:
   material:
     description: a drop of blood, a piece of flesh, and a pinch of bone dust
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/animate_dead
+  implementation: dnd2024:spell_animate_dead
+  parameters:
+    target:
+      kind: bones_or_humanoid_corpse
+      count: 1
+      visible_to_caster: false
+      size:
+      - small
+      - medium
+      unique_remains_per_creature: true
+    animation:
+      bones:
+        key: dnd2024:creatures/skeleton
+      corpse:
+        key: dnd2024:creatures/zombie
+    control:
+      hours: 24
+      command:
+        action: bonus_action
+        event: turn.current
+        range_feet: 60
+        telepathic: true
+        targets: any_created_creatures_in_range
+        same_command_all: true
+        options:
+        - next_turn_action_and_movement
+        - general_task
+        persists_until: task_completed
+      uncommanded:
+        action: dodge
+        movement: avoid_harm_only
+      expiry: stop_obeying
+    reassert:
+      target: own_animated_creatures
+      before_control_expires: true
+      base_count: 4
+      control_hours: 24
+      replaces_animation: true
+    scaling:
+      per_slot_above: 3
+      additional_animated: 2
+      additional_reasserted: 2
+splat_contracts:
+- id: dnd2024:spell_animate_dead
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - spawned_creatures
+  - control_effect
+  - commands
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - movement
+  - summoning
+  - time
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: ecdcd4ab8fc1785220e7c7441f513210767e992abd59ed25cfadc0b973701bb0
   source_path: builtin/srd-5.2.1/spell/animate_dead.md
   pages:
   - 108
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_animate_dead
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 9c6f5820227713caaf4f346b5817a2aa5a84127c1db1edbd8387a24f78b2900d
 splat_clauses:
 - key: source_rules
   text: '# Animate Dead Level 3 Necromancy (Cleric, Wizard) Casting Time: 1 minute Range: 10 feet Components:
@@ -60,7 +146,8 @@ splat_clauses:
     additional Undead creatures for each spell slot level above 3. Each of the creatures must come from
     a different corpse or pile of bones.'
   sha256: 23b4bf6d16b3ac9937fedcce31bdb5470e9acc99faee4be50beda9d79a93ac43
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Animate Dead

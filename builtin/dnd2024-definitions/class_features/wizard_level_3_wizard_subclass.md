@@ -12,19 +12,76 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/wizard_level_3_wizard_subclass
-  parameters: {}
+  parameters:
+    subclass_choice:
+      count: 1
+      class: wizard
+      srd_options:
+      - key: dnd2024:subclasses/wizard_wizard_subclass_evoker
+    grant_features:
+      from: selected_subclass
+      when_required_class_level_lte_current: true
+      reevaluate_on_class_level_gain: true
+    spellbook_copying_sidebar:
+      copy_found_spell:
+        list: wizard
+        minimum_spell_level: 1
+        must_be_level_can_prepare: true
+        hours_per_spell_level: 2
+        gp_per_spell_level: 50
+        result: add_to_spellbook
+      copy_own_book_spell:
+        hours_per_spell_level: 1
+        gp_per_spell_level: 10
+        result: add_to_destination_spellbook
+      replace_lost_book:
+        eligible_spells: currently_prepared_wizard_spells
+        hours_per_spell_level: 1
+        gp_per_spell_level: 10
+        other_spells_require_rediscovery: true
+  implementation: dnd2024:class_features_wizard_level_3_wizard_subclass
+splat_contracts:
+- id: dnd2024:class_features_wizard_level_3_wizard_subclass
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+    spellbook_operation:
+      required: false
+      type: choice
+    spells:
+      required: false
+      type: definition_list
+  outputs:
+  - feature_state
+  - choices
+  - inventory_changes
+  events:
+  - character.feature_gained
+  - character.level_gained
+  capabilities:
+  - character_choices
+  - class_progression
+  - spellbooks
+  - downtime
+  - inventory
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 78
   - 79
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_wizard_level_3_wizard_subclass
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: a303f00bfc11fcf0cce8e29121e7d60a8065f94538b3f4f81d39ec6685fbab83
   parent_name: Wizard
   line_span:
     first: 6694
@@ -48,7 +105,8 @@ splat_clauses:
     keep a backup spellbook. of your career, you gain each of your subclass’s features that are of your
     Wizard level or lower.'
   sha256: 5e84db2a1d88e9c5463867ecf68657810cc082a934f1c1eb4c27669a27ea4d9e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Wizard Subclass

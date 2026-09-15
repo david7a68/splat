@@ -27,17 +27,58 @@ splat_spell:
   ritual: false
   range:
     mode: touch
+splat_rule:
+  mechanic: dnd2024:spells/protection_from_poison
+  implementation: dnd2024:spell_protection_from_poison
+  parameters:
+    spell_lifetime:
+      concentration: false
+      maximum_seconds: 3600
+    target:
+      kind: creature
+      touch: true
+    immediate:
+      end_condition: poisoned
+    benefits:
+      save_advantage:
+        condition: poisoned
+        purposes:
+        - avoid
+        - end
+      damage_resistance: poison
+splat_contracts:
+- id: dnd2024:spell_protection_from_poison
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    target:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - conditions
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 64b6303facc44d95660992a176d889fed23b97052198b614abe049814be58d5c
   source_path: builtin/srd-5.2.1/spell/protection_from_poison.md
   pages:
   - 157
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_protection_from_poison
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: e413e7b7831654c5a9f3427822a7d68bb70e22862d3cb8f98b23a1d20c0fac89
 splat_clauses:
 - key: source_rules
   text: '# Protection from Poison Level 2 Abjuration (Cleric, Druid, Paladin, Ranger) Casting Time: Action
@@ -45,7 +86,8 @@ splat_clauses:
     on it. For the duration, the target has Advantage on saving throws to avoid or end the Poisoned condition,
     and it has Resistance to Poison damage.'
   sha256: 04736a67738105169800681cfaa33a0384d796b38ceee8aff9fb993b32b477d2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Protection from Poison

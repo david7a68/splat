@@ -12,18 +12,64 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/exploration_travel_pace
-  parameters: {}
+  parameters:
+    paces:
+    - pace: fast
+      feet_per_minute: 400
+      miles_per_hour: 4
+      miles_per_day: 30
+      disadvantage:
+      - wisdom_perception
+      - wisdom_survival
+      - dexterity_stealth
+    - pace: normal
+      feet_per_minute: 300
+      miles_per_hour: 3
+      miles_per_day: 24
+      disadvantage:
+      - dexterity_stealth
+    - pace: slow
+      feet_per_minute: 200
+      miles_per_hour: 2
+      miles_per_day: 18
+      advantage:
+      - wisdom_perception
+      - wisdom_survival
+    mounted:
+      distance_multiplier: 2
+      maximum_hours: 1
+      recharge:
+      - short_rest
+      - long_rest
+    pace_limit_source: terrain
+  implementation: dnd2024:rule_exploration_travel_pace
+splat_contracts:
+- id: dnd2024:rule_exploration_travel_pace
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - travel_rates
+  events: []
+  capabilities:
+  - travel
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 12
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_exploration_travel_pace
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 128ed1827c2a76d1741d88d54f89b58e09e33995831cbb454386eb172a635b3c
   parent_name: Exploration
   line_span:
     first: 727
@@ -42,7 +88,8 @@ splat_clauses:
     imposes Disadvantage on Dexterity (Stealth) checks. Slow. Traveling at a Slow pace grants Advantage
     on Wisdom (Perception or Survival) checks.'
   sha256: 4b84016780843f201fa73e83c4f6359c4819c65c33a9fc91b582ffb94aadad71
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Travel Pace

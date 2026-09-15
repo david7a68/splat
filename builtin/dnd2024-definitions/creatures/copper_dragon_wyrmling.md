@@ -64,18 +64,177 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/copper_dragon_wyrmling
+  implementation: dnd2024:creature_copper_dragon_wyrmling
+  parameters:
+    features:
+      rend:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 7
+            roll:
+              count: 1
+              sides: 10
+              modifier: 2
+            type: slashing
+      acid_breath:
+        economy: action
+        resource:
+          kind: recharge
+          die: 6
+          success_faces:
+          - 5
+          - 6
+          check: self.turn_start
+          rest_recovery:
+          - short
+          - long
+          capacity: 1
+          initial_uses: 1
+        operation: saving_throw
+        ability: dexterity
+        dc: 11
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: line
+            size_ft: 20
+            origin: self
+            width_ft: 5
+        failure:
+          damage:
+          - average: 18
+            roll:
+              count: 4
+              sides: 8
+              modifier: 0
+            type: acid
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+      slowing_breath:
+        economy: action
+        operation: saving_throw
+        ability: constitution
+        dc: 11
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: cone
+            size_ft: 15
+            origin: self
+        failure:
+          can_take_reactions: false
+          speed_multiplier: 0.5
+          turn_economy:
+            choose_one:
+            - action
+            - bonus_action
+          until: target.next_turn_end
+        success:
+          effects: []
+    skill_totals:
+      perception: 4
+      stealth: 3
+    damage_immunities:
+    - acid
+    condition_immunities: []
+    senses:
+      blindsight: 10
+      darkvision: 60
+      passive_perception: 14
+    languages:
+      speaks:
+      - draconic
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_copper_dragon_wyrmling
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - turn.ended
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 7b9e62976c42cd7243cfa17bcdb7088707362a6c6699a1c36951cbdfbb5ad4e2
   source_path: builtin/srd-5.2.1/creature/copper_dragon_wyrmling.md
   pages:
   - 275
   - 276
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_copper_dragon_wyrmling
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: fffe728603e10086cce739653844203aa12ce41cdc01d87ef3b86343959bd90d
 splat_clauses:
 - key: source_rules
   text: '# Copper Dragon Wyrmling Medium Dragon (Metallic), Chaotic Good AC 16 Initiative +3 (13) HP 22
@@ -89,7 +248,8 @@ splat_clauses:
     and it can take either an action or a Bonus Action on its turn, not both. This effect lasts until
     the end of its next turn.'
   sha256: 5608ff0480230bc97f29e8ebbe6df2e3ccf636bee387e0bb4f8494070c82fc7c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Copper Dragon Wyrmling

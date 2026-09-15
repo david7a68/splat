@@ -12,18 +12,141 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/cleric_as_a_level_1_character
-  parameters: {}
+  parameters:
+    requires_total_character_level: 1
+    core_traits:
+      key: dnd2024:classes/cleric
+    grant_all_core_traits: true
+    features:
+    - level: 1
+      feature:
+        key: dnd2024:class_features/cleric_level_1_divine_order
+    - level: 1
+      feature:
+        key: dnd2024:class_features/cleric_level_1_spellcasting
+    progression:
+    - level: 1
+      proficiency_bonus: 2
+      channel_divinity_uses: 0
+      features:
+      - key: dnd2024:class_features/cleric_level_1_divine_order
+      - key: dnd2024:class_features/cleric_level_1_spellcasting
+    - level: 2
+      proficiency_bonus: 2
+      channel_divinity_uses: 2
+      features:
+      - key: dnd2024:class_features/cleric_level_2_channel_divinity
+    - level: 3
+      proficiency_bonus: 2
+      channel_divinity_uses: 2
+      features:
+      - key: dnd2024:class_features/cleric_level_3_cleric_subclass
+    - level: 4
+      proficiency_bonus: 2
+      channel_divinity_uses: 2
+      features:
+      - key: dnd2024:class_features/cleric_level_4_ability_score_improvement
+    - level: 5
+      proficiency_bonus: 3
+      channel_divinity_uses: 2
+      features:
+      - key: dnd2024:class_features/cleric_level_5_sear_undead
+    - level: 6
+      proficiency_bonus: 3
+      channel_divinity_uses: 3
+      features: []
+    - level: 7
+      proficiency_bonus: 3
+      channel_divinity_uses: 3
+      features:
+      - key: dnd2024:class_features/cleric_level_7_blessed_strikes
+    - level: 8
+      proficiency_bonus: 3
+      channel_divinity_uses: 3
+      features: []
+    - level: 9
+      proficiency_bonus: 4
+      channel_divinity_uses: 3
+      features: []
+    - level: 10
+      proficiency_bonus: 4
+      channel_divinity_uses: 3
+      features:
+      - key: dnd2024:class_features/cleric_level_10_divine_intervention
+    - level: 11
+      proficiency_bonus: 4
+      channel_divinity_uses: 3
+      features: []
+    - level: 12
+      proficiency_bonus: 4
+      channel_divinity_uses: 3
+      features: []
+    - level: 13
+      proficiency_bonus: 5
+      channel_divinity_uses: 3
+      features: []
+    - level: 14
+      proficiency_bonus: 5
+      channel_divinity_uses: 3
+      features:
+      - key: dnd2024:class_features/cleric_level_14_improved_blessed_strikes
+    - level: 15
+      proficiency_bonus: 5
+      channel_divinity_uses: 3
+      features: []
+    - level: 16
+      proficiency_bonus: 5
+      channel_divinity_uses: 3
+      features: []
+    - level: 17
+      proficiency_bonus: 6
+      channel_divinity_uses: 3
+      features: []
+    - level: 18
+      proficiency_bonus: 6
+      channel_divinity_uses: 4
+      features: []
+    - level: 19
+      proficiency_bonus: 6
+      channel_divinity_uses: 4
+      features:
+      - key: dnd2024:class_features/cleric_level_19_epic_boon
+    - level: 20
+      proficiency_bonus: 6
+      channel_divinity_uses: 4
+      features:
+      - key: dnd2024:class_features/cleric_level_20_greater_divine_intervention
+    subclass_feature_levels:
+    - 3
+    - 6
+    - 17
+  implementation: dnd2024:rules_cleric_as_a_level_1_character
+splat_contracts:
+- id: dnd2024:rules_cleric_as_a_level_1_character
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - core_traits
+  - class_features
+  events: []
+  capabilities:
+  - character_creation
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 36
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_cleric_as_a_level_1_character
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 9482f8cddc9c8939a780ce3ff19000e74eddd5d2ad832cd55ca8964b032266a8
   parent_name: Cleric
   line_span:
     first: 2930
@@ -39,7 +162,8 @@ splat_clauses:
     Score Improvement 3 17 +6 Subclass feature 3 18 +6 — 4 19 +6 Epic Boon 4 20 +6 Greater Divine Intervention
     4'
   sha256: cabe37f216ad4cc34189b16e4fecad5e6893043c40e9450235d412f52727aee9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # As a Level 1 Character

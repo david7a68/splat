@@ -12,18 +12,60 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/evoker_level_6_sculpt_spells
-  parameters: {}
+  parameters:
+    trigger: actor.casts_evocation_spell
+    targets:
+      not_actor: true
+      affected_by_spell: true
+      visible_to_actor: true
+      maximum:
+        op: add
+        args:
+        - 1
+        - var: spell.level
+      selection: actor_choice
+    saving_throws_against_spell: automatic_success
+    damage_on_success:
+      if_normally_half: 0
+    class_scope:
+      class: wizard
+      minimum_level: 6
+  implementation: dnd2024:class_features_evoker_level_6_sculpt_spells
+splat_contracts:
+- id: dnd2024:class_features_evoker_level_6_sculpt_spells
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - spell.cast
+  - saving_throw
+  - damage.pending
+  capabilities:
+  - character_features
+  - spellcasting
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 82
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_evoker_level_6_sculpt_spells
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 5bf10bc284d8e9f023b20dd1c77b9319301e125f214bda36a3f02da033e875b5
   parent_name: Evoker
   line_span:
     first: 7033
@@ -36,7 +78,8 @@ splat_clauses:
     on their saving throws against the spell, and they take no damage if they would normally take half
     damage on a successful save.'
   sha256: a7abbfe2666d9eb4309632f42c0d88ccdca5bf88966a6df64b76b94332e2ddef
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 6: Sculpt Spells

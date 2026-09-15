@@ -15,17 +15,88 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/potion_of_longevity
+  implementation: dnd2024:item_potion_of_longevity
+  parameters:
+    consume: drink
+    physical_age_change_years:
+      expression: 1d6+6
+      scope: use
+    default_direction: decrease
+    minimum_age_years: 13
+    subsequent_use:
+      track: lifetime_prior_potions_of_longevity_consumed
+      aging_probability_percent:
+        op: min
+        args:
+        - 100
+        - op: multiply
+          args:
+          - 10
+          - binding: prior_consumptions
+      on_probability_success: increase_age_instead
+    consume_action: bonus_action
+    administer_action: bonus_action
+    effect_target: drinker
+    consumed_quantity: 1
+    effect_starts: immediately_after_consumption
+    attunement:
+      required: false
+    common_rules:
+    - key: dnd2024:rules/magic_item_categories_potions
+splat_contracts:
+- id: dnd2024:item_potion_of_longevity
+  inputs:
+    actor:
+      type: participant
+      required: true
+    source_item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choice:
+      required: false
+      type: choice
+    event:
+      required: false
+      type: event
+    campaign:
+      required: false
+      type: campaign
+    prior_consumptions:
+      required: false
+      type: integer
+  outputs:
+  - item_state
+  - effects
+  - resolutions
+  events:
+  - item.consumed
+  capabilities:
+  - inventory
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 94e88c6c041eed2b4c970fb6a1ed7607ea87c1d56fd6e15e05a974814e584adc
   source_path: builtin/srd-5.2.1/magic_item/potion_of_longevity.md
   pages:
   - 236
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_potion_of_longevity
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_2.md
+  specification_sha256: 9a5bbe530e521bbbe4e2dbca6f07c68651fe944efafc32aa802446eeb9f62744
 splat_clauses:
 - key: source_rules
   text: '# Potion of Longevity Potion, Very Rare When you drink this potion, your physical age is reduced
@@ -34,7 +105,8 @@ splat_clauses:
     liquid is a tiny heart that, against all reason, is still beating. These ingredients vanish when the
     potion is opened.'
   sha256: 58808d5bc3c73a93d4f63b3389d6914fcfbc1c67bc9bd64490d171af0bb4e4ba
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Potion of Longevity

@@ -12,18 +12,46 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/sorcerer_transmuted_spell
-  parameters: {}
+  parameters:
+    cost:
+      sorcery_points: 1
+    damage_type_choice:
+    - acid
+    - cold
+    - fire
+    - lightning
+    - poison
+    - thunder
+    requires_original_type_in_choice: true
+    new_type_must_differ: true
+    scope: current_spell_cast
+  implementation: dnd2024:rules_sorcerer_transmuted_spell
+splat_contracts:
+- id: dnd2024:rules_sorcerer_transmuted_spell
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - spell.cast_pending
+  capabilities:
+  - metamagic
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 67
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_sorcerer_transmuted_spell
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 149680373a3251ca8034e800eb2281079abafc5d93296f0efed693c40276f32b
   parent_name: Sorcerer
   line_span:
     first: 5697
@@ -34,7 +62,8 @@ splat_clauses:
     the following list, you can spend 1 Sorcery Point to change that damage type to one of the other listed
     types: Acid, Cold, Fire, Lightning, Poison, Thunder.'
   sha256: 7d181f20eb5775dd55bc5bf1f80a6d4d6106c41e8b98b41bb3003039b87d7ed9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Transmuted Spell

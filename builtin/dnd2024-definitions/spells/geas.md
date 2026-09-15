@@ -27,17 +27,116 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/geas
+  implementation: dnd2024:spell_geas
+  parameters:
+    target:
+      kind: creature
+      count: 1
+      visible_to_caster: true
+    command:
+      verbal: true
+      choice:
+      - perform_service
+      - refrain_action_or_activity
+      certain_death_command: end_spell
+    save:
+      ability: wisdom
+      dc:
+        binding: save_dc
+      failure:
+        condition: charmed
+      success:
+        effect: none
+    automatic_success_if: cannot_understand_command
+    violation:
+      event: target.acts_directly_counter_to_command
+      damage:
+        amount:
+          dice:
+            count: 5
+            sides: 10
+            add: 0
+        type: psychic
+      maximum_per_day: 1
+      requires: charmed_by_spell
+    end_by_spells:
+    - remove_curse
+    - greater_restoration
+    - wish
+    duration_by_slot:
+      '5':
+        days: 30
+      '6':
+        days: 30
+      '7':
+        days: 365
+      '8':
+        days: 365
+      '9':
+        until: named_ending_spell
+splat_contracts:
+- id: dnd2024:spell_geas
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - save
+  - charmed
+  - command
+  - violation_damage
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - saving_throws
+  - conditions
+  - movement
+  - forms
+  - choices
+  - time
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: bbb69d9886f2df42e07167a14d0ea6047e285b15e58e8ea6792ed8d4358c635f
   source_path: builtin/srd-5.2.1/spell/geas.md
   pages:
   - 135
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_geas
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 842395d393f9043d2a06043a241ef872dda448960eff0408058a0798951aaa61
 splat_clauses:
 - key: source_rules
   text: '# Geas Level 5 Enchantment (Bard, Cleric, Druid, Paladin, Wizard) Casting Time: 1 minute Range:
@@ -52,7 +151,8 @@ splat_clauses:
     use a level 7 or 8 spell slot, the duration is 365 days. If you use a level 9 spell slot, the spell
     lasts until it is ended by one of the spells mentioned above.'
   sha256: 07f2c63f064230c4a3defe7dcc95452d89f8bee2528a99d21d3ecd9e9b173bd6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Geas

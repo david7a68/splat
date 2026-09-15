@@ -12,18 +12,40 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_multiattack
-  parameters: {}
+  parameters:
+    action: attack
+    attack_count_and_types: multiattack_entry
+    additional_abilities_allowed: multiattack_entry
+  implementation: dnd2024:rules_parts_of_a_stat_block_multiattack
+splat_contracts:
+- id: dnd2024:rules_parts_of_a_stat_block_multiattack
+  inputs:
+    monster:
+      type: participant
+      required: true
+    multiattack:
+      type: definition
+      required: true
+  outputs:
+  - attack_sequence
+  - additional_abilities
+  events: []
+  capabilities:
+  - monster_attacks
+  - action_economy
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 257
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_parts_of_a_stat_block_multiattack
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: a143a376a22ac4356ce9d69ed157079c65e0dcf5da335509248e00ece7933a7d
   parent_name: Parts of a Stat Block
   line_span:
     first: 11164
@@ -35,7 +57,8 @@ splat_clauses:
     details the attacks a creature can make, as well as any additional abilities it can use, as part of
     the Attack action.'
   sha256: 8c477f9d4a6965394f4f64af8d5eefe33f90758d88a6c963f79a0a42635fd568
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Multiattack

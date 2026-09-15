@@ -12,17 +12,110 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule_group:
   category: species
+splat_rule:
+  mechanic: dnd2024:species/tiefling
+  implementation: dnd2024:species_tiefling
+  parameters:
+    creature_type: humanoid
+    size_choice:
+      count: 1
+      options:
+      - size: medium
+        height_feet_approximate:
+          minimum: 4
+          maximum: 7
+      - size: small
+        height_feet_approximate:
+          minimum: 3
+          maximum: 4
+    speed_feet: 30
+    darkvision_feet: 60
+    fiendish_legacy:
+      choice:
+        count: 1
+        options:
+        - id: abyssal
+          level_1:
+            damage_resistance: poison
+            cantrip:
+              key: dnd2024:spells/poison_spray
+          level_3_spell:
+            key: dnd2024:spells/ray_of_sickness
+          level_5_spell:
+            key: dnd2024:spells/hold_person
+        - id: chthonic
+          level_1:
+            damage_resistance: necrotic
+            cantrip:
+              key: dnd2024:spells/chill_touch
+          level_3_spell:
+            key: dnd2024:spells/false_life
+          level_5_spell:
+            key: dnd2024:spells/ray_of_enfeeblement
+        - id: infernal
+          level_1:
+            damage_resistance: fire
+            cantrip:
+              key: dnd2024:spells/fire_bolt
+          level_3_spell:
+            key: dnd2024:spells/hellish_rebuke
+          level_5_spell:
+            key: dnd2024:spells/darkness
+      level_basis: character_level
+      spellcasting_ability_choice:
+        count: 1
+        options:
+        - intelligence
+        - wisdom
+        - charisma
+      leveled_spell_grants:
+        always_prepared: true
+        each_spell_free_cast:
+          spell_slot_cost: 0
+          uses:
+            maximum: 1
+            recover:
+              event: rest.long_rest_completed
+              amount: all
+        can_use_appropriate_spell_slots: true
+    otherworldly_presence:
+      cantrip:
+        key: dnd2024:spells/thaumaturgy
+      ability: chosen_fiendish_legacy_spellcasting_ability
+splat_contracts:
+- id: dnd2024:species_tiefling
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+  outputs:
+  - feature_state
+  - spell_grants
+  events:
+  - character.species_selected
+  - character.level_gained
+  - rest.long_rest_completed
+  capabilities:
+  - character_creation
+  - spellcasting
+  - senses
+  - resistances
 splat_conversion:
-  status: partial
+  status: specified
   category: species
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 86
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:species_tiefling
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: f695f2af4c6bcfecc4b42ebc6a0cd88c71b9fbcb11fb4fe03a8d8fb77ee58413
   line_span:
     first: 7420
     count: 30
@@ -42,7 +135,8 @@ splat_clauses:
     Legacy trait. Level 3 Level 5 Ray of Sickness Hold Person False Life Ray of Enfeeblement Hellish Rebuke
     Darkness'
   sha256: 82773c46be307aa61253c34b7cbd1430d4ae62731dfc44ae5e37e69b86f04ceb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tiefling

@@ -62,18 +62,316 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/pit_fiend
+  implementation: dnd2024:creature_pit_fiend
+  parameters:
+    skill_totals:
+      perception: 10
+      persuasion: 19
+    damage_resistances:
+    - cold
+    damage_immunities:
+    - fire
+    - poison
+    condition_immunities:
+    - poisoned
+    senses:
+    - sense: truesight
+      range_ft: 120
+    passive_perception: 20
+    languages:
+      speak: true
+      known:
+      - infernal
+    telepathy:
+      range_ft: 120
+      two_way: true
+    features:
+      diabolical_restoration:
+        economy: passive
+        trigger: actor.died
+        when:
+          plane_not: nine_hells
+        body: disappears
+        revive:
+          new_body: true
+          plane: nine_hells
+          location_choice: gm
+          hp: maximum
+          delay:
+            amount: 0
+            unit: second
+      legendary_resistance:
+        economy: passive
+        trigger: saving_throw.failed
+        optional: true
+        op: saving_throw.set_result
+        result: success
+        uses:
+          count: 4
+          recovery: long_rest
+      magic_resistance:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - saving_throw
+        against:
+        - spell
+        - magical_effect
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 14
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 3
+                sides: 6
+              add: 8
+            average: 18
+        - op: saving_throw
+          ability: constitution
+          dc: 21
+          targets:
+            kind: target
+            requires_creature: true
+          failure:
+          - op: condition.apply
+            condition: poisoned
+            duration:
+              amount: 1
+              unit: minute
+            while_active:
+            - op: healing.prohibit
+            on_target_turn_start:
+            - op: damage
+              components:
+              - type: poison
+                amount:
+                  dice:
+                    count: 6
+                    sides: 6
+                  add: 0
+                average: 21
+            repeat_save:
+              event: target.turn_end
+              ability: constitution
+              dc: 21
+              success: effect.end
+              automatic_success_after:
+                amount: 1
+                unit: minute
+          success: []
+      devilish_claw:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 14
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: necrotic
+            amount:
+              dice:
+                count: 4
+                sides: 8
+              add: 8
+            average: 26
+      fiery_mace:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 14
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: force
+            amount:
+              dice:
+                count: 4
+                sides: 6
+              add: 8
+            average: 22
+          - type: fire
+            amount:
+              dice:
+                count: 6
+                sides: 6
+              add: 0
+            average: 21
+      fear_aura:
+        economy: passive
+        trigger: enemy.turn_start
+        requires:
+          actor_excluded_conditions:
+          - incapacitated
+        effect:
+          op: saving_throw
+          ability: wisdom
+          dc: 21
+          targets:
+            kind: triggering_enemy
+            count: all
+            area:
+              shape: emanation
+              origin: actor
+              size_ft: 20
+          failure:
+          - op: condition.apply
+            condition: frightened
+            duration:
+              until: target.next_turn_start
+          success:
+          - op: feature.immunity
+            source: actor
+            feature: fear_aura
+            duration:
+              amount: 24
+              unit: hour
+      hellfire_spellcasting:
+        economy: action
+        op: spell_sequence
+        ability: charisma
+        save_dc: 21
+        waived_components:
+        - material
+        base:
+        - op: spell.cast
+          spell:
+            key: dnd2024:spells/fireball
+          cast_level: 5
+          count: 2
+        replacement:
+          maximum: 1
+          choices:
+          - op: spell.cast
+            spell:
+              key: dnd2024:spells/hold_monster
+            cast_level: 7
+          - op: spell.cast
+            spell:
+              key: dnd2024:spells/wall_of_fire
+        recharge:
+          die_sides: 6
+          success_min: 4
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 1
+          feature: bite
+        - count: 2
+          feature: devilish_claw
+        - count: 1
+          feature: fiery_mace
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_pit_fiend
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.died
+  - actor.turn_start
+  - creature.feature_requested
+  - enemy.turn_start
+  - saving_throw.failed
+  - target.turn_end
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 1c46fb765527ba87943cfb3eee088043dc1d2e51d690bca788fe92320cfd0220
   source_path: builtin/srd-5.2.1/creature/pit_fiend.md
   pages:
   - 314
   - 315
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_pit_fiend
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 41df1f01d7c82294d7e10d5eba28e2fdd35bae665e23aebea0123773d226baea
 splat_clauses:
 - key: source_rules
   text: '# Pit Fiend Large Fiend (Devil), Lawful Evil AC 21 Initiative +14 (24) HP 337 (27d10 + 189) Speed
@@ -100,7 +398,8 @@ splat_clauses:
     components and using Charisma as the spellcasting ability (spell save DC 21). It can replace one Fireball
     with Hold Monster (level 7 version) or Wall of Fire.'
   sha256: 2b269d21f369d52892c9212e37f25a6c1aab08f429ec8be4fda11ed141e1aaf3
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Pit Fiend

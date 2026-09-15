@@ -61,18 +61,177 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/air_elemental
+  implementation: dnd2024:creature_air_elemental
+  parameters:
+    damage_resistances:
+    - bludgeoning
+    - lightning
+    - piercing
+    - slashing
+    damage_immunities:
+    - poison
+    - thunder
+    condition_immunities:
+    - exhaustion
+    - grappled
+    - paralyzed
+    - petrified
+    - poisoned
+    - prone
+    - restrained
+    - unconscious
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 10
+    languages:
+      speak: true
+      known:
+      - primordial
+      primordial_dialects:
+      - auran
+    features:
+      air_form:
+        economy: passive
+        op: movement.form
+        minimum_opening_inches: 1
+        extra_movement_cost: 0
+        can_enter_and_end_in_creature_space: true
+      thunderous_slam:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 8
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: thunder
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 5
+            average: 14
+      whirlwind:
+        economy: action
+        op: saving_throw
+        ability: strength
+        dc: 13
+        targets:
+          kind: creature
+          count: 1
+          maximum_size: medium
+          shares_actor_space: true
+        failure:
+        - op: damage
+          components:
+          - type: thunder
+            amount:
+              dice:
+                count: 4
+                sides: 10
+              add: 2
+            average: 24
+        - op: push
+          maximum_ft: 20
+          direction: straight_away_from_actor
+        - op: condition.apply
+          condition: prone
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+        recharge:
+          die_sides: 6
+          success_min: 4
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: thunderous_slam
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_air_elemental
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 4c2573fab6820602294d9f2cb3b402f3aed864703c0aa03731900ab113cf9988
   source_path: builtin/srd-5.2.1/creature/air_elemental.md
   pages:
   - 258
   - 259
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_air_elemental
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 4be4a42894d8e8943254cef91dc76a51b5eb6142eddb2db8959a282e8ccccd57
 splat_clauses:
 - key: source_rules
   text: '# Air Elemental Large Elemental, Neutral AC 15 Initiative +5 (15) HP 90 (12d10 + 24) Speed 10
@@ -87,7 +246,8 @@ splat_clauses:
     creature in the elemental’s space. Failure: 24 (4d10 + 2) Thunder damage, and the target is pushed
     up to 20 feet straight away from the elemental and has the Prone condition. Success: Half damage only.'
   sha256: 50f5b76fee650cc7233824dd8e6d509538c3b3f0b641699ab5cd9a193b01ebae
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Air Elemental

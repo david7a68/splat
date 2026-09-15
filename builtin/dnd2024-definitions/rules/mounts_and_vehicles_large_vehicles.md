@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/mounts_and_vehicles_large_vehicles
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 100
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 49a593d8025208b76153c809b303327b36aec89207a7fb626b3506274df4207d
   parent_name: Mounts and Vehicles
   line_span:
     first: 8730
@@ -33,7 +34,7 @@ splat_clauses:
   text: '# Large Vehicles The Airborne and Waterborne Vehicles table provides statistics for various types
     of large vehicles. The following notes apply.'
   sha256: 6ba8a288839778a574953f8274149bc0c13565d53c75c2ece7b21a2fced43c1b
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Large Vehicles

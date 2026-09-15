@@ -62,18 +62,220 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/werebear
+  implementation: dnd2024:creature_werebear
+  parameters:
+    skill_totals:
+      perception: 7
+    gear:
+    - item: handaxes
+      count: 4
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 17
+    languages:
+      speak: true
+      known:
+      - common
+      speech_prohibited_forms:
+      - bear
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 12
+              add: 4
+            average: 17
+        - op: saving_throw
+          ability: constitution
+          dc: 14
+          targets:
+            kind: target
+            creature_types:
+            - humanoid
+          failure:
+          - op: curse.apply
+            on_target_zero_hp:
+              instead:
+                op: stat_block.replace
+                definition:
+                  key: dnd2024:creatures/werebear
+                controller: gm
+                hp: 10
+          success:
+          - op: feature.immunity
+            source: actor
+            feature: bite_curse
+            duration:
+              amount: 24
+              unit: hour
+          effect_identity: bite_curse
+        allowed_forms:
+        - bear
+        - hybrid
+      handaxe:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        - ranged
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        range_ft:
+          normal: 20
+          long: 60
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 3
+                sides: 6
+              add: 4
+            average: 14
+        allowed_forms:
+        - humanoid
+        - hybrid
+      rend:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 4
+            average: 13
+        allowed_forms:
+        - bear
+        - hybrid
+      shape_shift:
+        economy: bonus_action
+        op: shapechange
+        equipment_transformed: false
+        statistics_preserved_except:
+        - size
+        choices:
+        - form: hybrid
+          size: large
+          animal: bear
+        - form: bear
+          size: large
+        - form: true_humanoid
+      multiattack:
+        economy: action
+        op: multiattack
+        attacks:
+          count: 2
+          choices:
+          - handaxe
+          - rend
+          combination: any
+        replace_attack:
+          maximum: 1
+          choices:
+          - op: feature.use
+            feature: bite
+    form_overrides:
+      bear:
+        speed_ft: 40
+        climb_speed_ft: 30
+        can_speak: false
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_werebear
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_lifecycle
+  - creature_rules
+  - damage
+  - effects
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 145c64c32d94a02cd8ccbdffcb114353e9f44b6fb3492da7c81ff38fffd7676a
   source_path: builtin/srd-5.2.1/creature/werebear.md
   pages:
   - 337
   - 338
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_werebear
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: d6419230b768628069fe2d67859f9e7b53d86d692cb4456b38c5a2a26d7c331d
 splat_clauses:
 - key: source_rules
   text: '# Werebear Medium or Small Monstrosity (Lycanthrope), Neutral Good AC 15 Initiative +3 (13) HP
@@ -93,7 +295,8 @@ splat_clauses:
     game statistics, other than its size, are the same in each form. Any equipment it is wearing or carrying
     isn’t transformed.'
   sha256: e3547a7d55956cfa637d384fea72ad5ad465f57fcda02472e683f20e256a5292
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Werebear

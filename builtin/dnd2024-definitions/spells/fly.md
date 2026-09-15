@@ -30,17 +30,70 @@ splat_spell:
   material:
     description: a feather
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/fly
+  implementation: dnd2024:spell_fly
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 600
+    targets:
+      kind: creature
+      willing: true
+      touch: true
+      count:
+        base: 1
+        increment_per_slot_above: 1
+        base_slot: 3
+    grant:
+      fly_speed_feet: 60
+      hover: true
+    on_end:
+      if: target_aloft
+      effect: fall
+      exception: target_can_stop_fall
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_fly
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - movement
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: b2e91226632083570b155f07f4a142b00d20e607a80596d5d026e1e614fdb908
   source_path: builtin/srd-5.2.1/spell/fly.md
   pages:
   - 133
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_fly
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 25add5d0114935d1376cd07c1d9525f4ca1544020756b23b064df77ba946c9fe
 splat_clauses:
 - key: source_rules
   text: '# Fly Level 3 Transmutation (Sorcerer, Warlock, Wizard) Casting Time: Action Range: Touch Components:
@@ -49,7 +102,8 @@ splat_clauses:
     if it is still aloft unless it can stop the fall. Using a Higher-Level Spell Slot. You can target
     one additional creature for each spell slot level above 3.'
   sha256: 51adef45d75ccdfaa62e0982aea61ad0edfee10bbc82250d4ddf9e1c01ecae4b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Fly

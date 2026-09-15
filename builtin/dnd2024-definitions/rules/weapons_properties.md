@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/weapons_properties
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 89
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 02778b32784acf213209ca9d9d8e1db79f435ffdfd155a4349587a21503a6e51
   parent_name: Weapons
   line_span:
     first: 7692
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Properties Here are definitions of the properties in the Properties column of the Weapons table.'
   sha256: a339359b8a8af4ceaea04d3c2581bc3f418727d4030414da5bd915b942d20c64
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Properties

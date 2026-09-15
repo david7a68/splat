@@ -59,17 +59,179 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/assassin
+  implementation: dnd2024:creature_assassin
+  parameters:
+    skill_totals:
+      acrobatics: 7
+      perception: 6
+      stealth: 10
+    damage_resistances:
+    - poison
+    gear:
+    - item: light_crossbow
+      count: 1
+    - item: shortsword
+      count: 1
+    - item: studded_leather_armor
+      count: 1
+    senses: []
+    passive_perception: 16
+    languages:
+      speak: true
+      known:
+      - common
+      - thieves_cant
+    features:
+      shortsword:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 4
+            average: 7
+          - type: poison
+            amount:
+              dice:
+                count: 5
+                sides: 6
+              add: 0
+            average: 17
+        - op: condition.apply
+          condition: poisoned
+          duration:
+            until: actor.next_turn_start
+      light_crossbow:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 80
+          long: 320
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 4
+            average: 8
+          - type: poison
+            amount:
+              dice:
+                count: 6
+                sides: 6
+              add: 0
+            average: 21
+      cunning_action:
+        economy: bonus_action
+        op: action.choose
+        choices:
+        - dash
+        - disengage
+        - hide
+      evasion:
+        economy: passive
+        when:
+          save_ability: dexterity
+          success_damage_fraction: 0.5
+          actor_excluded_conditions:
+          - incapacitated
+        op: damage_fraction.override
+        success: 0
+        failure: 0.5
+      multiattack:
+        economy: action
+        op: multiattack
+        attacks:
+          count: 3
+          choices:
+          - shortsword
+          - light_crossbow
+          combination: any
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_assassin
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: fa6d0c52ee0d108322f44125fa8a3bb55982786709f9a856028b554cd3f436c0
   source_path: builtin/srd-5.2.1/creature/assassin.md
   pages:
   - 260
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_assassin
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: b27ea1866e3d6887dcde19fec300344fccb09842db659d7209b9370de1990c2e
 splat_clauses:
 - key: source_rules
   text: '# Assassin Medium or Small Humanoid, Neutral AC 16 Initiative +10 (20) HP 97 (15d8 + 30) Speed
@@ -86,7 +248,8 @@ splat_clauses:
     plus 21 (6d6) Poison damage. ### Bonus Actions Cunning Action. The assassin takes the Dash, Disengage,
     or Hide action.'
   sha256: 6c7df14e38672e42e87fd2f08e2d23b652415519e68a4172337bee945a879b39
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Assassin

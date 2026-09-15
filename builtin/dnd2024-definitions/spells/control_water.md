@@ -30,18 +30,151 @@ splat_spell:
   material:
     description: a mixture of water and dust
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/control_water
+  implementation: dnd2024:spell_control_water
+  parameters:
+    targeting:
+      kind: water_in_area
+      shape: cube
+      max_side_feet: 100
+      within_range: true
+    duration: spell_duration
+    effect_choice:
+    - flood
+    - part_water
+    - redirect_flow
+    - whirlpool
+    change_or_repeat:
+      economy: magic_action
+      timing: later_caster_turns
+    flood:
+      standing_water_rise_max_feet: 20
+      large_body_alternative:
+        wave_height_feet: 20
+        travels: across_area
+        vehicle_size_max: huge
+        vehicles:
+          carried_to: opposite_side
+          capsize_chance_percent: 25
+        repeat: caster_next_turn_start_while_flood
+      ends_on:
+      - spell_ends
+      - different_effect_chosen
+    part_water:
+      trench: across_area
+      walls: both_sides
+      ends_on:
+      - spell_ends
+      - different_effect_chosen
+      refill_duration_rounds: 1
+    redirect_flow:
+      direction: caster_choice
+      allowed:
+      - over_obstacles
+      - up_walls
+      - other_directions
+      outside_area: terrain_normal_flow
+      ends_on:
+      - spell_ends
+      - different_effect_chosen
+    whirlpool:
+      minimum_water_area_feet:
+      - 50
+      - 50
+      minimum_water_depth_feet: 25
+      geometry:
+        base_width_feet: 5
+        top_width_max_feet: 50
+        height_feet: 25
+        location: area_center
+      pull:
+        targets: creatures_in_water
+        within_feet: 25
+        distance_feet: 10
+        toward: whirlpool
+      damage:
+        events:
+        - first_entry_each_turn
+        - target_turn_end_inside
+        save_ability: strength
+        failure:
+          dice: 2d8
+          type: bludgeoning
+        success_fraction:
+          numerator: 1
+          denominator: 2
+      swim_away:
+        prerequisite:
+          economy: action
+          check:
+            ability: strength
+            skill: athletics
+            dc: spell_save_dc
+            success_required: true
+      ends_on:
+      - spell_ends
+      - different_effect_chosen
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 10
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_control_water
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      type: location_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+    campaign:
+      type: campaign
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - locations
+  events:
+  - spell.cast_completed
+  - turn.started
+  - turn.ended
+  - area.entered
+  - position.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - spatial_effects
+  - campaign_state
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 726b6c90d1841dccfa08e74dba8eeacf7a9f0ddaad03147745216fab8ad407e2
   source_path: builtin/srd-5.2.1/spell/control_water.md
   pages:
   - 119
   - 120
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_control_water
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: a3178078b83bd65ffb9267fb08fe10bce68b85bc1339fce820c215f7131eeb47
 splat_clauses:
 - key: source_rules
   text: '# Control Water Level 4 Transmutation (Cleric, Druid, Wizard) Casting Time: Action Range: 300
@@ -72,7 +205,8 @@ splat_clauses:
     only if it first takes an action to pull away and succeeds on a Strength (Athletics) check against
     your spell save DC.'
   sha256: 276994f7515a5abc5c381655feda775d5458d69ac06baf19859ed7fa6d5c5fbc
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Control Water

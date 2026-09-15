@@ -24,17 +24,112 @@ splat_item:
     value: 2.0
     unit: lb
   category: weapon
+splat_rule:
+  mechanic: dnd2024:equipment/light_hammer
+  implementation: dnd2024:equipment_light_hammer
+  parameters:
+    weapon_category: simple_melee
+    damage:
+      expression: 1d4
+      type: bludgeoning
+      amount:
+        dice:
+          count: 1
+          sides: 4
+        bonus: 0
+    properties:
+    - id: light
+      rule:
+        key: dnd2024:rules/weapons_light
+      trigger: attack_with_light_weapon_during_own_attack_action
+      extra_attack:
+        count: 1
+        economy: bonus_action
+        timing: later_same_turn
+        weapon: different_light_weapon
+        damage_ability_modifier: negative_only
+    - id: thrown
+      rule:
+        key: dnd2024:rules/weapons_thrown
+      range:
+        normal_ft: 20
+        long_ft: 60
+        normal_range_mode: normal
+        long_range_mode: disadvantage
+        beyond_long_range: cannot_attack
+        rule:
+          key: dnd2024:rules/weapons_range
+      draw_as_part_of_attack: true
+      attack_type: ranged
+      melee_weapon_uses_melee_ability: true
+    attack:
+      proficiency_bonus_if_proficient: true
+      base_ability: strength
+      normal_hit_damage_ability_modifier: attack_ability_modifier
+    mastery:
+      property: nick
+      rule:
+        key: dnd2024:rules/weapons_nick
+      requires_weapon_mastery_feature_for_this_weapon: true
+      automatic_from_weapon_proficiency: false
+      parameters:
+        trigger: light_property_extra_attack
+        replace_economy: bonus_action
+        economy: part_of_attack_action
+        maximum_per_turn: 1
+    application:
+      actor: equipper
+      item: equipped_instance
+      inactive_if_not_equipped: true
+splat_contracts:
+- id: dnd2024:equipment_light_hammer
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    target:
+      required: false
+      type: participant
+    event:
+      type: event
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - attack_options
+  - attack_modifiers
+  - damage
+  - mastery_effects
+  - ammunition_updates
+  events:
+  - attack.pending
+  - attack.hit
+  - attack.miss
+  - damage.resolved
+  - combat.ended
+  capabilities:
+  - weapon_properties
+  - weapon_mastery
+  - attacks
+  - effects
+  - ammunition
 splat_conversion:
-  status: partial
+  status: specified
   category: equipment
   source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
   source_path: builtin/srd-5.2.1/source.txt
   pages:
   - 91
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:equipment_light_hammer
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: 6f56c7eadfc01f3eec589c841e7840d5cc10f4b741cc6b30e1d053c136834409
 splat_clauses:
 - key: source_rules
   text: '# Light Hammer Source table, SRD 5.2.1 page 91. { "damage": { "expression": "1d4", "type": "bludgeoning"
@@ -42,7 +137,8 @@ splat_clauses:
     melee", "price": { "value": 2, "unit": "gp" }, "mass": { "value": 2.0, "unit": "lb" }, "category":
     "weapon" }'
   sha256: f81465be2332d6ba5ed64dcc6bcd247f6b8632ecf79708819762b83e7214a976
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Light Hammer

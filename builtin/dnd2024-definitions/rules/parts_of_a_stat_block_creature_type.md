@@ -12,18 +12,49 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_creature_type
-  parameters: {}
+  parameters:
+    creature_type_enum:
+    - aberration
+    - beast
+    - celestial
+    - construct
+    - dragon
+    - elemental
+    - fey
+    - fiend
+    - giant
+    - humanoid
+    - monstrosity
+    - ooze
+    - plant
+    - undead
+    type_inherent_rules: false
+    type_filters_other_effects: true
+  implementation: dnd2024:rules_parts_of_a_stat_block_creature_type
+splat_contracts:
+- id: dnd2024:rules_parts_of_a_stat_block_creature_type
+  inputs:
+    definition:
+      type: definition
+      required: true
+  outputs:
+  - typed_attributes
+  events: []
+  capabilities:
+  - definition_catalogs
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 254
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_parts_of_a_stat_block_creature_type
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 57681723a579a6647b842e8b4046cbcef16957b034fff45765e93b735506b03a
   parent_name: Parts of a Stat Block
   line_span:
     first: 10894
@@ -47,7 +78,8 @@ splat_clauses:
     such as shambling mounds and treants. Undead are spirits and the reanimated dead, such as ghosts,
     vampires, and zombies.'
   sha256: 88620dafe85482293f64510de1b71a2e73313876bf36591987201046563189b9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Creature Type

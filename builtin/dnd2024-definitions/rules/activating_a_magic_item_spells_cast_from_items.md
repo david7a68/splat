@@ -12,18 +12,56 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/activating_a_magic_item_spells_cast_from_items
-  parameters: {}
+  parameters:
+    spell_cast_defaults:
+      spell_level: lowest_possible
+      caster_level: lowest_possible
+      user_spell_slots_expended: 0
+      components_required: false
+      casting_time: normal_spell
+      range: normal_spell
+      duration: normal_spell
+      concentration: user_if_spell_requires
+    item_specific_overrides: true
+    confer_effect_without_casting:
+      duration: normal_spell
+      cast_event: false
+    user_spellcasting_ability_if_required:
+      multiple: user_choice
+      none_modifier: 0
+      add_user_proficiency_bonus: true
+  implementation: dnd2024:rule_activating_a_magic_item_spells_cast_from_items
+splat_contracts:
+- id: dnd2024:rule_activating_a_magic_item_spells_cast_from_items
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - item_changes
+  events: []
+  capabilities:
+  - magic_items
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 206
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_activating_a_magic_item_spells_cast_from_items
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 862ac87175935fc526b57021bb00e77c86b871472aa8678da66202cecefd09af
   parent_name: Activating a Magic Item
   line_span:
     first: 10610
@@ -41,7 +79,8 @@ splat_clauses:
     user chooses which one to use with the item. If the user doesn’t have a spellcasting ability, their
     spellcasting ability modifier is +0 for the item, and the user’s Proficiency Bonus applies.'
   sha256: 38cb21e7f4248dd43f184932cfa7ac3ff5657e5897de6aeade7d80bc8bb355af
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spells Cast from Items

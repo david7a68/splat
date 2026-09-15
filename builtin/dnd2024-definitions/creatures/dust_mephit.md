@@ -61,17 +61,203 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/dust_mephit
+  implementation: dnd2024:creature_dust_mephit
+  parameters:
+    skill_totals:
+      perception: 2
+      stealth: 4
+    damage_vulnerabilities:
+    - fire
+    damage_immunities:
+    - poison
+    condition_immunities:
+    - exhaustion
+    - poisoned
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 12
+    languages:
+      speak: true
+      known:
+      - primordial
+      primordial_dialects:
+      - auran
+      - terran
+    features:
+      claw:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 2
+            average: 4
+      death_burst:
+        economy: passive
+        op: saving_throw
+        ability: dexterity
+        dc: 10
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            origin: actor
+            size_ft: 5
+        failure:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 2
+                sides: 4
+              add: 0
+            average: 5
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+        trigger: actor.died
+      blinding_breath:
+        economy: action
+        op: saving_throw
+        ability: dexterity
+        dc: 10
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            origin: actor
+            size_ft: 15
+        failure:
+        - op: condition.apply
+          condition: blinded
+          duration:
+            until: actor.next_turn_end
+        success: []
+        recharge:
+          die_sides: 6
+          success_min: 6
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      sleep:
+        economy: action
+        op: spellcasting
+        profile:
+          ability: charisma
+          waived_components:
+          - verbal
+          - somatic
+          - material
+          save_dc: 10
+        choose_count: 1
+        choices:
+        - op: spell.cast
+          spell:
+            key: dnd2024:spells/sleep
+        uses:
+          count: 1
+          recovery: long_rest
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_dust_mephit
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.died
+  - actor.turn_start
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f771e2452966150a03df46e5dd2584e3cae9477f756d983b52c7efc4ea2f3bda
   source_path: builtin/srd-5.2.1/creature/dust_mephit.md
   pages:
   - 307
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_dust_mephit
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: e090072b66972db252f908e721bfb7b9e847fa30e8479771f85452af1ab640ef
 splat_clauses:
 - key: source_rules
   text: '# Dust Mephit Small Elemental, Neutral Evil AC 12 Initiative +2 (12) HP 17 (5d6) Speed 30 ft.,
@@ -86,7 +272,8 @@ splat_clauses:
     (1/Day). The mephit casts the Sleep spell, requiring no spell components and using Charisma as the
     spellcasting ability (spell save DC 10).'
   sha256: 4f7979786d4d53bfc69eef5e353aadb11392a1adaec5ab2176a944dd008c5213
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dust Mephit

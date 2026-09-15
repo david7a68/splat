@@ -67,18 +67,198 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/white_dragon_wyrmling
+  implementation: dnd2024:creature_white_dragon_wyrmling
+  parameters:
+    features:
+      ice_walk:
+        economy: passive
+        movement_checks_waived:
+          surfaces:
+          - ice
+          modes:
+          - walk
+          - climb
+        difficult_terrain_extra_cost_ignored:
+        - ice
+        - snow
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 6
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 2
+          damage_type: slashing
+        - op: damage
+          average: 2
+          amount:
+            dice:
+              count: 1
+              sides: 4
+            add: 0
+          damage_type: cold
+        reach_feet: 5
+      cold_breath:
+        economy: action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: save
+        ability: constitution
+        dc: 12
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            size_feet: 15
+            origin: self
+        failure:
+        - op: damage
+          average: 22
+          amount:
+            dice:
+              count: 5
+              sides: 8
+            add: 0
+          damage_type: cold
+        success:
+        - op: damage_fraction
+          numerator: 1
+          denominator: 2
+          round: down
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: rend
+          count: 2
+    skill_totals:
+      perception: 4
+      stealth: 2
+    defenses:
+      immunities:
+        damage_types:
+        - cold
+    senses:
+      passive_perception: 14
+      special:
+      - sense: blindsight
+        range_feet: 10
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks:
+      - draconic
+      understands:
+      - draconic
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_white_dragon_wyrmling
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 020b8d2582b7e99ea4c63358979888462a5b5b2a274de8d94409235ee0961a95
   source_path: builtin/srd-5.2.1/creature/white_dragon_wyrmling.md
   pages:
   - 339
   - 340
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_white_dragon_wyrmling
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: e217e723bd74091d5fd055cd44e72f7337102504b5c337fec13332262d685386
 splat_clauses:
 - key: source_rules
   text: '# White Dragon Wyrmling Medium Dragon (Chromatic), Chaotic Evil AC 16 Initiative +2 (12) HP 32
@@ -92,7 +272,8 @@ splat_clauses:
     5–6). Constitution Saving Throw: DC 12, each creature in a 15-foot Cone. Failure: 22 (5d8) Cold damage.
     Success: Half damage.'
   sha256: ee3d55d93a39ebbb9c748ed71a8f3e96bff337cb9ba59701b7db83eb15b74ae7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # White Dragon Wyrmling

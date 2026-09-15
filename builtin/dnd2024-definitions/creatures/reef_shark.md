@@ -59,17 +59,118 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/reef_shark
+  implementation: dnd2024:creature_reef_shark
+  parameters:
+    skill_totals:
+      perception: 2
+    senses:
+    - sense: blindsight
+      range_ft: 30
+    passive_perception: 12
+    languages:
+      speak: true
+      known: []
+    features:
+      pack_tactics:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - attack
+        target_kind: creature
+        when:
+          ally_within_target_ft: 5
+          ally_excluded_conditions:
+          - incapacitated
+      water_breathing:
+        economy: passive
+        op: breathing.allow
+        media:
+        - water
+        exclusive: true
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 4
+              add: 2
+            average: 7
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_reef_shark
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 5cbf0d1a3eb0590c1b181807657a88db5de39a1557a9f24bac61dee798586281
   source_path: builtin/srd-5.2.1/creature/reef_shark.md
   pages:
   - 360
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_reef_shark
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 98bd265cf8d45259c33e6fde4b3a1e17ce7d023e6972f84077ef39826c342592
 splat_clauses:
 - key: source_rules
   text: '# Reef Shark Medium Beast, Unaligned AC 12 Initiative +2 (12) HP 22 (4d8 + 4) Speed 5 ft., Swim
@@ -80,7 +181,8 @@ splat_clauses:
     Incapacitated condition. Water Breathing. The shark can breathe only underwater. ### Actions Bite.
     Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Piercing damage.'
   sha256: 53c95f92b37a20bdffcb82126776bd5664515257eb71b28648dcbf30b36eb26a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Reef Shark

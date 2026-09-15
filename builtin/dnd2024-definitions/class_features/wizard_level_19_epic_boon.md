@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/wizard_level_19_epic_boon
-  parameters: {}
+  parameters:
+    minimum_class_level: 19
+    feat_choice:
+      count: 1
+      category: any
+      require_prerequisites: true
+      suggested_category: epic_boon
+  implementation: dnd2024:class_features_wizard_level_19_epic_boon
+splat_contracts:
+- id: dnd2024:class_features_wizard_level_19_epic_boon
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+  outputs:
+  - feature_state
+  - choices
+  events:
+  - character.level_gained
+  capabilities:
+  - character_choices
+  - feats
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 79
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_wizard_level_19_epic_boon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 84a0a380af212f7fdb8e68993cbb1b7faab5a001e7760ad093a3a1c79647178f
   parent_name: Wizard
   line_span:
     first: 6748
@@ -33,7 +59,8 @@ splat_clauses:
   text: '# Level 19: Epic Boon You gain an Epic Boon feat (see “Feats”) or another feat of your choice
     for which you qualify. Boon of Spell Recall is recommended.'
   sha256: 6e51c8e37e4946bebfd3c2f66eed886fc9a54cb9e23f8882d2a1e845d1c0d37f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 19: Epic Boon

@@ -12,17 +12,60 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule_group:
   category: subclass
+  members:
+  - key: dnd2024:class_features/life_domain_level_17_supreme_healing
+  - key: dnd2024:class_features/life_domain_level_3_disciple_of_life
+  - key: dnd2024:class_features/life_domain_level_3_life_domain_spells
+  - key: dnd2024:class_features/life_domain_level_3_preserve_life
+  - key: dnd2024:class_features/life_domain_level_6_blessed_healer
+splat_rule:
+  mechanic: dnd2024:subclasses/cleric_cleric_subclass_life_domain
+  implementation: dnd2024:subclasses_cleric_cleric_subclass_life_domain
+  parameters:
+    class: cleric
+    subclass: life_domain
+    feature_grants:
+    - feature:
+        key: dnd2024:class_features/life_domain_level_17_supreme_healing
+      minimum_class_level: 17
+    - feature:
+        key: dnd2024:class_features/life_domain_level_3_disciple_of_life
+      minimum_class_level: 3
+    - feature:
+        key: dnd2024:class_features/life_domain_level_3_life_domain_spells
+      minimum_class_level: 3
+    - feature:
+        key: dnd2024:class_features/life_domain_level_3_preserve_life
+      minimum_class_level: 3
+    - feature:
+        key: dnd2024:class_features/life_domain_level_6_blessed_healer
+      minimum_class_level: 6
+splat_contracts:
+- id: dnd2024:subclasses_cleric_cleric_subclass_life_domain
+  inputs:
+    actor:
+      type: participant
+      required: true
+  outputs:
+  - feature_state
+  events:
+  - character.subclass_selected
+  - character.class_level_gained
+  capabilities:
+  - class_progression
 splat_conversion:
-  status: partial
+  status: specified
   category: subclass
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 40
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:subclasses_cleric_cleric_subclass_life_domain
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 99dcc4f0e807a18ffd827e580d0cb83a6ae6b2ca4afa619bb4ec7a1fde9ac212
   parent_name: Cleric
   line_span:
     first: 3285
@@ -36,7 +79,8 @@ splat_clauses:
     is particularly associated with agricultural deities, gods of healing or endurance, and gods of home
     and community. Religious orders of healing also seek the magic of this domain.'
   sha256: c536dde7f8fbd14c55d99169bef9eda103659de5da9f207173dcc934827f8dc9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Cleric Subclass: Life Domain

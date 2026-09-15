@@ -12,18 +12,50 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/paralyzed_condition
-  parameters: {}
+  parameters:
+    condition: paralyzed
+    grants_condition: incapacitated
+    automatic_save_failure_abilities:
+    - strength
+    - dexterity
+    incoming_attack_rolls: advantage
+    automatic_critical_if_hit_attacker_within_feet: 5
+    speed: 0
+    speed_can_increase: false
+  implementation: dnd2024:glossary_paralyzed_condition
+splat_contracts:
+- id: dnd2024:glossary_paralyzed_condition
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - condition_effects
+  events:
+  - condition.applied
+  - condition.ended
+  - attack.pending
+  - saving_throw.pending
+  - speed.calculated
+  capabilities:
+  - conditions
+  - checks
+  - attacks
+  - movement
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 653140860d9ad85944aefc03c0f7329c4346241a2645b2e277c901f6bbbd2229
   source_path: builtin/srd-5.2.1/glossary/paralyzed_condition.md
   pages:
   - 186
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_paralyzed_condition
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: c8475e2e3ac89cc449cc63c49493525446ae86a05d76d60c69c83398994eb66a
 splat_clauses:
 - key: source_rules
   text: '# Paralyzed [Condition] While you have the Paralyzed condition, you experience the following
@@ -32,7 +64,8 @@ splat_clauses:
     Attack rolls against you have Advantage. Automatic Critical Hits. Any attack roll that hits you is
     a Critical Hit if the attacker is within 5 feet of you.'
   sha256: 06312c9cd021c7e3402248793b7d58ae28a893205cba3fa925bc032762cbe036
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Paralyzed [Condition]

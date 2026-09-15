@@ -29,17 +29,123 @@ splat_spell:
   material:
     description: a ball of bat guano and sulfur
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/delayed_blast_fireball
+  implementation: dnd2024:spell_delayed_blast_fireball
+  parameters:
+    bead:
+      initial_location: chosen_point_within_range
+      duration: spell_duration
+      base_damage:
+        dice:
+          count:
+            op: add
+            args:
+            - 12
+            - op: multiply
+              args:
+              - 1
+              - op: subtract
+                args:
+                - binding: cast_level
+                - 7
+          sides: 6
+          add: 0
+        type: fire
+      accumulate:
+        event: caster_turn_end
+        requires: spell_not_ended
+        additional_dice:
+          dice:
+            count: 1
+            sides: 6
+            add: 0
+      touch:
+        save:
+          ability: dexterity
+          dc:
+            binding: save_dc
+          failure:
+            end_spell: true
+          success:
+            throw_optional: true
+            throw_maximum_feet: 40
+      thrown_collision_end_spell:
+      - creature_space
+      - solid_object
+    explosion:
+      trigger: spell_ends
+      origin: current_bead_location
+      shape: sphere
+      radius_feet: 20
+      targets: each_creature_in_area
+      save:
+        ability: dexterity
+        dc:
+          binding: save_dc
+        failure:
+          damage: accumulated
+        success:
+          damage: accumulated
+          damage_fraction:
+            numerator: 1
+            denominator: 2
+      ignite:
+        kind: flammable_object
+        worn: false
+        carried: false
+        in_area: true
+splat_contracts:
+- id: dnd2024:spell_delayed_blast_fireball
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  events:
+  - spell.cast_completed
+  - turn.end
+  - effect.ended
+  - movement.completed
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - spatial_relationships
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 8bb481ec805b0acb612c4a05caea93406dc25a698e22cda771c8d671bcf00996
   source_path: builtin/srd-5.2.1/spell/delayed_blast_fireball.md
   pages:
   - 122
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_delayed_blast_fireball
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 617b10868413c17ee7af79439fd38b64bad0b50a97599023fd91d5293624c849
 splat_clauses:
 - key: source_rules
   text: '# Delayed Blast Fireball Level 7 Evocation (Sorcerer, Wizard) Casting Time: Action Range: 150
@@ -56,7 +162,8 @@ splat_clauses:
     in the explosion that aren’t being worn or carried start burning. Using a Higher-Level Spell Slot.
     The base damage increases by 1d6 for each spell slot level above 7.'
   sha256: d91e0abfdd65247d8237b897c8f5f1503a13f580bb4fe2787033f80a081f5a6a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Delayed Blast Fireball

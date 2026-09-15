@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/combat_encounters_adjustments
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 203
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: bc7a749aa5551e79f49635cd46d3821dba078c324b488c8a93fb955edd10da8e
   parent_name: Combat Encounters
   line_span:
     first: 10356
@@ -35,7 +36,7 @@ splat_clauses:
     or harder than intended. You can adjust an encounter on the fly, such as by having creatures flee
     (making the encounter easier) or adding reinforcements (making the encounter harder).'
   sha256: 0e960663cc11e076279483ca3e5fb18097f24b769dedce4409213b99efbd9c48
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Adjustments

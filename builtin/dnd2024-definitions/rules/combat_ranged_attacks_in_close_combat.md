@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_ranged_attacks_in_close_combat
-  parameters: {}
+  parameters:
+    attack_kind: ranged
+    disadvantage_when:
+      enemy_distance_feet_maximum: 5
+      enemy_can_see_attacker: true
+      enemy_incapacitated: false
+    attack_sources:
+    - weapon
+    - spell
+    - other
+  implementation: dnd2024:rule_combat_ranged_attacks_in_close_combat
+splat_contracts:
+- id: dnd2024:rule_combat_ranged_attacks_in_close_combat
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - attack_modifiers
+  events: []
+  capabilities:
+  - attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 15
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_combat_ranged_attacks_in_close_combat
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 2c75d589e46c5ccf2ab0ae4993ea0874c988c569a193bec8250e178f7f7e61f3
   parent_name: Combat
   line_span:
     first: 1023
@@ -35,7 +61,8 @@ splat_clauses:
     on the roll if you are within 5 feet of an enemy who can see you and doesn’t have the Incapacitated
     condition (see “Rules Glossary”).'
   sha256: 851374b1dc3bcfad2f9f9e402d191026caf8fb5473f6a63f515e96fdabcc8fd2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ranged Attacks in Close Combat

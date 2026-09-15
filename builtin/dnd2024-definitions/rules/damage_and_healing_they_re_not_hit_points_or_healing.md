@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_they_re_not_hit_points_or_healing
-  parameters: {}
+  parameters:
+    temporary_hp:
+      add_to_hp: false
+      restored_by_healing: false
+      counts_as_healing: false
+      allowed_at_full_hp: true
+      restores_consciousness_at_zero_hp: false
+  implementation: dnd2024:rules_damage_and_healing_they_re_not_hit_points_or_healing
+splat_contracts:
+- id: dnd2024:rules_damage_and_healing_they_re_not_hit_points_or_healing
+  inputs:
+    target:
+      type: participant
+      required: true
+    damage:
+      required: false
+      type: resolution
+    event:
+      type: event
+      required: true
+  outputs:
+  - hit_point_updates
+  - condition_updates
+  - death_save_updates
+  events: []
+  capabilities:
+  - damage
+  - healing
+  - death_saves
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 18
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_damage_and_healing_they_re_not_hit_points_or_healing
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 0caddda7c2b3ec5cbe43732a545861a7d4cec400e67393a5c9fcf36fa726829d
   parent_name: Damage and Healing
   line_span:
     first: 1308
@@ -36,7 +66,8 @@ splat_clauses:
     If you have 0 Hit Points, receiving Temporary Hit Points doesn’t restore you to consciousness. Only
     true healing can save you.'
   sha256: c69445c2cf6c0c41a96a46665b7936fd87acca877588a3b70ec51451663cc2ae
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # They’re Not Hit Points or Healing

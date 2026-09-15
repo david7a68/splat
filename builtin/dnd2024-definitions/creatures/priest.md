@@ -59,17 +59,211 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/priest
+  implementation: dnd2024:creature_priest
+  parameters:
+    features:
+      mace:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 6
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 3
+          damage_type: bludgeoning
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 2
+              sides: 4
+            add: 0
+          damage_type: radiant
+        reach_feet: 5
+      radiant_flame:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 11
+          amount:
+            dice:
+              count: 2
+              sides: 10
+            add: 0
+          damage_type: radiant
+        range_feet: 60
+      multiattack:
+        economy: action
+        op: repeat_choice
+        count: 2
+        choices:
+        - feature: mace
+        - feature: radiant_flame
+      spellcasting:
+        economy: action
+        op: cast_spell_choice
+        ability: wisdom
+        spells:
+        - spell:
+            key: dnd2024:spells/light
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/thaumaturgy
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/spirit_guardians
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        components_waived: []
+        save_dc: 13
+        required_material_components_available: true
+      divine_aid:
+        economy: bonus_action
+        resource:
+          capacity: 3
+          cost: 1
+          recovery: long_rest
+          scope: shared_choices
+        op: cast_spell_choice
+        choices:
+        - spell:
+            key: dnd2024:spells/bless
+        - spell:
+            key: dnd2024:spells/dispel_magic
+        - spell:
+            key: dnd2024:spells/healing_word
+        - spell:
+            key: dnd2024:spells/lesser_restoration
+        ability: wisdom
+        save_dc: 13
+        components_waived: []
+    skill_totals:
+      medicine: 7
+      perception: 5
+      religion: 5
+    defenses: {}
+    senses:
+      passive_perception: 15
+      special: []
+    gear:
+    - item_name: Chain Shirt
+      quantity: 1
+    - item_name: Holy Symbol
+      quantity: 1
+    - item_name: Mace
+      quantity: 1
+    communication:
+      speaks:
+      - common
+      understands:
+      - common
+      additional_languages:
+        count: 1
+        chooser: gm
+        distinct_from_known: true
+        can_speak: true
+        can_understand: true
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_priest
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - hit_points
+  - resources
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: b41cfb1f69ce0cfb361c875c7c5d7e36e21a6bd897fbe663b863332304ce1847
   source_path: builtin/srd-5.2.1/creature/priest.md
   pages:
   - 316
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_priest
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 9e4c0fba143932bbd644829a6ad94dade002c50aef386eb42c67ce23b0591a39
 splat_clauses:
 - key: source_rules
   text: '# Priest Medium or Small Humanoid (Cleric), Neutral AC 13 Initiative +0 (10) HP 38 (7d8 + 7)
@@ -84,7 +278,8 @@ splat_clauses:
     casts Bless, Dispel Magic, Healing Word, or Lesser Restoration, using the same spellcasting ability
     as Spellcasting.'
   sha256: e39f2f7f13ce80d6c40a4ff8a283278ea671cd68b0b133080056cae322e55036
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Priest

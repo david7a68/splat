@@ -12,18 +12,71 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magical_contagions_sewer_plague
-  parameters: {}
+  parameters:
+    kind: magical_contagion
+    infection:
+      target_type: humanoid
+      exposure:
+      - wounded_by_infected_carrier
+      - contact_contaminated_filth_or_offal
+      save:
+        ability: constitution
+        dc: 11
+      on_failure: infected
+      onset:
+        dice:
+          count: 1
+          sides: 4
+        unit: day
+    onset_effect:
+      exhaustion_gain: 1
+    while_exhaustion_positive:
+      hit_die_healing_multiplier: 0.5
+      long_rest_restores_hp: false
+      long_rest_reduces_exhaustion: false
+    recovery:
+      timing: daily_dawn
+      save:
+        ability: constitution
+        dc: 11
+      failure:
+        exhaustion_gain: 1
+      success:
+        exhaustion_reduce: 1
+        end_contagion_if_exhaustion_zero: true
+  implementation: dnd2024:rules_magical_contagions_sewer_plague
+splat_contracts:
+- id: dnd2024:rules_magical_contagions_sewer_plague
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - contagion.exposure
+  - contagion.onset
+  - dawn
+  - rest.long_finished
+  - hit_die.spent
+  capabilities:
+  - contagions
+  - exhaustion
+  - healing
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 194
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_magical_contagions_sewer_plague
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: a57aa09f304814aeaa6fa41e86c4deb6f35c19196017f00db319b27104c18833
   parent_name: Magical Contagions
   line_span:
     first: 9559
@@ -43,7 +96,8 @@ splat_clauses:
     1 Exhaustion level as its fatigue worsens. On a successful save, the creature’s Exhaustion level decreases
     by 1. If the creature’s Exhaustion level is reduced to 0, the contagion ends on the creature.'
   sha256: c6d5dd7f4a6f53bab0d09baa61b2b4f65e26022dae571a01ef70ea1c65e2959d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Sewer Plague

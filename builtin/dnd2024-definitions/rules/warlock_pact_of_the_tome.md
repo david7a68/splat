@@ -12,18 +12,63 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/warlock_pact_of_the_tome
-  parameters: {}
+  parameters:
+    conjure:
+      timing:
+      - short_rest_finished
+      - long_rest_finished
+      location: hand
+      appearance: owner_choice
+      exclusive_magic_access: owner
+    book_disappears:
+    - replacement_book_conjured
+    - owner_dies
+    on_conjure_choices:
+    - count: 3
+      spell_level: 0
+      source: any_class_spell_list
+      exclude_already_prepared: true
+    - count: 2
+      spell_level: 1
+      ritual: true
+      source: any_class_spell_list
+      exclude_already_prepared: true
+    while_book_on_person:
+      chosen_spells_prepared: true
+      chosen_spells_class: warlock
+    spellcasting_focus: true
+  implementation: dnd2024:rules_warlock_pact_of_the_tome
+splat_contracts:
+- id: dnd2024:rules_warlock_pact_of_the_tome
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - book
+  - prepared_spells
+  - spellcasting_focus
+  events:
+  - rest.short_finished
+  - rest.long_finished
+  - participant.died
+  capabilities:
+  - character_options
+  - inventory
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 74
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_warlock_pact_of_the_tome
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 5aad5c3459591d3a06037bf8718057d080c01f1c2ad061619c1b10fa0eb2c559
   parent_name: Warlock
   line_span:
     first: 6326
@@ -39,7 +84,8 @@ splat_clauses:
     your person, you have the chosen spells prepared, and they function as Warlock spells for you. Spellcasting
     Focus. You can use the book as a Spellcasting Focus.'
   sha256: c81324b69ce066112e839e91441581281cbebbae78f524fb186ae390a1863772
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Pact of the Tome

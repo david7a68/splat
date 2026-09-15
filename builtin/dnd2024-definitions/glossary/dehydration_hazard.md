@@ -12,18 +12,62 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/dehydration_hazard
-  parameters: {}
+  parameters:
+    daily_water_gallons:
+      tiny: 0.25
+      small: 1
+      medium: 1
+      large: 4
+      huge: 16
+      gargantuan: 64
+    exhaustion:
+      trigger: day_end
+      predicate:
+        op: less_than
+        args:
+        - var: water_consumed
+        - op: multiply
+          args:
+          - 0.5
+          - var: daily_requirement
+      levels: 1
+      cause: dehydration
+    cause_exhaustion_removal_locked_until:
+      water_consumed_gallons_at_least: full_daily_requirement
+  implementation: dnd2024:glossary_dehydration_hazard
+splat_contracts:
+- id: dnd2024:glossary_dehydration_hazard
+  inputs:
+    subject:
+      type: participant
+      required: true
+    water_consumed:
+      type: number
+      required: true
+  outputs:
+  - exhaustion_change
+  - recovery_lock
+  events:
+  - day.ended
+  - water.consumed
+  - exhaustion.removal_pending
+  capabilities:
+  - hazards
+  - survival
+  - conditions
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 3157b5df1f579b415c52e2169af5b61a05085962db033b8f835451464515a275
   source_path: builtin/srd-5.2.1/glossary/dehydration_hazard.md
   pages:
   - 181
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_dehydration_hazard
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: de2181d0850b0c2579935d6b65081df46d54e3c4b781edf8c7ea62b5bac1ae2c
 splat_clauses:
 - key: source_rules
   text: '# Dehydration [Hazard] A creature requires an amount of water per day based on its size, as shown
@@ -33,7 +77,8 @@ splat_clauses:
     per Day Size Water Size Water Tiny 1/4 gallon Large 4 gallons Small 1 gallon Huge 16 gallons Medium
     1 gallon Gargantuan 64 gallons'
   sha256: 58df4957f98445a23b2e794b0424eb4fc4f37cf19f2ec0d53736c4072c288cd4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dehydration [Hazard]

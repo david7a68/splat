@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_items_wearing_and_wielding_items
-  parameters: {}
+  parameters:
+    required_equipment_positions:
+      boots: feet
+      gloves: hands
+      hat: head
+      helmet: head
+      ring: finger
+      armor: donned
+      shield: strapped_to_arm
+      cloak: shoulders
+      weapon: held
+    magic_garment_fit_default: any_size_or_build
+    item_specific_overrides: true
+  implementation: dnd2024:rules_magic_items_wearing_and_wielding_items
+splat_contracts:
+- id: dnd2024:rules_magic_items_wearing_and_wielding_items
+  inputs:
+    subject:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+  outputs:
+  - magic_property_access
+  events: []
+  capabilities:
+  - equipment
+  - magic_items
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 103
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_magic_items_wearing_and_wielding_items
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 3a83ddac11ac7cb90b7838f77f69716d1ca229e976df6baae85ca347b430b785
   parent_name: Magic Items
   line_span:
     first: 8935
@@ -37,7 +67,8 @@ splat_clauses:
     that’s meant to be worn can fit a creature regardless of size or build. Magic garments are made to
     be easily adjustable, or they magically adjust themselves to the wearer.'
   sha256: 7ac489c736f38bf9f6eedb0b25207ec8e6c20275a64a97d3dcf086ed7834cfa0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wearing and Wielding Items

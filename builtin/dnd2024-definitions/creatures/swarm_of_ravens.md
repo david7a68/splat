@@ -63,17 +63,190 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/swarm_of_ravens
+  implementation: dnd2024:creature_swarm_of_ravens
+  parameters:
+    features:
+      swarm:
+        economy: passive
+        space_sharing: bidirectional
+        minimum_passage_size: tiny
+        regain_hit_points: false
+        gain_temporary_hit_points: false
+      beaks:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: choose_by_predicate
+          test:
+            self_bloodied: true
+          then:
+          - op: damage
+            average: 2
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 0
+            damage_type: piercing
+          else:
+          - op: damage
+            average: 5
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 2
+            damage_type: piercing
+        reach_feet: 5
+      cacophony:
+        economy: action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: save
+        ability: wisdom
+        dc: 10
+        targets:
+          kind: creature
+          count: 1
+          location: self_space
+        failure:
+        - op: condition
+          condition: deafened
+          ends:
+            event: turn.start
+            participant: self
+            occurrence: next
+          while_active:
+            disadvantage:
+            - ability_check
+            - attack
+        success: []
+    skill_totals:
+      perception: 5
+    defenses:
+      resistances:
+        damage_types:
+        - bludgeoning
+        - piercing
+        - slashing
+      immunities:
+        conditions:
+        - charmed
+        - frightened
+        - grappled
+        - paralyzed
+        - petrified
+        - prone
+        - restrained
+        - stunned
+    senses:
+      passive_perception: 15
+      special: []
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_swarm_of_ravens
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - grappling
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: cd099394d5250683f7fba31d84d6f8e0085aba8272342024764dc3a83c19bb24
   source_path: builtin/srd-5.2.1/creature/swarm_of_ravens.md
   pages:
   - 362
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_swarm_of_ravens
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: fcacdd36228aa5353ab21caded8ac6b55c2120c1c6264eada9a444ea81ef0a84
 splat_clauses:
 - key: source_rules
   text: '# Swarm of Ravens Medium Swarm of Tiny Beasts, Unaligned AC 12 Initiative +2 (12) HP 11 (2d8
@@ -88,7 +261,8 @@ splat_clauses:
     Failure: The target has the Deafened condition until the start of the swarm’s next turn. While Deafened,
     the target also has Disadvantage on ability checks and attack rolls.'
   sha256: 7c9a851104d2b97f041aadd8239ea1a169ddd82384da762f568d46088968c075
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Swarm of Ravens

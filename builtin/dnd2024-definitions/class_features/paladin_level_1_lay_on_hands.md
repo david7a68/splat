@@ -12,19 +12,71 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/paladin_level_1_lay_on_hands
-  parameters: {}
+  parameters:
+    resource:
+      id: lay_on_hands_pool
+      maximum:
+        op: multiply
+        args:
+        - 5
+        - stat: classes.paladin.level
+      recover:
+        event: rest.long_rest_completed
+        amount: all_expended
+    action: bonus_action
+    target:
+      type: creature
+      range: touch
+      self_allowed: true
+    healing:
+      chosen_points:
+        type: integer
+        minimum: 0
+        maximum: remaining_pool
+      hit_points_per_pool_point: 1
+    remove_condition:
+      condition: poisoned
+      pool_cost: 5
+      cost_points_also_heal: false
+  implementation: dnd2024:class_features_paladin_level_1_lay_on_hands
+splat_contracts:
+- id: dnd2024:class_features_paladin_level_1_lay_on_hands
+  inputs:
+    actor:
+      type: participant
+      required: true
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - feature_state
+  - resource_changes
+  - healing
+  - conditions
+  events:
+  - action.bonus
+  - rest.long_rest_completed
+  capabilities:
+  - healing
+  - conditions
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 53
   - 54
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_paladin_level_1_lay_on_hands
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 90b09fe35cd79ca9ccd165abf1b5dded75a11c74eae92a1f5bde743607bc9774
   parent_name: Paladin
   line_span:
     first: 4456
@@ -42,7 +94,8 @@ splat_clauses:
     in the pool. You can also expend 5 Hit Points from the pool of healing power to remove the Poisoned
     condition from the creature; those points don’t also restore Hit Points to the creature.'
   sha256: b62bcee42b4743cdbf8b255508b44959bc4b00edb8c02ae58cdbc2b72a8173c8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Lay On Hands

@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_saving_throws_and_damage
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 16
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 2b352ce4c365137cec6384449bf62cee334c9d04902fe0682941c55167c09562
   parent_name: Damage and Healing
   line_span:
     first: 1151
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Saving Throws and Damage Damage dealt via saving throws uses these rules.'
   sha256: 286596a8cb7910076a884370f8c3b664ab9244d874f1f0ae8c719d002888a129
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Saving Throws and Damage

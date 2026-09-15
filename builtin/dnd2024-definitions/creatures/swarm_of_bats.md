@@ -62,17 +62,134 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/swarm_of_bats
+  implementation: dnd2024:creature_swarm_of_bats
+  parameters:
+    damage_resistances:
+    - bludgeoning
+    - piercing
+    - slashing
+    damage_immunities: []
+    condition_immunities:
+    - charmed
+    - frightened
+    - grappled
+    - paralyzed
+    - petrified
+    - prone
+    - restrained
+    - stunned
+    senses:
+    - sense: blindsight
+      range_ft: 60
+    passive_perception: 11
+    languages:
+      speak: true
+      known: []
+    features:
+      swarm:
+        economy: passive
+        op: swarm.form
+        shared_spaces_bidirectional: true
+        minimum_opening:
+          creature_size: tiny
+          creature_shape: bat
+        regain_hp: false
+        gain_temporary_hp: false
+      bites:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 4
+              add: 0
+            average: 5
+          replacement_when:
+            if:
+              actor_bloodied: true
+            components:
+            - type: piercing
+              amount:
+                dice:
+                  count: 1
+                  sides: 4
+                add: 0
+              average: 2
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_swarm_of_bats
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: e3a92f01202d09a5ccf81ee03f7207854f43983a19aa4acd5c789a34e6ed6674
   source_path: builtin/srd-5.2.1/creature/swarm_of_bats.md
   pages:
   - 361
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_swarm_of_bats
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: f227d62a23bb769abc1a5ec2b61b8c029e174d8eeea6fc72b28fc40b6a630bd8
 splat_clauses:
 - key: source_rules
   text: '# Swarm of Bats Large Swarm of Tiny Beasts, Unaligned AC 12 Initiative +2 (12) HP 11 (2d10) Speed
@@ -84,7 +201,8 @@ splat_clauses:
     Hit Points or gain Temporary Hit Points. ### Actions Bites. Melee Attack Roll: +4, reach 5 ft. Hit:
     5 (2d4) Piercing damage, or 2 (1d4) Piercing damage if the swarm is Bloodied.'
   sha256: cd98657c231d5b2ac6426a9d67d1ed3658b67c4232c76484fb13196f6deb1931
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Swarm of Bats

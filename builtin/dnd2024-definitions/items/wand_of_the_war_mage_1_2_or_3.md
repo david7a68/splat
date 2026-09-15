@@ -15,24 +15,62 @@ splat_item:
   rarity: uncommon
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/wand_of_the_war_mage_1_2_or_3
+  implementation: dnd2024:item_wand_of_the_war_mage_1_2_or_3
+  parameters:
+    equipment_state: held
+    variants:
+    - rarity: uncommon
+      spell_attack_bonus: 1
+    - rarity: rare
+      spell_attack_bonus: 2
+    - rarity: very_rare
+      spell_attack_bonus: 3
+    spell_attacks:
+      ignore_cover:
+      - half
+    attunement:
+      required: true
+      eligibility:
+        spellcaster: true
+splat_contracts:
+- id: dnd2024:item_wand_of_the_war_mage_1_2_or_3
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+  outputs:
+  - modifiers
+  events:
+  - equipment.state_changed
+  capabilities:
+  - equipment
+  - derived_statistics
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: f0c9874fa6aecbc1bf9febbfd779f1633faa8838547ebcdeed54ab673ae3c38a
   source_path: builtin/srd-5.2.1/magic_item/wand_of_the_war_mage_1_2_or_3.md
   pages:
   - 251
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_wand_of_the_war_mage_1_2_or_3
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: e990663a3a18af47aaa937fb9e19453ef1f79bee4d3f6990c2fd911d6eff710f
 splat_clauses:
 - key: source_rules
   text: '# Wand of the War Mage, +1, +2, or +3 Wand, Uncommon (+1), Rare (+2), or Very Rare (+3) (Requires
     Attunement by a Spellcaster) While holding this wand, you gain a bonus to spell attack rolls determined
     by the wand’s rarity. In addition, you ignore Half Cover when making a spell attack roll.'
   sha256: 021b430d821e79e13f41300edca532763c7b58bb108ad4167414a0a376e55f08
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wand of the War Mage, +1, +2, or +3

@@ -28,17 +28,78 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/daylight
+  implementation: dnd2024:spell_daylight
+  parameters:
+    origin_choice:
+      point:
+        shape: sphere
+      object:
+        shape: emanation
+        not_worn: true
+        not_carried: true
+        opaque_cover_blocks: true
+    light:
+      sunlight: true
+      bright_radius_feet: 60
+      additional_dim_feet: 60
+    dispel:
+      event: area.overlap
+      target: darkness_spell
+      maximum_spell_level: 3
+splat_contracts:
+- id: dnd2024:spell_daylight
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - sunlight_effect
+  - dispelled_effects
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_areas
+  - perception
+  - inventory
+  - choices
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: ffbba253b702b505b616f1b15955271d59966feacdeb9ae144652c36d42b2eb5
   source_path: builtin/srd-5.2.1/spell/daylight.md
   pages:
   - 122
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_daylight
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 9d86a462feb99d02a6ccfd5224547ba6e192bb4961568e6b7b244f81da827de9
 splat_clauses:
 - key: source_rules
   text: '# Daylight Level 3 Evocation (Cleric, Druid, Paladin, Ranger, Sorcerer) Casting Time: Action
@@ -49,7 +110,8 @@ splat_clauses:
     with something opaque, such as a bowl or helm, blocks the sunlight. If any of this spell’s area overlaps
     with an area of Darkness created by a spell of level 3 or lower, that other spell is dispelled.'
   sha256: 651ee6812e6e0781e9b3637567325472cd9a74514af0b2b28139c12f7eeda3fc
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Daylight

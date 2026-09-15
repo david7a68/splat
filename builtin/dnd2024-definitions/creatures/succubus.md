@@ -60,17 +60,216 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/succubus
+  implementation: dnd2024:creature_succubus
+  parameters:
+    features:
+      fiendish_touch:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 7
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 16
+          amount:
+            dice:
+              count: 2
+              sides: 10
+            add: 5
+          damage_type: psychic
+        reach_feet: 5
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: fiendish_touch
+          count: 1
+        - op: choose
+          choices:
+          - op: use_feature
+            feature: charm
+            count: 1
+          - op: use_feature
+            feature: draining_kiss
+            count: 1
+      charm:
+        economy: action
+        op: cast_spell
+        spell:
+          key: dnd2024:spells/dominate_person
+        ability: charisma
+        save_dc: 15
+        components_waived:
+        - verbal
+        - somatic
+        - material
+        cast_level: 8
+      draining_kiss:
+        economy: action
+        op: save
+        ability: constitution
+        dc: 15
+        targets:
+          kind: creature
+          count: 1
+          range_feet: 5
+          charmed_by: self
+        failure:
+        - op: damage
+          average: 13
+          amount:
+            dice:
+              count: 3
+              sides: 8
+            add: 0
+          damage_type: psychic
+        success:
+        - op: damage_fraction
+          numerator: 1
+          denominator: 2
+          round: down
+        after_save:
+        - op: reduce_hit_point_maximum
+          amount:
+            event_value: damage_taken
+      shape_shift:
+        economy: bonus_action
+        op: shape_shift
+        forms:
+        - form: humanoid
+          size_choice:
+          - medium
+          - small
+          fly_speed_available: false
+        - form: 'true'
+          fly_speed_available: true
+        retain_statistics_except:
+        - fly_speed
+        equipment_transformed: false
+      incubus_form:
+        economy: passive
+        trigger: self.long_rest.finished
+        optional: true
+        op: replace_stat_block
+        definition:
+          key: dnd2024:creatures/incubus
+    skill_totals:
+      deception: 9
+      insight: 5
+      perception: 5
+      persuasion: 9
+      stealth: 7
+    defenses:
+      resistances:
+        damage_types:
+        - cold
+        - fire
+        - poison
+        - psychic
+    senses:
+      passive_perception: 15
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks:
+      - abyssal
+      - common
+      - infernal
+      understands:
+      - abyssal
+      - common
+      - infernal
+      telepathy:
+        range_feet: 60
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_succubus
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - self.long_rest.finished
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - shapechanging
+  - spellcasting
+  - stat_block_replacement
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 2b4961508737adf7d9e522f7d8043240014d53cc27e6842c688ac7a481a801ec
   source_path: builtin/srd-5.2.1/creature/succubus.md
   pages:
   - 331
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_succubus
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: be827794a18cb3a0acf003220c930ba43d172cc0a171a581b8e929aeb5f76209
 splat_clauses:
 - key: source_rules
   text: '# Succubus Medium Fiend, Neutral Evil AC 15 Initiative +3 (13) HP 71 (13d8 + 13) Speed 30 ft.,
@@ -89,7 +288,8 @@ splat_clauses:
     true form. Its game statistics are the same in each form, except its Fly Speed is available only in
     its true form. Any equipment it is wearing or carrying isn’t transformed.'
   sha256: 864d24d35442d3e80944626122eb26952716678c2b7cbc63ac18542b37ee6304
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Succubus

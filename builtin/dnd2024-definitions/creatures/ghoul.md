@@ -56,17 +56,160 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ghoul
+  implementation: dnd2024:creature_ghoul
+  parameters:
+    features:
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: bite
+          count: 2
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 5
+            roll:
+              count: 1
+              sides: 6
+              modifier: 2
+            type: piercing
+          - average: 3
+            roll:
+              count: 1
+              sides: 6
+              modifier: 0
+            type: necrotic
+      claw:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 4
+            roll:
+              count: 1
+              sides: 4
+              modifier: 2
+            type: slashing
+          save:
+            operation: saving_throw
+            ability: constitution
+            dc: 10
+            targets:
+              kind: creature
+              exclude:
+              - undead
+              - elf
+            failure:
+              conditions:
+              - condition: paralyzed
+                until: target.next_turn_end
+    damage_immunities:
+    - poison
+    condition_immunities:
+    - charmed
+    - exhaustion
+    - poisoned
+    senses:
+      darkvision: 60
+      passive_perception: 10
+    languages:
+      speaks:
+      - common
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_ghoul
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.ended
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 8a8b46d08aff8aa3059c548eaf2a8e6f813eb0bbe1d251fa0744750ef359e4af
   source_path: builtin/srd-5.2.1/creature/ghoul.md
   pages:
   - 288
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ghoul
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: aab4e2b564fcabdc94b7edbf348918cccdc153c5b43080efdb78435a33a03216
 splat_clauses:
 - key: source_rules
   text: '# Ghoul Medium Undead, Chaotic Evil AC 12 Initiative +2 (12) HP 22 (5d8) Speed 30 ft. MOD SAVE
@@ -78,7 +221,8 @@ splat_clauses:
     Undead or elf, it is subjected to the following effect. Constitution Saving Throw: DC 10. Failure:
     The target has the Paralyzed condition until the end of its next turn.'
   sha256: 07858cba079769ac5b91e48c94e6252d8c393ba17c208999ebe2051ba91d11aa
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ghoul

@@ -55,17 +55,137 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/boar
+  implementation: dnd2024:creature_boar
+  parameters:
+    features:
+      gore:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 3
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 4
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 1
+          damage_type: piercing
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: medium
+            immediately_preceding_movement:
+              minimum_feet: 20
+              direction: straight_toward_target
+          then:
+          - op: damage
+            average: 3
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            damage_type: piercing
+          - op: condition
+            condition: prone
+        reach_feet: 5
+      bloodied_fury:
+        economy: passive
+        advantage:
+          roll: attack
+          when: self_bloodied
+    defenses: {}
+    senses:
+      passive_perception: 9
+      special: []
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_boar
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 065ab616d8b018779560ae074d7760c351a9dff6d2f5af96e9300e9d2b46e01e
   source_path: builtin/srd-5.2.1/creature/boar.md
   pages:
   - 346
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_boar
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: eecd0a61f6253fc5e0a5b6dd5bb5fc2be689373c0ef8df35b6a65cc7a9b3218a
 splat_clauses:
 - key: source_rules
   text: '# Boar Medium Beast, Unaligned AC 11 Initiative +0 (10) HP 13 (2d8 + 4) Speed 40 ft. MOD SAVE
@@ -76,7 +196,8 @@ splat_clauses:
     feet straight toward it immediately before the hit, the target takes an extra 3 (1d6) Piercing damage
     and has the Prone condition.'
   sha256: 913851858812ede8f293e93615279d5589aedefb232e6fbecbb235799c76d36e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Boar

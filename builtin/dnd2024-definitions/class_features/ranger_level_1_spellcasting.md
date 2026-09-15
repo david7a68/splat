@@ -12,19 +12,74 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/ranger_level_1_spellcasting
-  parameters: {}
+  parameters:
+    class: ranger
+    spell_list: ranger
+    ability: wisdom
+    focus_types:
+    - druidic_focus
+    slots:
+      progression:
+        key: dnd2024:tables/ranger_progression
+      columns_by_spell_level:
+        '1': spell_slots_1
+        '2': spell_slots_2
+        '3': spell_slots_3
+        '4': spell_slots_4
+        '5': spell_slots_5
+      recovery:
+        event: rest.long_rest_completed
+        amount: all_expended
+    prepared_spells:
+      initial_count: 2
+      initial_spell_level: 1
+      count:
+        table:
+          key: dnd2024:tables/ranger_progression
+        row:
+          stat: classes.ranger.level
+        column: prepared_spells
+      choose_on_count_increase: true
+      level_must_have_slot: true
+      replace:
+        event: rest.long_rest_completed
+        maximum: 1
+      other_class_feature_always_prepared:
+        counts_toward_limit: false
+        counts_as_class_spell: true
+  implementation: dnd2024:class_features_ranger_level_1_spellcasting
+splat_contracts:
+- id: dnd2024:class_features_ranger_level_1_spellcasting
+  inputs:
+    actor:
+      type: participant
+      required: true
+  outputs:
+  - feature_state
+  - resource_changes
+  - spell_grants
+  events:
+  - character.class_level_gained
+  - rest.long_rest_completed
+  - spell.cast_pending
+  capabilities:
+  - spellcasting
+  - spell_preparation
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 57
   - 58
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_ranger_level_1_spellcasting
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 8943b6d8de06601c4bc58d162bf92de23b53295025c9f5f3f506b22430cab6e5
   parent_name: Ranger
   line_span:
     first: 4829
@@ -59,7 +114,8 @@ splat_clauses:
     your Ranger spells. Spellcasting Focus. You can use a Druidic Focus as a Spellcasting Focus for your
     Ranger spells.'
   sha256: 55c64e02b1071b79f64464850f3421d481c87550dacb0d256149089444cc0b04
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Spellcasting

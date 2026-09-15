@@ -62,17 +62,178 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/spy
+  implementation: dnd2024:creature_spy
+  parameters:
+    features:
+      shortsword:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 2
+          damage_type: piercing
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 0
+          damage_type: poison
+        reach_feet: 5
+      hand_crossbow:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 2
+          damage_type: piercing
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 0
+          damage_type: poison
+        range_feet: 30
+        long_range_feet: 120
+      cunning_action:
+        economy: bonus_action
+        op: take_action
+        choice:
+        - dash
+        - disengage
+        - hide
+    skill_totals:
+      deception: 5
+      insight: 4
+      investigation: 5
+      perception: 6
+      sleight_of_hand: 4
+      stealth: 6
+    defenses: {}
+    senses:
+      passive_perception: 16
+      special: []
+    gear:
+    - item_name: Hand Crossbow
+      quantity: 1
+    - item_name: Shortsword
+      quantity: 1
+    - item_name: Thieves’ Tools
+      quantity: 1
+    communication:
+      speaks:
+      - common
+      understands:
+      - common
+      additional_languages:
+        count: 1
+        chooser: gm
+        distinct_from_known: true
+        can_speak: true
+        can_understand: true
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_spy
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: cddd216cc9d8ae3e9e2dbe5ac6fa64bcf8b2ab852e7523f63f05a8c9ac3598c3
   source_path: builtin/srd-5.2.1/creature/spy.md
   pages:
   - 329
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_spy
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 75fdd3c86ecdf98672c22ae2c6b70fd47f7385ebb90e1ba7401125b0830d6d10
 splat_clauses:
 - key: source_rules
   text: '# Spy Medium or Small Humanoid, Neutral AC 12 Initiative +4 (14) HP 27 (6d8) Speed 30 ft., Climb
@@ -84,7 +245,8 @@ splat_clauses:
     +4, range 30/120 ft. Hit: 5 (1d6 + 2) Piercing damage plus 7 (2d6) Poison damage. ### Bonus Actions
     Cunning Action. The spy takes the Dash, Disengage, or Hide action.'
   sha256: 17ce044354f08b722e4d142c9c4892df08c6012decc9d2a90b4ecb97b762d423
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spy

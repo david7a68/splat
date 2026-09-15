@@ -59,17 +59,153 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/bulette
+  implementation: dnd2024:creature_bulette
+  parameters:
+    skill_totals:
+      perception: 6
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    - sense: tremorsense
+      range_ft: 120
+    passive_perception: 16
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 12
+              add: 4
+            average: 17
+      leap:
+        economy: bonus_action
+        op: movement.jump
+        maximum_ft: 30
+        movement_cost_ft: 10
+      deadly_leap:
+        economy: action
+        op: sequence
+        steps:
+        - op: movement.jump
+          movement_cost_ft: 5
+          maximum_ft: 15
+          destination_contains:
+            minimum_creatures: 1
+            maximum_size: large
+        - op: saving_throw
+          ability: dexterity
+          dc: 15
+          targets:
+            kind: creature
+            count: all
+            location: actor_destination_space
+          failure:
+          - op: damage
+            components:
+            - type: bludgeoning
+              amount:
+                dice:
+                  count: 3
+                  sides: 12
+                add: 0
+              average: 19
+          - op: condition.apply
+            condition: prone
+          success:
+          - op: damage
+            from: failure_damage
+            multiplier: 0.5
+            round: down
+          - op: push
+            distance_ft: 5
+            direction: straight_away_from_actor
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: bite
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_bulette
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 767ae691b73bb03a642ee4d528e54bd686acfb999da712f2f7506b2d1f038de2
   source_path: builtin/srd-5.2.1/creature/bulette.md
   pages:
   - 272
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_bulette
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 294462a64053d40c234c10630540db8d2a5eb23bc347a959ed339e799ff0d2be
 splat_clauses:
 - key: source_rules
   text: '# Bulette Large Monstrosity, Unaligned AC 17 Initiative +0 (10) HP 94 (9d10 + 45) Speed 40 ft.,
@@ -83,7 +219,8 @@ splat_clauses:
     target is pushed 5 feet straight away from the bulette. ### Bonus Actions Leap. The bulette jumps
     up to 30 feet by spending 10 feet of movement.'
   sha256: a483513ec9d29eda02a099058220c07c2aa4add18e073b13344064e27ec529c5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Bulette

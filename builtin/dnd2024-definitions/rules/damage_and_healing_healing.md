@@ -12,18 +12,71 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_healing
-  parameters: {}
+  parameters:
+    healing:
+      new_hp:
+        op: min
+        args:
+        - var: subject.hp_max
+        - op: add
+          args:
+          - var: subject.hp
+          - var: healing
+      discard_excess: true
+    knock_out:
+      optional: true
+      trigger:
+        melee_attack: true
+        would_reduce_target_hp_to: 0
+      replace_hp_with: 1
+      condition: unconscious
+      start_short_rest: true
+      ends:
+      - short_rest_finished
+      - any_hp_regained
+      - successful_first_aid
+      first_aid:
+        action_cost: 1
+        ability: wisdom
+        skill: medicine
+        dc: 10
+  implementation: dnd2024:rules_damage_and_healing_healing
+splat_contracts:
+- id: dnd2024:rules_damage_and_healing_healing
+  inputs:
+    subject:
+      type: participant
+      required: true
+    healing:
+      required: false
+      type: integer
+    attack:
+      required: false
+      type: resolution
+  outputs:
+  - hit_points
+  - conditions
+  - rest_state
+  events:
+  - healing.applied
+  - attack.damage_pending
+  capabilities:
+  - healing
+  - conditions
+  - rests
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 17
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_damage_and_healing_healing
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 87728e8b992a9f4281133f2e9059ad5c4a2c3dc2f06f5ab834dc9d28f5b291f7
   parent_name: Damage and Healing
   line_span:
     first: 1204
@@ -41,7 +94,8 @@ splat_clauses:
     if you receive 8 Hit Points of healing and have 14 Hit Points and a Hit Point maximum of 20, you regain
     6 Hit Points, not 8.'
   sha256: 3f9c121b70420f26f019cbca99fb7edbd1980f4bac669b52ab9ace98dec534de
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Healing

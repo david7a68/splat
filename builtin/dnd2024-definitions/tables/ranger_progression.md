@@ -11,7 +11,7 @@ splat_sources:
   locator: pp. 58
   url: https://www.dndbeyond.com/srd
 splat_rule:
-  mechanic: dnd2024:class_progression
+  mechanic: dnd2024:tables/ranger_progression
   parameters:
     class: ranger
     rows:
@@ -25,6 +25,19 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_1_spellcasting
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_1_favored_enemy
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_1_weapon_mastery
+        at_class_level: 1
     - level: 2
       proficiency_bonus: 2
       features_text: Deft Explorer, Fighting Style
@@ -35,6 +48,15 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_2_deft_explorer
+        at_class_level: 2
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_2_fighting_style
+        at_class_level: 2
     - level: 3
       proficiency_bonus: 2
       features_text: Ranger Subclass
@@ -45,6 +67,11 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: choose_subclass
+        feature:
+          key: dnd2024:class_features/ranger_level_3_ranger_subclass
+        at_class_level: 3
     - level: 4
       proficiency_bonus: 2
       features_text: Ability Score Improvement
@@ -55,6 +82,11 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_4_ability_score_improvement
+        at_class_level: 4
     - level: 5
       proficiency_bonus: 3
       features_text: Extra Attack
@@ -65,6 +97,11 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_5_extra_attack
+        at_class_level: 5
     - level: 6
       proficiency_bonus: 3
       features_text: Roving
@@ -75,6 +112,11 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_6_roving
+        at_class_level: 6
     - level: 7
       proficiency_bonus: 3
       features_text: Subclass feature
@@ -85,6 +127,9 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 7
     - level: 8
       proficiency_bonus: 3
       features_text: Ability Score Improvement
@@ -95,6 +140,11 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_4_ability_score_improvement
+        at_class_level: 8
     - level: 9
       proficiency_bonus: 4
       features_text: Expertise
@@ -105,6 +155,11 @@ splat_rule:
       spell_slots_3: 2
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_9_expertise
+        at_class_level: 9
     - level: 10
       proficiency_bonus: 4
       features_text: Tireless
@@ -115,6 +170,11 @@ splat_rule:
       spell_slots_3: 2
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_10_tireless
+        at_class_level: 10
     - level: 11
       proficiency_bonus: 4
       features_text: Subclass feature
@@ -125,6 +185,9 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 11
     - level: 12
       proficiency_bonus: 4
       features_text: Ability Score Improvement
@@ -135,6 +198,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_4_ability_score_improvement
+        at_class_level: 12
     - level: 13
       proficiency_bonus: 5
       features_text: Relentless Hunter
@@ -145,6 +213,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 1
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_13_relentless_hunter
+        at_class_level: 13
     - level: 14
       proficiency_bonus: 5
       features_text: Nature’s Veil
@@ -155,6 +228,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 1
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_14_nature_s_veil
+        at_class_level: 14
     - level: 15
       proficiency_bonus: 5
       features_text: Subclass feature
@@ -165,6 +243,9 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 2
       spell_slots_5: 0
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 15
     - level: 16
       proficiency_bonus: 5
       features_text: Ability Score Improvement
@@ -175,6 +256,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 2
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_4_ability_score_improvement
+        at_class_level: 16
     - level: 17
       proficiency_bonus: 6
       features_text: Precise Hunter
@@ -185,6 +271,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 3
       spell_slots_5: 1
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_17_precise_hunter
+        at_class_level: 17
     - level: 18
       proficiency_bonus: 6
       features_text: Feral Senses
@@ -195,6 +286,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 3
       spell_slots_5: 1
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_18_feral_senses
+        at_class_level: 18
     - level: 19
       proficiency_bonus: 6
       features_text: Epic Boon
@@ -205,6 +301,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 3
       spell_slots_5: 2
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_19_epic_boon
+        at_class_level: 19
     - level: 20
       proficiency_bonus: 6
       features_text: Foe Slayer
@@ -215,17 +316,109 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 3
       spell_slots_5: 2
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/ranger_level_20_foe_slayer
+        at_class_level: 20
+    class_definition:
+      key: dnd2024:classes/ranger
+    lookup:
+      input: class_level
+      minimum: 1
+      maximum: 20
+      match: exact
+      numeric_columns: current_capacity_or_value
+      feature_grants: all_crossed_levels
+      repeat_application: idempotent_per_class_level_and_feature
+    multiclass:
+      proficiency_bonus_source: total_character_level
+      spell_slot_override_rule:
+        key: dnd2024:rules/multiclassing_spellcasting
+      pact_magic_pool_separate: true
+    column_semantics:
+      favored_enemy:
+        kind: resource_capacity
+        resource: favored_enemy
+        recovery: owning_feature_contract
+        level_change_refills: false
+      prepared_spells:
+        kind: selection_capacity
+        selection: prepared_spells
+        eligibility: owning_feature_contract
+      proficiency_bonus:
+        kind: bonus
+        applies_to: proficiency
+        use_class_row_only_if_single_class: true
+      spell_slots_1:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 1
+        recovery: long_rest
+      spell_slots_2:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 2
+        recovery: long_rest
+      spell_slots_3:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 3
+        recovery: long_rest
+      spell_slots_4:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 4
+        recovery: long_rest
+      spell_slots_5:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 5
+        recovery: long_rest
+  implementation: dnd2024:class_progression_ranger_progression
+splat_contracts:
+- id: dnd2024:class_progression_ranger_progression
+  inputs:
+    actor:
+      type: participant
+      required: true
+    class_level:
+      type: integer
+      required: true
+    previous_class_level:
+      required: false
+      type: integer
+    selected_subclass:
+      required: false
+      type: definition
+    choices:
+      required: false
+      type: definition_list
+  outputs:
+  - feature_grants
+  - selection_capacities
+  - resource_capacities
+  - class_values
+  events:
+  - character.class_level_changed
+  capabilities:
+  - class_progression
+  - feature_grants
+  - resource_capacities
+  - character_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: table
   source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
   source_path: builtin/srd-5.2.1/source.txt
   pages:
   - 58
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_progression_ranger_progression
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: 821efecfa9a2f5be5825a25898020857c2f733ad12abf96343d4e6c45524834a
 splat_clauses:
 - key: source_rules
   text: '# Ranger Progression From SRD 5.2.1 page 58. Ranger Features Proficiency Favored Prepared —Spell
@@ -257,7 +450,8 @@ splat_clauses:
     with weapons allows you to use the mastery properties of two kinds of weapons of your 58 System Reference
     Document 5.2.1'
   sha256: 0a208df3f0a891aa7fb01b088bb87ded8ab762004c892dcd50afd56462cacdef
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ranger Progression

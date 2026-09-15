@@ -56,17 +56,159 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/azer_sentinel
+  implementation: dnd2024:creature_azer_sentinel
+  parameters:
+    features:
+      burning_hammer:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 8
+          amount:
+            dice:
+              count: 1
+              sides: 10
+            add: 3
+          damage_type: bludgeoning
+        - op: damage
+          average: 3
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 0
+          damage_type: fire
+        reach_feet: 5
+      fire_aura:
+        economy: passive
+        trigger: self.turn.end
+        requires:
+          self_incapacitated: false
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            size_feet: 5
+            origin: self
+          selection: self_choice
+        effects:
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 1
+              sides: 10
+            add: 0
+          damage_type: fire
+      illumination:
+        economy: passive
+        bright_radius_feet: 10
+        dim_additional_feet: 10
+    defenses:
+      immunities:
+        damage_types:
+        - fire
+        - poison
+        conditions:
+        - poisoned
+    senses:
+      passive_perception: 11
+      special: []
+    communication:
+      speaks:
+      - primordial
+      understands:
+      - primordial
+      dialects:
+      - ignan
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_azer_sentinel
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - self.turn.end
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: df1e8217fe6e6e32e563dab698fe2adf33975ef5dfefa410cc4d96eee7baf966
   source_path: builtin/srd-5.2.1/creature/azer_sentinel.md
   pages:
   - 261
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_azer_sentinel
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 823b9024edcb5d895eb7a43e2c0bddd0d3a6aaa01536f0e8b27b76828bd53355
 splat_clauses:
 - key: source_rules
   text: '# Azer Sentinel Medium Elemental, Lawful Neutral AC 17 Initiative +1 (11) HP 39 (6d8 + 12) Speed
@@ -78,7 +220,8 @@ splat_clauses:
     and Dim Light for an additional 10 feet. ### Actions Burning Hammer. Melee Attack Roll: +5, reach
     5 ft. Hit: 8 (1d10 + 3) Bludgeoning damage plus 3 (1d6) Fire damage.'
   sha256: 54b40ad604405e53701584118d18a4c14949d30e89319928f544bff91f1f130b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Azer Sentinel

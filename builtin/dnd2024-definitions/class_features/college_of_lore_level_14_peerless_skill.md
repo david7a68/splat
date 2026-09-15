@@ -12,18 +12,55 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/college_of_lore_level_14_peerless_skill
-  parameters: {}
+  parameters:
+    trigger:
+    - actor.ability_check_failed
+    - actor.attack_roll_failed
+    resource_cost:
+      id: bard.bardic_inspiration
+      amount: 1
+    roll:
+      var: actor.bardic_inspiration_die
+    modify: add_to_d20
+    recompute_success: true
+    refund_on_failure: true
+    class_scope:
+      class: bard
+      minimum_level: 14
+  implementation: dnd2024:class_features_college_of_lore_level_14_peerless_skill
+splat_contracts:
+- id: dnd2024:class_features_college_of_lore_level_14_peerless_skill
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - ability.check_failed
+  - attack.roll_failed
+  capabilities:
+  - character_features
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 35
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_college_of_lore_level_14_peerless_skill
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: df3a5e20c3797ed0b8eeb3f092c3f8940942f9fbf4f6314f7124c36642a25d6e
   parent_name: College of Lore
   line_span:
     first: 2906
@@ -34,7 +71,8 @@ splat_clauses:
     one use of Bardic Inspiration; roll the Bardic Inspiration die, and add the number rolled to the d20,
     potentially turning a failure into a success. On a failure, the Bardic Inspiration isn’t expended.'
   sha256: 73429a695f5ee9f6f82b5297e62072016ff0abcbd815d1d4b2cb87c129602ff9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 14: Peerless Skill

@@ -14,21 +14,22 @@ splat_rule:
   mechanic: dnd2024:glossary/campaign
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: glossary
   source_sha256: 636181497a4fd02257882f6e1aec07f2f6fe4e10762e0adf9332685c4741f375
   source_path: builtin/srd-5.2.1/glossary/campaign.md
   pages:
   - 178
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: c06e85d17fbde8bd6313b53abd4b86fad549970a4e81a45830f89dbc95b3facd
 splat_clauses:
 - key: source_rules
   text: '# Campaign A campaign is a series of adventures. See also “Adventure.”'
   sha256: f8913f6eb94b266e062127b31df58ad96dff5664bb5958197c5488b9b9463a4e
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Campaign

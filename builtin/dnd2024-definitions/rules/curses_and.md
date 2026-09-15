@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/curses_and
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 193
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 01f04a841d1bddbb000bf254038997cbdc00e87246badaf559172beb86e66e79
   parent_name: Curses and
   line_span:
     first: 9432
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Curses and'
   sha256: 15c61d9a725bb975b28fd13f86dc0319fbb64199deeef786d0e61b021ab41876
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Curses and

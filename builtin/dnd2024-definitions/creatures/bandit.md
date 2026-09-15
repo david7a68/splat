@@ -57,18 +57,130 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/bandit
+  implementation: dnd2024:creature_bandit
+  parameters:
+    gear:
+    - item: leather_armor
+      count: 1
+    - item: light_crossbow
+      count: 1
+    - item: scimitar
+      count: 1
+    senses: []
+    passive_perception: 10
+    languages:
+      speak: true
+      known:
+      - common
+      - thieves_cant
+    features:
+      scimitar:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 3
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 1
+            average: 4
+      light_crossbow:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 3
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 80
+          long: 320
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 1
+            average: 5
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_bandit
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 5ffe4bcfd67a8131df0ecb3c918da46933f0298280a52f7ae4ded50ba294f2b7
   source_path: builtin/srd-5.2.1/creature/bandit.md
   pages:
   - 261
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_bandit
+  conversion_gaps: []
   execution_profiles:
   - dnd2024:creatures/bandit
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: fa9e0b72af7fc42328ef417d2dc97c29e6d084dadf22fe50bcb3a77c463559bd
 splat_clauses:
 - key: source_rules
   text: '# Bandit Medium or Small Humanoid, Neutral AC 12 Initiative +1 (11) HP 11 (2d8 + 2) Speed 30
@@ -78,7 +190,8 @@ splat_clauses:
     4 (1d6 + 1) Slashing damage. Light Crossbow. Ranged Attack Roll: +3, range 80/320 ft. Hit: 5 (1d8
     + 1) Piercing damage.'
   sha256: 88a531e15a7550a47efd47de872755a86b47372c5f7a2cfe68e9be2b8dc75456
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Bandit

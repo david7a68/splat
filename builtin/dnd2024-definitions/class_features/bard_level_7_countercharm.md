@@ -12,18 +12,50 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/bard_level_7_countercharm
-  parameters: {}
+  parameters:
+    trigger:
+      saving_throw: failed
+      effect_applies_any_condition:
+      - charmed
+      - frightened
+      target: self_or_creature
+      target_range_feet: 30
+    action: reaction
+    reroll:
+      advantage: true
+  implementation: dnd2024:class_features_bard_level_7_countercharm
+splat_contracts:
+- id: dnd2024:class_features_bard_level_7_countercharm
+  inputs:
+    actor:
+      type: participant
+      required: true
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - feature_state
+  events:
+  - saving_throw.failed
+  capabilities:
+  - saving_throws
+  - reactions
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 33
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_bard_level_7_countercharm
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 2c679b26d651e4ca5bf8e473a2ed79f2bf3917bf65b804434aa9b27418fa7762
   parent_name: Bard
   line_span:
     first: 2680
@@ -35,7 +67,8 @@ splat_clauses:
     the Charmed or Frightened condition, you can take a Reaction to cause the save to be rerolled, and
     the new roll has Advantage.'
   sha256: c7b2f67f70361b496b8d9c743feb98ed82a4f94bf5ddf1006ad39530b300f115
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 7: Countercharm

@@ -31,17 +31,59 @@ splat_spell:
   material:
     description: a pinch of soot and salt
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/comprehend_languages
+  implementation: dnd2024:spell_comprehend_languages
+  parameters:
+    spell_lifetime:
+      concentration: false
+      maximum_seconds: 3600
+    target: caster
+    comprehend:
+      meaning: literal
+      heard_languages: true
+      seen_signed_languages: true
+      written_language:
+        visible: true
+        touching_written_surface_required: true
+        reading_seconds_per_page_approximate: 60
+    decode:
+      symbols: false
+      secret_messages: false
+splat_contracts:
+- id: dnd2024:spell_comprehend_languages
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    language_content:
+      required: false
+      type: text
+  outputs:
+  - effects
+  - information
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - information
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 16cc0e9e8a498bf32f53d5f5247a2118c3e0b44a5baf7dc10772a85a5dabe55b
   source_path: builtin/srd-5.2.1/spell/comprehend_languages.md
   pages:
   - 117
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_comprehend_languages
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 7855189d4228e07186da19290148d06dc61b4497ca601410cb46c986bffcff82
 splat_clauses:
 - key: source_rules
   text: '# Comprehend Languages Level 1 Divination (Bard, Sorcerer, Warlock, Wizard) Casting Time: Action
@@ -50,7 +92,8 @@ splat_clauses:
     any written language that you see, but you must be touching the surface on which the words are written.
     It takes about 1 minute to read one page of text. This spell doesn’t decode symbols or secret messages.'
   sha256: 6decda382c641ba959bf476c9193f7bd198eb322d61f0d5c9c5c7738c75aa0c2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Comprehend Languages

@@ -12,18 +12,43 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/weapons_push
-  parameters: {}
+  parameters:
+    trigger:
+      weapon_hit: true
+      target_kind: creature
+    optional: true
+    target_size_max: large
+    push:
+      distance_ft_min: 0
+      distance_ft_max: 10
+      direction: straight_away_from_attacker
+  implementation: dnd2024:rules_weapons_push
+splat_contracts:
+- id: dnd2024:rules_weapons_push
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - attack.hit
+  capabilities:
+  - weapon_mastery
+  - forced_movement
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 90
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_weapons_push
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 653aaf78412ea6bff46d604c0f2bb6bf99fc7dff96b3f1695f8915309fbe92a0
   parent_name: Weapons
   line_span:
     first: 7793
@@ -33,7 +58,8 @@ splat_clauses:
   text: '# Push If you hit a creature with this weapon, you can push the creature up to 10 feet straight
     away from yourself if it is Large or smaller.'
   sha256: 4b401f89c26b8aa09547f0925e9e22954449c89c4667f0a1e2421dda2d804873
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Push

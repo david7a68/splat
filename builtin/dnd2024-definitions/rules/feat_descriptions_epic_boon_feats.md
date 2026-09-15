@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/feat_descriptions_epic_boon_feats
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 88
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 878f11930dae31d7bd641fc06c244d93e6e240447fbbbfa625f7a0faa7fb754f
   parent_name: Feat Descriptions
   line_span:
     first: 7569
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Epic Boon Feats'
   sha256: 023d2f35178203a9400f1e8e4c1b3217634ea6ef2c0c94fc24c58ff793e41cea
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Epic Boon Feats

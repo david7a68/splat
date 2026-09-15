@@ -12,18 +12,41 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/starting_at_higher_levels
-  parameters: {}
+  parameters:
+    starting_level:
+      authority: gm
+      minimum: 1
+    experienced_group_recommendation:
+      level: 3
+      binding: false
+  implementation: dnd2024:rules_starting_at_higher_levels
+splat_contracts:
+- id: dnd2024:rules_starting_at_higher_levels
+  inputs:
+    campaign:
+      type: campaign
+      required: true
+    level:
+      type: integer
+      required: true
+  outputs:
+  - starting_level
+  events: []
+  capabilities:
+  - character_creation
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 24
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_starting_at_higher_levels
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 8ca17d9060aab008e800a118b7b821f02f75693adca3b0d89f08cd0117bed906
   parent_name: Starting at Higher Levels
   line_span:
     first: 1850
@@ -33,7 +56,8 @@ splat_clauses:
   text: '# Starting at Higher Levels Your GM might start your group’s characters at a level higher than
     1. It is particularly recommended to start at level 3 if your group is composed of seasoned D&D players.'
   sha256: 77e9f57133aa1431f4f32bb4ef422689d0d41eccfb072ca4661ca39da20ad7b5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Starting at Higher Levels

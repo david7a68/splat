@@ -12,18 +12,52 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_breaking_up_your_move
-  parameters: {}
+  parameters:
+    movement_segments_allowed: true
+    interleave_with:
+    - action
+    - bonus_action
+    - reaction
+    turn_scope: same_turn
+    movement_budget: remaining_movement
+  implementation: dnd2024:rules_combat_breaking_up_your_move
+splat_contracts:
+- id: dnd2024:rules_combat_breaking_up_your_move
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    event:
+      type: event
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - action_options
+  - effects
+  - resource_updates
+  events: []
+  capabilities:
+  - action_economy
+  - movement
+  - combat
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 14
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_combat_breaking_up_your_move
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 6d431719197c26c18e32d410f03c9b9148fa860bd0a9fcd889580867424fe053
   parent_name: Combat
   line_span:
     first: 908
@@ -34,7 +68,8 @@ splat_clauses:
     any action, Bonus Action, or Reaction you take on the same turn. For example, if you have a Speed
     of 30 feet, you could go 10 feet, take an action, and then go 20 feet.'
   sha256: 573afd3186c79bbb0674776545de5741e1b152b34828b15552b44a26c0330e30
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Breaking Up Your Move

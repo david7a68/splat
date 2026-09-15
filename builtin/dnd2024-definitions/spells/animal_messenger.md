@@ -30,17 +30,112 @@ splat_spell:
   material:
     description: a morsel of food
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/animal_messenger
+  implementation: dnd2024:spell_animal_messenger
+  parameters:
+    targets:
+      kind: creature
+      maximum: 1
+      within_spell_range: true
+      visible: true
+      size: tiny
+      creature_type: beast
+    save:
+      ability: charisma
+      dc:
+        binding: save_dc
+      failure:
+        effect: deliver_message
+      success:
+        effect: none
+    automatic_save_success:
+      challenge_rating_not_equal: 0
+    message:
+      word_limit: 25
+      destination:
+        visited_by_caster: true
+      recipient:
+        match: caster_general_description
+      delivery: mimic_caster_communication
+    travel:
+      duration_hours:
+        op: add
+        args:
+        - 24
+        - op: multiply
+          args:
+          - 48
+          - op: subtract
+            args:
+            - binding: cast_level
+            - 2
+      miles_per_24_hours:
+        flying: 50
+        otherwise: 25
+      rate_precision: approximate
+      on_arrival: deliver_to_matching_creature
+      on_duration_expired_before_arrival:
+        message: lost
+        beast_destination: casting_location
+      on_arrival_duration_remaining: spell_duration_remaining
+splat_contracts:
+- id: dnd2024:spell_animal_messenger
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    message:
+      required: false
+      type: text
+    choices:
+      required: false
+      type: choice
+    items:
+      required: false
+      type: item_list
+  outputs:
+  - effects
+  - knowledge
+  - items
+  events:
+  - spell.cast_completed
+  - save.before
+  - save.after
+  - time.elapsed
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - saving_throws
+  - knowledge
+  - inventory
+  - behavior_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 7d535947ad4e02ad9914329816896930541204fb9f13bf204a48404c24ebe3e6
   source_path: builtin/srd-5.2.1/spell/animal_messenger.md
   pages:
   - 108
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_animal_messenger
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: ec9c4979fd1bdb229a95db1140dec15cf61e21be3f08dd0ed7652b10f935268d
 splat_clauses:
 - key: source_rules
   text: '# Animal Messenger Level 2 Enchantment (Bard, Druid, Ranger) Casting Time: Action or Ritual Range:
@@ -56,7 +151,8 @@ splat_clauses:
     cast the spell. Using a Higher-Level Spell Slot. The spell’s duration increases by 48 hours for each
     spell slot level above 2.'
   sha256: 88ce7fc2433a1160e6709905ec3deed42aa9bdacce05bf1ccdf9861dae1ba133
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Animal Messenger

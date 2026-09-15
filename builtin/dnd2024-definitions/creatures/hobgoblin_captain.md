@@ -57,17 +57,187 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/hobgoblin_captain
+  implementation: dnd2024:creature_hobgoblin_captain
+  parameters:
+    features:
+      greatsword:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 9
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 2
+          damage_type: slashing
+        - op: damage
+          average: 3
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 0
+          damage_type: poison
+        reach_feet: 5
+      longbow:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 6
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 2
+          damage_type: piercing
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 2
+              sides: 4
+            add: 0
+          damage_type: poison
+        range_feet: 150
+        long_range_feet: 600
+      multiattack:
+        economy: action
+        op: repeat_choice
+        count: 2
+        choices:
+        - feature: greatsword
+        - feature: longbow
+      aura_of_authority:
+        economy: passive
+        requires:
+          self_incapacitated: false
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            size_feet: 10
+            origin: self
+          relation:
+          - self
+          - ally
+        advantage:
+          rolls:
+          - attack
+          - saving_throw
+    defenses: {}
+    senses:
+      passive_perception: 10
+      special:
+      - sense: darkvision
+        range_feet: 60
+    gear:
+    - item_name: Greatsword
+      quantity: 1
+    - item_name: Half Plate Armor
+      quantity: 1
+    - item_name: Longbow
+      quantity: 1
+    communication:
+      speaks:
+      - common
+      - goblin
+      understands:
+      - common
+      - goblin
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_hobgoblin_captain
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 0b26335479979eef84a1eaeeb0797614f42c89054d76e662e5ddbb611eefc14a
   source_path: builtin/srd-5.2.1/creature/hobgoblin_captain.md
   pages:
   - 299
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_hobgoblin_captain
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: e0ac54896e04252222054ee551fe67aac6e68ddb2b61e053311bfc0c05944213
 splat_clauses:
 - key: source_rules
   text: '# Hobgoblin Captain Medium Fey (Goblinoid), Lawful Evil AC 17 Initiative +4 (14) HP 58 (9d8 +
@@ -81,7 +251,8 @@ splat_clauses:
     damage. Longbow. Ranged Attack Roll: +4, range 150/600 ft. Hit: 6 (1d8 + 2) Piercing damage plus 5
     (2d4) Poison damage.'
   sha256: c6b186af5b1e043cf54dec2b435e1855b341ee1882be90fc4dc46cb16740beac
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hobgoblin Captain

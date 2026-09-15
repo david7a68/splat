@@ -12,18 +12,36 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/casting_spells_spell_level
-  parameters: {}
+  parameters:
+    spell_level_minimum: 0
+    spell_level_maximum: 9
+    cantrip_level: 0
+    level_access_source: class_spellcasting_rules
+  implementation: dnd2024:rules_casting_spells_spell_level
+splat_contracts:
+- id: dnd2024:rules_casting_spells_spell_level
+  inputs:
+    definition:
+      type: definition
+      required: true
+  outputs:
+  - typed_attributes
+  events: []
+  capabilities:
+  - definition_catalogs
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 104
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_casting_spells_spell_level
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: cfbaeef6bd039d4197caebc7574576b36868e7394505c066d9ac13c035a1d5c4
   parent_name: Casting Spells
   line_span:
     first: 9071
@@ -35,7 +53,8 @@ splat_clauses:
     by rote—are level 0. The rules for each spellcasting class say when its members gain access to spells
     of certain levels.'
   sha256: 2f9fc90b17214de2d04530a8a01dbe4f3910259c4b53e12cadaa249032dea0d7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spell Level

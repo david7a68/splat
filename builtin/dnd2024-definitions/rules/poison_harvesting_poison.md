@@ -12,18 +12,65 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/poison_harvesting_poison
-  parameters: {}
+  parameters:
+    target_requirements:
+      venomous: true
+      any_state:
+      - dead
+      - incapacitated
+      already_harvested: false
+    time:
+      dice:
+        count: 1
+        sides: 6
+      unit: minute
+    required_tool: poisoners_kit
+    check:
+      ability: intelligence
+      skill: nature
+      dc: 20
+    success:
+      poison_doses: 1
+      target_further_harvest_prohibited: true
+    failure:
+      poison_doses: 0
+    failure_margin_at_least_5:
+      subjected_to: target_poison
+  implementation: dnd2024:rules_poison_harvesting_poison
+splat_contracts:
+- id: dnd2024:rules_poison_harvesting_poison
+  inputs:
+    subject:
+      type: participant
+      required: true
+    target:
+      type: participant
+      required: true
+    kit:
+      type: item_instance
+      required: true
+  outputs:
+  - poison_doses
+  - poison_exposure
+  - harvest_state
+  events: []
+  capabilities:
+  - poison
+  - crafting
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 197
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_poison_harvesting_poison
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: e045b5c13e3befe689bf7ccb1ac7fdd8441e3ecca981c06df443a303af7453ec
   parent_name: Poison
   line_span:
     first: 9807
@@ -37,7 +84,8 @@ splat_clauses:
     a failed check, the character is unable to extract any poison. If the character fails the check by
     5 or more, the character is subjected to the creature’s poison.'
   sha256: e3c86585531951511775a889ec7adfb6f86ba6153f8e0f47a47995feb4a8ac4e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Harvesting Poison

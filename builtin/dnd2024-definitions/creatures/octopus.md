@@ -59,18 +59,146 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/octopus
+  implementation: dnd2024:creature_octopus
+  parameters:
+    features:
+      compression:
+        economy: trait
+        operation: passive_rule
+        minimum_gap_inches: 1
+        extra_movement_cost: 0
+      water_breathing:
+        economy: trait
+        operation: passive_rule
+        breathing:
+        - water
+      tentacles:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 1
+            roll:
+              constant: 1
+            type: bludgeoning
+      ink_cloud:
+        economy: reaction
+        resource:
+          kind: daily
+          uses: 1
+          recovery: long_rest
+        operation: sequence
+        trigger: creature.turn_end
+        requires:
+          self_underwater: true
+          triggering_creature_within_ft: 5
+        effects:
+        - operation: create_area
+          area:
+            shape: cube
+            size_ft: 5
+            center: self
+          obscurement: heavy
+          duration_seconds: 60
+          ends_on:
+          - strong_current
+          - similar_dispersal_effect
+        - operation: move
+          maximum_ft:
+            multiply:
+            - stat: swim_speed
+            - 1
+    skill_totals:
+      perception: 2
+      stealth: 6
+    senses:
+      darkvision: 30
+      passive_perception: 12
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_octopus
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.ended
+  - rest.completed
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: ba6a1adaa4e94d975915cee5c89af5609ca275089040ff49ae65b5969f63b4d3
   source_path: builtin/srd-5.2.1/creature/octopus.md
   pages:
   - 357
   - 358
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_octopus
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 73ad51033b46028954eb5702177b06cf7d141874da546178805f04083fee40f0
 splat_clauses:
 - key: source_rules
   text: '# Octopus Small Beast, Unaligned AC 12 Initiative +2 (12) HP 3 (1d6) Speed 5 ft., Swim 30 ft.
@@ -84,7 +212,8 @@ splat_clauses:
     up to its Swim Speed. The Cube is Heavily Obscured for 1 minute or until a strong current or similar
     effect disperses the ink.'
   sha256: b124dcacb96a9de6429d49f0e367f7f4e1daa1b1f8ff93021c94de1c6d9f64be
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Octopus

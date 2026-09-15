@@ -55,18 +55,175 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/rust_monster
+  implementation: dnd2024:creature_rust_monster
+  parameters:
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 11
+    languages:
+      speak: true
+      known: []
+    features:
+      iron_scent:
+        economy: passive
+        op: location.pinpoint
+        material: ferrous_metal
+        range_ft: 30
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 3
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 1
+            average: 5
+      antennae:
+        economy: action
+        op: item.target
+        target:
+          kind: object
+          magical: false
+          material: metal
+          categories:
+          - armor
+          - weapon
+          worn_or_carried_by_creature: true
+          range_ft: 5
+        bearer_save:
+          op: saving_throw
+          ability: dexterity
+          dc: 11
+          targets:
+            kind: item_bearer
+          failure:
+          - op: item.penalty
+            cumulative: true
+            amount: -1
+            armor:
+              stat: provided_ac
+              destroy_at_ac: 10
+            weapon:
+              stat: attack_roll
+              destroy_at_penalty: -5
+            remove_penalty_spell:
+              key: dnd2024:spells/mending
+          success: []
+      destroy_metal:
+        economy: action
+        op: object.destroy_volume
+        range_ft: 5
+        requires_touch: true
+        target:
+          magical: false
+          material: metal
+          worn_or_carried: false
+        volume:
+          shape: cube
+          edge_ft: 1
+      reflexive_antennae:
+        economy: reaction
+        trigger: attack.hits_actor
+        effect:
+          op: feature.use
+          feature: antennae
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - feature: bite
+          count: 1
+        - feature: antennae
+          count: 2
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_rust_monster
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - attack.hits_actor
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - item_state
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: ebd69ac080948dc7c8d6c6f6d8b55fd9f7fc8ea48b10b4a529f8873d66ec59b5
   source_path: builtin/srd-5.2.1/creature/rust_monster.md
   pages:
   - 320
   - 321
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_rust_monster
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: f3fd91bcb1d100cac5f605afc057a90855708fec22416f4ad3fccd707970e5b2
 splat_clauses:
 - key: source_rules
   text: '# Rust Monster Medium Monstrosity, Unaligned AC 14 Initiative +1 (11) HP 33 (6d8 + 6) Speed 40
@@ -84,7 +241,8 @@ splat_clauses:
     of the object. ### Reactions Reflexive Antennae. Trigger: An attack roll hits the rust monster. Response:
     The rust monster uses Antennae.'
   sha256: 9a20721e5d9cc3e9386d74a52eb8a537d282d42b4daf2531f80bee232655b8b5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Rust Monster

@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/classes
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 28
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 93d4f98ad0faf4c1e889b3b8828d00b74a1dfd9abfd20bdad4ee7154e159aff1
   parent_name: Classes
   line_span:
     first: 2206
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Classes'
   sha256: 6adbccb64401b0807ed7a91320e47ecee2c60ff207d4717ed723de70f68ed89e
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Classes

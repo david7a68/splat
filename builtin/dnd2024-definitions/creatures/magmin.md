@@ -56,18 +56,153 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/magmin
+  implementation: dnd2024:creature_magmin
+  parameters:
+    damage_immunities:
+    - fire
+    condition_immunities: []
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 10
+    languages:
+      speak: true
+      known:
+      - primordial
+      primordial_dialects:
+      - ignan
+    features:
+      touch:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: fire
+            amount:
+              dice:
+                count: 2
+                sides: 4
+              add: 2
+            average: 7
+        - op: burning.start
+          when_any:
+          - target_kind: creature
+          - target_kind: object
+            flammable: true
+            worn_or_carried: false
+      death_burst:
+        economy: passive
+        op: saving_throw
+        ability: dexterity
+        dc: 11
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            origin: actor
+            size_ft: 10
+        failure:
+        - op: damage
+          components:
+          - type: fire
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 0
+            average: 7
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+        trigger: actor.died
+      ignited_illumination:
+        economy: bonus_action
+        op: state.choose
+        parameter: ablaze
+        choices:
+        - true
+        - false
+        while_true:
+          bright_radius_ft: 10
+          dim_additional_ft: 10
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_magmin
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.died
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: e76e9d499f5ea2b66339c5ec48847f48093934f5766e769a3d87dcd813aa92e7
   source_path: builtin/srd-5.2.1/creature/magmin.md
   pages:
   - 305
   - 306
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_magmin
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 767b8e93cda68fbda4b3c366242539c750959e6545765815486b5f53103325f2
 splat_clauses:
 - key: source_rules
   text: '# Magmin Small Elemental, Chaotic Neutral AC 14 Initiative +2 (12) HP 13 (3d6 + 3) Speed 30 ft.
@@ -81,7 +216,8 @@ splat_clauses:
     flames. While ablaze, the magmin sheds Bright Light in a 10-foot radius and Dim Light for an additional
     10 feet.'
   sha256: d7dbfa0f02791894744183acb706b88eaec8677d3150b860abde839db5824a69
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Magmin

@@ -12,18 +12,78 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/circle_of_the_land_level_6_natural_recovery
-  parameters: {}
+  parameters:
+    free_cast:
+      resource:
+        id: land.natural_recovery_cast
+        maximum: 1
+        recovery:
+        - event: rest.long_completed
+          amount: all
+      cost: 1
+      spell_eligibility:
+        prepared_by:
+          key: dnd2024:class_features/circle_of_the_land_level_3_circle_of_the_land_spells
+        minimum_spell_level: 1
+      expend_slot: false
+    slot_recovery:
+      event: rest.short_completed
+      resource:
+        id: land.natural_recovery_slots
+        maximum: 1
+        recovery:
+        - event: rest.long_completed
+          amount: all
+      cost: 1
+      choose_expended_slots: true
+      maximum_combined_levels:
+        op: ceil
+        args:
+        - op: divide
+          args:
+          - var: actor.class_levels.druid
+          - 2
+      maximum_slot_level: 5
+    class_scope:
+      class: druid
+      minimum_level: 6
+  implementation: dnd2024:class_features_circle_of_the_land_level_6_natural_recovery
+splat_contracts:
+- id: dnd2024:class_features_circle_of_the_land_level_6_natural_recovery
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - spellcasting
+  - resources
+  events:
+  - spell.cast
+  - rest.short_completed
+  - rest.long_completed
+  capabilities:
+  - character_features
+  - resources
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 46
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_circle_of_the_land_level_6_natural_recovery
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 76d732b9ea28acd4a7fd5d92e0affa22e563c0aba3ff27cbfaaaf55deb8971d0
   parent_name: Circle of the Land
   line_span:
     first: 3839
@@ -39,7 +99,8 @@ splat_clauses:
     1 spell slot, or three level 1 spell slots. Once you recover spell slots with this feature, you can’t
     do so again until you finish a Long Rest.'
   sha256: 187990232d3d6ddcff3ec9856709d35261b5d194fc0fc297e0dcf3ae0bbe6627
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 6: Natural Recovery

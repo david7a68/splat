@@ -12,18 +12,179 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/sentient_magic_items_special_purpose
-  parameters: {}
+  parameters:
+    purpose_optional: true
+    purpose_methods:
+    - choose
+    - roll
+    cooperative_when: wielder_use_aligns_with_purpose
+    possible_conflict_when: wielder_deviates_from_purpose
+    alignment_table:
+      roll:
+        count: 1
+        sides: 100
+        add: 0
+      outcomes:
+      - roll_min: 1
+        roll_max: 15
+        alignment: lawful_good
+      - roll_min: 16
+        roll_max: 35
+        alignment: neutral_good
+      - roll_min: 36
+        roll_max: 50
+        alignment: chaotic_good
+      - roll_min: 51
+        roll_max: 63
+        alignment: lawful_neutral
+      - roll_min: 64
+        roll_max: 73
+        alignment: neutral
+      - roll_min: 74
+        roll_max: 85
+        alignment: chaotic_neutral
+      - roll_min: 86
+        roll_max: 89
+        alignment: lawful_evil
+      - roll_min: 90
+        roll_max: 96
+        alignment: neutral_evil
+      - roll_min: 97
+        roll_max: 100
+        alignment: chaotic_evil
+    communication_table:
+      roll:
+        count: 1
+        sides: 10
+        add: 0
+      outcomes:
+      - roll_min: 1
+        roll_max: 6
+        mode: transmit_emotions
+        recipient: carrier_or_wielder
+      - roll_min: 7
+        roll_max: 9
+        mode: speech
+        languages_minimum: 1
+      - roll_min: 10
+        roll_max: 10
+        mode:
+        - speech
+        - telepathy
+        languages_minimum: 1
+        telepathy_recipient: carrier_or_wielder
+    senses_table:
+      roll:
+        count: 1
+        sides: 4
+        add: 0
+      outcomes:
+      - roll: 1
+        hearing_feet: 30
+        vision_feet: 30
+        vision_type: standard
+      - roll: 2
+        hearing_feet: 60
+        vision_feet: 60
+        vision_type: standard
+      - roll: 3
+        hearing_feet: 120
+        vision_feet: 120
+        vision_type: standard
+      - roll: 4
+        hearing_feet: 120
+        vision_feet: 120
+        vision_type: darkvision
+    purpose_table:
+      roll:
+        count: 1
+        sides: 10
+        add: 0
+      outcomes:
+      - roll: 1
+        id: aligned
+        objective: defeat_or_destroy_opposed_alignment
+        neutral_allowed: false
+      - roll: 2
+        id: bane
+        objective: thwart_or_destroy
+        target_choice: creature_type
+      - roll: 3
+        id: creator_seeker
+        objectives:
+        - find_creator
+        - understand_creation
+      - roll: 4
+        id: destiny_seeker
+        objective: fulfill_item_and_bearer_future_roles
+      - roll: 5
+        id: destroyer
+        objectives:
+        - destruction
+        - arbitrary_fighting
+      - roll: 6
+        id: glory_seeker
+        objectives:
+        - greatest_item_renown
+        - user_fame_or_notoriety
+      - roll: 7
+        id: lore_seeker
+        objective_choices:
+        - knowledge
+        - solve_mystery
+        - learn_secret
+        - decipher_prophecy
+      - roll: 8
+        id: protector
+        objective: defend
+        target_choice: creature_kind
+      - roll: 9
+        id: soulmate_seeker
+        objective: find_other_sentient_item
+      - roll: 10
+        id: templar
+        objective: defend_servants_and_interests
+        target_choice: deity
+    conflict_rules:
+      key: dnd2024:rules/sentient_magic_items_conflict
+  implementation: dnd2024:rules_sentient_magic_items_special_purpose
+splat_contracts:
+- id: dnd2024:rules_sentient_magic_items_special_purpose
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+  outputs:
+  - item_updates
+  - cost
+  - effects
+  events: []
+  capabilities:
+  - items
+  - attunement
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 208
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_sentient_magic_items_special_purpose
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 204066ea1a9e65a1acd92ea4f48bfe8e8aa8ebc49c22cc6749c810ecf405de0b
   parent_name: Sentient Magic Items
   line_span:
     first: 10772
@@ -54,7 +215,8 @@ splat_clauses:
     another sentient magic item, perhaps one that is similar to itself. 10 Templar. The item seeks to
     defend the servants and interests of a particular deity.'
   sha256: 21ad0693d0a5daa65ea88be4dba1adb5c208ef41943de67c75de03974291f83f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Special Purpose

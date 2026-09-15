@@ -26,17 +26,104 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/dominate_beast
+  implementation: dnd2024:spell_dominate_beast
+  parameters:
+    targets:
+      kind: creature
+      maximum: 1
+      within_spell_range: true
+      visible: true
+      creature_type: beast
+    save:
+      ability: wisdom
+      dc:
+        binding: save_dc
+      failure:
+        condition: charmed
+        duration: spell_duration
+      success:
+        effect: none
+    save_advantage_if:
+      caster_or_allies_fighting_target: true
+    repeat_save:
+      event: target_takes_damage
+      ability: wisdom
+      success: end_spell_on_target
+    control:
+      requires: target_charmed_by_spell
+      telepathy:
+        requires_same_plane: true
+      command:
+        event: caster_turn
+        cost: none
+        obey: best_effort_on_target_turn
+      completed_without_new_order:
+        behavior: target_choice
+        priority: self_protection
+      reaction_command:
+        cost: caster_reaction
+        target_cost: reaction
+    duration_by_slot:
+      '4':
+        minutes: 1
+      '5':
+        minutes: 10
+      '6':
+        hours: 1
+      7_plus:
+        hours: 8
+    concentration: true
+splat_contracts:
+- id: dnd2024:spell_dominate_beast
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - damage.applied
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - conditions
+  - saving_throws
+  - roll_modifiers
+  - behavior_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 500e726129e675852f6c953c2577f837912d42a64eb7d295a22e1840913166e9
   source_path: builtin/srd-5.2.1/spell/dominate_beast.md
   pages:
   - 125
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_dominate_beast
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 40dff68c311ee746b8c441b1a2e09741197f9be4700f8627b0195ebf79fed71b
 splat_clauses:
 - key: source_rules
   text: '# Dominate Beast Level 4 Enchantment (Druid, Ranger, Sorcerer) Casting Time: Action Range: 60
@@ -52,7 +139,8 @@ splat_clauses:
     Spell Slot. Your Concentration can last longer with a spell slot of level 5 (up to 10 minutes), 6
     (up to 1 hour), or 7+ (up to 8 hours).'
   sha256: 13a660cfa793f6a25e7c69646fa6644c4c8d5234034449479d9e57fb456c9017
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dominate Beast

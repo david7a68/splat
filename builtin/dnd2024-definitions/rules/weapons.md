@@ -12,18 +12,50 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/weapons
-  parameters: {}
+  parameters:
+    weapon_categories:
+    - simple
+    - martial
+    weapon_kinds:
+    - melee
+    - ranged
+    base_melee_reach_feet: 5
+    damage_on_hit_source: weapon_damage_and_type
+    properties_source: weapon_definition
+    mastery:
+      requires_feature_unlock: true
+    selling:
+      equipment_fraction_of_purchase_cost: 0.5
+      trade_goods_and_valuables_fraction: 1
+      magic_item_prices: magic_item_rules
+  implementation: dnd2024:rule_weapons
+splat_contracts:
+- id: dnd2024:rule_weapons
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - item_effects
+  events: []
+  capabilities:
+  - equipment
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 89
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_weapons
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: e97cd3a5cd509589dd798d8bd3cb36e5618013a91d149259a550acba59ec40b4
   parent_name: Weapons
   line_span:
     first: 7659
@@ -43,7 +75,8 @@ splat_clauses:
     half its cost when sold. In contrast, trade goods and valuables—like gems and art objects—retain their
     full value in the marketplace. “Magic Items” has prices for magic items.'
   sha256: 9fdd56366ef8834f5ebcc02e56a2799fd481cd71d91b0b97b667c5026eb5a8bd
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Weapons

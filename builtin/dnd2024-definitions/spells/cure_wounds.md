@@ -28,18 +28,77 @@ splat_spell:
   ritual: false
   range:
     mode: touch
+splat_rule:
+  mechanic: dnd2024:spells/cure_wounds
+  implementation: dnd2024:spell_cure_wounds
+  parameters:
+    target:
+      kind: creature
+      count: 1
+      visible_to_caster: false
+      touch: true
+    healing:
+      dice:
+        count: 2
+        sides: 8
+        add:
+          binding: spellcasting_modifier
+    scaling:
+      per_slot_above: 1
+      healing_dice: 2
+      sides: 8
+splat_contracts:
+- id: dnd2024:spell_cure_wounds
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    spellcasting_modifier:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - healing
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - healing
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: fa510b85cff9347ef844da3f8aa575308bd750368b6ce9a501185da8fd5e29b0
   source_path: builtin/srd-5.2.1/spell/cure_wounds.md
   pages:
   - 121
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_cure_wounds
+  conversion_gaps: []
   execution_profiles:
   - dnd2024:spells/cure_wounds
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 5c071ab9ef50faef6c107fdef36f8276813b602ea67864f9dc2d764646bf6b0f
 splat_clauses:
 - key: source_rules
   text: '# Cure Wounds Level 1 Abjuration (Bard, Cleric, Druid, Paladin, Ranger) Casting Time: Action
@@ -47,7 +106,8 @@ splat_clauses:
     Points equal to 2d8 plus your spellcasting ability modifier. Using a Higher-Level Spell Slot. The
     healing increases by 2d8 for each spell slot level above 1.'
   sha256: a05543213c0a487fe621054bfe72470aba9cdda6d2fe2bbcbf8556631baac73e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Cure Wounds

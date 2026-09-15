@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/exploration_adventuring_equipment
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 11
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 097535c37b862131df218b38d1bc03cc734e2a55b125ce5b7c449dfb74d825a4
   parent_name: Exploration
   line_span:
     first: 599
@@ -38,7 +39,7 @@ splat_clauses:
     The weapons in “Equipment” can also be used for more than battle; you could use a Quarterstaff, for
     example, to push a sinister-looking button that you’re reluctant to touch.'
   sha256: c804941a61e64b1359a5eac6c45747e813e689208f7f339848f85a8cc8315286
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Adventuring Equipment

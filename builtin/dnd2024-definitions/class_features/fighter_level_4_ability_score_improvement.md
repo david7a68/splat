@@ -12,18 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/fighter_level_4_ability_score_improvement
-  parameters: {}
+  parameters:
+    class: fighter
+    grant_at_class_levels:
+    - 4
+    - 6
+    - 8
+    - 12
+    - 14
+    - 16
+    feat_choice:
+      count_each: 1
+      default:
+        key: dnd2024:feats/general_feats_ability_score_improvement
+      allowed_categories: any
+      must_meet_prerequisites: true
+    class_scope:
+      class: fighter
+      minimum_level: 4
+  implementation: dnd2024:class_features_fighter_level_4_ability_score_improvement
+splat_contracts:
+- id: dnd2024:class_features_fighter_level_4_ability_score_improvement
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - feat_grants
+  events:
+  - character.level_gained
+  capabilities:
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 48
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_fighter_level_4_ability_score_improvement
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 3578e7b2b283b2e35a351bda3ec78d02d46a525d2fd731c4af8771c25fcc1d19
   parent_name: Fighter
   line_span:
     first: 4008
@@ -34,7 +69,8 @@ splat_clauses:
     or another feat of your choice for which you qualify. You gain this feature again at Fighter levels
     6, 8, 12, 14, and 16.'
   sha256: beca968644342e36684100f8c47ca810420ec9de182110698477fb1da30fa6a6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 4: Ability Score Improvement

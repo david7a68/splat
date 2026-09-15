@@ -12,24 +12,56 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/enemy
-  parameters: {}
+  parameters:
+    predicate:
+      any:
+      - fights_against_subject
+      - actively_works_to_harm_subject
+      - rule_designated_enemy
+      - gm_designated_enemy
+    gm_designation:
+      chooser: gm
+      options:
+      - true
+      - false
+  implementation: dnd2024:glossary_enemy
+splat_contracts:
+- id: dnd2024:glossary_enemy
+  inputs:
+    subject:
+      type: participant
+      required: true
+    other:
+      type: participant
+      required: true
+    relationship:
+      type: choice
+      required: true
+  outputs:
+  - is_enemy
+  events: []
+  capabilities:
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 454e10ecf2caaeba46dcf4f4000ea40d351bf80d4335ffa40f5e048827cff42f
   source_path: builtin/srd-5.2.1/glossary/enemy.md
   pages:
   - 181
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_enemy
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 75b5851e61635f8606253fe28c20961c4375e82f56ea4a7ddafbe02b63403eaf
 splat_clauses:
 - key: source_rules
   text: '# Enemy A creature is your enemy if it fights against you in combat, actively works to harm you,
     or is designated as your enemy by the rules or GM.'
   sha256: 7ad681401a91d8604e7fe4ed81a2fe0f8aea5a9799700c0570febad5784c30a5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Enemy

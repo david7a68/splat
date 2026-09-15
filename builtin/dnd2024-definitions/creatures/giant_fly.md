@@ -92,17 +92,86 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_fly
+  implementation: dnd2024:creature_giant_fly
+  parameters:
+    features: {}
+    senses:
+      darkvision: 60
+      passive_perception: 10
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_giant_fly
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.created
+  capabilities:
+  - creature_statistics
+  - attacks
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f75cd007088c137aab508a6a0e9f88c41e59e29f96534d218c07428bd77c3177
   source_path: builtin/srd-5.2.1/creature/giant_fly.md
   pages:
   - 222
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_fly
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 452f7563d3ab8e30fad8d7bbf392df8574c652198bcbf33cd2961404a5e7bff5
 splat_clauses:
 - key: source_rules
   text: '# Giant Fly Large Beast, Unaligned AC 11 Initiative +1 (11) HP 19 (3d10 + 3) Speed 30 ft., Fly
@@ -144,7 +213,8 @@ splat_clauses:
     be used again until 2 days have passed. While in raven form, the figurine grants you the ability to
     cast Animal Messenger on it.'
   sha256: 6d0a4000b2b89dadbecfaae805065131e592155e9ff5c619c5158b5b45d8bf4a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Fly

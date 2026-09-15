@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/bard_bard_subclass
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 35
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: af1d013bb9baead30eabaf95238b63f862d5a443aa2a0904325c16a2f4337351
   parent_name: Bard
   line_span:
     first: 2871
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Bard Subclass:'
   sha256: ceb2a70ce8bb3df55f81103ff8476a544119875c52ea310f8efa48b52e83d20c
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Bard Subclass:

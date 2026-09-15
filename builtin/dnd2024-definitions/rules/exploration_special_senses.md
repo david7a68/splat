@@ -12,18 +12,37 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/exploration_special_senses
-  parameters: {}
+  parameters:
+    senses:
+    - key: dnd2024:glossary/blindsight
+    - key: dnd2024:glossary/darkvision
+    - key: dnd2024:glossary/tremorsense
+    - key: dnd2024:glossary/truesight
+  implementation: dnd2024:rules_exploration_special_senses
+splat_contracts:
+- id: dnd2024:rules_exploration_special_senses
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - sense_definitions
+  events: []
+  capabilities:
+  - senses
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 11
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_exploration_special_senses
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 2641d08696d8158cb8e1c3ce81df5dcc3b3d2a7c53d6d5f9bf032077f1dd463d
   parent_name: Exploration
   line_span:
     first: 646
@@ -34,7 +53,8 @@ splat_clauses:
     situations. “Rules Glossary” defines the following special senses: Blindsight Darkvision Tremorsense
     Truesight'
   sha256: 0aed5efd076bdb8cd4838e4a4024f61d0fc9fcd91502063b9f65dd34cbfe8349
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Special Senses

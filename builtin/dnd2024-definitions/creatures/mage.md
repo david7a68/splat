@@ -59,17 +59,212 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/mage
+  implementation: dnd2024:creature_mage
+  parameters:
+    features:
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: arcane_burst
+          count: 3
+      arcane_burst:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee_or_ranged
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 6
+          reach_ft: 5
+          range_ft: 120
+          long_range_ft: null
+        hit:
+          damage:
+          - average: 16
+            roll:
+              count: 3
+              sides: 8
+              modifier: 3
+            type: force
+      spellcasting:
+        economy: action
+        operation: spellcasting
+        ability: intelligence
+        components_waived: []
+        save_dc: 14
+        options:
+        - spell:
+            key: dnd2024:spells/detect_magic
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/light
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/mage_armor
+          usage:
+            kind: at_will
+          included_in_header_ac: true
+        - spell:
+            key: dnd2024:spells/mage_hand
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/prestidigitation
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/fireball
+          usage:
+            kind: daily
+            uses: 2
+            pool: per_spell
+            recovery: long_rest
+          cast_level: 4
+        - spell:
+            key: dnd2024:spells/invisibility
+          usage:
+            kind: daily
+            uses: 2
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/cone_of_cold
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/fly
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        material_components_available: true
+      misty_step:
+        economy: bonus_action
+        resource:
+          kind: daily
+          uses: 3
+          recovery: long_rest
+        operation: cast_spell
+        spell:
+          key: dnd2024:spells/misty_step
+        ability: intelligence
+      protective_magic:
+        economy: reaction
+        resource:
+          kind: daily
+          uses: 3
+          recovery: long_rest
+        operation: spell_choice
+        options:
+        - operation: cast_spell
+          spell:
+            key: dnd2024:spells/counterspell
+        - operation: cast_spell
+          spell:
+            key: dnd2024:spells/shield
+        trigger: chosen_spell.normal_trigger
+        ability: intelligence
+        save_dc: 14
+    skill_totals:
+      arcana: 6
+      history: 6
+      perception: 4
+    gear:
+    - item: wand
+      quantity: 1
+    senses:
+      passive_perception: 14
+    languages:
+      speaks:
+      - common
+      understands: []
+      additional_languages:
+        count: 3
+        chooser: creator
+        can_speak: true
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_mage
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - rest.completed
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - damage
+  - spellcasting
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 100c75a887b41b7f78fbb5daea234ea6e7ac417a211992244ca1cd5b09f90b55
   source_path: builtin/srd-5.2.1/creature/mage.md
   pages:
   - 305
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_mage
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 5fd74c2ce31d8fe7622cbb28faed94f3ea8df653e537840cae3aa53a3be33039
 splat_clauses:
 - key: source_rules
   text: '# Mage Medium or Small Humanoid (Wizard), Neutral AC 15 Initiative +2 (12) HP 81 (18d8) Speed
@@ -84,7 +279,8 @@ splat_clauses:
     spellcasting ability as Spellcasting. ### Reactions Protective Magic (3/Day). The mage casts Counterspell
     or Shield in response to the spell’s trigger, using the same spellcasting ability as Spellcasting.'
   sha256: 29124c627e67192586014a240fc0341d8224d9056da5bb1f069a17cb72c12838
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Mage

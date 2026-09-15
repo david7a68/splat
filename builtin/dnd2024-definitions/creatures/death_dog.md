@@ -57,17 +57,178 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/death_dog
+  implementation: dnd2024:creature_death_dog
+  parameters:
+    features:
+      bite:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 4
+          amount:
+            dice:
+              count: 1
+              sides: 4
+            add: 2
+          damage_type: piercing
+        - op: if
+          test:
+            target_kind: creature
+          then:
+          - op: save
+            ability: constitution
+            dc: 12
+            targets:
+              participant: target
+            failure:
+            - op: choose_by_predicate
+              test:
+                target_has_source_poison_effect: true
+              then:
+              - op: reduce_hit_point_maximum
+                average: 5
+                amount:
+                  dice:
+                    count: 1
+                    sides: 10
+                  add: 0
+              else:
+              - op: condition
+                condition: poisoned
+                ends:
+                  event: repeated_save.success
+                while_active:
+                  long_rest_restores_hp_maximum: false
+                  repeat_save:
+                    ability: constitution
+                    dc: 12
+                    interval:
+                      hours: 24
+                    success: end_effect
+                    failure:
+                    - op: reduce_hit_point_maximum
+                      average: 5
+                      amount:
+                        dice:
+                          count: 1
+                          sides: 10
+                        add: 0
+            success: []
+        reach_feet: 5
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: bite
+          count: 2
+    skill_totals:
+      perception: 5
+      stealth: 4
+    defenses:
+      immunities:
+        conditions:
+        - blinded
+        - charmed
+        - deafened
+        - frightened
+        - stunned
+        - unconscious
+    senses:
+      passive_perception: 15
+      special:
+      - sense: darkvision
+        range_feet: 120
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_death_dog
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - repeated_save.success
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 6c7269d6ccf79f229b940ad16bc3d6a77a5f81cf704bbd53172fc213b51e3717
   source_path: builtin/srd-5.2.1/creature/death_dog.md
   pages:
   - 279
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_death_dog
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 555813805c4553fb06505fa85e5161985bfc1d8cfa5b245e195151905ec3487f
 splat_clauses:
 - key: source_rules
   text: '# Death Dog Medium Monstrosity, Neutral Evil AC 12 Initiative +2 (12) HP 39 (6d8 + 12) Speed
@@ -81,7 +242,8 @@ splat_clauses:
     the save every 24 hours that elapse, ending the effect on itself on a success. Subsequent Failures:
     The Poisoned target’s Hit Point maximum decreases by 5 (1d10).'
   sha256: d1fce97bccab648b2af928eb2892c566c103aa12e45b74d78f71351385582bd6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Death Dog

@@ -15,17 +15,129 @@ splat_item:
   rarity: rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/instant_fortress
+  implementation: dnd2024:item_instant_fortress
+  parameters:
+    statuette_size_inches: 1
+    material: adamantine
+    expand:
+      action: magic
+      place_on_ground: true
+      command_word: true
+      displace:
+        creatures: unoccupied_adjacent_outside_space
+        objects: outside_tower
+        exclude_worn_carried_objects: true
+    shrink:
+      command_word: true
+      requires: tower_empty
+      preserve_damage: true
+    tower:
+      width_ft: 20
+      length_ft: 20
+      height_ft: 30
+      arrow_slits: all_sides
+      battlement: true
+      floors: 2
+      connector:
+        chooser: user
+        options:
+        - ladder
+        - staircase
+        - ramp
+      roof_access: trapdoor
+      ground_door:
+        faces: user_at_creation
+        open:
+          actor: attuned_user
+          action: bonus_action
+          command: true
+        immune_to:
+        - key: dnd2024:spells/knock
+        immune_to_similar_opening_magic: true
+      cannot_tip_over: true
+      component_statistics:
+        components:
+        - roof
+        - door
+        - walls
+        ac: 20
+        hp: 100
+        immunity:
+        - bludgeoning
+        - piercing
+        - slashing
+        immunity_exception: siege_equipment
+        resistance: all_other_damage
+    repair:
+      only_spell:
+        key: dnd2024:spells/wish
+      counts_as: replicate_spell_level_8_or_lower
+      hp_restored: all
+    attunement:
+      required: true
+    common_rules:
+    - key: dnd2024:rules/magic_item_categories_wondrous_items
+    - key: dnd2024:rules/activating_a_magic_item_spells_cast_from_items
+splat_contracts:
+- id: dnd2024:item_instant_fortress
+  inputs:
+    actor:
+      type: participant
+      required: true
+    source_item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choice:
+      required: false
+      type: choice
+    event:
+      required: false
+      type: event
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - item_state
+  - effects
+  - resolutions
+  events:
+  - action.magic_pending
+  - action.bonus_pending
+  - command.issued
+  - spell.cast_completed
+  - damage.pending
+  - attunement.changed
+  capabilities:
+  - inventory
+  - effects
+  - spellcasting
+  - roll_resolution
+  - spatial_state
+  - participant_state
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 8e6f33e5172874b61a3c68c2631a8b2d4a67718a42accb27d4b7e524cd7eea7c
   source_path: builtin/srd-5.2.1/magic_item/instant_fortress.md
   pages:
   - 227
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_instant_fortress
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_2.md
+  specification_sha256: 305c94be654ba10cac888f4c57aa7047a832d353936a56de1bea8b737c28c2e9
 splat_clauses:
 - key: source_rules
   text: '# Instant Fortress Wondrous Item, Rare (Requires Attunement) As a Magic action, you can place
@@ -45,7 +157,8 @@ splat_clauses:
     (this use of the spell counts as replicating a spell of level 8 or lower). Each casting of Wish causes
     the tower to regain all its Hit Points.'
   sha256: e98727bada481b579ae11821ed621f8d9899096d3f0a035ebc1d6b9c706da750
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Instant Fortress

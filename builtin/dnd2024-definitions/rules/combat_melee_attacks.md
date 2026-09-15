@@ -12,18 +12,47 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_melee_attacks
-  parameters: {}
+  parameters:
+    target_distance_maximum: attacker_reach
+    attack_kind: melee
+  implementation: dnd2024:rules_combat_melee_attacks
+splat_contracts:
+- id: dnd2024:rules_combat_melee_attacks
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    event:
+      type: event
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - action_options
+  - effects
+  - resource_updates
+  events: []
+  capabilities:
+  - action_economy
+  - movement
+  - combat
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 15
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_combat_melee_attacks
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: a3ea52add86a853d9229b4a0c0870b2ec7cc0e3090d3d86437ceeb01a05a6133
   parent_name: Combat
   line_span:
     first: 1030
@@ -34,7 +63,8 @@ splat_clauses:
     typically uses a handheld weapon or an Unarmed Strike. Many monsters make melee attacks with claws,
     teeth, or other body parts. A few spells also involve melee attacks.'
   sha256: 509d71ba218a36a0cb69628f5a3e81f5cf6ddd3663e2e8a8c9d1264b0c704740
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Melee Attacks

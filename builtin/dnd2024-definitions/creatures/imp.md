@@ -62,18 +62,183 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/imp
+  implementation: dnd2024:creature_imp
+  parameters:
+    features:
+      magic_resistance:
+        economy: passive
+        advantage:
+          roll: saving_throw
+          against:
+          - spell
+          - magical_effect
+      sting:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 6
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 3
+          damage_type: piercing
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 0
+          damage_type: poison
+        reach_feet: 5
+      invisibility:
+        economy: action
+        op: cast_spell
+        spell:
+          key: dnd2024:spells/invisibility
+        ability: charisma
+        components_waived:
+        - verbal
+        - somatic
+        - material
+        targets: self
+        cast_level: spell_minimum
+      shape_shift:
+        economy: action
+        op: shape_shift
+        forms:
+        - form: rat
+          speeds_feet:
+            walk: 20
+        - form: raven
+          speeds_feet:
+            walk: 20
+            fly: 60
+        - form: spider
+          speeds_feet:
+            walk: 20
+            climb: 20
+        - form: 'true'
+        retain_statistics_except:
+        - speed
+        equipment_transformed: false
+    skill_totals:
+      deception: 4
+      insight: 3
+      stealth: 5
+    defenses:
+      resistances:
+        damage_types:
+        - cold
+      immunities:
+        damage_types:
+        - fire
+        - poison
+        conditions:
+        - poisoned
+    senses:
+      passive_perception: 11
+      special:
+      - sense: darkvision
+        range_feet: 120
+        magical_darkness_unimpeded: true
+    communication:
+      speaks:
+      - common
+      - infernal
+      understands:
+      - common
+      - infernal
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_imp
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - shapechanging
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 9ed613d61ad6e883d9a253e9ebe8d4688bc6e054cc9ef7f1b266527e8a29214d
   source_path: builtin/srd-5.2.1/creature/imp.md
   pages:
   - 300
   - 301
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_imp
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: e30f5fd8fda6dc9e5595c2f64714d25322a033d785d6c5563565705f175a350b
 splat_clauses:
 - key: source_rules
   text: '# Imp Tiny Fiend (Devil), Lawful Evil AC 13 Initiative +3 (13) HP 21 (6d4 + 6) Speed 20 ft.,
@@ -88,7 +253,8 @@ splat_clauses:
     ft., Climb 20 ft.), or it returns to its true form. Its game statistics are the same in each form,
     except for its Speed. Any equipment it is wearing or carrying isn’t transformed.'
   sha256: 44646926b1c4cadbf1848200989b1327fc45d1f9a402d5bb4ea23e57253fb376
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Imp

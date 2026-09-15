@@ -32,17 +32,89 @@ splat_spell:
   material:
     description: a pentacle
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/banishment
+  implementation: dnd2024:spell_banishment
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 60
+    targets:
+      kind: creature
+      visible: true
+      range_feet: 30
+      count:
+        base: 1
+        increment_per_slot_above: 1
+        base_slot: 4
+    save:
+      ability: charisma
+      dc: spell_save_dc
+      success: unaffected
+    failure:
+      transport: harmless_demiplane
+      condition_while_there: incapacitated
+    spell_end:
+      default:
+        return: original_space
+        occupied_fallback: nearest_unoccupied_space
+      full_minute_exception:
+        types:
+        - aberration
+        - celestial
+        - elemental
+        - fey
+        - fiend
+        minimum_elapsed_seconds: 60
+        return_to_original_plane: false
+        destination_plane:
+          chooser: gm
+          constraint: associated_with_target_creature_type
+        destination_location: random
+splat_contracts:
+- id: dnd2024:spell_banishment
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    destination_plane_choice:
+      required: false
+      type: choice
+    save_dc:
+      type: integer
+      required: true
+  outputs:
+  - effects
+  - transports
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - planar_travel
+  - conditions
+  - tests
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 54084a29a8c3e8e5533d74d006a5fdab90a23f4b0043dc3d29cbb4d61d1ee2bd
   source_path: builtin/srd-5.2.1/spell/banishment.md
   pages:
   - 112
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_banishment
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: e4b3e4d90a30c8ee12fa01415d4d8ece4e4244293915b310e94963dcb625e1ad
 splat_clauses:
 - key: source_rules
   text: '# Banishment Level 4 Abjuration (Cleric, Paladin, Sorcerer, Warlock, Wizard) Casting Time: Action
@@ -55,7 +127,8 @@ splat_clauses:
     on a plane (GM’s choice) associated with its creature type. Using a Higher-Level Spell Slot. You can
     target one additional creature for each spell slot level above 4.'
   sha256: a51d3f1c634c05a6117c8dbb9935cf8e014e20d4bfe8b198c4c36c4ad1d89ed1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Banishment

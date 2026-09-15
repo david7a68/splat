@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/armor_light_medium_or_heavy_armor
-  parameters: {}
+  parameters:
+    when:
+      wearing_armor_category:
+      - light
+      - medium
+      - heavy
+      trained_in_worn_armor: false
+    effects:
+      d20_tests_using:
+      - strength
+      - dexterity
+      roll_mode: disadvantage
+      spellcasting_allowed: false
+  implementation: dnd2024:rule_armor_light_medium_or_heavy_armor
+splat_contracts:
+- id: dnd2024:rule_armor_light_medium_or_heavy_armor
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - item_effects
+  events: []
+  capabilities:
+  - equipment
+  - proficiency
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 92
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_armor_light_medium_or_heavy_armor
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 48ad1eeccdd3c1bb94412b5ba3d2cd501d5c6bcac2aad8b2f7be7210475454cc
   parent_name: Armor
   line_span:
     first: 7952
@@ -34,7 +64,8 @@ splat_clauses:
     it, you have Disadvantage on any D20 Test that involves Strength or Dexterity, and you can’t cast
     spells.'
   sha256: a8fa78c33cb17fce3dd4a69a32deefcf6b953b2ac07d371149b757c6c027d8a9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Light, Medium, or Heavy Armor

@@ -59,17 +59,121 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_wolf_spider
+  implementation: dnd2024:creature_giant_wolf_spider
+  parameters:
+    features:
+      spider_climb:
+        economy: trait
+        operation: passive_rule
+        climb_difficult_surfaces: true
+        climb_ceilings: true
+        ability_check_required: false
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 5
+            roll:
+              count: 1
+              sides: 4
+              modifier: 3
+            type: piercing
+          - average: 5
+            roll:
+              count: 2
+              sides: 4
+              modifier: 0
+            type: poison
+    skill_totals:
+      perception: 3
+      stealth: 7
+    senses:
+      blindsight: 10
+      darkvision: 60
+      passive_perception: 13
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_giant_wolf_spider
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 439412db81b28fb658ff0db148f569af4d759354dcfb9c281a39a55ab7c531c1
   source_path: builtin/srd-5.2.1/creature/giant_wolf_spider.md
   pages:
   - 355
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_wolf_spider
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 62092cd6cfaf56ebf3c48705924438229eacef30a08fc89029acad5ec0521dcd
 splat_clauses:
 - key: source_rules
   text: '# Giant Wolf Spider Medium Beast, Unaligned AC 13 Initiative +3 (13) HP 11 (2d8 + 2) Speed 40
@@ -80,7 +184,8 @@ splat_clauses:
     Actions Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Piercing damage plus 5 (2d4) Poison
     damage.'
   sha256: 3985cf7c707e60edb9471f3e25fedafdd1931d2441645d9f9b4a3e620a0afd95
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Wolf Spider

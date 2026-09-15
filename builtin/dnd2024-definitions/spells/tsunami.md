@@ -24,17 +24,130 @@ splat_spell:
   ritual: false
   range:
     mode: 1 mile
+splat_rule:
+  mechanic: dnd2024:spells/tsunami
+  implementation: dnd2024:spell_tsunami
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_rounds: 6
+    wall:
+      origin: chosen_point
+      range_miles: 1
+      maximum_length_feet: 300
+      maximum_height_feet: 300
+      maximum_duration_rounds: 6
+      maximum_thickness_feet: 50
+    initial:
+      targets: all_creatures_in_area
+      save:
+        ability: strength
+        dc: spell_save_dc
+      failure_damage:
+        dice: 6d10
+        type: bludgeoning
+      success_damage_scale:
+        numerator: 1
+        denominator: 2
+    movement:
+      event: turn.start
+      subject: caster
+      only_turns_after_wall_appeared: true
+      distance_feet: 50
+      direction: away_from_caster
+      carry: creatures_inside
+    moving_wall_damage:
+      targets:
+        kinds: creature
+        maximum_size: huge
+        positions:
+        - inside_wall
+        - space_entered_by_wall
+      save:
+        ability: strength
+        dc: spell_save_dc
+        success: no_damage
+      failure_damage:
+        initial_dice: 5d10
+        type: bludgeoning
+        later_round_dice_decrement: 1
+      damage_limit:
+        count: 1
+        per: round
+        scope: creature
+    decay:
+      event: turn.end
+      subject: caster
+      sequence: after_wall_movement_turn
+      height_decrease_feet: 50
+      future_damage_decrease_d10: 1
+      height_zero: end_spell
+    trapped_movement:
+      method: swimming
+      check:
+        ability: strength
+        skill: athletics
+        dc: spell_save_dc
+      success: may_move
+      failure: cannot_move
+      exit_wall: fall_to_ground
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_tsunami
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    origin:
+      type: location
+      required: true
+    wall_dimensions:
+      type: choice
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - damage
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  - turn.end
+  - turn.start
+  capabilities:
+  - spellcasting
+  - effects
+  - movement
+  - areas
+  - damage
+  - tests
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 768941e57c87066f3085c1b71efee6c54f1c427f426a89c199d2d2bbc72e148e
   source_path: builtin/srd-5.2.1/spell/tsunami.md
   pages:
   - 171
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_tsunami
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: cf9493a951d587739d09db3c9f61636124021c28b8e62c01f67600c79c7c84e9
 splat_clauses:
 - key: source_rules
   text: '# Tsunami Level 8 Conjuration (Druid) Casting Time: 1 minute Range: 1 mile Components: V, S Duration:
@@ -52,7 +165,8 @@ splat_clauses:
     save DC to move at all. If it fails the check, it can’t move. A creature that moves out of the wall
     falls to the ground.'
   sha256: 78fa46551b66045ea80a64fbc1f27eda0b262344abed5cb22773536044346c6b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tsunami

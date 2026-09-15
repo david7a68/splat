@@ -29,17 +29,87 @@ splat_spell:
   material:
     description: a crystal bead
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/tiny_hut
+  implementation: dnd2024:spell_tiny_hut
+  parameters:
+    spell_lifetime:
+      concentration: false
+      maximum_seconds: 28800
+    area:
+      shape: emanation
+      radius_feet: 10
+      origin: caster_at_cast
+      stationary: true
+    cast_failure:
+      if: any_creature_in_area_not_fully_encapsulated
+    crossing:
+      creatures_and_objects_present_at_cast: freely_allowed
+      all_other_creatures_and_objects: barred
+    spell_barrier:
+      maximum_spell_level_blocked: 3
+      cast_through: forbidden
+      effects_extend_inside: forbidden
+    interior:
+      atmosphere: comfortable_and_dry
+      weather_independent: true
+      light_choice:
+        chooser: caster
+        economy: none
+        options:
+        - dim
+        - darkness
+    appearance:
+      outside: opaque
+      color: caster_choice
+      inside: transparent
+    early_end_conditions:
+    - caster_leaves_area
+    - caster_casts_tiny_hut_again
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_tiny_hut
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    color:
+      type: choice
+      required: true
+    lighting_choice:
+      type: choice
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - areas
+  - magic_suppression
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: a5ebc50fac2e7218b601772e360cf00a3f002730876290fe299c162afe0e30eb
   source_path: builtin/srd-5.2.1/spell/tiny_hut.md
   pages:
   - 169
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_tiny_hut
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 6625da3e253cc2998b24fabbe5cc3f020f0f7bc076c44f3ad49014c470448753
 splat_clauses:
 - key: source_rules
   text: '# Tiny Hut Level 3 Evocation (Bard, Wizard) Casting Time: 1 minute or Ritual Range: Self Components:
@@ -53,7 +123,8 @@ splat_clauses:
     required). The Emanation is opaque from the outside and of any color you choose, but it’s transparent
     from the inside. The spell ends early if you leave the Emanation or if you cast it again.'
   sha256: 22ecc468a47aa8778230e9e1a0395a09fdc02eb6ebd40ce9cee3d29ee30a0e58
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tiny Hut

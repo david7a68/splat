@@ -12,18 +12,42 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/sorcerer_seeking_spell
-  parameters: {}
+  parameters:
+    trigger: spell_attack_miss
+    cost_sorcery_points: 1
+    reroll_d20: 1
+    must_use_new_roll: true
+    compatible_with_other_metamagic: true
+  implementation: dnd2024:rule_sorcerer_seeking_spell
+splat_contracts:
+- id: dnd2024:rule_sorcerer_seeking_spell
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - spell_modifications
+  events:
+  - attack.missed
+  capabilities:
+  - metamagic
+  - attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 67
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_sorcerer_seeking_spell
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 7d68e77ca0eb587131e3da3692b908b270e610c07b872eeeb1a759dbb6e532f4
   parent_name: Sorcerer
   line_span:
     first: 5682
@@ -34,7 +58,8 @@ splat_clauses:
     spend 1 Sorcery Point to reroll the d20, and you must use the new roll. You can use Seeking Spell
     even if you’ve already used a different Metamagic option during the casting of the spell.'
   sha256: eb2ff88f0cc865d68633f7e28b26745b61eb58f6d0e0358dc4c2d39c9e4d3d78
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Seeking Spell

@@ -12,18 +12,94 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/create_your_character_choose_languages
-  parameters: {}
+  parameters:
+    granted_languages:
+    - common
+    additional_standard_languages:
+      count: 2
+      selection:
+      - choose
+      - roll
+      dice:
+        count: 1
+        sides: 12
+      table:
+      - min: 1
+        max: 1
+        language: common_sign_language
+      - min: 2
+        max: 2
+        language: draconic
+      - min: 3
+        max: 4
+        language: dwarvish
+      - min: 5
+        max: 6
+        language: elvish
+      - min: 7
+        max: 7
+        language: giant
+      - min: 8
+        max: 8
+        language: gnomish
+      - min: 9
+        max: 9
+        language: goblin
+      - min: 10
+        max: 11
+        language: halfling
+      - min: 12
+        max: 12
+        language: orc
+    knowledge:
+    - communicate
+    - read
+    - write
+    additional_grants_source: features
+    rare_requires_feature: true
+    rare_languages:
+    - abyssal
+    - celestial
+    - deep_speech
+    - druidic
+    - infernal
+    - primordial
+    - sylvan
+    - thieves_cant
+    - undercommon
+    primordial:
+      dialects:
+      - aquan
+      - auran
+      - ignan
+      - terran
+      mutually_intelligible: true
+  implementation: dnd2024:rules_create_your_character_choose_languages
+splat_contracts:
+- id: dnd2024:rules_create_your_character_choose_languages
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - languages
+  events: []
+  capabilities:
+  - character_creation
+  - languages
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 20
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_create_your_character_choose_languages
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: b38e1f59ccb8fee5051bfb53a2aa1dad5879f5119e5af2d25c6121c6f26c490f
   parent_name: Create Your Character
   line_span:
     first: 1467
@@ -44,7 +120,8 @@ splat_clauses:
     dialects. Creatures that know one of these dialects can communicate with those that know a different
     one.'
   sha256: 8f036381f1f4dd9b4e005e72aa9f0c5dfe6132c2fd9d3d83f560dfbe7944fb1c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Choose Languages

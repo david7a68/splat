@@ -12,18 +12,41 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/weapons_sap
-  parameters: {}
+  parameters:
+    trigger: weapon_hits_creature
+    effect:
+      next_attack_roll: disadvantage
+      expires: start_of_attacker_next_turn
+  implementation: dnd2024:rule_weapons_sap
+splat_contracts:
+- id: dnd2024:rule_weapons_sap
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - effects
+  events:
+  - attack.hit
+  capabilities:
+  - weapon_mastery
+  - attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 90
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_weapons_sap
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 0c2864b4be23bfac45083f352b90554eaf7b0938ab0cb2b0521d2f897dd6ea64
   parent_name: Weapons
   line_span:
     first: 7797
@@ -33,7 +56,8 @@ splat_clauses:
   text: '# Sap If you hit a creature with this weapon, that creature has Disadvantage on its next attack
     roll before the start of your next turn.'
   sha256: b40763cd8c9feb83b4c0ee858e89a0ff9ace623441a3396dfdb96da0c6072082
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Sap

@@ -59,17 +59,231 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/gibbering_mouther
+  implementation: dnd2024:creature_gibbering_mouther
+  parameters:
+    features:
+      bite:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 2
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 0
+          damage_type: piercing
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: medium
+          then:
+          - op: condition
+            condition: prone
+        - op: if
+          test:
+            attack_reduces_target_hp_to: 0
+          then:
+          - op: kill
+          - op: absorb_body
+            equipment_remains: true
+        reach_feet: 5
+      blinding_spittle:
+        economy: action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: save
+        ability: dexterity
+        dc: 10
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: sphere
+            size_feet: 10
+            origin: chosen_point
+            origin_range_feet: 30
+        failure:
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 0
+          damage_type: radiant
+        - op: condition
+          condition: blinded
+          ends:
+            event: turn.end
+            participant: self
+            occurrence: next
+        success: []
+      aberrant_ground:
+        economy: passive
+        terrain:
+          area:
+            shape: emanation
+            radius_feet: 10
+            origin: self
+          surface: ground
+          difficult: true
+      gibbering:
+        economy: passive
+        trigger: creature.turn.start
+        requires:
+          self_incapacitated: false
+        op: save
+        ability: wisdom
+        dc: 10
+        targets:
+          kind: creature
+          count: all
+          range_feet: 20
+        failure:
+        - op: roll_behavior
+          roll:
+            dice:
+              count: 1
+              sides: 8
+            add: 0
+          duration: current_turn
+          table:
+          - roll_min: 1
+            roll_max: 4
+            behavior:
+              does_nothing: true
+          - roll_min: 5
+            roll_max: 6
+            behavior:
+              action_allowed: false
+              bonus_action_allowed: false
+              movement: all
+              direction: random
+          - roll_min: 7
+            roll_max: 8
+            behavior:
+              op: melee_attack
+              target: random_creature_within_reach
+              fallback: does_nothing
+        success: []
+    defenses:
+      immunities:
+        conditions:
+        - prone
+    senses:
+      passive_perception: 10
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_gibbering_mouther
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - creature.turn.start
+  - turn.end
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 2b994942dcab1a84a9c3781f9e5989f75744c3e40bb33dada65d9b05bb7bf9f8
   source_path: builtin/srd-5.2.1/creature/gibbering_mouther.md
   pages:
   - 288
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_gibbering_mouther
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 59238b7cfcae889e37e46ce68f41c4ded69291c0a3ee61603f8d11435cd78637
 splat_clauses:
 - key: source_rules
   text: '# Gibbering Mouther Medium Aberration, Chaotic Neutral AC 9 Initiative -1 (9) HP 52 (7d8 + 21)
@@ -89,7 +303,8 @@ splat_clauses:
     Sphere centered on a point within 30 feet. Failure: 7 (2d6) Radiant damage, and the target has the
     Blinded condition until the end of the mouther’s next turn.'
   sha256: 980f49ffe0f42c9a3e86bb635219c3558958484d01bb5b1aa2626d183bc0e301
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Gibbering Mouther

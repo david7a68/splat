@@ -28,17 +28,131 @@ splat_spell:
   material:
     description: burning incense worth 10+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/find_familiar
+  implementation: dnd2024:spell_find_familiar
+  parameters:
+    targeting:
+      kind: location
+      unoccupied: true
+      within_range: true
+    form:
+      chooser: caster
+      eligible:
+        type: beast
+        challenge_rating: 0
+      examples:
+      - bat
+      - cat
+      - frog
+      - hawk
+      - lizard
+      - octopus
+      - owl
+      - rat
+      - raven
+      - spider
+      - weasel
+      statistics: chosen_form
+      replace_type_choice:
+      - celestial
+      - fey
+      - fiend
+    behavior:
+      independent: true
+      obeys_commands: true
+      allies:
+      - caster
+      - caster_allies
+      initiative: own_roll
+      turn: own
+      attack_allowed: false
+      other_actions: normal
+    connection:
+      telepathy_range_feet: 100
+      shared_senses:
+        economy: bonus_action
+        duration: until_caster_next_turn_start
+        channels:
+        - vision
+        - hearing
+        special_senses: included
+    deliver_spell:
+      spell_range: touch
+      familiar_distance_to_caster_max_feet: 100
+      familiar_economy: reaction
+      timing: caster_casts_spell
+      delivery: familiar_touch
+    disappearance:
+      zero_hp: disappears_until_recast
+      dismissal:
+        economy: magic_action
+        options:
+        - temporary_pocket_dimension
+        - permanent
+      return:
+        requires: temporarily_dismissed
+        economy: magic_action
+        unoccupied: true
+        distance_feet: 30
+      on_zero_hp_or_pocket_dimension: leave_worn_and_carried_items_in_space
+    limit:
+      per_caster: 1
+      recast_with_existing: adopt_new_eligible_form
+    spell_lifetime:
+      concentration: false
+      maximum:
+        kind: instantaneous
+splat_contracts:
+- id: dnd2024:spell_find_familiar
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      type: location_list
+      required: true
+    forms:
+      type: definition_list
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - participants
+  - locations
+  events:
+  - spell.cast_completed
+  - health.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_effects
+  - participant_lifecycle
+  - forms
+  - perception
+  - controlled_participants
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 3dcfbef9417a26a3587314b6d4f66823d68fcdb620e26ff7b99b160abc0370be
   source_path: builtin/srd-5.2.1/spell/find_familiar.md
   pages:
   - 130
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_find_familiar
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 0f156165dfb04b59d6b140212d21370f9abd7d9ad4c5b04b01a8fbfd65ecab09
 splat_clauses:
 - key: source_rules
   text: '# Find Familiar Level 1 Conjuration (Wizard) Casting Time: 1 hour or Ritual Range: 10 feet Components:
@@ -63,7 +177,8 @@ splat_clauses:
     time. If you cast this spell while you have a familiar, you instead cause it to adopt a new eligible
     form.'
   sha256: 8244de8bd0dd43c6e3ab3366d3bdab60dbbb98c8bf1c31f935ae913a056d623a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Find Familiar

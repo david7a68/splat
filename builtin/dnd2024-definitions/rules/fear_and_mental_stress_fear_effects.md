@@ -12,18 +12,67 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/fear_and_mental_stress_fear_effects
-  parameters: {}
+  parameters:
+    trigger: supernaturally_frightful_encounter
+    default_save_ability: wisdom
+    failed_save_condition: frightened
+    dc_choice:
+      actor: gm
+      criterion: situation_terror
+      examples:
+      - situation: harmless_sarcophagus_apparition
+        dc: 10
+      - situation: magical_trap_private_worst_fear_illusion
+        dc: 15
+      - situation: abyss_portal_reveals_torment
+        dc: 20
+    default_repeat_save:
+      timing: end_of_each_target_turn
+      success: effect_ends
+    optional_riders:
+      actor: gm
+      duration: while_frightened
+      choices:
+      - must_take_action: dash
+        movement_direction: away_from_fear_source
+      - attacks_against_target: advantage
+      - per_turn_choose_exactly_one:
+        - movement
+        - action
+        - bonus_action
+  implementation: dnd2024:rule_fear_and_mental_stress_fear_effects
+splat_contracts:
+- id: dnd2024:rule_fear_and_mental_stress_fear_effects
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - turn.ended
+  capabilities:
+  - fear
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 196
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_fear_and_mental_stress_fear_effects
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: afabb17b8f2fddbe780e96bb2ec46600f7baf42f7bbfabdc821cafaf694ed9f7
   parent_name: Fear and Mental Stress
   line_span:
     first: 9693
@@ -44,7 +93,8 @@ splat_clauses:
     against the Frightened creature have Advantage. • The Frightened creature can do only one of the following
     on each of its turns: move, take an action, or take a Bonus Action.'
   sha256: 30e05be5c8cb514ac31ba7d88b3aea1be37794202942df3417a2f0bfe939c929
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Fear Effects

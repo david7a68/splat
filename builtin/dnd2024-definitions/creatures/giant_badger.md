@@ -60,18 +60,105 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_badger
+  implementation: dnd2024:creature_giant_badger
+  parameters:
+    skill_totals:
+      perception: 3
+    damage_resistances:
+    - poison
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 13
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 3
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 4
+              add: 1
+            average: 6
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_giant_badger
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 199fb22925b2205cb35d72de9640a7e602e066f85c9c7798b21e89a27738fae1
   source_path: builtin/srd-5.2.1/creature/giant_badger.md
   pages:
   - 349
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_badger
+  conversion_gaps: []
   execution_profiles:
   - dnd2024:creatures/giant_badger
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 2a17ebfd0231f47f775cf1439ab425e859a5ff2f610bbd577c9215a2c7624bc4
 splat_clauses:
 - key: source_rules
   text: '# Giant Badger Medium Beast, Unaligned AC 13 Initiative +0 (10) HP 15 (2d8 + 6) Speed 30 ft.,
@@ -80,7 +167,8 @@ splat_clauses:
     13 Languages None CR 1/4 (XP 50; PB +2) ### Actions Bite. Melee Attack Roll: +3, reach 5 ft. Hit:
     6 (2d4 + 1) Piercing damage.'
   sha256: ecb567856c27ca39b2ddd05c7d95a45086d29cfa0e38a8c2e2d43769d65103af
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Badger

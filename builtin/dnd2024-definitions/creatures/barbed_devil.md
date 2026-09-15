@@ -62,17 +62,251 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/barbed_devil
+  implementation: dnd2024:creature_barbed_devil
+  parameters:
+    features:
+      magic_resistance:
+        economy: passive
+        advantage:
+          roll: saving_throw
+          against:
+          - spell
+          - magical_effect
+      claws:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 6
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 10
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 3
+          damage_type: piercing
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+          then:
+          - op: condition
+            condition: grappled
+            escape_dc: 13
+            source: self
+            appendages:
+              kind: claw
+              available: 2
+              used: 2
+        reach_feet: 5
+      tail:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 6
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 14
+          amount:
+            dice:
+              count: 2
+              sides: 10
+            add: 3
+          damage_type: slashing
+        reach_feet: 10
+      hurl_flame:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 17
+          amount:
+            dice:
+              count: 5
+              sides: 6
+            add: 0
+          damage_type: fire
+        - op: if
+          test:
+            target_kind: object
+            flammable: true
+            worn: false
+            carried: false
+          then:
+          - op: ignite
+        range_feet: 150
+      multiattack:
+        economy: action
+        op: choose_sequence
+        choices:
+        - - op: use_feature
+            feature: claws
+            count: 1
+          - op: use_feature
+            feature: tail
+            count: 1
+        - - op: use_feature
+            feature: hurl_flame
+            count: 2
+      diabolical_restoration:
+        economy: passive
+        resource:
+          capacity: 1
+          recovery:
+          - long_rest
+          cost: 1
+        trigger: self.died
+        requires:
+          death_plane_not: nine_hells
+        op: revive
+        new_body: true
+        old_body: disappears
+        delay:
+          seconds: 0
+        hit_points: maximum
+        destination:
+          plane: nine_hells
+          location_choice: gm
+      barbed_hide:
+        economy: passive
+        trigger: self.turn.start
+        targets:
+          kind: creature
+          relation_any:
+          - grappled_by_self
+          - grappling_self
+          count: all
+        effects:
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 1
+              sides: 10
+            add: 0
+          damage_type: piercing
+    skill_totals:
+      deception: 5
+      insight: 5
+      perception: 8
+    defenses:
+      resistances:
+        damage_types:
+        - cold
+      immunities:
+        damage_types:
+        - fire
+        - poison
+        conditions:
+        - poisoned
+    senses:
+      passive_perception: 18
+      special:
+      - sense: darkvision
+        range_feet: 120
+        magical_darkness_unimpeded: true
+    communication:
+      speaks:
+      - infernal
+      understands:
+      - infernal
+      telepathy:
+        range_feet: 120
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_barbed_devil
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - self.died
+  - self.turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - grappling
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: e0234b167e18b365821fb783fec40e1e6d68e90bec785e195540338ea4b5674a
   source_path: builtin/srd-5.2.1/creature/barbed_devil.md
   pages:
   - 262
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_barbed_devil
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: ac81ae4868bcdc18045b36971a11ec70ee5e36a9f9f276369bfc67d86a254c23
 splat_clauses:
 - key: source_rules
   text: '# Barbed Devil Medium Fiend (Devil), Lawful Evil AC 15 Initiative +3 (13) HP 110 (13d8 + 52)
@@ -91,7 +325,8 @@ splat_clauses:
     damage. Hurl Flame. Ranged Attack Roll: +5, range 150 ft. Hit: 17 (5d6) Fire damage. If the target
     is a flammable object that isn’t being worn or carried, it starts burning.'
   sha256: ce0e62b0bacc1b76068d0c626265120ab122a2bc5db772b9a4f2b98b96a9ec70
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Barbed Devil

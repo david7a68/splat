@@ -12,19 +12,106 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/sorcerer_level_1_spellcasting
-  parameters: {}
+  parameters:
+    class: sorcerer
+    spellcasting_ability: charisma
+    spellcasting_focus: arcane_focus
+    save_dc:
+      op: add
+      args:
+      - 8
+      - var: actor.abilities.charisma.modifier
+      - var: actor.proficiency_bonus
+    spell_attack_bonus:
+      op: add
+      args:
+      - var: actor.proficiency_bonus
+      - var: actor.abilities.charisma.modifier
+    slots:
+      progression:
+        key: dnd2024:tables/sorcerer_progression
+      recovery:
+      - rest.long_completed
+      recover: all
+      pool: spellcasting
+    prepared_spells:
+      initial_count: 2
+      initial_spell_level: 1
+      progression:
+        table:
+          key: dnd2024:tables/sorcerer_progression
+        row:
+          var: actor.class_levels.sorcerer
+        column: prepared_spells
+      eligible_list: sorcerer
+      eligible_levels:
+        minimum: 1
+        maximum: available_class_slot_level
+      on_count_increase: choose_until_count_met
+      replacement:
+        event: character.level_gained
+        class: sorcerer
+        maximum: 1
+      always_prepared_from_other_class_features:
+        counts_against_limit: false
+        counts_as_class_spell: sorcerer
+    cantrips:
+      initial_count: 4
+      list: sorcerer
+      additional_levels:
+      - 4
+      - 10
+      additional_each: 1
+      replace:
+        event: character.level_gained
+        class: sorcerer
+        maximum: 1
+        same_list: true
+    class_scope:
+      class: sorcerer
+      minimum_level: 1
+  implementation: dnd2024:class_features_sorcerer_level_1_spellcasting
+splat_contracts:
+- id: dnd2024:class_features_sorcerer_level_1_spellcasting
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - spellcasting
+  - prepared_spells
+  - resources
+  events:
+  - character.level_gained
+  - rest.long_completed
+  - rest.short_completed
+  - spell.prepare
+  - spell.cast
+  capabilities:
+  - character_features
+  - spellcasting
+  - proficiencies
+  - d20_tests
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 64
   - 65
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_sorcerer_level_1_spellcasting
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 01ab12cbce2a92fd2646c9c81790acedf74f91475b084a053460e6863a6f2295
   parent_name: Sorcerer
   line_span:
     first: 5434
@@ -65,7 +152,8 @@ splat_clauses:
     ability for your Sorcerer spells. Spellcasting Focus. You can use an Arcane Focus as a Spellcasting
     Focus for your Sorcerer spells.'
   sha256: 46221fdb829867bef91982e416eacf018f3ce5bb1c1edded7c193e017fbd9518
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Spellcasting

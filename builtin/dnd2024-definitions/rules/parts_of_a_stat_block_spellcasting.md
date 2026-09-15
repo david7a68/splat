@@ -12,18 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_spellcasting
-  parameters: {}
+  parameters:
+    spellcasting_parameters_source: monster_stat_block
+    leveled_spell_default:
+      cast_level: lowest_possible
+      upcasting: false
+    specific_restrictions_apply: true
+    self_only_means: monster_only
+    components:
+      ignore_only_if_trait_says: true
+      required_materials_present: true
+      required_components_observable: true
+    long_casting:
+      minimum_minutes: 1
+      magic_action_each_turn: true
+      concentration_required: true
+      listing_in_action_does_not_shorten_cast: true
+      explicit_action_exception_overrides: true
+  implementation: dnd2024:rule_parts_of_a_stat_block_spellcasting
+splat_contracts:
+- id: dnd2024:rule_parts_of_a_stat_block_spellcasting
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - monster_parameters
+  events: []
+  capabilities:
+  - monsters
+  - spellcasting
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 257
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_parts_of_a_stat_block_spellcasting
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 0c56e62dd02d4ad7b8bdfdbb7537eba0809e3103c5980fa192dcf46119522f8d
   parent_name: Parts of a Stat Block
   line_span:
     first: 11171
@@ -44,7 +79,8 @@ splat_clauses:
     the action’s description states otherwise; the monster must take the Magic action on each of its turns
     and maintain Concentration to cast the spell, as described in “Rules Glossary.”'
   sha256: 60ba26d448068a364075f57aca63c6a414ac7b958739fbf1828f3a35dc2a0e30
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spellcasting

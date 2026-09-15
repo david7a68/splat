@@ -30,17 +30,111 @@ splat_spell:
   material:
     description: a handful of sand
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/dream
+  implementation: dnd2024:spell_dream
+  parameters:
+    targets:
+      dream_target:
+        kind: creature
+        known_to_caster: true
+        same_plane_as_caster: true
+      messenger:
+        choices:
+        - caster
+        - willing_touched_creature
+    trance:
+      condition: incapacitated
+      speed: 0
+      end_voluntarily_any_time: true
+      on_end: end_spell
+    dream:
+      requires: target_asleep
+      conversation_until:
+      - target_wakes
+      - spell_ends
+      messenger_can_shape:
+      - landscapes
+      - objects
+      - images
+      target_recall: perfect
+      target_initially_awake:
+        messenger_knows: true
+        choices:
+        - end_trance
+        - wait_for_sleep
+    terrifying_option:
+      message_word_limit: 10
+      save_after_message:
+        ability: wisdom
+        dc:
+          binding: save_dc
+        failure:
+          rest_benefits: false
+          damage_when_target_wakes:
+            dice:
+              count: 3
+              sides: 6
+              add: 0
+            type: psychic
+        success:
+          effect: none
+splat_contracts:
+- id: dnd2024:spell_dream
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    message:
+      required: false
+      type: text
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - knowledge
+  events:
+  - spell.cast_completed
+  - movement.completed
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - spatial_relationships
+  - conditions
+  - saving_throws
+  - knowledge
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: eb430e6735b0ba2f5c1f7049c2e4e0479d5dfefd67992c891de0c89d7bc54f6f
   source_path: builtin/srd-5.2.1/spell/dream.md
   pages:
   - 126
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_dream
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 5c183326e96db56a9a6c76338482d57519a2514d9df62b1c17d10b1471942c8b
 splat_clauses:
 - key: source_rules
   text: '# Dream Level 5 Illusion (Bard, Warlock, Wizard) Casting Time: 1 minute Range: Special Components:
@@ -57,7 +151,8 @@ splat_clauses:
     the target makes a Wisdom saving throw. On a failed save, the target gains no benefit from its rest,
     and it takes 3d6 Psychic damage when it wakes up.'
   sha256: 1839bfa4b8a2cb57e8c8baca8f9f146039df3baa6d2195c79628508949159aa7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dream

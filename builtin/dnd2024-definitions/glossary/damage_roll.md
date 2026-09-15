@@ -12,24 +12,52 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/damage_roll
-  parameters: {}
+  parameters:
+    amount:
+      op: add
+      args:
+      - var: rolled_total
+      - var: applicable_modifiers
+    apply_to: target
+  implementation: dnd2024:glossary_damage_roll
+splat_contracts:
+- id: dnd2024:glossary_damage_roll
+  inputs:
+    target:
+      type: object
+      required: true
+    rolled_total:
+      type: integer
+      required: true
+    applicable_modifiers:
+      type: integer
+      required: true
+  outputs:
+  - damage_amount
+  events:
+  - damage.rolled
+  capabilities:
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 64574babd0d607a0a4a017d2d7ec49f637e1866220a691802295432abd80737e
   source_path: builtin/srd-5.2.1/glossary/damage_roll.md
   pages:
   - 180
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_damage_roll
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 86cec1c5961a52ae629aba894f5b3208a5fb95864a1843fa76af87eb04f8bbd0
 splat_clauses:
 - key: source_rules
   text: '# Damage Roll A damage roll is a die roll, adjusted by any applicable modifiers, that deals damage
     to a target. See also “Playing the Game” (“Damage and Healing”).'
   sha256: 5a44d30e55b60c28b6ba9fcb9967eee5065c62d8460e8f0509ff796caa939376
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Damage Roll

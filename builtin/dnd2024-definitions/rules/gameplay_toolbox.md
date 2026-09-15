@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/gameplay_toolbox
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 192
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 7756bfc342ed4c6e5f08f0981f305f0a1cb88b5fca2b2aa178abca2ad22dbca0
   parent_name: Gameplay Toolbox
   line_span:
     first: 9325
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Gameplay Toolbox'
   sha256: 201b2087c605777a94d852ad636d8e7515547e7afd11f54e84146e6df8cda852
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Gameplay Toolbox

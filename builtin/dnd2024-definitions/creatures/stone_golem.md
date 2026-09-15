@@ -56,17 +56,200 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/stone_golem
+  implementation: dnd2024:creature_stone_golem
+  parameters:
+    damage_immunities:
+    - poison
+    - psychic
+    condition_immunities:
+    - charmed
+    - exhaustion
+    - frightened
+    - paralyzed
+    - petrified
+    - poisoned
+    senses:
+    - sense: darkvision
+      range_ft: 120
+    passive_perception: 10
+    languages:
+      speak: false
+      known:
+      - common
+      additional_choice_count: 2
+    features:
+      immutable_form:
+        economy: passive
+        op: shapechange.prohibit
+      magic_resistance:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - saving_throw
+        against:
+        - spell
+        - magical_effect
+      slam:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 10
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 6
+            average: 15
+          - type: force
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 0
+            average: 9
+      force_bolt:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 9
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 120
+          long: 120
+        hit:
+        - op: damage
+          components:
+          - type: force
+            amount:
+              dice:
+                count: 4
+                sides: 10
+              add: 0
+            average: 22
+      slow:
+        economy: bonus_action
+        op: spellcasting
+        profile:
+          ability: constitution
+          waived_components:
+          - verbal
+          - somatic
+          - material
+          save_dc: 17
+        choose_count: 1
+        choices:
+        - op: spell.cast
+          spell:
+            key: dnd2024:spells/slow
+        recharge:
+          die_sides: 6
+          success_min: 5
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      multiattack:
+        economy: action
+        op: multiattack
+        attacks:
+          count: 2
+          choices:
+          - slam
+          - force_bolt
+          combination: any
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_stone_golem
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_lifecycle
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: e13d5cfa07064dd2a50740b668344b3cbc7a4a3f4e8afb2eb1c0baeb60c2562d
   source_path: builtin/srd-5.2.1/creature/stone_golem.md
   pages:
   - 330
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_stone_golem
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 3dbec564d9524fec37e4ab2364b968ff67dd4d3d575084a3a35b0b66fd721c50
 splat_clauses:
 - key: source_rules
   text: '# Stone Golem Large Construct, Unaligned AC 18 Initiative +3 (13) HP 220 (21d10 + 105) Speed
@@ -81,7 +264,8 @@ splat_clauses:
     (Recharge 5–6). The golem casts the Slow spell, requiring no spell components and using Constitution
     as the spellcasting ability (spell save DC 17).'
   sha256: 7037884bd14ffbd1ffd1aa2b726e4ea8e5ce251130405e76bbabf5d0bd0b2b85
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Stone Golem

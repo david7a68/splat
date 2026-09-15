@@ -60,91 +60,147 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
-splat_traits:
-  condition_immunities:
-    rule: dnd2024:condition_immunities
-    parameters:
-      conditions:
-      - blinded
-      - charmed
-      - deafened
-      - frightened
-      - stunned
-      - unconscious
-  hold_breath:
-    rule: dnd2024:hold_breath
-    parameters:
-      duration:
-        value: 1
-        unit: hour
-  heads:
-    rule: dnd2024:hydra_heads_2024
-    parameters:
-      initial_heads: 5
-      damage_threshold_per_turn: 25
-      heads_lost_on_threshold: 1
-      death_when_heads: 0
-      regrow_at: owner_turn_end
-      regrow_per_lost_head: 2
-      lost_head_window: since_last_owner_turn
-      regrowth_requires_living_head: true
-      regrowth_prevented_by: fire_damage_since_last_owner_turn
-      healing_per_regrowth_event: 20
-      extra_reactions_per_head_beyond_first: 1
-      extra_reactions_allowed: opportunity_attack
-      extra_reactions_refresh: owner_turn_start
-      reaction_capacity_recomputed_at: owner_turn_start
-splat_actions:
-  bite:
-    name: Bite
-    activation:
-      economy: action
-      category: attack
-      timing: on_turn
-      cost_at: commit
+splat_rule:
+  mechanic: dnd2024:creatures/hydra
+  implementation: dnd2024:creature_hydra
+  parameters:
+    features:
+      hold_breath:
+        economy: trait
+        operation: passive_rule
+        hold_breath_seconds: 3600
+      multiple_heads:
+        economy: trait
+        operation: passive_rule
+        initial_heads: 5
+        head_loss:
+          trigger: damage_on_single_turn
+          threshold: 25
+          heads_lost: 1
+        dies_if_heads: 0
+        regrow:
+          event: self.turn_end
+          requires_living_head: true
+          unless_fire_damage_since_last_turn: true
+          heads_per_head_lost_since_last_turn: 2
+          heal_per_regrowth_event: 20
+      reactive_heads:
+        economy: trait
+        operation: passive_rule
+        extra_reaction_capacity:
+          max:
+          - 0
+          - subtract:
+            - stat: heads
+            - 1
+        refresh_event: self.turn_start
+        recompute_only_at_refresh: true
+        allowed_uses:
+        - opportunity_attack
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: bite
+          count:
+            stat: heads
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 8
+          reach_ft: 10
+        hit:
+          damage:
+          - average: 10
+            roll:
+              count: 1
+              sides: 10
+              modifier: 5
+            type: piercing
+    skill_totals:
+      perception: 6
+    damage_immunities: []
+    condition_immunities:
+    - blinded
+    - charmed
+    - deafened
+    - frightened
+    - stunned
+    - unconscious
+    senses:
+      darkvision: 60
+      passive_perception: 16
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_hydra
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
     targets:
-      chosen:
-        kind: creature
-        count:
-          min: 1
-          max: 1
-        allow_self: false
-        range:
-          feet: 10
-    rolls:
-      attack:
-        expression: 1d20
-        modifier: 8
-        scope: attack
-      damage:
-        expression: 1d10 + 5
-        scope: attack
-    steps:
-    - key: attack
-      operation: dnd2024:attack
-      kind: melee_weapon
-      target: chosen
-      roll: attack
-      on_hit:
-        damage:
-        - type: piercing
-          amount:
-            roll: damage
-  multiattack:
-    name: Multiattack
-    activation:
-      economy: action
-      category: attack
-      timing: on_turn
-      cost_at: commit
-    steps:
-    - key: heads
-      operation: dnd2024:hydra_heads_2024
-      parameters:
-        mode: multiattack
-        attack: bite
-        count: living_heads
-        pay_attack_economy_again: false
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - turn.ended
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - conditions
+  - damage
+  - creature_transformation
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
   status: specified
   category: creature
@@ -153,10 +209,11 @@ splat_conversion:
   pages:
   - 300
   engine_gaps: &id001
-  - dnd2024:hydra_heads_2024
-  - dnd2024:hold_breath
+  - dnd2024:creature_hydra
   conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 8dd9f43d3f2d86a0c69dfb118b1682966ad637371f2d294a53afd82dcd8ae639
 splat_clauses:
 - key: source_rules
   text: '# Hydra Huge Monstrosity, Unaligned AC 15 Initiative +4 (14) HP 184 (16d12 + 80) Speed 40 ft.,

@@ -15,17 +15,74 @@ splat_item:
   rarity: legendary
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/crystal_ball_of_mind_reading
+  implementation: dnd2024:item_crystal_ball_of_mind_reading
+  parameters:
+    equipped: touching
+    spells:
+    - spell:
+        key: dnd2024:spells/scrying
+      save_dc: 17
+      usage: at_will
+    - spell:
+        key: dnd2024:spells/detect_thoughts
+      save_dc: 17
+      targets:
+        visible_to_actor: true
+        maximum_distance_from_scrying_sensor_ft: 30
+      concentration: false
+      ends_on: linked_scrying_ends
+      usage: at_will
+    attunement_required: true
+splat_contracts:
+- id: dnd2024:item_crystal_ball_of_mind_reading
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - spell.cast_pending
+  - spell.ended
+  - item.attunement_completed
+  - item.attunement_ended
+  capabilities:
+  - item_effects
+  - item_spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 6c13018d67656afe5431f9257d648e91e32296057600ca2ee8653b4981570a76
   source_path: builtin/srd-5.2.1/magic_item/crystal_ball_of_mind_reading.md
   pages:
   - 216
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_crystal_ball_of_mind_reading
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: e9b7bf7becefede566fd8c325b18e3627fb5aaa4d33b82bedd621d0924845957
 splat_clauses:
 - key: source_rules
   text: '# Crystal Ball of Mind Reading Wondrous Item, Legendary (Requires Attunement) While touching
@@ -34,7 +91,8 @@ splat_clauses:
     to concentrate on this Detect Thoughts spell to maintain it during its duration, but it ends if the
     Scrying spell ends.'
   sha256: bfdd620d4d535f8a96c1fb957afc57e5da9e0eb9d6d78858fb7cc9289524e19f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Crystal Ball of Mind Reading

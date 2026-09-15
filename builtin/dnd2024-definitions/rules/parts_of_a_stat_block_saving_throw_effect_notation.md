@@ -12,18 +12,47 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_saving_throw_effect_notation
-  parameters: {}
+  parameters:
+    save_fields:
+    - ability
+    - dc
+    - target_eligibility
+    - failure_effect
+    - success_effect
+    half_damage_only:
+      damage_fraction: 0.5
+      rounding: floor
+      other_effects_applied: false
+  implementation: dnd2024:rule_parts_of_a_stat_block_saving_throw_effect_notation
+splat_contracts:
+- id: dnd2024:rule_parts_of_a_stat_block_saving_throw_effect_notation
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - monster_parameters
+  events: []
+  capabilities:
+  - monsters
+  - saving_throws
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 256
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_parts_of_a_stat_block_saving_throw_effect_notation
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: b4d0bc25566b4df106a6e22972c42786dad359c7cfa68cf42913283f4708d2af
   parent_name: Parts of a Stat Block
   line_span:
     first: 11148
@@ -36,7 +65,8 @@ splat_clauses:
     save means the target takes half as much damage (round down) as targets that fail the save, while
     also ignoring all other parts of the effect.'
   sha256: c37ad19ee811d4986075a7e19f55f0ad7f1347ddc2f1c3df6812ea003c6d3561
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Saving Throw Effect Notation

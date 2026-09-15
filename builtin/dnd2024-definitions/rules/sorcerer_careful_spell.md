@@ -12,19 +12,52 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/sorcerer_careful_spell
-  parameters: {}
+  parameters:
+    cost_sorcery_points: 1
+    trigger: casting_spell_forcing_other_creatures_to_save
+    selected_creatures_maximum:
+      op: max
+      args:
+      - 1
+      - variable: charisma_modifier
+    selected_creatures: spell_save_targets
+    selected_effects:
+      saving_throw: automatic_success
+      half_damage_on_save_becomes: 0
+  implementation: dnd2024:rule_sorcerer_careful_spell
+splat_contracts:
+- id: dnd2024:rule_sorcerer_careful_spell
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    charisma_modifier:
+      type: number
+      required: true
+  outputs:
+  - spell_modifications
+  events:
+  - spell.cast_pending
+  capabilities:
+  - metamagic
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 66
   - 67
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_sorcerer_careful_spell
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: f1d956bb433ca6ddad9bb5d113b9f8bca59680946630fb0ba7a01ce104622deb
   parent_name: Sorcerer
   line_span:
     first: 5632
@@ -37,7 +70,8 @@ splat_clauses:
     creature). A chosen creature automatically succeeds on its saving throw against the spell, and it
     takes no damage if it would normally take half damage on a successful save.'
   sha256: e67487c10d1da8fbe208e694505563f87efd09628767d4dfe7f43b0597e6da37
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Careful Spell

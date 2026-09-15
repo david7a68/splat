@@ -15,17 +15,117 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/energy_bow
+  implementation: dnd2024:item_energy_bow
+  parameters:
+    weapon_bonus:
+      attack: 1
+      damage: 1
+    ammunition:
+      requires_string: false
+      generation_trigger: firing_motion
+      kind: energy_arrow
+      damage_type: force
+      replaces_damage_type: piercing
+      disappears_on:
+      - hit
+      - miss
+      light:
+        bright_radius_ft: 20
+        additional_dim_ft: 20
+    arrow_of_restraint:
+      trigger: ranged_attack_against_creature
+      replace_damage: true
+      on_hit:
+        save:
+          ability: strength
+          dc: 15
+        failure:
+          condition: restrained
+          duration:
+            value: 1
+            unit: minute
+      escape:
+        actor: restrained_target
+        action: action
+        check:
+          ability: strength
+          skill: athletics
+          dc: 20
+        success: end_restraint
+    arrow_of_transport:
+      action: magic
+      range_ft: 60
+      target_seen: true
+      eligible:
+        any_of:
+        - kind: creature
+          willing: true
+          maximum_size: medium
+        - kind: object
+          worn_or_carried: false
+          fits_cube_ft: 5
+      destination:
+        range_from_user_ft: 10
+        seen: true
+        unoccupied: true
+      effect: teleport
+      attack_roll_required: false
+    energy_ladder:
+      action: magic
+      wall_range_ft: 60
+      maximum_length_ft: 60
+      duration:
+        value: 1
+        unit: minute
+      rungs: glowing_energy_arrows
+    attunement:
+      required: true
+splat_contracts:
+- id: dnd2024:item_energy_bow
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - equipment
+  - item_resources
+  - effects
+  - spatial_queries
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: bcbeaaaa03b0c554f1b4e373fdd1cc28f74b4469c0b3c2cda434a8d00356f7fc
   source_path: builtin/srd-5.2.1/magic_item/energy_bow.md
   pages:
   - 220
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_energy_bow
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: fd150631955bde5c801cf560fa85df8738c5e9826352989060bf719d252cf76f
 splat_clauses:
 - key: source_rules
   text: '# Energy Bow Weapon (Longbow or Shortbow), Very Rare (Requires Attunement) You gain a +1 bonus
@@ -47,7 +147,8 @@ splat_clauses:
     The arrows become glowing rungs that stick out of the wall, forming a magical ladder up to 60 feet
     long on the wall. This ladder lasts for 1 minute before disappearing.'
   sha256: 1a466a463e962f72b1651c940f976caa5aa72a96bd61f2452b3b73c25ac69d1b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Energy Bow

@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/create_your_character_step_5_character_creation_details
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 22
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 3d681c1d390dd824fb57287dead68e64a46cfa04773e5c1a14dd7bd254e80110
   parent_name: Create Your Character
   line_span:
     first: 1637
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Step 5: Character Creation Details Now fill in the rest of your character sheet.'
   sha256: 258a23a93d2b6cbc8d8f8e87a7f020b222b9f464a831d6b2a7810f5c6ccef92e
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Step 5: Character Creation Details

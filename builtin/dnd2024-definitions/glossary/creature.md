@@ -14,22 +14,23 @@ splat_rule:
   mechanic: dnd2024:glossary/creature
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: glossary
   source_sha256: 42a9c5e1128b5fa91d1b1beb95ee0a25ac687fb2942be87b6ed1cebdc88065dc
   source_path: builtin/srd-5.2.1/glossary/creature.md
   pages:
   - 179
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 69d949987b3a1f25c642ec93d89dee77a5740565de8af8d6ec98ed07c5cc9dd1
 splat_clauses:
 - key: source_rules
   text: '# Creature Any being in the game, including a player’s character, is a creature. See also “Creature
     Type.”'
   sha256: 8808be79b4c63906cac365d9ba4e1914a1a7c02f09c4963ce02e68a5a4ca153f
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Creature

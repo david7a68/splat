@@ -31,17 +31,101 @@ splat_spell:
   material:
     description: a piece of sunstone
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/sunburst
+  implementation: dnd2024:spell_sunburst
+  parameters:
+    area:
+      shape: sphere
+      radius_feet: 60
+      origin: chosen_point_within_range
+      illumination: sunlight
+    targets:
+      kind: creature
+      each_in_area: true
+    save:
+      ability: constitution
+      dc:
+        binding: save_dc
+      failure:
+        damage:
+          dice:
+            count: 12
+            sides: 6
+            add: 0
+          type: radiant
+        condition: blinded
+        duration_minutes: 1
+      success:
+        damage:
+          dice:
+            count: 12
+            sides: 6
+            add: 0
+          type: radiant
+        damage_fraction:
+          numerator: 1
+          denominator: 2
+    repeat_save:
+      requires: blinded_by_spell
+      event: target_turn_end
+      ability: constitution
+      success: end_effect_on_target
+    dispel:
+      in_area: true
+      effect: darkness
+      created_by: any_spell
+splat_contracts:
+- id: dnd2024:spell_sunburst
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  events:
+  - spell.cast_completed
+  - turn.end
+  - movement.completed
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - spatial_relationships
+  - conditions
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 2687bcee2ffc6ffce56de263e80ef5ab966e73c2e88c4e6d9b59806d7fa2ac86
   source_path: builtin/srd-5.2.1/spell/sunburst.md
   pages:
   - 167
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_sunburst
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 4fedd1bd6fce3d7bef340e893c758037c4061f6e473233b2050094883e57c4da
 splat_clauses:
 - key: source_rules
   text: '# Sunburst Level 8 Evocation (Cleric, Druid, Sorcerer, Wizard) Casting Time: Action Range: 150
@@ -53,7 +137,8 @@ splat_clauses:
     the effect on itself on a success. This spell dispels Darkness in its area that was created by any
     spell.'
   sha256: 8f00229b9e581746c9587c64cb5fe1761c19e990f90351ee9775676ca2f3c1f3
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Sunburst

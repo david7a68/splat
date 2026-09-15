@@ -12,18 +12,39 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/weapons_heavy
-  parameters: {}
+  parameters:
+    requires_property: heavy
+    disadvantage_cases:
+    - weapon_category: melee
+      strength_below: 13
+    - weapon_category: ranged
+      dexterity_below: 13
+  implementation: dnd2024:rules_weapons_heavy
+splat_contracts:
+- id: dnd2024:rules_weapons_heavy
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - attack.calculate
+  capabilities:
+  - weapon_properties
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 89
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_weapons_heavy
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 986217bcef1f77cfa5c5040ce4c348e4a87e33127eefafcf3200cac2403f64cf
   parent_name: Weapons
   line_span:
     first: 7711
@@ -34,7 +55,8 @@ splat_clauses:
     your Strength score isn’t at least 13 or if it’s a Ranged weapon and your Dexterity score isn’t at
     least 13.'
   sha256: 3e39d062b201b4e2f26bf281529f083800b5423dd3347e45a50a85d4f356c8ce
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Heavy

@@ -59,18 +59,122 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/blood_hawk
+  implementation: dnd2024:creature_blood_hawk
+  parameters:
+    skill_totals:
+      perception: 6
+    senses: []
+    passive_perception: 16
+    languages:
+      speak: true
+      known: []
+    features:
+      pack_tactics:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - attack
+        target_kind: creature
+        when:
+          ally_within_target_ft: 5
+          ally_excluded_conditions:
+          - incapacitated
+      beak:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 2
+            average: 4
+          replacement_when:
+            if:
+              target_bloodied: true
+            components:
+            - type: piercing
+              amount:
+                dice:
+                  count: 1
+                  sides: 8
+                add: 2
+              average: 6
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_blood_hawk
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f6172bd050736b3723783f98c1d78c1aa089f7ffbe9c440ed5cca9fbf91fb16c
   source_path: builtin/srd-5.2.1/creature/blood_hawk.md
   pages:
   - 345
   - 346
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_blood_hawk
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 47153d211d0e4bd9254438956f97ba7857b0b2e1170bb934cbdbdde9e4824a3d
 splat_clauses:
 - key: source_rules
   text: '# Blood Hawk Small Beast, Unaligned AC 12 Initiative +2 (12) HP 7 (2d6) Speed 10 ft., Fly 60
@@ -81,7 +185,8 @@ splat_clauses:
     ### Actions Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, or 6 (1d8 +
     2) Piercing damage if the target is Bloodied.'
   sha256: d514509cf50966f79701058689976940846d3159e4f0ccfddc7601a408c1a199
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Blood Hawk

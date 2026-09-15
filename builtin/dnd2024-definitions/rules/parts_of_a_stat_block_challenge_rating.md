@@ -12,18 +12,38 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_challenge_rating
-  parameters: {}
+  parameters:
+    apply_definitions:
+    - key: dnd2024:glossary/challenge_rating
+  implementation: dnd2024:rule_parts_of_a_stat_block_challenge_rating
+splat_contracts:
+- id: dnd2024:rule_parts_of_a_stat_block_challenge_rating
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - resolution
+  events: []
+  capabilities:
+  - monsters
+  - encounter_building
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 256
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_parts_of_a_stat_block_challenge_rating
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 398970373263421c944c66f03918a918c6acaf8335536d6048222d44aefe4e3b
   parent_name: Parts of a Stat Block
   line_span:
     first: 11080
@@ -33,7 +53,8 @@ splat_clauses:
   text: '# Challenge Rating Challenge Rating is defined in “Rules Glossary,” while guidance on using CR
     to plan potential combat encounters is in “Gameplay Toolbox.”'
   sha256: 49669fa70bcc70137671a29d4c8d193bcb73c1fd8ee1450945062a6ab88deeb8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Challenge Rating

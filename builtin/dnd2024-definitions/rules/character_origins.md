@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/character_origins
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 83
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 5881223060f1002b10a62cffc3870fde4e93fe0bb2c6e618758ef6a30b655fc0
   parent_name: Character Origins
   line_span:
     first: 7059
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Character Origins'
   sha256: a7234ad5ef241fc5b6ebf91b809742593481b03490248c08f1e76b5da15d8c9f
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Character Origins

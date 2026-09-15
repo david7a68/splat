@@ -62,17 +62,142 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/swarm_of_piranhas
+  implementation: dnd2024:creature_swarm_of_piranhas
+  parameters:
+    damage_resistances:
+    - bludgeoning
+    - piercing
+    - slashing
+    damage_immunities: []
+    condition_immunities:
+    - charmed
+    - frightened
+    - grappled
+    - paralyzed
+    - petrified
+    - prone
+    - restrained
+    - stunned
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 8
+    languages:
+      speak: true
+      known: []
+    features:
+      swarm:
+        economy: passive
+        op: swarm.form
+        shared_spaces_bidirectional: true
+        minimum_opening:
+          creature_size: tiny
+          creature_shape: piranha
+        regain_hp: false
+        gain_temporary_hp: false
+      water_breathing:
+        economy: passive
+        op: breathing.allow
+        media:
+        - water
+        exclusive: true
+      bites:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 4
+              add: 3
+            average: 8
+          replacement_when:
+            if:
+              actor_bloodied: true
+            components:
+            - type: piercing
+              amount:
+                dice:
+                  count: 1
+                  sides: 4
+                add: 3
+              average: 5
+        advantage_when:
+          target_hp_below_maximum: true
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_swarm_of_piranhas
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 44b991c189afa373ecae0e06413ed45f26ca3e70984c980e102fa01e83d2f474
   source_path: builtin/srd-5.2.1/creature/swarm_of_piranhas.md
   pages:
   - 362
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_swarm_of_piranhas
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: f6780b683a009a31fb8491d06171496d422db09515dea6dbdf2f278dbd9672b1
 splat_clauses:
 - key: source_rules
   text: '# Swarm of Piranhas Medium Swarm of Tiny Beasts, Unaligned AC 13 Initiative +3 (13) HP 28 (8d8
@@ -86,7 +211,8 @@ splat_clauses:
     its Hit Points), reach 5 ft. Hit: 8 (2d4 + 3) Piercing damage, or 5 (1d4 + 3) Piercing damage if the
     swarm is Bloodied.'
   sha256: 0f55473e7d5efa8874ef37bea31fb6a2c266bca37fc1121e1c1aeffad5c8d693
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Swarm of Piranhas

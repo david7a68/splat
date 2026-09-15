@@ -15,18 +15,199 @@ splat_item:
   rarity: rarity_varies
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/ioun_stone
+  implementation: dnd2024:item_ioun_stone
+  parameters:
+    activate:
+      action: magic
+      toss_in_air: true
+      orbit_distance_ft:
+        roll:
+          count: 1
+          sides: 3
+      maximum_simultaneously_orbiting: 3
+    benefits_require_orbit: true
+    orbit:
+      counts_as: worn
+      avoids_collisions: true
+      other_creatures_cannot:
+      - attack
+      - snatch
+    stow:
+      action: utilize
+      quantity: any_number_orbiting
+    attunement_end:
+      orbiting: fall_as_dropped
+    variants:
+    - name: absorption
+      rarity: very_rare
+      reaction:
+        trigger: visible_creature_casts_spell
+        max_spell_level: 4
+        effect: cancel_spell
+        resources_wasted: true
+        capacity_spell_levels: 20
+        cumulative_levels_at_capacity:
+        - burn_out
+        - nonmagical
+        color_after: dull_gray
+    - name: greater_absorption
+      rarity: legendary
+      reaction:
+        trigger: visible_creature_casts_spell
+        max_spell_level: 8
+        effect: cancel_spell
+        resources_wasted: true
+        capacity_spell_levels: 20
+        cumulative_levels_at_capacity:
+        - burn_out
+        - nonmagical
+        color_after: dull_gray
+    - name: agility
+      rarity: very_rare
+      ability: dexterity
+      increase: 2
+      maximum: 20
+    - name: fortitude
+      rarity: very_rare
+      ability: constitution
+      increase: 2
+      maximum: 20
+    - name: insight
+      rarity: very_rare
+      ability: wisdom
+      increase: 2
+      maximum: 20
+    - name: intellect
+      rarity: very_rare
+      ability: intelligence
+      increase: 2
+      maximum: 20
+    - name: leadership
+      rarity: very_rare
+      ability: charisma
+      increase: 2
+      maximum: 20
+    - name: strength
+      rarity: very_rare
+      ability: strength
+      increase: 2
+      maximum: 20
+    - name: awareness
+      rarity: rare
+      advantage:
+      - initiative
+      - wisdom_perception
+    - name: mastery
+      rarity: legendary
+      proficiency_bonus_increase: 1
+    - name: protection
+      rarity: rare
+      ac_bonus: 1
+    - name: regeneration
+      rarity: legendary
+      healing:
+        hp: 15
+        interval:
+          amount: 1
+          unit: hours
+        requires_hp_at_least: 1
+    - name: reserve
+      rarity: rare
+      spell_storage:
+        capacity_spell_levels: 4
+        initial_spell_levels:
+          roll:
+            count: 1
+            sides: 4
+        initial_spells_choice: gm
+        store:
+          caster: any_creature
+          touch_required_during_cast: true
+          spell_level_min: 1
+          spell_level_max: 4
+          occupancy: cast_slot_level
+          normal_spell_effect: false
+          insufficient_capacity: expend_without_effect
+        release:
+          cast_as: user
+          copy_original_caster:
+          - slot_level
+          - save_dc
+          - spell_attack_bonus
+          - spellcasting_ability
+          remove_spell_from_storage: true
+          free_capacity: true
+    - name: sustenance
+      rarity: rare
+      needs_food: false
+      needs_drink: false
+    absorption_remaining_budget_policy:
+      adjudicator: gm
+      scope: spell_level_exceeds_remaining_lifetime_budget
+      options:
+      - reject_absorption
+      - absorb_and_burn_out
+      source_unspecified: true
+    absorption_burnout_threshold:
+      comparison: greater_than_or_equal
+      levels: 20
+    attunement_required: true
+splat_contracts:
+- id: dnd2024:item_ioun_stone
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.activation_requested
+  - item.attunement_ended
+  - spell.cast_pending
+  - time.elapsed
+  - item.attunement_completed
+  capabilities:
+  - item_effects
+  - dice
+  - item_spellcasting
+  - inventory_containers
+  - item_variants
+  - healing
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: f3ef6e9b7756e94c77c4d32efb911a422e66b75d06ae7357dcb979fb0b0c9ad6
   source_path: builtin/srd-5.2.1/magic_item/ioun_stone.md
   pages:
   - 227
   - 228
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_ioun_stone
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 3d6dc0f82f22985adb5e5b3608dd8cd8f6d6f24040c58f2bd337d51f8bedc2d2
 splat_clauses:
 - key: source_rules
   text: '# Ioun Stone Wondrous Item, Rarity Varies (Requires Attunement) Roughly marble sized, Ioun Stones
@@ -70,7 +251,8 @@ splat_clauses:
     orbits your head. Sustenance (Rare). You don’t need to eat or drink while this clear spindle orbits
     your head.'
   sha256: fe221ad033818b8e9aee0997a86d26f6905d0dfad3a401345fe275c739c09591
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ioun Stone

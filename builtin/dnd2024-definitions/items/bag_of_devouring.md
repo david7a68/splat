@@ -15,17 +15,107 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/bag_of_devouring
+  implementation: dnd2024:item_bag_of_devouring
+  parameters:
+    appearance:
+      key: dnd2024:items/bag_of_holding
+    orifice:
+      inside_out: closed
+      senses_contents: true
+    organic_contents:
+      types:
+      - animal_matter
+      - vegetable_matter
+      wholly_inserted: devoured_permanently
+    partial_living_insertion:
+      pull_inside_probability:
+      - 1
+      - 2
+    escape:
+      action: action
+      check:
+        ability: strength
+        skill: athletics
+        dc: 15
+    rescue:
+      action: action
+      reach_inside_triggers_pull: true
+      check_only_if_rescuer_not_pulled: true
+      check:
+        ability: strength
+        skill: athletics
+        dc: 20
+    turn_start_inside:
+      devoured: true
+      body_destroyed: true
+    storage:
+      inanimate_volume_cubic_ft: 1
+      daily_ejection:
+        frequency_per_day: 1
+        time_choice: gm
+        plane_choice: gm
+        contents: all_inanimate_objects
+    on_damage_kind:
+      pierced_or_torn:
+        destroy_item: true
+        transport_contents:
+          plane: astral
+          location: random
+    attunement_required: false
+splat_contracts:
+- id: dnd2024:item_bag_of_devouring
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.contents_changed
+  - item.turned_inside_out
+  - turn.started
+  - item.damaged
+  - time.day_changed
+  - item.activation_requested
+  capabilities:
+  - item_effects
+  - planar_travel
+  - inventory_containers
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 6016468eddc7b7eaa91206f9668602937562412a1a1c4d6eb87e41844821c515
   source_path: builtin/srd-5.2.1/magic_item/bag_of_devouring.md
   pages:
   - 212
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_bag_of_devouring
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 78ec0177a8a6ef2e013667e318a4d9c0c32464176f4ec8cea18d519b1fbea85c
 splat_clauses:
 - key: source_rules
   text: '# Bag of Devouring Wondrous Item, Very Rare This bag resembles a Bag of Holding but is a feeding
@@ -43,7 +133,8 @@ splat_clauses:
     or torn, it is destroyed, and anything contained within it is transported to a random location on
     the Astral Plane.'
   sha256: 198cf26aa477fa23298aa582c642addbec95b1fce8bc025a512b8856ca72f60f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Bag of Devouring

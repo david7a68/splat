@@ -12,18 +12,71 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_limited_usage
-  parameters: {}
+  parameters:
+    usage_modes:
+      x_per_day:
+        maximum_uses: x
+        recovery_event: long_rest.finished
+        recovery: all
+      recharge_x_y:
+        maximum_uses: 1
+        roll_event: actor_turn.started
+        roll:
+          count: 1
+          sides: 6
+          add: 0
+        recharge_when:
+          minimum: x
+          maximum: y
+        rest_recovery:
+        - short_rest.finished
+        - long_rest.finished
+      recharge_after_rest:
+        maximum_uses: 1
+        recovery_events:
+        - short_rest.finished
+        - long_rest.finished
+  implementation: dnd2024:rules_parts_of_a_stat_block_limited_usage
+splat_contracts:
+- id: dnd2024:rules_parts_of_a_stat_block_limited_usage
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    event:
+      type: event
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - action_options
+  - effects
+  - resource_updates
+  events:
+  - turn.started
+  - rest.short_completed
+  - rest.long_completed
+  capabilities:
+  - action_economy
+  - movement
+  - combat
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 257
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_parts_of_a_stat_block_limited_usage
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 42a9d3cf9435e2b5da9e6e2e2cb000b25745870810386174fd105fa5b734998a
   parent_name: Parts of a Stat Block
   line_span:
     first: 11219
@@ -43,7 +96,8 @@ splat_clauses:
     after a Short or Long Rest. This notation means the monster can use the stat block part once and must
     then finish a Short or Long Rest to use it again.'
   sha256: 8baafdeb24c668b9736c55a6fbb6f6caffc5d3c2ca86d490a2a3531de0330383
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Limited Usage

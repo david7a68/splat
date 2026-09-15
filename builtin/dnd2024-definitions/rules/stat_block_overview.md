@@ -12,18 +12,45 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/stat_block_overview
-  parameters: {}
+  parameters:
+    stat_block_sections:
+    - name_size_type_tags_alignment
+    - ac_hp_speed_initiative
+    - ability_scores_modifiers_saves
+    - senses_languages_cr_optional_details
+    - traits
+    - actions
+    - bonus_actions
+    - reactions
+    - legendary_actions
+    traits_active: always_or_stated_situations
+    action_options: stat_block_plus_universal_actions
+    optional_detail_omission_means_absent: true
+  implementation: dnd2024:rules_stat_block_overview
+splat_contracts:
+- id: dnd2024:rules_stat_block_overview
+  inputs:
+    definition:
+      type: definition
+      required: true
+  outputs:
+  - typed_attributes
+  events: []
+  capabilities:
+  - definition_catalogs
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 254
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_stat_block_overview
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 1a04a0bd21a4d069d1274ce23c40e2f5df28406073969bc1aa15b6644e862b21
   parent_name: Stat Block Overview
   line_span:
     first: 10862
@@ -42,7 +69,8 @@ splat_clauses:
     in “Playing the Game.” Bonus Actions. This section provides a monster’s Bonus Actions, if any. Reactions
     and Legendary Actions. These sections provide Reactions and Legendary Actions, if any.'
   sha256: 8a530f67c8465b7aea46d1f0b4383c54d5fdcba9f611bf552bacaa44afeb8dc6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Stat Block Overview

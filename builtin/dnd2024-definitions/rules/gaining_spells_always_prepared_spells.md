@@ -12,18 +12,33 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/gaining_spells_always_prepared_spells
-  parameters: {}
+  parameters:
+    always_prepared_spells_count_against_changeable_preparation_limit: false
+  implementation: dnd2024:rules_gaining_spells_always_prepared_spells
+splat_contracts:
+- id: dnd2024:rules_gaining_spells_always_prepared_spells
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - prepared_spell_count
+  events: []
+  capabilities:
+  - spell_preparation
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 104
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_gaining_spells_always_prepared_spells
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 3ff443917839f9b060a9c77c75bd6c7a10fc88584284cc12d87385af74b8b2d1
   parent_name: Gaining Spells
   line_span:
     first: 9056
@@ -34,7 +49,8 @@ splat_clauses:
     If you also have a list of prepared spells that you can change, a spell that you always have prepared
     doesn’t count against the number of spells on that list.'
   sha256: c64bae4ff8ff5a69f4b23e8d88c8b89412eb9ebea60c90103f35adb057ed3412
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Always-Prepared Spells

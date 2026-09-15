@@ -24,17 +24,94 @@ splat_spell:
   ritual: false
   range:
     feet: 90
+splat_rule:
+  mechanic: dnd2024:spells/blade_barrier
+  implementation: dnd2024:spell_blade_barrier
+  parameters:
+    targeting:
+      kind: area
+      within_range: true
+    wall:
+      choices:
+      - shape: straight
+        max_length_feet: 100
+      - shape: ring
+        max_diameter_feet: 60
+      height_feet: 20
+      thickness_feet: 5
+      cover: three_quarters
+      difficult_terrain: true
+      duration: spell_duration
+    damage_triggers:
+      events:
+      - spell.cast_completed
+      - area.entered
+      - turn.ended
+      scope: creature_in_wall
+      max_saves_per_turn: 1
+    save:
+      ability: dexterity
+      failure:
+        damage:
+          dice: 6d10
+          type: force
+      success:
+        damage_fraction:
+          numerator: 1
+          denominator: 2
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 10
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_blade_barrier
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      type: location_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - locations
+  events:
+  - spell.cast_completed
+  - turn.ended
+  - area.entered
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - spatial_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 257aa4a00d7dc66432372faab6100af3a32aaabda84b25c2b76b3cc897d0868a
   source_path: builtin/srd-5.2.1/spell/blade_barrier.md
   pages:
   - 113
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_blade_barrier
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 47e96dfcdff9ffdc63297bc05396e942d543976fa40e9fda7af29bc4aac6ea13
 splat_clauses:
 - key: source_rules
   text: '# Blade Barrier Level 6 Evocation (Cleric) Casting Time: Action Range: 90 feet Components: V,
@@ -46,7 +123,8 @@ splat_clauses:
     as much damage on a successful one. A creature also makes that save if it enters the wall’s space
     or ends it turn there. A creature makes that save only once per turn.'
   sha256: b707b7c4a2fbbe1b2ce9149ee6323a65c1795c75b3bec5bee7b55b42067aaf12
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Blade Barrier

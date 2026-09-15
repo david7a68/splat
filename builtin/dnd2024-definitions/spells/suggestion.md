@@ -30,17 +30,84 @@ splat_spell:
   material:
     description: a drop of honey
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/suggestion
+  implementation: dnd2024:spell_suggestion
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 28800
+    target:
+      kind: creature
+      visible: true
+      range_feet: 30
+      hears_caster: true
+      understands_caster: true
+    instruction:
+      maximum_words: 25
+      kind: course_of_activity
+      must_sound_achievable: true
+      obvious_damage_to_target_or_allies: forbidden
+      feasibility_resolution: supplied_assessment
+    save:
+      ability: wisdom
+      dc: spell_save_dc
+      success: unaffected
+    failure:
+      condition: charmed
+      source: caster
+      instruction_compliance: best_effort
+    end_target:
+      any:
+      - caster_or_allies_deal_damage_to_target
+      - suggested_activity_completed
+      - spell_duration_ended
+splat_contracts:
+- id: dnd2024:spell_suggestion
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    target:
+      type: participant
+      required: true
+    suggested_activity:
+      type: text
+      required: true
+    feasibility_assessment:
+      type: resolution
+      required: true
+    save_dc:
+      type: integer
+      required: true
+  outputs:
+  - effects
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - behavior
+  - conditions
+  - tests
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 4b8814b86863188ffa7099d187393eaf2686d560ffc0e2bc3a59c9864154860b
   source_path: builtin/srd-5.2.1/spell/suggestion.md
   pages:
   - 166
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_suggestion
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 8ff318cad3c2bfe9bb55d1271b95a32dca47c3681f9f85baac880d2c3116b014
 splat_clauses:
 - key: source_rules
   text: '# Suggestion Level 2 Enchantment (Bard, Sorcerer, Warlock, Wizard) Casting Time: Action Range:
@@ -55,7 +122,8 @@ splat_clauses:
     but if the suggested activity can be completed in a shorter time, the spell ends for the target upon
     completing it.'
   sha256: 81b608cdc586ae3db5551bc0c6e10fda1902dffeea7ec58bba22e9d2d37da418
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Suggestion

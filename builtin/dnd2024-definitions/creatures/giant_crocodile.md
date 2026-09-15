@@ -59,17 +59,150 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_crocodile
+  implementation: dnd2024:creature_giant_crocodile
+  parameters:
+    skill_totals:
+      stealth: 5
+    senses: []
+    passive_perception: 10
+    languages:
+      speak: true
+      known: []
+    features:
+      hold_breath:
+        economy: passive
+        op: breathing.hold
+        duration:
+          amount: 1
+          unit: hour
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 8
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 3
+                sides: 10
+              add: 5
+            average: 21
+        - op: grapple
+          escape_dc: 15
+          when:
+            target_kind: creature
+            target_maximum_size: large
+          while_grappled:
+          - op: condition.apply
+            condition: restrained
+          - op: targeting.prohibit
+            feature: tail
+            source: actor
+      tail:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 8
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 3
+                sides: 8
+              add: 5
+            average: 18
+        - op: condition.apply
+          condition: prone
+          when:
+            target_kind: creature
+            target_maximum_size: large
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 1
+          feature: bite
+        - count: 1
+          feature: tail
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_giant_crocodile
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 978fbd6426c52a931e411bea8ac2f3f28624dd4fdd7181beb88ca052567b71f0
   source_path: builtin/srd-5.2.1/creature/giant_crocodile.md
   pages:
   - 350
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_crocodile
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: a392879e39a47b20752ef47abcce23c00c7d76d7869c280bfa58b9181349f343
 splat_clauses:
 - key: source_rules
   text: '# Giant Crocodile Huge Beast, Unaligned AC 14 Initiative -1 (9) HP 85 (9d12 + 27) Speed 30 ft.,
@@ -82,7 +215,8 @@ splat_clauses:
     crocodile’s Tail. Tail. Melee Attack Roll: +8, reach 10 ft. Hit: 18 (3d8 + 5) Bludgeoning damage.
     If the target is a Large or smaller creature, it has the Prone condition.'
   sha256: 0bc167e980c8ad0b7b6e51727e69afd5f22096b13c7e62f342c4f28af6571af1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Crocodile

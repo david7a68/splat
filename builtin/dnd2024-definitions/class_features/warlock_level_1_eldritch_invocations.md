@@ -12,19 +12,56 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/warlock_level_1_eldritch_invocations
-  parameters: {}
+  parameters:
+    invocation_choice:
+      source:
+        key: dnd2024:rules/warlock_eldritch_invocation_options
+      initial_count: 1
+      count:
+        table:
+          key: dnd2024:tables/warlock_progression
+        row:
+          stat: classes.warlock.level
+        column: eldritch_invocations
+      requires_prerequisites: true
+      repeat_only_if_option_repeatable: true
+    replace:
+      event: character.warlock_level_gained
+      maximum: 1
+      new_requires_prerequisites: true
+      cannot_remove_if_prerequisite_of_retained_invocation: true
+  implementation: dnd2024:class_features_warlock_level_1_eldritch_invocations
+splat_contracts:
+- id: dnd2024:class_features_warlock_level_1_eldritch_invocations
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+  outputs:
+  - feature_state
+  - choices
+  events:
+  - character.class_level_gained
+  capabilities:
+  - character_choices
+  - invocations
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 70
   - 71
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_warlock_level_1_eldritch_invocations
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 0654c9f80412fd4d449b62fecda07ebf2bffb8de8fd83bbb1d5488abcbcc87c7
   parent_name: Warlock
   line_span:
     first: 5966
@@ -48,7 +85,8 @@ splat_clauses:
     you gain more invocations of your choice, as shown in the Invocations column of the Warlock Features
     table. You can’t pick the same invocation more than once unless its description says otherwise.'
   sha256: 94b842e0d3eb95c4abb1c0e7560bad74f6dc7bd0732fe8fa66d8680a7c8ca5c6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Eldritch Invocations

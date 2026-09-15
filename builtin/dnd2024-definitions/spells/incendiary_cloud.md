@@ -26,18 +26,97 @@ splat_spell:
   ritual: false
   range:
     feet: 150
+splat_rule:
+  mechanic: dnd2024:spells/incendiary_cloud
+  implementation: dnd2024:spell_incendiary_cloud
+  parameters:
+    targeting:
+      kind: creatures_in_area
+      shape: sphere
+      radius_feet: 20
+      origin: chosen_point_in_range
+    cloud:
+      heavily_obscured: true
+      until_any:
+      - spell_duration
+      - strong_wind_dispersal
+    damage_triggers:
+      events:
+      - cloud_appears
+      - cloud_moves_into_creature_space
+      - creature_enters_cloud
+      - creature_ends_turn_in_cloud
+      max_per_creature_per_turn: 1
+    save:
+      ability: dexterity
+      failure:
+        damage:
+          dice: 10d8
+          type: fire
+      success:
+        damage_fraction:
+          numerator: 1
+          denominator: 2
+    movement:
+      event: caster.turn_started
+      distance_feet: 10
+      direction: caster_choice_away_from_caster
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 1
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_incendiary_cloud
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      type: location_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - locations
+  events:
+  - spell.cast_completed
+  - turn.started
+  - turn.ended
+  - area.entered
+  - position.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - spatial_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 9ed9b6d3ed1b2fe1fc63b41dcdf6073af8d6242c929e7f04bc40ee0424e16f2c
   source_path: builtin/srd-5.2.1/spell/incendiary_cloud.md
   pages:
   - 142
   - 143
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_incendiary_cloud
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 9369960b3b78cb2d4dba9d45bce64a67f86c5aa322943e86c619a8492ffb3df7
 splat_clauses:
 - key: source_rules
   text: '# Incendiary Cloud Level 8 Conjuration (Druid, Sorcerer, Wizard) Casting Time: Action Range:
@@ -50,7 +129,8 @@ splat_clauses:
     this save only once per turn. The cloud moves 10 feet away from you in a direction you choose at the
     start of each of your turns.'
   sha256: df5c3918b8b36cafceab71d9441e35cb1ee7956d7bcafe45dc8794261cda77d5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Incendiary Cloud

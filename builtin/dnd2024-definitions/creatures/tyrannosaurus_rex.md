@@ -57,17 +57,144 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/tyrannosaurus_rex
+  implementation: dnd2024:creature_tyrannosaurus_rex
+  parameters:
+    skill_totals:
+      perception: 4
+    senses: []
+    passive_perception: 14
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 10
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 4
+                sides: 12
+              add: 7
+            average: 33
+        - op: grapple
+          escape_dc: 17
+          when:
+            target_kind: creature
+            target_maximum_size: large
+          while_grappled:
+          - op: condition.apply
+            condition: restrained
+          - op: targeting.prohibit
+            feature: tail
+            source: actor
+      tail:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 10
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 15
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 4
+                sides: 8
+              add: 7
+            average: 25
+        - op: condition.apply
+          condition: prone
+          when:
+            target_kind: creature
+            target_maximum_size: huge
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 1
+          feature: bite
+        - count: 1
+          feature: tail
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_tyrannosaurus_rex
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 398177586c9389c191e77a31b627a2d424980cec0afa17510cca53e621fa1eb8
   source_path: builtin/srd-5.2.1/creature/tyrannosaurus_rex.md
   pages:
   - 363
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_tyrannosaurus_rex
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 760f1c39dc548e352aafb941aa9f59ab263718005aa64c7a97783f1981e1300b
 splat_clauses:
 - key: source_rules
   text: '# Tyrannosaurus Rex Huge Beast (Dinosaur), Unaligned AC 13 Initiative +3 (13) HP 136 (13d12 +
@@ -80,7 +207,8 @@ splat_clauses:
     +10, reach 15 ft. Hit: 25 (4d8 + 7) Bludgeoning damage. If the target is a Huge or smaller creature,
     it has the Prone condition.'
   sha256: 62684ca5584729e7d461613f2676bf7277750db16b4aa3b16475c0dc95715f63
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tyrannosaurus Rex

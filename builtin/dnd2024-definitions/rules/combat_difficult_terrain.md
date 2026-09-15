@@ -12,18 +12,37 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_difficult_terrain
-  parameters: {}
+  parameters:
+    movement_cost_extra_feet_per_foot: 1
+    multiple_sources_stack: false
+  implementation: dnd2024:rule_combat_difficult_terrain
+splat_contracts:
+- id: dnd2024:rule_combat_difficult_terrain
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - movement_budget
+  events: []
+  capabilities:
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 14
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_combat_difficult_terrain
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 3804dda162ee952a8285d26d3b0ede2a715d30e3936684c81131085d9a5a9ea4
   parent_name: Combat
   line_span:
     first: 900
@@ -35,7 +54,8 @@ splat_clauses:
     movement in Difficult Terrain costs 1 extra foot, even if multiple things in a space count as Difficult
     Terrain.'
   sha256: 20f2ee670b2eea51b1adfc04d35817361a6681ae1b305618949902cbec97be30
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Difficult Terrain

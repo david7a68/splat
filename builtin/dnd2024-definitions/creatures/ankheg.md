@@ -58,17 +58,164 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ankheg
+  implementation: dnd2024:creature_ankheg
+  parameters:
+    features:
+      tunneler:
+        economy: trait
+        operation: passive_rule
+        burrow_material: solid_rock
+        speed_multiplier: 0.5
+        tunnel_diameter_ft: 10
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 5
+          advantage_if:
+            target_grappled_by: self
+        hit:
+          damage:
+          - average: 10
+            roll:
+              count: 2
+              sides: 6
+              modifier: 3
+            type: slashing
+          - average: 3
+            roll:
+              count: 1
+              sides: 6
+              modifier: 0
+            type: acid
+          grapple:
+            condition: grappled
+            source: self
+            escape_dc: 13
+            maximum_size: large
+      acid_spray:
+        economy: action
+        resource:
+          kind: recharge
+          die: 6
+          success_faces:
+          - 6
+          check: self.turn_start
+          rest_recovery:
+          - short
+          - long
+          capacity: 1
+          initial_uses: 1
+        operation: saving_throw
+        ability: dexterity
+        dc: 12
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: line
+            size_ft: 30
+            origin: self
+            width_ft: 5
+        failure:
+          damage:
+          - average: 14
+            roll:
+              count: 4
+              sides: 6
+              modifier: 0
+            type: acid
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+    senses:
+      darkvision: 60
+      tremorsense: 60
+      passive_perception: 11
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_ankheg
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - grappling
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: b949293f1ff9c29486d5fb019d894ba54958ca1e820db25e48474ecdbc5b5216
   source_path: builtin/srd-5.2.1/creature/ankheg.md
   pages:
   - 259
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ankheg
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 4adb54d788766fbfee6bc2b7027bd402a7299530aefdf9f15b7f44f7334f0ebb
 splat_clauses:
 - key: source_rules
   text: '# Ankheg Large Monstrosity, Unaligned AC 14 Initiative +0 (10) HP 45 (6d10 + 12) Speed 30 ft.,
@@ -81,7 +228,8 @@ splat_clauses:
     (escape DC 13). Acid Spray (Recharge 6). Dexterity Saving Throw: DC 12, each creature in a 30-foot-long,
     5-foot-wide Line. Failure: 14 (4d6) Acid damage. Success: Half damage.'
   sha256: 8a091fe628d7e4d0d4129c8dcbb827a16235cc88df0abe0db303c694e0439a4e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ankheg

@@ -12,18 +12,54 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_item_rarity
-  parameters: {}
+  parameters:
+    rarity_values_gp:
+      common: 100
+      uncommon: 400
+      rare: 4000
+      very_rare: 40000
+      legendary: 200000
+      artifact: null
+    artifact_value: priceless
+    consumable_non_scroll_multiplier: 0.5
+    spell_scroll_value:
+      op: multiply
+      left: scribe_cost
+      right: 2
+  implementation: dnd2024:rules_magic_item_rarity
+splat_contracts:
+- id: dnd2024:rules_magic_item_rarity
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - item_attributes
+  - actor_modifiers
+  events: []
+  capabilities:
+  - equipment
+  - armor_class
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 205
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_magic_item_rarity
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 6981f4133bf7cc420d9ae2abc9b3443ffb7ce95626339eacd1d1628f652d0e25
   parent_name: Magic Item Rarity
   line_span:
     first: 10557
@@ -35,7 +71,8 @@ splat_clauses:
     table. Common magic items, such as a Potion of Healing, are the most plentiful. Artifacts, such as
     the Dragon Orb, are priceless, unique, and difficult to acquire.'
   sha256: b5004aa5aab076dedeff9ac168dc77edeb5a589f24e396ba8ef5ed6e715e6dfc
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Magic Item Rarity

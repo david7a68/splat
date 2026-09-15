@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/warlock_becoming_a_warlock
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 70
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 9c4454726b838b3a0e06c6135ccdb2f3ffd2e7778328e25184ae5ba5b0779cb0
   parent_name: Warlock
   line_span:
     first: 5949
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Becoming a Warlock …'
   sha256: bf48f0a559013bb290b7005e7a553d1f773f7812eab33572107de84fa5d5f1db
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Becoming a Warlock …

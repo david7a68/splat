@@ -60,18 +60,182 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/earth_elemental
+  implementation: dnd2024:creature_earth_elemental
+  parameters:
+    features:
+      siege_monster:
+        economy: passive
+        damage_multiplier: 2
+        targets:
+        - object
+        - structure
+      slam:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 8
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 14
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 5
+          damage_type: bludgeoning
+        reach_feet: 10
+      rock_launch:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 8
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 8
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 5
+          damage_type: bludgeoning
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+          then:
+          - op: condition
+            condition: prone
+        range_feet: 60
+      multiattack:
+        economy: action
+        op: repeat_choice
+        count: 2
+        choices:
+        - feature: slam
+        - feature: rock_launch
+      earth_glide:
+        economy: passive
+        burrow_through:
+          materials:
+          - earth
+          - stone
+          magical: false
+          worked: false
+        disturbs_material: false
+    defenses:
+      vulnerabilities:
+        damage_types:
+        - thunder
+      immunities:
+        damage_types:
+        - poison
+        conditions:
+        - exhaustion
+        - paralyzed
+        - petrified
+        - poisoned
+        - unconscious
+    senses:
+      passive_perception: 10
+      special:
+      - sense: darkvision
+        range_feet: 60
+      - sense: tremorsense
+        range_feet: 60
+    communication:
+      speaks:
+      - primordial
+      understands:
+      - primordial
+      dialects:
+      - terran
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_earth_elemental
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f14176e8e44b6a91fab539816cc9e1d24a01fb08b0324a77c7de2d4478251a78
   source_path: builtin/srd-5.2.1/creature/earth_elemental.md
   pages:
   - 282
   - 283
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_earth_elemental
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: bc2627c84b5d22eef9220f82611d460a659fd3e00e5b06592f4e8b5ee034a808
 splat_clauses:
 - key: source_rules
   text: '# Earth Elemental Large Elemental, Neutral AC 17 Initiative -1 (9) HP 147 (14d10 + 70) Speed
@@ -86,7 +250,8 @@ splat_clauses:
     Roll: +8, range 60 ft. Hit: 8 (1d6 + 5) Bludgeoning damage. If the target is a Large or smaller creature,
     it has the Prone condition.'
   sha256: b91ac0d5408a872723cc2d87f9fb9be3d8a5d2f62e8d3d0616f925f8b34eba8b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Earth Elemental

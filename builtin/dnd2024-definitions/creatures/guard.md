@@ -58,18 +58,113 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/guard
+  implementation: dnd2024:creature_guard
+  parameters:
+    skill_totals:
+      perception: 2
+    gear:
+    - item: chain_shirt
+      count: 1
+    - item: shield
+      count: 1
+    - item: spear
+      count: 1
+    senses: []
+    passive_perception: 12
+    languages:
+      speak: true
+      known:
+      - common
+    features:
+      spear:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        - ranged
+        attack_bonus: 3
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        range_ft:
+          normal: 20
+          long: 60
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 1
+            average: 4
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_guard
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 73d7d66f55fa1edb54a49a9a5cea28990f204bc5127939c8531785f1ebe80496
   source_path: builtin/srd-5.2.1/creature/guard.md
   pages:
   - 296
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_guard
+  conversion_gaps: []
   execution_profiles:
   - dnd2024:creatures/guard
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 8123ed7126451fc65c16be146c0905b5531f6a4d0cc33a2f10489caa8283c97d
 splat_clauses:
 - key: source_rules
   text: '# Guard Medium or Small Humanoid, Neutral AC 16 Initiative +1 (11) HP 11 (2d8 + 2) Speed 30 ft.
@@ -78,7 +173,8 @@ splat_clauses:
     Common CR 1/8 (XP 25; PB +2) ### Actions Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or range
     20/60 ft. Hit: 4 (1d6 + 1) Piercing damage.'
   sha256: cd43171ce39c5473c000ab573795bbfd3662e765515684a464960cee9f033212
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Guard

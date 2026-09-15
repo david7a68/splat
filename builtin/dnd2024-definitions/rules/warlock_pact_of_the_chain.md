@@ -12,18 +12,64 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/warlock_pact_of_the_chain
-  parameters: {}
+  parameters:
+    learn_spell:
+      key: dnd2024:spells/find_familiar
+    casting:
+      economy: magic_action
+      spell_slot_cost: 0
+    familiar_forms:
+      allow_normal: true
+      additional:
+      - key: dnd2024:creatures/imp
+      - key: dnd2024:creatures/pseudodragon
+      - key: dnd2024:creatures/quasit
+      - key: dnd2024:creatures/skeleton
+      - key: dnd2024:creatures/sphinx_of_wonder
+      - key: dnd2024:creatures/sprite
+      - key: dnd2024:creatures/venomous_snake
+    attack_exchange:
+      trigger: actor.attack_action
+      forgo_attacks: 1
+      familiar_attacks: 1
+      familiar_economy: reaction
+  implementation: dnd2024:rules_warlock_pact_of_the_chain
+splat_contracts:
+- id: dnd2024:rules_warlock_pact_of_the_chain
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    choice:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - resource_updates
+  events: []
+  capabilities:
+  - class_features
+  - effects
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 74
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_warlock_pact_of_the_chain
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: bbad850fa66a0cecb44debe314cd88215f434305c20da3b205431fffe05315dd
   parent_name: Warlock
   line_span:
     first: 6314
@@ -37,7 +83,8 @@ splat_clauses:
     Attack action, you can forgo one of your own attacks to allow your familiar to make one attack of
     its own with its Reaction.'
   sha256: 1812aa653a3a5f1c13577b09f836e2b441b6f04254120c81afa04e9ad16dea09
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Pact of the Chain

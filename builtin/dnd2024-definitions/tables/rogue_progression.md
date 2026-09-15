@@ -11,7 +11,7 @@ splat_sources:
   locator: pp. 62
   url: https://www.dndbeyond.com/srd
 splat_rule:
-  mechanic: dnd2024:class_progression
+  mechanic: dnd2024:tables/rogue_progression
   parameters:
     class: rogue
     rows:
@@ -19,93 +19,367 @@ splat_rule:
       proficiency_bonus: 2
       features_text: Expertise, Sneak Attack, Thieves’ Cant, Weapon Mastery
       sneak_attack: 1d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_1_expertise
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_1_sneak_attack
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_1_thieves_cant
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_1_weapon_mastery
+        at_class_level: 1
+      sneak_attack_dice:
+        dice:
+          count: 1
+          sides: 6
+        bonus: 0
     - level: 2
       proficiency_bonus: 2
       features_text: Cunning Action
       sneak_attack: 1d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_2_cunning_action
+        at_class_level: 2
+      sneak_attack_dice:
+        dice:
+          count: 1
+          sides: 6
+        bonus: 0
     - level: 3
       proficiency_bonus: 2
       features_text: Rogue Subclass, Steady Aim
       sneak_attack: 2d6
+      grants:
+      - operation: choose_subclass
+        feature:
+          key: dnd2024:class_features/rogue_level_3_rogue_subclass
+        at_class_level: 3
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_3_steady_aim
+        at_class_level: 3
+      sneak_attack_dice:
+        dice:
+          count: 2
+          sides: 6
+        bonus: 0
     - level: 4
       proficiency_bonus: 2
       features_text: Ability Score Improvement
       sneak_attack: 2d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_4_ability_score_improvement
+        at_class_level: 4
+      sneak_attack_dice:
+        dice:
+          count: 2
+          sides: 6
+        bonus: 0
     - level: 5
       proficiency_bonus: 3
       features_text: Cunning Strike, Uncanny Dodge
       sneak_attack: 3d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_5_cunning_strike
+        at_class_level: 5
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_5_uncanny_dodge
+        at_class_level: 5
+      sneak_attack_dice:
+        dice:
+          count: 3
+          sides: 6
+        bonus: 0
     - level: 6
       proficiency_bonus: 3
       features_text: Expertise
       sneak_attack: 3d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_1_expertise
+        at_class_level: 6
+      sneak_attack_dice:
+        dice:
+          count: 3
+          sides: 6
+        bonus: 0
     - level: 7
       proficiency_bonus: 3
       features_text: Evasion, Reliable Talent
       sneak_attack: 4d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_7_evasion
+        at_class_level: 7
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_7_reliable_talent
+        at_class_level: 7
+      sneak_attack_dice:
+        dice:
+          count: 4
+          sides: 6
+        bonus: 0
     - level: 8
       proficiency_bonus: 3
       features_text: Ability Score Improvement
       sneak_attack: 4d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_4_ability_score_improvement
+        at_class_level: 8
+      sneak_attack_dice:
+        dice:
+          count: 4
+          sides: 6
+        bonus: 0
     - level: 9
       proficiency_bonus: 4
       features_text: Subclass feature
       sneak_attack: 5d6
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 9
+      sneak_attack_dice:
+        dice:
+          count: 5
+          sides: 6
+        bonus: 0
     - level: 10
       proficiency_bonus: 4
       features_text: Ability Score Improvement
       sneak_attack: 5d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_4_ability_score_improvement
+        at_class_level: 10
+      sneak_attack_dice:
+        dice:
+          count: 5
+          sides: 6
+        bonus: 0
     - level: 11
       proficiency_bonus: 4
       features_text: Improved Cunning Strike
       sneak_attack: 6d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_11_improved_cunning_strike
+        at_class_level: 11
+      sneak_attack_dice:
+        dice:
+          count: 6
+          sides: 6
+        bonus: 0
     - level: 12
       proficiency_bonus: 4
       features_text: Ability Score Improvement
       sneak_attack: 6d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_4_ability_score_improvement
+        at_class_level: 12
+      sneak_attack_dice:
+        dice:
+          count: 6
+          sides: 6
+        bonus: 0
     - level: 13
       proficiency_bonus: 5
       features_text: Subclass feature
       sneak_attack: 7d6
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 13
+      sneak_attack_dice:
+        dice:
+          count: 7
+          sides: 6
+        bonus: 0
     - level: 14
       proficiency_bonus: 5
       features_text: Devious Strikes
       sneak_attack: 7d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_14_devious_strikes
+        at_class_level: 14
+      sneak_attack_dice:
+        dice:
+          count: 7
+          sides: 6
+        bonus: 0
     - level: 15
       proficiency_bonus: 5
       features_text: Slippery Mind
       sneak_attack: 8d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_15_slippery_mind
+        at_class_level: 15
+      sneak_attack_dice:
+        dice:
+          count: 8
+          sides: 6
+        bonus: 0
     - level: 16
       proficiency_bonus: 5
       features_text: Ability Score Improvement
       sneak_attack: 8d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_4_ability_score_improvement
+        at_class_level: 16
+      sneak_attack_dice:
+        dice:
+          count: 8
+          sides: 6
+        bonus: 0
     - level: 17
       proficiency_bonus: 6
       features_text: Subclass feature
       sneak_attack: 9d6
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 17
+      sneak_attack_dice:
+        dice:
+          count: 9
+          sides: 6
+        bonus: 0
     - level: 18
       proficiency_bonus: 6
       features_text: Elusive
       sneak_attack: 9d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_18_elusive
+        at_class_level: 18
+      sneak_attack_dice:
+        dice:
+          count: 9
+          sides: 6
+        bonus: 0
     - level: 19
       proficiency_bonus: 6
       features_text: Epic Boon
       sneak_attack: 10d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_19_epic_boon
+        at_class_level: 19
+      sneak_attack_dice:
+        dice:
+          count: 10
+          sides: 6
+        bonus: 0
     - level: 20
       proficiency_bonus: 6
       features_text: Stroke of Luck
       sneak_attack: 10d6
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/rogue_level_20_stroke_of_luck
+        at_class_level: 20
+      sneak_attack_dice:
+        dice:
+          count: 10
+          sides: 6
+        bonus: 0
+    class_definition:
+      key: dnd2024:classes/rogue
+    lookup:
+      input: class_level
+      minimum: 1
+      maximum: 20
+      match: exact
+      numeric_columns: current_capacity_or_value
+      feature_grants: all_crossed_levels
+      repeat_application: idempotent_per_class_level_and_feature
+    multiclass:
+      proficiency_bonus_source: total_character_level
+      spell_slot_override_rule:
+        key: dnd2024:rules/multiclassing_spellcasting
+      pact_magic_pool_separate: true
+    column_semantics:
+      proficiency_bonus:
+        kind: bonus
+        applies_to: proficiency
+        use_class_row_only_if_single_class: true
+      sneak_attack:
+        kind: dice_expression
+        applies_to: sneak_attack
+  implementation: dnd2024:class_progression_rogue_progression
+splat_contracts:
+- id: dnd2024:class_progression_rogue_progression
+  inputs:
+    actor:
+      type: participant
+      required: true
+    class_level:
+      type: integer
+      required: true
+    previous_class_level:
+      required: false
+      type: integer
+    selected_subclass:
+      required: false
+      type: definition
+    choices:
+      required: false
+      type: definition_list
+  outputs:
+  - feature_grants
+  - selection_capacities
+  - resource_capacities
+  - class_values
+  events:
+  - character.class_level_changed
+  capabilities:
+  - class_progression
+  - feature_grants
+  - resource_capacities
+  - character_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: table
   source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
   source_path: builtin/srd-5.2.1/source.txt
   pages:
   - 62
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_progression_rogue_progression
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: cd438835652d674cc7f23e50d6dd7a89bb7f5db907547335a36c2987be9af029
 splat_clauses:
 - key: source_rules
   text: '# Rogue Progression From SRD 5.2.1 page 62. Rogue Features Proficiency Level Bonus Class Features
@@ -135,7 +409,8 @@ splat_clauses:
     can Daggers and Shortbows. use this feature only if you haven’t moved during this turn, and after
     you use it, your Speed is 0 until the end of the current turn. 62 System Reference Document 5.2.1'
   sha256: 89b1599538f53b10ed1ca468aa822bfc024a053f4a63713ab32b1608904c4f50
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Rogue Progression

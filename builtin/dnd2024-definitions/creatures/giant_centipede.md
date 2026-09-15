@@ -58,18 +58,105 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_centipede
+  implementation: dnd2024:creature_giant_centipede
+  parameters:
+    senses:
+    - sense: blindsight
+      range_ft: 30
+    passive_perception: 8
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 2
+            average: 4
+        - op: condition.apply
+          condition: poisoned
+          duration:
+            until: actor.next_turn_start
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_giant_centipede
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 3b822dd4f34e0f993ca895063f9bd27bfe5f1cfa0073cf7c3db416875833f9d1
   source_path: builtin/srd-5.2.1/creature/giant_centipede.md
   pages:
   - 349
   - 350
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_centipede
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 0b378374972d00db6e19ccfbfc039d95c3dfd60862cd0d604697f7d00eb2006c
 splat_clauses:
 - key: source_rules
   text: '# Giant Centipede Small Beast, Unaligned AC 14 Initiative +2 (12) HP 9 (2d6 + 2) Speed 30 ft.,
@@ -78,7 +165,8 @@ splat_clauses:
     Actions Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, and the target
     has the Poisoned condition until the start of the centipede’s next turn.'
   sha256: f6690062cccd1173d185daf655a25e67980f4e4f9e999ce39b73fcf896e89950
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Centipede

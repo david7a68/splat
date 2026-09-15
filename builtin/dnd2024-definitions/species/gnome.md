@@ -12,17 +12,119 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule_group:
   category: species
+splat_rule:
+  mechanic: dnd2024:species/gnome
+  implementation: dnd2024:species_gnome
+  parameters:
+    creature_type: humanoid
+    size: small
+    height_feet:
+      typical_minimum: 3
+      typical_maximum: 4
+    speed_feet: 30
+    darkvision_feet: 60
+    save_advantage_abilities:
+    - intelligence
+    - wisdom
+    - charisma
+    lineage_choice:
+      count: 1
+      spellcasting_ability_choice:
+      - intelligence
+      - wisdom
+      - charisma
+      ability_choice_time: lineage_selection
+      options:
+        forest:
+          cantrips:
+          - key: dnd2024:spells/minor_illusion
+          always_prepared:
+          - key: dnd2024:spells/speak_with_animals
+          free_cast:
+            spell:
+              key: dnd2024:spells/speak_with_animals
+            resource:
+              id: gnome.speak_with_animals
+              maximum:
+                var: actor.proficiency_bonus
+              recovery:
+              - event: rest.long_completed
+                amount: all
+            cost: 1
+            expend_slot: false
+          cast_with_available_slots: true
+        rock:
+          cantrips:
+          - key: dnd2024:spells/mending
+          - key: dnd2024:spells/prestidigitation
+          clockwork_device:
+            creation:
+              cast:
+                key: dnd2024:spells/prestidigitation
+              minutes: 10
+            size: tiny
+            armor_class: 5
+            hit_points: 1
+            effect_choice:
+              source_spell:
+                key: dnd2024:spells/prestidigitation
+              count: 1
+              nested_options_chosen_at_creation: true
+              fixed_until_destroyed: true
+            activation:
+              action: bonus_action
+              requires_touch: true
+              user: any_creature
+              produce_chosen_effect: true
+            maximum_simultaneous_devices: 3
+            expires:
+              hours_after_creation: 8
+            dismantle:
+              actor: creator
+              action: utilize
+              requires_touch: true
+splat_contracts:
+- id: dnd2024:species_gnome
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - character.species_selected
+  - saving_throw
+  - spell.cast
+  - action.bonus
+  - action.utilize
+  - rest.long_completed
+  - time.elapsed
+  capabilities:
+  - character_features
+  - resources
+  - spellcasting
+  - d20_tests
+  - proficiencies
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: species
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 85
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:species_gnome
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 6a2ee3af3b62ab08ca8d4c5529ac974dc3f9ecf412c16eb1ebe3d76d49e71d86
   line_span:
     first: 7276
     count: 44
@@ -48,7 +150,8 @@ splat_clauses:
     devices in existence at a time, and each falls apart 8 hours after its creation or when you dismantle
     it with a touch as a Utilize action.'
   sha256: 78e73c12ba9ab8da5534da674c6fb7481ed2e0d6e3c455c874e6d7c95a9d6497
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Gnome

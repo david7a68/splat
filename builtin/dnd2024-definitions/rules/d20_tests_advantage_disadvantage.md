@@ -12,19 +12,63 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/d20_tests_advantage_disadvantage
-  parameters: {}
+  parameters:
+    apply_definitions:
+    - key: dnd2024:glossary/advantage
+    - key: dnd2024:glossary/disadvantage
+    - key: dnd2024:glossary/heroic_inspiration
+    circumstantial_advantage:
+      actor: gm
+      choices:
+      - advantage
+      - disadvantage
+      - neither
+    heroic_inspiration:
+      maximum: 1
+      reroll:
+        die_count: 1
+        timing: immediately_after_roll
+        must_use_new_roll: true
+        consume: true
+      overflow:
+        optional: true
+        recipient: party_player_character_without_inspiration
+      gm_award:
+        optional: true
+      human_daily_grant: true
+  implementation: dnd2024:rule_d20_tests_advantage_disadvantage
+splat_contracts:
+- id: dnd2024:rule_d20_tests_advantage_disadvantage
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - resolution
+  events: []
+  capabilities:
+  - dice
+  - heroic_inspiration
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 7
   - 8
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_d20_tests_advantage_disadvantage
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 7e41dadf149ba079b19690fc95fda06129c2f247d9d6d2b25299f8bb7748dd10
   parent_name: D20 Tests
   line_span:
     first: 278
@@ -44,7 +88,8 @@ splat_clauses:
     to gain Heroic Inspiration independent of the GM’s decision. For example, Human characters start each
     day with Heroic Inspiration. GM can also decide that circumstances grant Advantage or impose Disadvantage.'
   sha256: d86f4ea2c85cf82f6025d3fde63c5ddcbde6b1fcd3b1085643321f1496af0825
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Advantage/Disadvantage

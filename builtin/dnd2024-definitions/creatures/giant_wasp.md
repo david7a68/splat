@@ -58,18 +58,129 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_wasp
+  implementation: dnd2024:creature_giant_wasp
+  parameters:
+    features:
+      flyby:
+        economy: passive
+        opportunity_attack_immunity:
+          trigger: fly_out_of_enemy_reach
+      sting:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 2
+          damage_type: piercing
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 2
+              sides: 4
+            add: 0
+          damage_type: poison
+        reach_feet: 5
+    defenses: {}
+    senses:
+      passive_perception: 10
+      special: []
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_giant_wasp
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - fly_out_of_enemy_reach
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - movement
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 2d90678348039425c109a2c3a4f4228d68ed7e12bffe58a7cb2f8dcb794a7583
   source_path: builtin/srd-5.2.1/creature/giant_wasp.md
   pages:
   - 354
   - 355
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_wasp
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: dfbf9811aec1e0d787be4b9fe1fff2c2fb362e7eaca449e127ae129b1fd6a20e
 splat_clauses:
 - key: source_rules
   text: '# Giant Wasp Medium Beast, Unaligned AC 13 Initiative +2 (12) HP 22 (5d8) Speed 10 ft., Fly 50
@@ -78,7 +189,8 @@ splat_clauses:
     doesn’t provoke an Opportunity Attack when it flies out of an enemy’s reach. ### Actions Sting. Melee
     Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage plus 5 (2d4) Poison damage.'
   sha256: e2c523f4c3ae309b6b887557ecfdba56e89cd80b3a2302cba741e44efa0a61fa
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Wasp

@@ -12,24 +12,50 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/target
-  parameters: {}
+  parameters:
+    eligible_kinds:
+    - creature
+    - object
+    targeted_when_any:
+    - attack_roll_target
+    - forced_save_target
+    - selected_spell_recipient
+    - selected_other_effect_recipient
+  implementation: dnd2024:glossary_target
+splat_contracts:
+- id: dnd2024:glossary_target
+  inputs:
+    subject:
+      type: object
+      required: true
+    effect:
+      type: effect
+      required: true
+  outputs:
+  - is_target
+  events: []
+  capabilities:
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 4e2670d24fdda1d2a1c81034bc0444657cdf5ca908163e77ac4cd9331b3b06ea
   source_path: builtin/srd-5.2.1/glossary/target.md
   pages:
   - 190
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_target
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: ae8885e89018d7eff14f417a5ff3bb8e1ae18a18e0ad8cc616d2a62fccc89b99
 splat_clauses:
 - key: source_rules
   text: '# Target A target is the creature or object targeted by an attack roll, forced to make a saving
     throw by an effect, or selected to receive the effects of a spell or another phenomenon.'
   sha256: 42b7af75d79d6630e977de7653cf904f50ea0efed3098092ca7a98e7f9c52bfe
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Target

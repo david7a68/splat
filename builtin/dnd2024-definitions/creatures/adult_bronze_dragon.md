@@ -64,18 +64,352 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/adult_bronze_dragon
+  implementation: dnd2024:creature_adult_bronze_dragon
+  parameters:
+    features:
+      amphibious:
+        economy: passive
+        breathing_media:
+        - air
+        - water
+      legendary_resistance:
+        economy: passive
+        resource:
+          capacity: 3
+          capacity_in_lair: 4
+          recovery: long_rest
+          cost: 1
+        trigger: saving_throw.failed
+        optional: true
+        op: replace_save_outcome
+        outcome: success
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 12
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 16
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 7
+          damage_type: slashing
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 1
+              sides: 10
+            add: 0
+          damage_type: lightning
+        reach_feet: 10
+      lightning_breath:
+        economy: action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: save
+        ability: dexterity
+        dc: 19
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: line
+            size_feet: 90
+            origin: self
+            width_feet: 5
+        failure:
+        - op: damage
+          average: 55
+          amount:
+            dice:
+              count: 10
+              sides: 10
+            add: 0
+          damage_type: lightning
+        success:
+        - op: damage_fraction
+          numerator: 1
+          denominator: 2
+          round: down
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: rend
+          count: 3
+        replacement:
+          max_attacks: 1
+          choices:
+          - feature: repulsion_breath
+          - feature: spellcasting
+            spell:
+              key: dnd2024:spells/guiding_bolt
+            cast_level: 2
+      spellcasting:
+        economy: action
+        op: cast_spell_choice
+        ability: charisma
+        spells:
+        - spell:
+            key: dnd2024:spells/detect_magic
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/guiding_bolt
+          frequency: at_will
+          cast_level: 2
+        - spell:
+            key: dnd2024:spells/shapechange
+          frequency: at_will
+          overrides:
+            form_types:
+            - beast
+            - humanoid
+            temporary_hit_points_gained: 0
+            concentration_required: false
+            temporary_hit_points_to_maintain_required: false
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/speak_with_animals
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/thaumaturgy
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/detect_thoughts
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/water_breathing
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        components_waived:
+        - material
+        save_dc: 17
+        spell_attack_bonus: 10
+      thunderclap:
+        economy: legendary_action
+        op: save
+        ability: constitution
+        dc: 17
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: sphere
+            size_feet: 20
+            origin: chosen_point
+            origin_visible_to: self
+            origin_range_feet: 90
+        failure:
+        - op: damage
+          average: 10
+          amount:
+            dice:
+              count: 3
+              sides: 6
+            add: 0
+          damage_type: thunder
+        - op: condition
+          condition: deafened
+          ends:
+            event: turn.end
+            participant: target
+            occurrence: next
+        success: []
+      repulsion_breath:
+        economy: action
+        op: save
+        ability: strength
+        dc: 19
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            size_feet: 30
+            origin: self
+        failure:
+        - op: push
+          distance_max_feet: 60
+          direction: straight_away_from_self
+        - op: condition
+          condition: prone
+        success: []
+      guiding_light:
+        economy: legendary_action
+        op: cast_spell
+        spell:
+          key: dnd2024:spells/guiding_bolt
+        via: spellcasting
+        cast_level: 2
+      pounce:
+        economy: legendary_action
+        op: sequence
+        steps:
+        - op: move
+          distance_max:
+            multiply:
+            - stat: speed
+            - numerator: 1
+              denominator: 2
+        - op: use_feature
+          feature: rend
+          count: 1
+    skill_totals:
+      insight: 7
+      perception: 12
+      stealth: 5
+    defenses:
+      immunities:
+        damage_types:
+        - lightning
+    senses:
+      passive_perception: 22
+      special:
+      - sense: blindsight
+        range_feet: 60
+      - sense: darkvision
+        range_feet: 120
+    communication:
+      speaks:
+      - common
+      - draconic
+      understands:
+      - common
+      - draconic
+    legendary_actions:
+      uses: 3
+      uses_in_lair: 4
+      cost_per_action: 1
+      trigger: another_creature.turn.end
+      recovery:
+        event: turn.start
+        participant: self
+        amount: all
+      maximum_per_trigger: 1
+      requires:
+        self_incapacitated: false
+        self_can_take_actions: true
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_adult_bronze_dragon
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - another_creature.turn.end
+  - saving_throw.failed
+  - turn.end
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - legendary_actions
+  - resources
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: b5a890131a952068fa6117c845979fcb1cf4feebd111f111d9adae36f7886baf
   source_path: builtin/srd-5.2.1/creature/adult_bronze_dragon.md
   pages:
   - 270
   - 271
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_adult_bronze_dragon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 4170df5eaa54b34725e5efc1410babb64cf9260545e7ea0c43e436446b37c3de
 splat_clauses:
 - key: source_rules
   text: '# Adult Bronze Dragon Huge Dragon (Metallic), Lawful Good AC 18 Initiative +10 (20) HP 212 (17d12
@@ -104,7 +438,8 @@ splat_clauses:
     Failure: 10 (3d6) Thunder damage, and the target has the Deafened condition until the end of its next
     turn.'
   sha256: 3e60d3c4fcc2600a31cf0c54155d4e1368e38f4f36aeab300e14825598304c76
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Adult Bronze Dragon

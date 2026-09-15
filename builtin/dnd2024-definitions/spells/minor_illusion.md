@@ -30,17 +30,94 @@ splat_spell:
   material:
     description: a bit of fleece
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/minor_illusion
+  implementation: dnd2024:spell_minor_illusion
+  parameters:
+    illusion:
+      within_spell_range: true
+      duration: spell_duration
+      end_on_recast: true
+      choose_modes: 1
+    modes:
+      sound:
+        volume_minimum: whisper
+        volume_maximum: scream
+        sound_choice: any
+        timing_choices:
+        - continuous
+        - discrete_over_duration
+      image:
+        depiction: object
+        maximum_cube_side_feet: 5
+        prohibit_sensory_effects:
+        - sound
+        - light
+        - smell
+        - all_nonvisual
+        physical_interaction:
+          reveals_illusion: true
+          things_pass_through: true
+    discern:
+      cost: study_action
+      check:
+        ability: intelligence
+        skill: investigation
+        dc:
+          binding: save_dc
+      success: recognize_illusion
+      recognized_illusion_appearance: faint
+splat_contracts:
+- id: dnd2024:spell_minor_illusion
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - effect.ended
+  - movement.completed
+  - save.before
+  - save.after
+  - spell.cast_pending
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_relationships
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 5b0c6e2de6f79039b60c00fd14dd62c9b89729206275a0c75e5b6ab86c73b427
   source_path: builtin/srd-5.2.1/spell/minor_illusion.md
   pages:
   - 149
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_minor_illusion
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 8bc7503a99fa9d0ca5e18e5ce0deb1f312fbf1f07b7a9c4cdc9184171760ee18
 splat_clauses:
 - key: source_rules
   text: '# Minor Illusion Illusion Cantrip (Bard, Sorcerer, Warlock, Wizard) Casting Time: Action Range:
@@ -57,7 +134,8 @@ splat_clauses:
     sound, light, smell, or any other sensory effect. Physical interaction with the image reveals it to
     be an illusion, since things can pass through it.'
   sha256: c1690ea72eaf8ea4964a2e3859d4b91e2911c590ba1e92e2bcbd143573c5c8f2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Minor Illusion

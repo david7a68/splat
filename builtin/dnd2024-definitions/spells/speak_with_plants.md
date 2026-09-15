@@ -26,17 +26,86 @@ splat_spell:
   ritual: false
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/speak_with_plants
+  implementation: dnd2024:spell_speak_with_plants
+  parameters:
+    targeting:
+      kind: plants_in_area
+      shape: emanation
+      radius_feet: 30
+      origin: caster_at_cast
+      immobile: true
+    animation:
+      duration: spell_duration
+      limited_sentience: true
+      communicates_with: caster
+      follows: simple_commands
+      movable_parts:
+      - branches
+      - tendrils
+      - stalks
+      uproot_or_move_about: false
+    questions:
+      scope: events_in_spell_area
+      history_days: 1
+      topics:
+      - passing_creatures
+      - weather
+      - other_circumstances
+    terrain_choices:
+    - from: plant_growth_difficult_terrain
+      to: ordinary
+    - from: ordinary_with_plants
+      to: difficult_terrain
+    terrain_duration: spell_duration
+    plant_creatures:
+      communication: shared_language_equivalent
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 10
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_speak_with_plants
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+    campaign:
+      type: campaign
+      required: true
+  outputs:
+  - effects
+  - information
+  events:
+  - spell.cast_completed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_effects
+  - campaign_state
+  - controlled_participants
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 8b3f0f86a783dd5bc3ab1204e75f941c3ec50d5feb65c41b22c3262fb812fbae
   source_path: builtin/srd-5.2.1/spell/speak_with_plants.md
   pages:
   - 164
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_speak_with_plants
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 9d1f8f31e41b3f4960cdb445ba0b5bec68336f29f70c1541fd253304db8480c9
 splat_clauses:
 - key: source_rules
   text: '# Speak with Plants Level 3 Transmutation (Bard, Druid, Ranger) Casting Time: Action Range: Self
@@ -50,7 +119,8 @@ splat_clauses:
     move their branches, tendrils, and stalks for you. If a Plant creature is in the area, you can communicate
     with it as if you shared a common language.'
   sha256: cc008c45b01a7511280b4446eab90e013028798a0f6c6f6e73ca3e506e2c963e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Speak with Plants

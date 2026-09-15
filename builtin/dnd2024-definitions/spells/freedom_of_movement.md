@@ -31,17 +31,87 @@ splat_spell:
   material:
     description: a leather strap
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/freedom_of_movement
+  implementation: dnd2024:spell_freedom_of_movement
+  parameters:
+    target:
+      kind: creature
+      count: 1
+      visible_to_caster: false
+      willing: true
+      touch: true
+    effects:
+      ignore_difficult_terrain: true
+      magical_speed_reduction: false
+      magically_imposed_conditions_prevented:
+      - paralyzed
+      - restrained
+      swim_speed:
+        stat:
+          of: target
+          key: speed
+    escape:
+      cost_movement_feet: 5
+      automatic: true
+      eligible:
+      - nonmagical_restraints
+      - nonmagical_grapple
+    scaling:
+      per_slot_above: 4
+      additional_targets: 1
+splat_contracts:
+- id: dnd2024:spell_freedom_of_movement
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - movement_effect
+  - condition_protection
+  - escape
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - conditions
+  - movement
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 16ae66dc402f4e46091360e3cf25fa2b1df076041314fdd75f23b0603693f2c0
   source_path: builtin/srd-5.2.1/spell/freedom_of_movement.md
   pages:
   - 134
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_freedom_of_movement
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 78d608eff22f5cfdbbdb77a0e5384244e2fa0d3e948f216def5b19b6d4043143
 splat_clauses:
 - key: source_rules
   text: '# Freedom of Movement Level 4 Abjuration (Bard, Cleric, Druid, Ranger) Casting Time: Action Range:
@@ -53,7 +123,8 @@ splat_clauses:
     condition on it. Using a Higher-Level Spell Slot. You can target one additional creature for each
     spell slot level above 4.'
   sha256: d17939bff7a4068434fbc2136acb2e0d930bed93b4a5ba74b0fb4f09de397ed4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Freedom of Movement

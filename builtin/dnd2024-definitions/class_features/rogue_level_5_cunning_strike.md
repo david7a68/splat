@@ -12,18 +12,88 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/rogue_level_5_cunning_strike
-  parameters: {}
+  parameters:
+    trigger: sneak_attack.damage_pending
+    maximum_effect_choices: 1
+    cost:
+      resource: sneak_attack_damage_dice
+      remove_before_roll: true
+    effect_timing: immediately_after_attack_damage
+    save_dc:
+      op: add
+      args:
+      - 8
+      - stat: abilities.dexterity.modifier
+      - stat: proficiency_bonus
+    options:
+    - id: poison
+      cost_d6: 1
+      requires_carried_item: poisoners_kit
+      save:
+        ability: constitution
+        failure_condition: poisoned
+        duration:
+          minutes: 1
+        repeat:
+          event: target.turn_ended
+          success_ends: true
+    - id: trip
+      cost_d6: 1
+      maximum_target_size: large
+      save:
+        ability: dexterity
+        failure_condition: prone
+    - id: withdraw
+      cost_d6: 1
+      move:
+        maximum_feet:
+          op: divide
+          args:
+          - stat: speed
+          - 2
+        provokes_opportunity_attacks: false
+  implementation: dnd2024:class_features_rogue_level_5_cunning_strike
+splat_contracts:
+- id: dnd2024:class_features_rogue_level_5_cunning_strike
+  inputs:
+    actor:
+      type: participant
+      required: true
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+    destination:
+      required: false
+      type: location
+  outputs:
+  - feature_state
+  - movement
+  - conditions
+  events:
+  - sneak_attack.damage_pending
+  - attack.damage_completed
+  - turn.ended
+  capabilities:
+  - damage_dice_costs
+  - conditions
+  - movement
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 63
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_rogue_level_5_cunning_strike
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: adfe641194d71cdaefd9599a9abed7ae06e29a2e8cdb629f29428f4eaf5629b5
   parent_name: Rogue
   line_span:
     first: 5267
@@ -44,7 +114,8 @@ splat_clauses:
     Withdraw (Cost: 1d6). Immediately after the attack, you move up to half your Speed without provoking
     Opportunity Attacks.'
   sha256: f88090b2c1094e56e1f08b0999c71432200f2af7a1273153482ff4280e982a8d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 5: Cunning Strike

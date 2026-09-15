@@ -58,17 +58,167 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/goblin_warrior
+  implementation: dnd2024:creature_goblin_warrior
+  parameters:
+    skill_totals:
+      stealth: 6
+    gear:
+    - item: leather_armor
+      count: 1
+    - item: scimitar
+      count: 1
+    - item: shield
+      count: 1
+    - item: shortbow
+      count: 1
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 9
+    languages:
+      speak: true
+      known:
+      - common
+      - goblin
+    features:
+      scimitar:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 2
+            average: 5
+        - op: conditional
+          when:
+            attack_had_advantage: true
+          effects:
+          - op: damage
+            components:
+            - type: slashing
+              amount:
+                dice:
+                  count: 1
+                  sides: 4
+                add: 0
+              average: 2
+      shortbow:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 80
+          long: 320
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 2
+            average: 5
+        - op: conditional
+          when:
+            attack_had_advantage: true
+          effects:
+          - op: damage
+            components:
+            - type: piercing
+              amount:
+                dice:
+                  count: 1
+                  sides: 4
+                add: 0
+              average: 2
+      nimble_escape:
+        economy: bonus_action
+        op: action.choose
+        choices:
+        - disengage
+        - hide
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_goblin_warrior
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 39b0293c12fc3b857acf52dd061165138fb1355cc743fa61245d0e6145121c22
   source_path: builtin/srd-5.2.1/creature/goblin_warrior.md
   pages:
   - 290
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_goblin_warrior
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 4b9cb6dbcaca8616f52957a42029996280cd0bbca6038b20c76d4778f300111f
 splat_clauses:
 - key: source_rules
   text: '# Goblin Warrior Small Fey (Goblinoid), Chaotic Neutral AC 15 Initiative +2 (12) HP 10 (3d6)
@@ -80,7 +230,8 @@ splat_clauses:
     2) Piercing damage, plus 2 (1d4) Piercing damage if the attack roll had Advantage. ### Bonus Actions
     Nimble Escape. The goblin takes the Disengage or Hide action.'
   sha256: b3b0bf61bcde473055ec4340c5040dbebfad865b0c52b1ff8ac424f0e0b9b736
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Goblin Warrior

@@ -14,7 +14,7 @@ splat_rule:
   mechanic: dnd2024:rules/social_interaction_roleplaying
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
@@ -22,9 +22,10 @@ splat_conversion:
   - 10
   - 11
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: fb9030e6aa8b68dc47bd9e2efa79f4f7d1507721efa4dcf4dbb1d9fb6add961c
   parent_name: Social Interaction
   line_span:
     first: 555
@@ -44,7 +45,7 @@ splat_clauses:
     insult a proud warrior or speak ill of a noble’s allies, your efforts to convince or deceive will
     likely fail.'
   sha256: a2e69e38d91b77e34ac52f240bad05f6317e117fe71113b956e778e33c3112a1
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Roleplaying

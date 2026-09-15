@@ -55,17 +55,140 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/elephant
+  implementation: dnd2024:creature_elephant
+  parameters:
+    features:
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: gore
+          count: 2
+      gore:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 8
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 15
+            roll:
+              count: 2
+              sides: 8
+              modifier: 6
+            type: piercing
+          prone:
+            condition: prone
+            maximum_size: huge
+            requires:
+              immediately_preceding_straight_movement_toward_target_ft: 20
+      trample:
+        economy: bonus_action
+        operation: saving_throw
+        ability: dexterity
+        dc: 16
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 5
+          required_conditions:
+          - prone
+        failure:
+          damage:
+          - average: 17
+            roll:
+              count: 2
+              sides: 10
+              modifier: 6
+            type: bludgeoning
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+    senses:
+      passive_perception: 10
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_elephant
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 1fdfb95a87eea5105bac82d8b2455e5323ec59529374f2aed2da6563f7561ab3
   source_path: builtin/srd-5.2.1/creature/elephant.md
   pages:
   - 348
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_elephant
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 555d88889b50bf8e39f71649e8c3661469c7feb1c92c4df93b446831126441ee
 splat_clauses:
 - key: source_rules
   text: '# Elephant Huge Beast, Unaligned AC 12 Initiative -1 (9) HP 76 (8d12 + 24) Speed 40 ft. MOD SAVE
@@ -77,7 +200,8 @@ splat_clauses:
     DC 16, one creature within 5 feet that has the Prone condition. Failure: 17 (2d10 + 6) Bludgeoning
     damage. Success: Half damage.'
   sha256: 2e655566b9d77cc383ecfb914546d73e883b1212b50def10c316961c418a48bb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Elephant

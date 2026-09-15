@@ -15,18 +15,92 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/dragon_scale_mail
+  implementation: dnd2024:item_dragon_scale_mail
+  parameters:
+    equipment_state: worn
+    armor_class_bonus: 1
+    saving_throws:
+      advantage_against: dragon_breath_weapons
+    variants:
+      black:
+        resistance: acid
+      blue:
+        resistance: lightning
+      brass:
+        resistance: fire
+      bronze:
+        resistance: lightning
+      copper:
+        resistance: acid
+      gold:
+        resistance: fire
+      green:
+        resistance: poison
+      red:
+        resistance: fire
+      silver:
+        resistance: cold
+      white:
+        resistance: cold
+    detection:
+      action: magic
+      resource:
+        uses: 1
+        recovery: dawn
+      target: closest_dragon_matching_armor_type
+      range_miles: 30
+      outputs:
+      - distance
+      - direction
+    attunement:
+      required: true
+splat_contracts:
+- id: dnd2024:item_dragon_scale_mail
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - equipment
+  - item_resources
+  - effects
+  - spatial_queries
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: a6adb3dac0e893bdad4c631be7b2bad2d16c9c37c521db8191bd87b5110faa28
   source_path: builtin/srd-5.2.1/magic_item/dragon_scale_mail.md
   pages:
   - 218
   - 219
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_dragon_scale_mail
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: fbaab62c4e841cc82a370a633764464e0971be9faf8efe70b2282cfb593c01a6
 splat_clauses:
 - key: source_rules
   text: '# Dragon Scale Mail Armor (Scale Mail), Very Rare (Requires Attunement) Dragon Scale Mail is
@@ -40,7 +114,8 @@ splat_clauses:
     until the next dawn. Dragon Resistance Dragon Resistance Black Acid Gold Fire Blue Lightning Green
     Poison Brass Fire Red Fire Bronze Lightning Silver Cold Copper Acid White Cold'
   sha256: 855099b6a1ac27a9aa5a08a4a0622d85393269a0ff0409f42e6e6054945918de
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dragon Scale Mail

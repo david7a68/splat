@@ -59,17 +59,106 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/eagle
+  implementation: dnd2024:creature_eagle
+  parameters:
+    features:
+      talons:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 4
+            roll:
+              count: 1
+              sides: 4
+              modifier: 2
+            type: slashing
+    skill_totals:
+      perception: 6
+    senses:
+      passive_perception: 16
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_eagle
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 9f3d76bd9c559bb9f16d68651e65d4f0bf55a246c5c83cc80824788b87c91be4
   source_path: builtin/srd-5.2.1/creature/eagle.md
   pages:
   - 348
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_eagle
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 433746c9368f2db17f28ed1a67addd4479762b2e7effb8f10eaccb850a2a8b59
 splat_clauses:
 - key: source_rules
   text: '# Eagle Small Beast, Unaligned AC 12 Initiative +2 (12) HP 4 (1d6 + 1) Speed 10 ft., Fly 60 ft.
@@ -77,7 +166,8 @@ splat_clauses:
     -2 Skills Perception +6 Senses Passive Perception 16 Languages None CR 0 (XP 10; PB +2) ### Actions
     Talons. Melee Attack Roll: +4, reach 5 feet. Hit: 4 (1d4 + 2) Slashing damage.'
   sha256: 43e022e5754c7eb2a73ef85316ff8c57e6d775b39b8c6da26e00a77d85156545
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Eagle

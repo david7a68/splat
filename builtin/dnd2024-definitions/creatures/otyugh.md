@@ -55,17 +55,187 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/otyugh
+  implementation: dnd2024:creature_otyugh
+  parameters:
+    senses:
+    - sense: darkvision
+      range_ft: 120
+    passive_perception: 11
+    languages:
+      speak: true
+      known:
+      - otyugh
+    telepathy:
+      range_ft: 120
+      two_way: false
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 6
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 3
+            average: 12
+        - op: condition.apply
+          condition: poisoned
+          on_target_long_rest_finished:
+            op: saving_throw
+            ability: constitution
+            dc: 15
+            targets:
+              kind: target
+            failure:
+            - op: hp_maximum.reduce
+              amount:
+                dice:
+                  count: 1
+                  sides: 10
+                add: 0
+              average: 5
+              recovery: this_poisoned_condition_ends
+            success:
+            - op: effect.end
+      tentacle:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 6
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 3
+            average: 12
+        - op: grapple
+          escape_dc: 13
+          when:
+            target_kind: creature
+            target_maximum_size: medium
+          limb_slots: 2
+          slots_per_target: 1
+      tentacle_slam:
+        economy: action
+        op: saving_throw
+        ability: constitution
+        dc: 14
+        targets:
+          kind: creature
+          count: all
+          grappled_by: actor
+        failure:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 3
+                sides: 8
+              add: 3
+            average: 16
+        - op: condition.apply
+          condition: stunned
+          duration:
+            until: actor.next_turn_start
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 1
+          feature: bite
+        - count: 2
+          feature: tentacle
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_otyugh
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 7df039a0501bd31fdd1c1323973047d6dcc705fd97c309efcd7b8948c8323d72
   source_path: builtin/srd-5.2.1/creature/otyugh.md
   pages:
   - 313
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_otyugh
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: f9c34c8182854c47794706f95ae83a7d5fe00707fdeb0d048eaf93ecb301b1db
 splat_clauses:
 - key: source_rules
   text: '# Otyugh Large Aberration, Neutral AC 14 Initiative +0 (10) HP 104 (11d10 + 44) Speed 30 ft.
@@ -83,7 +253,8 @@ splat_clauses:
     and the target has the Stunned condition until the start of the otyugh’s next turn. Success: Half
     damage only.'
   sha256: 32cef42de27fbd202fcd98635a17aae84a528dbb9be8ae710b21bdcc36de22a4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Otyugh

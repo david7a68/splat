@@ -12,18 +12,67 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/wizard_level_20_signature_spells
-  parameters: {}
+  parameters:
+    choose_spells:
+      count: 2
+      level: 3
+      in_spellbook: true
+    always_prepared: true
+    counts_against_prepared_limit: false
+    free_cast:
+      per_spell_resource:
+        id: wizard.signature_spell
+        maximum: 1
+        recovery:
+        - event: rest.short_completed
+          amount: all
+        - event: rest.long_completed
+          amount: all
+      cost: 1
+      cast_level: 3
+      expend_slot: false
+    higher_level_casting:
+      expend_slot: true
+    class_scope:
+      class: wizard
+      minimum_level: 20
+  implementation: dnd2024:class_features_wizard_level_20_signature_spells
+splat_contracts:
+- id: dnd2024:class_features_wizard_level_20_signature_spells
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - character.feature_acquired
+  - rest.short_completed
+  - rest.long_completed
+  - spell.cast
+  capabilities:
+  - character_features
+  - resources
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 79
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_wizard_level_20_signature_spells
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: da26c1970208b395336461852b708bc25be59418fc1d114b9cbfcf0109589131
   parent_name: Wizard
   line_span:
     first: 6752
@@ -35,7 +84,8 @@ splat_clauses:
     a spell slot. When you do so, you can’t cast them in this way again until you finish a Short or Long
     Rest. To cast either spell at a higher level, you must expend a spell slot.'
   sha256: 96b04e6179028e8e432199aab7883b2eec6a00c635f13130fcd3ed841976f17c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 20: Signature Spells

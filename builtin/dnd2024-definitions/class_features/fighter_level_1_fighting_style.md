@@ -12,18 +12,47 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/fighter_level_1_fighting_style
-  parameters: {}
+  parameters:
+    feat_choice:
+      count: 1
+      category: fighting_style
+    replace:
+      event: fighter.level_gained
+      category: fighting_style
+      maximum: 1
+    class_scope:
+      class: fighter
+      minimum_level: 1
+  implementation: dnd2024:class_features_fighter_level_1_fighting_style
+splat_contracts:
+- id: dnd2024:class_features_fighter_level_1_fighting_style
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - feat_grants
+  events:
+  - character.feature_acquired
+  - character.level_gained
+  capabilities:
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 47
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_fighter_level_1_fighting_style
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 2981b00e4ff7552eedcd5a8cdae5eed3775db99ce110864aca1782476932ace3
   parent_name: Fighter
   line_span:
     first: 3934
@@ -35,7 +64,8 @@ splat_clauses:
     the feat you chose with a different Fighting Style feat. Second Weapon Wind Mastery 2 3 2 3 2 3 3
     4 3 4 3 4 3 4 3 4 3 4 4 5 4 5 4 5 4 5 4 5 4 5 4 6 4 6 4 6 4 6 4 6'
   sha256: d9bd0a678354f3e9e9ff0e8c27c2128f0a318e19fa86532b642967933fa7dcf0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Fighting Style

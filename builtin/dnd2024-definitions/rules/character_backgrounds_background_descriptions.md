@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/character_backgrounds_background_descriptions
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 83
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 6946ea7bf5f0622d16685d47287ba075b4aaa9bf22474edfa720ea88048ef7a9
   parent_name: Character Backgrounds
   line_span:
     first: 7086
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Background Descriptions'
   sha256: 41f62cb64ad694779e85f6bf7cdf054c505aeb49ed96173072bcc4e8d5f4d0be
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Background Descriptions

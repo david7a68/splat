@@ -26,18 +26,89 @@ splat_spell:
   ritual: false
   range:
     mode: sight
+splat_rule:
+  mechanic: dnd2024:spells/mirage_arcane
+  implementation: dnd2024:spell_mirage_arcane
+  parameters:
+    spell_lifetime:
+      concentration: false
+      maximum_seconds: 864000
+    area:
+      maximum_square_miles: 1
+      range: sight
+    terrain:
+      appearance_design: caster_choice
+      modalities:
+      - visual
+      - audible
+      - tactile
+      - olfactory
+      movement_effect_choices:
+      - create_difficult_terrain
+      - remove_difficult_terrain
+      - impede_movement
+      terrain_geometry: supplied_design
+    structures:
+      alter_appearance: true
+      add_illusory_structures: true
+    creatures:
+      disguise: false
+      conceal: false
+      add: false
+    removed_illusory_piece:
+      event: object.left_area
+      effect: immediately_disappear
+    truesight:
+      see_true_terrain: true
+      aware_of_illusion: true
+      removes_other_modalities: false
+      physical_interaction_remains_possible: true
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_mirage_arcane
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    area:
+      type: location
+      required: true
+    terrain_design:
+      type: choice
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  events:
+  - object.left_area
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - illusions
+  - areas
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: b726d5867a53e8a6d70054c1f82e70d5ff1aecad4f741a377a17265d0c5fb0dd
   source_path: builtin/srd-5.2.1/spell/mirage_arcane.md
   pages:
   - 149
   - 150
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_mirage_arcane
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 6bc7a63cbdd32378e403e8bd9fe16e8d22a41d7ac582d44c26104f547b2b7996
 splat_clauses:
 - key: source_rules
   text: '# Mirage Arcane Level 7 Illusion (Bard, Druid, Wizard) Casting Time: 10 minutes Range: Sight
@@ -53,7 +124,8 @@ splat_clauses:
     true form; however, all other elements of the illusion remain, so while the creature is aware of the
     illusion’s presence, the creature can still physically interact with the illusion.'
   sha256: 58a15003be30c86279267bc21104821f9434054059e067de80e7ed89ec7f38e8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Mirage Arcane

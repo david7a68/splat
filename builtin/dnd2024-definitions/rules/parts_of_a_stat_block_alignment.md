@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_alignment
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 254
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: a84751556ad56e7445d10ff9428a29cc0ef6f05c853dbc35fbf088275e6894ee
   parent_name: Parts of a Stat Block
   line_span:
     first: 10935
@@ -36,7 +37,7 @@ splat_clauses:
     invitation for you to consider whether an individual leans toward one of the other alignments. “Character
     Creation” describes the nine alignments and unaligned creatures.'
   sha256: 12cf88e23cd15327674d5eabcfe701d5148b4cad43c28636bbf5d613ce46bcff
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Alignment

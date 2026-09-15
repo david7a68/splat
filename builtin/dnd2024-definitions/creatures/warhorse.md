@@ -55,17 +55,116 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/warhorse
+  implementation: dnd2024:creature_warhorse
+  parameters:
+    senses: []
+    passive_perception: 11
+    languages:
+      speak: true
+      known: []
+    features:
+      hooves:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 6
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 2
+                sides: 4
+              add: 4
+            average: 9
+        - op: conditional
+          when:
+            target_maximum_size: large
+            actor_moved_straight_toward_target_ft_at_least: 20
+            immediately_before_hit: true
+            target_kind: creature
+          effects:
+          - op: damage
+            components:
+            - type: bludgeoning
+              amount:
+                dice:
+                  count: 2
+                  sides: 4
+                add: 0
+              average: 5
+          - op: condition.apply
+            condition: prone
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_warhorse
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f1534724359fab4fce61595bdbf0c114feddb274b84c4fcf5945d9ccd627bc01
   source_path: builtin/srd-5.2.1/creature/warhorse.md
   pages:
   - 364
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_warhorse
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: c1a1eb8367dfa760db2b1c1bc82e0d769480c4b5f1b3cad85b3b9eab24d9a8b7
 splat_clauses:
 - key: source_rules
   text: '# Warhorse Large Beast, Unaligned AC 11 Initiative +1 (11) HP 19 (3d10 + 3) Speed 60 ft. MOD
@@ -75,7 +174,8 @@ splat_clauses:
     and the horse moved 20+ feet straight toward it immediately before the hit, the target takes an extra
     5 (2d4) Bludgeoning damage and has the Prone condition.'
   sha256: a785a94aad4e962239bbf00be97ff70bc8b9ad5bd48edb27f29789422a2410ce
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Warhorse

@@ -12,18 +12,45 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/d20_tests_ability_checks
-  parameters: {}
+  parameters:
+    check: ability_check
+    eligibility:
+      attack: false
+      meaningful_failure_possible: true
+      outcome_uncertain: true
+      narrative_interest: true
+    call_authority:
+    - gm
+    - applicable_rule
+    ability_and_dc: gm_or_applicable_rule
+  implementation: dnd2024:rules_d20_tests_ability_checks
+splat_contracts:
+- id: dnd2024:rules_d20_tests_ability_checks
+  inputs:
+    subject:
+      type: participant
+      required: true
+    task:
+      type: resolution
+      required: true
+  outputs:
+  - check_request
+  events: []
+  capabilities:
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 6
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_d20_tests_ability_checks
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 359daaf4e1a68843169c0e61aa09bbc48795f87baff5216c69f3f659fba0127b
   parent_name: D20 Tests
   line_span:
     first: 140
@@ -36,7 +63,8 @@ splat_clauses:
     other than an attack that has a chance of meaningful failure. When the outcome is uncertain and narratively
     interesting, the dice determine the result.'
   sha256: 932ec0c1b563a70f52194679732b8ff9ee070b9f4ed3305ad22836b5a055d6cc
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ability Checks

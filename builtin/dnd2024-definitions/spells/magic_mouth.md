@@ -29,17 +29,85 @@ splat_spell:
   material:
     description: jade dust worth 10+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/magic_mouth
+  implementation: dnd2024:spell_magic_mouth
+  parameters:
+    spell_lifetime:
+      concentration: false
+      until: dispelled_or_source_specific_end
+    target:
+      kind: object
+      visible: true
+      range_feet: 30
+      worn_or_carried_by_another: false
+    message:
+      spoken_at_cast: true
+      maximum_words: 25
+      maximum_delivery_seconds: 600
+      playback_voice: caster_voice_at_cast
+      playback_volume: spoken_volume_at_cast
+    trigger:
+      chooser: caster
+      timing: cast
+      allowed_modalities:
+      - visual
+      - audible
+      maximum_distance_from_object_feet: 30
+      condition_resolution: supplied_trigger_predicate
+    delivery:
+      event: declared_trigger.occurred
+      mouth_appears: true
+      mouth_location: existing_mouth_or_mouthlike_feature_if_present
+    recurrence_choice:
+      chooser: caster
+      timing: cast
+      options:
+      - end_after_delivery
+      - repeat_on_each_trigger
+splat_contracts:
+- id: dnd2024:spell_magic_mouth
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    target:
+      type: object
+      required: true
+    message:
+      type: text
+      required: true
+    trigger:
+      type: choice
+      required: true
+    recurrence:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  events:
+  - declared_trigger.occurred
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - illusions
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 911fc9a944050fdc8a1e9df06cf4184f67fd332de8b3921bbb32a7e938263b80
   source_path: builtin/srd-5.2.1/spell/magic_mouth.md
   pages:
   - 146
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_magic_mouth
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 4e08705f1610eab72593ba1015dc1a91b615a2f019e0f269ce2cb39894eff2d0
 splat_clauses:
 - key: source_rules
   text: '# Magic Mouth Level 2 Illusion (Bard, Wizard) Casting Time: 1 minute or Ritual Range: 30 feet
@@ -57,7 +125,8 @@ splat_clauses:
     that occur within 30 feet of the object. For example, you could instruct the mouth to speak when any
     creature moves within 30 feet of the object or when a silver bell rings within 30 feet of it.'
   sha256: 3537b2bd94fb92dddf0e2433a434f574109b02fb1266dc0539718970c2465c33
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Magic Mouth

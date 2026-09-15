@@ -59,17 +59,106 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/rat
+  implementation: dnd2024:creature_rat
+  parameters:
+    skill_totals:
+      perception: 2
+    senses:
+    - sense: darkvision
+      range_ft: 30
+    passive_perception: 12
+    languages:
+      speak: true
+      known: []
+    features:
+      agile:
+        economy: passive
+        op: opportunity_attack.suppress
+        trigger: actor.leaves_enemy_reach
+        movement_modes:
+        - all
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 2
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              constant: 1
+            average: 1
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_rat
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.leaves_enemy_reach
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: fe6b20ec190b7b25b285b9a281ae30af523d9f8ed2dc0889657c0618bf9cbce4
   source_path: builtin/srd-5.2.1/creature/rat.md
   pages:
   - 359
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_rat
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 550e8a84c07e534cad4f0ee0234508710f5688678b9f5b29e14c6075c617cd6d
 splat_clauses:
 - key: source_rules
   text: '# Rat Tiny Beast, Unaligned AC 10 Initiative +0 (10) HP 1 (1d4 - 1) Speed 20 ft., Climb 20 ft.
@@ -78,7 +167,8 @@ splat_clauses:
     PB +2) ### Traits Agile. The rat doesn’t provoke an Opportunity Attack when it moves out of an enemy’s
     reach. ### Actions Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Piercing damage.'
   sha256: 548d5933e0df28517412f0ed71dc6b4b2e04869127bf26b9150be9ddc8185dfb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Rat

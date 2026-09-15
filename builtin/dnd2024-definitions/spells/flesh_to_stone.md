@@ -30,17 +30,97 @@ splat_spell:
   material:
     description: a cockatrice feather
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/flesh_to_stone
+  implementation: dnd2024:spell_flesh_to_stone
+  parameters:
+    targeting:
+      kind: creature
+      count: 1
+      visible: true
+      within_range: true
+    initial_save:
+      ability: constitution
+      automatic_success_types:
+      - construct
+      failure:
+        condition: restrained
+        duration: spell_duration
+      success:
+        speed: 0
+        until: caster_next_turn_start
+    progression:
+      event: restrained_target.turn_ended
+      save_ability: constitution
+      counters:
+        scope: saves_against_this_spell
+        initial_failure_counts:
+          type: choice
+          chooser: table
+          options:
+          - true
+          - false
+          source_scope: saves_against_this_spell
+        consecutive_required: false
+        success_threshold: 3
+        failure_threshold: 3
+      on_success_threshold: end_spell
+      on_failure_threshold:
+        form: stone
+        condition: petrified
+        duration: spell_duration
+    full_concentration_duration:
+      condition: petrified
+      duration: until_removed
+      removal:
+      - greater_restoration
+      - similar_magic
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 1
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_flesh_to_stone
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - turn.ended
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - conditions
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 4ae4269f6d1650016fc295ea93056a357ab30417d7648f3bd5ab536ab0cf1f84
   source_path: builtin/srd-5.2.1/spell/flesh_to_stone.md
   pages:
   - 133
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_flesh_to_stone
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: a609a9bb2d29f6360f74005a2c34224c020a805de193403d81c3da6aa93fa1ce
 splat_clauses:
 - key: source_rules
   text: '# Flesh to Stone Level 6 Transmutation (Druid, Sorcerer, Wizard) Casting Time: Action Range:
@@ -55,7 +135,8 @@ splat_clauses:
     this spell for the entire possible duration, the target is Petrified until the condition is ended
     by Greater Restoration or similar magic.'
   sha256: b9fd5f6bc9497ff2910550adeb0df224f5e14e153cbf9ab3c6bed31856423556
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Flesh to Stone

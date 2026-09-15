@@ -12,18 +12,38 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/casting_spells_class_spell_lists
-  parameters: {}
+  parameters:
+    class_membership_source: spell_header_class_list
+    feature_can_add_to_character_spell_list: true
+    feature_addition_requires_listed_class_membership: false
+  implementation: dnd2024:rule_casting_spells_class_spell_lists
+splat_contracts:
+- id: dnd2024:rule_casting_spells_class_spell_lists
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - spell_resolution
+  events: []
+  capabilities:
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 105
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_casting_spells_class_spell_lists
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: f4773cbf818c367713f3b86a597bfcbf453585951e913ff66604136c652d69a6
   parent_name: Casting Spells
   line_span:
     first: 9143
@@ -34,7 +54,8 @@ splat_clauses:
     after the spell’s school of magic. Some features add a spell to a character’s spell list even if the
     character isn’t a member of a class in the parentheses.'
   sha256: 856eb011e50a622acd029d710c53fff8adf168b508ba8e65bc04a37f2a46e181
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Class Spell Lists

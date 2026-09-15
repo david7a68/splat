@@ -12,18 +12,52 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/thief_level_17_thief_s_reflexes
-  parameters: {}
+  parameters:
+    combat_round: 1
+    turns:
+    - initiative: normal
+    - initiative:
+        op: subtract
+        args:
+        - var: actor.initiative
+        - 10
+    class_scope:
+      class: rogue
+      minimum_level: 17
+  implementation: dnd2024:class_features_thief_level_17_thief_s_reflexes
+splat_contracts:
+- id: dnd2024:class_features_thief_level_17_thief_s_reflexes
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - turn_schedule
+  events:
+  - combat.started
+  - initiative.ordered
+  capabilities:
+  - character_features
+  - initiative
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 64
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_thief_level_17_thief_s_reflexes
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 4ebbdcdd4a826def212fb79871d98366a402d413630df8a565dce4e34e1123e2
   parent_name: Thief
   line_span:
     first: 5396
@@ -34,7 +68,8 @@ splat_clauses:
     can take two turns during the first round of any combat. You take your first turn at your normal Initiative
     and your second turn at your Initiative minus 10.'
   sha256: 5ce2e4d79074e6a6569d8ebd842c89de9926d74b294bf9c0bd8054f544d575ab
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 17: Thief’s Reflexes

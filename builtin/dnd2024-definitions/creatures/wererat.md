@@ -62,17 +62,222 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/wererat
+  implementation: dnd2024:creature_wererat
+  parameters:
+    features:
+      bite:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 8
+          amount:
+            dice:
+              count: 2
+              sides: 4
+            add: 3
+          damage_type: piercing
+        - op: if
+          test:
+            target_type: humanoid
+          then:
+          - op: save
+            ability: constitution
+            dc: 11
+            targets:
+              participant: target
+            failure:
+            - op: curse
+              trigger: target.hit_points_would_become_zero
+              replacement:
+                op: replace_stat_block
+                definition:
+                  key: dnd2024:creatures/wererat
+                controller: gm
+                hit_points: 10
+            success:
+            - op: feature_immunity
+              source: self
+              feature: bite_curse
+              duration:
+                hours: 24
+        reach_feet: 5
+        requires_form:
+        - rat
+        - hybrid
+      scratch:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 6
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 3
+          damage_type: slashing
+        reach_feet: 5
+        range_feet: 30
+        long_range_feet: 120
+      multiattack:
+        economy: action
+        op: repeat_choice
+        count: 2
+        choices:
+        - feature: scratch
+        - feature: hand_crossbow
+        replacement:
+          max_attacks: 1
+          choices:
+          - feature: bite
+      shape_shift:
+        economy: bonus_action
+        op: shape_shift
+        forms:
+        - form: hybrid
+          size: medium
+        - form: rat
+          size: small
+        - form: true_humanoid
+        retain_statistics_except:
+        - size
+        equipment_transformed: false
+      hand_crossbow:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 5
+        range_feet: 30
+        long_range_feet: 120
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 6
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 3
+          damage_type: piercing
+        requires_form:
+        - humanoid
+        - hybrid
+    skill_totals:
+      perception: 4
+      stealth: 5
+    defenses: {}
+    senses:
+      passive_perception: 14
+      special:
+      - sense: darkvision
+        range_feet: 60
+    gear:
+    - item_name: Hand Crossbow
+      quantity: 1
+    communication:
+      speaks:
+      - common
+      understands:
+      - common
+      cannot_speak_in_forms:
+      - rat
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_wererat
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - target.hit_points_would_become_zero
+  capabilities:
+  - action_economy
+  - creature_rules
+  - curses
+  - dice
+  - effects
+  - resources
+  - shapechanging
+  - stat_block_replacement
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: fb5e4fc9ef8591bb2a9906ade41f535f23f6e1fb00d05868a40d918a464ce581
   source_path: builtin/srd-5.2.1/creature/wererat.md
   pages:
   - 338
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_wererat
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 4149cde2906de29d669f39effeb0a993d8f659721ea5128749b44f575e375b98
 splat_clauses:
 - key: source_rules
   text: '# Wererat Medium or Small Monstrosity (Lycanthrope), Lawful Evil AC 13 Initiative +3 (13) HP
@@ -91,7 +296,8 @@ splat_clauses:
     to its true humanoid form. Its game statistics, other than its size, are the same in each form. Any
     equipment it is wearing or carrying isn’t transformed.'
   sha256: 067930c5ab10eb3a97ddaf1ebc1168faa8228e181bc5eccd6d98ea05577e8be4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wererat

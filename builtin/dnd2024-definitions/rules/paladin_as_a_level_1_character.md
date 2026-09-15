@@ -12,18 +12,47 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/paladin_as_a_level_1_character
-  parameters: {}
+  parameters:
+    class:
+      key: dnd2024:classes/paladin
+    entry_mode: level_one_character
+    grant_all_core_traits: true
+    grant_features_at_class_level: 1
+    embedded_feature_progression_source:
+      key: dnd2024:tables/paladin_progression
+    level_one_features:
+    - key: dnd2024:class_features/paladin_level_1_lay_on_hands
+    - key: dnd2024:class_features/paladin_level_1_spellcasting
+    - key: dnd2024:class_features/paladin_level_1_weapon_mastery
+  implementation: dnd2024:rule_paladin_as_a_level_1_character
+splat_contracts:
+- id: dnd2024:rule_paladin_as_a_level_1_character
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - character_changes
+  events: []
+  capabilities:
+  - character_creation
+  - classes
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 53
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_paladin_as_a_level_1_character
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 41f48620114a339144ee23b91cd86f2f6b336a89d8d6796987d43a6f5f0a1e4c
   parent_name: Paladin
   line_span:
     first: 4415
@@ -39,7 +68,8 @@ splat_clauses:
     Expansion 19 +6 Epic Boon 20 +6 Subclass feature • Gain the Paladin’s level 1 features, which are
     listed in the Paladin Features table.'
   sha256: 8e471508053a46d69b323375b369f0e867e82fe050b78105ae491bbb1916001b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # As a Level 1 Character

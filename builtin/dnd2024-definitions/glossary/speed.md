@@ -12,18 +12,68 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/speed
-  parameters: {}
+  parameters:
+    unit: feet
+    budget_period: own_turn
+    special_modes:
+    - burrow
+    - climb
+    - fly
+    - swim
+    mode_choice:
+      chooser: subject
+      switch_during_move: true
+    on_mode_switch:
+      remaining:
+        op: subtract
+        args:
+        - var: new_speed
+        - var: distance_already_moved
+      usable_if_remaining_greater_than: 0
+    temporary_speed_changes:
+      also_apply_to_all_special_speeds: true
+      same_duration: true
+      additive_delta: same_amount
+      set_zero: all_zero
+      multiply: same_factor
+  implementation: dnd2024:glossary_speed
+splat_contracts:
+- id: dnd2024:glossary_speed
+  inputs:
+    subject:
+      type: participant
+      required: true
+    selected_mode:
+      type: choice
+      required: true
+    distance_already_moved:
+      type: number
+      required: true
+    speed_effect:
+      required: false
+      type: effect
+  outputs:
+  - remaining_movement
+  - speeds
+  events:
+  - movement.pending
+  - movement_mode.changed
+  - speed.changed
+  capabilities:
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 9a6775bff56fc5d47a68b8f29ca406a11e8d9229816e092df38af2252b1d168e
   source_path: builtin/srd-5.2.1/glossary/speed.md
   pages:
   - 188
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_speed
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 734edbb0eb0f0865c5224e25fd5810bef6e14c8569c9750896e6e9f092a6ab69
 splat_clauses:
 - key: source_rules
   text: '# Speed A creature has a Speed, which is the distance in feet the creature can cover when it
@@ -40,7 +90,8 @@ splat_clauses:
     your Climb Speed is also reduced to 0. Similarly, if your Speed is halved and you have a Fly Speed,
     your Fly Speed is also halved.'
   sha256: c36e6640bd5fe1c1d4edf3c5a9f76aa58393375d5e21170a420cd8e98372bffd
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Speed

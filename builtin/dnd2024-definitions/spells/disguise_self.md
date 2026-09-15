@@ -26,17 +26,76 @@ splat_spell:
   ritual: false
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/disguise_self
+  implementation: dnd2024:spell_disguise_self
+  parameters:
+    targeting:
+      kind: self
+      includes:
+      - clothing
+      - armor
+      - weapons
+      - carried_belongings
+    illusion:
+      duration: spell_duration
+      height_change_max_feet: 1
+      weight_appearance:
+      - heavier
+      - lighter
+      limb_arrangement: same_basic
+      remaining_appearance: caster_choice
+      physical_inspection: fails
+      physical_substance: false
+    discern:
+      economy: study_action
+      check:
+        ability: intelligence
+        skill: investigation
+        dc: spell_save_dc
+      success: disguise_discerned
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 1
+        unit: hour
+splat_contracts:
+- id: dnd2024:spell_disguise_self
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - perception
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: f9456416d7b86fe409b6a8e31f19742843e356ae4f5520115bc4c04ec6bee5af
   source_path: builtin/srd-5.2.1/spell/disguise_self.md
   pages:
   - 124
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_disguise_self
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 4f17b83a9fe638129be326eb2058786a1a12027b99cf9a075aaa607580c25117
 splat_clauses:
 - key: source_rules
   text: '# Disguise Self Level 1 Illusion (Bard, Sorcerer, Wizard) Casting Time: Action Range: Self Components:
@@ -49,7 +108,8 @@ splat_clauses:
     a creature must take the Study action to inspect your appearance and succeed on an Intelligence (Investigation)
     check against your spell save DC.'
   sha256: 7c1254018ef748011fde5b2b26b3ff4a3f7637eae39eb33cfe4de750216e1ca2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Disguise Self

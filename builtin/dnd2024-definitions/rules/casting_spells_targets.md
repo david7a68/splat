@@ -12,18 +12,65 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/casting_spells_targets
-  parameters: {}
+  parameters:
+    target_kind_source: spell_description
+    clear_path_required: true
+    total_cover_blocks_targeting: true
+    self_targeting:
+      allowed_if_creature_of_choice: true
+      excluded_if:
+      - hostile_required
+      - other_creature_required
+    area_shapes:
+    - cone
+    - cube
+    - cylinder
+    - emanation
+    - line
+    - sphere
+    area_targets: spell_area_geometry
+    target_awareness:
+      requires_perceptible_effect: true
+      spell_exception_overrides: true
+    invalid_target:
+      effect: none
+      spent_slot_refunded: false
+      perception:
+        if_successful_save_normally_no_effect: apparent_successful_save
+        otherwise: no_effect_observed
+      saving_throw_rolled: false
+  implementation: dnd2024:rule_casting_spells_targets
+splat_contracts:
+- id: dnd2024:rule_casting_spells_targets
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - spell_resolution
+  events: []
+  capabilities:
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 106
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_casting_spells_targets
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 71e4a4e4397e56e4f854e8379ff1bc8e5164bba2d0c935c98d96dec51aec6cea
   parent_name: Casting Spells
   line_span:
     first: 9256
@@ -48,7 +95,8 @@ splat_clauses:
     no hint that the creature is an invalid target). Otherwise, you perceive that the spell did nothing
     to the target.'
   sha256: cf0b65da274c82b2a6cdd74dfbf1bd08f05300b718df89c3a033160ff28362b8
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Targets

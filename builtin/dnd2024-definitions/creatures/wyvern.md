@@ -59,17 +59,141 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/wyvern
+  implementation: dnd2024:creature_wyvern
+  parameters:
+    skill_totals:
+      perception: 4
+    senses:
+    - sense: darkvision
+      range_ft: 120
+    passive_perception: 14
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 4
+            average: 13
+      sting:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 7
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 4
+            average: 11
+          - type: poison
+            amount:
+              dice:
+                count: 7
+                sides: 6
+              add: 0
+            average: 24
+        - op: condition.apply
+          condition: poisoned
+          duration:
+            until: actor.next_turn_start
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 1
+          feature: bite
+        - count: 1
+          feature: sting
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_wyvern
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: ba1f0deef116ea8b4c5a98571fd485f14b142633a6618b2a49854ae57c34e643
   source_path: builtin/srd-5.2.1/creature/wyvern.md
   pages:
   - 343
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_wyvern
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 393a4a930fb3b23292a90f9821b2b6f552b41d8a652fd16c256268251ec9bb4b
 splat_clauses:
 - key: source_rules
   text: '# Wyvern Large Dragon, Unaligned AC 14 Initiative +0 (10) HP 127 (15d10 + 45) Speed 30 ft., Fly
@@ -80,7 +204,8 @@ splat_clauses:
     +7, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage plus 24 (7d6) Poison damage, and the target has
     the Poisoned condition until the start of the wyvern’s next turn.'
   sha256: 2800237e4b6d4aff051d7ac3248d6a843eda561704e57cd13cf830fa0f6e436c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wyvern

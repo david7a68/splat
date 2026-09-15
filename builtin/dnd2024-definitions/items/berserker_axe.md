@@ -15,17 +15,92 @@ splat_item:
   rarity: rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/berserker_axe
+  implementation: dnd2024:item_berserker_axe
+  parameters:
+    weapon_bonus:
+      attack: 1
+      damage: 1
+    attuned_passive:
+      hit_point_maximum_bonus:
+        value_from: character_level
+    curse:
+      starts: attunement
+      unwilling_to_part: true
+      must_keep: within_reach
+      other_weapon_attacks: disadvantage
+      berserk_trigger:
+        event: damage_received
+        source: other_creature
+        requires: item_in_possession
+        save:
+          ability: wisdom
+          dc: 15
+        failure: berserk
+      berserk:
+        end_check: self_turn_start
+        end_if:
+          no_creatures_seen_or_heard_within_ft: 60
+        enemy:
+          select: nearest_seen_or_heard_creature
+          tie: random
+        turn:
+          movement: as_close_to_enemy_as_possible
+          action: attack
+          attack_target: enemy
+          weapon: this_item
+          if_unreachable:
+            spend: all_available_movement
+            then: end_turn
+        retarget_on:
+        - target_death
+        - target_neither_seen_nor_heard
+    attunement:
+      required: true
+splat_contracts:
+- id: dnd2024:item_berserker_axe
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    event:
+      required: false
+      type: event
+  outputs:
+  - modifiers
+  - curse_state
+  - effects
+  events:
+  - equipment.state_changed
+  - attunement.completed
+  - damage.received
+  capabilities:
+  - curses
+  - equipment
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 6a8d680e074e28ed80ca22bd32d9837a4031852913f6f152470b13951d7c34af
   source_path: builtin/srd-5.2.1/magic_item/berserker_axe.md
   pages:
   - 213
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_berserker_axe
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: fefe8e7962661742d3291aec637ed4f1209f7192957f5944d4b941b597ba700c
 splat_clauses:
 - key: source_rules
   text: '# Berserker Axe Weapon (Battleaxe, Greataxe, or Halberd), Rare (Requires Attunement) You gain
@@ -43,7 +118,8 @@ splat_clauses:
     turn ends after you’ve used up all your available movement. If the creature dies or can no longer
     be seen or heard by you, the next nearest creature that you can see or hear becomes your new target.'
   sha256: 02e3b431cf1980c32bf31f732ed2bee147526402776b5512dce2f92ff7e61486
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Berserker Axe

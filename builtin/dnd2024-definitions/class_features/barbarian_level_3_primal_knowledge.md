@@ -12,18 +12,64 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/barbarian_level_3_primal_knowledge
-  parameters: {}
+  parameters:
+    skill_proficiency:
+      count: 1
+      choices:
+      - animal_handling
+      - athletics
+      - intimidation
+      - nature
+      - perception
+      - survival
+    ability_substitution:
+      requires:
+        rage_active: true
+      skills:
+      - acrobatics
+      - intimidation
+      - perception
+      - stealth
+      - survival
+      ability: strength
+      optional: true
+    class_scope:
+      class: barbarian
+      minimum_level: 3
+  implementation: dnd2024:class_features_barbarian_level_3_primal_knowledge
+splat_contracts:
+- id: dnd2024:class_features_barbarian_level_3_primal_knowledge
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - character.feature_acquired
+  - ability.check_pending
+  capabilities:
+  - character_features
+  - proficiencies
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 29
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_barbarian_level_3_primal_knowledge
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 4aa5f28d0d262a2213c98f027592b34ad288e29eececdae7cfb55f59140cc5b5
   parent_name: Barbarian
   line_span:
     first: 2357
@@ -37,7 +83,8 @@ splat_clauses:
     Intimidation, Perception, Stealth, or Survival. When you use this ability, your Strength represents
     primal power coursing through you, honing your agility, bearing, and senses.'
   sha256: 406ad5c3cf8537f189b9e92c1e95972243e321197dc25ed9102c943ec362dc3f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Primal Knowledge

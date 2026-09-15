@@ -12,18 +12,73 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_hit_points
-  parameters: {}
+  parameters:
+    hit_point_generation_choice:
+    - printed_number
+    - roll_printed_expression
+    combine_methods: false
+    constitution_contribution:
+      op: multiply
+      args:
+      - variable: constitution_modifier
+      - variable: hit_dice_count
+    typical_hit_die_by_size:
+    - size: tiny
+      die_sides: 4
+      average_per_die: 2.5
+    - size: small
+      die_sides: 6
+      average_per_die: 3.5
+    - size: medium
+      die_sides: 8
+      average_per_die: 4.5
+    - size: large
+      die_sides: 10
+      average_per_die: 5.5
+    - size: huge
+      die_sides: 12
+      average_per_die: 6.5
+    - size: gargantuan
+      die_sides: 20
+      average_per_die: 10.5
+  implementation: dnd2024:rule_parts_of_a_stat_block_hit_points
+splat_contracts:
+- id: dnd2024:rule_parts_of_a_stat_block_hit_points
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    constitution_modifier:
+      type: number
+      required: true
+    hit_dice_count:
+      type: number
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - monster_parameters
+  events: []
+  capabilities:
+  - monsters
+  - hit_points
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 255
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_parts_of_a_stat_block_hit_points
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 695609e3c6b924af77d9b36f7626358a99b6286fa8793dbe22f92735be0ef9d2
   parent_name: Parts of a Stat Block
   line_span:
     first: 10963
@@ -41,7 +96,8 @@ splat_clauses:
     and 2d8 Hit Dice, it has 2d8 + 2 Hit Points (average 11). For more on Hit Points, see “Playing the
     Game.”'
   sha256: 5940476e9b540ef67d2cfbcb8e642e2bdb1f0f267bfe1ab984647022d8c5adfb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hit Points

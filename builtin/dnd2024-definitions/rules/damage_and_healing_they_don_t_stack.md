@@ -12,18 +12,42 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_they_don_t_stack
-  parameters: {}
+  parameters:
+    temporary_hit_points_stacking: false
+    new_grant_choice:
+    - retain_existing
+    - replace_with_new
+  implementation: dnd2024:rule_damage_and_healing_they_don_t_stack
+splat_contracts:
+- id: dnd2024:rule_damage_and_healing_they_don_t_stack
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - hit_points
+  events: []
+  capabilities:
+  - hit_points
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 18
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_damage_and_healing_they_don_t_stack
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 4d6be2e16dfed98a560be25114e990fffde3f2860cbcc98064390128710d9acf
   parent_name: Damage and Healing
   line_span:
     first: 1301
@@ -35,7 +59,8 @@ splat_clauses:
     example, if a spell grants you 12 Temporary Hit Points when you already have 10, you can have 12 or
     10, not 22.'
   sha256: 6b2fdb25fc7561808cf5c96f60eda912f8f662b67b9109e8bef98e89793faaf6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # They Don’t Stack

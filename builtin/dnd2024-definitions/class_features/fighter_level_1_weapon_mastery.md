@@ -12,18 +12,54 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/fighter_level_1_weapon_mastery
-  parameters: {}
+  parameters:
+    mastery_choices:
+      count:
+        table:
+          key: dnd2024:tables/fighter_progression
+        row:
+          var: actor.class_levels.fighter
+        column: weapon_mastery
+      eligible:
+        weapon_category:
+        - simple
+        - martial
+      replacement:
+        event: rest.long_completed
+        maximum: 1
+    class_scope:
+      class: fighter
+      minimum_level: 1
+  implementation: dnd2024:class_features_fighter_level_1_weapon_mastery
+splat_contracts:
+- id: dnd2024:class_features_fighter_level_1_weapon_mastery
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - character.level_gained
+  - rest.long_completed
+  capabilities:
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 48
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_fighter_level_1_weapon_mastery
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: dd25b7eca6aa144b134fe10e0852efa365c5d25078cf5684d81412e1ebf3d7d9
   parent_name: Fighter
   line_span:
     first: 3975
@@ -36,7 +72,8 @@ splat_clauses:
     you gain the ability to use the mastery properties of more kinds of weapons, as shown in the Weapon
     Mastery column of the Fighter Features table.'
   sha256: 8f79cd3021374aa75688102133b7336c72d81ed16aed7f3d7a6b56d71aa07f04
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Weapon Mastery

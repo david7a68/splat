@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/create_your_character_determine_ability_modifiers
-  parameters: {}
+  parameters:
+    modifier:
+      op: floor
+      value:
+        op: divide
+        left:
+          op: subtract
+          left: ability_score
+          right: 10
+        right: 2
+    source_table_score_range:
+      minimum: 3
+      maximum: 20
+  implementation: dnd2024:rules_create_your_character_determine_ability_modifiers
+splat_contracts:
+- id: dnd2024:rules_create_your_character_determine_ability_modifiers
+  inputs:
+    actor:
+      type: participant
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - character_updates
+  events: []
+  capabilities:
+  - character_creation
+  - progression
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 21
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_create_your_character_determine_ability_modifiers
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 76d0eb06e736434506f7b6b36b1081a6542d636548133113593f10d327edda14
   parent_name: Create Your Character
   line_span:
     first: 1566
@@ -35,7 +65,8 @@ splat_clauses:
     Score Modifier Score Modifier 3 -4 12–13 +1 4–5 -3 14–15 +2 6–7 -2 16–17 +3 8–9 -1 18–19 +4 10–11
     +0 20 +5'
   sha256: ba3ff58fc9c0362f5cab37122aa3e0d6c0cb4aa36070f00fcb5b5dc9a625ca17
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Determine Ability Modifiers

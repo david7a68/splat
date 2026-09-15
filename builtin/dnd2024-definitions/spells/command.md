@@ -25,17 +25,110 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/command
+  implementation: dnd2024:spell_command
+  parameters:
+    target:
+      kind: creature
+      count: 1
+      visible_to_caster: true
+    save:
+      ability: wisdom
+      dc:
+        binding: save_dc
+      failure:
+        execute_command: next_target_turn
+      success:
+        effect: none
+    choice:
+      chooser: caster
+      words: 1
+      options:
+      - approach
+      - drop
+      - flee
+      - grovel
+      - halt
+    commands:
+      approach:
+        movement: toward_caster
+        route: shortest_most_direct
+        end_turn_within_feet: 5
+      drop:
+        drop: all_held_objects
+        then: end_turn
+      flee:
+        whole_turn: move_away_from_caster
+        means: fastest_available
+      grovel:
+        condition: prone
+        then: end_turn
+      halt:
+        movement: false
+        action: false
+        bonus_action: false
+    scaling:
+      per_slot_above: 1
+      additional_targets: 1
+splat_contracts:
+- id: dnd2024:spell_command
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - saves
+  - next_turn_command
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - saving_throws
+  - conditions
+  - movement
+  - inventory
+  - choices
+  - time
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 35fdb4cbb0e393cc1def0de68d4e1385220aaaeb5ad5e603085b68286b638ab6
   source_path: builtin/srd-5.2.1/spell/command.md
   pages:
   - 116
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_command
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: c8ec4be138dde63d2a31b3790817da4c6ed464a1d4c9955646c7f0184c76e32b
 splat_clauses:
 - key: source_rules
   text: '# Command Level 1 Enchantment (Bard, Cleric, Paladin) Casting Time: Action Range: 60 feet Components:
@@ -48,7 +141,8 @@ splat_clauses:
     move and takes no action or Bonus Action. Using a Higher-Level Spell Slot. You can affect one additional
     creature for each spell slot level above 1.'
   sha256: f5f67c0cfcbfa55f2d5e6788645c1cb96d0a1b53db09cf66562786738c7e3134
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Command

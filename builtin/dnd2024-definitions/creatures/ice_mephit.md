@@ -61,17 +61,205 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ice_mephit
+  implementation: dnd2024:creature_ice_mephit
+  parameters:
+    features:
+      death_burst:
+        economy: trait
+        operation: saving_throw
+        ability: constitution
+        dc: 10
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: emanation
+            size_ft: 5
+            origin: self
+        failure:
+          damage:
+          - average: 5
+            roll:
+              count: 2
+              sides: 4
+              modifier: 0
+            type: cold
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+        trigger: self.dies
+      claw:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 3
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 3
+            roll:
+              count: 1
+              sides: 4
+              modifier: 1
+            type: slashing
+          - average: 2
+            roll:
+              count: 1
+              sides: 4
+              modifier: 0
+            type: cold
+      fog_cloud:
+        economy: action
+        resource:
+          kind: daily
+          uses: 1
+          recovery: long_rest
+        operation: cast_spell
+        spell:
+          key: dnd2024:spells/fog_cloud
+        ability: charisma
+        components_waived:
+        - verbal
+        - somatic
+        - material
+      frost_breath:
+        economy: action
+        resource:
+          kind: recharge
+          die: 6
+          success_faces:
+          - 6
+          check: self.turn_start
+          rest_recovery:
+          - short
+          - long
+          capacity: 1
+          initial_uses: 1
+        operation: saving_throw
+        ability: constitution
+        dc: 10
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: cone
+            size_ft: 15
+            origin: self
+        failure:
+          damage:
+          - average: 7
+            roll:
+              count: 3
+              sides: 4
+              modifier: 0
+            type: cold
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+    skill_totals:
+      perception: 2
+      stealth: 3
+    damage_vulnerabilities:
+    - fire
+    damage_immunities:
+    - cold
+    - poison
+    condition_immunities:
+    - exhaustion
+    - poisoned
+    senses:
+      darkvision: 60
+      passive_perception: 12
+    languages:
+      speaks:
+      - language: primordial
+        dialects:
+        - aquan
+        - auran
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_ice_mephit
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - creature.died
+  - rest.completed
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spellcasting
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 714af5ea3c19f777ed34bcff05f018c93e067f42ed70855677f94839fc8eaf8b
   source_path: builtin/srd-5.2.1/creature/ice_mephit.md
   pages:
   - 307
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ice_mephit
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: f44343eddb8fd4bb981a9efec12d8f27838a6ca3251d202d71e76a15eb916aea
 splat_clauses:
 - key: source_rules
   text: '# Ice Mephit Small Elemental, Neutral Evil AC 11 Initiative +1 (11) HP 21 (6d6) Speed 30 ft.,
@@ -86,7 +274,8 @@ splat_clauses:
     Saving Throw: DC 10, each creature in a 15-foot Cone. Failure: 7 (3d4) Cold damage. Success: Half
     damage.'
   sha256: 2eb2103d6faa3548ad55e19e3912660378dcf74dcaa5cde9f0920cfd262bdfeb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ice Mephit

@@ -12,18 +12,75 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/grappling
-  parameters: {}
+  parameters:
+    successful_grapple_condition: grappled
+    body_part:
+      default: free_hand
+      alternatives_require_explicit_rule: true
+      targets_per_part: 1
+      cannot_target_other_creatures_while_grappling: true
+    escape:
+      cost: action
+      check_choice:
+        chooser: subject
+        options:
+        - ability: strength
+          skill: athletics
+        - ability: dexterity
+          skill: acrobatics
+      dc: grapple_escape_dc
+      success: end_grappled
+    also_ends_when_any:
+    - grappler_incapacitated
+    - distance_exceeds_grapple_range
+    release:
+      chooser: grappler
+      timing: any_time
+      cost: none
+  implementation: dnd2024:glossary_grappling
+splat_contracts:
+- id: dnd2024:glossary_grappling
+  inputs:
+    subject:
+      type: participant
+      required: true
+    grappler:
+      type: participant
+      required: true
+    grapple:
+      type: effect
+      required: true
+    escape_choice:
+      required: false
+      type: choice
+  outputs:
+  - grapple_state
+  - escape_check
+  - body_part_reservation
+  events:
+  - grapple.started
+  - action.requested
+  - condition.changed
+  - movement.completed
+  - grapple.released
+  capabilities:
+  - grappling
+  - conditions
+  - checks
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: a410ea077d9df57019d795c0ae09dc625944e2d4cbb7d9b9b93c803d71ed7439
   source_path: builtin/srd-5.2.1/glossary/grappling.md
   pages:
   - 182
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_grappling
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: ea10f659eb8b541e3ff3357d23a02110e241466b4eb0b7ad315f425b8585bca9
 splat_clauses:
 - key: source_rules
   text: '# Grappling A creature can grapple another creature. Characters typically grapple by using an
@@ -39,7 +96,8 @@ splat_clauses:
     condition or if the distance between the Grappled target and the grappler exceeds the grapple’s range.
     In addition, the grappler can release the target at any time (no action required).'
   sha256: 354a1b5daf1de8824219edef812874164253fabfc8ab22102c6b507c728df4c2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Grappling

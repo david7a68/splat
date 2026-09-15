@@ -12,18 +12,49 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/weapons_nick
-  parameters: {}
+  parameters:
+    extra_light_attack_economy_choice:
+    - part_of_attack_action
+    - bonus_action
+    extra_light_attack_per_turn_limit: 1
+  implementation: dnd2024:rules_weapons_nick
+splat_contracts:
+- id: dnd2024:rules_weapons_nick
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    event:
+      type: event
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - action_options
+  - effects
+  - resource_updates
+  events: []
+  capabilities:
+  - action_economy
+  - movement
+  - combat
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 90
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_weapons_nick
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: d2adcdf43a1087b6926773671c74fe332ba8b901011ef97c175c20b213686a87
   parent_name: Weapons
   line_span:
     first: 7788
@@ -33,7 +64,8 @@ splat_clauses:
   text: '# Nick When you make the extra attack of the Light property, you can make it as part of the Attack
     action instead of as a Bonus Action. You can make this extra attack only once per turn.'
   sha256: cfaac3ae715329f58e517ce142a250cdf6717c0873cdf57b625cc11a59c345dc
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Nick

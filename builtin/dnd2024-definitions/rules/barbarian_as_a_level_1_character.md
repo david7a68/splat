@@ -12,18 +12,47 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/barbarian_as_a_level_1_character
-  parameters: {}
+  parameters:
+    class:
+      key: dnd2024:classes/barbarian
+    entry_mode: level_one_character
+    grant_all_core_traits: true
+    grant_features_at_class_level: 1
+    embedded_feature_progression_source:
+      key: dnd2024:tables/barbarian_progression
+    level_one_features:
+    - key: dnd2024:class_features/barbarian_level_1_rage
+    - key: dnd2024:class_features/barbarian_level_1_unarmored_defense
+    - key: dnd2024:class_features/barbarian_level_1_weapon_mastery
+  implementation: dnd2024:rule_barbarian_as_a_level_1_character
+splat_contracts:
+- id: dnd2024:rule_barbarian_as_a_level_1_character
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - character_changes
+  events: []
+  capabilities:
+  - character_creation
+  - classes
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 28
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_barbarian_as_a_level_1_character
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 2e234a061dc3fa8613a51cea8f8db7c8a53e678e5b397d0335d1a4bb2920e7ad
   parent_name: Barbarian
   line_span:
     first: 2223
@@ -40,7 +69,8 @@ splat_clauses:
     +6 Primal Champion • Gain the Barbarian’s level 1 features, which are listed in the Barbarian Features
     table.'
   sha256: 769e147ef4d31b0fe9e71bbd7acca97298f487723246ce73b887030edf4cf014
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # As a Level 1 Character

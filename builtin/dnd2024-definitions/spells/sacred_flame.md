@@ -24,17 +24,87 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/sacred_flame
+  implementation: dnd2024:spell_sacred_flame
+  parameters:
+    targets:
+      kind: creature
+      maximum: 1
+      within_spell_range: true
+      visible: true
+    save:
+      ability: dexterity
+      dc:
+        binding: save_dc
+      failure:
+        damage:
+          dice:
+            count:
+              by_caster_level:
+              - minimum: 1
+                count: 1
+              - minimum: 5
+                count: 2
+              - minimum: 11
+                count: 3
+              - minimum: 17
+                count: 4
+            sides: 8
+            add: 0
+          type: radiant
+      success:
+        effect: none
+    ignore_cover_for_save:
+    - half
+    - three_quarters
+splat_contracts:
+- id: dnd2024:spell_sacred_flame
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    caster_level:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  events:
+  - spell.cast_completed
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: c1aabe1b8c1cf3413915cf38501d4652d3fdfd0702a9e652d835958d9c1694a5
   source_path: builtin/srd-5.2.1/spell/sacred_flame.md
   pages:
   - 159
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_sacred_flame
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 80c0a1898861b5e97025585e7f1543eea5fa944f18675945cf7e8eb9a72eda7c
 splat_clauses:
 - key: source_rules
   text: '# Sacred Flame Evocation Cantrip (Cleric) Casting Time: Action Range: 60 feet Components: V,
@@ -43,7 +113,8 @@ splat_clauses:
     benefit from Half Cover or Three-Quarters Cover for this save. Cantrip Upgrade. The damage increases
     by 1d8 when you reach levels 5 (2d8), 11 (3d8), and 17 (4d8).'
   sha256: 4d7ad905c8c268e6f4dea8ce6c53e346172c4df56cda5e25f8df1a9ddbc27cf1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Sacred Flame

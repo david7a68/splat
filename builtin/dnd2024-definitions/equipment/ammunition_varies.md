@@ -14,8 +14,87 @@ splat_item:
   category: adventuring_gear
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:equipment/ammunition_varies
+  implementation: dnd2024:equipment_ammunition_varies
+  parameters:
+    required_by_property: ammunition
+    weapon_selects_type: true
+    storage_included: false
+    variants:
+    - id: arrows
+      purchase_quantity: 20
+      storage:
+        key: dnd2024:equipment/quiver_1_gp
+      mass:
+        value: 1
+        unit: lb
+      price:
+        value: 1
+        unit: gp
+    - id: bolts
+      purchase_quantity: 20
+      storage:
+        key: dnd2024:equipment/case_crossbow_bolt_1_gp
+      mass:
+        value: 1.5
+        unit: lb
+      price:
+        value: 1
+        unit: gp
+    - id: firearm_bullets
+      purchase_quantity: 10
+      storage:
+        key: dnd2024:equipment/pouch_5_sp
+      mass:
+        value: 2
+        unit: lb
+      price:
+        value: 3
+        unit: gp
+    - id: sling_bullets
+      purchase_quantity: 20
+      storage:
+        key: dnd2024:equipment/pouch_5_sp
+      mass:
+        value: 1.5
+        unit: lb
+      price:
+        value: 4
+        unit: cp
+    - id: needles
+      purchase_quantity: 50
+      storage:
+        key: dnd2024:equipment/pouch_5_sp
+      mass:
+        value: 1
+        unit: lb
+      price:
+        value: 1
+        unit: gp
+splat_contracts:
+- id: dnd2024:equipment_ammunition_varies
+  inputs:
+    item:
+      type: item_instance
+      required: true
+    variant:
+      type: choice
+      required: true
+    weapon:
+      required: false
+      type: item_instance
+  outputs:
+  - variant_properties
+  - ammunition_compatibility
+  - purchase_quantities
+  events: []
+  capabilities:
+  - ammunition
+  - item_variants
+  - inventory
 splat_conversion:
-  status: partial
+  status: specified
   category: equipment
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
@@ -23,10 +102,12 @@ splat_conversion:
   - 94
   - 95
   - 96
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:equipment_ammunition_varies
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: c166bfc3f66d80a348ca9de10c6a7f5c301ec19c329de86a0c96f1e31a056e6d
   line_span:
     first: 8161
     count: 100
@@ -58,7 +139,8 @@ splat_clauses:
     Bullets, Firearm 10 Pouch 2 lb. 3 GP Bullets, Sling 20 Pouch 1½ lb. 4 CP Needles 50 Pouch 1 lb. 1
     GP'
   sha256: a64bcb3a89d72b484fdfb62f63621c7b4ed32539e42a89d793db0c1a79e23a68
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ammunition (Varies)

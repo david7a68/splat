@@ -12,18 +12,66 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/sentient_magic_items_communication
-  parameters: {}
+  parameters:
+    selection:
+    - gm_choice
+    - random_roll
+    die:
+      count: 1
+      sides: 10
+    table:
+    - min: 1
+      max: 6
+      modes:
+      - transmit_emotions
+      recipient: carrying_or_wielding_creature
+    - min: 7
+      max: 9
+      modes:
+      - speech
+      language_count_min: 1
+      languages: gm_choice
+    - min: 10
+      max: 10
+      modes:
+      - speech
+      - telepathy
+      language_count_min: 1
+      languages: gm_choice
+      telepathy_recipient: carrying_or_wielding_creature
+  implementation: dnd2024:rules_sentient_magic_items_communication
+splat_contracts:
+- id: dnd2024:rules_sentient_magic_items_communication
+  inputs:
+    item:
+      type: item_instance
+      required: true
+    communication_choice:
+      type: choice
+      required: true
+    languages:
+      required: false
+      type: choice
+  outputs:
+  - item_communication
+  events: []
+  capabilities:
+  - sentient_items
+  - random_tables
+  - languages
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 207
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_sentient_magic_items_communication
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 3c57ecf730689a34a7aa8663f460bbad9befaca9964426fe2e05a7f8e7397123
   parent_name: Sentient Magic Items
   line_span:
     first: 10762
@@ -34,7 +82,8 @@ splat_clauses:
     telepathically, or speaking aloud. You can choose how it communicates or roll on the Sentient Item’s
     Communication table.'
   sha256: bac81006976c2446ff499ffae7c66e01ac4e30a778ffe80ccf13d5b9e896145a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Communication

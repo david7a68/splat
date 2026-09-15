@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/creating_a_background
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 192
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 6fa1745f61de9936afdd62fe8e2f88d0d6c0064bc7155200c3afefca707dfbf6
   parent_name: Creating a Background
   line_span:
     first: 9381
@@ -36,7 +37,7 @@ splat_clauses:
     craft the story they have in mind for their character. This section describes, step by step, how you
     can create backgrounds tailored for your world and the heroes in it.'
   sha256: 9b99c66c2ef014a8f14bb5ed821b50abc635ebb0be4610a2ce198a1d53cf9b9a
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Creating a Background

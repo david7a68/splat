@@ -12,18 +12,55 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/weapons_light
-  parameters: {}
+  parameters:
+    trigger:
+      action: attack
+      own_turn: true
+      weapon_property: light
+    extra_attack:
+      count: 1
+      cost: bonus_action
+      timing: later_same_turn
+      different_weapon: true
+      weapon_property: light
+      damage_ability_modifier:
+        op: min
+        args:
+        - 0
+        - variable: attack_ability_modifier
+  implementation: dnd2024:rule_weapons_light
+splat_contracts:
+- id: dnd2024:rule_weapons_light
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    attack_ability_modifier:
+      type: number
+      required: true
+  outputs:
+  - item_effects
+  events:
+  - attack.completed
+  capabilities:
+  - equipment
+  - attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 89
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_weapons_light
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 63df3168c71ad5ef18106967300584858099be2bdc19079000a8c037173f3880
   parent_name: Weapons
   line_span:
     first: 7716
@@ -37,7 +74,8 @@ splat_clauses:
     in the other using the Attack action and a Bonus Action, but you don’t add your Strength or Dexterity
     modifier to the damage roll of the Bonus Action unless that modifier is negative.'
   sha256: 5fcb94874d08fa8e51e6b74d04f795bc08d49db727652a4cbfeb695368814561
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Light

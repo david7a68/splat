@@ -12,18 +12,58 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_items_identifying_a_magic_item
-  parameters: {}
+  parameters:
+    handling_reveals: extraordinary_nature
+    automatic_properties_identification: false
+    methods:
+      identify_spell:
+        spell:
+          key: dnd2024:spells/identify
+      short_rest:
+        items_maximum: 1
+        focus_required: true
+        physical_contact_required: true
+        reveal_at: rest_end
+        reveals:
+        - properties
+        - usage
+        reveals_curse: false
+      potion_taste:
+        quantity: small_taste
+        reveals: potion_effect
+    clues_and_experimentation:
+      actor: gm
+      outputs:
+      - property_hints
+  implementation: dnd2024:rule_magic_items_identifying_a_magic_item
+splat_contracts:
+- id: dnd2024:rule_magic_items_identifying_a_magic_item
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - item_changes
+  events: []
+  capabilities:
+  - magic_items
+  - identification
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 102
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_magic_items_identifying_a_magic_item
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 369905c0a60801f19bb602ac6e8a72e9634a054ab85c9ae8fdc9b13aba836694
   parent_name: Magic Items
   line_span:
     first: 8874
@@ -44,7 +84,8 @@ splat_clauses:
     fluid.” Perhaps you then dive into a river to see what happens. The GM would then say you swim unexpectedly
     well.'
   sha256: fbcfada1f566878621511197d584906a4c7cc09def766bf888f1475bf53ebf42
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Identifying a Magic Item

@@ -28,17 +28,83 @@ splat_spell:
   material:
     description: rare oils worth 1,000+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/reincarnate
+  implementation: dnd2024:spell_reincarnate
+  parameters:
+    targets:
+      kind: dead_humanoid_or_piece
+      touched: true
+      dead_days_maximum: 10
+    revive:
+      create_new_body: true
+      call_soul_into_body: true
+      species_selection:
+        methods:
+        - roll
+        - gm_choose_another_playable_species
+        roll:
+          dice:
+            count: 1
+            sides: 10
+            add: 0
+        faces:
+          '1': reroll
+          '2': dragonborn
+          '3': dwarf
+          '4': elf
+          '5': gnome
+          '6': goliath
+          '7': halfling
+          '8': human
+          '9': orc
+          '10': tiefling
+      species_options_chooser: reincarnated_creature
+      retains:
+      - former_life_memories
+      - original_capabilities_except_species_traits
+      remove: previous_species_traits
+      gain: new_species_traits
+splat_contracts:
+- id: dnd2024:spell_reincarnate
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - health
+  events:
+  - spell.cast_completed
+  - time.elapsed
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - health
+  - forms
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: d84dbfdca80386a542bab83277cb0de3d47660e58f48a9084582fa9c6ed1948d
   source_path: builtin/srd-5.2.1/spell/reincarnate.md
   pages:
   - 158
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_reincarnate
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: fa9d5e6e0755174c3bf76d8466c0b5abf138298e529904da359c44cc734630bc
 splat_clauses:
 - key: source_rules
   text: '# Reincarnate Level 5 Necromancy (Druid) Casting Time: 1 hour Range: Touch Components: V, S,
@@ -51,7 +117,8 @@ splat_clauses:
     life. It retains the capabilities it had in its original form, except it loses the traits of its previous
     species and gains the traits of its new one.'
   sha256: 25c912b86b8705e6dca46621616b70d1e99343ff728e1445d5b24ff12f10d3de
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Reincarnate

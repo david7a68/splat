@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/proficiency_equipment_proficiencies
-  parameters: {}
+  parameters:
+    weapon_proficiency:
+      required_to_wield: false
+      attack_bonus: proficiency_bonus
+    tool_proficiency:
+      ability_check_bonus: proficiency_bonus
+      matching_skill_proficiency: advantage
+      proficiency_bonus_times: 1
+  implementation: dnd2024:rules_proficiency_equipment_proficiencies
+splat_contracts:
+- id: dnd2024:rules_proficiency_equipment_proficiencies
+  inputs:
+    actor:
+      type: participant
+      required: true
+    test:
+      type: resolution
+      required: true
+  outputs:
+  - test_modifiers
+  - test_result
+  events: []
+  capabilities:
+  - d20_tests
+  - proficiency
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 9
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_proficiency_equipment_proficiencies
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: d23ea0d42b14e8db6f6ddf68044f997367986102c9a7f4d4b98a4c3cb0870df6
   parent_name: Proficiency
   line_span:
     first: 435
@@ -38,7 +64,8 @@ splat_clauses:
     have proficiency in the skill that’s also used with that check, you have Advantage on the check too.
     This means you can benefit from both skill proficiency and tool proficiency on the same ability check.'
   sha256: 242206ef78d765846b76108ca382d66b9d11cc6ce32d8747d04668d6a26861fa
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Equipment Proficiencies

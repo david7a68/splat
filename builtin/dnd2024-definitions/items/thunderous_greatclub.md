@@ -15,17 +15,139 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/thunderous_greatclub
+  implementation: dnd2024:item_thunderous_greatclub
+  parameters:
+    attuned:
+      strength:
+        set: 20
+        only_if_unmodified_score_below: 20
+    on_hit:
+      creature_extra_damage:
+        roll:
+          dice: 1
+          sides: 8
+          bonus: 0
+        type: thunder
+      unworn_uncarried_object_extra_damage:
+        roll:
+          dice: 3
+          sides: 8
+          bonus: 0
+        type: thunder
+    clap_of_thunder:
+      action: magic
+      requires: strike_hard_surface
+      audible_range_ft: 300
+      shape: cone
+      length_ft: 30
+      creatures:
+        save:
+          ability: strength
+          dc: 15
+        failure_condition: prone
+      objects:
+        nonmagical: true
+        worn_or_carried: false
+        damage:
+          roll:
+            dice: 3
+            sides: 8
+            bonus: 0
+          type: thunder
+    earthquake:
+      action: magic
+      requires: strike_ground
+      resource:
+        uses: 1
+        recovery: dawn
+      shape: circle
+      radius_ft: 50
+      origin: impact_point
+      ground_contact_structures_damage:
+        amount: 50
+        type: bludgeoning
+      ground_creatures:
+        save:
+          ability: dexterity
+          dc: 20
+        failure_condition: prone
+        if_concentrating:
+          save:
+            ability: constitution
+            dc: 20
+          failure: concentration_ends
+      optional_fissure:
+        depth_ft: 30
+        width_ft: 10
+        placement: user_choice_within_area
+        creatures_at_opening:
+          save:
+            ability: dexterity
+            dc: 20
+          failure: fall_into_fissure
+          success: move_with_edge
+        structures_at_opening: collapse_into_fissure
+        length:
+          source_specified: false
+          input: chosen_fissure_location
+          constraint: within_earthquake_area
+    attunement:
+      required: true
+splat_contracts:
+- id: dnd2024:item_thunderous_greatclub
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    event:
+      required: false
+      type: event
+  outputs:
+  - modifiers
+  - effects
+  - damage
+  - item_state
+  events:
+  - equipment.state_changed
+  - attack.resolved
+  - saving_throw.resolved
+  capabilities:
+  - equipment
+  - combat_reactions
+  - effects
+  - damage
+  - item_resources
+  - spatial_queries
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 928e8038167a1b4d01401ceb0b7a471f01a4d508d23197495681deebc6e4f8ac
   source_path: builtin/srd-5.2.1/magic_item/thunderous_greatclub.md
   pages:
   - 249
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_thunderous_greatclub
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: 3788f648f113b21e20401f09010ebb9c4bec49bd0f2da3cf8e2fbfa4f8bc31eb
 splat_clauses:
 - key: source_rules
   text: '# Thunderous Greatclub Weapon (Greatclub), Very Rare (Requires Attunement) While you are attuned
@@ -47,7 +169,8 @@ splat_clauses:
     structure on a spot where the fissure opens collapses into the fissure. Once you use this property,
     it can’t be used again until the next dawn.'
   sha256: af3560d964873db7d623e1092e747661568f73d95dcc12b1bf7efd03b235cc08
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Thunderous Greatclub

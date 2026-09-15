@@ -12,18 +12,124 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/cleric_level_2_channel_divinity
-  parameters: {}
+  parameters:
+    resource:
+      id: cleric.channel_divinity
+      maximum:
+        table:
+          key: dnd2024:tables/cleric_progression
+        row:
+          var: actor.class_levels.cleric
+        column: channel_divinity
+      recovery:
+      - event: rest.short_completed
+        amount: 1
+      - event: rest.long_completed
+        amount: all
+    cost_per_use: 1
+    choose_effect: 1
+    dc:
+      op: add
+      args:
+      - 8
+      - var: actor.abilities.wisdom.modifier
+      - var: actor.proficiency_bonus
+    options:
+      divine_spark:
+        action: magic
+        requires_item: holy_symbol
+        target:
+          type: creature
+          self: false
+          visible: true
+          range_feet: 30
+        amount:
+          op: add
+          args:
+          - dice:
+              count_by_cleric_level:
+                '2': 1
+                '7': 2
+                '13': 3
+                '18': 4
+              sides: 8
+          - var: actor.abilities.wisdom.modifier
+        choice:
+        - heal
+        - damage
+        damage:
+          types_choice:
+          - necrotic
+          - radiant
+          save: constitution
+          success_multiplier: 0.5
+          rounding: down
+      turn_undead:
+        action: magic
+        requires_item: holy_symbol
+        targets:
+          type: undead
+          selection: actor_choice
+          range_feet: 30
+        save: wisdom
+        failure:
+          conditions:
+          - frightened
+          - incapacitated
+          duration:
+            minutes: 1
+          on_target_turn: move_as_far_as_possible_from_actor
+          ends_on:
+          - target.damage_taken
+          - actor.incapacitated
+          - actor.died
+    class_scope:
+      class: cleric
+      minimum_level: 2
+  implementation: dnd2024:class_features_cleric_level_2_channel_divinity
+splat_contracts:
+- id: dnd2024:class_features_cleric_level_2_channel_divinity
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - action.magic
+  - rest.short_completed
+  - rest.long_completed
+  - turn.start
+  - damage.taken
+  - condition.applied
+  - participant.died
+  capabilities:
+  - character_features
+  - resources
+  - damage
+  - conditions
+  - proficiencies
+  - d20_tests
+  - healing
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 37
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_cleric_level_2_channel_divinity
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 3c14f8c7bbdc5bf78a1d376bfbaa9eb588a98eb38e9efb68e58ad63bf77de0ca
   parent_name: Cleric
   line_span:
     first: 3050
@@ -50,7 +156,8 @@ splat_clauses:
     as far from you as it can on its turns. This effect ends early on the creature if it takes any damage,
     if you have the Incapacitated condition, or if you die.'
   sha256: 5dbde65f0e6937c4198ec3082e5f08294199a7bc2b8e0acf3ae024c0cb4e2da6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 2: Channel Divinity

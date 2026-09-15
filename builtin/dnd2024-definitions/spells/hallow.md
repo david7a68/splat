@@ -28,18 +28,139 @@ splat_spell:
   material:
     description: incense worth 1,000+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/hallow
+  implementation: dnd2024:spell_hallow
+  parameters:
+    spell_lifetime:
+      concentration: false
+      until: dispelled_or_source_specific_end
+    area:
+      origin: touched_point
+      radius_feet_max: 60
+      overlap_existing_hallow: spell_fails
+    ward:
+      chooser: caster
+      type_selection: any_subset
+      type_options:
+      - aberration
+      - celestial
+      - elemental
+      - fey
+      - fiend
+      - undead
+      selected_types:
+        willing_entry: forbidden
+      occupants:
+        suppress_effects_from_selected_types:
+        - possession
+        - charmed
+        - frightened
+        suppression_scope: while_in_area
+    extra_effect:
+      chooser: caster
+      count: 1
+    options:
+      courage:
+        creature_types: caster_choice
+        while_in_area:
+          gain_frightened: forbidden
+      darkness:
+        light_level: darkness
+        normal_light_illuminates: false
+        magical_light_illuminates:
+          spell_level_less_than_cast_level: false
+      daylight:
+        light_level: bright
+        magical_darkness_extinguishes:
+          spell_level_less_than_cast_level: false
+      peaceful_rest:
+        subjects: dead_bodies_interred_in_area
+        transform_into_undead: forbidden
+      extradimensional_interference:
+        creature_types: caster_choice
+        forbidden_travel:
+        - teleport_enter
+        - teleport_exit
+        - interplanar_enter
+        - interplanar_exit
+      fear:
+        creature_types: caster_choice
+        while_in_area:
+          condition: frightened
+      resistance:
+        creature_types: caster_choice
+        damage_type:
+          chooser: caster
+          count: 1
+        while_in_area:
+          resistance: chosen_damage_type
+      silence:
+        sound_from_inside: blocked
+        sound_entering: blocked
+      tongues:
+        creature_types: caster_choice
+        communication_with: any_creature_in_area
+        shared_language_required: false
+      vulnerability:
+        creature_types: caster_choice
+        damage_type:
+          chooser: caster
+          count: 1
+        while_in_area:
+          vulnerability: chosen_damage_type
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_hallow
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    origin:
+      type: location
+      required: true
+    radius_feet:
+      type: number
+      required: true
+    ward_types:
+      type: choice
+      required: true
+    extra_effect:
+      type: choice
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - areas
+  - magic_suppression
+  - conditions
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 7c9f46e6b04d40182d3b278adb18fdeecc84c151d9d09179946bf366389036a8
   source_path: builtin/srd-5.2.1/spell/hallow.md
   pages:
   - 138
   - 139
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_hallow
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: df1ec5d7a2901f1e2d8b1d47affd534fa4b5bf89326dc1f2e4e4dc96c71860a4
 splat_clauses:
 - key: source_rules
   text: '# Hallow Level 5 Abjuration (Cleric) Casting Time: 24 hours Range: Touch Components: V, S, M
@@ -63,7 +184,8 @@ splat_clauses:
     in the area even if they don’t share a common language. Vulnerability. Creatures of any types you
     choose have Vulnerability to one damage type of your choice while in the area.'
   sha256: a02cde5dbfdf36e0fa5a25e74f65f7e1834141432dd782cb1fff66f846c4265e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hallow

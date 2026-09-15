@@ -15,17 +15,212 @@ splat_item:
   rarity: legendary
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/apparatus_of_the_crab
+  implementation: dnd2024:item_apparatus_of_the_crab
+  parameters:
+    weight_lb: 500
+    size: large
+    ac: 20
+    hp: 200
+    damage_immunities:
+    - poison
+    - psychic
+    hidden_catch:
+      check:
+        ability: intelligence
+        skill: investigation
+        dc: 20
+      success: find_catch
+      release_catch: unlock_entry_hatch
+    occupants:
+      maximum: 2
+      sizes:
+      - tiny
+      - small
+      - medium
+    pilot_required: 1
+    hatch_closed:
+      airtight: true
+      watertight: true
+      breathing_hours:
+        op: divide
+        args:
+        - 10
+        - binding: breathing_occupants
+      zero_breathing_occupants_air_depletion: false
+    floats: true
+    safe_depth_ft: 900
+    below_safe_depth:
+      interval:
+        amount: 1
+        unit: minute
+      damage:
+        roll:
+          expression: 2d6
+          scope: use
+        type: bludgeoning
+    legs_extended:
+      speed_ft: 30
+      swim_speed_ft: 30
+    legs_retracted:
+      speed_ft: 0
+      swim_speed_ft: 0
+      speed_bonuses_allowed: false
+    operate:
+      action: utilize
+      actor_location: inside_compartment
+      maximum_levers: 2
+      positions:
+      - up
+      - down
+      reset_after_each_use: neutral
+    levers:
+    - number: 1
+      up:
+        legs: extended
+      down:
+        legs: retracted
+    - number: 2
+      up:
+        forward_window_shutter: open
+      down:
+        forward_window_shutter: closed
+    - number: 3
+      up:
+        side_window_shutters: open
+        count_per_side: 2
+      down:
+        side_window_shutters: closed
+        count_per_side: 2
+    - number: 4
+      up:
+        claws: extended
+        count: 2
+      down:
+        claws: retracted
+    - number: 5
+      scope: each_extended_claw
+      up:
+        attack:
+          kind: melee
+          bonus: 8
+          reach_ft: 5
+          hit:
+            damage:
+              average: 7
+              roll:
+                expression: 2d6
+                scope: attack
+              type: bludgeoning
+      down:
+        attack:
+          kind: melee
+          bonus: 8
+          reach_ft: 5
+          hit:
+            condition: grappled
+            escape_dc: 15
+    - number: 6
+      requires: legs_extended
+      up:
+        movement: forward
+        modes:
+        - walk
+        - swim
+      down:
+        movement: backward
+        modes:
+        - walk
+        - swim
+    - number: 7
+      requires: legs_extended
+      up:
+        turn_degrees: 90
+        direction: counterclockwise
+      down:
+        turn_degrees: 90
+        direction: clockwise
+    - number: 8
+      up:
+        light:
+          bright_radius_ft: 30
+          dim_additional_ft: 30
+      down:
+        light: 'off'
+    - number: 9
+      requires: in_liquid
+      up:
+        vertical_movement: sink
+        maximum_ft: 20
+      down:
+        vertical_movement: rise
+        maximum_ft: 20
+    - number: 10
+      up:
+        rear_hatch: open_unsealed
+      down:
+        rear_hatch: closed_sealed
+    attunement:
+      required: false
+    common_rules:
+    - key: dnd2024:rules/magic_item_categories_wondrous_items
+splat_contracts:
+- id: dnd2024:item_apparatus_of_the_crab
+  inputs:
+    actor:
+      type: participant
+      required: true
+    source_item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choice:
+      required: false
+      type: choice
+    event:
+      required: false
+      type: event
+    campaign:
+      required: false
+      type: campaign
+    breathing_occupants:
+      required: false
+      type: integer
+  outputs:
+  - item_state
+  - effects
+  - resolutions
+  events:
+  - action.utilize_pending
+  - time.minute
+  capabilities:
+  - inventory
+  - effects
+  - resources_and_time
+  - roll_resolution
+  - spatial_state
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 1d23eeef5b946474d413a9e7ef96916d840cf1235f9157de2b87910479a9c0bd
   source_path: builtin/srd-5.2.1/magic_item/apparatus_of_the_crab.md
   pages:
   - 210
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_apparatus_of_the_crab
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_2.md
+  specification_sha256: 0499e227719bcf0186eb28292529baf0a57fa98adc89ab63359ad663b3696531
 splat_clauses:
 - key: source_rules
   text: '# Apparatus of the Crab Wondrous Item, Legendary This item first appears to be a sealed iron
@@ -51,7 +246,8 @@ splat_clauses:
     a 30-foot radius and Dim Light for an additional 30 feet. 9 The apparatus sinks up to 20 feet if it’s
     in liquid. 10 The rear hatch unseals and opens.'
   sha256: 8f5c056c6b0210178b532756c10808abb93492f587154fdaaca28264670c0cd5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Apparatus of the Crab

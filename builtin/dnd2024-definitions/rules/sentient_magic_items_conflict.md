@@ -12,18 +12,94 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/sentient_magic_items_conflict
-  parameters: {}
+  parameters:
+    conflict_trigger:
+      bearer_opposes:
+      - item_alignment
+      - item_purpose
+      conflict_occurrence_authority: gm
+    initial_save:
+      ability: charisma
+      dc:
+        op: add
+        args:
+        - 12
+        - var: item.charisma_modifier
+    failure_demands:
+      count_min: 1
+      selection: item_controller
+      options:
+      - pursue_item_goals_exclusively
+      - dispose_of_repugnant_possessions
+      - transfer_item_to_another_bearer
+      - carry_or_wear_item_at_all_times
+    noncompliance_responses:
+      choice: item_controller
+      options:
+      - prohibit_bearer_attunement
+      - suppress_selected_activated_properties
+      - attempt_bearer_control
+    control:
+      save:
+        ability: charisma
+        dc:
+          op: add
+          args:
+          - 12
+          - var: item.charisma_modifier
+      failure:
+        condition: charmed
+        duration:
+          dice:
+            count: 1
+            sides: 12
+          unit: hour
+        must_try_obey_item_commands: true
+      repeat_save:
+        trigger: bearer_damage_taken
+        success: end_control
+      attempt_recharge: next_dawn
+      recharge_required_on_success_or_failure: true
+  implementation: dnd2024:rules_sentient_magic_items_conflict
+splat_contracts:
+- id: dnd2024:rules_sentient_magic_items_conflict
+  inputs:
+    bearer:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    item_choices:
+      type: resolution
+      required: true
+  outputs:
+  - demands
+  - suppressed_properties
+  - attunement_eligibility
+  - control_effect
+  events:
+  - sentient_item.conflict
+  - damage.applied
+  - dawn
+  capabilities:
+  - sentient_items
+  - conditions
+  - saving_throws
+  - attunement
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 208
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_sentient_magic_items_conflict
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 715b0e178bdd5c6dd7d3f3c5f97f376e62af5926ea35bb3a293b628ac58fa1be
   parent_name: Sentient Magic Items
   line_span:
     first: 10831
@@ -45,7 +121,8 @@ splat_clauses:
     ending the effect on a success. Whether or not the attempt to control its bearer succeeds, the item
     can’t use this power again until the next dawn.'
   sha256: fc4bcd8f039ce977d145ec5a663da607e8f12a8695fbf6b1bd3e1105ec1c6d44
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Conflict

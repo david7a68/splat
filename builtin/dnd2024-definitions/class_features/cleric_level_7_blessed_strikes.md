@@ -12,18 +12,67 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/cleric_level_7_blessed_strikes
-  parameters: {}
+  parameters:
+    choice:
+      count: 1
+      options:
+        divine_strike:
+          trigger: actor.weapon_attack_hits_creature
+          limit:
+            count: 1
+            period: actor.turn
+          damage:
+            dice:
+              count: 1
+              sides: 8
+            type_choice:
+            - necrotic
+            - radiant
+        potent_spellcasting:
+          class: cleric
+          spell_level: 0
+          damage_bonus:
+            var: actor.abilities.wisdom.modifier
+    legacy_subclass_same_options: only_selected_option_applies
+    class_scope:
+      class: cleric
+      minimum_level: 7
+  implementation: dnd2024:class_features_cleric_level_7_blessed_strikes
+splat_contracts:
+- id: dnd2024:class_features_cleric_level_7_blessed_strikes
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - character.feature_acquired
+  - attack.hit
+  - spell.damage
+  capabilities:
+  - character_features
+  - spellcasting
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 38
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_cleric_level_7_blessed_strikes
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 9c9e2d85dd72fecc13fd627ebf145448efe51fd92b7045965d2e8ab34fd70cad
   parent_name: Cleric
   line_span:
     first: 3109
@@ -37,7 +86,8 @@ splat_clauses:
     or Radiant damage (your choice). Potent Spellcasting. Add your Wisdom modifier to the damage you deal
     with any Cleric cantrip.'
   sha256: 8137dae44ebe0651496a7d53a795b7a57a6767cc4b878a878a1e78f8d0556e5a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 7: Blessed Strikes

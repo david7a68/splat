@@ -12,18 +12,75 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magical_contagions_sight_rot
-  parameters: {}
+  parameters:
+    contagion: sight_rot
+    water_exposure:
+      creature_types:
+      - beast
+      - humanoid
+      trigger: drink_tainted_water
+      save:
+        ability: constitution
+        dc: 15
+        failure: infected
+    infected_effect:
+      condition: blinded
+      until: contagion_ends
+    immediate_cures:
+    - key: dnd2024:spells/heal
+    - key: dnd2024:spells/lesser_restoration
+    ointment:
+      craft_tool:
+        key: dnd2024:equipment/other_tools_herbalism_kit_5_gp
+      proficiency_required: true
+      tool_use_required: true
+      hours_per_dose: 1
+      doses_per_craft: 1
+      application_location: eyes
+      suppression_hours_per_dose: 24
+      total_suppression_hours_to_cure: 72
+      doses_and_applications_to_cure: 3
+    skin_contact_spread:
+      recipient_type: humanoid
+      source: infected_creature
+      save:
+        ability: constitution
+        dc: 15
+        failure: infected
+        success:
+          immunity_to_same_source_hours: 24
+  implementation: dnd2024:rule_magical_contagions_sight_rot
+splat_contracts:
+- id: dnd2024:rule_magical_contagions_sight_rot
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - effects
+  events:
+  - water.drunk
+  - creature.skin_contact
+  capabilities:
+  - contagions
+  - conditions
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 194
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_magical_contagions_sight_rot
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: a588b0ed7389ff45198d4d5671b64fe7dfcd06ca37fe80b7ce1811ff75481017
   parent_name: Magical Contagions
   line_span:
     first: 9586
@@ -42,7 +99,8 @@ splat_clauses:
     contagion. On a successful save, the Humanoid can’t catch the contagion from that particular infected
     creature for the next 24 hours.'
   sha256: c6dcdf1045c17f0f59c5a7deb3327c4fcf7cbfa9ba0c1e26c1113daeac51804b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Sight Rot

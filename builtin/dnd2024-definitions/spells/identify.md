@@ -29,17 +29,75 @@ splat_spell:
   material:
     description: a pearl worth 100+ GP
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/identify
+  implementation: dnd2024:spell_identify
+  parameters:
+    targets:
+      count: 1
+      kind_choices:
+      - object
+      - creature
+      touch_throughout_casting: true
+    knowledge:
+      magical_object:
+      - properties
+      - use_instructions
+      - attunement_required
+      - charges_if_any
+      object:
+      - ongoing_spells
+      - creating_spell_name_if_created_by_spell
+      creature:
+      - ongoing_spells
+splat_contracts:
+- id: dnd2024:spell_identify
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    objects:
+      required: false
+      type: object_list
+    campaign:
+      required: false
+      type: campaign
+    choices:
+      required: false
+      type: choice
+    items:
+      required: false
+      type: item_list
+  outputs:
+  - effects
+  - knowledge
+  - items
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - knowledge
+  - inventory
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 2e82430c4b3e2a484c9ec43a1c07b995119877d6a842e2bc203c044632072c1c
   source_path: builtin/srd-5.2.1/spell/identify.md
   pages:
   - 142
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_identify
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: d6cb54f31fe08be551a1f8d92e4ff42149ed74ee9a60654a78b1c6ea30df7bd3
 splat_clauses:
 - key: source_rules
   text: '# Identify Level 1 Divination (Bard, Wizard) Casting Time: 1 minute or Ritual Range: Touch Components:
@@ -50,7 +108,8 @@ splat_clauses:
     learn that spell’s name. If you instead touch a creature throughout the casting, you learn which ongoing
     spells, if any, are currently affecting it.'
   sha256: 1fbab574c49e121f6d313a743fc77419c85969df8220b33d975cdf29dd92bfe0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Identify

@@ -29,18 +29,97 @@ splat_spell:
   material:
     description: a statuette of yourself worth 5+ GP
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/project_image
+  implementation: dnd2024:spell_project_image
+  parameters:
+    image:
+      appearance_and_voice: caster
+      location: previously_seen_within_range
+      obstacles_ignored: true
+      intangible: true
+      any_damage: disappear_and_end_spell
+    senses:
+      sight_origin: image
+      hearing_origin: image
+    control:
+      action: magic
+      move_feet: 60
+      choices:
+      - gesture
+      - speech
+      - behavior
+      perfect_mannerism_mimicry: true
+    discern:
+      physical_interaction: automatic
+      study:
+        ability: intelligence
+        skill: investigation
+        dc:
+          binding: save_dc
+      after_discern:
+        see_through: true
+        sound: hollow
+splat_contracts:
+- id: dnd2024:spell_project_image
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - image
+  - perception
+  - discernment_results
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - saving_throws
+  - movement
+  - perception
+  - choices
+  - relationships
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 521104e9fd711860d80cb2183623754f8615aa85c9aea4a20ac3086d32ccf7fb
   source_path: builtin/srd-5.2.1/spell/project_image.md
   pages:
   - 156
   - 157
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_project_image
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: ea8510cdae8524afeb5043a014089a5d74783adaa4c11554a8a98249bad4b4fc
 splat_clauses:
 - key: source_rules
   text: '# Project Image Level 7 Illusion (Bard, Wizard) Casting Time: Action Range: 500 miles Components:
@@ -56,7 +135,8 @@ splat_clauses:
     spell save DC. If a creature discerns the illusion for what it is, the creature can see through the
     image, and any noise it makes sounds hollow to the creature.'
   sha256: 6efebc0cb4fa7ca025ef3ef57c7f2614ca677fb43d750b2cd6bb3cf119fb41f0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Project Image

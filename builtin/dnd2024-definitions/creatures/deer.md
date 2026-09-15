@@ -56,17 +56,109 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/deer
+  implementation: dnd2024:creature_deer
+  parameters:
+    skill_totals:
+      perception: 4
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 14
+    languages:
+      speak: true
+      known: []
+    features:
+      agile:
+        economy: passive
+        op: opportunity_attack.suppress
+        trigger: actor.leaves_enemy_reach
+        movement_modes:
+        - all
+      ram:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 2
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 0
+            average: 2
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_deer
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.leaves_enemy_reach
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 72967b5fd81ae18549dc67aa06326b821d18a8bc7fb13dc745552ebca67659b7
   source_path: builtin/srd-5.2.1/creature/deer.md
   pages:
   - 347
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_deer
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 582a1b1a4c9fadccb3e5aa4ff517fb1d1ef6f749ba00ef522e82bce11a9b1bbb
 splat_clauses:
 - key: source_rules
   text: '# Deer Medium Beast, Unaligned AC 13 Initiative +3 (13) HP 4 (1d8) Speed 50 ft. MOD SAVE MOD
@@ -75,7 +167,8 @@ splat_clauses:
     The deer doesn’t provoke an Opportunity Attack when it moves out of an enemy’s reach. ### Actions
     Ram. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Bludgeoning damage.'
   sha256: 81ba49f0181c3f5a754d980bded20b123a4f58aa08b87d2e93a2cbd93894cc3c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Deer

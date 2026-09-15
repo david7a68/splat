@@ -12,18 +12,47 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/environmental_effects_high_altitude
-  parameters: {}
+  parameters:
+    altitude_feet_minimum: 10000
+    travel_hours_multiplier: 2
+    acclimation:
+      days_minimum: 30
+      above_altitude_feet: 20000
+      above_altitude_requires_native: true
+      acclimated_exempt_from_multiplier: true
+  implementation: dnd2024:rules_environmental_effects_high_altitude
+splat_contracts:
+- id: dnd2024:rules_environmental_effects_high_altitude
+  inputs:
+    travelers:
+      type: participant_list
+      required: true
+    vehicle:
+      required: false
+      type: object
+    journey:
+      type: resolution
+      required: true
+  outputs:
+  - travel_rate
+  - travel_limits
+  events: []
+  capabilities:
+  - travel
+  - vehicles
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 195
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_environmental_effects_high_altitude
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 6efe990a4b9b455dbe71da014f2556a6e774e594946ce892a1e330175591603c
   parent_name: Environmental Effects
   line_span:
     first: 9651
@@ -37,7 +66,8 @@ splat_clauses:
     days or more at this elevation. Creatures can’t become acclimated to elevations above 20,000 feet
     unless they are native to such environments.'
   sha256: 2141e44f1afcabb8eddd475e13155f47cbcab0a5aa7e14e85b077ef068408880
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # High Altitude

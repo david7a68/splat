@@ -15,18 +15,117 @@ splat_item:
   rarity: rare
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/bead_of_force
+  implementation: dnd2024:item_bead_of_force
+  parameters:
+    diameter_inches: 0.75
+    weight_oz: 1
+    found_quantity:
+      roll:
+        count: 1
+        sides: 4
+        add: 4
+    action: magic
+    throw_range_ft: 60
+    consumed_on: impact
+    area:
+      shape: sphere
+      radius_ft: 10
+    save:
+      ability: dexterity
+      dc: 15
+      failure:
+        damage:
+          amount:
+            roll:
+              count: 5
+              sides: 4
+          type: force
+      success:
+        damage: 0
+    barrier:
+      duration:
+        amount: 1
+        unit: minutes
+      transparent: true
+      trapped:
+        save: failure
+        wholly_inside: true
+      push_out:
+        or:
+        - save: success
+        - partially_inside: true
+        direction: away_from_center
+        until: outside
+      passable:
+      - breathable_air
+      blocks:
+      - attacks
+      - other_effects
+      - other_matter
+      movement:
+        actor: enclosed_creature
+        action: utilize
+        maximum_distance:
+          multiply:
+          - actor.speed
+          - 0.5
+      can_be_picked_up: true
+      weight_lb: 1
+      weight_includes_contents: true
+    attunement_required: false
+splat_contracts:
+- id: dnd2024:item_bead_of_force
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.activation_requested
+  - item.impact
+  - time.elapsed
+  capabilities:
+  - item_effects
+  - dice
+  - effect_duration
+  - spatial_targeting
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: f3b17f5f3c8487ed1ac2e682c2570f6b94e9bc2723ed2fe30c27e59848f98dcf
   source_path: builtin/srd-5.2.1/magic_item/bead_of_force.md
   pages:
   - 212
   - 213
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_bead_of_force
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 84ca90c5fcdbbb50b3b313fbf69adf4ee7ae8b96cc1914c0f77e75cdbb06fe03
 splat_clauses:
 - key: source_rules
   text: '# Bead of Force Wondrous Item, Rare This small black sphere measures 3/4 of an inch in diameter
@@ -41,7 +140,8 @@ splat_clauses:
     the sphere up to half the creature’s Speed. The sphere can be picked up, and its magic causes it to
     weigh only 1 pound, regardless of the weight of creatures inside.'
   sha256: 4c11eecfdfb571fe8a396314908862990f293c3d9d365704dd855b2e3cea845b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Bead of Force

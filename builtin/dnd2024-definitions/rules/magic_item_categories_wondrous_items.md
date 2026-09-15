@@ -12,18 +12,66 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_item_categories_wondrous_items
-  parameters: {}
+  parameters:
+    category: wondrous_item
+    attunement_prerequisites:
+      class: membership_in_required_class
+      spellcaster:
+        minimum_spells: 1
+        allowed_sources:
+        - traits
+        - features
+        excluded_sources:
+        - magic_items
+        - similar_external_sources
+    wearable_size_adjustment:
+      default: true
+      gm_can_disable: true
+      gm_fit_restrictions:
+      - body_size
+      - body_shape
+    unusual_anatomy_fit:
+      actor: gm
+      scope: item_not_made_for_anatomy
+      must_have_required_body_parts: true
+    paired_items:
+      default: both_worn
+      gm_exception:
+        scope: missing_body_part
+        other_item_remains_on_person: true
+  implementation: dnd2024:rule_magic_item_categories_wondrous_items
+splat_contracts:
+- id: dnd2024:rule_magic_item_categories_wondrous_items
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - item_changes
+  events: []
+  capabilities:
+  - magic_items
+  - attunement
+  - equipment
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 205
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_magic_item_categories_wondrous_items
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 3cbd5825271b7fc43a5599d8eaca084f015bb2128935d657dd607116ba114289
   parent_name: Magic Item Categories
   line_span:
     first: 10525
@@ -46,7 +94,8 @@ splat_clauses:
     example, a character with only one arm might be able to use a single Glove of Missile Snaring so long
     as the matching glove is on their person.'
   sha256: c870d134d81e1d235f2d8ff238a85ad4d26fb9460772649fd6a268a293f61bd0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wondrous Items

@@ -11,7 +11,7 @@ splat_sources:
   locator: pp. 53
   url: https://www.dndbeyond.com/srd
 splat_rule:
-  mechanic: dnd2024:class_progression
+  mechanic: dnd2024:tables/paladin_progression
   parameters:
     class: paladin
     rows:
@@ -25,6 +25,19 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_1_lay_on_hands
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_1_spellcasting
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_1_weapon_mastery
+        at_class_level: 1
     - level: 2
       proficiency_bonus: 2
       features_text: Fighting Style, Paladin’s Smite
@@ -35,6 +48,15 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_2_fighting_style
+        at_class_level: 2
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_2_paladin_s_smite
+        at_class_level: 2
     - level: 3
       proficiency_bonus: 2
       features_text: Channel Divinity, Paladin Subclass
@@ -45,6 +67,15 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_3_channel_divinity
+        at_class_level: 3
+      - operation: choose_subclass
+        feature:
+          key: dnd2024:class_features/paladin_level_3_paladin_subclass
+        at_class_level: 3
     - level: 4
       proficiency_bonus: 2
       features_text: Ability Score Improvement
@@ -55,6 +86,11 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_4_ability_score_improvement
+        at_class_level: 4
     - level: 5
       proficiency_bonus: 3
       features_text: Extra Attack, Faithful Steed
@@ -65,6 +101,15 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_5_extra_attack
+        at_class_level: 5
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_5_faithful_steed
+        at_class_level: 5
     - level: 6
       proficiency_bonus: 3
       features_text: Aura of Protection
@@ -75,6 +120,11 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_6_aura_of_protection
+        at_class_level: 6
     - level: 7
       proficiency_bonus: 3
       features_text: Subclass feature
@@ -85,6 +135,9 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 7
     - level: 8
       proficiency_bonus: 3
       features_text: Ability Score Improvement
@@ -95,6 +148,11 @@ splat_rule:
       spell_slots_3: 0
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_4_ability_score_improvement
+        at_class_level: 8
     - level: 9
       proficiency_bonus: 4
       features_text: Abjure Foes
@@ -105,6 +163,11 @@ splat_rule:
       spell_slots_3: 2
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_9_abjure_foes
+        at_class_level: 9
     - level: 10
       proficiency_bonus: 4
       features_text: Aura of Courage
@@ -115,6 +178,11 @@ splat_rule:
       spell_slots_3: 2
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_10_aura_of_courage
+        at_class_level: 10
     - level: 11
       proficiency_bonus: 4
       features_text: Radiant Strikes
@@ -125,6 +193,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_11_radiant_strikes
+        at_class_level: 11
     - level: 12
       proficiency_bonus: 4
       features_text: Ability Score Improvement
@@ -135,6 +208,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 0
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_4_ability_score_improvement
+        at_class_level: 12
     - level: 13
       proficiency_bonus: 5
       features_text: —
@@ -145,6 +223,7 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 1
       spell_slots_5: 0
+      grants: []
     - level: 14
       proficiency_bonus: 5
       features_text: Restoring Touch
@@ -155,6 +234,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 1
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_14_restoring_touch
+        at_class_level: 14
     - level: 15
       proficiency_bonus: 5
       features_text: Subclass feature
@@ -165,6 +249,9 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 2
       spell_slots_5: 0
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 15
     - level: 16
       proficiency_bonus: 5
       features_text: Ability Score Improvement
@@ -175,6 +262,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 2
       spell_slots_5: 0
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_4_ability_score_improvement
+        at_class_level: 16
     - level: 17
       proficiency_bonus: 6
       features_text: —
@@ -185,6 +277,7 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 3
       spell_slots_5: 1
+      grants: []
     - level: 18
       proficiency_bonus: 6
       features_text: Aura Expansion
@@ -195,6 +288,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 3
       spell_slots_5: 1
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_18_aura_expansion
+        at_class_level: 18
     - level: 19
       proficiency_bonus: 6
       features_text: Epic Boon
@@ -205,6 +303,11 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 3
       spell_slots_5: 2
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/paladin_level_19_epic_boon
+        at_class_level: 19
     - level: 20
       proficiency_bonus: 6
       features_text: Subclass feature
@@ -215,17 +318,107 @@ splat_rule:
       spell_slots_3: 3
       spell_slots_4: 3
       spell_slots_5: 2
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 20
+    class_definition:
+      key: dnd2024:classes/paladin
+    lookup:
+      input: class_level
+      minimum: 1
+      maximum: 20
+      match: exact
+      numeric_columns: current_capacity_or_value
+      feature_grants: all_crossed_levels
+      repeat_application: idempotent_per_class_level_and_feature
+    multiclass:
+      proficiency_bonus_source: total_character_level
+      spell_slot_override_rule:
+        key: dnd2024:rules/multiclassing_spellcasting
+      pact_magic_pool_separate: true
+    column_semantics:
+      channel_divinity:
+        kind: resource_capacity
+        resource: channel_divinity
+        recovery: owning_feature_contract
+        level_change_refills: false
+      prepared_spells:
+        kind: selection_capacity
+        selection: prepared_spells
+        eligibility: owning_feature_contract
+      proficiency_bonus:
+        kind: bonus
+        applies_to: proficiency
+        use_class_row_only_if_single_class: true
+      spell_slots_1:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 1
+        recovery: long_rest
+      spell_slots_2:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 2
+        recovery: long_rest
+      spell_slots_3:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 3
+        recovery: long_rest
+      spell_slots_4:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 4
+        recovery: long_rest
+      spell_slots_5:
+        kind: resource_capacity
+        resource: spell_slot
+        spell_level: 5
+        recovery: long_rest
+  implementation: dnd2024:class_progression_paladin_progression
+splat_contracts:
+- id: dnd2024:class_progression_paladin_progression
+  inputs:
+    actor:
+      type: participant
+      required: true
+    class_level:
+      type: integer
+      required: true
+    previous_class_level:
+      required: false
+      type: integer
+    selected_subclass:
+      required: false
+      type: definition
+    choices:
+      required: false
+      type: definition_list
+  outputs:
+  - feature_grants
+  - selection_capacities
+  - resource_capacities
+  - class_values
+  events:
+  - character.class_level_changed
+  capabilities:
+  - class_progression
+  - feature_grants
+  - resource_capacities
+  - character_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: table
   source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
   source_path: builtin/srd-5.2.1/source.txt
   pages:
   - 53
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_progression_paladin_progression
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: 144fe61aeec82979426caafb34a00af4eb2bd6ccdb4838b4dae3f3300f52bafd
 splat_clauses:
 - key: source_rules
   text: '# Paladin Progression From SRD 5.2.1 page 53. Paladin Features Proficiency Channel Prepared —Spell
@@ -240,7 +433,8 @@ splat_clauses:
     1 19 +6 Epic Boon 3 15 4 3 3 3 2 20 +6 Subclass feature 3 15 4 3 3 3 2 53 System Reference Document
     5.2.1'
   sha256: 5de22c48f98c23967571cc8e826626ec4572db01d10f097b348bea69e59ca6e6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Paladin Progression

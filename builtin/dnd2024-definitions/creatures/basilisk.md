@@ -55,17 +55,151 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/basilisk
+  implementation: dnd2024:creature_basilisk
+  parameters:
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 9
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 3
+            average: 10
+          - type: poison
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 0
+            average: 7
+      petrifying_gaze:
+        economy: bonus_action
+        op: saving_throw
+        ability: constitution
+        dc: 12
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            origin: actor
+            size_ft: 30
+        failure:
+        - op: condition.apply
+          condition: restrained
+        - op: saving_throw.repeat
+          event: target.next_turn_end
+          only_if_condition: restrained
+          ability: constitution
+          dc: 12
+          success:
+          - op: effect.end
+          failure:
+          - op: condition.remove
+            condition: restrained
+          - op: condition.apply
+            condition: petrified
+        success: []
+        include_actor_if_sees_own_reflection_in_area: true
+        recharge:
+          die_sides: 6
+          success_min: 4
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_basilisk
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  - target.next_turn_end
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 8a5782180bc9c45eceedab36e357a3762ebedae0b0585af2b8c81e8f36dc6ae4
   source_path: builtin/srd-5.2.1/creature/basilisk.md
   pages:
   - 262
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_basilisk
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: c6d04fe2397402cc085eb64cda5f64fca1a8d2df8f4439c9190c6d8b68b7e23d
 splat_clauses:
 - key: source_rules
   text: '# Basilisk Medium Monstrosity, Unaligned AC 15 Initiative -1 (9) HP 52 (8d8 + 16) Speed 20 ft.
@@ -78,7 +212,8 @@ splat_clauses:
     turn if it is still Restrained, ending the effect on itself on a success. Second Failure: The target
     has the Petrified condition instead of the Restrained condition.'
   sha256: a50df939a8fcec315b461f5d6a5b8f04cb95c122a10d99a56c2016566e2ae5f0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Basilisk

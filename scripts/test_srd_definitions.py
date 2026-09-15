@@ -25,15 +25,16 @@ class DefinitionTests(unittest.TestCase):
         self.assertIn('immediately after hitting',spell['casting_time'])
         self.assertEqual(spell['duration'],'1 minute')
 
-    def test_variable_hit_points_and_ambiguous_save_are_not_guessed(self):
+    def test_variable_hit_points_and_supplied_unsigned_save(self):
         _,body=load_note(SOURCE/'creature/animated_object.md')
         fields=creature_fields(body)
         self.assertNotIn('max_hp',fields['splat_stats'])
         _,body=load_note(SOURCE/'creature/young_white_dragon.md')
         fields=creature_fields(body)
         self.assertEqual(fields['splat_stats']['max_hp']['value'],123)
-        self.assertNotIn('save_intelligence',fields['splat_stats'])
-        self.assertEqual(fields['splat_creature']['ambiguous_saves'],['intelligence'])
+        self.assertEqual(fields['splat_stats']['intelligence']['value'],6)
+        self.assertEqual(fields['splat_stats']['save_intelligence'],{'value':2})
+        self.assertNotIn('ambiguous_saves',fields['splat_creature'])
 
     def test_weapon_and_armor_tables_preserve_special_cases(self):
         rows={r['name']:r['fields']['splat_item'] for r in equipment_tables()}
@@ -88,5 +89,59 @@ class DefinitionTests(unittest.TestCase):
         for r in records:
             self.assertEqual(r['status']=='partial',bool(r['conversion_gaps']))
         self.assertEqual(report['counts']['executable_full_definitions'],0)
+
+
+class CompletedContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from srd_contracts import read_research
+        cls.research = read_research()
+
+    def parameters(self, key):
+        return self.research[key]['fields']['splat_rule']['parameters']
+
+    def test_full_pass_has_no_missing_research_or_conversion_gaps(self):
+        report=json.loads((OUTPUT/'coverage.json').read_text())
+        self.assertEqual(set(self.research),{entry['key'] for entry in report['entries']})
+        self.assertEqual(report['counts']['specified'],1970)
+        self.assertEqual(report['counts']['informational'],95)
+        self.assertEqual(report['counts']['partial'],0)
+        self.assertTrue(all(not entry['conversion_gaps'] for entry in report['entries']))
+        registry=json.loads((OUTPUT/'contracts.json').read_text())['contracts']
+        self.assertEqual(len(registry),1970)
+        self.assertTrue(all(not contract['implemented'] for contract in registry))
+
+    def test_independent_audit_corrections_are_encoded(self):
+        apparatus=self.parameters('dnd2024:items/apparatus_of_the_crab')
+        self.assertEqual(apparatus['levers'][4]['up']['attack']['hit']['damage']['roll']['scope'],'attack')
+        wonder=self.parameters('dnd2024:items/wand_of_wonder')
+        repeat=wonder['effects'][17]['effect']['save']['failure']['repeat_save']
+        self.assertEqual(repeat['requires'],{'condition':'restrained','source':'this_effect','active':True})
+
+    def test_revision_specific_rules_are_preserved_in_final_contracts(self):
+        counter=self.parameters('dnd2024:spells/counterspell')
+        self.assertEqual(counter['save']['ability'],'constitution')
+        self.assertEqual(counter['failure']['slot_cast']['spell_slot'],'not_expended')
+        poly=self.parameters('dnd2024:spells/polymorph')
+        self.assertIn('hit_points',poly['form']['retain'])
+        self.assertTrue(poly['temporary_hp']['remainder_vanishes_on_spell_end'])
+        heads=self.parameters('dnd2024:creatures/hydra')['features']
+        self.assertEqual(heads['multiple_heads']['regrow']['heal_per_regrowth_event'],20)
+        self.assertTrue(heads['reactive_heads']['recompute_only_at_refresh'])
+        self.assertEqual(heads['reactive_heads']['refresh_event'],'self.turn_start')
+
+    def test_contract_shapes_and_source_prose_are_not_interchangeable(self):
+        from srd_contracts import json_shape, check_shape, UniqueLoader
+        shape=json_shape({'charges':7,'consumed':False})
+        check_shape({'charges':4,'consumed':True},shape)
+        with self.assertRaises(ValueError):check_shape({'charges':'four','consumed':True},shape)
+        with self.assertRaises(ValueError):check_shape({'charges':4,'consumed':True,'run_script':'x'},shape)
+        with self.assertRaises(ValueError):yaml.load('parameters: {charges: 7, charges: 4}',Loader=UniqueLoader)
+
+    def test_source_case_choices_do_not_get_invented_defaults(self):
+        creation=self.parameters('dnd2024:spells/creation')
+        self.assertEqual(creation['duration_by_material_seconds']['vegetable'],86400)
+        self.assertTrue(creation['unlisted_mineral_duration']['no_automatic_default'])
+        self.assertEqual(creation['unlisted_mineral_duration']['required_input'],'material_duration_resolution')
 
 if __name__=='__main__':unittest.main()

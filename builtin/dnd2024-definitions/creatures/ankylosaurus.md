@@ -56,17 +56,128 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ankylosaurus
+  implementation: dnd2024:creature_ankylosaurus
+  parameters:
+    features:
+      tail:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 6
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 9
+          amount:
+            dice:
+              count: 1
+              sides: 10
+            add: 4
+          damage_type: bludgeoning
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: huge
+          then:
+          - op: condition
+            condition: prone
+        reach_feet: 10
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: tail
+          count: 2
+    defenses: {}
+    senses:
+      passive_perception: 11
+      special: []
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_ankylosaurus
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 3da1ca12b45066d7149f3ed4ddc17da56acf27597cdad1c92ff3e8816a97ad4f
   source_path: builtin/srd-5.2.1/creature/ankylosaurus.md
   pages:
   - 344
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ankylosaurus
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: f3762f7bdb636fad85f1e27e4d0e730cafd18526d60fafcd77cb718635741550
 splat_clauses:
 - key: source_rules
   text: '# Ankylosaurus Huge Beast (Dinosaur), Unaligned AC 15 Initiative +0 (10) HP 68 (8d12 + 16) Speed
@@ -75,7 +186,8 @@ splat_clauses:
     The ankylosaurus makes two Tail attacks. Tail. Melee Attack Roll: +6, reach 10 ft. Hit: 9 (1d10 +
     4) Bludgeoning damage. If the target is a Huge or smaller creature, it has the Prone condition.'
   sha256: 4c34604001a792db093be65b811a29fc142d7d9cca3aeba49c14dc1bad1d295f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ankylosaurus

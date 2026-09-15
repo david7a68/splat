@@ -15,24 +15,69 @@ splat_item:
   rarity: uncommon
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/philter_of_love
+  implementation: dnd2024:item_philter_of_love
+  parameters:
+    consumption:
+      trigger: drink
+      consume_item: true
+    delayed_effect:
+      trigger: next_creature_seen
+      window:
+        value: 10
+        unit: minute
+      condition: charmed
+      source: seen_creature
+      duration:
+        value: 1
+        unit: hour
+    attunement:
+      required: false
+splat_contracts:
+- id: dnd2024:item_philter_of_love
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - consumables
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: dd8aca7128aab7937e358534f29f72038ddf1821971bc5fbe19be309bd482aa6
   source_path: builtin/srd-5.2.1/magic_item/philter_of_love.md
   pages:
   - 234
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_philter_of_love
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: e1f7cc1df0e446588a0efd86fda1a7d964e841fd90e5003eb019e98b8b9ffe59
 splat_clauses:
 - key: source_rules
   text: '# Philter of Love Potion, Uncommon The next time you see a creature within 10 minutes after drinking
     this philter, you are charmed by that creature and have the Charmed condition for 1 hour. This rose-hued,
     effervescent liquid contains one easy-to-miss bubble shaped like a heart.'
   sha256: 81b754bb174ba1537bb760ede1bd8a58501372d53bf7f74523402cc1538b105a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Philter of Love

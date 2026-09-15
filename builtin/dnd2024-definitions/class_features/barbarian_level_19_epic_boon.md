@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/barbarian_level_19_epic_boon
-  parameters: {}
+  parameters:
+    feat_choice:
+      count: 1
+      category_preference: epic_boon
+      allowed_categories: any
+      must_meet_prerequisites: true
+    class_scope:
+      class: barbarian
+      minimum_level: 19
+  implementation: dnd2024:class_features_barbarian_level_19_epic_boon
+splat_contracts:
+- id: dnd2024:class_features_barbarian_level_19_epic_boon
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - character.feature_acquired
+  capabilities:
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 30
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_barbarian_level_19_epic_boon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: ad07a4a9511d14fff2938d3bbc78784a268423835cf2c0d13866489990b293db
   parent_name: Barbarian
   line_span:
     first: 2444
@@ -33,7 +59,8 @@ splat_clauses:
   text: '# Level 19: Epic Boon You gain an Epic Boon feat (see “Feats”) or another feat of your choice
     for which you qualify. Boon of Irresistible Offense is recommended.'
   sha256: b19f1d7ec23f77085b40c2259261288bd8639b1cae0ef0cba14d87076892936a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 19: Epic Boon

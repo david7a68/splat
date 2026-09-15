@@ -65,18 +65,372 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/tarrasque
+  implementation: dnd2024:creature_tarrasque
+  parameters:
+    features:
+      legendary_resistance:
+        economy: trait
+        resource:
+          kind: daily
+          uses: 6
+          recovery: long_rest
+        operation: replace_save_result
+        trigger: self.save_failed
+        optional: true
+        result: success
+      magic_resistance:
+        economy: trait
+        operation: passive_rule
+        saving_throw_advantage_against:
+        - spells
+        - magical_effects
+      reflective_carapace:
+        economy: trait
+        operation: passive_rule
+        trigger: self.targeted_by_spell
+        spell_eligibility:
+          any_of:
+          - spell:
+              key: dnd2024:spells/magic_missile
+          - requires_ranged_attack_roll: true
+        roll:
+          die: 6
+          results:
+          - faces:
+            - 1
+            - 2
+            - 3
+            - 4
+            - 5
+            self_affected: false
+          - faces:
+            - 6
+            self_affected: false
+            reflect_to: caster
+      siege_monster:
+        economy: trait
+        operation: passive_rule
+        damage_multiplier: 2
+        target_kinds:
+        - object
+        - structure
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: bite
+          count: 1
+        - operation: attack_choice
+          count: 3
+          options:
+          - claw
+          - tail
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 19
+          reach_ft: 15
+        hit:
+          damage:
+          - average: 36
+            roll:
+              count: 4
+              sides: 12
+              modifier: 10
+            type: piercing
+          grapple:
+            condition: grappled
+            source: self
+            escape_dc: 20
+            while_grappled:
+              conditions:
+              - restrained
+              can_teleport: false
+      claw:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 19
+          reach_ft: 15
+        hit:
+          damage:
+          - average: 28
+            roll:
+              count: 4
+              sides: 8
+              modifier: 10
+            type: slashing
+      tail:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 19
+          reach_ft: 30
+        hit:
+          damage:
+          - average: 23
+            roll:
+              count: 3
+              sides: 8
+              modifier: 10
+            type: bludgeoning
+          prone:
+            condition: prone
+            maximum_size: huge
+      thunderous_bellow:
+        economy: action
+        resource:
+          kind: recharge
+          die: 6
+          success_faces:
+          - 5
+          - 6
+          check: self.turn_start
+          rest_recovery:
+          - short
+          - long
+          capacity: 1
+          initial_uses: 1
+        operation: saving_throw
+        ability: constitution
+        dc: 27
+        targets:
+          kinds:
+          - creature
+          - object
+          objects_exclude:
+          - worn
+          - carried
+          selection: each
+          area:
+            shape: cone
+            size_ft: 150
+            origin: self
+        failure:
+          damage:
+          - average: 78
+            roll:
+              count: 12
+              sides: 12
+              modifier: 0
+            type: thunder
+          conditions:
+          - condition: deafened
+            until: target.next_turn_end
+          - condition: frightened
+            until: target.next_turn_end
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+      swallow:
+        economy: bonus_action
+        operation: saving_throw
+        ability: strength
+        dc: 27
+        failure:
+          end_grapple: true
+          swallow:
+            maximum_size: large
+            conditions:
+            - restrained
+            - blinded
+            cover_against_outside: total
+            periodic_damage:
+              event: self.turn_start
+              damage:
+              - roll:
+                  count: 16
+                  sides: 6
+                  modifier: 0
+                type: acid
+            regurgitate:
+              trigger: turn_end
+              if_damage_on_single_turn_from_one_inside_creature_at_least: 60
+              save:
+                ability: constitution
+                dc: 20
+                failure:
+                  eject: all
+                  within_ft: 10
+                  conditions:
+                  - prone
+            on_self_death:
+              remove_conditions:
+              - restrained
+              escape_movement_ft: 20
+              exit_condition: prone
+            can_teleport: false
+        targets:
+          kind: creature
+          count: 1
+          grappled_by: self
+          maximum_size: large
+        capacity: 6
+        success:
+          effects: []
+      onslaught:
+        economy: legendary_action
+        legendary_cost: 1
+        operation: sequence
+        effects:
+        - operation: move
+          maximum_ft:
+            multiply:
+            - stat: speed
+            - 0.5
+        - operation: attack_choice
+          count: 1
+          options:
+          - claw
+          - tail
+      world_shaking_movement:
+        economy: legendary_action
+        legendary_cost: 1
+        cooldown_until: self.next_turn_start
+        operation: sequence
+        effects:
+        - operation: move
+          maximum_ft:
+            multiply:
+            - stat: speed
+            - 1
+        - operation: shock_wave
+          area:
+            shape: emanation
+            size_ft: 60
+            origin: self
+          duration: instantaneous
+          targets: creatures
+          end_concentration: true
+          prone:
+            maximum_size: medium
+    skill_totals:
+      perception: 9
+    damage_resistances:
+    - bludgeoning
+    - piercing
+    - slashing
+    damage_immunities:
+    - fire
+    - poison
+    condition_immunities:
+    - charmed
+    - deafened
+    - frightened
+    - paralyzed
+    - poisoned
+    senses:
+      blindsight: 120
+      passive_perception: 19
+    languages:
+      speaks: []
+      understands: []
+    legendary_actions:
+      uses: 3
+      recovery: self.turn_start
+      trigger: other_creature.turn_end
+      cost_per_action: 1
+      requires:
+        not_incapacitated: true
+      maximum_actions_per_trigger: 1
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_tarrasque
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - turn.ended
+  - rest.completed
+  - saving_throw.resolved
+  - attack.resolved
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - grappling
+  - teleportation
+  - spatial_queries
+  - limited_resources
+  - legendary_actions
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 516b5b36fbca2a26bc4c74cf85a83fb81c13e232429842225ec78cf0661b31cd
   source_path: builtin/srd-5.2.1/creature/tarrasque.md
   pages:
   - 331
   - 332
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_tarrasque
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: e6bed3e16a7decd617d862c229ec4ed6ad6046a8297dd63cda1845700d2c0b53
 splat_clauses:
 - key: source_rules
   text: '# Tarrasque Gargantuan Monstrosity (Titan), Unaligned AC 25 Initiative +18 (28) HP 697 (34d20
@@ -116,7 +470,8 @@ splat_clauses:
     and, if Medium or smaller, have the Prone condition. The tarrasque can’t take this action again until
     the start of its next turn.'
   sha256: 7c57ffc1e9edd17ac8ff78918a86f8b2d6b757b16bd38b8dfd5961c3838f5426
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tarrasque

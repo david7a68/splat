@@ -12,18 +12,84 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/improvised_weapons
-  parameters: {}
+  parameters:
+    qualifies_any:
+    - object_used_as_makeshift_weapon
+    - ranged_weapon_used_for_melee
+    - melee_weapon_without_thrown_property_thrown
+    - weapon_used_contrary_to_design
+    proficiency_bonus_added: false
+    damage:
+      dice: 1d4
+      type_choice:
+        chooser: gm
+        options:
+        - acid
+        - bludgeoning
+        - cold
+        - fire
+        - force
+        - lightning
+        - necrotic
+        - piercing
+        - poison
+        - psychic
+        - radiant
+        - slashing
+        - thunder
+        constraint: appropriate_for_object
+    thrown_range_feet:
+      normal: 20
+      long: 60
+    weapon_equivalent:
+      optional: true
+      chooser: gm
+      requires_resemblance: true
+      allowed_categories:
+      - simple
+      - martial
+      replacement_rules: selected_weapon_all_rules
+  implementation: dnd2024:glossary_improvised_weapons
+splat_contracts:
+- id: dnd2024:glossary_improvised_weapons
+  inputs:
+    subject:
+      type: participant
+      required: true
+    weapon:
+      type: item_instance
+      required: true
+    use_mode:
+      type: choice
+      required: true
+    gm_damage_type:
+      type: choice
+      required: true
+    equivalent_weapon:
+      required: false
+      type: definition
+  outputs:
+  - weapon_attack_profile
+  events:
+  - attack.pending
+  capabilities:
+  - equipment
+  - attacks
+  - damage
+  - gm_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 0a1156a4b93fd42e11fd307a5551d9211a7fdd2cafb851cdd4b722a415a1a089
   source_path: builtin/srd-5.2.1/glossary/improvised_weapons.md
   pages:
   - 183
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_improvised_weapons
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: df8a06a6ffac4b6498cb1a372aa6e8cea0f07c8ce9035071ca41fe52488c2df2
 splat_clauses:
 - key: source_rules
   text: '# Improvised Weapons An improvised weapon is an object wielded as a makeshift weapon, such as
@@ -37,7 +103,8 @@ splat_clauses:
     or Martial weapon, the GM may say it functions as that weapon and uses that weapon’s rules. For example,
     the GM could treat a table leg as a Club.'
   sha256: 80c9a321ed52550ec351d2ee88a26b0959a1ebec1a315eed5329e9a05c6452a9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Improvised Weapons

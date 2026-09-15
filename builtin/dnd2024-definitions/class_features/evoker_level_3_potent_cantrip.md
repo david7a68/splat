@@ -12,18 +12,49 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/evoker_level_3_potent_cantrip
-  parameters: {}
+  parameters:
+    spell_level: 0
+    target_type: creature
+    triggers:
+    - cantrip_attack_misses
+    - target_succeeds_cantrip_save
+    damage_multiplier: 0.5
+    additional_cantrip_effects: false
+    requires_cantrip_damage: true
+  implementation: dnd2024:class_features_evoker_level_3_potent_cantrip
+splat_contracts:
+- id: dnd2024:class_features_evoker_level_3_potent_cantrip
+  inputs:
+    actor:
+      type: participant
+      required: true
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - feature_state
+  - damage
+  events:
+  - spell.attack_missed
+  - spell.save_succeeded
+  capabilities:
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 82
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_evoker_level_3_potent_cantrip
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 438462fb53ac5024fc0d7a860cfa51e2962210c60127286762f5d12565cc5163
   parent_name: Evoker
   line_span:
     first: 7025
@@ -35,7 +66,8 @@ splat_clauses:
     succeeds on a saving throw against the cantrip, the target takes half the cantrip’s damage (if any)
     but suffers no additional effect from the cantrip.'
   sha256: f5ee2e4e8c7955babb5a1ffd549434319e17115c1ac21e824848a7a5d65edd2c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Potent Cantrip

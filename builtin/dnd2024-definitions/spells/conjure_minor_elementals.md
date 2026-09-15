@@ -25,17 +25,87 @@ splat_spell:
   ritual: false
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/conjure_minor_elementals
+  implementation: dnd2024:spell_conjure_minor_elementals
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 600
+    area:
+      shape: emanation
+      radius_feet: 15
+      origin: caster
+      moves_with_origin: true
+    damage_trigger:
+      event: attack.hit
+      attacker: caster
+      target_kind: creature
+      target_in_area: true
+    extra_damage:
+      dice:
+        base_count: 2
+        sides: 8
+        extra_per_slot: 1
+        base_slot: 4
+      type:
+        chooser: caster
+        timing: attack_made
+        options:
+        - acid
+        - cold
+        - fire
+        - lightning
+    terrain:
+      scope: ground_in_area
+      affected: caster_enemies
+      difficult: true
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_conjure_minor_elementals
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    damage_type_choices:
+      type: choice
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - damage
+  events:
+  - attack.hit
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - areas
+  - attacks
+  - damage
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 45ae0fd9f779d6510023032c4c093f41ba376894af74fa0c635d94638138051b
   source_path: builtin/srd-5.2.1/spell/conjure_minor_elementals.md
   pages:
   - 118
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_conjure_minor_elementals
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: a973e08deff33a63e35ec6020dbf28a5d4ecb8458c54aa228eac17b89f26ec64
 splat_clauses:
 - key: source_rules
   text: '# Conjure Minor Elementals Level 4 Conjuration (Druid, Wizard) Casting Time: Action Range: Self
@@ -46,7 +116,8 @@ splat_clauses:
     is Difficult Terrain for your enemies. Using a Higher-Level Spell Slot. The damage increases by 1d8
     for each spell slot level above 4.'
   sha256: 6c4a74d9ca9e246b877ce815c2acbc5f7ebf7c7c577af5923a452978f3e6df06
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Conjure Minor Elementals

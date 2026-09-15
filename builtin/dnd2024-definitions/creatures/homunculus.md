@@ -59,17 +59,142 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/homunculus
+  implementation: dnd2024:creature_homunculus
+  parameters:
+    features:
+      telepathic_bond:
+        economy: trait
+        operation: passive_rule
+        telepathy:
+          with: master
+          requires_same_plane: true
+          range: unlimited
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 1
+            roll:
+              constant: 1
+            type: piercing
+          save:
+            operation: saving_throw
+            ability: constitution
+            dc: 12
+            targets:
+              kind: target
+            failure:
+              conditions:
+              - condition: poisoned
+                until: self.next_turn_end
+            failure_by_5_or_more:
+              conditions:
+              - condition: poisoned
+                duration_seconds: 60
+              while_poisoned:
+                condition: unconscious
+                ends_on: target.damage_taken
+    damage_immunities:
+    - poison
+    condition_immunities:
+    - charmed
+    - poisoned
+    senses:
+      darkvision: 60
+      passive_perception: 10
+    languages:
+      speaks: []
+      understands:
+      - common
+      additional_languages:
+        count: 1
+        chooser: creator
+        can_speak: false
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_homunculus
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.ended
+  - damage.resolved
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: df67d41c5cc7313f0fc172cf6384d6d1cb822f0b8f9e55fb2a96fbaf17e5dde6
   source_path: builtin/srd-5.2.1/creature/homunculus.md
   pages:
   - 299
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_homunculus
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: be768f7082a9bd799888890c0cd7614668c40648797cf12e63f869108a5b298d
 splat_clauses:
 - key: source_rules
   text: '# Homunculus Tiny Construct, Neutral AC 13 Initiative +2 (12) HP 4 (1d4 + 2) Speed 20 ft., Fly
@@ -83,7 +208,8 @@ splat_clauses:
     More: The target has the Poisoned condition for 1 minute. While Poisoned, the target has the Unconscious
     condition, which ends early if the target takes any damage.'
   sha256: 155bc927b88ecff2c7cdd53ba751f118274348818ad70cc8e299b6ef85fac8e2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Homunculus

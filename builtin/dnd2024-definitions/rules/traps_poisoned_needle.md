@@ -12,19 +12,121 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/traps_poisoned_needle
-  parameters: {}
+  parameters:
+    classification: nuisance
+    base_levels:
+      min: 1
+      max: 4
+    triggers:
+    - lock_opened_with_object_other_than_correct_key
+    - disarm_failure
+    duration: instantaneous
+    magical_opening_exemptions:
+    - knock
+    - similar_magic
+    save:
+      ability: constitution
+      dc: 11
+    failure:
+      damage:
+        dice:
+          count: 1
+          sides: 10
+        average: 5
+        type: poison
+      condition: poisoned
+      condition_duration:
+        value: 1
+        unit: hour
+    success:
+      damage: half_round_down
+      condition: none
+    detect:
+      action: search
+      ability: wisdom
+      skill: perception
+      dc: 15
+      success: needle_detected
+    disarm:
+      requires_detected: true
+      action_cost: 1
+      ability: dexterity
+      skill: sleight_of_hand
+      dc: 15
+      failure: trigger_trap
+    optional_level_scaling:
+    - levels:
+        min: 5
+        max: 10
+      damage:
+        dice:
+          count: 2
+          sides: 10
+        average: 11
+      save_dc: 13
+    - levels:
+        min: 11
+        max: 16
+      damage:
+        dice:
+          count: 4
+          sides: 10
+        average: 22
+      save_dc: 15
+    - levels:
+        min: 17
+        max: 20
+      damage:
+        dice:
+          count: 10
+          sides: 10
+        average: 55
+      save_dc: 17
+  implementation: dnd2024:rules_traps_poisoned_needle
+splat_contracts:
+- id: dnd2024:rules_traps_poisoned_needle
+  inputs:
+    trap:
+      type: object
+      required: true
+    subject:
+      type: participant
+      required: true
+    interaction:
+      type: resolution
+      required: true
+    level_band:
+      type: choice
+      required: true
+  outputs:
+  - damage
+  - conditions
+  - trap_state
+  - discovery
+  events:
+  - lock.opened
+  - action.search
+  - action.disarm
+  capabilities:
+  - traps
+  - damage
+  - conditions
+  - checks
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 200
   - 201
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_traps_poisoned_needle
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 2caaa216c619a2a2b400b5618ad5b702967d7da1530b1f58509d000e77a026e9
   parent_name: Traps
   line_span:
     first: 10133
@@ -45,7 +147,8 @@ splat_clauses:
     save DC, as shown in the following table. Levels Poison Damage Save DC 5–10 11 (2d10) 13 11–16 22
     (4d10) 15 17–20 55 (10d10) 17'
   sha256: e0e3558d73ce99911002e4d1a623e222b1a50ca9ef49caaee3c16fc02b0a7fdf
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Poisoned Needle

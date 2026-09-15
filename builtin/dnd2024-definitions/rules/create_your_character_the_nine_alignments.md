@@ -12,19 +12,57 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/create_your_character_the_nine_alignments
-  parameters: {}
+  parameters:
+    alignment_axes:
+      morality:
+      - good
+      - neutral
+      - evil
+      order:
+      - lawful
+      - neutral
+      - chaotic
+    options:
+    - lawful_good
+    - neutral_good
+    - chaotic_good
+    - lawful_neutral
+    - neutral
+    - chaotic_neutral
+    - lawful_evil
+    - neutral_evil
+    - chaotic_evil
+    rational_thought_absent_default: unaligned
+    behavior_binding: false
+  implementation: dnd2024:rule_create_your_character_the_nine_alignments
+splat_contracts:
+- id: dnd2024:rule_create_your_character_the_nine_alignments
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - character_changes
+  events: []
+  capabilities:
+  - character_creation
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 21
   - 22
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_create_your_character_the_nine_alignments
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 7b0231f7c236656f7e9f53db6af2cd9c0d3f7aec5d42998ef79147b85b468255
   parent_name: Create Your Character
   line_span:
     first: 1583
@@ -57,7 +95,8 @@ splat_clauses:
     Evil (CE). Chaotic Evil creatures act with arbitrary violence, spurred by their hatred or bloodlust.
     A villain pursuing schemes of vengeance and havoc is probably Chaotic Evil.'
   sha256: 0c3bc62a92fdf1a753acb7161353374e3ff914afac1f62d73c7d5eef1dc95aa4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # The Nine Alignments

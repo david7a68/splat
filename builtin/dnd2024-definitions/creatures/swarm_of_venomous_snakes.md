@@ -62,18 +62,149 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/swarm_of_venomous_snakes
+  implementation: dnd2024:creature_swarm_of_venomous_snakes
+  parameters:
+    damage_resistances:
+    - bludgeoning
+    - piercing
+    - slashing
+    damage_immunities: []
+    condition_immunities:
+    - charmed
+    - frightened
+    - grappled
+    - paralyzed
+    - petrified
+    - prone
+    - restrained
+    - stunned
+    senses:
+    - sense: blindsight
+      range_ft: 10
+    passive_perception: 10
+    languages:
+      speak: true
+      known: []
+    features:
+      swarm:
+        economy: passive
+        op: swarm.form
+        shared_spaces_bidirectional: true
+        minimum_opening:
+          creature_size: tiny
+          creature_shape: snake
+        regain_hp: false
+        gain_temporary_hp: false
+      bites:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 6
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 4
+            average: 8
+          - type: poison
+            amount:
+              dice:
+                count: 3
+                sides: 6
+              add: 0
+            average: 10
+          replacement_when:
+            if:
+              actor_bloodied: true
+            components:
+            - type: piercing
+              amount:
+                dice:
+                  count: 1
+                  sides: 4
+                add: 4
+              average: 6
+            - type: poison
+              amount:
+                dice:
+                  count: 3
+                  sides: 6
+                add: 0
+              average: 10
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_swarm_of_venomous_snakes
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 777bacb0cda03bca612d13c8e530b1fa2c9c14fdf773deeb71b6f42a9a50112e
   source_path: builtin/srd-5.2.1/creature/swarm_of_venomous_snakes.md
   pages:
   - 362
   - 363
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_swarm_of_venomous_snakes
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 1204c325edb913c24f1b255a09afc059519f349a6382275159089016a65e4472
 splat_clauses:
 - key: source_rules
   text: '# Swarm of Venomous Snakes Medium Swarm of Tiny Beasts, Unaligned AC 14 Initiative +4 (14) HP
@@ -86,7 +217,8 @@ splat_clauses:
     +6, reach 5 ft. Hit: 8 (1d8 + 4) Piercing damage—or 6 (1d4 + 4) Piercing damage if the swarm is Bloodied—plus
     10 (3d6) Poison damage.'
   sha256: e94adc66ee34b336f83961cdb523001bf256fe665ffb20bac408556d8d373c7c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Swarm of Venomous Snakes

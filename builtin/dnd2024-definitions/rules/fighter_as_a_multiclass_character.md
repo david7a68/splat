@@ -12,18 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/fighter_as_a_multiclass_character
-  parameters: {}
+  parameters:
+    class:
+      key: dnd2024:classes/fighter
+    entry: multiclass
+    hit_die_sides: 10
+    armor_training:
+    - light
+    - medium
+    - shield
+    features:
+    - level: 1
+      feature:
+        key: dnd2024:class_features/fighter_level_1_fighting_style
+    - level: 1
+      feature:
+        key: dnd2024:class_features/fighter_level_1_second_wind
+    - level: 1
+      feature:
+        key: dnd2024:class_features/fighter_level_1_weapon_mastery
+    weapon_proficiencies:
+    - martial
+  implementation: dnd2024:rules_fighter_as_a_multiclass_character
+splat_contracts:
+- id: dnd2024:rules_fighter_as_a_multiclass_character
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - multiclass_grants
+  events: []
+  capabilities:
+  - multiclassing
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 47
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_fighter_as_a_multiclass_character
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 36bdea4f310d34ef6119a09b43b0a770e73a637016a18c53485335e21f642d48
   parent_name: Fighter
   line_span:
     first: 3923
@@ -34,7 +69,8 @@ splat_clauses:
     Point Die, proficiency with Martial weapons, and training with Light and Medium armor and Shields.
     • Gain the Fighter’s level 1 features, which are listed in the Fighter Features table.'
   sha256: ce0ad22a878fdd7a96e9292c5dcb09f904f08dbda806997b47f1eb7b2efff50a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # As a Multiclass Character

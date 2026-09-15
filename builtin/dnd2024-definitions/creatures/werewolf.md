@@ -59,17 +59,226 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/werewolf
+  implementation: dnd2024:creature_werewolf
+  parameters:
+    features:
+      pack_tactics:
+        economy: trait
+        operation: passive_rule
+        attack_advantage:
+          target_kind: creature
+          ally_within_target_ft: 5
+          ally_excludes_conditions:
+          - incapacitated
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_choice
+          count: 2
+          options:
+          - scratch
+          - longbow
+        replacements:
+        - replace_count: 1
+          maximum_uses: 1
+          operation:
+            operation: use_feature
+            feature: bite
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 12
+            roll:
+              count: 2
+              sides: 8
+              modifier: 3
+            type: piercing
+          save:
+            operation: saving_throw
+            ability: constitution
+            dc: 12
+            targets:
+              kind: humanoid
+            failure:
+              curse:
+                on_target_zero_hp:
+                  replace:
+                    definition:
+                      key: dnd2024:creatures/werewolf
+                    controller: gm
+                    hp: 10
+            success:
+              immunity:
+                effect: this_creature_curse
+                duration_seconds: 86400
+        allowed_forms:
+        - wolf
+        - hybrid
+      scratch:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 10
+            roll:
+              count: 2
+              sides: 6
+              modifier: 3
+            type: slashing
+      longbow:
+        economy: action
+        operation: attack
+        attack:
+          mode: ranged
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          range_ft: 150
+          long_range_ft: 600
+        hit:
+          damage:
+          - average: 11
+            roll:
+              count: 2
+              sides: 8
+              modifier: 2
+            type: piercing
+        allowed_forms:
+        - humanoid
+        - hybrid
+      shape_shift:
+        economy: bonus_action
+        operation: shape_shift
+        forms:
+        - form: hybrid
+          size: large
+        - form: wolf
+          size: medium
+        - form: true_humanoid
+          size: original
+        statistics_preserved_except:
+        - size
+        - form_specific_speed
+        equipment_transformed: false
+    skill_totals:
+      perception: 4
+      stealth: 4
+    gear:
+    - item: longbow
+      quantity: 1
+    senses:
+      darkvision: 60
+      passive_perception: 14
+    languages:
+      speaks:
+      - common
+      understands: []
+      cannot_speak_forms:
+      - wolf
+    form_rules:
+      beast:
+        speed_ft: 40
+        can_speak: false
+      true_humanoid:
+        speed_ft: 30
+      hybrid:
+        speed_ft: 30
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_werewolf
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - shape_shifting
+  - spatial_queries
+  - limited_resources
+  - curses
+  - hit_points
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 7bff0bd13d170bee77b6727f6ead43d9152c53dfd574daf4d533b7978d8af005
   source_path: builtin/srd-5.2.1/creature/werewolf.md
   pages:
   - 339
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_werewolf
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 53c93e3cae79557872af5911d1da50ed971207b102e589bc1f008e6f557df946
 splat_clauses:
 - key: source_rules
   text: '# Werewolf Medium or Small Monstrosity (Lycanthrope), Chaotic Evil AC 15 Initiative +4 (14) HP
@@ -90,7 +299,8 @@ splat_clauses:
     wolf, or it returns to its true humanoid form. Its game statistics, other than its size, are the same
     in each form. Any equipment it is wearing or carrying isn’t transformed.'
   sha256: e5de839fa59e239afad0d02b2af9a9bd3823ad2cd8ab214adfb944d8a4f6142c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Werewolf

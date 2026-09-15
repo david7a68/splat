@@ -15,17 +15,109 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/marvelous_pigments
+  implementation: dnd2024:item_marvelous_pigments
+  parameters:
+    box:
+      initial_pots:
+        expression: 1d4
+        scope: use
+      brush: true
+      total_weight_lb: 1
+    paint:
+      cost_pots: 1
+      brush_required: true
+      duration:
+        amount: 10
+        unit: minute
+      concentration: true
+      user_must_remain_in_area: true
+      area:
+        shape: cube
+        size_ft: 20
+      elements:
+        kinds:
+        - three_dimensional_object
+        - terrain_feature
+        count: any
+        all_extents_inside_area: true
+      interrupted:
+        painted_elements_vanish: true
+        pot_wasted: true
+      completion:
+        elements_become_real: true
+        door_connects_to_existing_beyond: true
+        pit_depth_within_cube: true
+      value_limits:
+        per_object_gp: 25
+        total_gp: 500
+        exceeding:
+          appearance: authentic
+          material: worthless
+          close_inspection_reveals: true
+      painted_energy:
+        dissipates_on_completion: true
+        damage: 0
+    attunement:
+      required: false
+    common_rules:
+    - key: dnd2024:rules/magic_item_categories_wondrous_items
+splat_contracts:
+- id: dnd2024:item_marvelous_pigments
+  inputs:
+    actor:
+      type: participant
+      required: true
+    source_item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choice:
+      required: false
+      type: choice
+    event:
+      required: false
+      type: event
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - item_state
+  - effects
+  - resolutions
+  events:
+  - painting.started
+  - concentration.ended
+  - position.changed
+  - time.elapsed
+  capabilities:
+  - inventory
+  - effects
+  - resources_and_time
+  - roll_resolution
+  - spatial_state
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 54f56cf46e923210e808257de7fbd656f8b79cc92043b33951136600effa0d1b
   source_path: builtin/srd-5.2.1/magic_item/marvelous_pigments.md
   pages:
   - 230
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_marvelous_pigments
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_2.md
+  specification_sha256: b610d4b2e20e5734ce18db04c3af8e6ebfb24f624dd277da6adde8ff139fdb3c
 splat_clauses:
 - key: source_rules
   text: '# Marvelous Pigments Wondrous Item, Very Rare This fine wooden box contains 1d4 pots of pigment
@@ -44,7 +136,8 @@ splat_clauses:
     material. If you paint a form of energy such as fire or lightning, the energy dissipates as soon as
     you complete the painting, doing no harm.'
   sha256: 2f725f1929b8c796adea4c54dbcb48e5bdf5d4d76cb1416b115c555afb7eb72a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Marvelous Pigments

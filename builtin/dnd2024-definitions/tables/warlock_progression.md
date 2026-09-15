@@ -11,7 +11,7 @@ splat_sources:
   locator: pp. 71
   url: https://www.dndbeyond.com/srd
 splat_rule:
-  mechanic: dnd2024:class_progression
+  mechanic: dnd2024:tables/warlock_progression
   parameters:
     class: warlock
     rows:
@@ -23,6 +23,15 @@ splat_rule:
       prepared_spells: 2
       pact_slots: 1
       pact_slot_level: 1
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_1_eldritch_invocations
+        at_class_level: 1
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_1_pact_magic
+        at_class_level: 1
     - level: 2
       proficiency_bonus: 2
       features_text: Magical Cunning
@@ -31,6 +40,11 @@ splat_rule:
       prepared_spells: 3
       pact_slots: 2
       pact_slot_level: 1
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_2_magical_cunning
+        at_class_level: 2
     - level: 3
       proficiency_bonus: 2
       features_text: Warlock Subclass
@@ -39,6 +53,11 @@ splat_rule:
       prepared_spells: 4
       pact_slots: 2
       pact_slot_level: 2
+      grants:
+      - operation: choose_subclass
+        feature:
+          key: dnd2024:class_features/warlock_level_3_warlock_subclass
+        at_class_level: 3
     - level: 4
       proficiency_bonus: 2
       features_text: Ability Score Improvement
@@ -47,6 +66,11 @@ splat_rule:
       prepared_spells: 5
       pact_slots: 2
       pact_slot_level: 2
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_4_ability_score_improvement
+        at_class_level: 4
     - level: 5
       proficiency_bonus: 3
       features_text: —
@@ -55,6 +79,7 @@ splat_rule:
       prepared_spells: 6
       pact_slots: 2
       pact_slot_level: 3
+      grants: []
     - level: 6
       proficiency_bonus: 3
       features_text: Subclass feature
@@ -63,6 +88,9 @@ splat_rule:
       prepared_spells: 7
       pact_slots: 2
       pact_slot_level: 3
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 6
     - level: 7
       proficiency_bonus: 3
       features_text: —
@@ -71,6 +99,7 @@ splat_rule:
       prepared_spells: 8
       pact_slots: 2
       pact_slot_level: 4
+      grants: []
     - level: 8
       proficiency_bonus: 3
       features_text: Ability Score Improvement
@@ -79,6 +108,11 @@ splat_rule:
       prepared_spells: 9
       pact_slots: 2
       pact_slot_level: 4
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_4_ability_score_improvement
+        at_class_level: 8
     - level: 9
       proficiency_bonus: 4
       features_text: Contact Patron
@@ -87,6 +121,11 @@ splat_rule:
       prepared_spells: 10
       pact_slots: 2
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_9_contact_patron
+        at_class_level: 9
     - level: 10
       proficiency_bonus: 4
       features_text: Subclass feature
@@ -95,6 +134,9 @@ splat_rule:
       prepared_spells: 10
       pact_slots: 2
       pact_slot_level: 5
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 10
     - level: 11
       proficiency_bonus: 4
       features_text: Mystic Arcanum (level 6 spell)
@@ -103,6 +145,12 @@ splat_rule:
       prepared_spells: 11
       pact_slots: 3
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_11_mystic_arcanum
+        at_class_level: 11
+        arcanum_spell_level: 6
     - level: 12
       proficiency_bonus: 4
       features_text: Ability Score Improvement
@@ -111,6 +159,11 @@ splat_rule:
       prepared_spells: 11
       pact_slots: 3
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_4_ability_score_improvement
+        at_class_level: 12
     - level: 13
       proficiency_bonus: 5
       features_text: Mystic Arcanum (level 7 spell)
@@ -119,6 +172,12 @@ splat_rule:
       prepared_spells: 12
       pact_slots: 3
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_11_mystic_arcanum
+        at_class_level: 13
+        arcanum_spell_level: 7
     - level: 14
       proficiency_bonus: 5
       features_text: Subclass feature
@@ -127,6 +186,9 @@ splat_rule:
       prepared_spells: 12
       pact_slots: 3
       pact_slot_level: 5
+      grants:
+      - operation: grant_selected_subclass_features
+        class_level: 14
     - level: 15
       proficiency_bonus: 5
       features_text: Mystic Arcanum (level 8 spell)
@@ -135,6 +197,12 @@ splat_rule:
       prepared_spells: 13
       pact_slots: 3
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_11_mystic_arcanum
+        at_class_level: 15
+        arcanum_spell_level: 8
     - level: 16
       proficiency_bonus: 5
       features_text: Ability Score Improvement
@@ -143,6 +211,11 @@ splat_rule:
       prepared_spells: 13
       pact_slots: 3
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_4_ability_score_improvement
+        at_class_level: 16
     - level: 17
       proficiency_bonus: 6
       features_text: Mystic Arcanum (level 9 spell)
@@ -151,6 +224,12 @@ splat_rule:
       prepared_spells: 14
       pact_slots: 4
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_11_mystic_arcanum
+        at_class_level: 17
+        arcanum_spell_level: 9
     - level: 18
       proficiency_bonus: 6
       features_text: —
@@ -159,6 +238,7 @@ splat_rule:
       prepared_spells: 14
       pact_slots: 4
       pact_slot_level: 5
+      grants: []
     - level: 19
       proficiency_bonus: 6
       features_text: Epic Boon
@@ -167,6 +247,11 @@ splat_rule:
       prepared_spells: 15
       pact_slots: 4
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_19_epic_boon
+        at_class_level: 19
     - level: 20
       proficiency_bonus: 6
       features_text: Eldritch Master
@@ -175,17 +260,95 @@ splat_rule:
       prepared_spells: 15
       pact_slots: 4
       pact_slot_level: 5
+      grants:
+      - operation: grant_feature
+        feature:
+          key: dnd2024:class_features/warlock_level_20_eldritch_master
+        at_class_level: 20
+    class_definition:
+      key: dnd2024:classes/warlock
+    lookup:
+      input: class_level
+      minimum: 1
+      maximum: 20
+      match: exact
+      numeric_columns: current_capacity_or_value
+      feature_grants: all_crossed_levels
+      repeat_application: idempotent_per_class_level_and_feature
+    multiclass:
+      proficiency_bonus_source: total_character_level
+      spell_slot_override_rule:
+        key: dnd2024:rules/multiclassing_spellcasting
+      pact_magic_pool_separate: true
+    column_semantics:
+      cantrips:
+        kind: selection_capacity
+        selection: cantrips
+        eligibility: owning_feature_contract
+      eldritch_invocations:
+        kind: selection_capacity
+        selection: eldritch_invocations
+        eligibility: owning_feature_contract
+      pact_slot_level:
+        kind: spell_level
+        applies_to: pact_slots
+      pact_slots:
+        kind: resource_capacity
+        resource: pact_slots
+        recovery: owning_feature_contract
+        level_change_refills: false
+      prepared_spells:
+        kind: selection_capacity
+        selection: prepared_spells
+        eligibility: owning_feature_contract
+      proficiency_bonus:
+        kind: bonus
+        applies_to: proficiency
+        use_class_row_only_if_single_class: true
+  implementation: dnd2024:class_progression_warlock_progression
+splat_contracts:
+- id: dnd2024:class_progression_warlock_progression
+  inputs:
+    actor:
+      type: participant
+      required: true
+    class_level:
+      type: integer
+      required: true
+    previous_class_level:
+      required: false
+      type: integer
+    selected_subclass:
+      required: false
+      type: definition
+    choices:
+      required: false
+      type: definition_list
+  outputs:
+  - feature_grants
+  - selection_capacities
+  - resource_capacities
+  - class_values
+  events:
+  - character.class_level_changed
+  capabilities:
+  - class_progression
+  - feature_grants
+  - resource_capacities
+  - character_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: table
   source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
   source_path: builtin/srd-5.2.1/source.txt
   pages:
   - 71
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_progression_warlock_progression
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: 40729e3a6870c2f4c82fc33d22831d07d271a696ad085bafe373a1940c8ea0e5
 splat_clauses:
 - key: source_rules
   text: '# Warlock Progression From SRD 5.2.1 page 71. Warlock Features Proficiency Eldritch Prepared
@@ -223,7 +386,8 @@ splat_clauses:
     gives you spells that you always have prepared, those spells don’t count 71 System Reference Document
     5.2.1'
   sha256: ece30ffb68d49f33ad7406059e03a2a27abe6358cf331318e6ddc72a06dc3109
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Warlock Progression

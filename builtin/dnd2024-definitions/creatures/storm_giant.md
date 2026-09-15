@@ -64,18 +64,233 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/storm_giant
+  implementation: dnd2024:creature_storm_giant
+  parameters:
+    features:
+      amphibious:
+        economy: trait
+        operation: passive_rule
+        breathing:
+        - air
+        - water
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_choice
+          count: 2
+          options:
+          - storm_sword
+          - thunderbolt
+      storm_sword:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 14
+          reach_ft: 10
+        hit:
+          damage:
+          - average: 23
+            roll:
+              count: 4
+              sides: 6
+              modifier: 9
+            type: slashing
+          - average: 13
+            roll:
+              count: 3
+              sides: 8
+              modifier: 0
+            type: lightning
+      thunderbolt:
+        economy: action
+        operation: attack
+        attack:
+          mode: ranged
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 14
+          range_ft: 500
+          long_range_ft: null
+        hit:
+          damage:
+          - average: 22
+            roll:
+              count: 2
+              sides: 12
+              modifier: 9
+            type: lightning
+          conditions:
+          - condition: blinded
+            until: self.next_turn_start
+          - condition: deafened
+            until: self.next_turn_start
+      lightning_storm:
+        economy: action
+        resource:
+          kind: recharge
+          die: 6
+          success_faces:
+          - 5
+          - 6
+          check: self.turn_start
+          rest_recovery:
+          - short
+          - long
+          capacity: 1
+          initial_uses: 1
+        operation: saving_throw
+        ability: dexterity
+        dc: 18
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: cylinder
+            radius_ft: 10
+            height_ft: 40
+            origin:
+              visible: true
+              range_ft: 500
+        failure:
+          damage:
+          - average: 55
+            roll:
+              count: 10
+              sides: 10
+              modifier: 0
+            type: lightning
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+      spellcasting:
+        economy: action
+        operation: spellcasting
+        ability: wisdom
+        components_waived:
+        - material
+        save_dc: 18
+        options:
+        - spell:
+            key: dnd2024:spells/detect_magic
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/light
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/control_weather
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        material_components_available: true
+    skill_totals:
+      arcana: 8
+      athletics: 14
+      history: 8
+      perception: 10
+    damage_resistances:
+    - cold
+    damage_immunities:
+    - lightning
+    - thunder
+    condition_immunities: []
+    senses:
+      darkvision: 120
+      truesight: 30
+      passive_perception: 20
+    languages:
+      speaks:
+      - common
+      - giant
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_storm_giant
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - rest.completed
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spellcasting
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: e42c9b7b1ce7c4a37a5412d7394e412b3a76ddfbc6e2a7d5e0aa4d15943ec0c6
   source_path: builtin/srd-5.2.1/creature/storm_giant.md
   pages:
   - 330
   - 331
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_storm_giant
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 87c993a127f944054fc8cad64fad29f2558e18b612b0ff7fea0745a368408637
 splat_clauses:
 - key: source_rules
   text: '# Storm Giant Huge Giant, Chaotic Good AC 16 Initiative +7 (17) HP 230 (20d12 + 100) Speed 50
@@ -93,7 +308,8 @@ splat_clauses:
     casts one of the following spells, requiring no Material components and using Wisdom as the spellcasting
     ability (spell save DC 18): At Will: Detect Magic, Light 1/Day: Control Weather'
   sha256: afcfa6d8e959c0517c502cae308f9ff58710007e23e5b79bcf6d264ec127a22f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Storm Giant

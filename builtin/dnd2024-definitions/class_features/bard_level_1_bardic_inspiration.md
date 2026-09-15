@@ -12,19 +12,83 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/bard_level_1_bardic_inspiration
-  parameters: {}
+  parameters:
+    action: bonus_action
+    resource:
+      id: bard.bardic_inspiration
+      maximum:
+        op: max
+        args:
+        - 1
+        - var: actor.abilities.charisma.modifier
+      recovery:
+      - event: rest.long_completed
+        amount: all
+    cost: 1
+    target:
+      creature: true
+      self: false
+      range_feet: 60
+      perceives_actor_any:
+      - sight
+      - hearing
+    die:
+      sides_by_bard_level:
+        '1': 6
+        '5': 8
+        '10': 10
+        '15': 12
+      count: 1
+    duration:
+      hours: 1
+    maximum_dice_per_creature: 1
+    use:
+      trigger: target.d20_test.failed
+      optional: true
+      roll_die: true
+      add_to: d20
+      recompute_success: true
+      consume: on_roll
+      maximum_uses: 1
+    class_scope:
+      class: bard
+      minimum_level: 1
+  implementation: dnd2024:class_features_bard_level_1_bardic_inspiration
+splat_contracts:
+- id: dnd2024:class_features_bard_level_1_bardic_inspiration
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - action.bonus
+  - d20_test.failed
+  - rest.long_completed
+  capabilities:
+  - character_features
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 31
   - 32
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_bard_level_1_bardic_inspiration
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 85e6a7924ced16cb5d2463f67bd861d1e4a4395c491451c1a37a2d9d8c7a761f
   parent_name: Bard
   line_span:
     first: 2553
@@ -49,7 +113,8 @@ splat_clauses:
     shown in the Bardic Die column of the Bard Features table. The die becomes a d8 at level 5, a d10
     at level 10, and a d12 at level 15.'
   sha256: b898e5005dac59fc9610165fc05229df812c3a1be0b1b8159a22912fdb2b1f7b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Bardic Inspiration

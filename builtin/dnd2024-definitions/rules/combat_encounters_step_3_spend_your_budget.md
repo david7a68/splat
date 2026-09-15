@@ -12,19 +12,103 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_encounters_step_3_spend_your_budget
-  parameters: {}
+  parameters:
+    budget_remaining:
+      op: subtract
+      args:
+      - variable: xp_budget
+      - op: sum
+        args:
+        - variable: selected_monster_xp
+    constraint: selected_total_lte_budget
+    unspent_xp_allowed: true
+    examples:
+    - party_size: 4
+      level: 1
+      difficulty: low
+      xp_per_character: 50
+      budget: 200
+      choices:
+      - - monster: bugbear_warrior
+          count: 1
+          xp_each: 200
+      - - monster: giant_wasp
+          count: 2
+          xp_each: 100
+      - - monster: giant_rat
+          count: 6
+          xp_each: 25
+    - party_size: 5
+      level: 3
+      difficulty: moderate
+      xp_per_character: 225
+      budget: 1125
+      choices:
+      - - monster: druid
+          count: 2
+          xp_each: 450
+        - monster: stirge
+          count: 9
+          xp_each: 25
+      - - monster: wight
+          count: 1
+          xp_each: 700
+        - monster: warhorse_skeleton
+          count: 1
+          xp_each: 100
+        - monster: skeleton
+          count: 6
+          xp_each: 50
+    - party_size: 6
+      level: 15
+      difficulty: high
+      xp_per_character: 7800
+      budget: 46800
+      choices:
+      - - monster: adult_red_dragon
+          count: 2
+          xp_each: 18000
+        - monster: fire_giant
+          count: 2
+          xp_each: 5000
+  implementation: dnd2024:rule_combat_encounters_step_3_spend_your_budget
+splat_contracts:
+- id: dnd2024:rule_combat_encounters_step_3_spend_your_budget
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selected_monster_xp:
+      type: resolution
+      required: true
+    xp_budget:
+      type: number
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - resolution
+  events: []
+  capabilities:
+  - encounter_building
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 202
   - 203
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_combat_encounters_step_3_spend_your_budget
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 897495d20832a9b96d72c4bf4fb9718768e4cc55f298e87b6595d51c529b2f00
   parent_name: Combat Encounters
   line_span:
     first: 10316
@@ -45,7 +129,8 @@ splat_clauses:
     × 6, for a total of 46,800 XP. With that, you could build this encounter: • 2 Adult Red Dragons (18,000
     XP each) and 2 Fire Giants (5,000 XP each), for 46,000 XP total'
   sha256: bd4e9082d7716b374bb730385c843a6142ff74456157ff3e033bf6180130dbb4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Step 3: Spend Your Budget

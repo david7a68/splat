@@ -25,17 +25,77 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/ray_of_frost
+  implementation: dnd2024:spell_ray_of_frost
+  parameters:
+    spell_lifetime:
+      concentration: false
+      instantaneous: true
+    target:
+      kind: creature
+      range_feet: 60
+    attack:
+      kind: ranged_spell_attack
+    hit:
+      damage:
+        type: cold
+        dice:
+          sides: 8
+          counts_by_character_level:
+          - minimum_level: 1
+            count: 1
+          - minimum_level: 5
+            count: 2
+          - minimum_level: 11
+            count: 3
+          - minimum_level: 17
+            count: 4
+      speed_modifier_feet: -10
+      speed_modifier_until:
+        event: turn.start
+        subject: caster
+        occurrence: next
+    miss: no_effect
+splat_contracts:
+- id: dnd2024:spell_ray_of_frost
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    target:
+      type: participant
+      required: true
+    character_level:
+      type: integer
+      required: true
+  outputs:
+  - effects
+  - damage
+  events:
+  - spell.cast_completed
+  - turn.start
+  capabilities:
+  - spellcasting
+  - effects
+  - attacks
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: a59d1bb8318090fdac3b9a194de5cacab56f3fff2fb8067f5d57ba362e928f2f
   source_path: builtin/srd-5.2.1/spell/ray_of_frost.md
   pages:
   - 157
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_ray_of_frost
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 1f4066b20e8c1496985079eacf8e0a7a73f70f8194bd87ca9bb309c54f821f58
 splat_clauses:
 - key: source_rules
   text: '# Ray of Frost Evocation Cantrip (Sorcerer, Wizard) Casting Time: Action Range: 60 feet Components:
@@ -44,7 +104,8 @@ splat_clauses:
     reduced by 10 feet until the start of your next turn. Cantrip Upgrade. The damage increases by 1d8
     when you reach levels 5 (2d8), 11 (3d8), and 17 (4d8).'
   sha256: f5535bc847efa1c25a6f79085c459cb874811956e7be0a74521491c42ec446db
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ray of Frost

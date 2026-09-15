@@ -12,18 +12,55 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/casting_spells_combining_spell_effects
-  parameters: {}
+  parameters:
+    different_spell_effects: combine
+    same_spell_effects:
+      stack: false
+      selection:
+      - most_potent
+      - most_recent_if_equal
+      scope: overlapping_durations
+      independent_durations_continue: true
+    identify_ongoing_spell:
+      requires:
+      - noninstantaneous
+      - ongoing_duration
+      - observable_effects
+      action: study
+      ability: intelligence
+      skill: arcana
+      dc: 15
+      success: identify_spell
+  implementation: dnd2024:rule_casting_spells_combining_spell_effects
+splat_contracts:
+- id: dnd2024:rule_casting_spells_combining_spell_effects
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - spell_resolution
+  events: []
+  capabilities:
+  - spellcasting
+  - effects
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 106
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_casting_spells_combining_spell_effects
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: f4d0e6ca298168053f83860c0aec35058154f6270bcaefeaf07f3b7e7e89c2be
   parent_name: Casting Spells
   line_span:
     first: 9306
@@ -40,7 +77,8 @@ splat_clauses:
     identify a non-instantaneous spell by its observable effects if its duration is ongoing. To identify
     it, you must take the Study action and succeed on a DC 15 Intelligence (Arcana) check.'
   sha256: df9a909bdc71520fc05335b31e93d7fc97db9874a43ae52e584c843abd94adb2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Combining Spell Effects

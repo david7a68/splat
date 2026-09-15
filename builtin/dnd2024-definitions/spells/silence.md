@@ -26,17 +26,70 @@ splat_spell:
   ritual: true
   range:
     feet: 120
+splat_rule:
+  mechanic: dnd2024:spells/silence
+  implementation: dnd2024:spell_silence
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 600
+    area:
+      shape: sphere
+      radius_feet: 20
+      origin: chosen_point
+      range_feet: 120
+    sound:
+      creation_inside: forbidden
+      passage_through: forbidden
+    entirely_inside:
+      creatures_and_objects:
+        damage_immunity: thunder
+      creatures:
+        condition: deafened
+    spellcasting_inside:
+      verbal_component: forbidden
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_silence
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    origin:
+      type: location
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - areas
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: c6f702b46f18f4fdd8ed93a7926a8c18db1fc02666b64f12c74d52207caa68b4
   source_path: builtin/srd-5.2.1/spell/silence.md
   pages:
   - 162
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_silence
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: f07eceffd02189ad4602cf60ce4c29d702f0fc9b43148a209839148e087df5b7
 splat_clauses:
 - key: source_rules
   text: '# Silence Level 2 Illusion (Bard, Cleric, Ranger) Casting Time: Action or Ritual Range: 120 feet
@@ -46,7 +99,8 @@ splat_clauses:
     condition while entirely inside it. Casting a spell that includes a Verbal component is impossible
     there.'
   sha256: bf01103eac4bf9caedb4ff3ebb74a88eb098a93b52a965cbc6eda144116f7c40
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Silence

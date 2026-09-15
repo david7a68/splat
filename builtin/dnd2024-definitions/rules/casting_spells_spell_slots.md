@@ -12,18 +12,42 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/casting_spells_spell_slots
-  parameters: {}
+  parameters:
+    spell_slot_required_default_for_spell_levels:
+      min: 1
+      max: 9
+    slot_level_min: spell_level
+    slots_expended_per_cast: 1
+    slot_capacity_source: class_spellcasting_table
+    restore_all_expended_slots: long_rest_finished
+    specific_feature_exceptions: true
+  implementation: dnd2024:rules_casting_spells_spell_slots
+splat_contracts:
+- id: dnd2024:rules_casting_spells_spell_slots
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - spell.cast_pending
+  - rest.long_finished
+  capabilities:
+  - spell_slots
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 104
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_casting_spells_spell_slots
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 07e8fb93700d597edf470645cc08311bf34800b873fde6b58dbb555bfdaac7fb
   parent_name: Casting Spells
   line_span:
     first: 9078
@@ -41,7 +65,8 @@ splat_clauses:
     one of four level 1 slots and has three remaining. Finishing a Long Rest restores any expended spell
     slots.'
   sha256: 0d876e3d05c72b5e53c5f6c4cf4ec72644e496822c8da7d6ab59a1902398a7c5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spell Slots

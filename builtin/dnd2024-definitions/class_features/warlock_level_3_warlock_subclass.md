@@ -12,18 +12,50 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/warlock_level_3_warlock_subclass
-  parameters: {}
+  parameters:
+    subclass_choice:
+      count: 1
+      class: warlock
+    feature_grant_policy:
+      class_level_at_least_feature_level: true
+      events:
+      - subclass.selected
+      - character.level_gained
+      persistent: true
+    class_scope:
+      class: warlock
+      minimum_level: 3
+  implementation: dnd2024:class_features_warlock_level_3_warlock_subclass
+splat_contracts:
+- id: dnd2024:class_features_warlock_level_3_warlock_subclass
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - subclass
+  - feature_grants
+  events:
+  - subclass.selected
+  - character.level_gained
+  capabilities:
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 72
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_warlock_level_3_warlock_subclass
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: f758f3052b264f1e88faf19da93985aa38722d3d8852b2a8f035f3e766f13ac2
   parent_name: Warlock
   line_span:
     first: 6095
@@ -35,7 +67,8 @@ splat_clauses:
     at certain Warlock levels. For the rest of your career, you gain each of your subclass’s features
     that are of your Warlock level or lower.'
   sha256: 979ae81cc308d8a194c5b6ef5006a66c6ce48ecda395cfee26a52708dfc1a868
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Warlock Subclass

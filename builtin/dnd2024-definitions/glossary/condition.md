@@ -12,18 +12,56 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/condition
-  parameters: {}
+  parameters:
+    members:
+    - key: dnd2024:glossary/blinded_condition
+    - key: dnd2024:glossary/charmed_condition
+    - key: dnd2024:glossary/deafened_condition
+    - key: dnd2024:glossary/exhaustion_condition
+    - key: dnd2024:glossary/frightened_condition
+    - key: dnd2024:glossary/grappled_condition
+    - key: dnd2024:glossary/incapacitated_condition
+    - key: dnd2024:glossary/invisible_condition
+    - key: dnd2024:glossary/paralyzed_condition
+    - key: dnd2024:glossary/petrified_condition
+    - key: dnd2024:glossary/poisoned_condition
+    - key: dnd2024:glossary/prone_condition
+    - key: dnd2024:glossary/restrained_condition
+    - key: dnd2024:glossary/stunned_condition
+    - key: dnd2024:glossary/unconscious_condition
+    default_stacking: false
+    stacking_exception: exhaustion
+    duration_and_end: source_effect_defined
+  implementation: dnd2024:glossary_condition
+splat_contracts:
+- id: dnd2024:glossary_condition
+  inputs:
+    subject:
+      type: participant
+      required: true
+    condition:
+      type: definition
+      required: true
+  outputs:
+  - condition_state
+  events:
+  - condition.applied
+  - condition.ended
+  capabilities:
+  - conditions
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 386f0d4fd5463b380a8d9ea4e1ab82d9fea13481d74da30d4c8030ecdfa1526a
   source_path: builtin/srd-5.2.1/glossary/condition.md
   pages:
   - 179
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_condition
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 614ffbe9e43c80f6a7fc7d5872e32c21095788086a2f391531439a6c6e261e48
 splat_clauses:
 - key: source_rules
   text: '# Condition A condition is a temporary game state. The definition of a condition says how it
@@ -32,7 +70,8 @@ splat_clauses:
     Paralyzed Stunned Frightened Petrified Unconscious A condition doesn’t stack with itself; a recipient
     either has a condition or doesn’t. The Exhaustion condition is an exception to that rule.'
   sha256: 96dba5ced6276c139fc83ea6d80beacaf6a13be9fcefc0097b9d03aa7366ca78
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Condition

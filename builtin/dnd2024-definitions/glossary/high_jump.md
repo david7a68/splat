@@ -12,18 +12,67 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/high_jump
-  parameters: {}
+  parameters:
+    direction: vertical
+    running_start:
+      minimum_feet: 10
+      on_foot: true
+      immediately_before: true
+    running_height_feet:
+      op: max
+      args:
+      - 0
+      - op: add
+        args:
+        - 3
+        - var: strength_modifier
+    standing_height_multiplier: 0.5
+    movement_cost_per_foot: 1
+    arms_extension_height_multiplier: 0.5
+    maximum_reach:
+      op: add
+      args:
+      - var: jump_height_feet
+      - op: multiply
+        args:
+        - 1.5
+        - var: creature_height_feet
+  implementation: dnd2024:glossary_high_jump
+splat_contracts:
+- id: dnd2024:glossary_high_jump
+  inputs:
+    subject:
+      type: participant
+      required: true
+    run_up_feet:
+      type: number
+      required: true
+    on_foot:
+      type: boolean
+      required: true
+    creature_height_feet:
+      type: number
+      required: true
+  outputs:
+  - jump_height
+  - movement_cost
+  - maximum_reach
+  events: []
+  capabilities:
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 1369e4ceffecebc43bfc22c94dc260198cf4ecb6372427c44025db9e72e5bf8e
   source_path: builtin/srd-5.2.1/glossary/high_jump.md
   pages:
   - 183
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_high_jump
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 35d29a8bac2906bafe998bbe9cc5b0b77f2ad704722342ebe7e33b783a5fc002
 splat_clauses:
 - key: source_rules
   text: '# High Jump When you make a High Jump, you leap into the air a number of feet equal to 3 plus
@@ -33,7 +82,8 @@ splat_clauses:
     during the jump. Thus, you can reach a distance equal to the height of the jump plus 11/2 times your
     height.'
   sha256: 95b3556274fa5eb0ca63bc596f73537f4cadd34beb358909ac356877b51cb820
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # High Jump

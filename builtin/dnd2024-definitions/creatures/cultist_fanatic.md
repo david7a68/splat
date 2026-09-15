@@ -58,17 +58,168 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/cultist_fanatic
+  implementation: dnd2024:creature_cultist_fanatic
+  parameters:
+    skill_totals:
+      deception: 3
+      persuasion: 3
+      religion: 2
+    gear:
+    - item: holy_symbol
+      count: 1
+    - item: leather_armor
+      count: 1
+    senses: []
+    passive_perception: 12
+    languages:
+      speak: true
+      known:
+      - common
+    features:
+      pact_blade:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 2
+            average: 6
+          - type: necrotic
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 0
+            average: 7
+      spellcasting:
+        economy: action
+        op: spellcasting
+        profile:
+          ability: wisdom
+          waived_components: []
+          spells:
+          - spell:
+              key: dnd2024:spells/light
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/thaumaturgy
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/command
+            uses:
+              count: 2
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/hold_person
+            uses:
+              count: 1
+              recovery: long_rest
+          save_dc: 12
+          attack_bonus: 4
+      spiritual_weapon:
+        economy: bonus_action
+        op: spellcasting
+        profile:
+          ability: same_as_spellcasting
+          waived_components: []
+        choose_count: 1
+        choices:
+        - op: spell.cast
+          spell:
+            key: dnd2024:spells/spiritual_weapon
+        uses:
+          count: 2
+          recovery: long_rest
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_cultist_fanatic
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: b58ce8c70af081d65f938d79d6804d5056f7f3f03442ec156b225e39e47e050c
   source_path: builtin/srd-5.2.1/creature/cultist_fanatic.md
   pages:
   - 278
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_cultist_fanatic
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: ee04c06c8c3886bdfca7d257a272ff8d1836b0f3ab676b3de0338c7e3e650e02
 splat_clauses:
 - key: source_rules
   text: '# Cultist Fanatic Medium or Small Humanoid, Neutral AC 13 Initiative +2 (12) HP 44 (8d8 + 8)
@@ -81,7 +232,8 @@ splat_clauses:
     ### Bonus Actions Spiritual Weapon (2/Day). The cultist casts the Spiritual Weapon spell, using the
     same spellcasting ability as Spellcasting.'
   sha256: 8082b4fdd4ca37969f569279ea67888ab43f1f142101149bcb3da7cbe52074dc
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Cultist Fanatic

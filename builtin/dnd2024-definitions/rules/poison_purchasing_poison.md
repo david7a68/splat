@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/poison_purchasing_poison
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 197
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: a94fcb72bd4b97c802bcb24e8bb355765d6c974191c9add1f7d8d0141a651450
   parent_name: Poison
   line_span:
     first: 9799
@@ -35,7 +36,7 @@ splat_clauses:
     might be able to acquire poison easily. Other characters might have to make extensive inquiries and
     pay bribes before they acquire the poison they seek.'
   sha256: 907e702d783ed1f0330769dfae7fb09e747f1dd7260a2923f62da6010c271f31
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Purchasing Poison

@@ -59,17 +59,120 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_goat
+  implementation: dnd2024:creature_giant_goat
+  parameters:
+    skill_totals:
+      perception: 3
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 13
+    languages:
+      speak: true
+      known: []
+    features:
+      ram:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 3
+            average: 6
+        - op: conditional
+          when:
+            target_maximum_size: large
+            actor_moved_straight_toward_target_ft_at_least: 20
+            immediately_before_hit: true
+            target_kind: creature
+          effects:
+          - op: damage
+            components:
+            - type: bludgeoning
+              amount:
+                dice:
+                  count: 2
+                  sides: 4
+                add: 0
+              average: 5
+          - op: condition.apply
+            condition: prone
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_giant_goat
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: d5d1f9d7761e7b6da1486aa6ba2d8b298da306f616e701ab535e3daaec6ea695
   source_path: builtin/srd-5.2.1/creature/giant_goat.md
   pages:
   - 351
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_goat
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 88bccba4089b90d18fa46359730d59e71c116378c2186998e4acd3c6b7fcb16a
 splat_clauses:
 - key: source_rules
   text: '# Giant Goat Large Beast, Unaligned AC 11 Initiative +1 (11) HP 19 (3d10 + 3) Speed 40 ft., Climb
@@ -80,7 +183,8 @@ splat_clauses:
     immediately before the hit, the target takes an extra 5 (2d4) Bludgeoning damage and has the Prone
     condition.'
   sha256: 5a3fa3c1b5b9936095378b0d5a146ced2ba62fffa9e86fb8427fc80bf895d8b2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Goat

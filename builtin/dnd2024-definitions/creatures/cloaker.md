@@ -60,17 +60,236 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/cloaker
+  implementation: dnd2024:creature_cloaker
+  parameters:
+    features:
+      light_sensitivity:
+        economy: passive
+        disadvantage:
+          rolls:
+          - attack
+          when: self_in_bright_light
+      attach:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 6
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 13
+          amount:
+            dice:
+              count: 3
+              sides: 6
+            add: 3
+          damage_type: piercing
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+          then:
+          - op: attach
+            effects_on_target:
+            - op: condition
+              condition: blinded
+            self_attack_restriction:
+              feature: attach
+              targets: attached_target_only
+            damage_taken:
+              self_fraction:
+                numerator: 1
+                denominator: 2
+                round: down
+              attached_target_damage: same_amount_as_self
+            detach_options:
+            - actor: self
+              movement_cost_feet: 5
+            - actor: target_or_creature_within_5_feet
+              economy: action
+              check:
+                ability: strength
+                skill: athletics
+                dc: 14
+              success: detach
+        reach_feet: 5
+      tail:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 6
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 8
+          amount:
+            dice:
+              count: 1
+              sides: 10
+            add: 3
+          damage_type: slashing
+        reach_feet: 10
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: attach
+          count: 1
+        - op: use_feature
+          feature: tail
+          count: 2
+      phantasms:
+        economy: bonus_action
+        resource:
+          capacity: 1
+          recovery:
+          - short_rest
+          - long_rest
+          cost: 1
+        op: cast_spell
+        spell:
+          key: dnd2024:spells/mirror_image
+        ability: wisdom
+        components_waived:
+        - verbal
+        - somatic
+        - material
+        ends_early:
+          events:
+          - self.turn.start
+          - self.turn.end
+          when: self_in_bright_light
+        cast_level: spell_minimum
+      moan:
+        economy: bonus_action
+        op: save
+        ability: wisdom
+        dc: 13
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            size_feet: 60
+            origin: self
+        failure:
+        - op: condition
+          condition: frightened
+          ends:
+            event: turn.end
+            participant: self
+            occurrence: next
+        success:
+        - op: feature_immunity
+          source: self
+          feature: moan
+          duration:
+            hours: 24
+    skill_totals:
+      stealth: 5
+    defenses:
+      immunities:
+        conditions:
+        - frightened
+    senses:
+      passive_perception: 12
+      special:
+      - sense: darkvision
+        range_feet: 120
+    communication:
+      speaks:
+      - deep_speech
+      - undercommon
+      understands:
+      - deep_speech
+      - undercommon
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_cloaker
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - turn.end
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: eaf065466d59b11241c0e39821869220a753058dc695ba48995f5dc4ff355ef5
   source_path: builtin/srd-5.2.1/creature/cloaker.md
   pages:
   - 274
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_cloaker
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: b0a29bfab8a77d8bbf3ac7142e91e906e7862dd2a3e4461452dacaecdf1d03bb
 splat_clauses:
 - key: source_rules
   text: '# Cloaker Large Aberration, Chaotic Neutral AC 14 Initiative +5 (15) HP 91 (14d10 + 14) Speed
@@ -92,7 +311,8 @@ splat_clauses:
     spell, requiring no spell components and using Wisdom as the spellcasting ability. The spell ends
     early if the cloaker starts or ends its turn in Bright Light.'
   sha256: a36dfff5cc787cfd89300ed6f6c6610fe64e73021775bf9d237227e84741088b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Cloaker

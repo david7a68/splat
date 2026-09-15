@@ -14,7 +14,7 @@ splat_rule:
   mechanic: dnd2024:rules/level_advancement_tiers_of_play
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
@@ -22,9 +22,10 @@ splat_conversion:
   - 23
   - 24
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 024a02073a5e1205e5461b52cc9c637b961da28025001c42215c5c88d8932c9b
   parent_name: Level Advancement
   line_span:
     first: 1811
@@ -38,7 +39,7 @@ splat_clauses:
     career to the epic heights of level 20. These tiers don’t have any rules associated with them; they
     point to the fact that the play experience evolves as characters gain levels.'
   sha256: 485359d141a276aa9be976d7213d199d64f84962c89f57dd043c6e2afb87f9b2
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Tiers of Play

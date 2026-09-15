@@ -17,17 +17,56 @@ splat_item:
   price:
     value: 2
     unit: gp
+  mass:
+    value: 5.0
+    unit: lb
+splat_rule:
+  mechanic: dnd2024:equipment/crowbar_2_gp
+  implementation: dnd2024:equipment_crowbar_2_gp
+  parameters:
+    using:
+      roll: ability_check
+      mode: advantage
+      ability: strength
+      requires: leverage_applicable
+    mass:
+      value: 5.0
+      unit: lb
+splat_contracts:
+- id: dnd2024:equipment_crowbar_2_gp
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - item_properties
+  - conditional_modifiers
+  events: []
+  capabilities:
+  - equipment
+  - conditional_modifiers
 splat_conversion:
-  status: partial
+  status: specified
   category: equipment
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 97
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:equipment_crowbar_2_gp
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: 94b626737515650722b86e9f6b7443c0fb9c690c81e647202a655462dab4bc46
   line_span:
     first: 8374
     count: 4
@@ -36,7 +75,8 @@ splat_clauses:
   text: '# Crowbar (2 GP) Using a Crowbar gives you Advantage on Strength checks where the Crowbar’s leverage
     can be applied.'
   sha256: b57eba28c76b3f08434e83acff464793646d7eea0b286d7402792cb1eddc9319
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Crowbar (2 GP)

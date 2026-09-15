@@ -59,17 +59,104 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_fire_beetle
+  implementation: dnd2024:creature_giant_fire_beetle
+  parameters:
+    damage_resistances:
+    - fire
+    senses:
+    - sense: blindsight
+      range_ft: 30
+    passive_perception: 8
+    languages:
+      speak: true
+      known: []
+    features:
+      illumination:
+        economy: passive
+        op: light.emit
+        bright_radius_ft: 10
+        dim_additional_ft: 10
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 1
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: fire
+            amount:
+              constant: 1
+            average: 1
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_giant_fire_beetle
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 973cb6f874eb5f5f7d8854f5bfa8eccc3988b12cb2d7b57d6e9a5770ef0873f2
   source_path: builtin/srd-5.2.1/creature/giant_fire_beetle.md
   pages:
   - 351
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_fire_beetle
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: c07286cb396d6f0e472aedb26a3d3291f75bde1b6a6956d69264026c604973b8
 splat_clauses:
 - key: source_rules
   text: '# Giant Fire Beetle Small Beast, Unaligned AC 13 Initiative +0 (10) HP 4 (1d6 + 1) Speed 30 ft.,
@@ -79,7 +166,8 @@ splat_clauses:
     Light for an additional 10 feet. ### Actions Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Fire
     damage.'
   sha256: 0d0a3f34a30dc58f5a1d48f97ee2eff5d3de9fb3d5e0e79fd72e860d3103fad1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Fire Beetle

@@ -12,18 +12,73 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/level_advancement_gaining_a_level
-  parameters: {}
+  parameters:
+    sequence:
+    - choose_class
+    - increase_hp_and_hit_dice
+    - grant_class_features
+    - update_proficiency
+    - update_ability_modifiers
+    class_choice:
+    - existing
+    - eligible_multiclass
+    hit_die_gain: 1
+    hp_gain:
+      mode:
+      - roll_class_hit_die
+      - fixed_class_value
+      constitution_modifier_added: true
+      minimum: 1
+      fixed:
+        barbarian: 7
+        bard: 5
+        cleric: 5
+        druid: 5
+        fighter: 6
+        monk: 5
+        paladin: 6
+        ranger: 6
+        rogue: 5
+        sorcerer: 4
+        warlock: 5
+        wizard: 4
+    grant_features_at: new_class_level
+    resolve_feature_choices: true
+    proficiency_source: total_character_level
+    propagate_stat_changes: true
+    constitution_hp_adjustment:
+      op: multiply
+      args:
+      - var: constitution_modifier_increase
+      - var: total_character_level
+  implementation: dnd2024:rules_level_advancement_gaining_a_level
+splat_contracts:
+- id: dnd2024:rules_level_advancement_gaining_a_level
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - character_statistics
+  - features
+  - hit_dice
+  events:
+  - character.level_gained
+  capabilities:
+  - level_advancement
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 23
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_level_advancement_gaining_a_level
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: f4912bb65bf6af0d14440e1dc064ff6060d4d190e6f35a6cf6849ba4c2a46afd
   parent_name: Level Advancement
   line_span:
     first: 1766
@@ -50,7 +105,8 @@ splat_clauses:
     their Constitution score from 17 to 18, the Constitution modifier increases to +4. The character’s
     Hit Point maximum then increases by 8, in addition to the Hit Points gained for reaching level 8.'
   sha256: 04ec96d1b115a510df733bc755dc5ac6781ebf1b1ec584604d9700d0fbbf917f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Gaining a Level

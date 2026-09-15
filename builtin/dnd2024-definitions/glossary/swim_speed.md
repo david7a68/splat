@@ -12,24 +12,45 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/swim_speed
-  parameters: {}
+  parameters:
+    movement_mode: swim
+    replaces_speed: true
+    ignores_mode_extra_movement_cost: true
+  implementation: dnd2024:glossary_swim_speed
+splat_contracts:
+- id: dnd2024:glossary_swim_speed
+  inputs:
+    subject:
+      type: participant
+      required: true
+    distance_feet:
+      type: number
+      required: true
+  outputs:
+  - movement_cost
+  events: []
+  capabilities:
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 12cc54d8080c9498f1443fb4b28bf7234e28dee47f81781797bc7bbb65ee5408
   source_path: builtin/srd-5.2.1/glossary/swim_speed.md
   pages:
   - 189
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_swim_speed
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: e899bd805c59b322663e169b35ba0ef8c3a7ed5b85c132f21ab19f1ee444c686
 splat_clauses:
 - key: source_rules
   text: '# Swim Speed A Swim Speed can be used to swim without expending the extra movement normally associated
     with swimming. See also “Swimming” and “Speed.”'
   sha256: 7537c19377a27f3b69ab877fefca85f9856dcd1cb53b75125e6caa144df87cec
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Swim Speed

@@ -60,17 +60,245 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/efreeti
+  implementation: dnd2024:creature_efreeti
+  parameters:
+    damage_immunities:
+    - fire
+    condition_immunities: []
+    senses:
+    - sense: darkvision
+      range_ft: 120
+    passive_perception: 12
+    languages:
+      speak: true
+      known:
+      - primordial
+      primordial_dialects:
+      - ignan
+    features:
+      elemental_restoration:
+        economy: passive
+        trigger: actor.died
+        when:
+          plane_not: elemental_plane_of_fire
+        body: disappears
+        revive:
+          new_body: true
+          plane: elemental_plane_of_fire
+          location_choice: gm
+          hp: maximum
+          delay:
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 0
+            unit: day
+      magic_resistance:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - saving_throw
+        against:
+        - spell
+        - magical_effect
+      wishes:
+        economy: passive
+        known_chance_percent: 30
+        spell:
+          key: dnd2024:spells/wish
+        requester:
+          excluded_subtype: genie
+          wish_communicated_and_understood: true
+        caster_stress: false
+        uses: 3
+        after_third_cast_lockout:
+          amount: 365
+          unit: day
+        reset_uses_after_lockout: true
+      heated_blade:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 10
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 6
+            average: 13
+          - type: fire
+            amount:
+              dice:
+                count: 2
+                sides: 12
+              add: 0
+            average: 13
+      hurl_flame:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 8
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 120
+          long: 120
+        hit:
+        - op: damage
+          components:
+          - type: fire
+            amount:
+              dice:
+                count: 7
+                sides: 6
+              add: 0
+            average: 24
+      spellcasting:
+        economy: action
+        op: spellcasting
+        profile:
+          ability: charisma
+          waived_components:
+          - material
+          spells:
+          - spell:
+              key: dnd2024:spells/detect_magic
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/elementalism
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/gaseous_form
+            uses:
+              count: 1
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/invisibility
+            uses:
+              count: 1
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/major_image
+            uses:
+              count: 1
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/plane_shift
+            uses:
+              count: 1
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/tongues
+            uses:
+              count: 1
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/wall_of_fire
+            uses:
+              count: 1
+              recovery: long_rest
+            cast_level: 7
+          save_dc: 16
+      multiattack:
+        economy: action
+        op: multiattack
+        attacks:
+          count: 3
+          choices:
+          - heated_blade
+          - hurl_flame
+          combination: any
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_efreeti
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.died
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: eb04223f597e6cce770d4b87bd1befc63b1847bc56faa43b746c3ec347163d29
   source_path: builtin/srd-5.2.1/creature/efreeti.md
   pages:
   - 283
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_efreeti
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: e67750d0ce40f8daf821774de6df2439e657ecae2570bc2d5da1c120ef64b658
 splat_clauses:
 - key: source_rules
   text: '# Efreeti Large Elemental (Genie), Neutral AC 17 Initiative +1 (11) HP 212 (17d10 + 119) Speed
@@ -91,7 +319,8 @@ splat_clauses:
     DC 16): At Will: Detect Magic, Elementalism 1/Day Each: Gaseous Form, Invisibility, Major Image, Plane
     Shift, Tongues, Wall of Fire (level 7 version)'
   sha256: 80cb484f8ffa6c10afb0a300425dcb20a42b5170f38649671de7fe9687cfd9a4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Efreeti

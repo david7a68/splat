@@ -57,18 +57,211 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/mimic
+  implementation: dnd2024:creature_mimic
+  parameters:
+    features:
+      bite:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: choose_by_predicate
+          test:
+            target_grappled_by: self
+          then:
+          - op: damage
+            average: 12
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 3
+            damage_type: piercing
+          else:
+          - op: damage
+            average: 7
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 3
+            damage_type: piercing
+        - op: damage
+          average: 4
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 0
+          damage_type: acid
+        reach_feet: 5
+        advantage_when:
+          target_grappled_by: self
+      pseudopod:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 3
+          damage_type: bludgeoning
+        - op: damage
+          average: 4
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 0
+          damage_type: acid
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+          then:
+          - op: condition
+            condition: grappled
+            escape_dc: 13
+            source: self
+            escape_check_disadvantage: true
+        reach_feet: 5
+      adhesive:
+        economy: passive
+        requires_form:
+        - object
+        trigger: self.touched
+        op: adhere
+        targets: touching_thing
+        creature_effect:
+          op: condition
+          condition: grappled
+          escape_dc: 13
+          source: self
+          size_max: huge
+          escape_check_disadvantage: true
+      shape_shift:
+        economy: bonus_action
+        op: shape_shift
+        forms:
+        - form: object
+          size_choice:
+          - medium
+          - small
+        - form: true_blob
+        retain_statistics: true
+        equipment_transformed: false
+    skill_totals:
+      stealth: 5
+    defenses:
+      immunities:
+        damage_types:
+        - acid
+        conditions:
+        - prone
+    senses:
+      passive_perception: 11
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_mimic
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - self.touched
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - grappling
+  - resources
+  - shapechanging
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: e21766dc7db90dd84bc96bb1fe498521ed50a8c25c94ff2c705c17cde204b6fb
   source_path: builtin/srd-5.2.1/creature/mimic.md
   pages:
   - 308
   - 309
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_mimic
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 88044cc89c26b14565dc4ddb2c60f503f133e33a5668acd12ed0465154d2923c
 splat_clauses:
 - key: source_rules
   text: '# Mimic Medium Monstrosity, Neutral AC 12 Initiative +3 (13) HP 58 (9d8 + 18) Speed 20 ft. MOD
@@ -85,7 +278,8 @@ splat_clauses:
     shape-shifts to resemble a Medium or Small object while retaining its game statistics, or it returns
     to its true blob form. Any equipment it is wearing or carrying isn’t transformed.'
   sha256: a1348dc4471c9ac477266e0edcd3e68f2572d4211938f3d60fd34c74c766c44f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Mimic

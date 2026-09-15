@@ -12,18 +12,92 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/bard_level_1_spellcasting
-  parameters: {}
+  parameters:
+    class: bard
+    spell_list: bard
+    ability: charisma
+    focus_types:
+    - musical_instrument
+    slots:
+      progression:
+        key: dnd2024:tables/bard_progression
+      columns_by_spell_level:
+        '1': spell_slots_1
+        '2': spell_slots_2
+        '3': spell_slots_3
+        '4': spell_slots_4
+        '5': spell_slots_5
+        '6': spell_slots_6
+        '7': spell_slots_7
+        '8': spell_slots_8
+        '9': spell_slots_9
+      recovery:
+        event: rest.long_rest_completed
+        amount: all_expended
+    prepared_spells:
+      initial_count: 4
+      initial_spell_level: 1
+      count:
+        table:
+          key: dnd2024:tables/bard_progression
+        row:
+          stat: classes.bard.level
+        column: prepared_spells
+      choose_on_count_increase: true
+      level_must_have_slot: true
+      replace:
+        event: character.class_level_gained
+        maximum: 1
+      other_class_feature_always_prepared:
+        counts_toward_limit: false
+        counts_as_class_spell: true
+    cantrips:
+      initial_count: 2
+      spell_level: 0
+      count:
+        table:
+          key: dnd2024:tables/bard_progression
+        row:
+          stat: classes.bard.level
+        column: cantrips
+      gain_extra_at_levels:
+      - 4
+      - 10
+      replace:
+        event: character.class_level_gained
+        maximum: 1
+  implementation: dnd2024:class_features_bard_level_1_spellcasting
+splat_contracts:
+- id: dnd2024:class_features_bard_level_1_spellcasting
+  inputs:
+    actor:
+      type: participant
+      required: true
+  outputs:
+  - feature_state
+  - resource_changes
+  - spell_grants
+  events:
+  - character.class_level_gained
+  - rest.long_rest_completed
+  - spell.cast_pending
+  capabilities:
+  - spellcasting
+  - spell_preparation
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 32
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_bard_level_1_spellcasting
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: db1f40a6b1f93e3ce6b810162dc16d93eb4d18de24de5468298f79d86e5ff707
   parent_name: Bard
   line_span:
     first: 2598
@@ -53,7 +127,8 @@ splat_clauses:
     is your spellcasting ability for your Bard spells. Spellcasting Focus. You can use a Musical Instrument
     as a Spellcasting Focus for your Bard spells.'
   sha256: 48c34fddc7ce98400ac0c076a9f0afd45cdffcc5f403414ce89b69211addb230
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 1: Spellcasting

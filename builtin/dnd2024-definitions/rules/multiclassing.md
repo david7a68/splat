@@ -12,18 +12,37 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/multiclassing
-  parameters: {}
+  parameters:
+    on_level_gain_choose:
+    - advance_existing_class
+    - gain_new_class
+    multiple_classes_allowed: true
+  implementation: dnd2024:rules_multiclassing
+splat_contracts:
+- id: dnd2024:rules_multiclassing
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - character.level_gained
+  capabilities:
+  - multiclassing
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 24
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_multiclassing
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: e2cb0050e483a6666c5bd5b9073189b3836d5ff22ab93ce99ac0aa0248849896
   parent_name: Multiclassing
   line_span:
     first: 1894
@@ -35,7 +54,8 @@ splat_clauses:
     a level in your current class. Doing so lets you mix the abilities of those classes to realize a character
     concept that might not be reflected in a single class.'
   sha256: cf666835bf7b59d563e7375c6967c95912f3af29bb1a9f38540c022e38922acb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Multiclassing

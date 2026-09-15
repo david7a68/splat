@@ -59,17 +59,112 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/owl
+  implementation: dnd2024:creature_owl
+  parameters:
+    features:
+      flyby:
+        economy: trait
+        operation: passive_rule
+        opportunity_attacks: false
+        while:
+          movement_mode: fly
+      talons:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 3
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 1
+            roll:
+              constant: 1
+            type: slashing
+    skill_totals:
+      perception: 5
+      stealth: 5
+    senses:
+      darkvision: 120
+      passive_perception: 15
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_owl
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 29c37d976197138adc799e7acabc241a52a43afa2f7ef6c8656e78a3583135a5
   source_path: builtin/srd-5.2.1/creature/owl.md
   pages:
   - 358
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_owl
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 32d533a839c939e181d3f5f13079190eb27b6b3e0cf6e7b8e980ff1f17d95a67
 splat_clauses:
 - key: source_rules
   text: '# Owl Tiny Beast, Unaligned AC 11 Initiative +1 (11) HP 1 (1d4 - 1) Speed 5 ft., Fly 60 ft. MOD
@@ -78,7 +173,8 @@ splat_clauses:
     10; PB +2) ### Traits Flyby. The owl doesn’t provoke an Opportunity Attack when it flies out of an
     enemy’s reach. ### Actions Talons. Melee Attack Roll: +3, reach 5 ft. Hit: 1 Slashing damage.'
   sha256: 08abc3a6a5c21b0966d7739c1ca4dbdb4624d4e9b7cd5dd4414ab455c2455409
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Owl

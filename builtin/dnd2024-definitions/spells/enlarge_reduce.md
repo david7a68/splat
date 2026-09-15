@@ -31,18 +31,106 @@ splat_spell:
   material:
     description: a pinch of powdered iron
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/enlarge_reduce
+  implementation: dnd2024:spell_enlarge_reduce
+  parameters:
+    target:
+      kind: creature_or_object
+      count: 1
+      visible_to_caster: true
+      object_not_worn_or_carried: true
+    unwilling_creature:
+      may_save: true
+      ability: constitution
+      success: no_effect
+    equipment:
+      resize_worn_and_carried: true
+      drop: revert_immediately
+      thrown_weapon_or_ammunition: revert_after_hit_or_miss
+    choice:
+    - enlarge
+    - reduce
+    effects:
+      enlarge:
+        size_category_delta: 1
+        strength_checks: advantage
+        strength_saves: advantage
+        weapon_and_unarmed_hit_damage_bonus:
+          dice:
+            count: 1
+            sides: 4
+            add: 0
+      reduce:
+        size_category_delta: -1
+        strength_checks: disadvantage
+        strength_saves: disadvantage
+        weapon_and_unarmed_hit_damage_subtract:
+          dice:
+            count: 1
+            sides: 4
+            add: 0
+        minimum_damage: 1
+splat_contracts:
+- id: dnd2024:spell_enlarge_reduce
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - save
+  - size_effect
+  - equipment_effect
+  - attack_damage_modifier
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - saving_throws
+  - forms
+  - inventory
+  - choices
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 59a156b859471cae4625b0cc37f10303d2fb9f478a94db304c5fbbf3055da81d
   source_path: builtin/srd-5.2.1/spell/enlarge_reduce.md
   pages:
   - 127
   - 128
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_enlarge_reduce
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 3e3fbb9eb62c89908fef794a026494d95b5d484f8d88a8c0a7633bab60c00254
 splat_clauses:
 - key: source_rules
   text: '# Enlarge/Reduce Level 2 Transmutation (Bard, Druid, Sorcerer, Wizard) Casting Time: Action Range:
@@ -60,7 +148,8 @@ splat_clauses:
     its reduced weapons or Unarmed Strikes deal 1d4 less damage on a hit (this can’t reduce the damage
     below 1).'
   sha256: 312466915284a6332585b835beb5475db7bbff2ef39578c74d270e16b7c36562
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Enlarge/Reduce

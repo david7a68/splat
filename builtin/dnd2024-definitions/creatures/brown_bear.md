@@ -59,17 +59,135 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/brown_bear
+  implementation: dnd2024:creature_brown_bear
+  parameters:
+    skill_totals:
+      perception: 3
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 13
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 3
+            average: 7
+      claw:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 3
+            average: 5
+        - op: condition.apply
+          condition: prone
+          when:
+            target_kind: creature
+            target_maximum_size: large
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 1
+          feature: bite
+        - count: 1
+          feature: claw
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_brown_bear
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f0158ecdda4268e412403a085d02090de34d6440169eddfee31fb62526fd5c86
   source_path: builtin/srd-5.2.1/creature/brown_bear.md
   pages:
   - 346
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_brown_bear
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: dccc0dfb9326e75fcc804cd178ed6afa5b55f75711747a19ad5388e9ee08fb83
 splat_clauses:
 - key: source_rules
   text: '# Brown Bear Large Beast, Unaligned AC 11 Initiative +1 (11) HP 22 (3d10 + 6) Speed 40 ft., Climb
@@ -80,7 +198,8 @@ splat_clauses:
     reach 5 ft. Hit: 5 (1d4 + 3) Slashing damage. If the target is a Large or smaller creature, it has
     the Prone condition.'
   sha256: dcd32653ac4843a7458d14b6c189f2dc18cbca2043faf9b88bf1822c06da3a36
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Brown Bear

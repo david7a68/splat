@@ -59,17 +59,142 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ape
+  implementation: dnd2024:creature_ape
+  parameters:
+    skill_totals:
+      athletics: 5
+      perception: 3
+    senses: []
+    passive_perception: 13
+    languages:
+      speak: true
+      known: []
+    features:
+      fist:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 3
+            average: 5
+      rock:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 25
+          long: 50
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 3
+            average: 10
+        recharge:
+          die_sides: 6
+          success_min: 6
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: fist
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_ape
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: c68fa64e146eb8134c7b8e45ae8c5bf540f5eecd9a9bda459cfae97961008b22
   source_path: builtin/srd-5.2.1/creature/ape.md
   pages:
   - 344
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ape
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 3f60ea2b329c499421943f2294ad1f948582c79e25455ed3aef4f251458e6321
 splat_clauses:
 - key: source_rules
   text: '# Ape Medium Beast, Unaligned AC 12 Initiative +2 (12) HP 19 (3d8 + 6) Speed 30 ft., Climb 30
@@ -79,7 +204,8 @@ splat_clauses:
     reach 5 ft. Hit: 5 (1d4 + 3) Bludgeoning damage. Rock (Recharge 6). Ranged Attack Roll: +5, range
     25/50 ft. Hit: 10 (2d6 + 3) Bludgeoning damage.'
   sha256: 21dbd209833a81cb6db776db19e18fda431674b8d8a78c248e25e0f3aefd07a4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ape

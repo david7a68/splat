@@ -61,18 +61,441 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/vampire
+  implementation: dnd2024:creature_vampire
+  parameters:
+    features:
+      legendary_resistance:
+        economy: passive
+        resource:
+          capacity: 3
+          capacity_in_lair: 4
+          recovery: long_rest
+          cost: 1
+        trigger: saving_throw.failed
+        optional: true
+        op: replace_save_outcome
+        outcome: success
+      spider_climb:
+        economy: passive
+        climb_ability_check_required: false
+        surfaces:
+        - difficult
+        - ceiling
+      grave_strike:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 9
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 8
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 4
+          damage_type: bludgeoning
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 0
+          damage_type: necrotic
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+          then:
+          - op: condition
+            condition: grappled
+            escape_dc: 14
+            source: self
+            appendages:
+              kind: hand
+              available: 2
+              used: 1
+        reach_feet: 5
+        requires_form:
+        - vampire
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: grave_strike
+          count: 2
+        - op: use_feature
+          feature: bite
+          count: 1
+        requires_form:
+        - vampire
+      misty_escape:
+        economy: none
+        trigger: self.hit_points_drop_to_zero
+        requires:
+          outside_resting_place: true
+        op: use_feature
+        feature: shape_shift
+        form: mist
+        if_shape_shift_unavailable:
+          op: destroy
+        while_zero_hp_mist:
+          return_to_vampire_form_allowed: false
+          reach_resting_place_deadline:
+            hours: 2
+          deadline_failure: destroy
+        on_reach_resting_place:
+          form: vampire
+          conditions:
+          - op: condition
+            condition: paralyzed
+            ends:
+              event: self.hit_points_regained
+          after:
+            hours: 1
+            op: heal
+            amount:
+              constant: 1
+      vampire_weakness:
+        economy: passive
+        op: feature_group
+        members:
+        - forbiddance
+        - running_water
+        - stake_to_the_heart
+        - sunlight
+      forbiddance:
+        economy: passive
+        enter_residence_requires:
+          invitation_from: occupant
+      running_water:
+        economy: passive
+        trigger: self.turn.end
+        requires:
+          in_running_water: true
+        effects:
+        - op: damage
+          average: 20
+          amount:
+            constant: 20
+          damage_type: acid
+      stake_to_the_heart:
+        economy: passive
+        trigger: piercing_weapon.driven_into_self_heart
+        requires:
+          self_incapacitated: true
+          in_resting_place: true
+        effects:
+        - op: condition
+          condition: paralyzed
+          ends:
+            event: weapon.removed
+      sunlight:
+        economy: passive
+        turn_start:
+          requires:
+            in_sunlight: true
+          effects:
+          - op: damage
+            average: 20
+            amount:
+              constant: 20
+            damage_type: radiant
+        while_in_sunlight:
+          disadvantage:
+          - attack
+          - ability_check
+      bite:
+        economy: action
+        requires_form:
+        - bat
+        - vampire
+        op: save
+        ability: constitution
+        dc: 17
+        targets:
+          kind: creature
+          count: 1
+          range_feet: 5
+          eligibility_any:
+          - willing
+          - grappled
+          - incapacitated
+          - restrained
+        failure:
+        - op: damage
+          average: 6
+          amount:
+            dice:
+              count: 1
+              sides: 4
+            add: 4
+          damage_type: piercing
+        - op: damage
+          average: 13
+          amount:
+            dice:
+              count: 3
+              sides: 8
+            add: 0
+          damage_type: necrotic
+        - op: reduce_hit_point_maximum
+          amount:
+            event_value: necrotic_damage_taken
+        - op: heal
+          participant: self
+          amount:
+            event_value: necrotic_damage_taken
+        - op: if
+          test:
+            target_type: humanoid
+            attack_reduced_target_hp_to_zero: true
+          then:
+          - op: create_undead_on_burial
+            definition:
+              key: dnd2024:creatures/vampire_spawn
+            timing: following_sunset
+            controller: self
+        success: []
+      charm:
+        economy: bonus_action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: cast_spell
+        spell:
+          key: dnd2024:spells/charm_person
+        ability: charisma
+        save_dc: 17
+        components_waived:
+        - verbal
+        - somatic
+        - material
+        overrides:
+          duration:
+            hours: 24
+          while_charmed:
+            willing_for_self_bite: true
+            self_bite_damage_ends_spell: false
+          on_end:
+            aware_of_charm: false
+        cast_level: spell_minimum
+      shape_shift:
+        economy: bonus_action
+        requires:
+          in_sunlight: false
+          in_running_water: false
+        op: shape_shift
+        worn_equipment_transformed: true
+        forms:
+        - form: bat
+          size: tiny
+          speeds_feet:
+            walk: 5
+            fly: 30
+          can_speak: false
+          retain_other_statistics: true
+        - form: mist
+          size: medium
+          speeds_feet:
+            walk: 5
+            fly: 20
+          hover: true
+          actions_allowed: false
+          can_speak: false
+          manipulate_objects: false
+          weight: 0
+          enter_and_stop_in_enemy_space: true
+          pass_through: spaces_air_can_pass
+          pass_through_liquid: false
+          damage_resistance:
+            all: true
+            except_sources:
+            - sunlight
+        - form: vampire
+        retain_statistics_except:
+        - size
+        - speed
+        - listed_form_rules
+      beguile:
+        economy: legendary_action
+        cooldown_ends:
+          event: turn.start
+          participant: self
+          occurrence: next
+        op: cast_spell
+        spell:
+          key: dnd2024:spells/command
+        ability: charisma
+        save_dc: 17
+        components_waived:
+        - verbal
+        - somatic
+        - material
+        cast_level: spell_minimum
+      deathless_strike:
+        economy: legendary_action
+        op: sequence
+        steps:
+        - op: move
+          distance_max:
+            multiply:
+            - stat: speed
+            - numerator: 1
+              denominator: 2
+        - op: use_feature
+          feature: grave_strike
+          count: 1
+    skill_totals:
+      perception: 7
+      stealth: 9
+    defenses:
+      resistances:
+        damage_types:
+        - necrotic
+    senses:
+      passive_perception: 17
+      special:
+      - sense: darkvision
+        range_feet: 120
+    communication:
+      speaks:
+      - common
+      understands:
+      - common
+      additional_languages:
+        count: 2
+        chooser: gm
+        distinct_from_known: true
+        can_speak: true
+        can_understand: true
+    legendary_actions:
+      uses: 3
+      uses_in_lair: 4
+      cost_per_action: 1
+      trigger: another_creature.turn.end
+      recovery:
+        event: turn.start
+        participant: self
+        amount: all
+      maximum_per_trigger: 1
+      requires:
+        self_incapacitated: false
+        self_can_take_actions: true
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_vampire
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - another_creature.turn.end
+  - piercing_weapon.driven_into_self_heart
+  - saving_throw.failed
+  - self.hit_points_drop_to_zero
+  - self.hit_points_regained
+  - self.turn.end
+  - turn.start
+  - weapon.removed
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - grappling
+  - hit_points
+  - legendary_actions
+  - resources
+  - shapechanging
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: dfc3b436e364595037379412bdfcdf3fa1e8eacd26fecbc8fdfaa37bdd3aed13
   source_path: builtin/srd-5.2.1/creature/vampire.md
   pages:
   - 335
   - 336
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_vampire
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 7fec3093ba12ab3127724cee83a7904c3c70cac3a2a972eef04944fc51e5777e
 splat_clauses:
 - key: source_rules
   text: '# Vampire Medium or Small Undead, Lawful Evil AC 16 Initiative +14 (24) HP 195 (23d8 + 92) Speed
@@ -119,7 +542,8 @@ splat_clauses:
     (spell save DC 17). The vampire can’t take this action again until the start of its next turn. Deathless
     Strike. The vampire moves up to half its Speed, and it makes one Grave Strike attack.'
   sha256: ffdb12c51e26bd789afd50d04d05e63eab586750540e4dd4bf94170546b0871e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Vampire

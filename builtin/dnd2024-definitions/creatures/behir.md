@@ -60,17 +60,237 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/behir
+  implementation: dnd2024:creature_behir
+  parameters:
+    skill_totals:
+      perception: 6
+      stealth: 7
+    damage_immunities:
+    - lightning
+    condition_immunities: []
+    senses:
+    - sense: darkvision
+      range_ft: 90
+    passive_perception: 16
+    languages:
+      speak: true
+      known:
+      - draconic
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 10
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 12
+              add: 6
+            average: 19
+          - type: lightning
+            amount:
+              dice:
+                count: 2
+                sides: 10
+              add: 0
+            average: 11
+      constrict:
+        economy: action
+        op: saving_throw
+        ability: strength
+        dc: 18
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 5
+          maximum_size: large
+          visible_to_actor: true
+        failure:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 5
+                sides: 8
+              add: 6
+            average: 28
+        - op: grapple
+          escape_dc: 16
+          while_grappled:
+          - op: condition.apply
+            condition: restrained
+        success: []
+      lightning_breath:
+        economy: action
+        op: saving_throw
+        ability: dexterity
+        dc: 16
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: line
+            origin: actor
+            size_ft: 90
+            width_ft: 5
+        failure:
+        - op: damage
+          components:
+          - type: lightning
+            amount:
+              dice:
+                count: 12
+                sides: 10
+              add: 0
+            average: 66
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+        recharge:
+          die_sides: 6
+          success_min: 5
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      swallow:
+        economy: bonus_action
+        op: saving_throw
+        ability: dexterity
+        dc: 18
+        targets:
+          kind: creature
+          count: 1
+          maximum_size: large
+          grappled_by: actor
+        failure:
+        - op: swallow
+          end_grapple: true
+          conditions:
+          - blinded
+          - restrained
+          total_cover_against: outside_actor
+          periodic_damage:
+            event: actor.turn_start
+            damage:
+            - type: acid
+              amount:
+                dice:
+                  count: 6
+                  sides: 6
+                add: 0
+              average: 21
+        success: []
+        swallowed_capacity: 1
+        regurgitation:
+          trigger: turn.end
+          ability: constitution
+          dc: 14
+          failure:
+            targets: swallowed_creature
+            exit_within_ft: 10
+            condition: prone
+          when:
+            damage_to_actor_from_one_swallowed_creature_this_turn_at_least: 30
+        actor_death:
+          remove_condition: restrained
+          escape_movement_cost_ft: 15
+          exit_condition: prone
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - feature: bite
+          count: 1
+        - feature: constrict
+          count: 1
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_behir
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  - that_turn.end
+  - turn.end
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_lifecycle
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 4f91eff54d4306101de2cdd818ab797c7fd3c3c365613f67e21578eed3d756fb
   source_path: builtin/srd-5.2.1/creature/behir.md
   pages:
   - 263
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_behir
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 9f56568301fe423c349fb0ad8912a58002c5e355f714a8b6e6aaa2fef35e72ff
 splat_clauses:
 - key: source_rules
   text: '# Behir Huge Monstrosity, Neutral Evil AC 17 Initiative +3 (13) HP 168 (16d12 + 64) Speed 50
@@ -93,7 +313,8 @@ splat_clauses:
     behir dies, a swallowed creature is no longer Restrained and can escape from the corpse by using 15
     feet of movement, exiting Prone.'
   sha256: 6de71422cb4affdf0a15bee85600027ee00ff41bcbece15b138bd19f0420a894
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Behir

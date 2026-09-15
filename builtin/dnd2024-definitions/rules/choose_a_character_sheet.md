@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/choose_a_character_sheet
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 19
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: f64e5afcc1fa7e779c08d5db3b7576f10b86aa5500da4a45e43984add9241020
   parent_name: Choose a Character Sheet
   line_span:
     first: 1320
@@ -35,7 +36,7 @@ splat_clauses:
     character’s details, whether it’s a printed character sheet, a digital character sheet, or plain paper.
     Choose whichever style of sheet works for you, and then embark on creating a character!'
   sha256: 6e28ab6d9c0660b828057062ecb30acdd4fef41ef9aacb4d808e9fe0bd475f59
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Choose a Character Sheet

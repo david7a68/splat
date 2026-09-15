@@ -56,17 +56,134 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/dire_wolf
+  implementation: dnd2024:creature_dire_wolf
+  parameters:
+    features:
+      pack_tactics:
+        economy: passive
+        advantage:
+          roll: attack
+          target_kind: creature
+          requires:
+            ally_distance_to_target_max_feet: 5
+            ally_incapacitated: false
+      bite:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 8
+          amount:
+            dice:
+              count: 1
+              sides: 10
+            add: 3
+          damage_type: piercing
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+          then:
+          - op: condition
+            condition: prone
+        reach_feet: 5
+    skill_totals:
+      perception: 5
+      stealth: 4
+    defenses: {}
+    senses:
+      passive_perception: 15
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_dire_wolf
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: d481ba6f9732987688748997f115bbab4f77b2e612fada174e5a8bb107f72957
   source_path: builtin/srd-5.2.1/creature/dire_wolf.md
   pages:
   - 347
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_dire_wolf
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: d86f2052a6a6bf82f4873a32d4fde6d00c5c14be33c2367dcdbab1c9297034c8
 splat_clauses:
 - key: source_rules
   text: '# Dire Wolf Large Beast, Unaligned AC 14 Initiative +2 (12) HP 22 (3d10 + 6) Speed 50 ft. MOD
@@ -77,7 +194,8 @@ splat_clauses:
     Incapacitated condition. ### Actions Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Piercing
     damage. If the target is a Large or smaller creature, it has the Prone condition.'
   sha256: ea6aed0c05a9feb63ae9ebbd7ba1087b84ba3c3830787382703291a654e355e4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dire Wolf

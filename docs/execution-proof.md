@@ -103,13 +103,13 @@ python3 scripts/test_convert_srd.py
 
 The generated `builtin/dnd2024-mechanics/generated/coverage.json` accounts for all
 1,452 source notes: 8 named source entries have the reviewed 11-definition slice,
-21 have generated attack profiles, and 1,423 remain pending conversion. That last
+21 have generated attack profiles, and 1,423 are outside this bounded execution profile. That last
 count includes 364 full-page notes that cover classes, feats, equipment and other
 rules beyond the named-entry index. It is a coverage ledger, not a claim that the
 entire SRD is executable. No incomplete creature is accepted by dropping its
 unconverted traits or action riders.
 
-The whole-SRD conversion remains in progress. Foundry's structured 2024 SRD was
+The [whole-SRD definition conversion](srd-definitions.md) is now complete and tracks engine gaps separately. Foundry's structured 2024 SRD was
 examined as a secondary transcription aid: 338/339 spells, 333/336 creatures,
 and 256/258 magic-item names have unique matching CC-BY records. Its activities
 still leave some mechanics in prose and include source/version differences;

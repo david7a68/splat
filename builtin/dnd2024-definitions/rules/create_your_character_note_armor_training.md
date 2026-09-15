@@ -12,18 +12,36 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/create_your_character_note_armor_training
-  parameters: {}
+  parameters:
+    grant_source: class_definition
+    armor_training: record_granted_categories
+    training_enables_effective_armor_use: true
+  implementation: dnd2024:rules_create_your_character_note_armor_training
+splat_contracts:
+- id: dnd2024:rules_create_your_character_note_armor_training
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - armor_training
+  events: []
+  capabilities:
+  - character_creation
+  - equipment
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 19
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_create_your_character_note_armor_training
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: b87d27b421852cb7dfa23338ea9743e11c86ad64e905ad3dc17c1e05512f7c74
   parent_name: Create Your Character
   line_span:
     first: 1383
@@ -35,7 +53,8 @@ splat_clauses:
     that armor effectively, gaining defensive bonuses from it. The categories of armor are described in
     “Equipment.”'
   sha256: 400c83b9d17811e6103857996a28b6c2db81e897e9dd84cf6f283a4152d4f982
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Note Armor Training

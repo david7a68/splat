@@ -12,19 +12,284 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/multiclassing_spellcasting
-  parameters: {}
+  parameters:
+    multiclass_table_requires_spellcasting_classes_min: 2
+    single_spellcasting_class: use_class_slots
+    spell_preparation:
+      separate_by_class: true
+      use_only_class_level: true
+      spell_associated_with_class: true
+      casting_ability: associated_class_ability
+    cantrip_scaling: total_character_level_unless_spell_overrides
+    effective_caster_level:
+      full_level_classes:
+      - bard
+      - cleric
+      - druid
+      - sorcerer
+      - wizard
+      half_level_classes:
+      - paladin
+      - ranger
+      half_rounding: up
+      round_each_class_before_sum: true
+    slots_by_effective_level:
+    - level: 1
+      slots:
+        '1': 2
+        '2': 0
+        '3': 0
+        '4': 0
+        '5': 0
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 2
+      slots:
+        '1': 3
+        '2': 0
+        '3': 0
+        '4': 0
+        '5': 0
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 3
+      slots:
+        '1': 4
+        '2': 2
+        '3': 0
+        '4': 0
+        '5': 0
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 4
+      slots:
+        '1': 4
+        '2': 3
+        '3': 0
+        '4': 0
+        '5': 0
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 5
+      slots:
+        '1': 4
+        '2': 3
+        '3': 2
+        '4': 0
+        '5': 0
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 6
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 0
+        '5': 0
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 7
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 1
+        '5': 0
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 8
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 2
+        '5': 0
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 9
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 1
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 10
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 2
+        '6': 0
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 11
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 2
+        '6': 1
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 12
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 2
+        '6': 1
+        '7': 0
+        '8': 0
+        '9': 0
+    - level: 13
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 2
+        '6': 1
+        '7': 1
+        '8': 0
+        '9': 0
+    - level: 14
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 2
+        '6': 1
+        '7': 1
+        '8': 0
+        '9': 0
+    - level: 15
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 2
+        '6': 1
+        '7': 1
+        '8': 1
+        '9': 0
+    - level: 16
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 2
+        '6': 1
+        '7': 1
+        '8': 1
+        '9': 0
+    - level: 17
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 2
+        '6': 1
+        '7': 1
+        '8': 1
+        '9': 1
+    - level: 18
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 3
+        '6': 1
+        '7': 1
+        '8': 1
+        '9': 1
+    - level: 19
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 3
+        '6': 2
+        '7': 1
+        '8': 1
+        '9': 1
+    - level: 20
+      slots:
+        '1': 4
+        '2': 3
+        '3': 3
+        '4': 3
+        '5': 3
+        '6': 2
+        '7': 2
+        '8': 1
+        '9': 1
+    slots_allow_casting_any_prepared_spell_with_sufficient_level: true
+    higher_slots_do_not_unlock_preparation: true
+    upcast_effects: spell_definition
+    pact_magic:
+      pact_slots_cast_other_class_prepared_spells: true
+      spellcasting_slots_cast_prepared_warlock_spells: true
+  implementation: dnd2024:rules_multiclassing_spellcasting
+splat_contracts:
+- id: dnd2024:rules_multiclassing_spellcasting
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - spell_slots
+  - prepared_spell_constraints
+  - casting_ability
+  - cantrip_level
+  events: []
+  capabilities:
+  - multiclassing
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 25
   - 26
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_multiclassing_spellcasting
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 72542bbadc257c1afd7a613b4f40e12c7e60a2cade1222991f88e92aa890be0d
   parent_name: Multiclassing
   line_span:
     first: 1977
@@ -64,7 +329,8 @@ splat_clauses:
     1 1 — 16 4 3 3 3 2 1 1 1 — 17 4 3 3 3 2 1 1 1 1 18 4 3 3 3 3 1 1 1 1 19 4 3 3 3 3 2 1 1 1 20 4 3 3
     3 3 2 2 1 1'
   sha256: 519f4f0a1e7bb586602bf754a9a4bcb81966da6931a4bd32059974059fb9733a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spellcasting

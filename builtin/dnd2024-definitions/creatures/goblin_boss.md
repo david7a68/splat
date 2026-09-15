@@ -58,17 +58,185 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/goblin_boss
+  implementation: dnd2024:creature_goblin_boss
+  parameters:
+    features:
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_choice
+          count: 2
+          options:
+          - scimitar
+          - shortbow
+      scimitar:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 5
+            roll:
+              count: 1
+              sides: 6
+              modifier: 2
+            type: slashing
+          conditional_damage:
+            if:
+              attack_had_advantage: true
+            damage:
+            - roll:
+                count: 1
+                sides: 4
+                modifier: 0
+              type: slashing
+      shortbow:
+        economy: action
+        operation: attack
+        attack:
+          mode: ranged
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          range_ft: 80
+          long_range_ft: 320
+        hit:
+          damage:
+          - average: 5
+            roll:
+              count: 1
+              sides: 6
+              modifier: 2
+            type: piercing
+          conditional_damage:
+            if:
+              attack_had_advantage: true
+            damage:
+            - roll:
+                count: 1
+                sides: 4
+                modifier: 0
+              type: piercing
+      nimble_escape:
+        economy: bonus_action
+        operation: choose_action
+        options:
+        - disengage
+        - hide
+        count: 1
+      redirect_attack:
+        economy: reaction
+        operation: redirect_attack
+        trigger: visible_creature.attack_roll_against_self
+        ally:
+          within_ft: 5
+          size:
+          - small
+          - medium
+          chooser: self
+        swap_positions: true
+        new_target: chosen_ally
+    skill_totals:
+      stealth: 6
+    gear:
+    - item: chain_shirt
+      quantity: 1
+    - item: scimitar
+      quantity: 1
+    - item: shield
+      quantity: 1
+    - item: shortbow
+      quantity: 1
+    senses:
+      darkvision: 60
+      passive_perception: 9
+    languages:
+      speaks:
+      - common
+      - goblin
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_goblin_boss
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - attack.resolved
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 44daf7dd0db816bd8bb38569725529b09a558a7ab18f07088b8dec056378cd90
   source_path: builtin/srd-5.2.1/creature/goblin_boss.md
   pages:
   - 290
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_goblin_boss
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 6dc1da35d7be3aae5cbfde705b52109b0efa8f780b692f8d118478c5adff4c48
 splat_clauses:
 - key: source_rules
   text: '# Goblin Boss Small Fey (Goblinoid), Chaotic Neutral AC 17 Initiative +2 (12) HP 21 (6d6) Speed
@@ -84,7 +252,8 @@ splat_clauses:
     5 feet of itself. The goblin and that ally swap places, and the ally becomes the target of the attack
     instead.'
   sha256: c4a0b69f95e3e73a98b977ca312f226318c1c80bd59c3939e2a806fc592d75b1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Goblin Boss

@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/shape_shifting
-  parameters: {}
+  parameters:
+    form_properties: source_effect_defined
+    ongoing_effects_carry_over_by_default: true
+    ongoing_effect_kinds:
+    - conditions
+    - spells
+    - curses
+    - other_effects
+    source_effect_override_allowed: true
+    death_reverts_to_true_form: true
+  implementation: dnd2024:glossary_shape_shifting
+splat_contracts:
+- id: dnd2024:glossary_shape_shifting
+  inputs:
+    subject:
+      type: participant
+      required: true
+    transform_effect:
+      type: effect
+      required: true
+  outputs:
+  - form
+  - retained_effects
+  events:
+  - shape.changed
+  - creature.died
+  capabilities:
+  - transformation
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: aaaa8f9c8ab359dc09dfa8261743b92c71c5c7fc7ba961f183e08cc04b989d7b
   source_path: builtin/srd-5.2.1/glossary/shape_shifting.md
   pages:
   - 187
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_shape_shifting
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 19975f876e1b48c26d7896c53f6b32831aa2ca525bea1bde60768c8558837115
 splat_clauses:
 - key: source_rules
   text: '# Shape-Shifting If an effect, such as Wild Shape or the Polymorph spell, lets you shape-shift,
@@ -31,7 +61,8 @@ splat_clauses:
     effects on you—conditions, spells, curses, and the like—carry over from one form to the other. You
     revert to your true form if you die.'
   sha256: f36ba44cd428aa947316c7218ed083a96ccd9c0655d8f8ca1643da80a49aff78
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Shape-Shifting

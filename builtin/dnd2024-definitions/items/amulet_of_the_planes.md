@@ -15,17 +15,135 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/amulet_of_the_planes
+  implementation: dnd2024:item_amulet_of_the_planes
+  parameters:
+    equipped: worn
+    action: magic
+    destination:
+      type: location
+      familiar: true
+      plane: other_than_current
+    check:
+      ability: intelligence
+      skill: arcana
+      dc: 15
+      success:
+        spell:
+          key: dnd2024:spells/plane_shift
+      failure:
+        transport:
+        - actor
+        - creatures
+        - objects
+        radius_ft: 15
+        destination_roll:
+          die: 100
+          rows:
+          - range:
+            - 1
+            - 60
+            plane: named_plane
+            location: random
+          - range:
+            - 61
+            - 70
+            plane_roll:
+              die: 6
+              values:
+              - air
+              - earth
+              - fire
+              - water
+              - feywild
+              - shadowfell
+            location: random
+          - range:
+            - 71
+            - 80
+            plane_roll:
+              die: 8
+              values:
+              - arborea
+              - arcadia
+              - beastlands
+              - bytopia
+              - elysium
+              - mechanus
+              - mount_celestia
+              - ysgard
+            location: random
+          - range:
+            - 81
+            - 90
+            plane_roll:
+              die: 8
+              values:
+              - abyss
+              - acheron
+              - carceri
+              - gehenna
+              - hades
+              - limbo
+              - nine_hells
+              - pandemonium
+            location: random
+          - range:
+            - 91
+            - 100
+            plane: astral
+            location: random
+    attunement_required: true
+splat_contracts:
+- id: dnd2024:item_amulet_of_the_planes
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.activation_requested
+  - item.attunement_completed
+  - item.attunement_ended
+  capabilities:
+  - item_effects
+  - dice
+  - item_spellcasting
+  - planar_travel
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 7cd7eb0bca097a46beb9d0a3ef5a20a8312eebbc18d1810aa0a4cf2fe2bc5ec8
   source_path: builtin/srd-5.2.1/magic_item/amulet_of_the_planes.md
   pages:
   - 209
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_amulet_of_the_planes
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 647b159d8aa23f8ef47e9c4b014ea4a378bfbff83ba7d1494f08c4385a5b246c
 splat_clauses:
 - key: source_rules
   text: '# Amulet of the Planes Wondrous Item, Very Rare (Requires Attunement) While wearing this amulet,
@@ -41,7 +159,8 @@ splat_clauses:
     by rolling 1d8: on a 1, the Abyss; on a 2, Acheron; on a 3, Carceri; on a 4, Gehenna; on a 5, Hades;
     on a 6, Limbo; on a 7, the Nine Hells; on an 8, Pandemonium 91–00 Random location on the Astral Plane'
   sha256: 5a10e2750d6ebf8d4d3a6b01a7066f6a9d089174bc310de3727400579502e708
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Amulet of the Planes

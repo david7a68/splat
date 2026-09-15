@@ -61,18 +61,250 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/nalfeshnee
+  implementation: dnd2024:creature_nalfeshnee
+  parameters:
+    features:
+      magic_resistance:
+        economy: passive
+        advantage:
+          roll: saving_throw
+          against:
+          - spell
+          - magical_effect
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 10
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 16
+          amount:
+            dice:
+              count: 2
+              sides: 10
+            add: 5
+          damage_type: slashing
+        - op: damage
+          average: 11
+          amount:
+            dice:
+              count: 2
+              sides: 10
+            add: 0
+          damage_type: force
+        reach_feet: 10
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: rend
+          count: 3
+      demonic_restoration:
+        economy: passive
+        resource:
+          capacity: 1
+          recovery:
+          - long_rest
+          cost: 1
+        trigger: self.died
+        requires:
+          death_plane_not: abyss
+        op: revive
+        new_body: true
+        old_body: disappears
+        delay:
+          seconds: 0
+        hit_points: maximum
+        destination:
+          plane: abyss
+          location_choice: gm
+      teleport:
+        economy: action
+        op: teleport
+        targets: self
+        range_feet: 120
+        destination:
+          unoccupied: true
+          visible_to: self
+      horror_nimbus:
+        economy: bonus_action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: save
+        ability: wisdom
+        dc: 15
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            size_feet: 15
+            origin: self
+        failure:
+        - op: damage
+          average: 28
+          amount:
+            dice:
+              count: 8
+              sides: 6
+            add: 0
+          damage_type: psychic
+        - op: condition
+          condition: frightened
+          ends:
+            any:
+            - minutes: 1
+            - event: target.damage_taken
+            - event: target.turn.end
+              self_out_of_target_line_of_sight: true
+        success:
+        - op: feature_immunity
+          source: self
+          feature: horror_nimbus
+          duration:
+            hours: 24
+      pursuit:
+        economy: reaction
+        trigger: another_creature.move.end
+        requires:
+          triggering_creature_visible: true
+          triggering_creature_distance_max_feet: 120
+        op: use_feature
+        feature: teleport
+        destination_constraints:
+          distance_to_triggering_creature_max_feet: 10
+    defenses:
+      resistances:
+        damage_types:
+        - cold
+        - fire
+        - lightning
+      immunities:
+        damage_types:
+        - poison
+        conditions:
+        - frightened
+        - poisoned
+    senses:
+      passive_perception: 11
+      special:
+      - sense: truesight
+        range_feet: 120
+    communication:
+      speaks:
+      - abyssal
+      understands:
+      - abyssal
+      telepathy:
+        range_feet: 120
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_nalfeshnee
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - another_creature.move.end
+  - self.died
+  - target.damage_taken
+  - target.turn.end
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - movement
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 77f7cc995fa311e9d79c520abdf78a37ec82b42647367c3ee6869f5d8afb7a0c
   source_path: builtin/srd-5.2.1/creature/nalfeshnee.md
   pages:
   - 310
   - 311
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_nalfeshnee
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: ac9b4289a890ed86ad5d1daff5d6c91b542507e117a2dddee1ca84b51dc127e5
 splat_clauses:
 - key: source_rules
   text: '# Nalfeshnee Large Fiend (Demon), Chaotic Evil AC 18 Initiative +5 (15) HP 184 (16d10 + 96) Speed
@@ -92,7 +324,8 @@ splat_clauses:
     Another creature the nalfeshnee can see ends its move within 120 feet of the nalfeshnee. Response:
     The nalfeshnee uses Teleport, but its destination space must be within 10 feet of the triggering creature.'
   sha256: 8409d5db133d3de7545c3bdf921a0c527f5f08db8c6bdb9ea215dfebc34c22c5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Nalfeshnee

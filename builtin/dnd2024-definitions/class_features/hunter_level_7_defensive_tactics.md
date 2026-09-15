@@ -12,18 +12,61 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/hunter_level_7_defensive_tactics
-  parameters: {}
+  parameters:
+    choice:
+      count: 1
+      options:
+      - id: escape_the_horde
+        opportunity_attacks_against_self: disadvantage
+      - id: multiattack_defense
+        trigger: creature.attack_roll_hits_self
+        source_further_attacks_against_self: disadvantage
+        until: current_turn_end
+    replace_choice:
+      events:
+      - rest.short_rest_completed
+      - rest.long_rest_completed
+      with: other_option
+  implementation: dnd2024:class_features_hunter_level_7_defensive_tactics
+splat_contracts:
+- id: dnd2024:class_features_hunter_level_7_defensive_tactics
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - feature_state
+  - choices
+  events:
+  - attack.pending
+  - attack.hit
+  - rest.short_rest_completed
+  - rest.long_rest_completed
+  capabilities:
+  - character_choices
+  - attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 61
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_hunter_level_7_defensive_tactics
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 03583430950daf707abb3e854a5d3f7e9aabf892618941588a2c3f192689bdec
   parent_name: Hunter
   line_span:
     first: 5107
@@ -36,7 +79,8 @@ splat_clauses:
     you with an attack roll, that creature has Disadvantage on all other attack rolls against you this
     turn.'
   sha256: a830c39f538f58d2b85baf5e8975f936f60535ad3b9e0110ef7e3f0aa9ac8403
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 7: Defensive Tactics

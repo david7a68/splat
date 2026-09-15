@@ -59,17 +59,109 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_venomous_snake
+  implementation: dnd2024:creature_giant_venomous_snake
+  parameters:
+    skill_totals:
+      perception: 2
+    senses:
+    - sense: blindsight
+      range_ft: 10
+    passive_perception: 12
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 6
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 4
+              add: 4
+            average: 6
+          - type: poison
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 0
+            average: 4
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_giant_venomous_snake
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: b8fabdb7c713af62c70ed2f2bd4ddf57f993fa2098036403abe3a7f401c6222f
   source_path: builtin/srd-5.2.1/creature/giant_venomous_snake.md
   pages:
   - 354
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_venomous_snake
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 806b40b4aae4a8ff05709b1a0d30a9c88e4cf7484b865aa33157fb486eba9f0b
 splat_clauses:
 - key: source_rules
   text: '# Giant Venomous Snake Medium Beast, Unaligned AC 14 Initiative +4 (14) HP 11 (2d8 + 2) Speed
@@ -78,7 +170,8 @@ splat_clauses:
     None CR 1/4 (XP 50; PB +2) ### Actions Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 6 (1d4 + 4)
     Piercing damage plus 4 (1d8) Poison damage.'
   sha256: 861dac7001db1eb236e4b6a0e08a6e9165288ff4d07b4e21ff9ec72f25015a2f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Venomous Snake

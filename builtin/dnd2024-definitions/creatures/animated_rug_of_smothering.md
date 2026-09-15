@@ -56,17 +56,145 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/animated_rug_of_smothering
+  implementation: dnd2024:creature_animated_rug_of_smothering
+  parameters:
+    damage_immunities:
+    - poison
+    - psychic
+    condition_immunities:
+    - charmed
+    - deafened
+    - exhaustion
+    - frightened
+    - paralyzed
+    - petrified
+    - poisoned
+    senses:
+    - sense: blindsight
+      range_ft: 60
+    passive_perception: 6
+    languages:
+      speak: true
+      known: []
+    features:
+      smother:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: choice
+          chooser: actor
+          choices:
+          - effects:
+            - op: damage
+              components:
+              - type: bludgeoning
+                amount:
+                  dice:
+                    count: 2
+                    sides: 6
+                  add: 3
+                average: 10
+          - requires:
+              target_kind: creature
+              target_maximum_size: medium
+            effects:
+            - op: grapple
+              escape_dc: 13
+              maximum_targets: 1
+              while_grappled:
+              - op: condition.apply
+                condition: restrained
+              - op: condition.apply
+                condition: blinded
+              - op: suffocation.start
+              - trigger: target.turn_start
+                effects:
+                - op: damage
+                  components:
+                  - type: bludgeoning
+                    amount:
+                      dice:
+                        count: 2
+                        sides: 6
+                      add: 3
+                    average: 10
+        unavailable_while_grappling: true
+        while_grappling:
+          incoming_damage_multiplier: 0.5
+          round: down
+          grappled_target_takes_same_damage: true
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_animated_rug_of_smothering
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  - target.turn_start
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 3062dc7d1668c55a13080e7435db919b19663f682d8cbdb2b6db19d41e3bd6ff
   source_path: builtin/srd-5.2.1/creature/animated_rug_of_smothering.md
   pages:
   - 259
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_animated_rug_of_smothering
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 4de35d1bfefd325b42ead9d197d818492c1bfb22b59d67c2eb632faf31140c4b
 splat_clauses:
 - key: source_rules
   text: '# Animated Rug of Smothering Large Construct, Unaligned AC 12 Initiative +4 (14) HP 27 (5d10)
@@ -80,7 +208,8 @@ splat_clauses:
     one creature at a time. While grappling the target, the rug can’t take this action, the rug halves
     the damage it takes (round down), and the target takes the same amount of damage.'
   sha256: 3010a2d0fadbb00b808d63a46063b66d7e52c3a4912cf2a5bae175351d5c40de
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Animated Rug of Smothering

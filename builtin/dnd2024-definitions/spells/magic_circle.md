@@ -31,18 +31,108 @@ splat_spell:
   material:
     description: salt and powdered silver worth 100+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/magic_circle
+  implementation: dnd2024:spell_magic_circle
+  parameters:
+    area:
+      shape: cylinder
+      radius_feet: 10
+      height_feet: 20
+      origin: visible_ground_point
+      glowing_runes_on_surface_intersections: true
+    type_choice:
+      minimum: 1
+      options:
+      - celestial
+      - elemental
+      - fey
+      - fiend
+      - undead
+    mode_choice:
+    - normal
+    - reversed
+    normal:
+      nonmagical_willing_entry: false
+      teleport_or_interplanar_entry:
+        save_ability: charisma
+        success_required: true
+      attack_rolls_against_inside: disadvantage
+      protect_inside_against:
+      - possession
+      - charmed
+      - frightened
+    reversed:
+      restricted_direction: exit
+      protected_targets: outside
+    scaling:
+      per_slot_above: 3
+      duration_hours: 1
+splat_contracts:
+- id: dnd2024:spell_magic_circle
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spell_attack_modifier:
+      required: false
+      type: integer
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - barrier_effect
+  - saves
+  - attack_modifier
+  - condition_protection
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - saving_throws
+  - attacks
+  - conditions
+  - spatial_areas
+  - movement
+  - choices
+  - time
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 24631119786e7f77b3af30181db9c6845c5825d0c7eb259908bf25972ed552a3
   source_path: builtin/srd-5.2.1/spell/magic_circle.md
   pages:
   - 145
   - 146
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_magic_circle
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: e0345707045e89e7dda011f35faa4ccb84f685b3570653d97427116dcf46e83c
 splat_clauses:
 - key: source_rules
   text: '# Magic Circle Level 3 Abjuration (Cleric, Paladin, Warlock, Wizard) Casting Time: 1 minute Range:
@@ -59,7 +149,8 @@ splat_clauses:
     a creature of the specified type from leaving the Cylinder and protecting targets outside it. Using
     a Higher-Level Spell Slot. The duration increases by 1 hour for each spell slot level above 3.'
   sha256: 32ae08eadf7fe59c18e36b0c87a3d91c28e5367750a766c8089d13974ac60636
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Magic Circle

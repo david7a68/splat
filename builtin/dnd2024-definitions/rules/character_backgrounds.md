@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/character_backgrounds
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 83
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: a76f8988e67c14211f32e829e9c55479d76ebf569dadb85cfd3d6ed3a6b86595
   parent_name: Character Backgrounds
   line_span:
     first: 7060
@@ -33,7 +34,7 @@ splat_clauses:
   text: '# Character Backgrounds Your character’s background is a collection of characteristics that represent
     the place and occupation that were most formative before your character embarked on a life of adventure.'
   sha256: 601602a789aa847c1b259265e2a979cdca50280a4b653ecb202e569bc676b611
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Character Backgrounds

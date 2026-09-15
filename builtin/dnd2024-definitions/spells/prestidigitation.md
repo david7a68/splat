@@ -27,17 +27,108 @@ splat_spell:
   ritual: false
   range:
     feet: 10
+splat_rule:
+  mechanic: dnd2024:spells/prestidigitation
+  implementation: dnd2024:spell_prestidigitation
+  parameters:
+    selection:
+      within_spell_range: true
+      effect_count: 1
+      noninstantaneous_active_maximum_across_castings: 3
+    modes:
+      sensory_effect:
+        duration: instantaneous
+        harmless: true
+        sensory_effect_choice: true
+      fire_play:
+        duration: instantaneous
+        choices:
+        - light
+        - snuff
+        target_kinds:
+        - candle
+        - torch
+        - small_campfire
+      clean_or_soil:
+        duration: instantaneous
+        choices:
+        - clean
+        - soil
+        object_maximum_cubic_feet: 1
+      minor_sensation:
+        choices:
+        - chill
+        - warm
+        - flavor
+        nonliving_material_maximum_cubic_feet: 1
+        duration_hours: 1
+      magic_mark:
+        choices:
+        - color
+        - small_mark
+        - symbol
+        target_kinds:
+        - object
+        - surface
+        duration_hours: 1
+      minor_creation:
+        choices:
+        - nonmagical_trinket
+        - illusory_image
+        must_fit_in_caster_hand: true
+        until: caster_next_turn_end
+        trinket:
+          damage_possible: false
+          monetary_worth: 0
+splat_contracts:
+- id: dnd2024:spell_prestidigitation
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    choices:
+      required: false
+      type: choice
+    items:
+      required: false
+      type: item_list
+  outputs:
+  - effects
+  - items
+  events:
+  - spell.cast_completed
+  - movement.completed
+  - turn.end
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_relationships
+  - inventory
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: c9fbbc8773c1708e2b84e0ac7a111bad0a5b52ff2fb13c72cd2c339df55af208
   source_path: builtin/srd-5.2.1/spell/prestidigitation.md
   pages:
   - 154
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_prestidigitation
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 0fc8946355f314987677e25f762c5f3e252ee1b0094f8c265d2a7c6a6bcdc45e
 splat_clauses:
 - key: source_rules
   text: '# Prestidigitation Transmutation Cantrip (Bard, Sorcerer, Warlock, Wizard) Casting Time: Action
@@ -52,7 +143,8 @@ splat_clauses:
     a nonmagical trinket or an illusory image that can fit in your hand. It lasts until the end of your
     next turn. A trinket can deal no damage and has no monetary worth.'
   sha256: 240f4ebbefb95026aac133c5549a9055550b4bc3a7a7ec495c8000b16ac3a5ca
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Prestidigitation

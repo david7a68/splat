@@ -12,18 +12,51 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/create_your_character_adjust_ability_scores
-  parameters: {}
+  parameters:
+    ability_choices: background_three_abilities
+    options:
+    - increases:
+      - 2
+      - 1
+      distinct_abilities: true
+    - increases:
+      - 1
+      - 1
+      - 1
+      distinct_abilities: true
+    score_maximum: 20
+    timing: after_base_assignment
+  implementation: dnd2024:rule_create_your_character_adjust_ability_scores
+splat_contracts:
+- id: dnd2024:rule_create_your_character_adjust_ability_scores
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - character_changes
+  events: []
+  capabilities:
+  - character_creation
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 21
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_create_your_character_adjust_ability_scores
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: cb0ed36ee5e7427db26f7c901fce289a073b89a3b33cfb4b30eeb4bf631ee925
   parent_name: Create Your Character
   line_span:
     first: 1558
@@ -35,7 +68,8 @@ splat_clauses:
     or increase all three by 1. None of these increases can raise a score above 20. Some players like
     to increase their class’s primary ability, while others prefer to increase a low score.'
   sha256: 854799ff30cc51eed2eeb5e798177e78dd9bdbf5054212a26660e274fb2002de
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Adjust Ability Scores

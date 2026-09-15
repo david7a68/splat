@@ -25,17 +25,116 @@ splat_spell:
   ritual: false
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/alter_self
+  implementation: dnd2024:spell_alter_self
+  parameters:
+    target:
+      kind: self
+      count: 1
+      visible_to_caster: false
+    choice:
+      chooser: caster
+      count: 1
+      options:
+      - aquatic_adaptation
+      - change_appearance
+      - natural_weapons
+      replace_action: magic
+    options:
+      aquatic_adaptation:
+        underwater_breathing: true
+        swim_speed:
+          stat:
+            of: caster
+            key: speed
+      change_appearance:
+        choice_fields:
+        - height
+        - weight
+        - face
+        - voice
+        - hair_length
+        - color
+        - distinguishing_features
+        - apparent_species
+        statistics_change: false
+        same_size_category: true
+        same_basic_shape: true
+        change_action: magic
+      natural_weapons:
+        growth_choice:
+          claws: slashing
+          fangs: piercing
+          horns: piercing
+          hooves: bludgeoning
+        attack: unarmed_strike
+        damage_replaces_normal:
+          dice:
+            count: 1
+            sides: 6
+            add:
+              binding: spellcasting_modifier
+        attack_ability: spellcasting
+        damage_ability: spellcasting
+splat_contracts:
+- id: dnd2024:spell_alter_self
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    spellcasting_modifier:
+      type: integer
+      required: true
+    spell_attack_modifier:
+      required: false
+      type: integer
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - form_effect
+  - granted_actions
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - attacks
+  - inventory
+  - choices
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: e1cfa74a0cc3e1134714029b787e31cf0d3fe4d2abf9f4e525187ab6b851e20e
   source_path: builtin/srd-5.2.1/spell/alter_self.md
   pages:
   - 107
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_alter_self
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 5e501a5d087f5e6aa31ee10cff2968fbe4f29988b15c73cb7429548367668df9
 splat_clauses:
 - key: source_rules
   text: '# Alter Self Level 2 Transmutation (Sorcerer, Wizard) Casting Time: Action Range: Self Components:
@@ -54,7 +153,8 @@ splat_clauses:
     your Unarmed Strike, and you use your spellcasting ability modifier for the attack and damage rolls
     rather than using Strength.'
   sha256: 9c68b31b4a9c28c3e9117d354396d4c4c610084a504d297c9a55befc7bfb6f9e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Alter Self

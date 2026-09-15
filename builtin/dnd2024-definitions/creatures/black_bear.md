@@ -62,18 +62,126 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/black_bear
+  implementation: dnd2024:creature_black_bear
+  parameters:
+    features:
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 5
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 2
+          damage_type: slashing
+        reach_feet: 5
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: rend
+          count: 2
+    skill_totals:
+      perception: 5
+    defenses: {}
+    senses:
+      passive_perception: 15
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_black_bear
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 1d66d2ea0cb1546b99eb8212a9088422199dd0d0449c4860f183beb3669a6d69
   source_path: builtin/srd-5.2.1/creature/black_bear.md
   pages:
   - 345
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_black_bear
+  conversion_gaps: []
   execution_profiles:
   - dnd2024:creatures/black_bear
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: d3824aaafd2b85993eddb4d13414e93db1590930efbd12e3376dbd36e0f4ce5f
 splat_clauses:
 - key: source_rules
   text: '# Black Bear Medium Beast, Unaligned AC 11 Initiative +1 (11) HP 19 (3d8 + 6) Speed 30 ft., Climb
@@ -82,7 +190,8 @@ splat_clauses:
     None CR 1/2 (XP 100; PB +2) ### Actions Multiattack. The bear makes two Rend attacks. Rend. Melee
     Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage.'
   sha256: a0720d2cb50d42c2f0acf5d806965526b913527deb9de472d7c4c77a124cdac3
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Black Bear

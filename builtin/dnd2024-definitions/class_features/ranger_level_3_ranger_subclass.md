@@ -12,18 +12,50 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/ranger_level_3_ranger_subclass
-  parameters: {}
+  parameters:
+    subclass_choice:
+      count: 1
+      class: ranger
+    feature_grant_policy:
+      class_level_at_least_feature_level: true
+      events:
+      - subclass.selected
+      - character.level_gained
+      persistent: true
+    class_scope:
+      class: ranger
+      minimum_level: 3
+  implementation: dnd2024:class_features_ranger_level_3_ranger_subclass
+splat_contracts:
+- id: dnd2024:class_features_ranger_level_3_ranger_subclass
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - subclass
+  - feature_grants
+  events:
+  - subclass.selected
+  - character.level_gained
+  capabilities:
+  - character_features
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 59
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_ranger_level_3_ranger_subclass
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: ee190ce164796d3d676b726d3ab4b0a89038055680838781b9d31191ec2ee714
   parent_name: Ranger
   line_span:
     first: 4952
@@ -35,7 +67,8 @@ splat_clauses:
     certain Ranger levels. For the rest of your career, you gain each of your subclass’s features that
     are of your Ranger level or lower.'
   sha256: 2f02eda70c02aa2da050b85c6119b80f45bd778e188394eaf1472b49abc09ac6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Ranger Subclass

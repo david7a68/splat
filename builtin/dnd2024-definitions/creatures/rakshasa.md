@@ -59,18 +59,307 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/rakshasa
+  implementation: dnd2024:creature_rakshasa
+  parameters:
+    features:
+      cursed_touch:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 10
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 12
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 5
+          damage_type: slashing
+        - op: damage
+          average: 19
+          amount:
+            dice:
+              count: 3
+              sides: 12
+            add: 0
+          damage_type: necrotic
+        - op: if
+          test:
+            target_kind: creature
+          then:
+          - op: curse
+            effects:
+            - op: disable_rest_benefits
+              rests:
+              - short
+              - long
+        reach_feet: 5
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: cursed_touch
+          count: 3
+      spellcasting:
+        economy: action
+        op: cast_spell_choice
+        ability: charisma
+        spells:
+        - spell:
+            key: dnd2024:spells/detect_magic
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/detect_thoughts
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/disguise_self
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/mage_hand
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/minor_illusion
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/fly
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/invisibility
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/major_image
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/plane_shift
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        components_waived:
+        - material
+        save_dc: 18
+      fiendish_restoration:
+        economy: passive
+        resource:
+          capacity: 1
+          recovery:
+          - long_rest
+          cost: 1
+        trigger: self.died
+        requires:
+          death_plane_not: nine_hells
+        op: revive
+        new_body: true
+        old_body: disappears
+        delay:
+          seconds: 0
+        hit_points: maximum
+        destination:
+          plane: nine_hells
+          location_choice: gm
+      greater_magic_resistance:
+        economy: passive
+        auto_success:
+          roll: saving_throw
+          against:
+          - spell
+          - magical_effect
+        auto_miss:
+          incoming_roll: spell_attack
+        permission_required_for:
+          spell_detection:
+          - remote_observation
+          - thoughts
+          - creature_type
+          - alignment
+      baleful_command:
+        economy: action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: save
+        ability: wisdom
+        dc: 18
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            size_feet: 30
+            origin: self
+          relation: enemy
+        failure:
+        - op: damage
+          average: 28
+          amount:
+            dice:
+              count: 8
+              sides: 6
+            add: 0
+          damage_type: psychic
+        - op: condition
+          condition: frightened
+          ends:
+            event: turn.start
+            participant: self
+            occurrence: next
+        - op: condition
+          condition: incapacitated
+          ends:
+            event: turn.start
+            participant: self
+            occurrence: next
+        success: []
+    skill_totals:
+      deception: 10
+      insight: 8
+      perception: 8
+    defenses:
+      vulnerabilities:
+        conditional:
+        - damage_type: piercing
+          source_kind: weapon
+          weapon_wielder_has_spell_effect:
+            key: dnd2024:spells/bless
+      immunities:
+        conditions:
+        - charmed
+        - frightened
+    senses:
+      passive_perception: 18
+      special:
+      - sense: truesight
+        range_feet: 60
+    communication:
+      speaks:
+      - common
+      - infernal
+      understands:
+      - common
+      - infernal
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_rakshasa
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - self.died
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - curses
+  - dice
+  - effects
+  - resources
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: cb051153da7fcf1184bdd43b73443ab3a2b2388239bd43d36803526705e9e54f
   source_path: builtin/srd-5.2.1/creature/rakshasa.md
   pages:
   - 317
   - 318
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_rakshasa
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 24789dc2b02fc178d57c3035eb3948c36df1622e631080b7a11ebeb6d756bd05
 splat_clauses:
 - key: source_rules
   text: '# Rakshasa Medium Fiend, Lawful Evil AC 17 Initiative +8 (18) HP 221 (26d8 + 104) Speed 40 ft.
@@ -93,7 +382,8 @@ splat_clauses:
     At Will: Detect Magic, Detect Thoughts, Disguise Self, Mage Hand, Minor Illusion 1/Day Each: Fly,
     Invisibility, Major Image, Plane Shift'
   sha256: 5d0cfc684a657c266bf32130d5566f4aca0d2e54246b5352939a9b9c2450410c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Rakshasa

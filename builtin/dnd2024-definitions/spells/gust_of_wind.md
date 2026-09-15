@@ -31,17 +31,92 @@ splat_spell:
   material:
     description: a legume seed
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/gust_of_wind
+  implementation: dnd2024:spell_gust_of_wind
+  parameters:
+    area:
+      shape: line
+      length_feet: 60
+      width_feet: 10
+      origin: caster
+      direction_choice: caster
+      duration: spell_duration
+      wind_strength: strong
+    save:
+      ability: strength
+      dc:
+        binding: save_dc
+      failure:
+        push_feet: 15
+        direction: away_from_caster_along_line
+      success:
+        effect: none
+    save_triggers:
+    - initial_creature_in_line
+    - creature_turn_ends_in_line
+    movement:
+      moving_closer_to_caster_in_line:
+        cost_feet_per_foot: 2
+    environment:
+      disperse:
+      - gas
+      - vapor
+      unprotected_flames: extinguish
+      protected_flames:
+        flicker_wildly: true
+        extinguish_chance_percent: 50
+    redirect:
+      cost: bonus_action
+      timing: caster_later_turns
+splat_contracts:
+- id: dnd2024:spell_gust_of_wind
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - movement.completed
+  - turn.end
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - spatial_relationships
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: cbc2b85164d19a72d972932f6bbb9cb4a91b7544028f73cb4cb618920ce70615
   source_path: builtin/srd-5.2.1/spell/gust_of_wind.md
   pages:
   - 138
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_gust_of_wind
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 5ed20867ded86c83bcaff730551ceca893dd1d2aad7850d5c741d19199b160c2
 splat_clauses:
 - key: source_rules
   text: '# Gust of Wind Level 2 Evocation (Druid, Ranger, Sorcerer, Wizard) Casting Time: Action Range:
@@ -55,7 +130,8 @@ splat_clauses:
     chance to extinguish them. As a Bonus Action on your later turns, you can change the direction in
     which the Line blasts from you.'
   sha256: ab67b453a2d8ae73f6ab336e2d0ddc0cecf652c25c4d9b2e8bd113604e5f49a4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Gust of Wind

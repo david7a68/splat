@@ -56,17 +56,132 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/tiger
+  implementation: dnd2024:creature_tiger
+  parameters:
+    features:
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 10
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 3
+          damage_type: slashing
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+          then:
+          - op: condition
+            condition: prone
+        reach_feet: 5
+      nimble_escape:
+        economy: bonus_action
+        op: take_action
+        choice:
+        - disengage
+        - hide
+    skill_totals:
+      perception: 3
+      stealth: 7
+    defenses: {}
+    senses:
+      passive_perception: 13
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_tiger
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: cc7300c09b9ac3f50666c026ff5b9e1cdf5047c7b6bf577e318ce7827ca862e7
   source_path: builtin/srd-5.2.1/creature/tiger.md
   pages:
   - 363
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_tiger
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 60bc94a75c0d900b37738cfcc427ae593efa1f52dc9b32f3e42775e53357ce3f
 splat_clauses:
 - key: source_rules
   text: '# Tiger Large Beast, Unaligned AC 13 Initiative +3 (13) HP 30 (4d10 + 8) Speed 40 ft. MOD SAVE
@@ -76,7 +191,8 @@ splat_clauses:
     If the target is a Large or smaller creature, it has the Prone condition. ### Bonus Actions Nimble
     Escape. The tiger takes the Disengage or Hide action.'
   sha256: 92f10b2e4174bf7540c70494d73bb757242c640d18143f56193190d5cb881243
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tiger

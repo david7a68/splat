@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/combat_encounters_troubleshooting
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 203
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 2b7f1ae7312a93cfcd3b21c3bc60c63bc021866276d4b5706ca572c2d187b127
   parent_name: Combat Encounters
   line_span:
     first: 10345
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Troubleshooting When creating and running combat encounters, keep the following in mind.'
   sha256: 09eeac6e329cbe259118d4681ad91b6931314a115b1614f8e43855b0e5458c9b
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Troubleshooting

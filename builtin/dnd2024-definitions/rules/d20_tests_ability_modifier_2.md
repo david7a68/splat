@@ -12,18 +12,40 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/d20_tests_ability_modifier_2
-  parameters: {}
+  parameters:
+    saving_throw_modifier: named_ability_modifier
+    example_abilities:
+      direct_force: strength
+      dodge: dexterity
+      toxic_hazard: constitution
+      illusion: intelligence
+      mental_assault: wisdom
+      identity: charisma
+  implementation: dnd2024:rules_d20_tests_ability_modifier_2
+splat_contracts:
+- id: dnd2024:rules_d20_tests_ability_modifier_2
+  inputs:
+    definition:
+      type: definition
+      required: true
+  outputs:
+  - typed_attributes
+  events: []
+  capabilities:
+  - definition_catalogs
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 7
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_d20_tests_ability_modifier_2
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 86c48593a5cc3a2b848d083215d8e0a5561935c0caad35ef0da685d2ed3a9eac
   parent_name: D20 Tests
   line_span:
     first: 199
@@ -37,7 +59,8 @@ splat_clauses:
     Endure a toxic hazard Intelligence Recognize an illusion as fake Wisdom Resist a mental assault Charisma
     Assert your identity'
   sha256: 3923550a6e0ce9a2786dc155747dc084e5c384cc272b652f17d12fa32f341a5c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ability Modifier

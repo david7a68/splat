@@ -12,19 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_equipping_a_monster_with_other_items
-  parameters: {}
+  parameters:
+    additional_equipment:
+      authority: gm
+      selection: item_list
+    after_monster_death:
+      recoverable_equipment: gm_choice
+      usable_equipment: gm_choice
+    magic_item_attunement:
+      key: dnd2024:glossary/attunement
+    class_tag_qualifies_for_class_attunement: true
+    combat_magic_items_may_change_challenge_rating: true
+  implementation: dnd2024:rules_parts_of_a_stat_block_equipping_a_monster_with_other_items
+splat_contracts:
+- id: dnd2024:rules_parts_of_a_stat_block_equipping_a_monster_with_other_items
+  inputs:
+    monster:
+      type: participant
+      required: true
+    equipment:
+      type: item_list
+      required: true
+    recovery_choices:
+      required: false
+      type: resolution
+  outputs:
+  - equipment
+  - recoverable_loot
+  - attunement_eligibility
+  events: []
+  capabilities:
+  - monster_equipment
+  - attunement
+  - loot
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 255
   - 256
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_parts_of_a_stat_block_equipping_a_monster_with_other_items
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 359b99578acc14999ca361fc699ca87c27b8a27c3b7f5faedf960a6d8f3c362f
   parent_name: Parts of a Stat Block
   line_span:
     first: 11051
@@ -39,7 +73,8 @@ splat_clauses:
     “Equipment.” A monster with a class tag after its creature type is considered a member of that class
     for Attunement purposes.'
   sha256: f376f5fc39544f58e64861c030a685651eebedef9235266e01389284a7e630e2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Equipping a Monster with Other Items

@@ -15,18 +15,190 @@ splat_item:
   rarity: uncommon
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/robe_of_useful_items
+  implementation: dnd2024:item_robe_of_useful_items
+  parameters:
+    equipment_state: worn
+    activation:
+      action: magic
+      operation: detach_patch
+      count: 1
+      result: represented_object_or_creature
+      consume_patch: true
+      on_last_patch: robe_becomes_nonmagical
+    initial_patches:
+      fixed:
+      - definition:
+          key: dnd2024:equipment/lantern_bullseye_10_gp
+        count: 2
+        filled: true
+        lit: true
+      - definition:
+          key: dnd2024:equipment/dagger
+        count: 2
+      - definition:
+          key: dnd2024:equipment/mirror_5_gp
+        count: 2
+      - definition:
+          key: dnd2024:equipment/pole_5_cp
+        count: 2
+      - definition:
+          key: dnd2024:equipment/rope_1_gp
+        count: 2
+        coiled: true
+      - definition:
+          key: dnd2024:equipment/sack_1_cp
+        count: 2
+      additional_count:
+        dice: 4
+        sides: 4
+        bonus: 0
+      additional_selection:
+      - gm_choice
+      - d100_per_patch
+      table:
+      - min: 1
+        max: 8
+        patch:
+          kind: bag
+          contents:
+            gp: 100
+      - min: 9
+        max: 15
+        patch:
+          kind: silver_coffer
+          length_ft: 1
+          width_inches: 6
+          depth_inches: 6
+          value_gp: 500
+      - min: 16
+        max: 22
+        patch:
+          kind: iron_door
+          maximum_width_ft: 10
+          maximum_height_ft: 10
+          barred_side: user_choice
+          placement: reachable_opening
+          conform_to_opening: true
+          attach_and_hinge: true
+      - min: 23
+        max: 30
+        patch:
+          kind: gems
+          count: 10
+          value_each_gp: 100
+      - min: 31
+        max: 44
+        patch:
+          kind: wooden_ladder
+          length_ft: 24
+      - min: 45
+        max: 51
+        patch:
+          creature:
+            key: dnd2024:creatures/riding_horse
+          equipment:
+            kind: riding_saddle
+      - min: 52
+        max: 59
+        patch:
+          kind: open_pit
+          cube_side_ft: 10
+          placement: ground
+          range_ft: 10
+      - min: 60
+        max: 68
+        patch:
+          definition:
+            key: dnd2024:equipment/potion_of_healing_50_gp
+          count: 4
+      - min: 69
+        max: 75
+        patch:
+          kind: rowboat
+          length_ft: 12
+      - min: 76
+        max: 83
+        patch:
+          definition:
+            key: dnd2024:items/spell_scroll
+          spell_choice:
+            chooser: user
+            allowed_levels:
+            - 1
+            - 2
+            - 3
+      - min: 84
+        max: 90
+        patch:
+          creature:
+            key: dnd2024:creatures/mastiff
+          count: 2
+      - min: 91
+        max: 96
+        patch:
+          kind: window
+          dimensions_ft:
+          - 2
+          - 4
+          maximum_depth_ft: 2
+          placement: reachable_vertical_surface
+      - min: 97
+        max: 100
+        patch:
+          kind: portable_ram
+      additional_table_rolls_independent: true
+    attunement:
+      required: false
+splat_contracts:
+- id: dnd2024:item_robe_of_useful_items
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - equipment
+  - item_resources
+  - effects
+  - spatial_queries
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 5f09892231cffa236f1aaf67f968b779b6100c31ec28938d1b235d8ea4bf87a4
   source_path: builtin/srd-5.2.1/magic_item/robe_of_useful_items.md
   pages:
   - 240
   - 241
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_robe_of_useful_items
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: a25ad2d97bf982380d9f141f95b92fbe803cf1040b32355bb3ab77cd4c3deb18
 splat_clauses:
 - key: source_rules
   text: '# Robe of Useful Items Wondrous Item, Uncommon This robe has cloth patches of various shapes
@@ -44,7 +216,8 @@ splat_clauses:
     level 1, 2, or 3 (your choice) 1d100 Patch 84–90 2 Mastiffs 91–96 Window (2 feet by 4 feet, up to
     2 feet deep), which you can place on a vertical surface you can reach 97–00 Portable Ram'
   sha256: 6ec78e19ea991802709d4c801323a8e7bea37bb4e81d110bc6c4628dfb1ebee7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Robe of Useful Items

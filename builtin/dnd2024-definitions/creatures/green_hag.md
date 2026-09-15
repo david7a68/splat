@@ -59,17 +59,253 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/green_hag
+  implementation: dnd2024:creature_green_hag
+  parameters:
+    features:
+      amphibious:
+        economy: passive
+        breathing_media:
+        - air
+        - water
+      claw:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 6
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 8
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 4
+          damage_type: slashing
+        - op: damage
+          average: 3
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 0
+          damage_type: poison
+        reach_feet: 5
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: claw
+          count: 2
+      spellcasting:
+        economy: action
+        op: cast_spell_choice
+        ability: wisdom
+        spells:
+        - spell:
+            key: dnd2024:spells/dancing_lights
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/disguise_self
+          frequency: at_will
+          overrides:
+            duration:
+              hours: 24
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/invisibility
+          frequency: at_will
+          overrides:
+            targets: self
+            while_invisible:
+              leaves_tracks: false
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/minor_illusion
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/ray_of_sickness
+          frequency: at_will
+          cast_level: 3
+        components_waived:
+        - material
+        save_dc: 12
+        spell_attack_bonus: 4
+      mimicry:
+        economy: passive
+        imitations:
+        - animal_sound
+        - humanoid_voice
+        discern:
+          ability: wisdom
+          skill: insight
+          dc: 14
+          requires_hearing: true
+      coven_magic:
+        economy: spell_normal_casting_time
+        requires:
+          hag_allies_within_feet: 30
+          minimum_hag_allies: 2
+        op: cast_spell_choice
+        ability: intelligence
+        save_dc: 11
+        components_waived:
+        - material
+        choices:
+        - spell:
+            key: dnd2024:spells/augury
+          resource:
+            capacity: 1
+            cost: 1
+            recovery: long_rest
+            scope: per_spell
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/find_familiar
+          resource:
+            capacity: 1
+            cost: 1
+            recovery: long_rest
+            scope: per_spell
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/identify
+          resource:
+            capacity: 1
+            cost: 1
+            recovery: long_rest
+            scope: per_spell
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/locate_object
+          resource:
+            capacity: 1
+            cost: 1
+            recovery: long_rest
+            scope: per_spell
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/scrying
+          resource:
+            capacity: 1
+            cost: 1
+            recovery: long_rest
+            scope: per_spell
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/unseen_servant
+          resource:
+            capacity: 1
+            cost: 1
+            recovery: long_rest
+            scope: per_spell
+          cast_level: spell_minimum
+    skill_totals:
+      arcana: 5
+      deception: 4
+      perception: 4
+      stealth: 3
+    defenses: {}
+    senses:
+      passive_perception: 14
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks:
+      - common
+      - elvish
+      - sylvan
+      understands:
+      - common
+      - elvish
+      - sylvan
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_green_hag
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 84739864c8f92c86c5307cce53704d4c2d96e6075afcc70c1924dc9593d21f6e
   source_path: builtin/srd-5.2.1/creature/green_hag.md
   pages:
   - 295
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_green_hag
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 253702974e6147466c6c3e0a7ba31c7c9c7de886d1957927966c5533aaa76f6a
 splat_clauses:
 - key: source_rules
   text: '# Green Hag Medium Fey, Neutral Evil AC 17 Initiative +1 (11) HP 82 (11d8 + 33) Speed 30 ft.,
@@ -89,7 +325,8 @@ splat_clauses:
     duration), Invisibility (self only, and the hag leaves no tracks while Invisible), Minor Illusion,
     Ray of Sickness (level 3 version)'
   sha256: 0300566eca20bcdffbe2f6b6c7af682b28459ebf3d60e0e36c1df0dda1c116d1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Green Hag

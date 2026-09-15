@@ -56,17 +56,100 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/shrieker_fungus
+  implementation: dnd2024:creature_shrieker_fungus
+  parameters:
+    damage_immunities: []
+    condition_immunities:
+    - blinded
+    - charmed
+    - deafened
+    - frightened
+    senses:
+    - sense: blindsight
+      range_ft: 30
+    passive_perception: 6
+    languages:
+      speak: true
+      known: []
+    features:
+      shriek:
+        economy: reaction
+        trigger: entity.moved
+        op: sound.emit
+        audible_radius_ft: 300
+        duration:
+          maximum:
+            amount: 1
+            unit: minute
+          until: actor.died
+        when:
+          entity_kind_any:
+          - creature
+          - bright_light_source
+          distance_to_actor_ft_at_most: 30
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_shrieker_fungus
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  - entity.moved
+  capabilities:
+  - action_economy
+  - creature_rules
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f19ca548e3a02bde53d863c5c633ea9cddd2ea2341d01db18c66aeb3256017c1
   source_path: builtin/srd-5.2.1/creature/shrieker_fungus.md
   pages:
   - 286
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_shrieker_fungus
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 74151e2e43276b4c3786b166dbc3f8d24035f3090138e9752dcae190855d84dc
 splat_clauses:
 - key: source_rules
   text: '# Shrieker Fungus Medium Plant, Unaligned AC 5 Initiative -5 (5) HP 13 (3d8) Speed 5 ft. MOD
@@ -76,7 +159,8 @@ splat_clauses:
     30 feet of the shrieker. Response: The shrieker emits a shriek audible within 300 feet of itself for
     1 minute or until the shrieker dies.'
   sha256: 1db0b8425f92c6cac0aa034745face8158cac96437406b4c83508a3c58331618
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Shrieker Fungus

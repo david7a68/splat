@@ -24,17 +24,82 @@ splat_item:
     value: 40.0
     unit: lb
   category: armor
+splat_rule:
+  mechanic: dnd2024:equipment/half_plate_armor
+  implementation: dnd2024:equipment_half_plate_armor
+  parameters:
+    armor:
+      category: medium armor
+      stealth_disadvantage: true
+      base_ac: 15
+      add_dexterity_modifier: true
+      dexterity_modifier_max: 2
+    while_equipped: true
+    maximum_simultaneous_same_category: 1
+    equip:
+      don:
+        value: 5
+        unit: minute
+      doff:
+        value: 1
+        unit: minute
+    training:
+      without_training:
+        d20_test_disadvantage_abilities:
+        - strength
+        - dexterity
+        can_cast_spells: false
+    stacking_group: body_armor
+    stealth:
+      ability: dexterity
+      skill: stealth
+      mode: disadvantage
+    application:
+      actor: equipper
+      item: equipped_instance
+      inactive_if_not_equipped: true
+splat_contracts:
+- id: dnd2024:equipment_half_plate_armor
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    event:
+      type: event
+      required: true
+  outputs:
+  - armor_class
+  - equipment_constraints
+  - roll_modifiers
+  - speed_modifiers
+  - spellcasting_eligibility
+  events:
+  - item.equipped
+  - item.unequipped
+  - ability_check.pending
+  - spell.cast_pending
+  capabilities:
+  - equipment
+  - armor_class
+  - roll_modifiers
+  - speed_modifiers
+  - spellcasting_eligibility
 splat_conversion:
-  status: partial
+  status: specified
   category: equipment
   source_sha256: 4456eaa81743ed341c13f19d1d7ced344a6adcbb15367941875ee45cd3f2e562
   source_path: builtin/srd-5.2.1/source.txt
   pages:
   - 92
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:equipment_half_plate_armor
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: 23d436dad7bbc255fe8a74fe123af323a0831148a6ce2ca54b069bd6a18b5fa7
 splat_clauses:
 - key: source_rules
   text: '# Half Plate Armor Source table, SRD 5.2.1 page 92. { "armor": { "category": "medium armor",
@@ -42,7 +107,8 @@ splat_clauses:
     2 }, "price": { "value": 750, "unit": "gp" }, "mass": { "value": 40.0, "unit": "lb" }, "category":
     "armor" }'
   sha256: 3cbd6bc1e933b7b9c5bbd939e7d44f474b558a4452fb0968107c2462622b1512
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Half Plate Armor

@@ -15,18 +15,161 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/staff_of_thunder_and_lightning
+  implementation: dnd2024:item_staff_of_thunder_and_lightning
+  parameters:
+    weapon:
+      key: dnd2024:equipment/quarterstaff
+    attack_roll_bonus: 2
+    damage_roll_bonus: 2
+    scope: attacks_with_source_item
+    properties_each_independent_uses:
+      maximum: 1
+      initial: 1
+      recovery:
+        event: dawn
+        amount:
+          expression: '1'
+          scope: use
+        cap: maximum
+    lightning:
+      trigger: melee_hit_with_staff
+      action: none
+      damage:
+        roll:
+          expression: 2d6
+          scope: attack
+        type: lightning
+    thunder:
+      trigger: melee_hit_with_staff
+      action: none
+      audible_ft: 300
+      save:
+        ability: constitution
+        dc: 17
+        failure:
+          condition: stunned
+          duration:
+            until: end_of_user_next_turn
+        success:
+          effect: none
+    thunder_and_lightning:
+      trigger: immediately_after_melee_hit_with_staff
+      action: bonus_action
+      apply_properties:
+      - lightning
+      - thunder
+      consume_daily_uses:
+      - thunder_and_lightning
+      consume_other_daily_uses: false
+    lightning_strike:
+      action: magic
+      area:
+        shape: line
+        width_ft: 5
+        length_ft: 120
+      save:
+        ability: dexterity
+        dc: 17
+        failure:
+          damage:
+            roll:
+              expression: 9d6
+              scope: use
+            type: lightning
+        success:
+          damage_scale:
+            numerator: 1
+            denominator: 2
+    thunderclap:
+      action: magic
+      audible_ft: 600
+      area:
+        shape: emanation
+        radius_ft: 60
+        origin: user
+      save:
+        ability: constitution
+        dc: 17
+        failure:
+          damage:
+            roll:
+              expression: 2d6
+              scope: use
+            type: thunder
+          condition: deafened
+          duration:
+            amount: 1
+            unit: minute
+        success:
+          damage_scale:
+            numerator: 1
+            denominator: 2
+          condition: null
+    attunement:
+      required: true
+    common_rules:
+    - key: dnd2024:rules/magic_item_categories_staffs
+splat_contracts:
+- id: dnd2024:item_staff_of_thunder_and_lightning
+  inputs:
+    actor:
+      type: participant
+      required: true
+    source_item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choice:
+      required: false
+      type: choice
+    event:
+      required: false
+      type: event
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - item_state
+  - effects
+  - resolutions
+  events:
+  - attack.hit
+  - action.magic_pending
+  - action.bonus_pending
+  - time.dawn
+  - turn.ended
+  - time.elapsed
+  - attunement.changed
+  capabilities:
+  - inventory
+  - effects
+  - resources_and_time
+  - roll_resolution
+  - spatial_state
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: fe4c3d0b9fcf9e2eb10c832752d73de0ad7778314a29ccc5f25c2eaff48b2737
   source_path: builtin/srd-5.2.1/magic_item/staff_of_thunder_and_lightning.md
   pages:
   - 247
   - 248
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_staff_of_thunder_and_lightning
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_2.md
+  specification_sha256: 31e9398b64c2f862399d3b72515180180128c774af95864ca668c0f68df8b579
 splat_clauses:
 - key: source_rules
   text: '# Staff of Thunder and Lightning Staff, Very Rare (Requires Attunement) This staff can be wielded
@@ -48,7 +191,8 @@ splat_clauses:
     and has the Deafened condition for 1 minute. On a successful save, a creature takes half as much damage
     only.'
   sha256: 350cf6d9c5d09c8a8f7cf7aa2dc59681d6f6bf21772519c0e8ed3ed06ae99080
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Staff of Thunder and Lightning

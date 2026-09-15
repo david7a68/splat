@@ -25,18 +25,93 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/demiplane
+  implementation: dnd2024:spell_demiplane
+  parameters:
+    spell_lifetime:
+      concentration: false
+      maximum_seconds: 3600
+    doorway:
+      size: medium
+      range_feet: 60
+      surface:
+        flat: true
+        solid: true
+        visible: true
+      can_open_close: true
+    destination_choices:
+      chooser: caster
+      options:
+      - new_demiplane
+      - caster_previous_demiplane
+      - other_caster_demiplane
+      other_caster_requirement: know_nature_and_contents
+    new_room:
+      empty: true
+      length_feet: 30
+      width_feet: 30
+      height_feet: 30
+      material:
+        chooser: caster
+        options:
+        - wood
+        - stone
+    end:
+      door_vanishes: true
+      objects_remain: true
+      creatures:
+        chooser: each_creature
+        options:
+        - remain
+        - exit
+        exit:
+          destination: nearest_unoccupied_space_to_former_door
+          condition: prone
+splat_contracts:
+- id: dnd2024:spell_demiplane
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    door_location:
+      type: location
+      required: true
+    destination:
+      type: choice
+      required: true
+    room_material:
+      required: false
+      type: choice
+    exit_choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - transports
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - planar_travel
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: b925d3321088ea91459ace90e2f4a02c2edb503ec4df07ea242eb3fee50b60c9
   source_path: builtin/srd-5.2.1/spell/demiplane.md
   pages:
   - 122
   - 123
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_demiplane
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: fb0465a1374ccf9d5e8fc96fa149fd0bc0e6cda9e28124587b0e047d34d96448
 splat_clauses:
 - key: source_rules
   text: '# Demiplane Level 8 Conjuration (Sorcerer, Warlock, Wizard) Casting Time: Action Range: 60 feet
@@ -50,7 +125,8 @@ splat_clauses:
     if you know the nature and contents of a demiplane created by a casting of this spell by another creature,
     you can connect the shadowy door to that demiplane instead.'
   sha256: 666b10b9ff28372844487b0792c6159fd4208e0d08327a3f84376f9bf679677c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Demiplane

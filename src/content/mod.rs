@@ -7,6 +7,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 pub mod builtin;
+pub mod contracts;
 pub mod definitions;
 
 #[cfg(test)]
@@ -694,6 +695,7 @@ pub fn validate(entries: &[Entry]) -> Report {
     const KNOWN_FIELDS: &[&str] = &[
         "splat_actions",
         "splat_conversion",
+        "splat_contracts",
         "splat_clauses",
         "splat_attack_options",
         "splat_budgets",

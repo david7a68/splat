@@ -12,25 +12,51 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/bonus_action
-  parameters: {}
+  parameters:
+    budget:
+      per_turn: 1
+      timing: own_turn
+    explicit_rule_grant_required: true
+    compatible_with_action: true
+  implementation: dnd2024:glossary_bonus_action
+splat_contracts:
+- id: dnd2024:glossary_bonus_action
+  inputs:
+    subject:
+      type: participant
+      required: true
+    selected_bonus_action:
+      type: definition
+      required: true
+  outputs:
+  - bonus_action_budget
+  - eligibility
+  events:
+  - turn.started
+  - bonus_action.requested
+  capabilities:
+  - action_economy
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: bb017e1bf6b75eb4e1b3a79258a7880f140661f17609ac75c6334ae506e6ee23
   source_path: builtin/srd-5.2.1/glossary/bonus_action.md
   pages:
   - 177
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_bonus_action
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 52447d1a4ef268b6c5de0775aba54feccc859b9c940270187fefd0d4219d332c
 splat_clauses:
 - key: source_rules
   text: '# Bonus Action A Bonus Action is a special action that you can take on the same turn that you
     take an action. You can’t take more than one Bonus Action on a turn, and you have a Bonus Action to
     take only if a rule explicitly says so. See also “Playing the Game” (“Actions”).'
   sha256: 390d80b71fe6caedb0c040b8f28c94c950586fca223d4a0fe6f6dbdea193c3bd
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Bonus Action

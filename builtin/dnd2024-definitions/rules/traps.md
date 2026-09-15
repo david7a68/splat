@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/traps
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 199
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 9d6b74a80dddf2b58c4d8594bb72fd1cb503337cc8e8f2f1691552c8410815c1
   parent_name: Traps
   line_span:
     first: 9933
@@ -36,7 +37,7 @@ splat_clauses:
     short amount of time or deadly puzzles that require quick thinking and teamwork to overcome. Traps
     that are undetectable and inescapable are rarely fun.'
   sha256: 0f134a018be194370f10e322ffae46754e7c6ba42f31f67ae3bbcf558b69ee0b
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Traps

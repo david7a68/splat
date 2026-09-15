@@ -29,17 +29,133 @@ splat_spell:
   material:
     description: a statuette of the target worth 5,000+ GP
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/imprisonment
+  implementation: dnd2024:spell_imprisonment
+  parameters:
+    target:
+      kind: creature
+      count: 1
+      visible_to_caster: true
+    save:
+      ability: wisdom
+      dc:
+        binding: save_dc
+      failure:
+        imprisoned: true
+      success:
+        unaffected: true
+        immunity_to_spell_hours: 24
+    imprisoned:
+      breathing_required: false
+      food_required: false
+      drink_required: false
+      aging: false
+      divination_locate_or_perceive: false
+      teleport: false
+    mode_choice:
+    - burial
+    - chaining
+    - hedged_prison
+    - minimus_containment
+    - slumber
+    modes:
+      burial:
+        location: beneath_earth
+        container: hollow_force_globe
+        size: just_fits_target
+        pass_in_or_out: false
+      chaining:
+        condition: restrained
+        anchored: ground
+        move_by_any_means: false
+      hedged_prison:
+        location: demiplane
+        teleportation: false
+        planar_travel: false
+        appearance_choice: prison_form
+      minimus_containment:
+        height_inches: 1
+        container: gemstone_or_similar_object
+        container_indestructible: true
+        light_passes: true
+        anything_else_passes: false
+      slumber:
+        condition: unconscious
+        can_awaken: false
+    ending_trigger:
+      chooser: caster
+      decision_type: observable_action_predicate
+      gm_approval_required: true
+      gm_constraint:
+        high_likelihood_within_years: 10
+      chosen_at: cast
+    dispel_magic:
+      required_slot_level: 9
+      eligible_targets:
+      - prison
+      - casting_component
+splat_contracts:
+- id: dnd2024:spell_imprisonment
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - save
+  - immunity
+  - prison_effect
+  - ending_trigger
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - saving_throws
+  - conditions
+  - movement
+  - perception
+  - forms
+  - inventory
+  - choices
+  - time
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 9e62770b152170e57c8254a2084d3f6a5db75248a8831b3ad8d3346aedd44ac7
   source_path: builtin/srd-5.2.1/spell/imprisonment.md
   pages:
   - 142
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_imprisonment
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 9246f6d277ec629ea126e0bc74de6bb1f91780c36587668b7d3d3d4327f68008
 splat_clauses:
 - key: source_rules
   text: '# Imprisonment Level 9 Abjuration (Warlock, Wizard) Casting Time: 1 minute Range: 30 feet Components:
@@ -65,7 +181,8 @@ splat_clauses:
     the spell only if it is cast with a level 9 spell slot, targeting either the prison or the component
     used to create it.'
   sha256: 99f60cd486d8c5b526699250c3db8c2911c50657b95c684bdf94f3baddcd08fb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Imprisonment

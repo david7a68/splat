@@ -26,24 +26,76 @@ splat_spell:
   ritual: false
   range:
     mode: touch
+splat_rule:
+  mechanic: dnd2024:spells/greater_invisibility
+  implementation: dnd2024:spell_greater_invisibility
+  parameters:
+    target:
+      kind: creature
+      count: 1
+      visible_to_caster: false
+      touch: true
+    condition:
+      name: invisible
+      duration: spell
+splat_contracts:
+- id: dnd2024:spell_greater_invisibility
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - invisible_effect
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - conditions
+  - perception
+  - time
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 3676e8f4953575cca13ea1b2191f1a045122da5b6dc6083ceb0d7736604818a8
   source_path: builtin/srd-5.2.1/spell/greater_invisibility.md
   pages:
   - 137
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_greater_invisibility
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 0b70b104487ac08e9d1f4d1d15f2f1524dc9b9977bfceb8e8f9b40686903bea3
 splat_clauses:
 - key: source_rules
   text: '# Greater Invisibility Level 4 Illusion (Bard, Sorcerer, Wizard) Casting Time: Action Range:
     Touch Components: V, S Duration: Concentration, up to 1 minute A creature you touch has the Invisible
     condition until the spell ends.'
   sha256: f34625b6650b95702ff3c06b85d248a891a5da5502a9ae2f32f940cdbb64891a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Greater Invisibility

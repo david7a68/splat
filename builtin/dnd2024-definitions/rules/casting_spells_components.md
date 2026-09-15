@@ -12,18 +12,41 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/casting_spells_components
-  parameters: {}
+  parameters:
+    component_types:
+    - verbal
+    - somatic
+    - material
+    required_components: spell_definition
+    cast_allowed_only_if_all_required_components_available: true
+  implementation: dnd2024:rule_casting_spells_components
+splat_contracts:
+- id: dnd2024:rule_casting_spells_components
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - spell_resolution
+  events: []
+  capabilities:
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 105
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_casting_spells_components
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 90fb10d10abd2c10ec5c07c81b565832e7520a9fe678ca9f958c8ef3a6c54076
   parent_name: Casting Spells
   line_span:
     first: 9190
@@ -35,7 +58,8 @@ splat_clauses:
     (M) components. If the spellcaster can’t provide one or more of a spell’s components, the spellcaster
     can’t cast the spell.'
   sha256: 62a4421c2bab66ad26646e483f3dbe0b071b79db3fa330731ff514cd1af3689a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Components

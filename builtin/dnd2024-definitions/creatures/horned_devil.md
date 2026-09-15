@@ -61,18 +61,252 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/horned_devil
+  implementation: dnd2024:creature_horned_devil
+  parameters:
+    features:
+      magic_resistance:
+        economy: passive
+        advantage:
+          roll: saving_throw
+          against:
+          - spell
+          - magical_effect
+      searing_fork:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 10
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 15
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 6
+          damage_type: piercing
+        - op: damage
+          average: 9
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 0
+          damage_type: fire
+        reach_feet: 10
+      hurl_flame:
+        economy: action
+        op: attack
+        attack_modes:
+        - ranged
+        attack_bonus: 8
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 26
+          amount:
+            dice:
+              count: 5
+              sides: 8
+            add: 4
+          damage_type: fire
+        - op: if
+          test:
+            target_kind: object
+            flammable: true
+            worn: false
+            carried: false
+          then:
+          - op: ignite
+        range_feet: 150
+      multiattack:
+        economy: action
+        op: repeat_choice
+        count: 3
+        choices:
+        - feature: searing_fork
+        - feature: hurl_flame
+        replacement:
+          max_attacks: 1
+          choices:
+          - feature: infernal_tail
+      diabolical_restoration:
+        economy: passive
+        resource:
+          capacity: 1
+          recovery:
+          - long_rest
+          cost: 1
+        trigger: self.died
+        requires:
+          death_plane_not: nine_hells
+        op: revive
+        new_body: true
+        old_body: disappears
+        delay:
+          seconds: 0
+        hit_points: maximum
+        destination:
+          plane: nine_hells
+          location_choice: gm
+      infernal_tail:
+        economy: action
+        op: save
+        ability: dexterity
+        dc: 17
+        targets:
+          kind: creature
+          count: 1
+          range_feet: 10
+          visible_to: self
+        failure:
+        - op: damage
+          average: 10
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 6
+          damage_type: necrotic
+        - op: if
+          test:
+            target_has_infernal_wound: false
+          then:
+          - op: infernal_wound
+            stacking: one_per_target
+            periodic:
+              event: target.turn.start
+              effects:
+              - op: lose_hit_points
+                average: 10
+                amount:
+                  dice:
+                    count: 3
+                    sides: 6
+                  add: 0
+            ends_any:
+            - minutes: 1
+            - event: spell.restores_hit_points
+              target: affected
+            - economy: action
+              actor: target_or_creature_within_5_feet
+              check:
+                ability: wisdom
+                skill: medicine
+                dc: 17
+              outcome: success
+        success: []
+    defenses:
+      resistances:
+        damage_types:
+        - cold
+      immunities:
+        damage_types:
+        - fire
+        - poison
+        conditions:
+        - poisoned
+    senses:
+      passive_perception: 13
+      special:
+      - sense: darkvision
+        range_feet: 150
+        magical_darkness_unimpeded: true
+    communication:
+      speaks:
+      - infernal
+      understands:
+      - infernal
+      telepathy:
+        range_feet: 120
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_horned_devil
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - self.died
+  - spell.restores_hit_points
+  - target.turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 48f96f08a602761d8959352ef51584a758f8ec1b7e32659e82f912df640d0562
   source_path: builtin/srd-5.2.1/creature/horned_devil.md
   pages:
   - 299
   - 300
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_horned_devil
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 1a964419ca793396445f1a182c32451dfed245319f7d6069d01237b05f23cf6d
 splat_clauses:
 - key: source_rules
   text: '# Horned Devil Large Fiend (Devil), Lawful Evil AC 18 Initiative +7 (17) HP 199 (19d10 + 95)
@@ -93,7 +327,8 @@ splat_clauses:
     restores Hit Points to the target, or after the target or a creature within 5 feet of it takes an
     action to stanch the wound, doing so by succeeding on a DC 17 Wisdom (Medicine) check.'
   sha256: 0bd91e3b47655de0edf594adb3bfb7664b373c6b5506bf73949c530421d2b65c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Horned Devil

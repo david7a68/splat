@@ -12,18 +12,43 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/warlock_ascendant_step
-  parameters: {}
+  parameters:
+    warlock_level_minimum: 5
+    cast:
+      spell:
+        key: dnd2024:spells/levitate
+      spell_slot_cost: 0
+      target: self
+      uses: unlimited
+  implementation: dnd2024:rule_warlock_ascendant_step
+splat_contracts:
+- id: dnd2024:rule_warlock_ascendant_step
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - feature_effects
+  events: []
+  capabilities:
+  - invocations
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 72
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_warlock_ascendant_step
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: acb6e133389bdd430f63af0352670016b078faa3391d05eb547172b8754933e2
   parent_name: Warlock
   line_span:
     first: 6156
@@ -33,7 +58,8 @@ splat_clauses:
   text: '# Ascendant Step Prerequisite: Level 5+ Warlock You can cast Levitate on yourself without expending
     a spell slot.'
   sha256: 46b017db315d4fb5359b09be015226e4b2d0988f82e77f137e8cc73702ef591b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ascendant Step

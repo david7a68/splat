@@ -12,18 +12,58 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/druid_level_2_wild_companion
-  parameters: {}
+  parameters:
+    action: magic
+    cost_choice:
+    - resource: spell_slot
+      amount: 1
+      minimum_level: 1
+    - resource: druid.wild_shape
+      amount: 1
+    cast:
+      spell:
+        key: dnd2024:spells/find_familiar
+      material_components: false
+      creature_type: fey
+      familiar_ends: actor.rest.long_completed
+    class_scope:
+      class: druid
+      minimum_level: 2
+  implementation: dnd2024:class_features_druid_level_2_wild_companion
+splat_contracts:
+- id: dnd2024:class_features_druid_level_2_wild_companion
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - action.magic
+  - rest.long_completed
+  capabilities:
+  - character_features
+  - resources
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 43
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_druid_level_2_wild_companion
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: d2d5a7602b6ddb80ae156d7f79d58688e5a7b828e93230340277bfc4dcbb1774
   parent_name: Druid
   line_span:
     first: 3564
@@ -35,7 +75,8 @@ splat_clauses:
     without Material components. When you cast the spell in this way, the familiar is Fey and disappears
     when you finish a Long Rest.'
   sha256: 7e1fd1ad2ba2569aa694e30bd3c945be2c0700f76d8ca8dd8dc2873ec55c5e69
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 2: Wild Companion

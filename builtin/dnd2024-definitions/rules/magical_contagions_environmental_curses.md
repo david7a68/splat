@@ -12,18 +12,67 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magical_contagions_environmental_curses
-  parameters: {}
+  parameters:
+    curse: demonic_possession
+    exposure_contexts:
+    - demonic_object_interaction
+    - desecrated_location_lingering
+    target_selection: gm
+    initial_save:
+      ability: charisma
+      dc: 15
+      failure: possessed_by_bodiless_demonic_entity
+    while_possessed:
+      trigger:
+        d20_test_die_result: 1
+      effect: entity_controls_creature_behavior
+      regain_control_save:
+        timing: end_of_each_later_turn
+        ability: charisma
+        dc: 15
+        success: creature_regains_control
+        curse_persists: true
+    end_curse:
+      long_rest_end_save:
+        ability: charisma
+        dc: 15
+        success: curse_ends
+      magic:
+      - key: dnd2024:spells/dispel_evil_and_good
+      - any_curse_removal_magic
+  implementation: dnd2024:rule_magical_contagions_environmental_curses
+splat_contracts:
+- id: dnd2024:rule_magical_contagions_environmental_curses
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - effects
+  events:
+  - d20_test.rolled
+  - turn.ended
+  - rest.long_completed
+  capabilities:
+  - curses
+  - possession
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 193
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_magical_contagions_environmental_curses
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 0729ab013af633bba463f94dca87e2f0ad396a49ed044512002cabf799f31915
   parent_name: Magical Contagions
   line_span:
     first: 9482
@@ -42,7 +91,8 @@ splat_clauses:
     Possession makes a DC 15 Charisma saving throw. On a successful save, the effect ends on the creature.
     A Dispel Evil and Good spell or any magic that removes a curse also ends the effect on it.'
   sha256: 6277c377517b95aac591a53bdf8c8723c6089a24df4a6c7b8f2591c02269d7bd
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Environmental Curses

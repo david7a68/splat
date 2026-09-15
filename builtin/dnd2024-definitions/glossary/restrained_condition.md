@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/restrained_condition
-  parameters: {}
+  parameters:
+    condition: restrained
+    speed: 0
+    speed_can_increase: false
+    incoming_attack_rolls: advantage
+    own_attack_rolls: disadvantage
+    dexterity_saves: disadvantage
+  implementation: dnd2024:glossary_restrained_condition
+splat_contracts:
+- id: dnd2024:glossary_restrained_condition
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - condition_effects
+  events:
+  - attack.pending
+  - saving_throw.pending
+  - speed.calculated
+  capabilities:
+  - conditions
+  - attacks
+  - checks
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 8be9904c115479aa6ad9ce46355f6727d0e8d80dd2abe0d8e8de64dc3509847f
   source_path: builtin/srd-5.2.1/glossary/restrained_condition.md
   pages:
   - 187
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_restrained_condition
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 2df7f4e6e096cfbac995dc23237e9771282f6cc0969d127e5e95ddc80d506ca6
 splat_clauses:
 - key: source_rules
   text: '# Restrained [Condition] While you have the Restrained condition, you experience the following
@@ -31,7 +57,8 @@ splat_clauses:
     Advantage, and your attack rolls have Disadvantage. Saving Throws Affected. You have Disadvantage
     on Dexterity saving throws.'
   sha256: ba1e7e620d7f0679c1739e33b8904070806c9425f057acdcaee2dfddc6720200
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Restrained [Condition]

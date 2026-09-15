@@ -12,18 +12,57 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_combat_step_by_step
-  parameters: {}
+  parameters:
+    sequence:
+    - operation: assign_positions
+      authority: gm
+      inputs:
+      - marching_order
+      - stated_positions
+    - operation: roll_initiative
+      participants: all
+    - operation: take_turns
+      order: initiative
+      round_end: all_participants_acted
+      repeat_until: combat_ended
+  implementation: dnd2024:rules_combat_combat_step_by_step
+splat_contracts:
+- id: dnd2024:rules_combat_combat_step_by_step
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    event:
+      type: event
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - action_options
+  - effects
+  - resource_updates
+  events: []
+  capabilities:
+  - action_economy
+  - movement
+  - combat
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 13
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_combat_combat_step_by_step
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: e71b88b9947c4a9bdf5869c68073bc8856bc7c1aa927685ff0e238d2fbdbb90f
   parent_name: Combat
   line_span:
     first: 776
@@ -38,7 +77,8 @@ splat_clauses:
     battle takes a turn in Initiative order. When everyone involved in the combat has had a turn, the
     round ends. Repeat this step until the fighting stops.'
   sha256: 9974adfdb2dddcefe981c8b82bb67fb51307f9d4669113f2834b9f276adc4d98
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Combat Step by Step

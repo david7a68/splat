@@ -12,18 +12,57 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/druid_level_5_wild_resurgence
-  parameters: {}
+  parameters:
+    conversions:
+    - from: spell_slot
+      amount: 1
+      to: wild_shape_use
+      gain: 1
+      requires_remaining_wild_shape: 0
+      action: none
+      limit:
+        count: 1
+        period: own_turn
+    - from: wild_shape_use
+      amount: 1
+      to: spell_slot
+      slot_level: 1
+      gain: 1
+      action: none
+      uses:
+        maximum: 1
+        recover:
+          event: rest.long_rest_completed
+          amount: all
+  implementation: dnd2024:class_features_druid_level_5_wild_resurgence
+splat_contracts:
+- id: dnd2024:class_features_druid_level_5_wild_resurgence
+  inputs:
+    actor:
+      type: participant
+      required: true
+  outputs:
+  - feature_state
+  - resource_changes
+  events:
+  - turn.active
+  - resource.conversion_requested
+  capabilities:
+  - resources
+  - spell_slots
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 43
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_druid_level_5_wild_resurgence
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 852151cfb2f30af7450f2163e0905e3a6c1ed7de95c1b15b9f976907b6dce96d
   parent_name: Druid
   line_span:
     first: 3583
@@ -35,7 +74,8 @@ splat_clauses:
     expend one use of Wild Shape (no action required) to give yourself a level 1 spell slot, but you can’t
     do so again until you finish a Long Rest.'
   sha256: 4360248b99a54c6373355bcbed81abd7b9b038a283e3c940e9ff6bbad659fbe4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 5: Wild Resurgence

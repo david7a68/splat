@@ -24,17 +24,182 @@ splat_spell:
   ritual: false
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/wish
+  implementation: dnd2024:spell_wish
+  parameters:
+    choice:
+      chooser: caster
+      options:
+      - duplicate_spell
+      - object_creation
+      - instant_health
+      - resistance
+      - spell_immunity
+      - sudden_learning
+      - roll_redo
+      - reshape_reality
+    effects:
+      duplicate_spell:
+        maximum_spell_level: 8
+        other_spell_only: true
+        casting_requirements_waived: all_including_costly_components
+        spell_takes_effect: true
+        stress: false
+      object_creation:
+        count: 1
+        maximum_gp_value: 25000
+        magic_item: false
+        maximum_each_dimension_feet: 300
+        destination: visible_unoccupied_ground
+      instant_health:
+        caster: true
+        additional_visible_creatures_maximum: 20
+        heal: full_hp
+        end_all_effects:
+        - exhaustion
+        - charmed
+        - petrified
+        - curses
+        - cursed_item_attunement
+        - ability_score_reductions
+        - hp_maximum_reductions
+      resistance:
+        maximum_visible_creatures: 10
+        damage_type_choice_count: 1
+        duration: permanent
+      spell_immunity:
+        maximum_visible_creatures: 10
+        single_choice:
+        - spell
+        - magical_effect
+        duration_hours: 8
+      sudden_learning:
+        replace_own_feat_count: 1
+        new_feat_eligibility_required: true
+        old_feat_cannot_be_prerequisite_for:
+        - other_feat
+        - feature
+        remove_old_benefits: true
+        grant_new_benefits: true
+      roll_redo:
+        roll_count: 1
+        lookback: last_round_including_caster_last_turn
+        reroll: true
+        roll_mode_choice:
+        - normal
+        - advantage
+        - disadvantage
+        result_choice:
+        - original
+        - reroll
+        reshape_prior_consequences: true
+      reshape_reality:
+        request: caster_precise_statement
+        adjudicator: gm
+        resolution_choice:
+        - success
+        - partial_success
+        - failure
+        - unforeseen_consequence
+        risk_increases_with_wish_magnitude: true
+        possible_consequences:
+        - time_travel
+        - transport_to_item_owner
+        - powerful_foes_for_community_region_world_effects
+        - divine_servants_intervention_for_god_effects
+        undo_multiverse: automatic_failure
+    stress:
+      applies_to: all_modes_except_duplicate_spell
+      spell_cast_damage:
+        until: caster.long_rest.completed
+        event: spell.cast_completed
+        amount:
+          dice:
+            count:
+              binding: cast_spell_level
+            sides: 10
+            add: 0
+        type: necrotic
+        reducible: false
+        preventable: false
+        cantrip_damage: 0
+      strength:
+        set: 3
+        duration_days:
+          dice:
+            count: 2
+            sides: 4
+            add: 0
+        rest_light_activity_day_recovery_reduction_days: 2
+      permanent_loss_of_wish_percent: 33
+splat_contracts:
+- id: dnd2024:spell_wish
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+    cast_spell_level:
+      type: integer
+      required: true
+  outputs:
+  - duplicated_spell
+  - chosen_effect
+  - revised_roll
+  - feat_replacement
+  - reality_resolution
+  - stress_effect
+  - wish_casting_loss
+  events:
+  - spell.cast_completed
+  - rest.completed
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - healing
+  - conditions
+  - movement
+  - perception
+  - inventory
+  - summoning
+  - choices
+  - time
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 7b25c16f59313843562eec92395aceb8e8e1704cdc03b9f278b9868039f450b6
   source_path: builtin/srd-5.2.1/spell/wish.md
   pages:
   - 175
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_wish
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 24f8b7c9ed6c04b0239059d9d2bca141ac658e7f02cdf9f9d299481ffff07bb9
 splat_clauses:
 - key: source_rules
   text: '# Wish Level 9 Conjuration (Sorcerer, Wizard) Casting Time: Action Range: Self Components: V
@@ -74,7 +239,8 @@ splat_clauses:
     your remaining recovery time decreases by 2 days. Finally, there is a 33 percent chance that you are
     unable to cast Wish ever again if you suffer this stress.'
   sha256: 5fbdae3f5178de53efe8d8842fd5f38f39028b6a63a706b6aa5e1bff2e6b6ab2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wish

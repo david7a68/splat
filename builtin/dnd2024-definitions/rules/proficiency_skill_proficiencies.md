@@ -12,19 +12,64 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/proficiency_skill_proficiencies
-  parameters: {}
+  parameters:
+    skill_abilities:
+      acrobatics: dexterity
+      animal_handling: wisdom
+      arcana: intelligence
+      athletics: strength
+      deception: charisma
+      history: intelligence
+      insight: wisdom
+      intimidation: charisma
+      investigation: intelligence
+      medicine: wisdom
+      nature: intelligence
+      perception: wisdom
+      performance: charisma
+      persuasion: charisma
+      religion: intelligence
+      sleight_of_hand: dexterity
+      stealth: dexterity
+      survival: wisdom
+    relevant_skill:
+      actor: gm
+      rules_suggest: true
+    proficient:
+      add: proficiency_bonus
+    unproficient:
+      check_permitted: true
+      proficiency_bonus: 0
+  implementation: dnd2024:rule_proficiency_skill_proficiencies
+splat_contracts:
+- id: dnd2024:rule_proficiency_skill_proficiencies
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - check_modifiers
+  events: []
+  capabilities:
+  - checks
+  - proficiency
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 8
   - 9
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_proficiency_skill_proficiencies
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: a5124e6a5f610af88d0b48d218b81e99fd776654b99a818eabec47df188d0df2
   parent_name: Proficiency
   line_span:
     first: 375
@@ -57,7 +102,8 @@ splat_clauses:
     proficiency, the character adds their Proficiency Bonus to the Strength check. If the character lacks
     that proficiency, they make the check without adding their Proficiency Bonus.'
   sha256: 885b6fbc9e8b4ca4f8274cecfe4547c8caab4ee4bf01f87370c18e1c7432aa88
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Skill Proficiencies

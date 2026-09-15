@@ -17,18 +17,127 @@ splat_item:
   price:
     value: 1
     unit: sp
+  mass:
+    value: 1.0
+    unit: lb
+splat_rule:
+  mechanic: dnd2024:equipment/oil_1_sp
+  implementation: dnd2024:equipment_oil_1_sp
+  parameters:
+    douse_target:
+      economy: replace_one_attack
+      action: attack
+      consume: 1
+      target:
+        count: 1
+        kinds:
+        - creature
+        - object
+        range_ft: 20
+      save:
+        ability: dexterity
+        dc:
+          op: add
+          operands:
+          - 8
+          - ability_modifier: dexterity
+          - stat: proficiency_bonus
+        success: no_effect
+        failure:
+          coating_duration:
+            value: 1
+            unit: minute
+          trigger: target_takes_fire_damage
+          extra_damage:
+            amount: 5
+            type: fire
+    douse_area:
+      action: utilize
+      consume: 1
+      area:
+        shape: square
+        side_ft: 5
+        range_ft: 5
+        level_ground: true
+      requires_ignition: true
+      duration:
+        rounds: 2
+        expiry: turn_end
+        outside_combat_seconds: 12
+      triggers:
+      - creature_enters
+      - creature_turn_end_in_area
+      damage:
+        amount: 5
+        type: fire
+      maximum_applications_per_creature_per_turn: 1
+    fuel:
+      compatible:
+      - key: dnd2024:equipment/lamp_5_sp
+      - key: dnd2024:equipment/lantern_bullseye_10_gp
+      - key: dnd2024:equipment/lantern_hooded_5_gp
+      burn_time_per_flask:
+        value: 6
+        unit: hour
+      time_is_cumulative: true
+      extinguish_action: utilize
+      rekindling_allowed: true
+    mass:
+      value: 1.0
+      unit: lb
+splat_contracts:
+- id: dnd2024:equipment_oil_1_sp
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    operation:
+      required: false
+      type: choice
+    target:
+      required: false
+      type: participant
+    target_object:
+      required: false
+      type: object
+    location:
+      required: false
+      type: location
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - action_options
+  - check_requests
+  - item_effects
+  - item_state
+  events:
+  - attack.replacement
+  capabilities:
+  - item_actions
+  - effects
+  - ability_checks
+  - consumables
 splat_conversion:
-  status: partial
+  status: specified
   category: equipment
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 98
   - 99
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:equipment_oil_1_sp
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: c470245c49b895de616c006fbe395cd3f4ac7aa56df5c45d921050ba61c08fd3
   line_span:
     first: 8531
     count: 26
@@ -48,7 +157,8 @@ splat_clauses:
     you can extinguish the burning Oil (as a Utilize action) and rekindle it again until it has burned
     for a total of 6 hours.'
   sha256: ca2a1732b535fb56e6d27e06bfa8b5986ed7517632f3b505f2645ae81a5ba49d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Oil (1 SP)

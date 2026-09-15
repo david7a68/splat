@@ -58,17 +58,173 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/bugbear_stalker
+  implementation: dnd2024:creature_bugbear_stalker
+  parameters:
+    features:
+      abduct:
+        economy: trait
+        operation: passive_rule
+        grappled_creature_movement_extra_cost: 0
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_choice
+          count: 2
+          options:
+          - javelin
+          - morningstar
+      javelin:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee_or_ranged
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 10
+          range_ft: 30
+          long_range_ft: 120
+        hit:
+          damage:
+          - average: 13
+            roll:
+              count: 3
+              sides: 6
+              modifier: 3
+            type: piercing
+      morningstar:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 5
+          reach_ft: 10
+          advantage_if:
+            target_grappled_by: self
+        hit:
+          damage:
+          - average: 12
+            roll:
+              count: 2
+              sides: 8
+              modifier: 3
+            type: piercing
+      quick_grapple:
+        economy: bonus_action
+        operation: saving_throw
+        ability: dexterity
+        dc: 13
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 10
+          visible: true
+          maximum_size: medium
+        failure:
+          grapple:
+            condition: grappled
+            source: self
+            escape_dc: 13
+        success:
+          effects: []
+    skill_totals:
+      stealth: 6
+      survival: 3
+    gear:
+    - item: chain_shirt
+      quantity: 1
+    - item: javelins
+      quantity: 6
+    - item: morningstar
+      quantity: 1
+    senses:
+      darkvision: 60
+      passive_perception: 11
+    languages:
+      speaks:
+      - common
+      - goblin
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_bugbear_stalker
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - grappling
+  - spatial_queries
+  - limited_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 6057eba685a118dca0fc6f7bdd1f4ce4912d8c2b9558f96defbc10c576346a6d
   source_path: builtin/srd-5.2.1/creature/bugbear_stalker.md
   pages:
   - 271
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_bugbear_stalker
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 966c10e2b0f8fb4572216cf88f991b64143436f48d93cdf0104e778fdfd63062
 splat_clauses:
 - key: source_rules
   text: '# Bugbear Stalker Medium Fey (Goblinoid), Chaotic Evil AC 15 Initiative +2 (12) HP 65 (10d8 +
@@ -82,7 +238,8 @@ splat_clauses:
     ### Bonus Actions Quick Grapple. Dexterity Saving Throw: DC 13, one Medium or smaller creature the
     bugbear can see within 10 feet. Failure: The target has the Grappled condition (escape DC 13).'
   sha256: 0e3e6c844bc8e3c6c80c0444b0cc5d076fa0a572bc95354763228ed9757a2b9f
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Bugbear Stalker

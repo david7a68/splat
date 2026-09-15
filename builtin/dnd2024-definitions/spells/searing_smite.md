@@ -24,17 +24,107 @@ splat_spell:
   ritual: false
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/searing_smite
+  implementation: dnd2024:spell_searing_smite
+  parameters:
+    targets:
+      identity: target_hit_by_triggering_attack
+    extra_attack_damage:
+      dice:
+        count:
+          op: add
+          args:
+          - 1
+          - op: multiply
+            args:
+            - 1
+            - op: subtract
+              args:
+              - binding: cast_level
+              - 1
+        sides: 6
+        add: 0
+      type: fire
+    ongoing:
+      duration: spell_duration
+      event: target_turn_start
+      steps:
+      - damage:
+          dice:
+            count:
+              op: add
+              args:
+              - 1
+              - op: multiply
+                args:
+                - 1
+                - op: subtract
+                  args:
+                  - binding: cast_level
+                  - 1
+            sides: 6
+            add: 0
+          type: fire
+      - save:
+          ability: constitution
+          dc:
+            binding: save_dc
+          failure:
+            continue_spell: true
+          success:
+            end_spell: true
+splat_contracts:
+- id: dnd2024:spell_searing_smite
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - damage
+  events:
+  - spell.cast_completed
+  - turn.start
+  - attack.roll
+  - attack.hit
+  - save.before
+  - save.after
+  - spell.cast_pending
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 4083fb8bda0153cd3d8772b57e81bc766e9c374040d554aa180cbd3e7853b46d
   source_path: builtin/srd-5.2.1/spell/searing_smite.md
   pages:
   - 160
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_searing_smite
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 693e4192479cfc58bf1acfc2f334c572ba46add29d51772436cccb5826a4ed93
 splat_clauses:
 - key: source_rules
   text: '# Searing Smite Level 1 Evocation (Paladin) Casting Time: Bonus Action, which you take immediately
@@ -44,7 +134,8 @@ splat_clauses:
     saving throw. On a failed save, the spell continues. On a successful save, the spell ends. Using a
     Higher-Level Spell Slot. All the damage increases by 1d6 for each spell slot level above 1.'
   sha256: 9d8fa35e58809b10e805ae3efb9c6de013de6eea3c89e8750e81c4a675109e25
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Searing Smite

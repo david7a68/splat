@@ -57,17 +57,138 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/tough
+  implementation: dnd2024:creature_tough
+  parameters:
+    gear:
+    - item: heavy_crossbow
+      count: 1
+    - item: leather_armor
+      count: 1
+    - item: mace
+      count: 1
+    senses: []
+    passive_perception: 10
+    languages:
+      speak: true
+      known:
+      - common
+    features:
+      pack_tactics:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - attack
+        target_kind: creature
+        when:
+          ally_within_target_ft: 5
+          ally_excluded_conditions:
+          - incapacitated
+      mace:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 2
+            average: 5
+      heavy_crossbow:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 3
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 100
+          long: 400
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 10
+              add: 1
+            average: 6
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_tough
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 9d829914ffb3371f2bbff6228013c3d3bb0d714e35adaf0981354417bba1e845
   source_path: builtin/srd-5.2.1/creature/tough.md
   pages:
   - 332
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_tough
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: bc270700f24c26fb85dcc1435ee96c54157e9bb654e1f0582638c1759677affd
 splat_clauses:
 - key: source_rules
   text: '# Tough Medium or Small Humanoid, Neutral AC 12 Initiative +1 (11) HP 32 (5d8 + 10) Speed 30
@@ -78,7 +199,8 @@ splat_clauses:
     Incapacitated condition. ### Actions Mace. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Bludgeoning
     damage. Heavy Crossbow. Ranged Attack Roll: +3, range 100/400 ft. Hit: 6 (1d10 + 1) Piercing damage.'
   sha256: 5f4ab58fe589652a49c5f35236457f40baaac689b172ee78251c56a050cb03c1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tough

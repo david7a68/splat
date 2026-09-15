@@ -12,18 +12,37 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_critical_hits
-  parameters: {}
+  parameters:
+    critical_hit:
+      damage_dice_multiplier: 2
+      include_additional_attack_dice: true
+      flat_modifiers_multiplier: 1
+  implementation: dnd2024:rules_damage_and_healing_critical_hits
+splat_contracts:
+- id: dnd2024:rules_damage_and_healing_critical_hits
+  inputs:
+    attack:
+      type: resolution
+      required: true
+  outputs:
+  - damage_roll
+  events:
+  - attack.critical_hit
+  capabilities:
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 16
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_damage_and_healing_critical_hits
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 5161c6822fdb03cf74867e4bfd8b136ac6363c342dcdb33f486be43087a9efd5
   parent_name: Damage and Healing
   line_span:
     first: 1142
@@ -36,7 +55,8 @@ splat_clauses:
     modifier. If the attack involves other damage dice, such as from the Rogue’s Sneak Attack feature,
     you also roll those dice twice.'
   sha256: 7c2593858dcba2c7a863ce9c414b028aca243b6d86e7ca184d43b58ff4aaa78b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Critical Hits

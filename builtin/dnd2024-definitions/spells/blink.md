@@ -25,18 +25,77 @@ splat_spell:
   ritual: false
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/blink
+  implementation: dnd2024:spell_blink
+  parameters:
+    targeting:
+      kind: self
+    duration: spell_duration
+    departure:
+      event: caster.turn_ended
+      roll: 1d6
+      on_results:
+      - 4
+      - 5
+      - 6
+      destination_plane: ethereal
+      already_ethereal: end_spell_immediately
+    ethereal_state:
+      perceive_original_plane_feet: 60
+      original_plane_color: gray
+      interaction_creatures: ethereal_only
+      visible_from_original_plane: requires_ethereal_perception
+    return:
+      events:
+      - caster.turn_started
+      - spell.ended
+      when: on_ethereal_plane
+      destination_plane: original
+      choose_visible_unoccupied_within_departure_feet: 10
+      fallback: nearest_unoccupied_space
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 1
+        unit: minute
+splat_contracts:
+- id: dnd2024:spell_blink
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - turn.started
+  - turn.ended
+  - position.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_effects
+  - planar_travel
+  - perception
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 43df2f0eeb08df3a9f69c4ce4ed93ab65222158641a154afd5c2847f96861b7f
   source_path: builtin/srd-5.2.1/spell/blink.md
   pages:
   - 113
   - 114
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_blink
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 47b350bb7d085285fc505e3ba3139b885e9ee410919862e2ff473033a88a11fa
 splat_clauses:
 - key: source_rules
   text: '# Blink Level 3 Transmutation (Sorcerer, Wizard) Casting Time: Action Range: Self Components:
@@ -51,7 +110,8 @@ splat_clauses:
     10 feet of the space you left. If no unoccupied space is available within that range, you appear in
     the nearest unoccupied space.'
   sha256: 00467de4e21e88eddbea862ed0fb579de3c89cb5de1fe62eceb1b1133875fb4a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Blink

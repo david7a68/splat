@@ -33,17 +33,69 @@ splat_spell:
   material:
     description: fur or a feather
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/enhance_ability
+  implementation: dnd2024:spell_enhance_ability
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 3600
+    targets:
+      kind: creature
+      touch: true
+      count:
+        base: 1
+        increment_per_slot_above: 1
+        base_slot: 2
+    ability:
+      chooser: caster
+      per_target: true
+      options:
+      - strength
+      - dexterity
+      - intelligence
+      - wisdom
+      - charisma
+    modifier:
+      selector: ability_checks_using_chosen_ability
+      advantage: true
+splat_contracts:
+- id: dnd2024:spell_enhance_ability
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    ability_choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 25373f5f446f9e2560425eab8c09672c41922160b3102a9a6e03e2432a67dfca
   source_path: builtin/srd-5.2.1/spell/enhance_ability.md
   pages:
   - 127
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_enhance_ability
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 335448fa92904066cc5e8126ae4d919fef96799a74d7a0e246a2683cd886a1a8
 splat_clauses:
 - key: source_rules
   text: '# Enhance Ability Level 2 Transmutation (Bard, Cleric, Druid, Ranger, Sorcerer, Wizard) Casting
@@ -53,7 +105,8 @@ splat_clauses:
     Spell Slot. You can target one additional creature for each spell slot level above 2. You can choose
     a different ability for each target.'
   sha256: 2d7ce003626962a00eabb4de3a79d96e28fcc5af5798a0551fe41502627a8d49
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Enhance Ability

@@ -12,18 +12,60 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/mounts_and_vehicles_passengers
-  parameters: {}
+  parameters:
+    passenger_sizes:
+    - small
+    - medium
+    hammock_capacity: vehicle_table_passengers
+    private_capacity:
+      op: floor
+      args:
+      - op: divide
+        args:
+        - variable: vehicle_table_passengers
+        - 5
+    typical_daily_prices:
+      hammock:
+        currency: sp
+        amount: 5
+      small_private_cabin:
+        currency: gp
+        amount: 2
+    price_override:
+      actor: gm
+      scope: ship
+  implementation: dnd2024:rule_mounts_and_vehicles_passengers
+splat_contracts:
+- id: dnd2024:rule_mounts_and_vehicles_passengers
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    vehicle_table_passengers:
+      type: number
+      required: true
+  outputs:
+  - vehicle_capacity
+  events: []
+  capabilities:
+  - vehicles
+  - economy
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 101
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_mounts_and_vehicles_passengers
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: a01e46f2cbd8567142e14d0307940f12af380d80437c59c201a9061a4142a57b
   parent_name: Mounts and Vehicles
   line_span:
     first: 8760
@@ -35,7 +77,8 @@ splat_clauses:
     A passenger usually pays 5 SP per day for a hammock, but prices can vary from ship to ship. A small
     private cabin usually costs 2 GP per day.'
   sha256: ab8959a7b7e70c70c243c28b37f0c41c85839c7614ad0f56c619db8793093911
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Passengers

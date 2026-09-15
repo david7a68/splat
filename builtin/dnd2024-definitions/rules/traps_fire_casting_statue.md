@@ -12,19 +12,138 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/traps_fire_casting_statue
-  parameters: {}
+  parameters:
+    classification: deadly
+    base_levels:
+      min: 1
+      max: 4
+    triggers:
+    - pressure_plate_first_entry_on_turn
+    - turn_started_on_pressure_plate
+    duration: instantaneous
+    reset: next_turn_start
+    area:
+      shape: cone
+      length_ft: 15
+      origin: statue
+    save:
+      ability: dexterity
+      dc: 15
+    damage:
+      dice:
+        count: 2
+        sides: 10
+      average: 11
+      type: fire
+    success_damage: half_round_down
+    detect_magic:
+      aura: evocation
+      location: statue
+    examine_statue:
+      action: search
+      distance_max_ft: 5
+      ability: wisdom
+      skill: perception
+      dc: 10
+      success: reveal_glyph
+    decipher_glyph:
+      requires_glyph_found: true
+      action: study
+      ability: intelligence
+      skill: arcana
+      dc: 15
+      success: identify_fire_symbol
+    disarm_glyph:
+      requires_glyph_found: true
+      action_cost: 1
+      tool: sharp
+      operation: deface_glyph
+      result: trap_disarmed
+    examine_floor:
+      action: search
+      ability: wisdom
+      skill: perception
+      dc: 15
+      success: reveal_pressure_plate
+    block_pressure_plate:
+      object_choice:
+      - iron_spike
+      - similar_wedge
+      result: triggering_prevented
+    optional_level_scaling:
+    - levels:
+        min: 5
+        max: 10
+      damage:
+        dice:
+          count: 4
+          sides: 10
+        average: 22
+      cone_length_ft: 30
+    - levels:
+        min: 11
+        max: 16
+      damage:
+        dice:
+          count: 10
+          sides: 10
+        average: 55
+      cone_length_ft: 60
+    - levels:
+        min: 17
+        max: 20
+      damage:
+        dice:
+          count: 18
+          sides: 10
+        average: 99
+      cone_length_ft: 120
+  implementation: dnd2024:rules_traps_fire_casting_statue
+splat_contracts:
+- id: dnd2024:rules_traps_fire_casting_statue
+  inputs:
+    trap:
+      type: object
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    interaction:
+      type: resolution
+      required: true
+    level_band:
+      type: choice
+      required: true
+  outputs:
+  - damage
+  - trap_state
+  - discovery
+  events:
+  - movement.entered
+  - turn.started
+  - action.search
+  - action.study
+  - action.disarm
+  capabilities:
+  - traps
+  - geometry
+  - damage
+  - checks
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 199
   - 200
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_traps_fire_casting_statue
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 0986e9d498d9a681f900f372e04d33d4f0c8d974b1b04663f7172b6e6aedceb8
   parent_name: Traps
   line_span:
     first: 10034
@@ -49,7 +168,8 @@ splat_clauses:
     effect, as shown in the following table. Levels Fire Damage Area of Effect 5–10 22 (4d10) 30-foot
     Cone 11–16 55 (10d10) 60-foot Cone 17–20 99 (18d10) 120-foot Cone'
   sha256: 65258ae83a0f6c4521231ee69110410ec339323682b4efddc2da1e7d2be85156
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Fire-Casting Statue

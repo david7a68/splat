@@ -58,17 +58,242 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ice_devil
+  implementation: dnd2024:creature_ice_devil
+  parameters:
+    skill_totals:
+      insight: 7
+      perception: 7
+      persuasion: 9
+    damage_immunities:
+    - cold
+    - fire
+    - poison
+    condition_immunities:
+    - poisoned
+    senses:
+    - sense: blindsight
+      range_ft: 120
+    passive_perception: 17
+    languages:
+      speak: true
+      known:
+      - infernal
+    telepathy:
+      range_ft: 120
+      two_way: true
+    features:
+      diabolical_restoration:
+        economy: passive
+        trigger: actor.died
+        when:
+          plane_not: nine_hells
+        body: disappears
+        revive:
+          new_body: true
+          plane: nine_hells
+          location_choice: gm
+          hp: maximum
+          delay:
+            amount: 0
+            unit: second
+      magic_resistance:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - saving_throw
+        against:
+        - spell
+        - magical_effect
+      ice_spear:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        - ranged
+        attack_bonus: 10
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        range_ft:
+          normal: 30
+          long: 120
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 5
+            average: 14
+          - type: cold
+            amount:
+              dice:
+                count: 3
+                sides: 6
+              add: 0
+            average: 10
+        - op: effect.apply
+          duration:
+            until: target.next_turn_end
+          rules:
+            bonus_actions_allowed: false
+            reactions_allowed: false
+            speed_add_ft: -10
+            turn_economy_choice:
+            - movement
+            - one_action
+            both_allowed: false
+        after_attack:
+          when: ranged_attack_hit_or_miss
+          op: item.return
+          destination: actor_hand
+          magical: true
+      tail:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 10
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 3
+                sides: 6
+              add: 5
+            average: 15
+          - type: cold
+            amount:
+              dice:
+                count: 4
+                sides: 8
+              add: 0
+            average: 18
+      ice_wall:
+        economy: action
+        op: spellcasting
+        profile:
+          ability: intelligence
+          waived_components:
+          - verbal
+          - somatic
+          - material
+          save_dc: 17
+        choose_count: 1
+        choices:
+        - op: spell.cast
+          spell:
+            key: dnd2024:spells/wall_of_ice
+          cast_level: 8
+        recharge:
+          die_sides: 6
+          success_min: 6
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 3
+          feature: ice_spear
+        replace_attack:
+          maximum: 1
+          choices:
+          - op: feature.use
+            feature: tail
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_ice_devil
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.died
+  - actor.turn_start
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - item_state
+  - resources
+  - rest_recovery
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 654cc2431963f7857052679847ccc83bb2ee75a9da6cf115c20ff91e7462f760
   source_path: builtin/srd-5.2.1/creature/ice_devil.md
   pages:
   - 300
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ice_devil
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 939843d5d5c60bec7890e1b807598fa064466991e8ad87de4bb744a91e0709e2
 splat_clauses:
 - key: source_rules
   text: '# Ice Devil Large Fiend (Devil), Lawful Evil AC 18 Initiative +7 (17) HP 228 (24d10 + 96) Speed
@@ -87,7 +312,8 @@ splat_clauses:
     plus 18 (4d8) Cold damage. Ice Wall (Recharge 6). The devil casts Wall of Ice (level 8 version), requiring
     no spell components and using Intelligence as the spellcasting ability (spell save DC 17).'
   sha256: 0697d0aee0cc1ba4ea0a3f83170dbe31b5872d400fb54dda5ae95cbc56410d82
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ice Devil

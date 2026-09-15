@@ -33,17 +33,79 @@ splat_spell:
   material:
     description: fur from a bloodhound
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/locate_creature
+  implementation: dnd2024:spell_locate_creature
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 3600
+    target_choice:
+      chooser: caster
+      named_or_described: true
+      familiar: true
+      options:
+      - known_specific_creature
+      - nearest_of_specific_kind
+      qualifying_prior_sighting:
+        distance_feet_max: 30
+        count_min: 1
+    detection:
+      distance_feet_max: 1000
+      outputs:
+      - direction_to_location
+      moving_target_additional_output: movement_direction
+    failure_conditions:
+    - target_in_different_form
+    - lead_blocks_direct_path
+    lead_block:
+      thickness: any
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_locate_creature
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    creature_description:
+      type: choice
+      required: true
+    world_facts:
+      type: resolution
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - information
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - information
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: dc6567ce624c63c24bd95e3885d0a2a858b5c3eb1ed7d5fa9770682aacb49aa1
   source_path: builtin/srd-5.2.1/spell/locate_creature.md
   pages:
   - 145
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_locate_creature
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: d46983cc334cb367ed07b46cd3e3689c88982d947a48daae842601935682d63f
 splat_clauses:
 - key: source_rules
   text: '# Locate Creature Level 4 Divination (Bard, Cleric, Druid, Paladin, Ranger, Wizard) Casting Time:
@@ -56,7 +118,8 @@ splat_clauses:
     a Flesh to Stone or Polymorph spell, this spell doesn’t locate the creature. This spell can’t locate
     a creature if any thickness of lead blocks a direct path between you and the creature.'
   sha256: adf598f816faf2eb233f6b9dc3306d1c46c7e5a930bd663ec8362bb8d4e28834
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Locate Creature

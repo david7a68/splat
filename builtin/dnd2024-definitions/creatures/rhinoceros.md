@@ -55,17 +55,132 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/rhinoceros
+  implementation: dnd2024:creature_rhinoceros
+  parameters:
+    features:
+      gore:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 7
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 14
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 5
+          damage_type: piercing
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+            immediately_preceding_movement:
+              minimum_feet: 20
+              direction: straight_toward_target
+          then:
+          - op: damage
+            average: 9
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 0
+            damage_type: piercing
+          - op: condition
+            condition: prone
+        reach_feet: 5
+    defenses: {}
+    senses:
+      passive_perception: 11
+      special: []
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_rhinoceros
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 0a1533eb2f10558551447c1f5f8fe32ccfd5f0735435ee486c1fa2daa373045d
   source_path: builtin/srd-5.2.1/creature/rhinoceros.md
   pages:
   - 360
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_rhinoceros
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 3bfff7e149f385388718ed2b8fee66368d995a8b66c7eef4e1d8abccd5a54aa9
 splat_clauses:
 - key: source_rules
   text: '# Rhinoceros Large Beast, Unaligned AC 13 Initiative -1 (9) HP 45 (6d10 + 12) Speed 40 ft. MOD
@@ -75,7 +190,8 @@ splat_clauses:
     rhinoceros moved 20+ feet straight toward it immediately before the hit, the target takes an extra
     9 (2d8) Piercing damage and has the Prone condition.'
   sha256: 43592313bde3201d41a28ceb99f12a49c52a8ea52223b638cdd51c17a0a41507
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Rhinoceros

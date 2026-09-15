@@ -12,17 +12,72 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule_group:
   category: species
+splat_rule:
+  mechanic: dnd2024:species/halfling
+  implementation: dnd2024:species_halfling
+  parameters:
+    creature_type: humanoid
+    size: small
+    height_feet:
+      typical_minimum: 2
+      typical_maximum: 3
+    speed_feet: 30
+    brave:
+      save_advantage:
+        condition: frightened
+        purposes:
+        - avoid
+        - end
+    nimbleness:
+      move_through_creature_space:
+        minimum_size_difference: 1
+      stop_in_occupied_space: false
+    luck:
+      trigger: actor.d20_test.d20_is_1
+      optional_reroll: true
+      must_use_new_roll: true
+    naturally_stealthy:
+      hide_obscurement_qualifier:
+        only_obscured_by_creature: true
+        minimum_size_difference: 1
+splat_contracts:
+- id: dnd2024:species_halfling
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - character.species_selected
+  - saving_throw
+  - participant.moved
+  - d20_test.rolled
+  - action.hide_pending
+  capabilities:
+  - character_features
+  - conditions
+  - d20_tests
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: species
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 86
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:species_halfling
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 761939fce1e6640cae76085ab8d9c5c65095a5eda9f66158bb5ec604efebc496
   line_span:
     first: 7366
     count: 16
@@ -36,7 +91,8 @@ splat_clauses:
     take the Hide action even when you are obscured only by a creature that is at least one size larger
     than you.'
   sha256: cf2976ec196bbe5e66a60adafd7904c5688691f7c8ed7e09b924d576bbaf8688
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Halfling

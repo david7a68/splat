@@ -12,18 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/sentient_magic_items
-  parameters: {}
+  parameters:
+    sentience:
+      single_use_item_allowed: false
+      controller: gm
+      activated_properties_controller: gm
+      good_relationship: bearer_access
+      strained_relationship: possible_conflict
+    conflict_rules:
+      key: dnd2024:rules/sentient_magic_items_conflict
+  implementation: dnd2024:rules_sentient_magic_items
+splat_contracts:
+- id: dnd2024:rules_sentient_magic_items
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+  outputs:
+  - item_updates
+  - cost
+  - effects
+  events: []
+  capabilities:
+  - items
+  - attunement
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 207
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_sentient_magic_items
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: f28b42d71a78111f78f2386f1f7a8507f8cb8dedd8b6faaf8e9e18d9712e4c84
   parent_name: Sentient Magic Items
   line_span:
     first: 10733
@@ -38,7 +73,8 @@ splat_clauses:
     properties. A bearer who maintains a good relationship with the item can access those properties.
     If the relationship is strained, a conflict can ensue (see “Conflict” below).'
   sha256: 45dfb1dea0b2c555a6a51af393f22ef994350594180d925f7e94b5c1a515895b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Sentient Magic Items

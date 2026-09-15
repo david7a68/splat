@@ -61,18 +61,276 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ghost
+  implementation: dnd2024:creature_ghost
+  parameters:
+    damage_resistances:
+    - acid
+    - bludgeoning
+    - cold
+    - fire
+    - lightning
+    - piercing
+    - slashing
+    - thunder
+    damage_immunities:
+    - necrotic
+    - poison
+    condition_immunities:
+    - charmed
+    - exhaustion
+    - frightened
+    - grappled
+    - paralyzed
+    - petrified
+    - poisoned
+    - prone
+    - restrained
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 11
+    languages:
+      speak: true
+      known:
+      - common
+      additional_choice_count: 1
+    features:
+      ethereal_sight:
+        economy: passive
+        op: vision.cross_plane
+        from: material
+        to: ethereal
+        range_ft: 60
+      incorporeal_movement:
+        economy: passive
+        op: movement.pass_through
+        entities:
+        - creature
+        - object
+        cost: difficult_terrain
+        end_turn_inside_object:
+        - op: damage
+          components:
+          - type: force
+            amount:
+              dice:
+                count: 1
+                sides: 10
+              add: 0
+            average: 5
+      withering_touch:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: necrotic
+            amount:
+              dice:
+                count: 3
+                sides: 10
+              add: 3
+            average: 19
+      etherealness:
+        economy: action
+        op: spell.cast
+        spell:
+          key: dnd2024:spells/etherealness
+        ability: charisma
+        waived_components:
+        - verbal
+        - somatic
+        - material
+        overrides:
+          visible_across_planes:
+          - material
+          - border_ethereal
+          cross_plane_effects_allowed: false
+      horrific_visage:
+        economy: action
+        op: saving_throw
+        ability: wisdom
+        dc: 13
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            origin: actor
+            size_ft: 60
+          must_see_actor: true
+          exclude_creature_types:
+          - undead
+        failure:
+        - op: damage
+          components:
+          - type: psychic
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 3
+            average: 10
+        - op: condition.apply
+          condition: frightened
+          duration:
+            until: actor.next_turn_start
+        success:
+        - op: feature.immunity
+          source: actor
+          feature: horrific_visage
+          duration:
+            amount: 24
+            unit: hour
+      possession:
+        economy: action
+        op: saving_throw
+        ability: charisma
+        dc: 13
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 5
+          visible_to_actor: true
+          creature_types:
+          - humanoid
+        failure:
+        - op: possession.start
+          actor_disappears: true
+          target_conditions:
+          - incapacitated
+          body_control: actor
+          target_retains_awareness: true
+          actor_targetable_only_by: effects_specifically_targeting_undead
+          actor_stat_overrides_from_target:
+          - speed
+          - strength_modifier
+          - dexterity_modifier
+          - constitution_modifier
+          end_when_any:
+          - body_hp_zero
+          - actor.bonus_action_leave
+          end_effects:
+          - op: actor.appear
+            within_target_ft: 5
+            unoccupied: true
+          - op: feature.immunity
+            source: actor
+            feature: possession
+            duration:
+              amount: 24
+              unit: hour
+        success:
+        - op: feature.immunity
+          source: actor
+          feature: possession
+          duration:
+            amount: 24
+            unit: hour
+        leave_economy: bonus_action
+        recharge:
+          die_sides: 6
+          success_min: 6
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: withering_touch
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_ghost
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_lifecycle
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: c9a20acc0e211c82308ece00e28fe4dd53c4437ec9360718ddbc81a66b73790e
   source_path: builtin/srd-5.2.1/creature/ghost.md
   pages:
   - 287
   - 288
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ghost
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 413142b850fecf99d264f912784079fd6af2a92af7c52f4055f6d96d35a104e8
 splat_clauses:
 - key: source_rules
   text: '# Ghost Medium Undead, Neutral AC 11 Initiative +1 (11) HP 45 (10d8) Speed 5 ft., Fly 40 ft.
@@ -101,7 +359,8 @@ splat_clauses:
     appears in an unoccupied space within 5 feet of the target, and the target is immune to this ghost’s
     Possession for 24 hours. Success: The target is immune to this ghost’s Possession for 24 hours.'
   sha256: 786e0503e53e1add3b87aad43b328d382192eb17cda4da47244b1722e5a7af9a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ghost

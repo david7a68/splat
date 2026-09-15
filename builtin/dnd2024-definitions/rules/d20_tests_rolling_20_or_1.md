@@ -12,18 +12,42 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/d20_tests_rolling_20_or_1
-  parameters: {}
+  parameters:
+    test: attack_roll
+    natural_results:
+      '20':
+        hit: true
+        critical_hit: true
+        ignore_ac_and_modifiers: true
+      '1':
+        hit: false
+        ignore_ac_and_modifiers: true
+  implementation: dnd2024:rules_d20_tests_rolling_20_or_1
+splat_contracts:
+- id: dnd2024:rules_d20_tests_rolling_20_or_1
+  inputs:
+    attack:
+      type: resolution
+      required: true
+  outputs:
+  - attack_result
+  events:
+  - attack.roll_resolved
+  capabilities:
+  - attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 7
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_d20_tests_rolling_20_or_1
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 988374b8b5e564dd38b91b489622b8ad6cab9cc9ebe2b7a56fc6c70c5612a939
   parent_name: D20 Tests
   line_span:
     first: 270
@@ -35,7 +59,8 @@ splat_clauses:
     later in “Playing the Game”). If you roll a 1 on the d20 (a “natural 1”) for an attack roll, the attack
     misses regardless of any modifiers or the target’s AC.'
   sha256: 4669701416b00ef2b8f7325bce9aaa434c6c978b8fb1b1f823d83cfa5a267ded
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Rolling 20 or 1

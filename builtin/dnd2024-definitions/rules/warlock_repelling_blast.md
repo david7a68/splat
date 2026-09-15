@@ -12,18 +12,54 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/warlock_repelling_blast
-  parameters: {}
+  parameters:
+    prerequisite:
+      warlock_level_minimum: 2
+      known_warlock_cantrip_deals_damage_via_attack_roll: true
+    cantrip_choice:
+      known: true
+      class: warlock
+      requires_attack_roll: true
+    hit_effect:
+      target_maximum_size: large
+      optional_push:
+        feet_maximum: 10
+        direction: straight_away_from_caster
+    repeatable: true
+    repeat_choice_must_differ: true
+  implementation: dnd2024:rule_warlock_repelling_blast
+splat_contracts:
+- id: dnd2024:rule_warlock_repelling_blast
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - feature_effects
+  events:
+  - attack.hit
+  capabilities:
+  - invocations
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 74
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_warlock_repelling_blast
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 586d20450abb5fdce2856e541f715fa480dba1c94418609042737079f3a8d3d6
   parent_name: Warlock
   line_span:
     first: 6343
@@ -36,7 +72,8 @@ splat_clauses:
     from you. Repeatable. You can gain this invocation more than once. Each time you do so, choose a different
     eligible cantrip.'
   sha256: 2156b4dd29bf89f938aa0622bfa0b1fe175be9773b40b03c82bf3351effd494e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Repelling Blast

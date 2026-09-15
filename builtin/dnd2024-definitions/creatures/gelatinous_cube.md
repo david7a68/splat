@@ -56,18 +56,210 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/gelatinous_cube
+  implementation: dnd2024:creature_gelatinous_cube
+  parameters:
+    features:
+      ooze_cube:
+        economy: trait
+        operation: passive_rule
+        fills_space: true
+        transparent: true
+        other_creatures_can_enter: true
+        on_creature_entry:
+          use: engulf
+          save_disadvantage: true
+        inside_cover: total
+        capacity:
+          choose_one:
+          - size: large
+            count: 1
+          - sizes:
+            - medium
+            - small
+            count: 4
+        pull_out:
+          economy: action
+          actor_within_ft: 5
+          targets:
+          - creature
+          - object
+          check: strength_athletics
+          dc: 12
+          actor_damage:
+          - roll:
+              count: 3
+              sides: 6
+              modifier: 0
+            type: acid
+      transparent:
+        economy: trait
+        operation: passive_rule
+        notice_check:
+          ability: wisdom
+          skill: perception
+          dc: 15
+          required_even_plain_sight: true
+          unless: observer_has_seen_cube_move_or_act
+      pseudopod:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 4
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 12
+            roll:
+              count: 3
+              sides: 6
+              modifier: 2
+            type: acid
+      engulf:
+        economy: action
+        operation: saving_throw
+        ability: dexterity
+        dc: 12
+        targets:
+          kind: creature
+          trigger: self.enters_target_space
+          limit: first_time_during_this_move
+        failure:
+          damage:
+          - roll:
+              count: 3
+              sides: 6
+              modifier: 0
+            type: acid
+          engulfed:
+            suffocating: true
+            can_cast_verbal_spells: false
+            conditions:
+            - restrained
+            damage_each_self_turn_start:
+            - roll:
+                count: 3
+                sides: 6
+                modifier: 0
+              type: acid
+            moves_with_self: true
+            escape:
+              economy: action
+              check: strength_athletics
+              dc: 12
+              destination: nearest_unoccupied_space
+        success:
+          damage_multiplier: 0.5
+          move_target:
+            unoccupied: true
+            within_self_ft: 5
+          if_no_unoccupied_space: failure_instead
+        before_save:
+          move:
+            operation: move
+            maximum_ft:
+              multiply:
+              - stat: speed
+              - 1
+            provoke_opportunity_attacks: false
+          pass_through:
+            maximum_size: large
+            requires_capacity: true
+    damage_immunities:
+    - acid
+    condition_immunities:
+    - blinded
+    - charmed
+    - deafened
+    - exhaustion
+    - frightened
+    - prone
+    senses:
+      blindsight: 60
+      passive_perception: 8
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_gelatinous_cube
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 6bc71f608e84bce08024eab82f6dca66ad4a676ebc11b5e7d940ce2ebd82d14d
   source_path: builtin/srd-5.2.1/creature/gelatinous_cube.md
   pages:
   - 286
   - 287
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_gelatinous_cube
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: dd3e7f6bcd1fe864cca510e1c83bc87738ab8cb157c317374f99b76348e45115
 splat_clauses:
 - key: source_rules
   text: '# Gelatinous Cube Large Ooze, Unaligned AC 6 Initiative -4 (6) HP 63 (6d10 + 30) Speed 15 ft.
@@ -93,7 +285,8 @@ splat_clauses:
     unoccupied space. Success: Half damage, and the target moves to an unoccupied space within 5 feet
     of the cube. If there is no unoccupied space, the target fails the save instead.'
   sha256: fbddad9661dd577bc58a2aa705c46eee9a716de73e59eb1dbde9be672e3d11e9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Gelatinous Cube

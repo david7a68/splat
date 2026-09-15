@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/magical_contagions_curses
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 193
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 77e5caa25a5b3091a569096c51810a17a0111ae01fb72b7ec34ecbea74b6c295
   parent_name: Magical Contagions
   line_span:
     first: 9440
@@ -32,7 +33,7 @@ splat_clauses:
 - key: source_rules
   text: '# Curses A curse typically takes one of the forms detailed below.'
   sha256: 5af9187d09ce5bfb9ff6da273eb9333a34502418fa57367995bed5d913cfab47
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Curses

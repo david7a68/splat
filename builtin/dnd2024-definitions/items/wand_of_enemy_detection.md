@@ -15,17 +15,84 @@ splat_item:
   rarity: rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/wand_of_enemy_detection
+  implementation: dnd2024:item_wand_of_enemy_detection
+  parameters:
+    equipment_state: held
+    charges:
+      maximum: 7
+      initial: 7
+      recovery:
+        event: dawn
+        amount:
+          dice: 1
+          sides: 6
+          bonus: 1
+    activation:
+      action: magic
+      cost: 1
+      duration:
+        value: 1
+        unit: minute
+      end_on: stop_holding_wand
+      detection:
+        select: nearest_hostile_creature
+        range_ft: 60
+        output:
+        - direction
+        distance_revealed: false
+        detect_despite:
+        - invisible
+        - ethereal
+        - disguised
+        - hidden
+    last_charge:
+      roll:
+        dice: 1
+        sides: 20
+        bonus: 0
+      on_value: 1
+      effect: destroy_item
+    attunement:
+      required: true
+splat_contracts:
+- id: dnd2024:item_wand_of_enemy_detection
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - equipment
+  - item_resources
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 6ccf92e07a3a37eb3dc02cdc5569d35d053e5dfdf2ef5471d4510a1eecd7a5f2
   source_path: builtin/srd-5.2.1/magic_item/wand_of_enemy_detection.md
   pages:
   - 250
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_wand_of_enemy_detection
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: e91893e204c781a3a7f7e639e8fcb4ab3b161695f9d4ec0b001752f958ed4597
 splat_clauses:
 - key: source_rules
   text: '# Wand of Enemy Detection Wand, Rare (Requires Attunement) This wand has 7 charges. While holding
@@ -36,7 +103,8 @@ splat_clauses:
     charges daily at dawn. If you expend the wand’s last charge, roll 1d20. On a 1, the wand crumbles
     into ashes and is destroyed.'
   sha256: 1b12f163e7615bb1681bc218e31da41362cc9f3b9e8560684c0bffb4c852eb51
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wand of Enemy Detection

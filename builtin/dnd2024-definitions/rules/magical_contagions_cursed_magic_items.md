@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/magical_contagions_cursed_magic_items
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 193
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: f898f1806fc60a5e95c216a62a32120b1f5f8f9ede29226869c304b4850688fb
   parent_name: Magical Contagions
   line_span:
     first: 9461
@@ -33,7 +34,7 @@ splat_clauses:
   text: '# Cursed Magic Items Cursed magic items are created deliberately or originate as the result of
     supernatural events. Such items are detailed in “Magic Items.”'
   sha256: 38da41143000870efaaacb2e350e5fae0bef86a40fe0dadee69c12d747180e98
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Cursed Magic Items

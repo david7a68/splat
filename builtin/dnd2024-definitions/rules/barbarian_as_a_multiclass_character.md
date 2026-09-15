@@ -12,18 +12,48 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/barbarian_as_a_multiclass_character
-  parameters: {}
+  parameters:
+    class_definition:
+      key: dnd2024:classes/barbarian
+    grant_core_fields:
+    - hit_point_die
+    weapon_proficiencies:
+    - martial
+    armor_training:
+    - shield
+    grant_features:
+      class_level: 1
+      from: class_definition
+    spell_slots: not_applicable
+  implementation: dnd2024:rules_barbarian_as_a_multiclass_character
+splat_contracts:
+- id: dnd2024:rules_barbarian_as_a_multiclass_character
+  inputs:
+    actor:
+      type: participant
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - character_updates
+  events: []
+  capabilities:
+  - character_creation
+  - progression
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 28
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_barbarian_as_a_multiclass_character
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 488c5eac3479f57bceb68a0a90c827ff1a5ce3ee5cbde2f6e7a8141171afe217
   parent_name: Barbarian
   line_span:
     first: 2251
@@ -34,7 +64,8 @@ splat_clauses:
     Hit Point Die, proficiency with Martial weapons, and training with Shields. • Gain the Barbarian’s
     level 1 features, which are listed in the Barbarian Features table.'
   sha256: 79f0ba954bdc704ce2980cfe26fc787005aaa6ef1d7c5a3a1563fd852391dd47
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # As a Multiclass Character

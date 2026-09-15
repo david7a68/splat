@@ -58,17 +58,106 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_lizard
+  implementation: dnd2024:creature_giant_lizard
+  parameters:
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 10
+    languages:
+      speak: true
+      known: []
+    features:
+      spider_climb:
+        economy: passive
+        op: movement.climb
+        difficult_surfaces: true
+        ceilings: true
+        ability_check_required: false
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 2
+            average: 6
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_giant_lizard
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: bb7a4e4df7ad76654101fd09d7bce008385aa3a2964ac9d3eaff2cd7c0206c89
   source_path: builtin/srd-5.2.1/creature/giant_lizard.md
   pages:
   - 352
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_lizard
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 24cec4a2c3eb9db797f58816415935b50053daba12ebeb61e311b2d7a63b8b7f
 splat_clauses:
 - key: source_rules
   text: '# Giant Lizard Large Beast, Unaligned AC 12 Initiative +1 (11) HP 19 (3d10 + 3) Speed 40 ft.,
@@ -78,7 +167,8 @@ splat_clauses:
     needing to make an ability check. ### Actions Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 6 (1d8
     + 2) Piercing damage.'
   sha256: 09037c6e1e575348332ffd5376b73fd2981cca0c11f101a68487836c5fc764d0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Lizard

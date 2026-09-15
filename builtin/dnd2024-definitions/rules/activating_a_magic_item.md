@@ -12,18 +12,41 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/activating_a_magic_item
-  parameters: {}
+  parameters:
+    default_activation_action: magic
+    additional_requirements_source:
+    - item_category
+    - item_description
+    item_description_overrides: true
+  implementation: dnd2024:rule_activating_a_magic_item
+splat_contracts:
+- id: dnd2024:rule_activating_a_magic_item
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - item_changes
+  events: []
+  capabilities:
+  - magic_items
+  - actions
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 206
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_activating_a_magic_item
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 1be829642c2b7fabd2dcb8dc94bc56e9a6be6012747b2b79cdd3ffcdfa7f0576
   parent_name: Activating a Magic Item
   line_span:
     first: 10591
@@ -34,7 +57,8 @@ splat_clauses:
     user might also need to do something special. The description of each item category or individual
     item details how an item is activated. Certain items use the following rules for their activation.'
   sha256: 2d689d3a700704483eb981dd99d8990aed7856693677aa9c64d0850852744396
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Activating a Magic Item

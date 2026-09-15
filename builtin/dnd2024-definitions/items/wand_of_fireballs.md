@@ -20,50 +20,79 @@ splat_item:
     - wielded
     attunement: required
     attunement_requirement: spellcaster
-splat_resources:
-  charges:
-    name: Charges
-    max: 7
-    initial: 7
-    recovery:
-    - key: dawn
-      mechanic: dnd2024:dawn
-      subject: owner
-      roll:
-        key: recovery
-        expression: 1d6 + 1
-        scope: use
-      restore:
-        add:
-          roll: recovery
-splat_actions:
-  cast:
-    name: Cast Fireball
-    activation:
-      economy: action
-      category: magic
-      timing: on_turn
-      cost_at: commit
-    steps:
-    - key: cast
-      operation: dnd2024:wand_of_fireballs_2024
-      spell:
+splat_rule:
+  mechanic: dnd2024:items/wand_of_fireballs
+  implementation: dnd2024:item_wand_of_fireballs
+  parameters:
+    equipped: held
+    attunement_requires: spellcaster
+    charges:
+      initial: 7
+      maximum: 7
+      recovery:
+        event: time.dawn
+        amount:
+          roll:
+            count: 1
+            sides: 6
+            add: 1
+        cap_at_maximum: true
+      last_charge:
+        roll:
+          roll:
+            count: 1
+            sides: 20
+        'on': 1
+        result: destroy_to_ashes
+    spells:
+    - spell:
         key: dnd2024:spells/fireball
-      parameters:
-        requires:
-        - held
-        - attuned
-        charges_min: 1
-        charges_max: 3
-        base_spell_level: 3
-        level_per_extra_charge: 1
-        save_dc: 15
-        spell_slot_cost: 0
-        last_charge:
-          roll: 1d20
-          destroy_on:
-          - 1
-          destroyed_form: ashes
+      save_dc: 15
+      charge_choice:
+        min: 1
+        max: 3
+      cast_level:
+        add:
+        - 2
+        - charges_spent
+    attunement_required: true
+splat_contracts:
+- id: dnd2024:item_wand_of_fireballs
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - spell.cast_pending
+  - time.dawn
+  - item.attunement_completed
+  - item.attunement_ended
+  capabilities:
+  - item_effects
+  - dice
+  - item_spellcasting
+  - item_charges
 splat_conversion:
   status: specified
   category: magic_item
@@ -73,9 +102,11 @@ splat_conversion:
   - 250
   - 251
   engine_gaps: &id001
-  - dnd2024:wand_of_fireballs_2024
+  - dnd2024:item_wand_of_fireballs
   conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 6dd8a630cb8d6b31ec4fa11b04fdee0bab190ebd7c3ce5592f22fc43054bebfa
 splat_clauses:
 - key: source_rules
   text: '# Wand of Fireballs Wand, Rare (Requires Attunement by a Spellcaster) This wand has 7 charges.

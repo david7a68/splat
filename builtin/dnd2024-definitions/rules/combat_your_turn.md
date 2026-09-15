@@ -12,19 +12,79 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_your_turn
-  parameters: {}
+  parameters:
+    movement_maximum: speed
+    actions: 1
+    order: actor_choice
+    may_forgo: true
+    communication:
+      brief_utterances_or_gestures_cost: 0
+      extended_cost_actions: 1
+      persuasion_action: influence
+    object_interactions:
+      free: 1
+      during:
+      - movement
+      - action
+      additional_action: utilize
+      special_item_cost: description
+      gm_require_utilize:
+        when_any:
+        - special_care
+        - unusual_obstacle
+    grid:
+      square_feet: 5
+      speed_squares:
+        op: floor
+        args:
+        - op: divide
+          args:
+          - variable: speed
+          - 5
+      adjacent_entry_squares: 1
+      diagonal_entry_squares: 1
+      difficult_terrain_entry_squares: 2
+      entry_requires_sufficient_movement: true
+      diagonal_cross_solid_corner: false
+      range: shortest_adjacent_square_path_excluding_origin_including_destination
+      additional_costs_apply: true
+  implementation: dnd2024:rule_combat_your_turn
+splat_contracts:
+- id: dnd2024:rule_combat_your_turn
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    speed:
+      type: number
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - turn_state
+  events: []
+  capabilities:
+  - turns
+  - movement
+  - actions
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 13
   - 14
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_combat_your_turn
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 00c756896c77d6fb664090d15afa298be70c48eeab832a5fddec670135807c08
   parent_name: Combat
   line_span:
     first: 815
@@ -60,7 +120,8 @@ splat_clauses:
     at all on your turn. If you can’t decide what to do, consider taking the defensive Dodge action or
     the Ready action to delay acting.'
   sha256: daf86ff07c0a0c5778a4a5b3263bea57daebf053521fe279aec5fd7cf2ddfd77
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Your Turn

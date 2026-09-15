@@ -56,17 +56,214 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/shield_guardian
+  implementation: dnd2024:creature_shield_guardian
+  parameters:
+    features:
+      fist:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 7
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 11
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 4
+          damage_type: bludgeoning
+        - op: damage
+          average: 7
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 0
+          damage_type: force
+        reach_feet: 10
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: fist
+          count: 2
+      bound:
+        economy: passive
+        bond:
+          item: amulet
+          magical: true
+        same_plane:
+          wearer_can_telepathically_call_guardian: true
+          guardian_knows_amulet:
+          - distance
+          - direction
+        damage_transfer:
+          requires_wearer_within_feet: 60
+          from: amulet_wearer
+          to: self
+          fraction:
+            numerator: 1
+            denominator: 2
+            round: up
+        telepathic_call_effect:
+          op: travel_to
+          destination: amulet_wearer
+      regeneration:
+        economy: passive
+        trigger: self.turn.start
+        requires:
+          hit_points_min: 1
+        op: heal
+        amount:
+          constant: 10
+      spell_storing:
+        economy: passive
+        capacity: 1
+        store:
+          actor: amulet_wearer
+          actor_kind: spellcaster
+          cast_target: self
+          caster_distance_max_feet: 5
+          spell_level_max: 4
+          spell_effect: suppressed
+          previous_spell: lost
+        release:
+          op: cast_stored_spell
+          parameters: set_by_original_caster
+          ability: original_caster_spellcasting_ability
+          components_waived:
+          - verbal
+          - somatic
+          - material
+          stored_spell_after_cast: lost
+          economy: stored_spell_casting_time
+      protection:
+        economy: reaction
+        trigger: attack_roll.hits_amulet_wearer
+        requires:
+          amulet_wearer_distance_max_feet: 5
+        targets: amulet_wearer
+        effects:
+        - op: modify_ac
+          add: 5
+          includes_triggering_attack: true
+          reevaluate_hit: true
+          ends:
+            event: turn.start
+            participant: self
+            occurrence: next
+    defenses:
+      immunities:
+        damage_types:
+        - poison
+        conditions:
+        - charmed
+        - exhaustion
+        - frightened
+        - paralyzed
+        - petrified
+        - poisoned
+    senses:
+      passive_perception: 10
+      special:
+      - sense: blindsight
+        range_feet: 10
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands: all
+      commands_only: true
+      can_speak: false
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_shield_guardian
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - attack_roll.hits_amulet_wearer
+  - self.turn.start
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - hit_points
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: bbe4cc0122ae2791cd09b6d29c33f3ef0d0990f7374fc923fcdbafe4eb897209
   source_path: builtin/srd-5.2.1/creature/shield_guardian.md
   pages:
   - 323
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_shield_guardian
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 1e37c23f04a076d5ef383fc42bd374ab0ea0a618d04d0c3d7220aef357c6d227
 splat_clauses:
 - key: source_rules
   text: '# Shield Guardian Large Construct, Unaligned AC 17 Initiative -1 (9) HP 142 (15d10 + 60) Speed
@@ -90,7 +287,8 @@ splat_clauses:
     The wearer gains a +5 bonus to AC, including against the triggering attack and possibly causing it
     to miss, until the start of the guardian’s next turn.'
   sha256: b40c059258a0b28801bf7440e711faafbb14822fd35ef33612b0dd4f80ca57b2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Shield Guardian

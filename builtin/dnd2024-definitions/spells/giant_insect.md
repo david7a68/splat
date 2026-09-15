@@ -24,18 +24,216 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/giant_insect
+  implementation: dnd2024:spell_giant_insect
+  parameters:
+    summon:
+      form_choice:
+      - centipede
+      - spider
+      - wasp
+      space:
+        unoccupied: true
+        visible: true
+        within_spell_range: true
+      ally_to:
+      - caster
+      - caster_allies
+      disappear:
+      - hp_zero
+      - spell_ends
+    combat:
+      initiative: caster_count
+      turn: immediately_after_caster
+      verbal_commands_cost: none
+      without_command:
+        action: dodge
+        movement: avoid_danger
+    statistics:
+      size: large
+      type: beast
+      alignment: unaligned
+      ac:
+        op: add
+        args:
+        - 11
+        - binding: cast_level
+      hp:
+        op: add
+        args:
+        - 30
+        - op: multiply
+          args:
+          - 10
+          - op: subtract
+            args:
+            - binding: cast_level
+            - 4
+      speed_feet: 40
+      climb_speed_feet: 40
+      fly:
+        form: wasp
+        speed_feet: 40
+      abilities:
+        strength: 17
+        dexterity: 13
+        constitution: 15
+        intelligence: 4
+        wisdom: 14
+        charisma: 3
+      save_modifiers:
+        strength: 3
+        dexterity: 1
+        constitution: 2
+        intelligence: -3
+        wisdom: 2
+        charisma: -4
+      darkvision_feet: 60
+      passive_perception: 12
+      understood_languages: caster_known_languages
+      challenge_rating: null
+      xp: 0
+      proficiency_bonus:
+        binding: caster_proficiency_bonus
+    traits:
+      spider_climb:
+        climb_difficult_surfaces: true
+        ceilings: true
+        requires_ability_check: false
+    actions:
+      multiattack:
+        attack_count:
+          op: floor
+          args:
+          - op: multiply
+            args:
+            - binding: cast_level
+            - numerator: 1
+              denominator: 2
+        choices:
+        - poison_jab
+        - web_bolt_if_spider
+      poison_jab:
+        attack: melee
+        bonus:
+          binding: spell_attack_modifier
+        reach_feet: 10
+        damage:
+        - dice:
+            count: 1
+            sides: 6
+            add:
+              op: add
+              args:
+              - 3
+              - binding: cast_level
+          type: piercing
+        - dice:
+            count: 1
+            sides: 4
+            add: 0
+          type: poison
+      web_bolt:
+        form: spider
+        attack: ranged
+        bonus:
+          binding: spell_attack_modifier
+        range_feet: 60
+        damage:
+          dice:
+            count: 1
+            sides: 10
+            add:
+              op: add
+              args:
+              - 3
+              - binding: cast_level
+          type: bludgeoning
+        hit_effect:
+          speed: 0
+          until: insect_next_turn_start
+    bonus_actions:
+      venomous_spew:
+        form: centipede
+        target:
+          kind: creature
+          count: 1
+          visible_to_insect: true
+          range_feet: 10
+        save:
+          ability: constitution
+          dc:
+            binding: save_dc
+          failure:
+            condition: poisoned
+            until: insect_next_turn_start
+          success:
+            effect: none
+splat_contracts:
+- id: dnd2024:spell_giant_insect
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    caster_proficiency_bonus:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spell_attack_modifier:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  - attacks
+  - participants
+  events:
+  - spell.cast_completed
+  - effect.ended
+  - movement.completed
+  - turn.start
+  - save.before
+  - save.after
+  - hp.changed
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - attacks
+  - spatial_relationships
+  - conditions
+  - saving_throws
+  - participant_lifecycle
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 629eb9c4f08ca3cbbba778f9b711fcb43b26ae438db6cdd1714bde4b2a4fe9fe
   source_path: builtin/srd-5.2.1/spell/giant_insect.md
   pages:
   - 135
   - 136
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_giant_insect
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: aee69f231dab20a47352d6b61543fa426aa16ec91e3cff203f6f416a2944a8ea
 splat_clauses:
 - key: source_rules
   text: '# Giant Insect Level 4 Conjuration (Druid) Casting Time: Action Range: 60 feet Components: V,
@@ -61,7 +259,8 @@ splat_clauses:
     DC, one creature the insect can see within 10 feet. Failure: The target has the Poisoned condition
     until the start of the insect’s next turn.'
   sha256: b1aedb6f36a741aa5a22db7f023ce2326b6a4783be73e49072f87a9ae79ff5a4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Insect

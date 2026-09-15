@@ -30,17 +30,90 @@ splat_spell:
   material:
     description: a bit of fleece
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/silent_image
+  implementation: dnd2024:spell_silent_image
+  parameters:
+    image:
+      kind_choice:
+      - object
+      - creature
+      - visible_phenomenon
+      maximum_cube_feet: 15
+      senses:
+      - vision
+      sound: false
+      smell: false
+      other_sensory_effects: false
+    move:
+      action: magic
+      destination: any_point_in_range
+      appearance_alteration: natural_movement
+    discern:
+      physical_interaction: automatic
+      study:
+        ability: intelligence
+        skill: investigation
+        dc:
+          binding: save_dc
+      after_discern: see_through
+splat_contracts:
+- id: dnd2024:spell_silent_image
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - image
+  - discernment_results
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - saving_throws
+  - movement
+  - perception
+  - inventory
+  - choices
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: b0b90eee24cbcfe29f58b625bdb5df3b45475724b1e529d0cb7efe921ef6b6d1
   source_path: builtin/srd-5.2.1/spell/silent_image.md
   pages:
   - 162
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_silent_image
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 65b43ebf18d211139b2c16427286ea73d2afcb94af20c440b86b53dca0d0fe41
 splat_clauses:
 - key: source_rules
   text: '# Silent Image Level 1 Illusion (Bard, Sorcerer, Wizard) Casting Time: Action Range: 60 feet
@@ -56,7 +129,8 @@ splat_clauses:
     check against your spell save DC. If a creature discerns the illusion for what it is, the creature
     can see through the image.'
   sha256: b137860922d2c6039b5aa21b0993d79c9f84a2fd8b275f5f7003a2aad62a4d74
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Silent Image

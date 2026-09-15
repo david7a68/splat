@@ -12,6 +12,7 @@ static DEFINITIONS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/dnd2024-
 pub enum Status {
     Partial,
     Specified,
+    Informational,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -36,6 +37,10 @@ pub struct Conversion {
     pub parent_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line_span: Option<LineSpan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub research_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub specification_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -52,6 +57,7 @@ pub struct Clause {
 enum ClauseStatus {
     NeedsSemanticConversion,
     ContractSpecified,
+    Informational,
 }
 
 fn hash(text: &str) -> String {
@@ -112,7 +118,35 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
                 "Specified contract must have no conversion gaps and declare engine gaps".into(),
             );
         }
+        Status::Informational
+            if !meta.conversion_gaps.is_empty()
+                || !meta.engine_gaps.is_empty()
+                || clauses
+                    .iter()
+                    .any(|c| c.status != ClauseStatus::Informational) =>
+        {
+            return Err("Informational source cannot contain rule gaps".into());
+        }
         _ => {}
+    }
+    let declarations = super::contracts::declarations(entry)?;
+    if meta.status == Status::Specified
+        && (declarations.is_empty()
+            || meta.research_path.is_none()
+            || meta.specification_sha256.is_none())
+    {
+        return Err("Researched rules require a typed contract interface".into());
+    }
+    if meta.status == Status::Informational
+        && (!declarations.is_empty() || field(&entry.fields, "splat_actions").is_some())
+    {
+        return Err("Informational source cannot declare actions or implementations".into());
+    }
+    if let Some(expected) = &meta.specification_sha256 {
+        let actual = super::contracts::fingerprint(&super::contracts::specification(entry)?)?;
+        if &actual != expected {
+            return Err("Typed specification fingerprint mismatch".into());
+        }
     }
     let required: Vec<String> = field(&entry.fields, "splat_requires_mechanics")
         .map(|v| serde_yaml_ng::from_value(v.clone()))
@@ -124,6 +158,12 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
             != required.iter().collect::<BTreeSet<_>>()
     {
         return Err("Engine gaps must match required mechanics".into());
+    }
+    if declarations
+        .iter()
+        .any(|contract| !required.contains(&contract.id))
+    {
+        return Err("Contract implementation missing from required mechanics".into());
     }
     if meta.execution_profiles.iter().any(|k| !resource_key(k)) {
         return Err("Invalid execution profile key".into());
@@ -158,6 +198,9 @@ pub struct CatalogueReport {
     pub definitions: usize,
     pub specified_contract_definitions: usize,
     pub partial_definitions: usize,
+    pub informational_definitions: usize,
+    pub engine_capabilities: BTreeMap<String, Vec<String>>,
+    pub adjudications: Vec<serde_json::Value>,
     pub executable_full_definitions: usize,
     pub executable_profiles: usize,
     pub engine_gaps: BTreeMap<String, Vec<String>>,
@@ -171,6 +214,9 @@ pub fn verify() -> CatalogueReport {
         definitions: 0,
         specified_contract_definitions: 0,
         partial_definitions: 0,
+        informational_definitions: 0,
+        engine_capabilities: BTreeMap::new(),
+        adjudications: Vec::new(),
         executable_full_definitions: 0,
         executable_profiles: 0,
         engine_gaps: BTreeMap::new(),
@@ -186,11 +232,36 @@ pub fn verify() -> CatalogueReport {
                 .ok_or("Missing definition coverage inventory")?,
         )
         .map_err(|e| e.to_string())?;
+        report.adjudications = manifest["adjudications"]
+            .as_array()
+            .ok_or("Missing source adjudication inventory")?
+            .clone();
         let records = manifest["entries"]
             .as_array()
             .ok_or("Missing inventory entries")?;
         if records.len() != definitions.len() {
             return Err("Definition inventory count mismatch".into());
+        }
+        let registry: super::contracts::Registry = serde_json::from_str(
+            DEFINITIONS
+                .get_file("contracts.json")
+                .and_then(|f| f.contents_utf8())
+                .ok_or("Missing contract registry")?,
+        )
+        .map_err(|e| e.to_string())?;
+        if registry.format != 1 {
+            return Err("Unsupported contract registry".into());
+        }
+        let mut contract_definitions = BTreeMap::new();
+        let mut contract_ids = BTreeSet::new();
+        for contract in &registry.contracts {
+            if !contract_ids.insert(&contract.id)
+                || contract_definitions
+                    .insert(contract.definition.as_str(), contract)
+                    .is_some()
+            {
+                return Err("Duplicate contract registry identity".into());
+            }
         }
         let profiles = crate::execution::builtin::entries()?;
         let profile_keys: BTreeSet<_> = profiles.iter().filter_map(|e| e.key.as_deref()).collect();
@@ -254,9 +325,28 @@ pub fn verify() -> CatalogueReport {
             if crate::execution::model::compile(entry).is_ok() {
                 return Err(format!("Catalogue definition unexpectedly executed: {key}"));
             }
+            if meta.status == Status::Specified {
+                let contract = contract_definitions
+                    .remove(key)
+                    .ok_or("Specified definition missing contract registry entry")?;
+                contract.validate(entry)?;
+                if contract.source_sha256 != meta.source_sha256
+                    || Some(&contract.research_path) != meta.research_path.as_ref()
+                {
+                    return Err(format!("Contract provenance mismatch: {key}"));
+                }
+                for capability in &contract.capabilities {
+                    report
+                        .engine_capabilities
+                        .entry(capability.clone())
+                        .or_default()
+                        .push(key.into());
+                }
+            }
             match meta.status {
                 Status::Partial => report.partial_definitions += 1,
                 Status::Specified => report.specified_contract_definitions += 1,
+                Status::Informational => report.informational_definitions += 1,
             }
             for gap in meta.engine_gaps {
                 report.engine_gaps.entry(gap).or_default().push(key.into());
@@ -266,6 +356,17 @@ pub fn verify() -> CatalogueReport {
                     .conversion_gaps
                     .insert(key.into(), meta.conversion_gaps);
             }
+        }
+        for case in &report.adjudications {
+            let key = case["key"]
+                .as_str()
+                .ok_or("Adjudication requires a definition key")?;
+            if !seen.contains(key) {
+                return Err(format!("Adjudication references unknown definition: {key}"));
+            }
+        }
+        if !contract_definitions.is_empty() {
+            return Err("Registry contains unknown definitions".into());
         }
         for reference in &source.entries {
             if ["creature", "spell", "magic_item", "glossary"].contains(&reference.category()) {
@@ -295,7 +396,7 @@ pub fn verify() -> CatalogueReport {
         report.structure.warnings.extend(checked.warnings);
         report.structure.limitations = vec![
             "Catalogue definitions and proof profiles are alternate views of the same identities. Do not load both as distinct definitions.".into(),
-            "Specified means a source-specific contract is recorded. It does not mean the adapter or its dependencies can execute. Partial entries still need semantic conversion of the listed clauses.".into(),
+            "Rule specifications are converted, but their registered adapters are not implemented. Informational entries have no rule behavior. Source-specific choices and geometry facts must be resolved for affected runs.".into(),
         ];
         Ok(())
     })();
@@ -327,16 +428,14 @@ mod tests {
             report.structure.warnings
         );
         assert_eq!(report.definitions, 2065);
-        assert_eq!(report.specified_contract_definitions, 5);
-        assert_eq!(report.partial_definitions, 2060);
+        assert_eq!(report.specified_contract_definitions, 1970);
+        assert_eq!(report.partial_definitions, 0);
+        assert_eq!(report.informational_definitions, 95);
         assert_eq!(report.executable_full_definitions, 0);
         assert_eq!(report.executable_profiles, 32);
-        assert!(report.engine_gaps.contains_key("dnd2024:polymorph_2024"));
-        assert!(
-            report
-                .conversion_gaps
-                .contains_key("dnd2024:spells/fireball")
-        );
+        assert!(report.engine_gaps.contains_key("dnd2024:spell_polymorph"));
+        assert!(report.conversion_gaps.is_empty());
+        assert!(report.engine_capabilities.contains_key("spellcasting"));
     }
 
     #[test]
@@ -347,6 +446,18 @@ mod tests {
             .find(|e| e.key.as_deref() == Some("dnd2024:spells/fireball"))
             .unwrap();
         let original = entry.clone();
+        entry
+            .fields
+            .get_mut(Value::String("splat_clauses".into()))
+            .unwrap()
+            .as_sequence_mut()
+            .unwrap()[0]
+            .as_mapping_mut()
+            .unwrap()
+            .insert(
+                Value::String("status".into()),
+                Value::String("needs_semantic_conversion".into()),
+            );
         let meta = entry
             .fields
             .get_mut(Value::String("splat_conversion".into()))

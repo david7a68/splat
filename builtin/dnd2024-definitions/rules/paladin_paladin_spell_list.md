@@ -12,19 +12,83 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/paladin_paladin_spell_list
-  parameters: {}
+  parameters:
+    class:
+      key: dnd2024:classes/paladin
+    spell_list:
+      '1':
+      - key: dnd2024:spells/bless
+      - key: dnd2024:spells/command
+      - key: dnd2024:spells/cure_wounds
+      - key: dnd2024:spells/detect_evil_and_good
+      - key: dnd2024:spells/detect_magic
+      - key: dnd2024:spells/detect_poison_and_disease
+      - key: dnd2024:spells/divine_favor
+      - key: dnd2024:spells/divine_smite
+      - key: dnd2024:spells/heroism
+      - key: dnd2024:spells/protection_from_evil_and_good
+      - key: dnd2024:spells/purify_food_and_drink
+      - key: dnd2024:spells/searing_smite
+      - key: dnd2024:spells/shield_of_faith
+      '2':
+      - key: dnd2024:spells/aid
+      - key: dnd2024:spells/find_steed
+      - key: dnd2024:spells/gentle_repose
+      - key: dnd2024:spells/lesser_restoration
+      - key: dnd2024:spells/locate_object
+      - key: dnd2024:spells/magic_weapon
+      - key: dnd2024:spells/prayer_of_healing
+      - key: dnd2024:spells/protection_from_poison
+      - key: dnd2024:spells/shining_smite
+      - key: dnd2024:spells/warding_bond
+      - key: dnd2024:spells/zone_of_truth
+      '3':
+      - key: dnd2024:spells/create_food_and_water
+      - key: dnd2024:spells/daylight
+      - key: dnd2024:spells/dispel_magic
+      - key: dnd2024:spells/magic_circle
+      - key: dnd2024:spells/remove_curse
+      - key: dnd2024:spells/revivify
+      '4':
+      - key: dnd2024:spells/aura_of_life
+      - key: dnd2024:spells/banishment
+      - key: dnd2024:spells/death_ward
+      - key: dnd2024:spells/locate_creature
+      '5':
+      - key: dnd2024:spells/dispel_evil_and_good
+      - key: dnd2024:spells/geas
+      - key: dnd2024:spells/greater_restoration
+      - key: dnd2024:spells/raise_dead
+    school_concentration_ritual_and_material_metadata: referenced_spell_definition
+  implementation: dnd2024:rule_paladin_paladin_spell_list
+splat_contracts:
+- id: dnd2024:rule_paladin_paladin_spell_list
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - spell_resolution
+  events: []
+  capabilities:
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 55
   - 56
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_paladin_paladin_spell_list
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: ba9177e5a840240907c662ac2e3bfde6eb64963c4e4d7929b5030b9b50205f14
   parent_name: Paladin
   line_span:
     first: 4662
@@ -49,7 +113,8 @@ splat_clauses:
     Evil and Good Abjuration C Geas Enchantment — Greater Restoration Abjuration M Raise Dead Necromancy
     M'
   sha256: b4c284a59a57304c015a4204910c467c247c2125fbff2c161103f49fb358633a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Paladin Spell List

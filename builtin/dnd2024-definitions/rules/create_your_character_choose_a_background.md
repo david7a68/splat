@@ -12,19 +12,56 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/create_your_character_choose_a_background
-  parameters: {}
+  parameters:
+    background_choice:
+      count: 1
+      options:
+      - key: dnd2024:backgrounds/acolyte
+      - key: dnd2024:backgrounds/soldier
+      additional_options_authority: gm
+    grants:
+      feat: background_feat
+      skill_proficiencies: 2
+      tool_proficiencies: 1
+    class_proficiencies_also_granted: true
+    level_1_proficiency_bonus: 2
+    ability_background_examples:
+      strength: soldier
+      dexterity: soldier
+      constitution: soldier
+      intelligence: acolyte
+      wisdom: acolyte
+      charisma: acolyte
+  implementation: dnd2024:rules_create_your_character_choose_a_background
+splat_contracts:
+- id: dnd2024:rules_create_your_character_choose_a_background
+  inputs:
+    actor:
+      type: participant
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - character_updates
+  events: []
+  capabilities:
+  - character_creation
+  - progression
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 19
   - 20
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_create_your_character_choose_a_background
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 61285099f5125f2eb3c9f1cf79af1584f68d87265cde7fdf5789b5d4003341ed
   parent_name: Create Your Character
   line_span:
     first: 1398
@@ -46,7 +83,8 @@ splat_clauses:
     which is +2 for a level 1 character. Note this number on your character sheet. You’ll fill in other
     numbers connected to these proficiencies in step 5.'
   sha256: e1c4cd3e4a2a1fa038db6ace163c93fe27e9251e1e9314d87fea05a0567ab746
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Choose a Background

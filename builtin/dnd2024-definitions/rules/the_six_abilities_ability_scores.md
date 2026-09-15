@@ -12,18 +12,59 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/the_six_abilities_ability_scores
-  parameters: {}
+  parameters:
+    normal_min: 1
+    adventurer_max: 20
+    absolute_max: 30
+    feature_can_override_adventurer_max: true
+    score_zero_consequence: reducing_effect_definition
+    score_bands:
+    - min: 1
+      max: 1
+      category: normal_minimum
+    - min: 2
+      max: 9
+      category: weak
+    - min: 10
+      max: 11
+      category: human_average
+    - min: 12
+      max: 19
+      category: strong
+    - min: 20
+      max: 20
+      category: adventurer_maximum
+    - min: 21
+      max: 29
+      category: extraordinary
+    - min: 30
+      max: 30
+      category: absolute_maximum
+  implementation: dnd2024:rules_the_six_abilities_ability_scores
+splat_contracts:
+- id: dnd2024:rules_the_six_abilities_ability_scores
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - ability_score_constraints
+  events: []
+  capabilities:
+  - character_statistics
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 5
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_the_six_abilities_ability_scores
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 08d53d42347ada980478edadb7a099e47f7fd6f7f1a5ba9618094c04d41e6090
   parent_name: The Six Abilities
   line_span:
     first: 66
@@ -38,7 +79,8 @@ splat_clauses:
     highest an adventurer’s score can go unless a feature says otherwise. 21–29 This represents an extraordinary
     capability. 30 This is the highest a score can go.'
   sha256: cd520bc39e0e5a5573b40ee177bcffaac730b7262ed5cd5024d20d576540f2f5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ability Scores

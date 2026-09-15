@@ -64,18 +64,335 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/adult_brass_dragon
+  implementation: dnd2024:creature_adult_brass_dragon
+  parameters:
+    features:
+      legendary_resistance:
+        economy: trait
+        resource:
+          kind: daily
+          uses: 3
+          recovery: long_rest
+          lair_uses: 4
+        operation: replace_save_result
+        trigger: self.save_failed
+        optional: true
+        result: success
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: rend
+          count: 3
+        replacements:
+        - replace_count: 1
+          maximum_uses: 1
+          operation:
+            operation: choice
+            options:
+            - operation: use_feature
+              feature: sleep_breath
+            - operation: cast_spell
+              spell:
+                key: dnd2024:spells/scorching_ray
+              cast_level: 2
+              spellcasting_profile: spellcasting
+      rend:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 11
+          reach_ft: 10
+        hit:
+          damage:
+          - average: 17
+            roll:
+              count: 2
+              sides: 10
+              modifier: 6
+            type: slashing
+          - average: 4
+            roll:
+              count: 1
+              sides: 8
+              modifier: 0
+            type: fire
+      fire_breath:
+        economy: action
+        resource:
+          kind: recharge
+          die: 6
+          success_faces:
+          - 5
+          - 6
+          check: self.turn_start
+          rest_recovery:
+          - short
+          - long
+          capacity: 1
+          initial_uses: 1
+        operation: saving_throw
+        ability: dexterity
+        dc: 18
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: line
+            size_ft: 60
+            origin: self
+            width_ft: 5
+        failure:
+          damage:
+          - average: 45
+            roll:
+              count: 10
+              sides: 8
+              modifier: 0
+            type: fire
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+      sleep_breath:
+        economy: action
+        operation: saving_throw
+        ability: constitution
+        dc: 18
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: cone
+            size_ft: 60
+            origin: self
+        failure:
+          conditions:
+          - condition: incapacitated
+            until: target.next_turn_end
+          repeat_save:
+            event: target.next_turn_end
+            failure:
+              conditions:
+              - condition: unconscious
+                duration_seconds: 600
+              ends_on:
+              - event: target.damage_taken
+              - event: creature.action
+                operation: wake_target
+                within_ft: 5
+            success: end_effect
+        success:
+          effects: []
+      spellcasting:
+        economy: action
+        operation: spellcasting
+        ability: charisma
+        components_waived:
+        - material
+        save_dc: 16
+        options:
+        - spell:
+            key: dnd2024:spells/detect_magic
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/minor_illusion
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/scorching_ray
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/shapechange
+          usage:
+            kind: at_will
+          overrides:
+            allowed_types:
+            - beast
+            - humanoid
+            gain_temporary_hp: false
+            maintain_requires_concentration: false
+            maintain_requires_temporary_hp: false
+        - spell:
+            key: dnd2024:spells/speak_with_animals
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/detect_thoughts
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/control_weather
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        material_components_available: true
+      blazing_light:
+        economy: legendary_action
+        legendary_cost: 1
+        operation: cast_spell
+        spell:
+          key: dnd2024:spells/scorching_ray
+        cast_level: 2
+        spellcasting_profile: spellcasting
+      pounce:
+        economy: legendary_action
+        legendary_cost: 1
+        operation: sequence
+        effects:
+        - operation: move
+          maximum_ft:
+            multiply:
+            - stat: speed
+            - 0.5
+        - operation: attack_sequence
+          feature: rend
+          count: 1
+      scorching_sands:
+        economy: legendary_action
+        legendary_cost: 1
+        cooldown_until: self.next_turn_start
+        operation: saving_throw
+        ability: dexterity
+        dc: 16
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 120
+          visible: true
+        failure:
+          damage:
+          - average: 27
+            roll:
+              count: 6
+              sides: 8
+              modifier: 0
+            type: fire
+          speed_multiplier: 0.5
+          until: target.next_turn_end
+        success:
+          effects: []
+    skill_totals:
+      history: 7
+      perception: 11
+      persuasion: 8
+      stealth: 5
+    damage_immunities:
+    - fire
+    condition_immunities: []
+    senses:
+      blindsight: 60
+      darkvision: 120
+      passive_perception: 21
+    languages:
+      speaks:
+      - common
+      - draconic
+      understands: []
+    legendary_actions:
+      uses: 3
+      recovery: self.turn_start
+      trigger: other_creature.turn_end
+      cost_per_action: 1
+      lair_uses: 4
+      requires:
+        not_incapacitated: true
+      maximum_actions_per_trigger: 1
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_adult_brass_dragon
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - turn.ended
+  - damage.resolved
+  - rest.completed
+  - saving_throw.resolved
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spellcasting
+  - spatial_queries
+  - limited_resources
+  - legendary_actions
+  - hit_points
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 3db4cf05974a3fb4d255201866ca495e8c9dc0119b1408e1ff34db1840dec9d8
   source_path: builtin/srd-5.2.1/creature/adult_brass_dragon.md
   pages:
   - 268
   - 269
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_adult_brass_dragon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 2577280b6d0e169cf3c956144ea9be7596e0b04417d9508741d8c14a1ab0f6a3
 splat_clauses:
 - key: source_rules
   text: '# Adult Brass Dragon Huge Dragon (Metallic), Chaotic Good AC 18 Initiative +10 (20) HP 172 (15d12
@@ -105,7 +422,8 @@ splat_clauses:
     end of its next turn. Failure or Success: The dragon can’t take this action again until the start
     of its next turn.'
   sha256: f4d46e67d68b75fa06e819b8c2ce8e1b3b7afa7a277a0c96ba89b330f0119409
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Adult Brass Dragon

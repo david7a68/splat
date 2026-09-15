@@ -12,18 +12,41 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/character_species
-  parameters: {}
+  parameters:
+    species_selection:
+      count: 1
+      grants: species_game_traits
+    normal_lifespan_years_default: 80
+    species_lifespan_overrides_default: true
+    character_age:
+      max: species_normal_lifespan
+    physical_maturity_age_basis: shared_across_species
+  implementation: dnd2024:rules_character_species
+splat_contracts:
+- id: dnd2024:rules_character_species
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - species_traits
+  - age_constraints
+  events: []
+  capabilities:
+  - character_creation
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 83
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_character_species
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: d81231217b28b9a9471f0e267e385460a462862ba6c07d562c6116201a2cd6ba
   parent_name: Character Species
   line_span:
     first: 7120
@@ -41,7 +64,8 @@ splat_clauses:
     species reach physical maturity at about the same age. Your character can be any age that isn’t beyond
     their species’ normal life span.'
   sha256: c72c6fa80433de3fd9f3d61a51ddb43b17cbf47dc5137b9e3467c9fe659f2599
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Character Species

@@ -12,24 +12,46 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/indifferent_attitude
-  parameters: {}
+  parameters:
+    attitude: indifferent
+    monster_default: true
+    desire_to_help: false
+    desire_to_hinder: false
+  implementation: dnd2024:glossary_indifferent_attitude
+splat_contracts:
+- id: dnd2024:glossary_indifferent_attitude
+  inputs:
+    subject:
+      type: participant
+      required: true
+    other:
+      type: participant
+      required: true
+  outputs:
+  - default_attitude
+  events: []
+  capabilities:
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 80c502c52c6a77a52ec5877c6f84e57a6bbf386b08e0f32a6567be5730b6dff7
   source_path: builtin/srd-5.2.1/glossary/indifferent_attitude.md
   pages:
   - 184
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_indifferent_attitude
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 6d44c70bcf9b472d7bdfba67939326500fdf3fd0d579203b44ce754fec2bb33d
 splat_clauses:
 - key: source_rules
   text: '# Indifferent [Attitude] An Indifferent creature has no desire to help or hinder you. Indifferent
     is the default attitude of a monster. See also “Influence.”'
   sha256: 5f57cd03eb63416eebbc1958eb4f0463b3be4ed19249e05a7a291e17ed37ad73
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Indifferent [Attitude]

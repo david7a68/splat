@@ -24,17 +24,113 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/conjure_fey
+  implementation: dnd2024:spell_conjure_fey
+  parameters:
+    creation:
+      kind: spirit
+      size: medium
+      origin_plane: feywild
+      appearance_choice: fey_creature
+      space:
+        unoccupied: true
+        visible: true
+        within_spell_range: true
+      duration: spell_duration
+    attack:
+      optional: true
+      target:
+        kind: creature
+        distance_from_spirit_maximum_feet: 5
+      kind: melee_spell
+      hit:
+        damage:
+          dice:
+            count:
+              op: add
+              args:
+              - 3
+              - op: multiply
+                args:
+                - 1
+                - op: subtract
+                  args:
+                  - binding: cast_level
+                  - 6
+            sides: 12
+            add:
+              binding: spellcasting_modifier
+          type: psychic
+        condition: frightened
+        fear_sources:
+        - caster
+        - spirit
+        until: caster_next_turn_start
+    activation:
+      initial: spirit_appears
+      later:
+        cost: bonus_action
+        'on': caster_turn
+        teleport_before_attack:
+          maximum_feet: 30
+          destination_unoccupied: true
+          destination_visible_to_caster: true
+splat_contracts:
+- id: dnd2024:spell_conjure_fey
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    spellcasting_modifier:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  - attacks
+  - participants
+  events:
+  - spell.cast_completed
+  - movement.completed
+  - turn.start
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - attacks
+  - spatial_relationships
+  - conditions
+  - participant_lifecycle
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 49c4b35e0f90a6717a38674e16684824d4506f0727175764ac200c5095f7854e
   source_path: builtin/srd-5.2.1/spell/conjure_fey.md
   pages:
   - 118
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_conjure_fey
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 5ff9831ff5085c3a33c51dbab4849358dfa87e440e7c47bf9da8362affe435fe
 splat_clauses:
 - key: source_rules
   text: '# Conjure Fey Level 6 Conjuration (Druid) Casting Time: Action Range: 60 feet Components: V,
@@ -48,7 +144,8 @@ splat_clauses:
     against a creature within 5 feet of it. Using a Higher-Level Spell Slot. The damage increases by 1d12
     for each spell slot level above 6.'
   sha256: 7bc4610ba2edbf5c12155e1b2b13b982f266dcb4f9aa25c4d016b46dd4099f99
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Conjure Fey

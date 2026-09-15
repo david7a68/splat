@@ -12,18 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/casting_spells_range
-  parameters: {}
+  parameters:
+    range_modes:
+      distance:
+        unit: feet
+        limits: spell_specified_effect_origin
+      touch:
+        requires_touch: true
+        within_caster_reach: true
+      self:
+        origin: caster
+        mode_from_spell:
+        - on_caster
+        - emanates_from_caster
+    movable_effects_range_limited_after_cast_default: false
+    specific_spell_overrides: true
+  implementation: dnd2024:rules_casting_spells_range
+splat_contracts:
+- id: dnd2024:rules_casting_spells_range
+  inputs:
+    caster:
+      type: participant
+      required: true
+    spell:
+      type: definition
+      required: true
+    target:
+      type: resolution
+      required: true
+  outputs:
+  - range_eligibility
+  events: []
+  capabilities:
+  - spellcasting
+  - geometry
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 105
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_casting_spells_range
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: c6153ced4722ce4e69c4901a051aac81a7b4c5e1f1907defc0e1217c82af917d
   parent_name: Casting Spells
   line_span:
     first: 9175
@@ -38,7 +73,8 @@ splat_clauses:
     spell has movable effects, they aren’t restricted by its range unless the spell’s description says
     otherwise.'
   sha256: 45a8ee0000d54fcf50d98cf0cddf9223e75925af11cfe9a89d5e92f2df7fa5ff
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Range

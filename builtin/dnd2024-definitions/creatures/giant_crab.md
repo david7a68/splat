@@ -59,17 +59,137 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_crab
+  implementation: dnd2024:creature_giant_crab
+  parameters:
+    features:
+      amphibious:
+        economy: passive
+        breathing_media:
+        - air
+        - water
+      claw:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 3
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 4
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 1
+          damage_type: bludgeoning
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: medium
+          then:
+          - op: condition
+            condition: grappled
+            escape_dc: 11
+            source: self
+            appendages:
+              kind: claw
+              available: 2
+              used: 1
+        reach_feet: 5
+    skill_totals:
+      stealth: 3
+    defenses: {}
+    senses:
+      passive_perception: 9
+      special:
+      - sense: blindsight
+        range_feet: 30
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_giant_crab
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - grappling
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 1777d84511f1c9a98ef310bcf3b42b87d0da065478fea7e1a2b14a95a4dd1a39
   source_path: builtin/srd-5.2.1/creature/giant_crab.md
   pages:
   - 350
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_crab
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: be8f219fc262ad10e173654f030df1c8aec4c3e27ecb4591b7065c113b8ff12e
 splat_clauses:
 - key: source_rules
   text: '# Giant Crab Medium Beast, Unaligned AC 15 Initiative +1 (11) HP 13 (3d8) Speed 30 ft., Swim
@@ -79,7 +199,8 @@ splat_clauses:
     Roll: +3, reach 5 ft. Hit: 4 (1d6 + 1) Bludgeoning damage. If the target is a Medium or smaller creature,
     it has the Grappled condition (escape DC 11) from one of two claws.'
   sha256: f2ed0226ec02b01b868bd1fe5e0398e35129f0f12ae289bab59ba596c075ef8e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Crab

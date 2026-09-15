@@ -60,17 +60,174 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/xorn
+  implementation: dnd2024:creature_xorn
+  parameters:
+    features:
+      earth_glide:
+        economy: trait
+        operation: passive_rule
+        burrow_materials:
+        - earth
+        - stone
+        requires:
+          material_nonmagical: true
+          material_unworked: true
+        disturb_material: false
+      treasure_sense:
+        economy: trait
+        operation: passive_rule
+        pinpoint:
+        - precious_metals
+        - precious_stones
+        range_ft: 60
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: bite
+          count: 1
+        - operation: attack_sequence
+          feature: claw
+          count: 3
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 6
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 17
+            roll:
+              count: 4
+              sides: 6
+              modifier: 3
+            type: piercing
+      claw:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 6
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 8
+            roll:
+              count: 1
+              sides: 10
+              modifier: 3
+            type: slashing
+      charge:
+        economy: bonus_action
+        operation: move
+        maximum_ft:
+          choose_stat:
+          - speed
+          - burrow_speed
+        direction: straight_toward_enemy
+        enemy_sensed: true
+    skill_totals:
+      perception: 6
+      stealth: 6
+    damage_immunities:
+    - poison
+    condition_immunities:
+    - paralyzed
+    - petrified
+    - poisoned
+    senses:
+      darkvision: 60
+      tremorsense: 60
+      passive_perception: 16
+    languages:
+      speaks:
+      - language: primordial
+        dialects:
+        - terran
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_xorn
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: b64a60c751b6d4b7b9c525541ee8c4ce2cdb4941d2bcfe7e245d708ee51c147e
   source_path: builtin/srd-5.2.1/creature/xorn.md
   pages:
   - 343
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_xorn
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 018f4989a4df495aa2c6c65f63ecb880f77284d01376a36d6dda4bc7885c7626
 splat_clauses:
 - key: source_rules
   text: '# Xorn Medium Elemental, Neutral AC 19 Initiative +0 (10) HP 84 (8d8 + 48) Speed 20 ft., Burrow
@@ -85,7 +242,8 @@ splat_clauses:
     damage. ### Bonus Actions Charge. The xorn moves up to its Speed or Burrow Speed straight toward an
     enemy it can sense.'
   sha256: 363e91ca31705d00ae0645f55ec9c6b6202c741325d4774e56691f5e4f78fa0e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Xorn

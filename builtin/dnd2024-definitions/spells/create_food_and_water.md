@@ -25,17 +25,76 @@ splat_spell:
   ritual: false
   range:
     feet: 30
+splat_rule:
+  mechanic: dnd2024:spells/create_food_and_water
+  implementation: dnd2024:spell_create_food_and_water
+  parameters:
+    placement:
+      choice:
+      - ground
+      - containers
+      within_range: true
+    food:
+      pounds: 45
+      nourishing: true
+      taste: bland
+      appearance_choice: food_kind
+      uneaten_spoils_hours: 24
+    water:
+      gallons: 30
+      fresh: true
+      clean: true
+splat_contracts:
+- id: dnd2024:spell_create_food_and_water
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - food_objects
+  - water_quantity
+  - food_expiry
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - choices
+  - time
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 8a5480ad136a07cd5255804cedbb9ea745d058cd90b93c476a42b2d7ac2dbd5e
   source_path: builtin/srd-5.2.1/spell/create_food_and_water.md
   pages:
   - 120
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_create_food_and_water
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 91e2d8b5fb036cbd457c910f515faa9620a3611fbfdf8702ab9b53c164ca710d
 splat_clauses:
 - key: source_rules
   text: '# Create Food and Water Level 3 Conjuration (Cleric, Paladin) Casting Time: Action Range: 30
@@ -44,7 +103,8 @@ splat_clauses:
     and dehydration. The food is bland but nourishing and looks like a food of your choice, and the water
     is clean. The food spoils after 24 hours if uneaten.'
   sha256: 6db3427987ca45c9dd2e8505ab248c55ad91a880be542f196ac3be377be2ed4e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Create Food and Water

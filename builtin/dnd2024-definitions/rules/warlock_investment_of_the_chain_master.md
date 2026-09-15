@@ -12,18 +12,74 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/warlock_investment_of_the_chain_master
-  parameters: {}
+  parameters:
+    prerequisites:
+      warlock_level_minimum: 5
+      invocation: pact_of_the_chain
+    trigger: find_familiar.cast
+    familiar_benefits:
+      movement_choice:
+        options:
+        - fly
+        - swim
+        speed_feet: 40
+      command_attack:
+        economy: bonus_action
+        familiar_action: attack
+      damage_type_choice:
+        replace_types:
+        - bludgeoning
+        - piercing
+        - slashing
+        options:
+        - necrotic
+        - radiant
+        optional: true
+        timing: each_damage_instance
+      saving_throw_dc: caster_spell_save_dc
+      damage_resistance:
+        trigger: familiar.damage_pending
+        economy: reaction
+        scope: triggering_damage
+  implementation: dnd2024:rules_warlock_investment_of_the_chain_master
+splat_contracts:
+- id: dnd2024:rules_warlock_investment_of_the_chain_master
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    choice:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - resource_updates
+  events:
+  - spell.cast_completed
+  - damage.pending
+  capabilities:
+  - class_features
+  - effects
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 73
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_warlock_investment_of_the_chain_master
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 9565da0b99a876c3f0ddca96dc018dd45e99659d3a0986d2f22ae13f3883f10f
   parent_name: Warlock
   line_span:
     first: 6236
@@ -39,7 +95,8 @@ splat_clauses:
     familiar forces a creature to make a saving throw, it uses your spell save DC. Resistance. When the
     familiar takes damage, you can take a Reaction to grant it Resistance against that damage.'
   sha256: 17759c0e3909449f3e29d9f455737e531381ab63505166ac6650b9f71e5210ab
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Investment of the Chain Master

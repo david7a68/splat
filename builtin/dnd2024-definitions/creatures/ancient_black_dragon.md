@@ -64,17 +64,326 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ancient_black_dragon
+  implementation: dnd2024:creature_ancient_black_dragon
+  parameters:
+    features:
+      amphibious:
+        economy: passive
+        breathing_media:
+        - air
+        - water
+      legendary_resistance:
+        economy: passive
+        resource:
+          capacity: 4
+          capacity_in_lair: 5
+          recovery: long_rest
+          cost: 1
+        trigger: saving_throw.failed
+        optional: true
+        op: replace_save_outcome
+        outcome: success
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 15
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 17
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 8
+          damage_type: slashing
+        - op: damage
+          average: 9
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 0
+          damage_type: acid
+        reach_feet: 15
+      acid_breath:
+        economy: action
+        resource:
+          capacity: 1
+          initial: 1
+          recharge:
+            event: turn.start
+            participant: self
+            roll:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            succeeds_on:
+            - 5
+            - 6
+          cost: 1
+          recovery_also:
+          - short_rest
+          - long_rest
+        op: save
+        ability: dexterity
+        dc: 22
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: line
+            size_feet: 90
+            origin: self
+            width_feet: 10
+        failure:
+        - op: damage
+          average: 67
+          amount:
+            dice:
+              count: 15
+              sides: 8
+            add: 0
+          damage_type: acid
+        success:
+        - op: damage_fraction
+          numerator: 1
+          denominator: 2
+          round: down
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: rend
+          count: 3
+        replacement:
+          max_attacks: 1
+          choices:
+          - feature: spellcasting
+            spell:
+              key: dnd2024:spells/acid_arrow
+            cast_level: 4
+      spellcasting:
+        economy: action
+        op: cast_spell_choice
+        ability: charisma
+        spells:
+        - spell:
+            key: dnd2024:spells/acid_arrow
+          frequency: at_will
+          cast_level: 4
+        - spell:
+            key: dnd2024:spells/detect_magic
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/fear
+          frequency: at_will
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/create_undead
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/speak_with_dead
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          recovery: long_rest
+          cast_level: spell_minimum
+        - spell:
+            key: dnd2024:spells/vitriolic_sphere
+          frequency: daily
+          uses: 1
+          resource_scope: per_spell
+          cast_level: 5
+          recovery: long_rest
+        components_waived:
+        - material
+        save_dc: 21
+        spell_attack_bonus: 13
+      cloud_of_insects:
+        economy: legendary_action
+        op: save
+        ability: dexterity
+        dc: 21
+        targets:
+          kind: creature
+          count: 1
+          range_feet: 120
+          visible_to: self
+        failure:
+        - op: damage
+          average: 33
+          amount:
+            dice:
+              count: 6
+              sides: 10
+            add: 0
+          damage_type: poison
+        - op: disadvantage
+          roll: concentration_save
+          ends:
+            event: turn.end
+            participant: target
+            occurrence: next
+        success: []
+        cooldown_ends:
+          event: turn.start
+          participant: self
+          occurrence: next
+      frightful_presence:
+        economy: legendary_action
+        op: cast_spell
+        spell:
+          key: dnd2024:spells/fear
+        via: spellcasting
+        cooldown_ends:
+          event: turn.start
+          participant: self
+          occurrence: next
+        cast_level: spell_minimum
+      pounce:
+        economy: legendary_action
+        op: sequence
+        steps:
+        - op: move
+          distance_max:
+            multiply:
+            - stat: speed
+            - numerator: 1
+              denominator: 2
+        - op: use_feature
+          feature: rend
+          count: 1
+    skill_totals:
+      perception: 16
+      stealth: 9
+    defenses:
+      immunities:
+        damage_types:
+        - acid
+    senses:
+      passive_perception: 26
+      special:
+      - sense: blindsight
+        range_feet: 60
+      - sense: darkvision
+        range_feet: 120
+    communication:
+      speaks:
+      - common
+      - draconic
+      understands:
+      - common
+      - draconic
+    legendary_actions:
+      uses: 3
+      uses_in_lair: 4
+      cost_per_action: 1
+      trigger: another_creature.turn.end
+      recovery:
+        event: turn.start
+        participant: self
+        amount: all
+      maximum_per_trigger: 1
+      requires:
+        self_incapacitated: false
+        self_can_take_actions: true
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_ancient_black_dragon
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - another_creature.turn.end
+  - saving_throw.failed
+  - turn.end
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - legendary_actions
+  - resources
+  - spellcasting
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 0cb683b5bae14f01b0db36b2fbb43a720dae11043e9406b56adf192ecbf85585
   source_path: builtin/srd-5.2.1/creature/ancient_black_dragon.md
   pages:
   - 265
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ancient_black_dragon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 57a92f3e871b2cfbba3bc150f80163cdd5c2978fe2adfe276c0bbe8edbf0f3a7
 splat_clauses:
 - key: source_rules
   text: '# Ancient Black Dragon Gargantuan Dragon (Chromatic), Chaotic Evil AC 22 Initiative +16 (26)
@@ -100,7 +409,8 @@ splat_clauses:
     The dragon can’t take this action again until the start of its next turn. Pounce. The dragon moves
     up to half its Speed, and it makes one Rend attack.'
   sha256: 1da6aad4decdac613b47c2cf62a7cd31976d42106318a547a4be423f24bef87e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ancient Black Dragon

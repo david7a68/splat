@@ -12,18 +12,43 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_falling_unconscious
-  parameters: {}
+  parameters:
+    apply_definitions:
+    - key: dnd2024:glossary/unconscious_condition
+    - key: dnd2024:glossary/death_saving_throw
+    when:
+      hit_points: 0
+      instant_death: false
+    unconscious_until: any_hit_points_regained
+  implementation: dnd2024:rule_damage_and_healing_falling_unconscious
+splat_contracts:
+- id: dnd2024:rule_damage_and_healing_falling_unconscious
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - resolution
+  events: []
+  capabilities:
+  - conditions
+  - death_saves
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 17
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_damage_and_healing_falling_unconscious
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 2607557ee1d47425c08d91cf615f018a16650cfc9b910ff26e30245ed4d07a88
   parent_name: Damage and Healing
   line_span:
     first: 1250
@@ -34,7 +59,8 @@ splat_clauses:
     condition (see “Rules Glossary”) until you regain any Hit Points, and you now face making Death Saving
     Throws (see below).'
   sha256: dd09f5e46034426dbeb83a953718a0158db6f5f00b1595118dfbce43185f82f1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Falling Unconscious

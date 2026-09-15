@@ -56,17 +56,224 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/flesh_golem
+  implementation: dnd2024:creature_flesh_golem
+  parameters:
+    features:
+      immutable_form:
+        economy: passive
+        shape_shift_allowed: false
+      magic_resistance:
+        economy: passive
+        advantage:
+          roll: saving_throw
+          against:
+          - spell
+          - magical_effect
+      slam:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 7
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 13
+          amount:
+            dice:
+              count: 2
+              sides: 8
+            add: 4
+          damage_type: bludgeoning
+        - op: damage
+          average: 4
+          amount:
+            dice:
+              count: 1
+              sides: 8
+            add: 0
+          damage_type: lightning
+        reach_feet: 5
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: slam
+          count: 2
+      lightning_absorption:
+        economy: passive
+        trigger: damage.subjected
+        damage_type: lightning
+        op: heal
+        amount:
+          event_value: incoming_damage_of_matching_type
+      aversion_to_fire:
+        economy: passive
+        trigger: self.damage_taken
+        requires:
+          damage_type: fire
+        disadvantage:
+          rolls:
+          - attack
+          - ability_check
+          ends:
+            event: turn.end
+            participant: self
+            occurrence: next
+      berserk:
+        economy: passive
+        trigger: self.turn.start
+        requires:
+          self_bloodied: true
+        activation_roll:
+          roll:
+            dice:
+              count: 1
+              sides: 6
+            add: 0
+          success:
+          - 6
+        state: berserk
+        while_active:
+          turn_behavior:
+            attack_target: nearest_visible_creature
+            requires_reachable_with_move_and_attack: true
+            fallback_target_kind: object
+        ends_any:
+        - self_destroyed: true
+        - self_bloodied: false
+        suppress:
+          actor: creator
+          economy: action
+          range_feet: 60
+          self_can_hear_creator: true
+          check:
+            ability: charisma
+            skill: persuasion
+            dc: 15
+          on_success:
+            suppress_until:
+              event: turn.start
+              participant: self
+              occurrence: next
+            resume_activation_rolls_if_bloodied: true
+    defenses:
+      immunities:
+        damage_types:
+        - lightning
+        - poison
+        conditions:
+        - charmed
+        - exhaustion
+        - frightened
+        - paralyzed
+        - petrified
+        - poisoned
+    senses:
+      passive_perception: 10
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks: []
+      understands:
+      - common
+      additional_languages:
+        count: 1
+        chooser: gm
+        distinct_from_known: true
+        can_speak: false
+        can_understand: true
+      can_speak: false
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_flesh_golem
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - damage.subjected
+  - self.damage_taken
+  - self.turn.start
+  - turn.end
+  - turn.start
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - hit_points
+  - resources
+  - shapechanging
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 5ef0e407664162639662d26defc923487684fe0371d72787ae0cf36eddea1b65
   source_path: builtin/srd-5.2.1/creature/flesh_golem.md
   pages:
   - 285
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_flesh_golem
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: edd84d5ac41cab17fb31186afe33346dfcb313da9cd90a4c044c5fba20c8b5c1
 splat_clauses:
 - key: source_rules
   text: '# Flesh Golem Medium Construct, Neutral AC 9 Initiative -1 (9) HP 127 (15d8 + 60) Speed 30 ft.
@@ -88,7 +295,8 @@ splat_clauses:
     ### Actions Multiattack. The golem makes two Slam attacks. Slam. Melee Attack Roll: +7, reach 5 ft.
     Hit: 13 (2d8 + 4) Bludgeoning damage plus 4 (1d8) Lightning damage.'
   sha256: 03b6be482d0cbfd0a3e0586bfb8d932bd603cef3b0b33c25effafaacca9685bf
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Flesh Golem

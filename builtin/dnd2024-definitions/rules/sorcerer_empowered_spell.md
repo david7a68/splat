@@ -12,18 +12,46 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/sorcerer_empowered_spell
-  parameters: {}
+  parameters:
+    trigger: spell_damage_roll
+    cost:
+      sorcery_points: 1
+    reroll_dice:
+      selection: caster_choice
+      maximum:
+        op: max
+        args:
+        - 1
+        - var: subject.charisma_modifier
+      use_new_results: true
+    compatible_with_other_metamagic: true
+  implementation: dnd2024:rules_sorcerer_empowered_spell
+splat_contracts:
+- id: dnd2024:rules_sorcerer_empowered_spell
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - spell.damage_rolled
+  capabilities:
+  - metamagic
+  - dice
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 67
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_sorcerer_empowered_spell
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 0a3f98ad2699596f3eee3c799d7bccb318cd71391c92d78f955d78a4dc776012
   parent_name: Sorcerer
   line_span:
     first: 5650
@@ -35,7 +63,8 @@ splat_clauses:
     must use the new rolls. You can use Empowered Spell even if you’ve already used a different Metamagic
     option during the casting of the spell.'
   sha256: 24741a0946b9dc32e5f515c02510d769567aec4e5c9f431bc34cd1d26e25c086
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Empowered Spell

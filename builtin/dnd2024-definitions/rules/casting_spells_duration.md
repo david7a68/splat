@@ -12,18 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/casting_spells_duration
-  parameters: {}
+  parameters:
+    duration_forms:
+      concentration:
+        key: dnd2024:glossary/concentration
+      instantaneous:
+        persists: false
+      time_span:
+        ends_at: elapsed_duration
+        caster_dismissal:
+          economy: none
+          blocked_by: incapacitated
+  implementation: dnd2024:rules_casting_spells_duration
+splat_contracts:
+- id: dnd2024:rules_casting_spells_duration
+  inputs:
+    caster:
+      type: participant
+      required: true
+    spell:
+      type: definition
+      required: true
+    event:
+      type: event
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - spell_state
+  - casting_requirements
+  events: []
+  capabilities:
+  - spellcasting
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 106
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_casting_spells_duration
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: a6f1d5fa39781804d57f5f11cdb3e88c2882e97c8be168389cf1ee907f4c431f
   parent_name: Casting Spells
   line_span:
     first: 9230
@@ -39,7 +74,8 @@ splat_clauses:
     spell that you cast is ongoing, you can dismiss it (no action required) if you don’t have the Incapacitated
     condition.'
   sha256: 98a6c61805233ad06935ebedb1303994ef733c3aadeb42d9cd28f6c988331359
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Duration

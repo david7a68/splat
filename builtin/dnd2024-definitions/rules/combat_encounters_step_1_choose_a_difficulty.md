@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_encounters_step_1_choose_a_difficulty
-  parameters: {}
+  parameters:
+    difficulty_choice:
+    - low
+    - moderate
+    - high
+    low_difficulty_guideline:
+      monster_count: 1
+      party_size: 4
+      monster_cr: character_level
+      binding_rule: false
+  implementation: dnd2024:rules_combat_encounters_step_1_choose_a_difficulty
+splat_contracts:
+- id: dnd2024:rules_combat_encounters_step_1_choose_a_difficulty
+  inputs:
+    party:
+      type: participant_list
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - encounter_difficulty
+  events: []
+  capabilities:
+  - encounter_design
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 202
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_combat_encounters_step_1_choose_a_difficulty
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 9ceecd6861f171c1f674a5c854f3f6d7b636f03f88115b2afafa25dbbcd34598
   parent_name: Combat Encounters
   line_span:
     first: 10266
@@ -41,7 +67,8 @@ splat_clauses:
     for one or more characters. To survive it, the characters will need smart tactics, quick thinking,
     and maybe even a little luck.'
   sha256: d95783ee1d64496a9faa07d2b4658fb5f9124eea87ac5161942b011dd2bc30ba
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Step 1: Choose a Difficulty

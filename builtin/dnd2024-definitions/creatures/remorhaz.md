@@ -59,18 +59,198 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/remorhaz
+  implementation: dnd2024:creature_remorhaz
+  parameters:
+    features:
+      heat_aura:
+        economy: trait
+        operation: passive_rule
+        trigger: self.turn_end
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: emanation
+            size_ft: 5
+            origin: self
+        damage:
+        - roll:
+            count: 3
+            sides: 10
+            modifier: 0
+          type: fire
+      bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 11
+          reach_ft: 10
+        hit:
+          damage:
+          - average: 18
+            roll:
+              count: 2
+              sides: 10
+              modifier: 7
+            type: piercing
+          - average: 14
+            roll:
+              count: 4
+              sides: 6
+              modifier: 0
+            type: fire
+          grapple:
+            condition: grappled
+            source: self
+            escape_dc: 17
+            maximum_size: large
+            while_grappled:
+              conditions:
+              - restrained
+      swallow:
+        economy: bonus_action
+        operation: saving_throw
+        ability: strength
+        dc: 19
+        failure:
+          end_grapple: true
+          swallow:
+            maximum_size: large
+            conditions:
+            - restrained
+            - blinded
+            cover_against_outside: total
+            periodic_damage:
+              event: self.turn_start
+              damage:
+              - roll:
+                  count: 3
+                  sides: 6
+                  modifier: 0
+                type: acid
+              - roll:
+                  count: 3
+                  sides: 6
+                  modifier: 0
+                type: fire
+            regurgitate:
+              trigger: turn_end
+              if_damage_on_single_turn_from_one_inside_creature_at_least: 30
+              save:
+                ability: constitution
+                dc: 15
+                failure:
+                  eject: all
+                  within_ft: 5
+                  conditions:
+                  - prone
+            on_self_death:
+              remove_conditions:
+              - restrained
+              escape_movement_ft: 15
+              exit_condition: prone
+        targets:
+          kind: creature
+          count: 1
+          grappled_by: self
+          maximum_size: large
+        capacity: 2
+        success:
+          effects: []
+    damage_immunities:
+    - cold
+    - fire
+    condition_immunities: []
+    senses:
+      darkvision: 60
+      tremorsense: 60
+      passive_perception: 10
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_remorhaz
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - turn.ended
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - grappling
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 7e7b1c49b60332c99da4125af12e4010fb7429152fab541cfd1812492d1554f7
   source_path: builtin/srd-5.2.1/creature/remorhaz.md
   pages:
   - 319
   - 320
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_remorhaz
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 3da223a72e8ddafef31e3f6f003fcdcae32e01ddb7bdaa9912cf3f1fabaca9b1
 splat_clauses:
 - key: source_rules
   text: '# Remorhaz Huge Monstrosity, Unaligned AC 17 Initiative +5 (15) HP 195 (17d12 + 85) Speed 40
@@ -92,7 +272,8 @@ splat_clauses:
     creature no longer has the Restrained condition and can escape from the corpse by using 15 feet of
     movement, exiting Prone.'
   sha256: 558747f34caae5043d41bbc8a19732a42c73e675346f32e0c4d6a46a1aec1d81
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Remorhaz

@@ -23,17 +23,101 @@ splat_spell:
   ritual: false
   range:
     feet: 30
+splat_rule:
+  mechanic: dnd2024:spells/thaumaturgy
+  implementation: dnd2024:spell_thaumaturgy
+  parameters:
+    effect_choice:
+      count: 1
+      within_range: true
+    maximum_simultaneous_minute_effects: 3
+    effects:
+      altered_eyes:
+        appearance_choice: caster
+        minutes: 1
+      booming_voice:
+        volume_multiplier_maximum: 3
+        minutes: 1
+        charisma_intimidation_checks: advantage
+      fire_play:
+        choice:
+        - flicker
+        - brighten
+        - dim
+        - change_color
+        minutes: 1
+      invisible_hand:
+        target:
+        - door
+        - window
+        unlocked_required: true
+        choice:
+        - open
+        - slam_shut
+        duration: instantaneous
+      phantom_sound:
+        sound_choice: caster
+        origin: chosen_point_in_range
+        duration: instantaneous
+      tremors:
+        target: ground
+        harmless: true
+        minutes: 1
+splat_contracts:
+- id: dnd2024:spell_thaumaturgy
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - minor_effect
+  - active_effect_count
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - perception
+  - choices
+  - time
+  - checks
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: c938381ef486e9790c827de73ada622e1418212dbabe7b79086cebecf482db6a
   source_path: builtin/srd-5.2.1/spell/thaumaturgy.md
   pages:
   - 169
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_thaumaturgy
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 4811ca3714f692bf56cbea8dcbf1408aea65b457a5c1e07583b06fa9748edd21
 splat_clauses:
 - key: source_rules
   text: '# Thaumaturgy Transmutation Cantrip (Cleric) Casting Time: Action Range: 30 feet Components:
@@ -47,7 +131,8 @@ splat_clauses:
     point of your choice within range, such as a rumble of thunder, the cry of a raven, or ominous whispers.
     Tremors. You cause harmless tremors in the ground for 1 minute.'
   sha256: d15bae79c9a849bf83d4123962fb86f0b826b7747ee59173ebf8903520083947
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Thaumaturgy

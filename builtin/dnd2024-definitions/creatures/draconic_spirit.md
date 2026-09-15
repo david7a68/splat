@@ -59,17 +59,237 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/draconic_spirit
+  implementation: dnd2024:creature_draconic_spirit
+  parameters:
+    features:
+      shared_resistances:
+        economy: passive
+        trigger: summon.created
+        choice:
+          chooser: summoner
+          options:
+          - acid
+          - cold
+          - fire
+          - lightning
+          - poison
+          count: 1
+        grant_to: summoner
+        resistance: chosen_type
+        ends:
+          event: summoning_spell.end
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus:
+          input: summoner_spell_attack_modifier
+        reach_feet: 10
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          damage_type: piercing
+          amount:
+            add:
+            - dice:
+                count: 1
+                sides: 6
+              add: 4
+            - input: spell_level
+      multiattack:
+        economy: action
+        op: sequence
+        steps:
+        - op: use_feature
+          feature: rend
+          count:
+            floor_divide:
+            - input: spell_level
+            - 2
+        - op: use_feature
+          feature: breath_weapon
+          count: 1
+      breath_weapon:
+        economy: action
+        damage_type_choice:
+          chooser: summoner
+          timing: spell.cast
+          options:
+          - acid
+          - cold
+          - fire
+          - lightning
+          - poison
+        op: save
+        ability: dexterity
+        dc:
+          input: summoner_spell_save_dc
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            size_feet: 30
+            origin: self
+        failure:
+        - op: damage
+          damage_type:
+            choice: breath_damage_type
+          amount:
+            add:
+            - dice:
+                count: 2
+                sides: 6
+              add: 0
+        success:
+        - op: damage_fraction
+          numerator: 1
+          denominator: 2
+          round: down
+    defenses:
+      resistances:
+        damage_types:
+        - acid
+        - cold
+        - fire
+        - lightning
+        - poison
+      immunities:
+        conditions:
+        - charmed
+        - frightened
+        - poisoned
+    senses:
+      passive_perception: 12
+      special:
+      - sense: blindsight
+        range_feet: 30
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks:
+      - draconic
+      understands:
+        union:
+        - - draconic
+        - languages_known_by: summoner
+    proficiency_bonus:
+      input: summoner_proficiency_bonus
+    scaling_stats:
+      ac:
+        add:
+        - 14
+        - input: spell_level
+      hit_points:
+        add:
+        - 50
+        - multiply:
+          - 10
+          - subtract:
+            - input: spell_level
+            - 5
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_draconic_spirit
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+    summoner:
+      type: participant
+      required: true
+    spell_level:
+      type: integer
+      required: true
+    summoner_spell_attack_modifier:
+      type: integer
+      required: true
+    summoner_spell_save_dc:
+      type: integer
+      required: true
+    summoner_spellcasting_ability_modifier:
+      type: integer
+      required: true
+    summoner_proficiency_bonus:
+      type: integer
+      required: true
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - summon.created
+  - summoning_spell.end
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: fc4d323c81b90c1ae4d392593ccd6c2b74b2c502c712b366a5e9a1b181785c8d
   source_path: builtin/srd-5.2.1/creature/draconic_spirit.md
   pages:
   - 166
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_draconic_spirit
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 1cc8dcf1c79555c5c7f0d0a4bb2dc4c76a48fc1ea6a72d3bb55a25ad1ddfda96
 splat_clauses:
 - key: source_rules
   text: '# Draconic Spirit Large Dragon, Neutral AC 14 + the spell’s level HP 50 + 10 for each spell level
@@ -85,7 +305,8 @@ splat_clauses:
     each creature in a 30-foot Cone. Failure: 2d6 damage of a type this spirit has Resistance to (your
     choice when you cast the spell). Success: Half damage.'
   sha256: aab24bcc36ef77fbf5df7dd424593e716aa7d3b8df2246ead76978f9ca28fcc6
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Draconic Spirit

@@ -28,18 +28,86 @@ splat_spell:
   material:
     description: a small square of silk
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/arcanist_s_magic_aura
+  implementation: dnd2024:spell_arcanist_s_magic_aura
+  parameters:
+    targeting:
+      options:
+      - kind: creature
+        willing: true
+        mode: mask
+      - kind: object
+        worn: false
+        carried: false
+        mode: false_aura
+      touch: true
+    mask:
+      choice: creature_type
+      excluded: target_actual_type
+      affected_systems:
+      - spells
+      - magical_effects
+      treated_type: chosen_type
+    false_aura:
+      affected_systems:
+      - magic_aura_detection_spells
+      - magic_aura_detection_effects
+      choices:
+      - nonmagical_appears_magical
+      - magical_appears_nonmagical
+      - chosen_school_aura
+    persistence:
+      same_target: true
+      frequency: daily
+      consecutive_days: 30
+      resulting_duration: until_dispelled
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 24
+        unit: hour
+splat_contracts:
+- id: dnd2024:spell_arcanist_s_magic_aura
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    objects:
+      type: object_list
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - time.elapsed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 02b68d9fd119be15ec29244c753d4a04196b84afb69786705f02e71a91bdeeb1
   source_path: builtin/srd-5.2.1/spell/arcanist_s_magic_aura.md
   pages:
   - 110
   - 111
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_arcanist_s_magic_aura
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 417dcdb14259ff04bfa5106b2bf90b719ec917926fac0e7363191dea012a2e74
 splat_clauses:
 - key: source_rules
   text: '# Arcanist’s Magic Aura Level 2 Illusion (Wizard) Casting Time: Action Range: Touch Components:
@@ -53,7 +121,8 @@ splat_clauses:
     object appear magical, make a magic item appear nonmagical, or change the object’s aura so that it
     appears to belong to a school of magic you choose.'
   sha256: 2c71b910f210adab82951584e3a43b50fd2005cd8080afdb2e99024a3e25a2f5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Arcanist’s Magic Aura

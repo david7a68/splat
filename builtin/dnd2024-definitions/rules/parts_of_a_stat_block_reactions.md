@@ -12,18 +12,39 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_reactions
-  parameters: {}
+  parameters:
+    options_and_triggers_source: monster_stat_block_reactions
+    reaction_rules:
+      key: dnd2024:rules/actions_reactions
+  implementation: dnd2024:rules_parts_of_a_stat_block_reactions
+splat_contracts:
+- id: dnd2024:rules_parts_of_a_stat_block_reactions
+  inputs:
+    monster:
+      type: participant
+      required: true
+    trigger:
+      type: event
+      required: true
+  outputs:
+  - reaction_options
+  events: []
+  capabilities:
+  - monster_reactions
+  - action_economy
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 257
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_parts_of_a_stat_block_reactions
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: e513850f01c1165ed9e664c8892803516b7db30f930c01a2c012161874b14038
   parent_name: Parts of a Stat Block
   line_span:
     first: 11201
@@ -33,7 +54,8 @@ splat_clauses:
   text: '# Reactions If the monster has Reaction options, those are listed in this section along with
     their triggers. See “Playing the Game” for details on Reactions.'
   sha256: 6179bf0951149272b022de0069cadc4bf99aa3330a9c643701934165f94425e2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Reactions

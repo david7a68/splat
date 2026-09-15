@@ -12,19 +12,82 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/barbarian_level_9_brutal_strike
-  parameters: {}
+  parameters:
+    requires:
+      reckless_attack_used: true
+      attack_ability: strength
+      attack_disadvantage: false
+      turn: actor
+    limit:
+      count: 1
+      period: actor.turn
+    cost:
+      forgo_all_advantage: true
+    on_hit:
+      extra_damage:
+        dice:
+          count: 1
+          sides: 10
+        type: attack.weapon_or_unarmed_damage_type
+      choose_effects: 1
+      options:
+        forceful_blow:
+          push:
+            feet: 15
+            direction: straight_away_from_actor
+          follow_movement:
+            maximum_feet:
+              op: multiply
+              args:
+              - var: actor.speed
+              - 0.5
+            direction: straight_toward_target
+            opportunity_attacks: false
+        hamstring_blow:
+          speed_bonus_feet: -15
+          end: actor.next_turn.start
+          stacking: latest_only
+    class_scope:
+      class: barbarian
+      minimum_level: 9
+  implementation: dnd2024:class_features_barbarian_level_9_brutal_strike
+splat_contracts:
+- id: dnd2024:class_features_barbarian_level_9_brutal_strike
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - attack.roll_pending
+  - attack.hit
+  - turn.start
+  capabilities:
+  - character_features
+  - damage
+  - d20_tests
+  - movement
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 29
   - 30
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_barbarian_level_9_brutal_strike
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: 642652e11e6f3afaf2996fa8c31ee8ba94fa122246f0d8397fd287fbd18b3199
   parent_name: Barbarian
   line_span:
     first: 2386
@@ -40,7 +103,8 @@ splat_clauses:
     Blow. The target’s Speed is reduced by 15 feet until the start of your next turn. A target can be
     affected by only one Hamstring Blow at a time— the most recent one.'
   sha256: 21ca551a58bd362f7dea0fe347f6548f2b030fd537bd03c840c50b0994184e01
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 9: Brutal Strike

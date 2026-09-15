@@ -30,17 +30,155 @@ splat_spell:
   material:
     description: a drop of mercury, a dollop of gum arabic, and a wisp of smoke
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/true_polymorph
+  implementation: dnd2024:spell_true_polymorph
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 3600
+    target:
+      count: 1
+      visible: true
+      range_feet: 30
+      kinds:
+      - creature
+      - nonmagical_object
+      object_requirements:
+        worn: false
+        carried: false
+    resistance:
+      subject: unwilling_creature
+      save:
+        ability: wisdom
+        dc: spell_save_dc
+      success: unaffected
+    lifetime:
+      initial: concentration_up_to_3600_seconds
+      ends_if_target:
+      - dies
+      - destroyed
+      full_concentration_seconds: 3600
+      full_concentration_result: until_dispelled
+    choice:
+      chooser: caster
+      modes:
+      - creature_into_creature
+      - object_into_creature
+      - creature_into_object
+    creature_into_creature:
+      form:
+        kind: any_creature
+        maximum_challenge_rating: target_challenge_rating_or_level
+      statistics:
+        replace: new_form_stat_block
+        retain:
+        - hit_points
+        - hit_point_dice
+        - alignment
+        - personality
+      temporary_hit_points:
+        amount:
+          stat:
+            of: new_form
+            key: hit_points
+        remaining_vanish_on_spell_end: true
+      restrictions:
+        actions_limited_by_anatomy: true
+        speak: false
+        cast_spells: false
+        gear: melded
+        use_equipment: false
+        benefit_from_equipment: false
+    object_into_creature:
+      form:
+        kind: any_creature
+        maximum_size: object_size
+        maximum_challenge_rating: 9
+      attitude:
+        toward:
+        - caster
+        - caster_allies
+        value: friendly
+      combat:
+        turn: immediately_after_caster
+        obeys_caster_commands: true
+      after_elapsed_greater_than_seconds:
+        seconds: 3600
+        caster_control: ends
+        continued_friendly_attitude:
+          chooser: gm
+          consideration: caster_treatment
+      statistics: chosen_creature_stat_block
+    creature_into_object:
+      form:
+        kind: nonmagical_object
+        maximum_size: target_creature_size
+      transformation_includes:
+      - creature
+      - worn_items
+      - carried_items
+      statistics: object_statistics
+      after_reversion:
+        memory_of_time_in_object_form: none
+    target_binding:
+      exactly_one:
+      - target_creature
+      - target_object
+      must_match_selected_mode: true
+splat_contracts:
+- id: dnd2024:spell_true_polymorph
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    mode:
+      type: choice
+      required: true
+    form:
+      type: definition
+      required: true
+    attitude_assessment:
+      required: false
+      type: choice
+    target_creature:
+      required: false
+      type: participant
+    target_object:
+      required: false
+      type: object
+    save_dc:
+      type: integer
+      required: true
+  outputs:
+  - effects
+  - forms
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - forms
+  - inventory
+  - tests
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 822f53d4ba493439d07c6102636b4132f9cfab59b56005a74e3fb7c3bb34dcab
   source_path: builtin/srd-5.2.1/spell/true_polymorph.md
   pages:
   - 170
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_true_polymorph
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 847498a5f9c9de8fa19fe00e976438a222f36591a3f7c63fb7e6939d50712b84
 splat_clauses:
 - key: source_rules
   text: '# True Polymorph Level 9 Transmutation (Bard, Warlock, Wizard) Casting Time: Action Range: 30
@@ -68,7 +206,8 @@ splat_clauses:
     object, and the creature has no memory of time spent in this form after the spell ends and it returns
     to normal.'
   sha256: f30c95512983ed14458c6ca4281bb34b8c0e080c0d5c70e766a4805bfbf38a26
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # True Polymorph

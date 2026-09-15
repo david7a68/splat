@@ -12,18 +12,142 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/traps_poisoned_darts
-  parameters: {}
+  parameters:
+    trap:
+      severity: deadly
+      levels:
+      - 1
+      - 4
+      trigger: creature_first_moves_onto_pressure_plate_on_turn
+      duration: instantaneous
+      maximum_activations: 3
+      reset_event: next_turn.started
+      reset_if_activations_less_than: 3
+    targets: all_creatures_in_dart_paths
+    save:
+      ability: dexterity
+      dc: 13
+    failure:
+      dart_count:
+        count: 1
+        sides: 3
+        add: 0
+      damage_per_dart:
+        dice:
+          count: 1
+          sides: 6
+          add: 0
+        average: 3
+        type: poison
+    detection:
+    - location: walls
+      economy: search
+      check:
+        ability: wisdom
+        dc: 15
+        skill: perception
+      reveals: dart_holes
+    - location: floor_pressure_plate
+      economy: search
+      check:
+        ability: wisdom
+        dc: 15
+        skill: perception
+      reveals: pressure_plate
+    disarm:
+    - operation: plug_all_holes
+      materials:
+      - wax
+      - cloth
+      - detritus
+      effect: prevents_firing
+    - operation: wedge_pressure_plate
+      materials:
+      - iron_spike
+      - similar_object
+      effect: prevents_triggering
+    scaling:
+    - levels:
+      - 1
+      - 4
+      poison_per_dart:
+        dice:
+          count: 1
+          sides: 6
+          add: 0
+        average: 3
+    - levels:
+      - 5
+      - 10
+      poison_per_dart:
+        dice:
+          count: 2
+          sides: 6
+          add: 0
+        average: 7
+    - levels:
+      - 11
+      - 16
+      poison_per_dart:
+        dice:
+          count: 4
+          sides: 6
+          add: 0
+        average: 14
+    - levels:
+      - 17
+      - 20
+      poison_per_dart:
+        dice:
+          count: 7
+          sides: 6
+          add: 0
+        average: 24
+  implementation: dnd2024:rules_traps_poisoned_darts
+splat_contracts:
+- id: dnd2024:rules_traps_poisoned_darts
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    hazard:
+      type: object
+      required: true
+    event:
+      type: event
+      required: true
+    resolution:
+      type: resolution
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - hazard_updates
+  events:
+  - movement.completed
+  - turn.started
+  capabilities:
+  - hazards
+  - effects
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 200
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_traps_poisoned_darts
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: e8e0c58c795a9b39b8aaa6f16f25116f947ffe83309b32ccdee971243f646514
   parent_name: Traps
   line_span:
     first: 10103
@@ -45,7 +169,8 @@ splat_clauses:
     for higher levels by increasing each dart’s Poison damage as follows: 7 (2d6) at levels 5–10, 14 (4d6)
     at levels 11–16, or 24 (7d6) at levels 17–20.'
   sha256: 3ed7295e48100cd8809e6ebe516718edbf41080c490ee8626a9c04fbd09ab9e1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Poisoned Darts

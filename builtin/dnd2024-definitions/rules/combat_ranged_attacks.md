@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/combat_ranged_attacks
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 15
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 9f5c3979c2a3254e998f5e40fe97e3e1fbc9bb79f905ddcd98fde550b33b63d9
   parent_name: Combat
   line_span:
     first: 1007
@@ -33,7 +34,7 @@ splat_clauses:
   text: '# Ranged Attacks When you make a ranged attack, you fire a bow, hurl an axe, or otherwise send
     projectiles to strike a foe at a distance. Many spells also involve making a ranged attack.'
   sha256: 641ba14bb16e26a712e881d58443fd40b181fb3cec56dc68d968c16ef43389e1
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Ranged Attacks

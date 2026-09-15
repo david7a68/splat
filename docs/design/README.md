@@ -3,6 +3,7 @@
 The candidate schema for the agreed scope is complete and ready for review.
 The design is committed. A [read-only verifier and SRD source import](../srd-import.md)
 now exercise part of the format. A [bounded execution proof](../execution-proof.md) now runs converted SRD mechanics.
+The [whole-SRD catalogue](../srd-definitions.md) now contains typed rule specifications with explicit engine gaps.
 The full simulator, content editor and campaign content loader remain unimplemented.
 
 Read these current contracts in order:

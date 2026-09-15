@@ -1,8 +1,9 @@
-# Whole-SRD definition conversion
+# SRD 5.2.1 definition conversion
 
-The catalogue contains **2,065 definition drafts**, derived from the bundled
-SRD 5.2.1. This pass has complete named-entry and page coverage, but **semantic
-conversion is not complete**. It must not be described as an executable SRD.
+The whole catalogue is converted: **1,970 typed rule specifications**, plus
+**95 informational entries**. All **2,065** inventoried entries are accounted
+for, and no `source_rules` conversion gaps remain. Engine implementation remains
+outside this pass. The existing 32 bounded execution profiles still run.
 
 | Content | Definitions |
 | --- | ---: |
@@ -17,106 +18,111 @@ conversion is not complete**. It must not be described as an executable SRD.
 | Class progression tables | 12 |
 | Other rule sections | 522 |
 
-All 240 class progression rows have structured numeric columns, including
-Warlock Pact Magic slots. All 38 weapons and 13 armor/shield rows have extracted
-values. All spell headers have level, school, class list, casting time, range,
-components, material text and duration. Creature drafts retain scores, signed
-save totals, AC, fixed HP and movement values where stated. Variable HP is not
-replaced by the first printed alternative. Defenses, senses, gear, skill totals
-and languages are retained as labelled source text pending further conversion.
+The [coverage inventory](../builtin/dnd2024-definitions/coverage.json) records
+source hashes, definition identities, status, execution profiles and source
+adjudications. The [contract registry](../builtin/dnd2024-definitions/contracts.json)
+records typed interfaces, closed parameter shapes, exact specifications,
+references, citations and missing engine capabilities.
 
-These counts describe an extraction inventory. They do not count all option
-variants as separate, fully resolved templates. For example, the source heading
-“Potions of Healing” still covers four strengths; the four existing execution
-profiles remain separate. General tables other than the weapon, armor and class
-progression tables still need table-specific decoding. Section extraction can
-include table fragments within feature prose; the page reference retains the
-original layout. Page coverage alone does not prove semantic coverage.
+## What was converted
 
-## Status and execution
+Each rule-bearing note now contains a source-specific registered rule contract
+with explicit parameters. These include targets, save and attack outcomes,
+scaling, choices, traits, conditions, durations, resources, recovery, forms,
+spell grants, equipment effects, inventory capacities, restrictions and exceptions.
+Keeping the source prose alone no longer qualifies a note as specified.
 
-The machine-readable [coverage inventory](../builtin/dnd2024-definitions/coverage.json)
-records two separate kinds of gaps:
+The source research is kept as [Markdown with YAML frontmatter](research/srd-conversion/).
+The converter merges these specifications with the original stat/header/table
+extraction to produce the built-in Markdown library. Full original prose remains
+with each definition for reading and comparison. The input documents cite the
+bundled official CC-BY SRD; no third-party mechanical database is shipped.
 
-- **Conversion gap:** a source clause still needs typed mechanics, an explicit
-  interpretation, or a resolved reference. There are **2,060 partial drafts**.
-- **Engine gap:** a specified rule contract has no engine adapter. Five definitions
-  have source-specific contracts: Hydra, Counterspell, Polymorph, Bag of Holding,
-  and Wand of Fireballs. They require six unavailable contracts. Their referenced
-  definitions can have further conversion gaps; specifying a wand does not make
-  its Fireball dependency executable.
+All 240 class progression rows retain their numeric columns and now have typed
+feature grants. Warlock Pact Magic remains distinct from ordinary spell slots.
+All 38 weapons and 13 armor/shield rows retain their values and have typed usage
+rules. Item and spell variants, random tables, species legacy tables, pack
+contents, spell lists, traps, hazards and character options are encoded within
+the definitions that own them. Variants can be parameters/options within one
+entry; the count does not imply each variant has a separate UUID.
+
+Several source extractions mixed table columns into neighboring notes. Research
+used the original page layout to place those mechanics under the right owner,
+including the Apparatus of the Crab controls, species tables, and Giant Fly's
+neighboring item prose. Source references and the PDF remain unchanged.
+
+## Conversion is distinct from engine support
+
+A **conversion gap** means a rule lacks a complete typed specification. There
+are none in this generated catalogue. An **engine gap** means the required
+registered adapter does not exist. The verifier lists these separately and
+also groups missing adapters by capability.
+
+The 1,970 source-specific contracts are interface and behavior specifications;
+they are not 1,970 executable plugins. Their parameters are data, never scripts.
+Some operations can later share engine adapters. This pass does not claim that
+those adapters, or a full encounter simulator, have been implemented.
 
 There are **zero executable full catalogue definitions**. The existing
-[32 execution profiles](execution-proof.md) remain available for the bounded
-proof. They are alternate views of the same source identities, not extra library
-copies. The catalogue preserves UUIDs for keys shared with those profiles.
-Load the catalogue with the source package, or the proof profiles with the source
-package. Loading both views together correctly reports duplicate identities.
-No second package manifest claims the `dnd2024` namespace.
+[32 execution profiles](execution-proof.md) are alternate bounded views of the
+same source identities. The catalogue preserves their shared UUIDs and keys.
+Load either the catalogue or those profiles with the source package. Loading
+both as independent library copies correctly reports duplicate identities.
+There is one `dnd2024` package owner; no second namespace manifest was added.
 
-The compiler rejects a note with conversion metadata before compiling actions.
-Changing a status string cannot grant execution. The reader rejects concealed
-conversion gaps, changed clause hashes, mismatched required-mechanic lists and
-unknown status fields. Built-in verification checks the inventory, source hashes,
-identities, references, all named sources, every rules page, and the rejection of
-every catalogue draft by the execution compiler. This verifies structure and the
-execution boundary, not the correctness of an unavailable adapter.
+The compiler rejects unavailable catalogue contracts before action execution.
+The reader checks declaration types, specification fingerprints and conversion
+status. Built-in verification also checks the registry's closed parameter
+shapes, implementation names, provenance, all references and source coverage.
+Changing a content declaration cannot register engine code or grant execution.
 
-## Source and known ambiguity
+## Source rulings and required inputs
 
-Only the bundled official SRD contributes shipped data. A third-party structural
-snapshot was investigated but is not included or used by this converter. The
-source PDF, source text and reference notes remain unchanged. Attribution is
-included in the catalogue's `LICENSE.txt`.
+The Young White Dragon's unsigned Intelligence SAVE `2` is now a supplied
+base total of **+2**, under the user's ruling. Its Intelligence score remains
+6. Roll `d20 + 2`, then apply additional modifiers; do not add the ability
+modifier or proficiency again. [Online research](research/young-white-dragon-save.md)
+found another project explicitly using +2, while Open5e and Foundry use −2.
+The raw publisher value remains in the source record.
 
-The Young White Dragon's Intelligence saving throw is printed as an unsigned
-`2` on page 340. This was checked in the rendered PDF. The draft keeps its other
-stats and records this save as unresolved. It does not silently choose `+2` or
-`-2`. That ambiguity is a conversion gap, not an engine gap.
+Narrow source ambiguities are explicit case inputs or rule selections, not
+invented defaults or generic manual-resolution fallbacks:
 
-The Hydra contract retains the selected ruling: recompute extra reaction capacity
-at the start of its next turn. It heals 20 HP per regrowth event, not per head.
-Counterspell requires a Constitution save and does not expend the interrupted
-spell's slot on failure. Polymorph retains HP and grants temporary HP. Bag of
-Holding tracks both mass and volume limits. Wand of Fireballs permits 1–3 charges,
-levels 3–5, dawn recovery and the last-charge destruction roll.
+- Creation: duration for minerals absent from its material-duration table.
+- Flesh to Stone: whether its initial failed save counts toward the three failures.
+- Control Weather: time to restore normal weather gradually after the spell ends.
+- Ioun Stone: absorption of a spell larger than the remaining lifetime budget.
+- Land vehicles: differing travel-pace statements on pages 12 and 192.
+
+These cases appear in the coverage report's `adjudications` list. They must be
+resolved when the affected case is used. Normal source-authorized GM choices,
+such as Wish's Reshape Reality mode, remain explicit choices. Geometry facts
+remain supplied assumptions; this work does not introduce maps or pathfinding.
+The truncated Telekinesis example adds no guessed rule.
+
+The [independent source audit](research/srd-contract-audit.md) checked nine complex
+contracts. Its two findings were fixed: separate Apparatus claw damage rolls,
+and Wand of Wonder's requirement that its own restraint still apply before the
+petrification repeat save. Regression tests cover both.
 
 ## Reproduce and verify
 
-Run from the repository root, with Python, PyYAML and Poppler available:
+From the repository root, with Python, PyYAML and Poppler available:
 
 ```sh
 python scripts/convert_srd_definitions.py --check
 python -m unittest discover -s scripts -p 'test_*.py'
-devenv shell -- cargo run --locked --bin verify-content -- --definitions
 devenv shell -- cargo run --locked --bin verify-content -- --definitions --require-converted
 devenv shell -- cargo run --locked --bin verify-content -- --executable
 devenv shell -- cargo run --locked --bin execution-proof -- 42
 ```
 
-`--definitions` succeeds for a valid catalogue with disclosed gaps.
-`--require-converted` deliberately fails while partial definitions remain. Engine
-gaps alone do not fail that flag; they still prevent execution. Both commands
-print the separate gap lists. The proof command exercises only its stated subset.
+The conversion command now requires a research specification for every entry.
+`--allow-partial` is a development option that cannot pass the final conversion
+gate. Omit `--check` to regenerate. Regeneration refuses to overwrite edited
+notes or remove unknown files. It does not write campaign data.
 
-To regenerate, omit `--check`. Source hashes pin the input. Reviewed contracts in
-`scripts/srd_inputs/contracts.yaml` also pin their source note hash, so a changed
-source cannot silently retain reviewed status. Regeneration refuses unknown
-stale files and edited generated notes. It does not write campaign data.
-
-## Remaining conversion work
-
-The inventory is a starting point for the remaining semantic pass, not a
-substitute for it. Work still includes:
-
-- Encode remaining action riders, spell effects, resource recovery, traits,
-  conditions, scaling, grants and equipment behavior.
-- Resolve class/subclass membership and feature grants into entry references;
-  split option families into selectable variants where the source requires it.
-- Decode remaining tables, such as equipment subtypes, random tables and
-  feature choices; connect table rows to the rules that use them.
-- Replace each `source_rules` conversion gap only after all its clauses are
-  accounted for by typed data or a specified source-specific contract.
-
-Engine implementation remains outside this pass, as requested. These conversion
-gaps must not be renamed to engine gaps merely to make the report pass.
+`--require-converted` succeeds with zero conversion gaps. Missing engine adapters
+are reported and still block execution. The proof command tests only its stated
+supported subset. Structural validation and a source audit do not replace
+future adapter tests for all possible rule interactions.

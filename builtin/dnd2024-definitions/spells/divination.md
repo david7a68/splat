@@ -30,17 +30,69 @@ splat_spell:
   material:
     description: incense worth 25+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/divination
+  implementation: dnd2024:spell_divination
+  parameters:
+    question:
+      maximum: 1
+      subjects:
+      - specific_goal
+      - event
+      - activity
+      future_limit_days: 7
+    reply:
+      provider: gm
+      truthful: true
+      form_choices:
+      - short_phrase
+      - cryptic_rhyme
+      accounts_for_later_changed_circumstances: false
+    repeat_cast:
+      reset: caster_long_rest_completed
+      no_answer_chance_percent_per_cast_after_first: 25
+      cumulative: true
+splat_contracts:
+- id: dnd2024:spell_divination
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    campaign:
+      required: false
+      type: campaign
+    message:
+      required: false
+      type: text
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - knowledge
+  events:
+  - spell.cast_completed
+  - rest.completed
+  capabilities:
+  - spellcasting
+  - effects
+  - knowledge
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 5b6d49a14e9b4583c44b58688fe24439db84016f43582f30a5bde0b1ad97ddac
   source_path: builtin/srd-5.2.1/spell/divination.md
   pages:
   - 125
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_divination
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: fc8ad0188f090072e262c4051c80d0ee3c1e830af7412ce4c0389745d474dd44
 splat_clauses:
 - key: source_rules
   text: '# Divination Level 4 Divination (Cleric, Druid, Wizard) Casting Time: Action or Ritual Range:
@@ -51,7 +103,8 @@ splat_clauses:
     such as the casting of other spells. If you cast the spell more than once before finishing a Long
     Rest, there is a cumulative 25 percent chance for each casting after the first that you get no answer.'
   sha256: 265868ab8e3c98cca1de74c08f5f55dbe759f90a7c25d96a53eb327062f58412
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Divination

@@ -30,17 +30,78 @@ splat_spell:
   material:
     description: a pinch of colorful sand
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/color_spray
+  implementation: dnd2024:spell_color_spray
+  parameters:
+    spell_lifetime:
+      concentration: false
+      instantaneous: true
+    area:
+      shape: cone
+      length_feet: 15
+      origin: caster
+    targets:
+      kind: creature
+      selection: all_in_area
+    save:
+      ability: constitution
+      dc: spell_save_dc
+      success: unaffected
+    failure:
+      condition: blinded
+      until:
+        event: turn.end
+        subject: caster
+        occurrence: next
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_color_spray
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    origin:
+      type: location
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - turn.end
+  capabilities:
+  - spellcasting
+  - effects
+  - areas
+  - tests
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 3101fcbf046c6050f4d78e0f0c96bac177885b4ef8b4c9eb9f14ab03149ed0bf
   source_path: builtin/srd-5.2.1/spell/color_spray.md
   pages:
   - 116
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_color_spray
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 91bf1689a1592ea183f9c61ac0992dae3a7a2b82bdc5fe82b0bb13b7a2f21df0
 splat_clauses:
 - key: source_rules
   text: '# Color Spray Level 1 Illusion (Bard, Sorcerer, Wizard) Casting Time: Action Range: Self Components:
@@ -48,7 +109,8 @@ splat_clauses:
     colorful light. Each creature in a 15-foot Cone originating from you must succeed on a Constitution
     saving throw or have the Blinded condition until the end of your next turn.'
   sha256: 9dfdcf471ca5637bbfe3e56968b2382fe13a13c5c6825ec40b3ea7f19a390d32
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Color Spray

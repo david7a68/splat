@@ -57,17 +57,170 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/hell_hound
+  implementation: dnd2024:creature_hell_hound
+  parameters:
+    skill_totals:
+      perception: 5
+    damage_immunities:
+    - fire
+    condition_immunities: []
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 15
+    languages:
+      speak: false
+      known:
+      - infernal
+    features:
+      pack_tactics:
+        economy: passive
+        op: roll.advantage
+        rolls:
+        - attack
+        target_kind: creature
+        when:
+          ally_within_target_ft: 5
+          ally_excluded_conditions:
+          - incapacitated
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 3
+            average: 7
+          - type: fire
+            amount:
+              dice:
+                count: 1
+                sides: 6
+              add: 0
+            average: 3
+      fire_breath:
+        economy: action
+        op: saving_throw
+        ability: dexterity
+        dc: 12
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            origin: actor
+            size_ft: 15
+        failure:
+        - op: damage
+          components:
+          - type: fire
+            amount:
+              dice:
+                count: 5
+                sides: 6
+              add: 0
+            average: 17
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+        recharge:
+          die_sides: 6
+          success_min: 5
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 2
+          feature: bite
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_hell_hound
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: f3d97e860453ec92db3d3bd80a55a031291ff1f0f4f1ebd229015dcf334f31d8
   source_path: builtin/srd-5.2.1/creature/hell_hound.md
   pages:
   - 297
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_hell_hound
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 52cbc743e6fcf5d5386e36b6b74fa028005654808491e8dba980842d71d4f51c
 splat_clauses:
 - key: source_rules
   text: '# Hell Hound Medium Fiend, Lawful Evil AC 15 Initiative +1 (11) HP 58 (9d8 + 18) Speed 50 ft.
@@ -80,7 +233,8 @@ splat_clauses:
     plus 3 (1d6) Fire damage. Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 12, each creature
     in a 15-foot Cone. Failure: 17 (5d6) Fire damage. Success: Half damage.'
   sha256: 510da9ab01366ccc5434348b9dadba25a4e593d864eb7d342f67a4a6cec31dbd
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hell Hound

@@ -25,17 +25,81 @@ splat_spell:
   ritual: false
   range:
     feet: 120
+splat_rule:
+  mechanic: dnd2024:spells/fire_bolt
+  implementation: dnd2024:spell_fire_bolt
+  parameters:
+    targets:
+      kind: creature_or_object
+      within_spell_range: true
+    attack:
+      kind: ranged_spell
+      hit:
+        damage:
+          dice:
+            count:
+              by_caster_level:
+              - minimum: 1
+                count: 1
+              - minimum: 5
+                count: 2
+              - minimum: 11
+                count: 3
+              - minimum: 17
+                count: 4
+            sides: 10
+            add: 0
+          type: fire
+        ignite_if:
+          target_flammable: true
+          target_worn: false
+          target_carried: false
+splat_contracts:
+- id: dnd2024:spell_fire_bolt
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    objects:
+      required: false
+      type: object_list
+    caster_level:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - damage
+  - attacks
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - dice
+  - damage
+  - attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: aee0d03ad30634fa063b39cc83068f9808928c485dc42ef2fedf40c3c0225380
   source_path: builtin/srd-5.2.1/spell/fire_bolt.md
   pages:
   - 132
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_fire_bolt
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 129536b987a96435138deb6ad79c9297364787af270c8e92dd83f77c94d201d3
 splat_clauses:
 - key: source_rules
   text: '# Fire Bolt Evocation Cantrip (Sorcerer, Wizard) Casting Time: Action Range: 120 feet Components:
@@ -44,7 +108,8 @@ splat_clauses:
     object hit by this spell starts burning if it isn’t being worn or carried. Cantrip Upgrade. The damage
     increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).'
   sha256: 9fc7adf0b1f1a8847e27645ef45dd5bcc072f4edb0ea140c96ae2a0c62bceeee
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Fire Bolt

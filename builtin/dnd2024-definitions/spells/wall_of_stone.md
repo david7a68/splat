@@ -30,17 +30,126 @@ splat_spell:
   material:
     description: a cube of granite
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/wall_of_stone
+  implementation: dnd2024:spell_wall_of_stone
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 600
+    wall:
+      material: stone
+      magical: false
+      origin: chosen_point
+      range_feet: 120
+      panel_count: 10
+      panel_choice:
+      - width_feet: 10
+        height_feet: 10
+        thickness_inches: 6
+      - width_feet: 10
+        height_feet: 20
+        thickness_inches: 3
+      every_panel_contiguous_with_another: true
+    appearance_collision:
+      creature_cut_by_wall:
+        push_to_side: caster_choice
+      enclosed_creature:
+        save:
+          ability: dexterity
+          dc: spell_save_dc
+        success:
+          optional: true
+          economy: reaction
+          movement_max: target_speed
+          destination: no_longer_enclosed
+    geometry:
+      shape: caster_choice
+      overlap_creature_or_object: false
+      vertical_required: false
+      firm_foundation_required: false
+      must_merge_with_existing_stone: true
+      solid_existing_stone_support_required: true
+      span_greater_than_feet:
+        threshold: 20
+        panel_size_scale:
+          numerator: 1
+          denominator: 2
+        purpose: supports
+      crude_features_allowed: true
+    panels:
+      armor_class: 15
+      hit_points_per_thickness_inch: 30
+      damage_immunity:
+      - poison
+      - psychic
+      at_zero_hit_points: destroyed
+      connected_panel_collapse:
+        chooser: gm
+        selection: connected_panels
+    duration:
+      full_concentration_seconds: 600
+      full_concentration_result:
+        permanent: true
+        dispellable: false
+      earlier_spell_end: wall_disappears
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_wall_of_stone
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    origin:
+      type: location
+      required: true
+    panel_design:
+      type: choice
+      required: true
+    collision_sides:
+      type: choice
+      required: true
+    collapse_choice:
+      required: false
+      type: choice
+    save_dc:
+      type: integer
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - objects
+  events:
+  - concentration.ended
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - world_objects
+  - areas
+  - tests
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 2535614729f802bebb9fbfa545e726e8f07438eea9c6f89b8e41f2c1991dd34d
   source_path: builtin/srd-5.2.1/spell/wall_of_stone.md
   pages:
   - 173
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_wall_of_stone
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 444b98a55c8605cd8bd3f3a0eb646a1116a80b4877f06f8d554a00f39493c5ef
 splat_clauses:
 - key: source_rules
   text: '# Wall of Stone Level 5 Evocation (Druid, Sorcerer, Wizard) Casting Time: Action Range: 120 feet
@@ -63,7 +172,8 @@ splat_clauses:
     for its full duration, the wall becomes permanent and can’t be dispelled. Otherwise, the wall disappears
     when the spell ends.'
   sha256: e82b38dde1e2f3ecf22ca3723559db67ee0bd02d1e0553c6b50f09c08c3c0137
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wall of Stone

@@ -12,18 +12,94 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/circle_of_the_land_level_3_land_s_aid
-  parameters: {}
+  parameters:
+    action: magic
+    cost:
+      resource: wild_shape
+      amount: 1
+    origin:
+      range_feet: 60
+      type: point
+    area:
+      shape: sphere
+      radius_feet: 10
+    damage_targets:
+      creatures: chosen_in_area
+    save:
+      ability: constitution
+      dc:
+        stat: spell_save_dc
+      success_damage_multiplier: 0.5
+    damage:
+      type: necrotic
+      dice_by_druid_level:
+        '3':
+          dice:
+            count: 2
+            sides: 6
+        '10':
+          dice:
+            count: 3
+            sides: 6
+        '14':
+          dice:
+            count: 4
+            sides: 6
+    healing:
+      target_count: 1
+      target_choice: creature_in_area
+      dice_by_druid_level:
+        '3':
+          dice:
+            count: 2
+            sides: 6
+        '10':
+          dice:
+            count: 3
+            sides: 6
+        '14':
+          dice:
+            count: 4
+            sides: 6
+  implementation: dnd2024:class_features_circle_of_the_land_level_3_land_s_aid
+splat_contracts:
+- id: dnd2024:class_features_circle_of_the_land_level_3_land_s_aid
+  inputs:
+    actor:
+      type: participant
+      required: true
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - feature_state
+  - resource_changes
+  - damage
+  - healing
+  events:
+  - action.magic
+  capabilities:
+  - areas
+  - saving_throws
+  - damage
+  - healing
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 46
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_circle_of_the_land_level_3_land_s_aid
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: f0634313544d5289289c92e06670f8f9a8279a440f7544221c3e7a4b72ccce2e
   parent_name: Circle of the Land
   line_span:
     first: 3826
@@ -38,7 +114,8 @@ splat_clauses:
     2d6 Hit Points. The damage and healing increase by 1d6 when you reach Druid levels 10 (3d6) and 14
     (4d6).'
   sha256: edf63b3e3abaf2c69c386d85a39efa7a59657b8fb7e2429d150f4af63747a272
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Land’s Aid

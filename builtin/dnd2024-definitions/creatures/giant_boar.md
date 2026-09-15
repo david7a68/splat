@@ -55,17 +55,137 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/giant_boar
+  implementation: dnd2024:creature_giant_boar
+  parameters:
+    features:
+      gore:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 5
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 10
+          amount:
+            dice:
+              count: 2
+              sides: 6
+            add: 3
+          damage_type: piercing
+        - op: if
+          test:
+            target_kind: creature
+            target_size_max: large
+            immediately_preceding_movement:
+              minimum_feet: 20
+              direction: straight_toward_target
+          then:
+          - op: damage
+            average: 7
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 0
+            damage_type: piercing
+          - op: condition
+            condition: prone
+        reach_feet: 5
+      bloodied_fury:
+        economy: passive
+        advantage:
+          roll: melee_attack
+          when: self_bloodied
+    defenses: {}
+    senses:
+      passive_perception: 8
+      special: []
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_giant_boar
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 71a8cc74d9b47372012c5d3d9a2fc15624b198f45c7a9f2d94cefd455a012df4
   source_path: builtin/srd-5.2.1/creature/giant_boar.md
   pages:
   - 349
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_giant_boar
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 86d8d1839cef310b21e0906b3a50249259b456dc4b418b90d3304ea061c6869c
 splat_clauses:
 - key: source_rules
   text: '# Giant Boar Large Beast, Unaligned AC 13 Initiative +0 (10) HP 42 (5d10 + 15) Speed 40 ft. MOD
@@ -76,7 +196,8 @@ splat_clauses:
     boar moved 20+ feet straight toward it immediately before the hit, the target takes an extra 7 (2d6)
     Piercing damage and has the Prone condition.'
   sha256: 668f387639350fe46e5b070f4ec7099fc91d036f36b11c23835ce47b12822abd
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Giant Boar

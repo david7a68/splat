@@ -12,18 +12,61 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/ranger_level_10_tireless
-  parameters: {}
+  parameters:
+    temporary_hit_points:
+      action: magic
+      amount:
+        op: max
+        args:
+        - 1
+        - op: add
+          args:
+          - dice:
+              count: 1
+              sides: 8
+          - stat: abilities.wisdom.modifier
+      uses:
+        maximum:
+          op: max
+          args:
+          - 1
+          - stat: abilities.wisdom.modifier
+        recover:
+          event: rest.long_rest_completed
+          amount: all
+    short_rest:
+      exhaustion_reduction: 1
+      minimum_exhaustion: 0
+  implementation: dnd2024:class_features_ranger_level_10_tireless
+splat_contracts:
+- id: dnd2024:class_features_ranger_level_10_tireless
+  inputs:
+    actor:
+      type: participant
+      required: true
+  outputs:
+  - feature_state
+  - resource_changes
+  events:
+  - action.magic
+  - rest.short_rest_completed
+  capabilities:
+  - temporary_hit_points
+  - resources
+  - exhaustion
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 59
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_ranger_level_10_tireless
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: f2681c2a656a1d46bc131b1b8c7c706e30d5e7fb9c01306ba8983b0e147ecda0
   parent_name: Ranger
   line_span:
     first: 4975
@@ -37,7 +80,8 @@ splat_clauses:
     a Long Rest. Decrease Exhaustion. Whenever you finish a Short Rest, your Exhaustion level, if any,
     decreases by 1.'
   sha256: 14d355fc5479d88c07522177415ebff9dc88efcf16ff667c23d41f0013afb415
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 10: Tireless

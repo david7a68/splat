@@ -12,18 +12,50 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/d20_tests_they_don_t_stack
-  parameters: {}
+  parameters:
+    roll: d20
+    cases:
+    - advantage_sources_min: 1
+      disadvantage_sources: 0
+      dice: 2
+      select: highest
+    - advantage_sources: 0
+      disadvantage_sources_min: 1
+      dice: 2
+      select: lowest
+    - advantage_sources_min: 1
+      disadvantage_sources_min: 1
+      dice: 1
+      advantage: false
+      disadvantage: false
+    - advantage_sources: 0
+      disadvantage_sources: 0
+      dice: 1
+  implementation: dnd2024:rules_d20_tests_they_don_t_stack
+splat_contracts:
+- id: dnd2024:rules_d20_tests_they_don_t_stack
+  inputs:
+    roll:
+      type: resolution
+      required: true
+  outputs:
+  - roll_configuration
+  events: []
+  capabilities:
+  - dice
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 8
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_d20_tests_they_don_t_stack
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 92bc568e8401f1addb7c9646eb97817bc549a9a1e079e2576606eb82be775562
   parent_name: D20 Tests
   line_span:
     first: 315
@@ -36,7 +68,8 @@ splat_clauses:
     neither of them, and you roll one d20. This is true even if multiple circumstances impose Disadvantage
     and only one grants Advantage or vice versa. In such a situation, you have neither Advantage nor Disadvantage.'
   sha256: 544cec0f9701e78d5e8f64a69cd8719c83c92797289af50134cf86656fc43f1a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # They Don’t Stack

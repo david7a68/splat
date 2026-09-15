@@ -29,17 +29,96 @@ splat_spell:
   material:
     description: seven thorns
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/spike_growth
+  implementation: dnd2024:spell_spike_growth
+  parameters:
+    spell_lifetime:
+      concentration: true
+      maximum_seconds: 600
+    area:
+      shape: sphere
+      radius_feet: 20
+      origin: chosen_point
+      range_feet: 150
+      affected_surface: ground
+    properties:
+      difficult_terrain: true
+      camouflage: natural_terrain
+    damage:
+      event: participant.moved
+      target_kind: creature
+      movement_scopes:
+      - into_area
+      - within_area
+      per_distance_feet: 5
+      dice: 2d4
+      type: piercing
+      saving_throw: false
+    hazard_recognition:
+      applies_if: did_not_see_area_at_cast
+      before_entering: true
+      economy: search_action
+      check:
+        ability: wisdom
+        skill_choice:
+        - perception
+        - survival
+        dc: spell_save_dc
+      success: recognize_hazard
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_spike_growth
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    origin:
+      type: location
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - damage
+  events:
+  - concentration.ended
+  - participant.moved
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - movement
+  - areas
+  - damage
+  - tests
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 5074e5b0308fae8bb665f1d6604cadd22561e42963af486796d041d9d5639eda
   source_path: builtin/srd-5.2.1/spell/spike_growth.md
   pages:
   - 164
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_spike_growth
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 66a3c9ad0395617b9e33d1ffbd77e04c90801efa3a2cf1a7075c282926405ba6
 splat_clauses:
 - key: source_rules
   text: '# Spike Growth Level 2 Transmutation (Druid, Ranger) Casting Time: Action Range: 150 feet Components:
@@ -51,7 +130,8 @@ splat_clauses:
     or Survival) check against your spell save DC to recognize the terrain as hazardous before entering
     it.'
   sha256: 8efd9475387f47686f0bbcd66a152b70269915073d025dbafaaf07e6ed949e75
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spike Growth

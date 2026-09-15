@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/monk_level_13_deflect_energy
-  parameters: {}
+  parameters:
+    feature:
+      key: dnd2024:class_features/monk_level_3_deflect_attacks
+    replace_eligible_attack_damage_types: all
+  implementation: dnd2024:class_features_monk_level_13_deflect_energy
+splat_contracts:
+- id: dnd2024:class_features_monk_level_13_deflect_energy
+  inputs:
+    actor:
+      type: participant
+      required: true
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+  outputs:
+  - feature_state
+  - damage
+  events:
+  - attack.hit
+  capabilities:
+  - damage
+  - reactions
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 52
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_monk_level_13_deflect_energy
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: f6c510e5b7934d58a54da8602abf36f8538abb755b2f8f70dc65a6e2c995e57b
   parent_name: Monk
   line_span:
     first: 4322
@@ -33,7 +59,8 @@ splat_clauses:
   text: '# Level 13: Deflect Energy You can now use your Deflect Attacks feature against attacks that
     deal any damage type, not just Bludgeoning, Piercing, or Slashing.'
   sha256: 97276d81ef7a01d030cf3c621e7f16adfc5771ad4c4cdf84b4cdf82c06849fce
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 13: Deflect Energy

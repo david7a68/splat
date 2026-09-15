@@ -14,22 +14,23 @@ splat_rule:
   mechanic: dnd2024:glossary/player_character
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: glossary
   source_sha256: 0f445b4ddd3a763322b6982e8634652d906158947844c6ad1dabe3d8c96cd0ba
   source_path: builtin/srd-5.2.1/glossary/player_character.md
   pages:
   - 186
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 101697b8b6359248810ea475407822b75e31941e34fe9a3d59fc6127e4ef8b8d
 splat_clauses:
 - key: source_rules
   text: '# Player Character A player character is a character controlled by a player. See also “Character
     Creation.”'
   sha256: 6b3d7572999ab334763d1734151f98753fde8ba117f0430886593b31f9873f16
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Player Character

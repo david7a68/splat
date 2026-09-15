@@ -31,17 +31,189 @@ splat_spell:
   material:
     description: powdered diamond worth 1,000+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/symbol
+  implementation: dnd2024:spell_symbol
+  parameters:
+    spell_lifetime:
+      concentration: false
+      until: dispelled_or_source_specific_end
+    glyph:
+      placement_choices:
+      - surface
+      - inside_closable_object
+      maximum_diameter_feet: 10
+      object_movement_limit_feet_from_cast_point: 10
+      movement_limit_exceeded:
+        break_glyph: true
+        end_spell: true
+        trigger: false
+    detection:
+      check:
+        ability: wisdom
+        skill: perception
+        dc: spell_save_dc
+      success: notice_glyph
+    trigger:
+      chooser: caster
+      timing: cast
+      surface_examples:
+      - touch
+      - step_on
+      - remove_covering_object
+      - approach_distance
+      object_examples:
+      - open_object
+      - see_glyph
+      creature_type_filters: allowed
+      exemption_conditions: allowed
+      password_exemption: allowed
+      condition_resolution: supplied_trigger_predicate
+    activation:
+      glow: true
+      light: dim
+      shape: sphere
+      radius_feet: 60
+      active_seconds: 600
+      active_expiry: end_spell
+    targets:
+      kind: creature
+      events:
+      - glyph.activated
+      - creature.entered_area
+      - turn.end
+      enter_occurrence_per_turn: first
+      in_sphere: true
+      limit:
+        count: 1
+        per: turn
+        scope: target
+    effect_choice:
+      chooser: caster
+      timing: inscription
+      count: 1
+    options:
+      death:
+        save:
+          ability: constitution
+          dc: spell_save_dc
+        failure_damage:
+          dice: 10d10
+          type: necrotic
+        success_damage_scale:
+          numerator: 1
+          denominator: 2
+      discord:
+        save:
+          ability: wisdom
+          dc: spell_save_dc
+        failure:
+          seconds: 60
+          behavior: argue_with_other_creatures
+          meaningful_communication: false
+          disadvantage:
+          - attack_rolls
+          - ability_checks
+      fear:
+        save:
+          ability: wisdom
+          dc: spell_save_dc
+        failure:
+          condition: frightened
+          seconds: 60
+          source: glyph
+          movement:
+            timing: each_target_turn
+            minimum_feet: 30
+            direction: away_from_glyph
+            only_if_able: true
+      pain:
+        save:
+          ability: constitution
+          dc: spell_save_dc
+        failure:
+          condition: incapacitated
+          seconds: 60
+      sleep:
+        save:
+          ability: wisdom
+          dc: spell_save_dc
+        failure:
+          condition: unconscious
+          seconds: 600
+          awaken_if:
+          - takes_damage
+          - another_creature_uses_action_to_shake_awake
+      stunning:
+        save:
+          ability: wisdom
+          dc: spell_save_dc
+        failure:
+          condition: stunned
+          seconds: 60
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_symbol
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    glyph_location:
+      type: location
+      required: true
+    object:
+      required: false
+      type: object
+    trigger:
+      type: choice
+      required: true
+    effect_choice:
+      type: choice
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    save_dc:
+      type: integer
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - damage
+  events:
+  - creature.entered_area
+  - glyph.activated
+  - spell.cast_completed
+  - turn.end
+  capabilities:
+  - spellcasting
+  - effects
+  - areas
+  - behavior
+  - conditions
+  - damage
+  - tests
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 97973ea51b40db894112e4d233703f11506d025166b527570d71350dea40bd8d
   source_path: builtin/srd-5.2.1/spell/symbol.md
   pages:
   - 167
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_symbol
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: d38c91fda20f8b631cca0003282d6c5de1f7c2cbd0db20c72a84651d8e294378
 splat_clauses:
 - key: source_rules
   text: '# Symbol Level 7 Abjuration (Bard, Cleric, Druid, Wizard) Casting Time: 1 minute Range: Touch
@@ -74,7 +246,8 @@ splat_clauses:
     takes an action to shake it awake. Stunning. Each target must succeed on a Wisdom saving throw or
     have the Stunned condition for 1 minute.'
   sha256: d4d2f7821c3ac126d7d517feeaef529906c9c722d6adabb56bedc119a509ca09
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Symbol

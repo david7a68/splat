@@ -25,17 +25,287 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/prismatic_wall
+  implementation: dnd2024:spell_prismatic_wall
+  parameters:
+    geometry_choice:
+      wall:
+        vertical: true
+        maximum_length_feet: 90
+        maximum_height_feet: 30
+        thickness_inches: 1
+      globe:
+        maximum_diameter_feet: 30
+    geometry:
+      center: point_in_range
+      opaque: true
+      creature_occupied_at_creation: instant_end_no_effect
+    light:
+      bright_radius_feet: 100
+      additional_dim_feet: 100
+    exempt:
+      caster: true
+      designated_creatures_at_cast: true
+      near_and_pass_through_unharmed: true
+    near_effect:
+      triggers:
+      - creature.moves_within_20_feet
+      - turn.start
+      can_see_wall_required: true
+      save:
+        ability: constitution
+        dc:
+          binding: save_dc
+        failure:
+          condition: blinded
+          minutes: 1
+        success:
+          effect: none
+    passage:
+      triggers:
+      - creature.reaches_into_wall
+      - creature.passes_through_wall
+      sequential_layers: true
+      save_per_layer: dexterity
+    destruction:
+      ac: 10
+      one_layer_at_time: true
+      order:
+      - red
+      - orange
+      - yellow
+      - green
+      - blue
+      - indigo
+      - violet
+      destroyed_layer_absent_until_spell_end: true
+      antimagic_field_effect: false
+      dispel_magic_layers:
+      - violet
+    layers:
+    - order: 1
+      color: red
+      save:
+        ability: dexterity
+        dc:
+          binding: save_dc
+        failure:
+          damage:
+            amount:
+              dice:
+                count: 12
+                sides: 6
+                add: 0
+            type: fire
+        success:
+          damage_fraction:
+            numerator: 1
+            denominator: 2
+      blocks: nonmagical_ranged_attacks
+      destroy:
+        damage_type: cold
+        minimum_damage: 25
+    - order: 2
+      color: orange
+      save:
+        ability: dexterity
+        dc:
+          binding: save_dc
+        failure:
+          damage:
+            amount:
+              dice:
+                count: 12
+                sides: 6
+                add: 0
+            type: acid
+        success:
+          damage_fraction:
+            numerator: 1
+            denominator: 2
+      blocks: magical_ranged_attacks
+      destroy:
+        effect: strong_wind
+    - order: 3
+      color: yellow
+      save:
+        ability: dexterity
+        dc:
+          binding: save_dc
+        failure:
+          damage:
+            amount:
+              dice:
+                count: 12
+                sides: 6
+                add: 0
+            type: lightning
+        success:
+          damage_fraction:
+            numerator: 1
+            denominator: 2
+      destroy:
+        damage_type: force
+        minimum_damage: 60
+    - order: 4
+      color: green
+      save:
+        ability: dexterity
+        dc:
+          binding: save_dc
+        failure:
+          damage:
+            amount:
+              dice:
+                count: 12
+                sides: 6
+                add: 0
+            type: poison
+        success:
+          damage_fraction:
+            numerator: 1
+            denominator: 2
+      destroy:
+        spell: passwall
+        or_spell:
+          minimum_level: 5
+          effect: open_portal_on_solid_surface
+    - order: 5
+      color: blue
+      save:
+        ability: dexterity
+        dc:
+          binding: save_dc
+        failure:
+          damage:
+            amount:
+              dice:
+                count: 12
+                sides: 6
+                add: 0
+            type: cold
+        success:
+          damage_fraction:
+            numerator: 1
+            denominator: 2
+      destroy:
+        damage_type: fire
+        minimum_damage: 25
+    - order: 6
+      color: indigo
+      save:
+        ability: dexterity
+        dc:
+          binding: save_dc
+        failure:
+          condition: restrained
+          repeat_save:
+            event: turn.end
+            ability: constitution
+            count_success_and_failure_separately: true
+            consecutive_required: false
+            successes_to_end_restrained: 3
+            failures_to_petrify: 3
+            petrified_until: freed_by_restoring_effect
+        success:
+          effect: none
+      blocks: spells_cast_through
+      destroy:
+        effect: bright_light
+        spell: daylight
+    - order: 7
+      color: violet
+      save:
+        ability: dexterity
+        dc:
+          binding: save_dc
+        failure:
+          condition: blinded
+          repeat_save:
+            event: caster.next_turn.start
+            ability: wisdom
+            success:
+              end_blinded: true
+            failure:
+              end_blinded: true
+              teleport:
+                destination: other_plane
+                chooser: gm
+        success:
+          effect: none
+      destroy:
+        spell: dispel_magic
+splat_contracts:
+- id: dnd2024:spell_prismatic_wall
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spell_attack_modifier:
+      required: false
+      type: integer
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - wall_layers
+  - saves
+  - damage
+  - conditions
+  - planar_transition
+  - destroyed_layers
+  events:
+  - spell.cast_completed
+  - turn.start
+  - turn.end
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - saving_throws
+  - attacks
+  - conditions
+  - spatial_areas
+  - movement
+  - perception
+  - choices
+  - time
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 6a2938d3e6e4be83cbdab37cfd8df25b1b0456ae29b0ce3fc904cde2cedbd37e
   source_path: builtin/srd-5.2.1/spell/prismatic_wall.md
   pages:
   - 155
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_prismatic_wall
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 4acc90146cd7f3269912d9d541bf9d2c8083521250f784dc65921d056a3dce40
 splat_clauses:
 - key: source_rules
   text: '# Prismatic Wall Level 9 Abjuration (Bard, Wizard) Casting Time: Action Range: 60 feet Components:
@@ -73,7 +343,8 @@ splat_clauses:
     ends. On a failed save, the condition ends, and the creature teleports to another plane of existence
     (GM’s choice). Additional Effects: This layer is destroyed by Dispel Magic.'
   sha256: 4d0b20a59c73c0b0f5538918b22b2557a4c926e6d512bfafa01759c72d91fb26
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Prismatic Wall

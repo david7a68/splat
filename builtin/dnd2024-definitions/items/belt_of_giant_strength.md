@@ -15,17 +15,82 @@ splat_item:
   rarity: rarity_varies
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/belt_of_giant_strength
+  implementation: dnd2024:item_belt_of_giant_strength
+  parameters:
+    equipped: worn
+    ability_floor:
+      ability: strength
+      when: unmodified_score_below_variant
+    variants:
+    - giant: hill
+      score: 21
+      rarity: rare
+    - giant: frost
+      score: 23
+      rarity: very_rare
+    - giant: stone
+      score: 23
+      rarity: very_rare
+    - giant: fire
+      score: 25
+      rarity: very_rare
+    - giant: cloud
+      score: 27
+      rarity: legendary
+    - giant: storm
+      score: 29
+      rarity: legendary
+    attunement_required: true
+splat_contracts:
+- id: dnd2024:item_belt_of_giant_strength
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.equipment_changed
+  - ability_score.changed
+  - item.attunement_completed
+  - item.attunement_ended
+  capabilities:
+  - item_effects
+  - item_variants
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: f90d26b9151d19449b3ba68f9d1f167675890e5acee51a739a4193f0d4ce4179
   source_path: builtin/srd-5.2.1/magic_item/belt_of_giant_strength.md
   pages:
   - 213
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_belt_of_giant_strength
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: a7d032e0b7b620410e64107898a5260ff4c1f0820943e036c528498b9a9ee0a3
 splat_clauses:
 - key: source_rules
   text: '# Belt of Giant Strength Wondrous Item, Rarity Varies (Requires Attunement) While wearing this
@@ -35,7 +100,8 @@ splat_clauses:
     Strength (frost or 23 Very Rare stone) Belt of Giant Strength (fire) 25 Very Rare Belt of Giant Strength
     (cloud) 27 Legendary Belt of Giant Strength (storm) 29 Legendary'
   sha256: d836c250aadc65fd087b085afb07b02a384d538ed6a4793d29acc04ddfc950a2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Belt of Giant Strength

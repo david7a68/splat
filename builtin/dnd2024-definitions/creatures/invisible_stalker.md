@@ -61,18 +61,189 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/invisible_stalker
+  implementation: dnd2024:creature_invisible_stalker
+  parameters:
+    features:
+      air_form:
+        economy: trait
+        operation: passive_rule
+        occupy_enemy_space: true
+        minimum_gap_inches: 1
+        extra_movement_cost: 0
+      invisibility:
+        economy: trait
+        operation: passive_rule
+        conditions:
+        - condition: invisible
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: wind_swipe
+          count: 3
+        replacements:
+        - replace_count: 1
+          maximum_uses: 1
+          operation:
+            operation: use_feature
+            feature: vortex
+      wind_swipe:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 7
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 11
+            roll:
+              count: 2
+              sides: 6
+              modifier: 4
+            type: force
+      vortex:
+        economy: action
+        operation: saving_throw
+        ability: constitution
+        dc: 14
+        targets:
+          kind: creature
+          count: 1
+          maximum_size: large
+          location: self.space
+        failure:
+          damage:
+          - average: 7
+            roll:
+              count: 1
+              sides: 8
+              modifier: 3
+            type: thunder
+          grapple:
+            condition: grappled
+            source: self
+            escape_dc: 13
+            while_grappled:
+              can_cast_verbal_spells: false
+              damage_each_self_turn_start:
+              - roll:
+                  count: 2
+                  sides: 6
+                  modifier: 0
+                type: thunder
+        success:
+          effects: []
+    skill_totals:
+      perception: 8
+      stealth: 10
+    damage_resistances:
+    - bludgeoning
+    - piercing
+    - slashing
+    damage_immunities:
+    - poison
+    condition_immunities:
+    - exhaustion
+    - grappled
+    - paralyzed
+    - petrified
+    - poisoned
+    - prone
+    - restrained
+    - unconscious
+    senses:
+      darkvision: 60
+      passive_perception: 18
+    languages:
+      speaks:
+      - common
+      - language: primordial
+        dialects:
+        - auran
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_invisible_stalker
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - grappling
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: fbab1143397e67ea044df2d05f6dc3d5398cc31723b181138751274f55957a2a
   source_path: builtin/srd-5.2.1/creature/invisible_stalker.md
   pages:
   - 301
   - 302
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_invisible_stalker
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 5256cf75f7dc7015ffba9d9bbff35cb889c6da84e6662696e00fc834ea29afc8
 splat_clauses:
 - key: source_rules
   text: '# Invisible Stalker Large Elemental, Neutral AC 14 Initiative +7 (22) HP 97 (13d10 + 26) Speed
@@ -89,7 +260,8 @@ splat_clauses:
     condition (escape DC 13). Until the grapple ends, the target can’t cast spells with a Verbal component
     and takes 7 (2d6) Thunder damage at the start of each of the stalker’s turns.'
   sha256: 44575a0e5fd5086a8b40ef020a031118af373973a72ac05674b76814e668d573
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Invisible Stalker

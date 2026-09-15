@@ -12,18 +12,37 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/monk_level_15_perfect_focus
-  parameters: {}
+  parameters:
+    when_uncanny_metabolism_used: false
+    resource: focus_points
+    recover_to_minimum: 4
+  implementation: dnd2024:class_features_monk_level_15_perfect_focus
+splat_contracts:
+- id: dnd2024:class_features_monk_level_15_perfect_focus
+  inputs:
+    actor:
+      type: participant
+      required: true
+  outputs:
+  - feature_state
+  - resource_changes
+  events:
+  - initiative.rolled
+  capabilities:
+  - resources
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 52
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_monk_level_15_perfect_focus
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 3c4b129acf83f3d0fc3fb5653391f8d02cf8a12001304486defec98e04522ffa
   parent_name: Monk
   line_span:
     first: 4332
@@ -33,7 +52,8 @@ splat_clauses:
   text: '# Level 15: Perfect Focus When you roll Initiative and don’t use Uncanny Metabolism, you regain
     expended Focus Points until you have 4 if you have 3 or fewer.'
   sha256: 30820644c1cf20c14f10a37c2525a7e0ffb1eeb6f6dec6253f1cc4d4a2001da2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 15: Perfect Focus

@@ -12,18 +12,40 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/parts_of_a_stat_block_traits
-  parameters: {}
+  parameters:
+    trait_activation_options:
+    - always
+    - specified_situation
+    condition_source: trait_definition
+  implementation: dnd2024:rule_parts_of_a_stat_block_traits
+splat_contracts:
+- id: dnd2024:rule_parts_of_a_stat_block_traits
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - monster_parameters
+  events: []
+  capabilities:
+  - monsters
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 256
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_parts_of_a_stat_block_traits
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: c2273dda7db7b8d533349c5638be538c7dc91ea69dd7a4ef60bafb9bdf1ffd0b
   parent_name: Parts of a Stat Block
   line_span:
     first: 11125
@@ -33,7 +55,8 @@ splat_clauses:
   text: '# Traits A monster’s traits, if any, are features that are active at all times or in certain
     situations.'
   sha256: c4dc69a22c6f6a6ebf7d71c539b770f0bb6a46eddd48045a04d9327bfd3dd963
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Traits

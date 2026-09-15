@@ -15,18 +15,396 @@ splat_item:
   rarity: rare
   equipment:
     attunement: required
+splat_rule:
+  mechanic: dnd2024:items/wand_of_wonder
+  implementation: dnd2024:item_wand_of_wonder
+  parameters:
+    equipped: held
+    action: magic
+    charge_cost: 1
+    charges:
+      initial: 7
+      maximum: 7
+      recovery:
+        event: time.dawn
+        amount:
+          roll:
+            count: 1
+            sides: 6
+            add: 1
+        cap_at_maximum: true
+      last_charge:
+        roll:
+          roll:
+            count: 1
+            sides: 20
+        'on': 1
+        result: destroy_to_dust
+    chosen_origin:
+      type: point
+      distance_from_user_ft_max: 120
+    spell_overrides:
+      save_dc: 15
+      range_ft_minimum: 120
+    multiple_possible_subjects:
+      selection: random
+      adjudicator: gm
+    effect_die: 100
+    effects:
+    - range:
+      - 1
+      - 20
+      effect:
+        cast_at_origin: true
+        spell_roll:
+          die: 10
+          rows:
+          - range:
+            - 1
+            - 2
+            spell:
+              key: dnd2024:spells/darkness
+          - range:
+            - 3
+            - 4
+            spell:
+              key: dnd2024:spells/faerie_fire
+          - range:
+            - 5
+            - 6
+            spell:
+              key: dnd2024:spells/fireball
+          - range:
+            - 7
+            - 8
+            spell:
+              key: dnd2024:spells/slow
+          - range:
+            - 9
+            - 10
+            spell:
+              key: dnd2024:spells/stinking_cloud
+    - range:
+      - 21
+      - 25
+      effect:
+        target: user
+        condition: stunned
+        ends: user.next_turn_start
+        chosen_origin_effect: false
+    - range:
+      - 26
+      - 30
+      effect:
+        spell:
+          key: dnd2024:spells/gust_of_wind
+        line:
+          from: user
+          to: chosen_origin
+    - range:
+      - 31
+      - 35
+      effect:
+        target: user
+        damage:
+          amount:
+            roll:
+              count: 1
+              sides: 6
+          type: psychic
+        chosen_origin_effect: false
+    - range:
+      - 36
+      - 40
+      effect:
+        weather: heavy_rain
+        area:
+          shape: cylinder
+          origin: chosen_origin
+          height_ft: 120
+          radius_ft: 60
+        duration:
+          amount: 1
+          unit: minutes
+        obscuration: lightly_obscured
+    - range:
+      - 41
+      - 45
+      effect:
+        create: oversized_butterflies
+        count: 600
+        area:
+          shape: cylinder
+          origin: chosen_origin
+          height_ft: 60
+          radius_ft: 30
+        duration:
+          amount: 10
+          unit: minutes
+        obscuration: heavily_obscured
+    - range:
+      - 46
+      - 50
+      effect:
+        spell:
+          key: dnd2024:spells/lightning_bolt
+        line:
+          from: user
+          to: chosen_origin
+    - range:
+      - 51
+      - 55
+      effect:
+        spell:
+          key: dnd2024:spells/enlarge_reduce
+        mode: enlarge
+        target: closest_creature_to_chosen_origin
+        ineligible_other_target_fallback: user
+    - range:
+      - 56
+      - 60
+      effect:
+        summon_roll:
+          die: 4
+          rows:
+          - range:
+            - 1
+            - 1
+            creature:
+              key: dnd2024:creatures/rhinoceros
+          - range:
+            - 2
+            - 2
+            creature:
+              key: dnd2024:creatures/elephant
+          - range:
+            - 3
+            - 4
+            creature:
+              key: dnd2024:creatures/rat
+        placement: nearest_unoccupied_space_to_chosen_origin
+        magically_formed: true
+        controlled_by_user: false
+        behavior: normal
+        duration:
+          amount: 1
+          unit: hours
+        ends_on: zero_hp
+    - range:
+      - 61
+      - 64
+      effect:
+        create: grass
+        area:
+          shape: circle
+          radius_ft: 60
+          ground: true
+          center: nearest_to_chosen_origin
+        existing_grass:
+          size_multiplier: 10
+          overgrowth_duration:
+            amount: 1
+            unit: minutes
+    - range:
+      - 65
+      - 68
+      effect:
+        target:
+          kind: object
+          choice: gm
+          worn_or_carried: false
+          distance_from_origin_ft_max: 120
+          maximum_each_dimension_ft: 10
+        transport_plane: ethereal
+        no_eligible_target: no_effect
+    - range:
+      - 69
+      - 72
+      effect:
+        spell:
+          key: dnd2024:spells/enlarge_reduce
+        mode: reduce
+        target: self
+        duration:
+          amount: 1
+          unit: minutes
+        chosen_origin_effect: false
+    - range:
+      - 73
+      - 77
+      effect:
+        target: closest_creature_to_chosen_origin
+        grow: leaves
+        ends_on:
+        - leaves_picked_off
+        - 24_hours_elapsed
+    - range:
+      - 78
+      - 82
+      effect:
+        chosen_origin_effect: false
+        area:
+          shape: emanation
+          origin: user
+          radius_ft: 30
+        save:
+          ability: constitution
+          dc: 15
+          failure:
+            condition: blinded
+            duration:
+              amount: 1
+              unit: minutes
+          repeat:
+            event: target.turn_end
+            success: end_effect
+    - range:
+      - 83
+      - 87
+      effect:
+        spell:
+          key: dnd2024:spells/invisibility
+        target: self
+        chosen_origin_effect: false
+    - range:
+      - 88
+      - 92
+      effect:
+        chosen_origin_effect: false
+        gem_count:
+          multiply:
+          - roll:
+              count: 1
+              sides: 4
+          - 10
+        gem_value_gp: 1
+        area:
+          shape: line
+          origin: wand_tip
+          toward: chosen_origin
+          length_ft: 30
+          width_ft: 5
+        damage:
+          type: bludgeoning
+          amount_per_gem: 1
+          total: gem_count
+          allocation: divide_equally_among_all_creatures_in_line
+    - range:
+      - 93
+      - 97
+      effect:
+        spell:
+          key: dnd2024:spells/polymorph
+        target: closest_creature_to_chosen_origin
+        form_roll:
+          die: 4
+          rows:
+          - range:
+            - 1
+            - 1
+            creature:
+              key: dnd2024:creatures/black_bear
+          - range:
+            - 2
+            - 2
+            creature:
+              key: dnd2024:creatures/giant_wasp
+          - range:
+            - 3
+            - 4
+            creature:
+              key: dnd2024:creatures/frog
+    - range:
+      - 98
+      - 100
+      effect:
+        target: closest_creature_to_chosen_origin
+        save:
+          ability: constitution
+          dc: 15
+          failure:
+            condition: restrained
+            repeat_at: target.next_turn_end
+            repeat_save:
+              requires:
+                condition: restrained
+                source: this_effect
+                active: true
+              ability: constitution
+              dc: 15
+              failure:
+                replace_condition: petrified
+                ends_on:
+                - spell:
+                    key: dnd2024:spells/greater_restoration
+                - magic_equivalent: greater_restoration
+                  adjudicator: gm
+              success:
+                end_effect: true
+    gem_damage_rounding:
+      scope: gem_total_divided_by_creature_count
+      policy: system_round_down
+      reason: general_round_down_rule
+    attunement_required: true
+splat_contracts:
+- id: dnd2024:item_wand_of_wonder
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    selection:
+      required: false
+      type: choice
+    context:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - item_state_changes
+  events:
+  - item.activation_requested
+  - turn.ended
+  - time.elapsed
+  - time.dawn
+  - item.attunement_completed
+  - item.attunement_ended
+  capabilities:
+  - item_effects
+  - dice
+  - item_spellcasting
+  - item_charges
+  - effect_duration
+  - spatial_targeting
+  - summoning
+  - planar_travel
+  - damage
+  - conditions
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 98843662831d005eefbae843621b0ce81b5ab5ae5e5a8c238153b558a51254f2
   source_path: builtin/srd-5.2.1/magic_item/wand_of_wonder.md
   pages:
   - 251
   - 252
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_wand_of_wonder
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_3.md
+  specification_sha256: 847d40fd80bf3e174a005d733d0be669cf4c7d54e8a666f81b0b463975098aac
 splat_clauses:
 - key: source_rules
   text: '# Wand of Wonder Wand, Rare (Requires Attunement) This wand has 7 charges. While holding it,
@@ -78,7 +456,8 @@ splat_clauses:
     failed save, the creature has the Petrified condition instead of the Restrained condition. The petrification
     lasts until the creature is freed by the Greater Restoration spell or similar magic.'
   sha256: b688ca452c6d803194e10f9feabaf9aca3a6d046a8e9797f2caf45dcf810ea7a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wand of Wonder

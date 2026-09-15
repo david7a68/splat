@@ -58,18 +58,199 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/purple_worm
+  implementation: dnd2024:creature_purple_worm
+  parameters:
+    senses:
+    - sense: blindsight
+      range_ft: 30
+    - sense: tremorsense
+      range_ft: 60
+    passive_perception: 9
+    languages:
+      speak: true
+      known: []
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 14
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 3
+                sides: 8
+              add: 9
+            average: 22
+        - op: grapple
+          escape_dc: 19
+          when:
+            target_kind: creature
+            target_maximum_size: large
+          while_grappled:
+          - op: condition.apply
+            condition: restrained
+      tail_stinger:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 14
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 10
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 9
+            average: 16
+          - type: poison
+            amount:
+              dice:
+                count: 10
+                sides: 6
+              add: 0
+            average: 35
+      tunneler:
+        economy: passive
+        op: burrow.solid_rock
+        speed_multiplier: 0.5
+        leaves_tunnel_diameter_ft: 10
+      swallow:
+        economy: bonus_action
+        op: saving_throw
+        ability: strength
+        dc: 19
+        targets:
+          kind: creature
+          count: 1
+          maximum_size: large
+          grappled_by: actor
+        failure:
+        - op: swallow
+          end_grapple: true
+          conditions:
+          - blinded
+          - restrained
+          total_cover_against: outside_actor
+          periodic_damage:
+            event: actor.turn_start
+            damage:
+            - type: acid
+              amount:
+                dice:
+                  count: 5
+                  sides: 6
+                add: 0
+              average: 17
+        success: []
+        swallowed_capacity: 3
+        regurgitation:
+          trigger: turn.end
+          ability: constitution
+          dc: 21
+          failure:
+            targets: all_swallowed_creatures
+            exit_within_ft: 5
+            condition: prone
+          when:
+            damage_to_actor_from_one_swallowed_creature_this_turn_at_least: 30
+        actor_death:
+          remove_condition: restrained
+          escape_movement_cost_ft: 20
+          exit_condition: prone
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 1
+          feature: bite
+        - count: 1
+          feature: tail_stinger
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_purple_worm
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - creature.feature_requested
+  - that_turn.end
+  - turn.end
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_lifecycle
+  - creature_rules
+  - damage
+  - effects
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: cb7b19b783001d1e37f5c6effa6f2f9af306c843905bbeacf614c56e9d366cc2
   source_path: builtin/srd-5.2.1/creature/purple_worm.md
   pages:
   - 316
   - 317
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_purple_worm
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 3183cd5bc850ba1a62709798c76f64fe1d56505c16cd8a9fd661778d85d9edf5
 splat_clauses:
 - key: source_rules
   text: '# Purple Worm Gargantuan Monstrosity, Unaligned AC 18 Initiative +3 (13) HP 247 (15d20 + 90)
@@ -91,7 +272,8 @@ splat_clauses:
     of the worm and has the Prone condition. If the worm dies, any swallowed creature no longer has the
     Restrained condition and can escape from the corpse using 20 feet of movement, exiting Prone.'
   sha256: f20fc4d688d675825590278168f4e720cbd60fc45424b54605d49d7cb4e4e414
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Purple Worm

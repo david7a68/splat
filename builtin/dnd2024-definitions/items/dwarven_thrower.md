@@ -16,17 +16,81 @@ splat_item:
   equipment:
     attunement: required
     attunement_requirement_text: a Dwarf or a Creature Attuned to a Belt of Dwarvenkind
+splat_rule:
+  mechanic: dnd2024:items/dwarven_thrower
+  implementation: dnd2024:item_dwarven_thrower
+  parameters:
+    weapon_bonus:
+      attack: 3
+      damage: 3
+    attunement_eligibility:
+      any_of:
+      - species: dwarf
+      - attuned_item:
+          key: dnd2024:items/belt_of_dwarvenkind
+    thrown:
+      normal_range_ft: 20
+      long_range_ft: 60
+    ranged_hit_extra_damage:
+      type: force
+      normal:
+        dice: 1
+        sides: 8
+        bonus: 0
+      giant:
+        dice: 2
+        sides: 8
+        bonus: 0
+    return_to_hand:
+      event: ranged_attack_hit_or_miss
+      timing: immediate
+    attunement:
+      required: true
+      eligibility:
+        any_of:
+        - species: dwarf
+        - attuned_item:
+            key: dnd2024:items/belt_of_dwarvenkind
+splat_contracts:
+- id: dnd2024:item_dwarven_thrower
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - equipment
+  - item_resources
+  - effects
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: d92cccf915ba601edfbc9afc052067cdb221e58ada710dc18df2ec3538a0825d
   source_path: builtin/srd-5.2.1/magic_item/dwarven_thrower.md
   pages:
   - 219
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_dwarven_thrower
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: cea7dbdbc824f43df3cae864f87de0082112d6b16893b163c48a57c1a476c461
 splat_clauses:
 - key: source_rules
   text: '# Dwarven Thrower Weapon (Warhammer), Very Rare (Requires Attunement by a Dwarf or a Creature
@@ -36,7 +100,8 @@ splat_clauses:
     2d8 Force damage if the target is a Giant. Immediately after hitting or missing, the weapon flies
     back to your hand.'
   sha256: 0fa9a9b30c7c23ba2d3890d253e7407d1651d0e570106ae71c923bb981e6b753
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dwarven Thrower

@@ -12,18 +12,122 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule_group:
   category: species
+splat_rule:
+  mechanic: dnd2024:species/elf
+  implementation: dnd2024:species_elf
+  parameters:
+    creature_type: humanoid
+    size: medium
+    height_feet_approximate:
+      minimum: 5
+      maximum: 6
+    speed_feet: 30
+    darkvision_feet: 60
+    elven_lineage:
+      choice:
+        count: 1
+        options:
+        - id: drow
+          level_1:
+            darkvision_feet: 120
+            cantrip:
+              key: dnd2024:spells/dancing_lights
+          level_3_spell:
+            key: dnd2024:spells/faerie_fire
+          level_5_spell:
+            key: dnd2024:spells/darkness
+        - id: high_elf
+          level_1:
+            cantrip:
+              key: dnd2024:spells/prestidigitation
+            replace_cantrip:
+              event: rest.long_rest_completed
+              list: wizard
+              maximum: 1
+          level_3_spell:
+            key: dnd2024:spells/detect_magic
+          level_5_spell:
+            key: dnd2024:spells/misty_step
+        - id: wood_elf
+          level_1:
+            speed_feet: 35
+            cantrip:
+              key: dnd2024:spells/druidcraft
+          level_3_spell:
+            key: dnd2024:spells/longstrider
+          level_5_spell:
+            key: dnd2024:spells/pass_without_trace
+      level_basis: character_level
+      spellcasting_ability_choice:
+        count: 1
+        options:
+        - intelligence
+        - wisdom
+        - charisma
+      leveled_spell_grants:
+        always_prepared: true
+        each_spell_free_cast:
+          spell_slot_cost: 0
+          uses:
+            maximum: 1
+            recover:
+              event: rest.long_rest_completed
+              amount: all
+        can_use_appropriate_spell_slots: true
+    fey_ancestry:
+      saving_throw_advantage:
+        avoid_or_end_condition: charmed
+    keen_senses:
+      skill_proficiency_choice:
+        count: 1
+        options:
+        - insight
+        - perception
+        - survival
+    trance:
+      sleep_required: false
+      magical_sleep_immune: true
+      long_rest_hours: 4
+      required_activity: trancelike_meditation
+      conscious_during_rest: true
+splat_contracts:
+- id: dnd2024:species_elf
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+  outputs:
+  - feature_state
+  - spell_grants
+  - proficiencies
+  events:
+  - character.species_selected
+  - character.level_gained
+  - rest.long_rest_completed
+  - saving_throw.pending
+  capabilities:
+  - character_creation
+  - spellcasting
+  - senses
+  - proficiencies
+  - rest
 splat_conversion:
-  status: partial
+  status: specified
   category: species
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 84
   - 85
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:species_elf
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: f7a9e928e62ce3d8d3728bd3ad2e2e080eea2bc502f525a58da9d82e73d59a2e
   line_span:
     first: 7237
     count: 39
@@ -46,7 +150,8 @@ splat_clauses:
     skill. Trance. You don’t need to sleep, and magic can’t put you to sleep. You can finish a Long Rest
     in 4 hours if you spend those hours in a trancelike meditation, during which you retain consciousness.'
   sha256: d36702972c8c812a8afef74b2a1d9ef343ece1f9223b65c9c42b70df03f92b4e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Elf

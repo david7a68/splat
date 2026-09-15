@@ -56,18 +56,123 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/zombie
+  implementation: dnd2024:creature_zombie
+  parameters:
+    damage_immunities:
+    - poison
+    condition_immunities:
+    - exhaustion
+    - poisoned
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 8
+    languages:
+      speak: false
+      known:
+      - common
+      additional_choice_count: 1
+    features:
+      undead_fortitude:
+        economy: passive
+        trigger: damage.reduces_actor_to_zero_hp
+        exclude:
+          damage_type: radiant
+          critical_hit: true
+        save:
+          ability: constitution
+          dc:
+            add:
+            - 5
+            - event_field: damage_taken
+          success:
+            hp_instead: 1
+      slam:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 3
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 1
+                sides: 8
+              add: 1
+            average: 5
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_zombie
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  - damage.reduces_actor_to_zero_hp
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: c750a5cd4af5d95f8d69ddc3d8fea882989ba098d1e14982990162a86ae97813
   source_path: builtin/srd-5.2.1/creature/zombie.md
   pages:
   - 343
   - 344
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_zombie
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 694f84c60d6fa8823821bd007fe8f7e5c2d338d239e1e04dff5549026613f591
 splat_clauses:
 - key: source_rules
   text: '# Zombie Medium Undead, Neutral Evil AC 8 Initiative -2 (8) HP 15 (2d8 + 6) Speed 20 ft. MOD
@@ -79,7 +184,8 @@ splat_clauses:
     drops to 1 Hit Point instead. ### Actions Slam. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d8 + 1)
     Bludgeoning damage.'
   sha256: e638350aafb69d20a9cb7d004c284ab392802822454cce96621ad5fd8edca6a7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Zombie

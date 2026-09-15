@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/fear_and_mental_stress
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 196
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: fc2af34ffaa6bfbcb2420a590b0dce244fc3e77a1bafda7e6ffface223d49d5c
   parent_name: Fear and Mental Stress
   line_span:
     first: 9683
@@ -36,7 +37,7 @@ splat_clauses:
     terrify or fray the mind of even the most stalwart adventurer. If you plan to use any of these rules,
     discuss them with your players at the start of the campaign.'
   sha256: c4a337a69ea7590fe50589f6cc3779d6de26ec3b5a65ed8e366f754cf31661e8
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Fear and Mental Stress

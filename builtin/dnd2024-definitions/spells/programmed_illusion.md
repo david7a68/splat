@@ -29,17 +29,102 @@ splat_spell:
   material:
     description: jade dust worth 25+ GP
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/programmed_illusion
+  implementation: dnd2024:spell_programmed_illusion
+  parameters:
+    spell_lifetime:
+      concentration: false
+      until: dispelled_or_source_specific_end
+    illusion:
+      kinds:
+      - object
+      - creature
+      - visible_phenomenon
+      range_feet: 120
+      maximum_cube_side_feet: 30
+      initial_state: imperceptible
+      visual_behavior: caster_script_at_cast
+      sounds: caster_script_at_cast
+      performance_seconds_max: 300
+    trigger:
+      chooser: caster
+      timing: cast
+      modalities:
+      - visual
+      - audible
+      maximum_distance_from_area_feet: 30
+      condition_resolution: supplied_trigger_predicate
+    cycle:
+      on_trigger: perform_script
+      after_performance:
+        disappear: true
+        dormant_seconds: 600
+      after_dormancy: triggerable_again
+    physical_interaction:
+      objects_pass_through: true
+      reveals_illusion: true
+    examination:
+      economy: study_action
+      check:
+        ability: intelligence
+        skill: investigation
+        dc: spell_save_dc
+      success: discern_illusion
+    discerned:
+      image: see_through
+      noise: hollow
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_programmed_illusion
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    origin:
+      type: location
+      required: true
+    script:
+      type: choice
+      required: true
+    trigger:
+      type: choice
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - illusions
+  - areas
+  - tests
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 66e3168476f7fedadd077d75f15a11fc63263737506c2d1a34bbb5df730a5f63
   source_path: builtin/srd-5.2.1/spell/programmed_illusion.md
   pages:
   - 156
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_programmed_illusion
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: 8e762b95bfa7f261530103b6b293b977fa64612040b993a825c48a382147d47a
 splat_clauses:
 - key: source_rules
   text: '# Programmed Illusion Level 6 Illusion (Bard, Wizard) Casting Time: Action Range: 120 feet Components:
@@ -58,7 +143,8 @@ splat_clauses:
     against your spell save DC. If a creature discerns the illusion for what it is, the creature can see
     through the image, and any noise it makes sounds hollow to the creature.'
   sha256: 78fcd384cf022956dd118f7c8965ad505096877ebaa962baaf0a1ae5c5349e50
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Programmed Illusion

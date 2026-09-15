@@ -12,18 +12,50 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_order_of_application
-  parameters: {}
+  parameters:
+    ordered_operations:
+    - bonuses_penalties_multipliers
+    - resistance
+    - vulnerability
+    resistance:
+      divide: 2
+      rounding: floor
+    vulnerability:
+      multiply: 2
+    example:
+      initial: 28
+      flat_adjustment: -5
+      after_adjustment: 23
+      after_resistance: 11
+      after_vulnerability: 22
+  implementation: dnd2024:rule_damage_and_healing_order_of_application
+splat_contracts:
+- id: dnd2024:rule_damage_and_healing_order_of_application
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - damage
+  events: []
+  capabilities:
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 17
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_damage_and_healing_order_of_application
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 1f734eae98724b59dbbb84f34954c7b28a0e0c36a41cadcba79c6670de3211ec
   parent_name: Damage and Healing
   line_span:
     first: 1186
@@ -37,7 +69,8 @@ splat_clauses:
     is first reduced by 5 (to 23), then halved for the creature’s Resistance (and rounded down to 11),
     then doubled for its Vulnerability (to 22).'
   sha256: 9ed06b8410e9322a8bb19a3faebdba78264ef21a6fa87b4a8a003691418c2031
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Order of Application

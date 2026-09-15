@@ -15,17 +15,60 @@ splat_item:
   rarity: very_rare
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/tome_of_understanding
+  implementation: dnd2024:item_tome_of_understanding
+  parameters:
+    study:
+      hours_required: 48
+      maximum_elapsed_days: 6
+      practice_required: true
+      ability: wisdom
+      increase: 2
+      maximum_score: 30
+      after_completion: item_loses_magic
+      magic_recovery:
+        value: 100
+        unit: year
+    attunement:
+      required: false
+splat_contracts:
+- id: dnd2024:item_tome_of_understanding
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    study_duration:
+      type: duration
+      required: true
+    elapsed_duration:
+      type: duration
+      required: true
+  outputs:
+  - ability_scores
+  - item_state
+  events:
+  - study.completed
+  capabilities:
+  - downtime
+  - ability_score_changes
+  - item_resources
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 92f709ba1d969502a58772adbcbc7dc81f53a6fcca63b4ac78a572487a20b9ce
   source_path: builtin/srd-5.2.1/magic_item/tome_of_understanding.md
   pages:
   - 250
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_tome_of_understanding
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: 35339da58b63288ed04f7c5682517b315f0b910243e66b484edfc02cd14bc453
 splat_clauses:
 - key: source_rules
   text: '# Tome of Understanding Wondrous Item, Very Rare This book contains intuition and insight exercises,
@@ -33,7 +76,8 @@ splat_clauses:
     the book’s contents and practicing its guidelines, your Wisdom increases by 2, to a maximum of 30.
     The manual then loses its magic, but regains it in a century.'
   sha256: 0a3873327296ed968c0cf57ff20a23c4521a90b8bb271b5a9b2e2cd280a3f55b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Tome of Understanding

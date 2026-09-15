@@ -30,17 +30,98 @@ splat_spell:
   material:
     description: ruby dust worth 1,500+ GP, which the spell consumes
     consumed: true
+splat_rule:
+  mechanic: dnd2024:spells/forcecage
+  implementation: dnd2024:spell_forcecage
+  parameters:
+    creation:
+      shape: cube
+      material: magical_force
+      immobile: true
+      invisible: true
+      within_spell_range: true
+      duration: spell_duration
+      modes:
+        cage:
+          side_feet_maximum: 20
+          bar_diameter_inches:
+            numerator: 1
+            denominator: 2
+          bar_spacing_inches:
+            numerator: 1
+            denominator: 2
+        box:
+          side_feet_maximum: 10
+          blocks:
+          - all_matter
+          - spells_cast_into_area
+          - spells_cast_out_of_area
+    initial_creatures:
+      fully_inside: trapped
+      partially_inside_or_too_large:
+        push_direction: away_from_center
+        until: fully_outside
+    escape:
+      nonmagical: prohibited
+      teleport_or_interplanar:
+        prior_save:
+          ability: charisma
+          dc:
+            binding: save_dc
+          failure:
+            exit: false
+            spell_or_effect: wasted
+          success:
+            exit_allowed: true
+      ethereal: blocked
+    dispel_magic_can_dispel: false
+splat_contracts:
+- id: dnd2024:spell_forcecage
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    save_dc:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - effect.ended
+  - movement.completed
+  - save.before
+  - save.after
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_relationships
+  - saving_throws
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: d7154ba1829c4d3d262e374e32112779081d3167f7746b79bacd86eac5c0d721
   source_path: builtin/srd-5.2.1/spell/forcecage.md
   pages:
   - 134
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_forcecage
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 618579f09aa2e806fe2d45d8304483590f85758276880d4c821bebf1323e0b4b
 splat_clauses:
 - key: source_rules
   text: '# Forcecage Level 7 Evocation (Bard, Warlock, Wizard) Casting Time: Action Range: 100 feet Components:
@@ -59,7 +140,8 @@ splat_clauses:
     The cage also extends into the Ethereal Plane, blocking ethereal travel. This spell can’t be dispelled
     by Dispel Magic.'
   sha256: 50cd7ac31cae2cff2e4f8fd7a5429340f0a139f1254c2f6ee15ed40900b1fcd5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Forcecage

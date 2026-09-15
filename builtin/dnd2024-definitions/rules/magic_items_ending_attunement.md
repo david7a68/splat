@@ -12,19 +12,61 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/magic_items_ending_attunement
-  parameters: {}
+  parameters:
+    attunement_ends_on:
+    - prerequisite_lost
+    - bearer_death
+    - other_creature_attunes
+    separation:
+      distance_feet_strictly_greater_than: 100
+      continuous_duration:
+        value: 24
+        unit: hours
+    voluntary_end:
+      focused_rest: short
+      cursed_item_allowed: false
+  implementation: dnd2024:rules_magic_items_ending_attunement
+splat_contracts:
+- id: dnd2024:rules_magic_items_ending_attunement
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+  outputs:
+  - item_updates
+  - cost
+  - effects
+  events:
+  - attunement.completed
+  - rest.short_completed
+  - creature.died
+  capabilities:
+  - items
+  - attunement
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 102
   - 103
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_magic_items_ending_attunement
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: c030f31fe7a8ec22d62912ca5bd368d5c3af5dbeb76d26fa0eeaad92d3d0920e
   parent_name: Magic Items
   line_span:
     first: 8927
@@ -36,7 +78,8 @@ splat_clauses:
     if another creature attunes to the item. You can also voluntarily end Attunement by spending another
     Short Rest focused on the item unless the item is cursed.'
   sha256: 865b3cce7bc0f9a1628f2541aeb652bbe5c2250b6391c3dea5abbe03c7fb661e
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ending Attunement

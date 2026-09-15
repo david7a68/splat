@@ -12,18 +12,57 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/damage_and_healing_lose_temporary_hit_points_first
-  parameters: {}
+  parameters:
+    damage_absorption_order:
+    - temporary_hp
+    - hp
+    temporary_hp_absorbed:
+      op: min
+      terms:
+      - damage
+      - temporary_hp
+    hp_damage:
+      op: max
+      terms:
+      - 0
+      - op: subtract
+        left: damage
+        right: temporary_hp
+  implementation: dnd2024:rules_damage_and_healing_lose_temporary_hit_points_first
+splat_contracts:
+- id: dnd2024:rules_damage_and_healing_lose_temporary_hit_points_first
+  inputs:
+    target:
+      type: participant
+      required: true
+    damage:
+      required: false
+      type: resolution
+    event:
+      type: event
+      required: true
+  outputs:
+  - hit_point_updates
+  - condition_updates
+  - death_save_updates
+  events: []
+  capabilities:
+  - damage
+  - healing
+  - death_saves
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 18
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_damage_and_healing_lose_temporary_hit_points_first
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 3066f1d9034eb7b044d889c8924a90114bf57a146a386ba7e5ce6cac14f4e442
   parent_name: Damage and Healing
   line_span:
     first: 1292
@@ -34,7 +73,8 @@ splat_clauses:
     are lost first, and any leftover damage carries over to your Hit Points. For example, if you have
     5 Temporary Hit Points and take 7 damage, you lose those points and then lose 2 Hit Points.'
   sha256: 80864106c2cee2e5c110329f67c4d1c57892ab491f301cb7dce00452e68f414a
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Lose Temporary Hit Points First

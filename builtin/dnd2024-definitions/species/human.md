@@ -12,17 +12,67 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule_group:
   category: species
+splat_rule:
+  mechanic: dnd2024:species/human
+  implementation: dnd2024:species_human
+  parameters:
+    creature_type: humanoid
+    size_choice:
+      count: 1
+      options:
+      - size: medium
+        height_feet_approximate:
+          minimum: 4
+          maximum: 7
+      - size: small
+        height_feet_approximate:
+          minimum: 2
+          maximum: 4
+    speed_feet: 30
+    resourceful:
+      event: rest.long_rest_completed
+      grant: heroic_inspiration
+    skillful:
+      proficiency_choice:
+        count: 1
+        category: any_skill
+    versatile:
+      feat_choice:
+        count: 1
+        category: origin
+splat_contracts:
+- id: dnd2024:species_human
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+  outputs:
+  - feature_state
+  - proficiencies
+  events:
+  - character.species_selected
+  - rest.long_rest_completed
+  capabilities:
+  - character_creation
+  - inspiration
+  - proficiencies
+  - feats
 splat_conversion:
-  status: partial
+  status: specified
   category: species
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 86
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:species_human
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 1a94eb8ec4eee0b4bc1f1c004e5b3db5f074d6aa4de3dcb3c32dd4fca27efc56
   line_span:
     first: 7382
     count: 20
@@ -36,7 +86,8 @@ splat_clauses:
     know the Poison Spray cantrip. Chthonic You have Resistance to Necrotic damage. You also know the
     Chill Touch cantrip. Infernal You have Resistance to Fire damage. You also know the Fire Bolt cantrip.'
   sha256: f6f913be40ecca6e6f462dc0da3424a8085bc7a7457a6b6bd8b20cc5dc49c385
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Human

@@ -59,17 +59,135 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/spider
+  implementation: dnd2024:creature_spider
+  parameters:
+    features:
+      spider_climb:
+        economy: passive
+        climb_ability_check_required: false
+        surfaces:
+        - difficult
+        - ceiling
+      web_walker:
+        economy: passive
+        ignore_movement_restrictions:
+        - web
+        knows_location:
+          targets: creatures_touching_same_web
+      bite:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 4
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 1
+          amount:
+            constant: 1
+          damage_type: piercing
+        - op: damage
+          average: 2
+          amount:
+            dice:
+              count: 1
+              sides: 4
+            add: 0
+          damage_type: poison
+        reach_feet: 5
+    skill_totals:
+      stealth: 4
+    defenses: {}
+    senses:
+      passive_perception: 10
+      special:
+      - sense: darkvision
+        range_feet: 30
+    communication:
+      speaks: []
+      understands: []
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_spider
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events: []
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 09afdf3bd3882ad38925c43a3516446c4b363a05ae9ffb2dc90ce57f903058dd
   source_path: builtin/srd-5.2.1/creature/spider.md
   pages:
   - 361
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_spider
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 0c846385a7f95c8a951b461a0c7e120bf9cbcb13cb98a00bfe9f7b18a407ff15
 splat_clauses:
 - key: source_rules
   text: '# Spider Tiny Beast, Unaligned AC 12 Initiative +2 (12) HP 1 (1d4 - 1) Speed 20 ft., Climb 20
@@ -80,7 +198,8 @@ splat_clauses:
     by webs, and the spider knows the location of any other creature in contact with the same web. ###
     Actions Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage plus 2 (1d4) Poison damage.'
   sha256: e49e5df584b2546279825fcaadaa5dcc589daf142848c8288601fc1f38e9c6d1
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spider

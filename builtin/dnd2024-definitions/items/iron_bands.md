@@ -15,17 +15,98 @@ splat_item:
   rarity: rare
   equipment:
     attunement: none
+splat_rule:
+  mechanic: dnd2024:items/iron_bands
+  implementation: dnd2024:item_iron_bands
+  parameters:
+    dimensions:
+      diameter_inches: 3
+      weight_lb: 1
+    activation:
+      action: magic
+      operation: throw
+      target:
+        maximum_size: huge
+        seen: true
+        range_ft: 60
+      attack:
+        kind: ranged
+        bonus:
+          sum:
+          - value_from: dexterity_modifier
+          - value_from: proficiency_bonus
+      on_hit:
+        condition: restrained
+        duration: until_released_or_broken
+      on_miss: revert_to_sphere
+      resource:
+        uses: 1
+        recovery: dawn
+    release:
+      actor: user
+      action: bonus_action
+      command: true
+      effects:
+      - end_restraint
+      - revert_to_sphere
+    break_attempt:
+      actor: any_creature_touching_bands
+      action: action
+      check:
+        ability: strength
+        skill: athletics
+        dc: 20
+      success:
+      - destroy_item
+      - free_creature
+      failure:
+        actor_further_attempts: automatic_failure
+        duration:
+          value: 24
+          unit: hour
+    attunement:
+      required: false
+splat_contracts:
+- id: dnd2024:item_iron_bands
+  inputs:
+    user:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    locations:
+      required: false
+      type: location_list
+  outputs:
+  - effects
+  - item_state
+  events:
+  - item.used
+  capabilities:
+  - equipment
+  - item_resources
+  - effects
+  - spatial_queries
 splat_conversion:
-  status: partial
+  status: specified
   category: magic_item
   source_sha256: 7b3c34eac06e1e0b89b9a1e8bcba80b60cebf722fb4724db94be950144fa0c37
   source_path: builtin/srd-5.2.1/magic_item/iron_bands.md
   pages:
   - 228
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:item_iron_bands
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/items_1.md
+  specification_sha256: f38ee8a179422ac3e9a8def23f25ec3f3413d02ace1f457c7f2e5a3e0b9eb77d
 splat_clauses:
 - key: source_rules
   text: '# Iron Bands Wondrous Item, Rare This rusty iron sphere measures 3 inches in diameter and weighs
@@ -40,7 +121,8 @@ splat_clauses:
     made by that creature automatically fail until 24 hours have elapsed. Once the bands are used, they
     can’t be used again until the next dawn.'
   sha256: 2ff387019b3fb8c471b65c5a5ee04e95dcf276885c1c9b670bee70dd9db15045
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Iron Bands

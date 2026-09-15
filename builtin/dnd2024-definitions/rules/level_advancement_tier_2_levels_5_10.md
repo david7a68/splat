@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/level_advancement_tier_2_levels_5_10
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 24
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 3f1307f11e19fe2f1d3c1dc22a050dd27d790931dfbb58c08ad9ccc5da3e1a0c
   parent_name: Level Advancement
   line_span:
     first: 1830
@@ -35,7 +36,7 @@ splat_clauses:
     ability to make multiple attacks in a round. The characters now face dangers that threaten cities
     and kingdoms.'
   sha256: ba8daa05b1e66701ff47dc2ec91c9d121ac097af020507d7065224d4431de605
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Tier 2 (Levels 5–10)

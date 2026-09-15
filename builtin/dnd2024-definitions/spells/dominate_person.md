@@ -26,17 +26,107 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/dominate_person
+  implementation: dnd2024:spell_dominate_person
+  parameters:
+    target:
+      kind: humanoid
+      count: 1
+      visible_to_caster: true
+    save:
+      ability: wisdom
+      dc:
+        binding: save_dc
+      failure:
+        condition: charmed
+      success:
+        effect: none
+    initial_save_advantage_if: caster_or_allies_fighting_target
+    repeat_save:
+      event: damage.applied
+      subject: target
+      ability: wisdom
+      success: end_spell_on_self
+    link:
+      telepathic: true
+      same_plane_required: true
+      command_on: caster_turn
+      command_action_cost: none
+      obey: best_effort_on_own_turn
+      after_completed_without_new_order: free_actions_focused_on_self_protection
+      reaction_command_cost: caster_reaction
+    duration_by_slot:
+      '5':
+        minutes: 1
+      '6':
+        minutes: 10
+      '7':
+        hours: 1
+      '8':
+        hours: 8
+      '9':
+        hours: 8
+    concentration: true
+splat_contracts:
+- id: dnd2024:spell_dominate_person
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    locations:
+      required: false
+      type: location_list
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - saves
+  - charmed
+  - telepathic_link
+  - commands
+  events:
+  - spell.cast_completed
+  - damage.applied
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - saving_throws
+  - conditions
+  - time
+  - relationships
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 1a2d20d646bde1ba119ea02e78ed6c6d3ebc703b5f0a0a8b259720fa525dd699
   source_path: builtin/srd-5.2.1/spell/dominate_person.md
   pages:
   - 126
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_dominate_person
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_1.md
+  specification_sha256: 57f8962e37ad8dcab2a652b7bf9037eced6333698a8dd7746c082b34c394217a
 splat_clauses:
 - key: source_rules
   text: '# Dominate Person Level 5 Enchantment (Bard, Sorcerer, Wizard) Casting Time: Action Range: 60
@@ -52,7 +142,8 @@ splat_clauses:
     a Higher-Level Spell Slot. Your Concentration can last longer with a spell slot of level 6 (up to
     10 minutes), 7 (up to 1 hour), or 8+ (up to 8 hours).'
   sha256: 3ac95e298afc7a4f95b755914519aee8c783424ffe512e415b7600723b48427d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dominate Person

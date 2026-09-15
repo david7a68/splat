@@ -12,19 +12,90 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/weapons_vex
-  parameters: {}
+  parameters:
+    trigger: weapon_hits_and_damages_creature
+    effect:
+      attacker_next_attack_against_same_creature: advantage
+      expires: end_of_attacker_next_turn
+    interleaved_weapon_table:
+      entries:
+      - key: dnd2024:equipment/club
+      - key: dnd2024:equipment/dagger
+      - key: dnd2024:equipment/greatclub
+      - key: dnd2024:equipment/handaxe
+      - key: dnd2024:equipment/javelin
+      - key: dnd2024:equipment/light_hammer
+      - key: dnd2024:equipment/mace
+      - key: dnd2024:equipment/quarterstaff
+      - key: dnd2024:equipment/sickle
+      - key: dnd2024:equipment/spear
+      - key: dnd2024:equipment/dart
+      - key: dnd2024:equipment/light_crossbow
+      - key: dnd2024:equipment/shortbow
+      - key: dnd2024:equipment/sling
+      - key: dnd2024:equipment/battleaxe
+      - key: dnd2024:equipment/flail
+      - key: dnd2024:equipment/glaive
+      - key: dnd2024:equipment/greataxe
+      - key: dnd2024:equipment/greatsword
+      - key: dnd2024:equipment/halberd
+      - key: dnd2024:equipment/lance
+      - key: dnd2024:equipment/longsword
+      - key: dnd2024:equipment/maul
+      - key: dnd2024:equipment/morningstar
+      - key: dnd2024:equipment/pike
+      - key: dnd2024:equipment/rapier
+      - key: dnd2024:equipment/scimitar
+      - key: dnd2024:equipment/shortsword
+      - key: dnd2024:equipment/trident
+      - key: dnd2024:equipment/warhammer
+      - key: dnd2024:equipment/war_pick
+      - key: dnd2024:equipment/whip
+      - key: dnd2024:equipment/blowgun
+      - key: dnd2024:equipment/hand_crossbow
+      - key: dnd2024:equipment/heavy_crossbow
+      - key: dnd2024:equipment/longbow
+      - key: dnd2024:equipment/musket
+      - key: dnd2024:equipment/pistol
+      columns:
+      - category
+      - damage
+      - damage_type
+      - properties
+      - mastery
+      - weight
+      - cost
+  implementation: dnd2024:rule_weapons_vex
+splat_contracts:
+- id: dnd2024:rule_weapons_vex
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - effects
+  events:
+  - attack.hit
+  capabilities:
+  - weapon_mastery
+  - attacks
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 90
   - 91
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_weapons_vex
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: dfeaf7c5d499cce69d93a74a5174a98ffa9544ac0fca63dde9b6f1e66ad2f0d6
   parent_name: Weapons
   line_span:
     first: 7813
@@ -60,7 +131,8 @@ splat_clauses:
     25 GP Vex 2 lb. 10 GP Topple 4 lb. 5 GP Push 5 lb. 15 GP Sap 2 lb. 5 GP Slow 3 lb. 2 GP Vex 1 lb.
     10 GP Vex 3 lb. 75 GP Push 18 lb. 50 GP Slow 2 lb. 50 GP Slow 10 lb. 500 GP Vex 3 lb. 250 GP'
   sha256: 868df8048a6dd9f5bfcacc3e2ddbd2ae2ede9c5069b31028f29ecb2e8bf640c4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Vex

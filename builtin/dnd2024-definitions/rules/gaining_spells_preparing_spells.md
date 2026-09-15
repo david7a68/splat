@@ -12,18 +12,72 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/gaining_spells_preparing_spells
-  parameters: {}
+  parameters:
+    prepared_spells_minimum_level: 1
+    class_replacement_rules:
+    - class: bard
+      event: level_gained
+      maximum_replacements: 1
+    - class: cleric
+      event: long_rest_finished
+      maximum_replacements: any
+    - class: druid
+      event: long_rest_finished
+      maximum_replacements: any
+    - class: paladin
+      event: long_rest_finished
+      maximum_replacements: 1
+    - class: ranger
+      event: long_rest_finished
+      maximum_replacements: 1
+    - class: sorcerer
+      event: level_gained
+      maximum_replacements: 1
+    - class: warlock
+      event: level_gained
+      maximum_replacements: 1
+    - class: wizard
+      event: long_rest_finished
+      maximum_replacements: any
+    monster_prepared_list_change:
+      default: false
+      gm_override: true
+  implementation: dnd2024:rules_gaining_spells_preparing_spells
+splat_contracts:
+- id: dnd2024:rules_gaining_spells_preparing_spells
+  inputs:
+    caster:
+      type: participant
+      required: true
+    spell:
+      type: definition
+      required: true
+    event:
+      type: event
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - spell_state
+  - casting_requirements
+  events: []
+  capabilities:
+  - spellcasting
+  - concentration
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 104
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_gaining_spells_preparing_spells
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: a881fbc1aec37a1a841109252f3063191b7d46691df2d83a46a9c64524879ccb
   parent_name: Gaining Spells
   line_span:
     first: 9038
@@ -38,7 +92,8 @@ splat_clauses:
     Finish a Long Rest Any Most spellcasting monsters don’t change their lists of prepared spells, but
     the GM is free to alter them.'
   sha256: f83802b4d8a7fb6001575114691477158e384f98006e8b1874882e6df0adb88c
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Preparing Spells

@@ -18,6 +18,7 @@ from pathlib import Path
 import yaml
 from convert_srd import SOURCE, MANUAL, NAMESPACE, ABILITIES, load_note, clean, slug
 from import_srd import positioned_lines, render, PDF_SHA256, ATTRIBUTION, SECTIONS
+from srd_contracts import read_research, merge_fields, contract_record, fingerprint
 
 OUTPUT = Path('builtin/dnd2024-definitions')
 CONTRACTS = Path('scripts/srd_inputs/contracts.yaml')
@@ -66,13 +67,14 @@ def spell_fields(body):
 
 def creature_fields(body):
     text = clean(body); before = text.split('###')[0]
-    stats = {}; ambiguous_saves = []
+    stats = {}
     for short, score, modifier, save in re.findall(r'\b(Str|Dex|Con|Int|Wis|Cha)\s*(\d+)\s*([+-]\d+)\s*([+-]?\d+)', before):
         if (int(score)-10)//2 != int(modifier): raise ValueError('Ability modifier mismatch')
         stats[ABILITIES[short]] = {'value': int(score)}
-        if save.startswith(('+','-')): stats['save_'+ABILITIES[short]] = {'value': int(save)}
-        else: ambiguous_saves.append(ABILITIES[short])
-    if len(stats)+len(ambiguous_saves) != 12: raise ValueError('Missing ability scores/saves')
+        # SAVE is a supplied total. Unsigned 2 means +2 under the user's ruling.
+        # Later bonuses apply to this total; ability/proficiency are not added again.
+        stats['save_'+ABILITIES[short]] = {'value': int(save)}
+    if len(stats) != 12: raise ValueError('Missing ability scores/saves')
     for name, pattern in [('armor_class',r'\bAC (\d+)'),('max_hp',r'\bHP (\d+)(?!\d)'),('initiative',r'\bInitiative ([+-]\d+)')]:
         m = re.search(pattern,before)
         if m: stats[name] = {'value': int(m[1])}
@@ -94,7 +96,6 @@ def creature_fields(body):
         m = re.search(r'\b'+label+r' (.*?)(?=\b(?:'+'|'.join(labels)+r')\b|$)',before)
         if m: description[slug(label)+'_text'] = m[1].strip()
     if hp: description['hit_points_text'] = hp[1]
-    if ambiguous_saves: description['ambiguous_saves'] = ambiguous_saves
     return {'splat_creature':description, 'splat_stats':stats, 'splat_health':{'zero_hp':'dnd2024:monster'}}
 
 
@@ -268,7 +269,10 @@ def clauses(body):
     return [{'key':'source_rules','text':text,'sha256':digest(text.encode()),'status':'needs_semantic_conversion'}]
 
 
-def generate(lines):
+def generate(lines, require_complete=True):
+    researched = read_research()
+    registry = []
+    missing = []
     contracts=yaml.load(CONTRACTS.read_text(),Loader=yaml.SafeLoader)
     proof={}
     for path in sorted(MANUAL.rglob('*.md')):
@@ -296,8 +300,6 @@ def generate(lines):
         except ValueError as error:
             fields={'splat_'+kind:{}};errors.append(str(error))
         fields.update(source.get('fields',{}))
-        for ability in fields.get('splat_creature',{}).get('ambiguous_saves',[]):
-            errors.append('Unsigned save_'+ability+' in official PDF; requires explicit correction policy')
         obligations=clauses(source['body'])
         status='partial';required=[]
         if key in contracts:
@@ -306,10 +308,34 @@ def generate(lines):
             fields.update(spec['fields'])
             obligations=[{'key':'source_rules','text':obligations[0]['text'],'sha256':obligations[0]['sha256'],'status':'contract_specified'}]
             required=spec['requires'];status='specified'
+        if key in researched:
+            spec = researched[key]
+            if spec['source_sha256'] != source['source_sha256']:
+                raise ValueError('Researched source changed: '+key)
+            # Research covers the complete note. Do not retain an older action
+            # interpretation alongside its replacement source-specific contract.
+            base_fields = {k:v for k,v in fields.items() if k not in {
+                'splat_actions', 'splat_traits', 'splat_resources', 'splat_parameters',
+            }} if key in contracts else fields
+            fields = merge_fields(base_fields, spec.get('fields', {}))
+            status = spec['disposition']
+            required = spec.get('requires', [])
+            obligations[0]['status'] = 'contract_specified' if status == 'specified' else 'informational'
+            if status == 'specified':
+                record = contract_record(key, spec, fields)
+                registry.append(record)
+                fields['splat_contracts'] = [spec['contract']]
+            if errors:
+                raise ValueError('Source extraction remains incomplete: '+key+' '+str(errors))
+        else:
+            missing.append(key)
         conversion={'status':status,'category':category,'source_sha256':source['source_sha256'],
                     'source_path':source['source_path'],'pages':source['pages'],
                     'engine_gaps':required,'conversion_gaps':errors+(['source_rules'] if status=='partial' else []),
                     'execution_profiles':[p['splat_key'] for p in proof.get(origin,[])] if category in ['creature','spell','magic_item'] else []}
+        if key in researched:
+            conversion['research_path'] = researched[key]['research_path']
+            conversion['specification_sha256'] = fingerprint({k:v for k,v in fields.items() if k != 'splat_contracts'})
         if source.get('parent_name'):conversion['parent_name']=source['parent_name']
         if 'line_span' in source:conversion['line_span']=source['line_span']
         front={'splat_schema':1,'splat_id':ident,'splat_kind':kind,'splat_key':key,'splat_name':name,
@@ -320,28 +346,37 @@ def generate(lines):
         body=source['body'].strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')
         outputs[path]='---\n'+yaml.dump(front,Dumper=DUMP,sort_keys=False,allow_unicode=True,width=100)+'---\n\n'+body+'\n'
         records.append({'key':key,'id':ident,'path':path,'source':origin,**conversion,'sha256':digest(outputs[path].encode())})
+    extra = researched.keys() - keys
+    if extra: raise ValueError('Research names unknown definitions: '+', '.join(sorted(extra)))
+    if require_complete and missing:
+        raise ValueError(f'Missing complete specifications for {len(missing)} definitions: '+', '.join(missing[:12]))
     page_inventory=[]
     for page in range(1,365):
         page_inventory.append({'page':page,'section':next(title for start,title in reversed(SECTIONS) if page>=start),
                                'definitions':[r['key'] for r in records if page in r['pages']],
                                'status':'reference_only' if page<5 else 'indexed'})
     if any(not p['definitions'] for p in page_inventory if p['page']>=5):raise ValueError('Unindexed source page')
+    adjudications=yaml.load(Path('scripts/srd_inputs/adjudications.yaml').read_text(),Loader=yaml.SafeLoader)
+    if any(case['key'] not in keys for case in adjudications['cases']): raise ValueError('Adjudication references unknown definition')
     report={'format':1,'source_sha256':PDF_SHA256,'counts':{'definitions':len(records),'categories':dict(sorted(collections.Counter(r['category'] for r in records).items())),
-            'specified':sum(r['status']=='specified' for r in records),'partial':sum(r['status']=='partial' for r in records),
+            'specified':sum(r['status']=='specified' for r in records),
+            'informational':sum(r['status']=='informational' for r in records),'partial':sum(r['status']=='partial' for r in records),
             'executable_full_definitions':0,'executable_profiles':sum(len(v) for v in proof.values())},
+            'adjudications':adjudications['cases'],
             'engine_contracts':sorted({g for r in records for g in r['engine_gaps']}),'entries':records,'pages':page_inventory}
+    outputs['contracts.json']=json.dumps({'format':1,'contracts':registry},ensure_ascii=False,indent=2)+'\n'
     outputs['coverage.json']=json.dumps(report,ensure_ascii=False,indent=2)+'\n'
-    outputs['LICENSE.txt']=ATTRIBUTION+'\n\nExtracted and reformatted by Splat. Typed conversion is incomplete where marked.\n'
+    outputs['LICENSE.txt']=ATTRIBUTION+'\n\nExtracted and converted into typed rule specifications by Splat. Unimplemented engine contracts do not execute.\n'
     return outputs,report
 
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--check',action='store_true');args=ap.parse_args()
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--check',action='store_true');ap.add_argument('--allow-partial',action='store_true',help='Development only: permit missing research specifications');args=ap.parse_args()
     if digest((SOURCE/'source.pdf').read_bytes())!=PDF_SHA256:raise ValueError('SRD PDF hash mismatch')
     with tempfile.TemporaryDirectory(prefix='splat-definitions-') as scratch:
         xml=Path(scratch)/'source.xml'
         subprocess.run(['pdftohtml','-xml','-hidden','-i',str(SOURCE/'source.pdf'),str(xml)],check=True,stdout=subprocess.DEVNULL)
-        outputs,report=generate(positioned_lines(xml.read_text()))
+        outputs,report=generate(positioned_lines(xml.read_text()),require_complete=not args.allow_partial)
     actual={str(p.relative_to(OUTPUT)):p.read_text() for p in OUTPUT.rglob('*') if p.is_file()}
     if args.check:
         changed=sorted(k for k in actual.keys()|outputs.keys() if actual.get(k)!=outputs.get(k))

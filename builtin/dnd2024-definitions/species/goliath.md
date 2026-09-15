@@ -12,18 +12,146 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule_group:
   category: species
+splat_rule:
+  mechanic: dnd2024:species/goliath
+  implementation: dnd2024:species_goliath
+  parameters:
+    creature_type: humanoid
+    size: medium
+    height_feet_approximate:
+      minimum: 7
+      maximum: 8
+    speed_feet: 35
+    giant_ancestry:
+      choice:
+        count: 1
+        options:
+        - id: clouds_jaunt
+          action: bonus_action
+          teleport:
+            maximum_feet: 30
+            destination_visible: true
+            destination_unoccupied: true
+            magical: true
+        - id: fires_burn
+          trigger: attack_roll_hit_and_damage
+          extra_damage:
+            roll:
+              dice:
+                count: 1
+                sides: 10
+            type: fire
+        - id: frosts_chill
+          trigger: attack_roll_hit_and_damage
+          extra_damage:
+            roll:
+              dice:
+                count: 1
+                sides: 6
+            type: cold
+          target_speed_reduction_feet: 10
+          until: source.next_turn_start
+        - id: hills_tumble
+          trigger: attack_roll_hit_and_damage
+          target_type: creature
+          maximum_size: large
+          condition: prone
+        - id: stones_endurance
+          trigger: damage.taken
+          action: reaction
+          damage_reduction:
+            op: add
+            args:
+            - dice:
+                count: 1
+                sides: 12
+            - stat: abilities.constitution.modifier
+        - id: storms_thunder
+          trigger: damage.taken_from_creature
+          source_maximum_distance_feet: 60
+          action: reaction
+          damage_to_source:
+            roll:
+              dice:
+                count: 1
+                sides: 8
+            type: thunder
+      uses:
+        maximum:
+          stat: proficiency_bonus
+        recover:
+          event: rest.long_rest_completed
+          amount: all
+    large_form:
+      minimum_character_level: 5
+      action: bonus_action
+      requires_space_for_size: large
+      size: large
+      duration:
+        minutes: 10
+      end_action: none
+      strength_check_advantage: true
+      speed_bonus_feet: 10
+      uses:
+        maximum: 1
+        recover:
+          event: rest.long_rest_completed
+          amount: all
+    powerful_build:
+      advantage_on_checks_to_end_condition: grappled
+      carrying_capacity_size_categories_bonus: 1
+splat_contracts:
+- id: dnd2024:species_goliath
+  inputs:
+    actor:
+      type: participant
+      required: true
+    selections:
+      required: false
+      type: choice
+    trigger:
+      required: false
+      type: event
+    targets:
+      required: false
+      type: participant_list
+    destination:
+      required: false
+      type: location
+  outputs:
+  - feature_state
+  - resource_changes
+  - damage
+  - movement
+  - conditions
+  events:
+  - character.species_selected
+  - action.bonus
+  - attack.damage_completed
+  - damage.taken
+  - ability_check.pending
+  capabilities:
+  - character_creation
+  - teleportation
+  - damage
+  - conditions
+  - resources
+  - movement
+  - carrying_capacity
 splat_conversion:
-  status: partial
+  status: specified
   category: species
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 85
   - 86
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:species_goliath
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_1.md
+  specification_sha256: 714e0439607ef61d524b2797298fba2d91f8aba8364f0a4a8b3707b6b70ad369
   line_span:
     first: 7320
     count: 46
@@ -49,7 +177,8 @@ splat_clauses:
     again until you finish a Long Rest. Powerful Build. You have Advantage on any ability check you make
     to end the Grappled condition. You also count as one size larger when determining your carrying capacity.'
   sha256: 296e2eba4f6dd53250b7c70aee83a7c46d12f9c00ae671fa6d388ff58b2e8c27
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Goliath

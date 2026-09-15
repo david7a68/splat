@@ -12,18 +12,44 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/scribing_spell_scrolls_prerequisites_for_the_scribe
-  parameters: {}
+  parameters:
+    proficiency_any:
+    - arcana
+    - calligraphers_supplies
+    spell_prepared_each_work_day: true
+    material_components_available: true
+    consumed_components_consumption_timing: scroll_completion
+    scroll_save_dc: scribe_spell_save_dc
+    scroll_attack_bonus: scribe_spell_attack_bonus
+  implementation: dnd2024:rule_scribing_spell_scrolls_prerequisites_for_the_scribe
+splat_contracts:
+- id: dnd2024:rule_scribing_spell_scrolls_prerequisites_for_the_scribe
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - crafted_items
+  events: []
+  capabilities:
+  - crafting
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 103
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_scribing_spell_scrolls_prerequisites_for_the_scribe
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: b2a70ffc5f92f6c9bfa2a7189fa15b6571b5710e927700cc1aa41c377d558be5
   parent_name: Scribing Spell Scrolls
   line_span:
     first: 9005
@@ -36,7 +62,8 @@ splat_clauses:
     components, they are consumed only when you complete the scroll. The scroll’s spell uses your spell
     save DC and spell attack bonus.'
   sha256: 2cd61707d0575f3d8d535e86560d7945fc74a6910190900fd324240a5a405ba9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Prerequisites for the Scribe

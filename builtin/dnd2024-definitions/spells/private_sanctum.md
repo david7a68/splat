@@ -28,17 +28,88 @@ splat_spell:
   material:
     description: a thin sheet of lead
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/private_sanctum
+  implementation: dnd2024:spell_private_sanctum
+  parameters:
+    targeting:
+      kind: area
+      shape: cube
+      min_side_feet: 5
+      max_side_feet: 100
+      within_range: true
+    security:
+      chooser: caster_at_cast
+      count: any
+      choices:
+      - block_sound_crossing_boundary
+      - dark_foggy_boundary_blocks_vision_including_darkvision
+      - block_divination_sensor_appearance_inside_and_perimeter_crossing
+      - creatures_inside_untargetable_by_divination_spells
+      - block_teleportation_in_and_out
+      - block_planar_travel_within
+    duration: spell_duration
+    persistence:
+      same_spot: true
+      frequency: daily
+      consecutive_days: 365
+      resulting_duration: until_dispelled
+    slot_scaling:
+      above: 4
+      max_cube_side_feet_per_level: 100
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 24
+        unit: hour
+splat_contracts:
+- id: dnd2024:spell_private_sanctum
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      type: location_list
+      required: true
+    choices:
+      type: choice
+      required: true
+    campaign:
+      type: campaign
+      required: true
+  outputs:
+  - effects
+  - locations
+  events:
+  - spell.cast_completed
+  - time.elapsed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_effects
+  - campaign_state
+  - planar_travel
+  - perception
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 26efa09be671e147a3bc963755a9994a8e9c0a9cebe728b3f971776ae3b7bd8f
   source_path: builtin/srd-5.2.1/spell/private_sanctum.md
   pages:
   - 156
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_private_sanctum
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 07253c660503634ef903b77a1a6ec5990e052150be064b84ad19f25c7cc7d4b4
 splat_clauses:
 - key: source_rules
   text: '# Private Sanctum Level 4 Abjuration (Wizard) Casting Time: 10 minutes Range: 120 feet Components:
@@ -54,7 +125,8 @@ splat_clauses:
     dispelled. Using a Higher-Level Spell Slot. You can increase the size of the Cube by 100 feet for
     each spell slot level above 4.'
   sha256: 5b02c4a1f0e383a564a8de55f57e2153e94c493dbccb65e6a7467f370ce5e98d
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Private Sanctum

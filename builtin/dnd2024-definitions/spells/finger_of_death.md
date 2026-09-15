@@ -26,17 +26,79 @@ splat_spell:
   ritual: false
   range:
     feet: 60
+splat_rule:
+  mechanic: dnd2024:spells/finger_of_death
+  implementation: dnd2024:spell_finger_of_death
+  parameters:
+    targeting:
+      kind: creature
+      count: 1
+      visible: true
+      within_range: true
+    save:
+      ability: constitution
+      failure:
+        damage:
+          dice: 7d8
+          add: 30
+          type: necrotic
+      success:
+        damage_fraction:
+          numerator: 1
+          denominator: 2
+    killed_humanoid:
+      event: caster.next_turn_started
+      form: zombie
+      obeys: caster_verbal_orders
+    spell_lifetime:
+      concentration: false
+      maximum:
+        kind: instantaneous
+splat_contracts:
+- id: dnd2024:spell_finger_of_death
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    forms:
+      type: definition_list
+      required: true
+    save_dc:
+      type: integer
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  - participants
+  events:
+  - spell.cast_completed
+  - turn.started
+  - health.changed
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - participant_lifecycle
+  - forms
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 54b97320b9ca24b86f6d5439139ac99477524b61ce317f27d445e7cf4f0be9f7
   source_path: builtin/srd-5.2.1/spell/finger_of_death.md
   pages:
   - 131
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_finger_of_death
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: 334a65186e833886b381baef8c54ed0517509832f50e195324061e2123366d10
 splat_clauses:
 - key: source_rules
   text: '# Finger of Death Level 7 Necromancy (Sorcerer, Warlock, Wizard) Casting Time: Action Range:
@@ -45,7 +107,8 @@ splat_clauses:
     on a failed save or half as much damage on a successful one. A Humanoid killed by this spell rises
     at the start of your next turn as a Zombie (see “Monsters”) that follows your verbal orders.'
   sha256: 7ef5083a00525112c160cd6ea014f8567f0a290347057040289a01fb4c9bbd37
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Finger of Death

@@ -17,17 +17,65 @@ splat_item:
   price:
     value: 1
     unit: cp
+  mass:
+    value: 1.0
+    unit: lb
+splat_rule:
+  mechanic: dnd2024:equipment/torch_1_cp
+  implementation: dnd2024:equipment_torch_1_cp
+  parameters:
+    light:
+      requires_lit: true
+      shape: radius
+      bright_ft: 20
+      additional_dim_ft: 20
+    burn_duration:
+      value: 1
+      unit: hour
+    attack:
+      action: attack
+      weapon_category: simple_melee
+      damage:
+        amount: 1
+        type: fire
+    mass:
+      value: 1.0
+      unit: lb
+splat_contracts:
+- id: dnd2024:equipment_torch_1_cp
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - item_properties
+  - conditional_modifiers
+  events: []
+  capabilities:
+  - equipment
+  - conditional_modifiers
 splat_conversion:
-  status: partial
+  status: specified
   category: equipment
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 100
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:equipment_torch_1_cp
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: a441342720dfd21a98d90291f1c45c4c2fff697f8880607afeeb0038d11e47a1
   line_span:
     first: 8671
     count: 6
@@ -37,7 +85,8 @@ splat_clauses:
     for an additional 20 feet. When you take the Attack action, you can attack with the Torch, using it
     as a Simple Melee weapon. On a hit, the target takes 1 Fire damage.'
   sha256: 3d96542224acc7e10fd01d02d9d2564d8fbe3d687dff38254683ccd0519bde55
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Torch (1 CP)

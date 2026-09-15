@@ -28,17 +28,93 @@ splat_spell:
   material:
     description: a candle
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/wind_walk
+  implementation: dnd2024:spell_wind_walk
+  parameters:
+    targets:
+      kind: creature
+      maximum: 10
+      within_spell_range: true
+      willing: true
+      additional_target: caster
+    cloud_form:
+      duration: spell_duration
+      appearance: cloud_wisp
+      fly_speed_feet: 300
+      hover: true
+      condition_immunity:
+      - prone
+      damage_resistance:
+      - bludgeoning
+      - piercing
+      - slashing
+      only_actions:
+      - dash
+      - magic_action_begin_revert
+    transformations:
+      to_normal:
+        cost: magic_action
+        duration_minutes: 1
+        during_condition: stunned
+      to_cloud:
+        requires: spell_not_ended
+        cost: magic_action
+        duration_minutes: 1
+    end_while_flying_in_cloud:
+      descent_feet_per_round: 60
+      maximum_minutes: 1
+      landing: safe
+      if_not_landed_after_minutes:
+        minutes: 1
+        effect: fall_remaining_distance
+splat_contracts:
+- id: dnd2024:spell_wind_walk
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    locations:
+      required: false
+      type: location_list
+    campaign:
+      required: false
+      type: campaign
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - spell.cast_completed
+  - effect.ended
+  - movement.completed
+  - time.elapsed
+  capabilities:
+  - spellcasting
+  - effects
+  - spatial_relationships
+  - conditions
+  - forms
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: bffcf7696d71749728e1e1faf4872fe7110dc290ec1df4debc5ac3d091a7676c
   source_path: builtin/srd-5.2.1/spell/wind_walk.md
   pages:
   - 174
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_wind_walk
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: aa8bbe30fb9bdad1a3bd419fcc839fec023c72b0ff3f40a5909e25a15950f5d9
 splat_clauses:
 - key: source_rules
   text: '# Wind Walk Level 6 Transmutation (Druid) Casting Time: 1 minute Range: 30 feet Components: V,
@@ -52,7 +128,8 @@ splat_clauses:
     is in cloud form and flying when the effect ends, the target descends 60 feet per round for 1 minute
     until it lands, which it does safely. If it can’t land after 1 minute, it falls the remaining distance.'
   sha256: 1caf07d6ca20db1732f9afca5617b308d45005ea617708b133820874022bc6f9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Wind Walk

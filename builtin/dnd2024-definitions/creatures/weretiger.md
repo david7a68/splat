@@ -59,17 +59,230 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/weretiger
+  implementation: dnd2024:creature_weretiger
+  parameters:
+    skill_totals:
+      perception: 5
+      stealth: 4
+    gear:
+    - item: longbow
+      count: 1
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 15
+    languages:
+      speak: true
+      known:
+      - common
+      speech_prohibited_forms:
+      - tiger
+    features:
+      bite:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 3
+            average: 12
+        - op: saving_throw
+          ability: constitution
+          dc: 13
+          targets:
+            kind: target
+            creature_types:
+            - humanoid
+          failure:
+          - op: curse.apply
+            on_target_zero_hp:
+              instead:
+                op: stat_block.replace
+                definition:
+                  key: dnd2024:creatures/weretiger
+                controller: gm
+                hp: 10
+          success:
+          - op: feature.immunity
+            source: actor
+            feature: bite_curse
+            duration:
+              amount: 24
+              unit: hour
+          effect_identity: bite_curse
+        allowed_forms:
+        - tiger
+        - hybrid
+      scratch:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 3
+            average: 10
+      longbow:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 4
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 150
+          long: 600
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 2
+            average: 11
+        allowed_forms:
+        - humanoid
+        - hybrid
+      prowl:
+        economy: bonus_action
+        allowed_forms:
+        - tiger
+        - hybrid
+        op: sequence
+        steps:
+        - op: movement
+          maximum:
+            multiply:
+            - 1
+            - actor_stat: speed
+          opportunity_attacks: false
+        - op: action.use
+          action: hide
+          optional: true
+      shape_shift:
+        economy: bonus_action
+        op: shapechange
+        equipment_transformed: false
+        statistics_preserved_except:
+        - size
+        choices:
+        - form: hybrid
+          size: large
+          animal: tiger
+        - form: tiger
+          size: large
+        - form: true_humanoid
+      multiattack:
+        economy: action
+        op: multiattack
+        attacks:
+          count: 2
+          choices:
+          - scratch
+          - longbow
+          combination: any
+        replace_attack:
+          maximum: 1
+          choices:
+          - op: feature.use
+            feature: bite
+    form_overrides:
+      tiger:
+        speed_ft: 40
+        can_speak: false
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_weretiger
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_lifecycle
+  - creature_rules
+  - damage
+  - effects
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 409eaa6049ba08a550573e8ac3b7713c5f87769f0cdaf47ecf7083c5f16adcd6
   source_path: builtin/srd-5.2.1/creature/weretiger.md
   pages:
   - 339
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_weretiger
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 373e2307aa984a671cc8d1021ffcae7ec4541b0ccf8f7174baa8d2dbf6aafd4f
 splat_clauses:
 - key: source_rules
   text: '# Weretiger Medium or Small Monstrosity (Lycanthrope), Neutral AC 12 Initiative +2 (12) HP 120
@@ -90,7 +303,8 @@ splat_clauses:
     true humanoid form. Its game statistics, other than its size, are the same in each form. Any equipment
     it is wearing or carrying isn’t transformed.'
   sha256: 4bbde9425c5227fa9fbdbd85e474ba5537457e65f89de216828eab9f8156fb13
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Weretiger

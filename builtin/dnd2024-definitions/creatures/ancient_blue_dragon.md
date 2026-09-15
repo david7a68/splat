@@ -64,17 +64,274 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ancient_blue_dragon
+  implementation: dnd2024:creature_ancient_blue_dragon
+  parameters:
+    skill_totals:
+      perception: 17
+      stealth: 7
+    damage_immunities:
+    - lightning
+    condition_immunities: []
+    senses:
+    - sense: blindsight
+      range_ft: 60
+    - sense: darkvision
+      range_ft: 120
+    passive_perception: 27
+    languages:
+      speak: true
+      known:
+      - common
+      - draconic
+    features:
+      legendary_resistance:
+        economy: passive
+        trigger: saving_throw.failed
+        optional: true
+        op: saving_throw.set_result
+        result: success
+        uses_in_lair: 5
+        uses:
+          count: 4
+          recovery: long_rest
+      rend:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 16
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 15
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 9
+            average: 18
+          - type: lightning
+            amount:
+              dice:
+                count: 2
+                sides: 10
+              add: 0
+            average: 11
+      spellcasting:
+        economy: action
+        op: spellcasting
+        profile:
+          ability: charisma
+          waived_components:
+          - material
+          spells:
+          - spell:
+              key: dnd2024:spells/detect_magic
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/invisibility
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/mage_hand
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/shatter
+            uses:
+              unlimited: true
+            cast_level: 3
+          - spell:
+              key: dnd2024:spells/scrying
+            uses:
+              count: 1
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/sending
+            uses:
+              count: 1
+              recovery: long_rest
+          save_dc: 22
+      lightning_breath:
+        economy: action
+        op: saving_throw
+        ability: dexterity
+        dc: 23
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: line
+            origin: actor
+            size_ft: 120
+            width_ft: 10
+        failure:
+        - op: damage
+          components:
+          - type: lightning
+            amount:
+              dice:
+                count: 16
+                sides: 10
+              add: 0
+            average: 88
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+        recharge:
+          die_sides: 6
+          success_min: 5
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      cloaked_flight:
+        economy: legendary_action
+        op: sequence
+        steps:
+        - op: spell.cast
+          spell:
+            key: dnd2024:spells/invisibility
+          profile: spellcasting
+          target: self
+        - op: movement
+          maximum:
+            multiply:
+            - 0.5
+            - actor_stat: fly_speed
+          optional: true
+        lockout_until: actor.next_turn_start
+        legendary_cost: 1
+      sonic_boom:
+        economy: legendary_action
+        op: sequence
+        steps:
+        - op: spell.cast
+          spell:
+            key: dnd2024:spells/shatter
+          profile: spellcasting
+          cast_level: 3
+        lockout_until: actor.next_turn_start
+        legendary_cost: 1
+      tail_swipe:
+        economy: legendary_action
+        op: feature.use
+        feature: rend
+        legendary_cost: 1
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 3
+          feature: rend
+        replace_attack:
+          maximum: 1
+          choices:
+          - op: spell.cast
+            spell:
+              key: dnd2024:spells/shatter
+            profile: spellcasting
+            cast_level: 3
+    legendary_actions:
+      uses: 3
+      uses_in_lair: 4
+      trigger: another_creature.turn_end_immediately_after
+      cost_per_action: 1
+      recover_all: actor.turn_start
+      maximum_per_trigger: 1
+      requires_actions_available: true
+      excluded_conditions:
+      - incapacitated
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_ancient_blue_dragon
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - another_creature.turn_end_immediately_after
+  - creature.feature_requested
+  - saving_throw.failed
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: e652475efd616b5d81edac03e3c6e177e49b6c1656677457eb2d70483460bc78
   source_path: builtin/srd-5.2.1/creature/ancient_blue_dragon.md
   pages:
   - 267
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ancient_blue_dragon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: c18ecea5af93c73399abd2264611b599a7e1311ceba48f95be9902fc384e7ad7
 splat_clauses:
 - key: source_rules
   text: '# Ancient Blue Dragon Gargantuan Dragon (Chromatic), Lawful Evil AC 22 Initiative +14 (24) HP
@@ -97,7 +354,8 @@ splat_clauses:
     turn. Sonic Boom. The dragon uses Spellcasting to cast Shatter (level 3 version). The dragon can’t
     take this action again until the start of its next turn. Tail Swipe. The dragon makes one Rend attack.'
   sha256: a5c6e6eab2f9af779d296580b37c29f73b0757dd62877f377cff6788b24d5566
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ancient Blue Dragon

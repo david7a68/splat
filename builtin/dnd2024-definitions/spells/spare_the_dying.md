@@ -25,17 +25,66 @@ splat_spell:
   ritual: false
   range:
     feet: 15
+splat_rule:
+  mechanic: dnd2024:spells/spare_the_dying
+  implementation: dnd2024:spell_spare_the_dying
+  parameters:
+    targets:
+      kind: creature
+      count: 1
+      hp: 0
+      dead: false
+      maximum_range_feet:
+        by_caster_level:
+        - minimum: 1
+          value: 15
+        - minimum: 5
+          value: 30
+        - minimum: 11
+          value: 60
+        - minimum: 17
+          value: 120
+    health_transition: stabilize
+splat_contracts:
+- id: dnd2024:spell_spare_the_dying
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    caster_level:
+      type: integer
+      required: true
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  - health
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - health
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 5e6f527f96a1dfc3dcbc044387860d831c0f1fe1b07992fab60720fc7180db79
   source_path: builtin/srd-5.2.1/spell/spare_the_dying.md
   pages:
   - 163
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_spare_the_dying
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_3.md
+  specification_sha256: 97981fc16f9a32c41e9d2deff615a14e68a0525ea16f0ed66b1d25517f89f44b
 splat_clauses:
 - key: source_rules
   text: '# Spare the Dying Necromancy Cantrip (Cleric, Druid) Casting Time: Action Range: 15 feet Components:
@@ -43,7 +92,8 @@ splat_clauses:
     The creature becomes Stable. Cantrip Upgrade. The range doubles when you reach levels 5 (30 feet),
     11 (60 feet), and 17 (120 feet).'
   sha256: dbfc90cb8e53f213a8628026b79039a59f69d4769acfcf44083d61207ba5ff50
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Spare the Dying

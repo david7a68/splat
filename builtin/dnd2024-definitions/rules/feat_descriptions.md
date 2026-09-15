@@ -14,16 +14,17 @@ splat_rule:
   mechanic: dnd2024:rules/feat_descriptions
   parameters: {}
 splat_conversion:
-  status: partial
+  status: informational
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 87
   engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 65da5413e5a13c990f873053a8b7eab1ecea160737e27f668c029c38e6eb6862
   parent_name: Feat Descriptions
   line_span:
     first: 7451
@@ -33,7 +34,7 @@ splat_clauses:
   text: '# Feat Descriptions The feats that follow are organized by category— Origin, General, Fighting
     Style, or Epic Boon—and alphabetized in each category.'
   sha256: ab46bf6fe736d014e46b02fbe68e264985974eff0dd770fabdcbb558b3b4e013
-  status: needs_semantic_conversion
+  status: informational
 ---
 
 # Feat Descriptions

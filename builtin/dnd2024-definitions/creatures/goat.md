@@ -59,17 +59,111 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/goat
+  implementation: dnd2024:creature_goat
+  parameters:
+    skill_totals:
+      perception: 2
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 12
+    languages:
+      speak: true
+      known: []
+    features:
+      ram:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 2
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              constant: 1
+            average: 1
+          replacement_when:
+            if:
+              actor_moved_straight_toward_target_ft_at_least: 20
+              immediately_before_hit: true
+            components:
+            - type: bludgeoning
+              amount:
+                dice:
+                  count: 1
+                  sides: 4
+                add: 0
+              average: 2
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_goat
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 7197f92960e499dd3a2411e9bb68f98536b20369a75cf5dec846a3477384099b
   source_path: builtin/srd-5.2.1/creature/goat.md
   pages:
   - 355
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_goat
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: ae83ae3e74acb7c3d600dcd23fc3e8241eaa041a49584dbb24c0ce1ff658b1ae
 splat_clauses:
 - key: source_rules
   text: '# Goat Medium Beast, Unaligned AC 10 Initiative +0 (10) HP 4 (1d8) Speed 40 ft., Climb 30 ft.
@@ -78,7 +172,8 @@ splat_clauses:
     PB +2) ### Actions Ram. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Bludgeoning damage, or 2 (1d4) Bludgeoning
     damage if the goat moved 20+ feet straight toward the target immediately before the hit.'
   sha256: a680a1eaa9a19bcf0a1180ff1703419c9f313d31fccbf42eb3d22f1739bf9380
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Goat

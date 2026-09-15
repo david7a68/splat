@@ -12,18 +12,53 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/rhythm_of_play
-  parameters: {}
+  parameters:
+    resolution_precedence:
+    - explicit_exception
+    - general_rule
+    scene_cycle:
+    - gm_describes_scene
+    - players_declare_actions
+    - gm_resolves_and_narrates
+    outside_combat:
+      actor: gm
+      choices:
+      - activity_order
+      - resolution_method
+      all_characters_receive_opportunity: true
+    combat_turns: true
+  implementation: dnd2024:rule_rhythm_of_play
+splat_contracts:
+- id: dnd2024:rule_rhythm_of_play
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - resolution
+  events: []
+  capabilities:
+  - rules
+  - turns
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 5
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_rhythm_of_play
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: 469b47e854db9996fcb76d65059f81614b0491f1ea88bf47d7c5a025df37ea82
   parent_name: Rhythm of Play
   line_span:
     first: 1
@@ -55,7 +90,8 @@ splat_clauses:
     rule. adventurers are talking to a noble, exploring a ruin, or fighting a dragon. In certain situations—particularly
     combat—the action is more structured, and everyone takes turns.'
   sha256: 9954af6ee206c65d445478ba7e649c6d6bca12b63bd26a642b8a522d6d6edab9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Rhythm of Play

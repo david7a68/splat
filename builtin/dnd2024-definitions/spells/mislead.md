@@ -25,17 +25,87 @@ splat_spell:
   ritual: false
   range:
     mode: self
+splat_rule:
+  mechanic: dnd2024:spells/mislead
+  implementation: dnd2024:spell_mislead
+  parameters:
+    targeting:
+      kind: self
+    invisible:
+      condition: invisible
+      duration: spell_duration
+      ends_immediately_after:
+      - caster_attack_roll
+      - caster_damage_dealt
+      - caster_spell_cast
+      double_ends_with_invisibility: false
+    double:
+      spawn_location: caster_space_at_cast
+      duration: spell_duration
+      intangible: true
+      invulnerable: true
+      control:
+        economy: magic_action
+        movement_max:
+          op: multiply
+          args:
+          - 2
+          - stat: caster_speed
+        behaviors:
+        - gesture
+        - speak
+        - caster_chosen_behavior
+      shared_senses:
+        channels:
+        - vision
+        - hearing
+        origin: double_location
+    spell_lifetime:
+      concentration: true
+      maximum:
+        value: 1
+        unit: hour
+splat_contracts:
+- id: dnd2024:spell_mislead
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    choices:
+      type: choice
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  events:
+  - spell.cast_completed
+  - damage.applied
+  - attack.hit
+  - attack.roll_completed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - conditions
+  - perception
+  - controlled_participants
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 15aab9723317bbb4827b5676af814ee8c8d63fd3745195d3b1d4e611ffdd6f03
   source_path: builtin/srd-5.2.1/spell/mislead.md
   pages:
   - 150
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_mislead
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: b5bd7feec571f59f86941ce72f558f711c4f222a4ee2a84971e209e22defffed
 splat_clauses:
 - key: source_rules
   text: '# Mislead Level 5 Illusion (Bard, Warlock, Wizard) Casting Time: Action Range: Self Components:
@@ -46,7 +116,8 @@ splat_clauses:
     in whatever way you choose. It is intangible and invulnerable. You can see through its eyes and hear
     through its ears as if you were located where it is.'
   sha256: a69fe6c065e61be5425e7098d98d139177ff331bca9655118b1ae37e35680503
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Mislead

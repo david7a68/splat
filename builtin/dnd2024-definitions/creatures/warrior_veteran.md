@@ -58,17 +58,150 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/warrior_veteran
+  implementation: dnd2024:creature_warrior_veteran
+  parameters:
+    skill_totals:
+      athletics: 5
+      perception: 2
+    gear:
+    - item: greatsword
+      count: 1
+    - item: heavy_crossbow
+      count: 1
+    - item: splint_armor
+      count: 1
+    senses: []
+    passive_perception: 12
+    languages:
+      speak: true
+      known:
+      - common
+      additional_choice_count: 1
+    features:
+      greatsword:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 2
+                sides: 6
+              add: 3
+            average: 10
+      heavy_crossbow:
+        economy: action
+        op: attack
+        modes:
+        - ranged
+        attack_bonus: 3
+        target:
+          kind: creature_or_object
+          count: 1
+        range_ft:
+          normal: 100
+          long: 400
+        hit:
+        - op: damage
+          components:
+          - type: piercing
+            amount:
+              dice:
+                count: 2
+                sides: 10
+              add: 1
+            average: 12
+      parry:
+        economy: reaction
+        trigger: melee_attack.hit_actor
+        requires:
+          holding_weapon: true
+        op: ac.add
+        amount: 2
+        scope: triggering_attack
+        recheck_hit: true
+      multiattack:
+        economy: action
+        op: multiattack
+        choose_sequence:
+        - feature: greatsword
+          count: 2
+        - feature: heavy_crossbow
+          count: 2
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_warrior_veteran
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  - melee_attack.hit_actor
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 514cfbd7fb4c45c2be9d59ff5b867272ec837aa2f405b47965277ee71f8ddb1b
   source_path: builtin/srd-5.2.1/creature/warrior_veteran.md
   pages:
   - 337
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_warrior_veteran
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: feca0e74e99f1ac73db93c45d3b6deb379589d888624d2efd0a175ce45fd272e
 splat_clauses:
 - key: source_rules
   text: '# Warrior Veteran Medium or Small Humanoid, Neutral AC 17 Initiative +3 (13) HP 65 (10d8 + 20)
@@ -81,7 +214,8 @@ splat_clauses:
     a melee attack roll while holding a weapon. Response: The warrior adds 2 to its AC against that attack,
     possibly causing it to miss.'
   sha256: 409902e6d2138db9035db96f970e2c2ec8269e98b54ffd0cd5f8097f9d156f32
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Warrior Veteran

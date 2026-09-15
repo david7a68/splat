@@ -12,19 +12,74 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/combat_making_an_attack
-  parameters: {}
+  parameters:
+    target:
+      kinds:
+      - creature
+      - object
+      - location
+      within_attack_range: true
+    sequence:
+    - choose_target
+    - determine_modifiers
+    - resolve_attack_roll
+    - resolve_hit_or_miss
+    modifiers:
+    - cover
+    - advantage
+    - disadvantage
+    - spell_bonuses
+    - feature_bonuses
+    - effect_penalties
+    default_hit: roll_damage
+    attack_specific_effects:
+      may_replace_damage: true
+      may_add_to_damage: true
+    unseen_target:
+      disadvantage: true
+      wrong_target_location: automatic_miss
+    unseen_attacker:
+      advantage: true
+    hidden_attacker:
+      reveal_location: on_hit_or_miss
+  implementation: dnd2024:rules_combat_making_an_attack
+splat_contracts:
+- id: dnd2024:rules_combat_making_an_attack
+  inputs:
+    attacker:
+      type: participant
+      required: true
+    target:
+      type: resolution
+      required: true
+    attack:
+      type: definition
+      required: true
+  outputs:
+  - attack_result
+  - damage
+  - effects
+  - revealed_location
+  events:
+  - attack.requested
+  capabilities:
+  - attacks
+  - senses
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 14
   - 15
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_combat_making_an_attack
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: dd8de815174a0463cd405274fbf32457a13b114fda75d113dd762663554f0670
   parent_name: Combat
   line_span:
     first: 951
@@ -46,7 +101,8 @@ splat_clauses:
     earlier in “Playing the Game.” On a hit, you roll damage unless the particular attack has rules that
     specify otherwise. Some attacks cause special effects in addition to or instead of damage.'
   sha256: aa27a871a05ab6c25eb545477c826bf067c670c8594dfc9f790b7e4c4e633351
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Making an Attack

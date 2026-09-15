@@ -64,17 +64,339 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ancient_copper_dragon
+  implementation: dnd2024:creature_ancient_copper_dragon
+  parameters:
+    skill_totals:
+      deception: 13
+      perception: 17
+      stealth: 8
+    damage_immunities:
+    - acid
+    condition_immunities: []
+    senses:
+    - sense: blindsight
+      range_ft: 60
+    - sense: darkvision
+      range_ft: 120
+    passive_perception: 27
+    languages:
+      speak: true
+      known:
+      - common
+      - draconic
+    features:
+      legendary_resistance:
+        economy: passive
+        trigger: saving_throw.failed
+        optional: true
+        op: saving_throw.set_result
+        result: success
+        uses_in_lair: 5
+        uses:
+          count: 4
+          recovery: long_rest
+      rend:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 15
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 15
+        hit:
+        - op: damage
+          components:
+          - type: slashing
+            amount:
+              dice:
+                count: 2
+                sides: 10
+              add: 8
+            average: 19
+          - type: acid
+            amount:
+              dice:
+                count: 2
+                sides: 8
+              add: 0
+            average: 9
+      spellcasting:
+        economy: action
+        op: spellcasting
+        profile:
+          ability: charisma
+          waived_components:
+          - material
+          spells:
+          - spell:
+              key: dnd2024:spells/detect_magic
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/mind_spike
+            uses:
+              unlimited: true
+            cast_level: 5
+          - spell:
+              key: dnd2024:spells/minor_illusion
+            uses:
+              unlimited: true
+          - spell:
+              key: dnd2024:spells/shapechange
+            uses:
+              unlimited: true
+            overrides:
+              forms:
+              - beast
+              - humanoid
+              temporary_hp_granted: 0
+              maintain_requires_concentration: false
+              maintain_requires_temporary_hp: false
+          - spell:
+              key: dnd2024:spells/greater_restoration
+            uses:
+              count: 1
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/major_image
+            uses:
+              count: 1
+              recovery: long_rest
+          - spell:
+              key: dnd2024:spells/project_image
+            uses:
+              count: 1
+              recovery: long_rest
+          save_dc: 21
+      acid_breath:
+        economy: action
+        op: saving_throw
+        ability: dexterity
+        dc: 22
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: line
+            origin: actor
+            size_ft: 90
+            width_ft: 10
+        failure:
+        - op: damage
+          components:
+          - type: acid
+            amount:
+              dice:
+                count: 14
+                sides: 8
+              add: 0
+            average: 63
+        success:
+        - op: damage
+          from: failure_damage
+          multiplier: 0.5
+          round: down
+        recharge:
+          die_sides: 6
+          success_min: 5
+          success_max: 6
+          check_event: actor.turn_start
+          maximum_uses: 1
+          initial_uses: 1
+          also_recovers_after:
+          - short_rest
+          - long_rest
+      slowing_breath:
+        economy: action
+        op: saving_throw
+        ability: constitution
+        dc: 22
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: cone
+            origin: actor
+            size_ft: 90
+        failure:
+        - op: effect.apply
+          duration:
+            until: target.next_turn_end
+          rules:
+            reactions_allowed: false
+            speed_multiplier: 0.5
+            turn_economy_choice:
+            - action
+            - bonus_action
+            both_allowed: false
+        success: []
+      giggling_magic:
+        economy: legendary_action
+        op: saving_throw
+        ability: charisma
+        dc: 21
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 120
+          visible_to_actor: true
+        failure:
+        - op: damage
+          components:
+          - type: psychic
+            amount:
+              dice:
+                count: 9
+                sides: 6
+              add: 0
+            average: 31
+        - op: roll.add
+          amount:
+            negate:
+              dice:
+                count: 1
+                sides: 8
+              add: 0
+          rolls:
+          - ability_check
+          - attack
+          roll_each_test: true
+          duration:
+            until: target.next_turn_end
+        success: []
+        lockout_until: actor.next_turn_start
+        legendary_cost: 1
+      mind_jolt:
+        economy: legendary_action
+        op: sequence
+        steps:
+        - op: spell.cast
+          spell:
+            key: dnd2024:spells/mind_spike
+          profile: spellcasting
+          cast_level: 5
+        lockout_until: actor.next_turn_start
+        legendary_cost: 1
+      pounce:
+        economy: legendary_action
+        op: sequence
+        steps:
+        - op: movement
+          maximum:
+            multiply:
+            - 0.5
+            - actor_stat: speed
+        - op: feature.use
+          feature: rend
+        legendary_cost: 1
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - count: 3
+          feature: rend
+        replace_attack:
+          maximum: 1
+          choices:
+          - op: feature.use
+            feature: slowing_breath
+          - op: spell.cast
+            spell:
+              key: dnd2024:spells/mind_spike
+            profile: spellcasting
+            cast_level: 5
+    legendary_actions:
+      uses: 3
+      uses_in_lair: 4
+      trigger: another_creature.turn_end_immediately_after
+      cost_per_action: 1
+      recover_all: actor.turn_start
+      maximum_per_trigger: 1
+      requires_actions_available: true
+      excluded_conditions:
+      - incapacitated
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spellcasting_defaults:
+      cast_level: lowest_possible_unless_overridden
+      upcast_allowed: only_explicit_cast_level_overrides
+      required_material_components_available: true
+      casting_time_at_least_1_minute:
+        uses_normal_time: true
+        magic_action_each_turn: true
+        concentration_required: true
+      other_components: spell_definition_unless_waived
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_ancient_copper_dragon
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - actor.turn_start
+  - another_creature.turn_end_immediately_after
+  - creature.feature_requested
+  - saving_throw.failed
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - resources
+  - rest_recovery
+  - saving_throws
+  - spatial_constraints
+  - spellcasting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 40e60c7d1d0b948aa526cb76cb8cad8870dc857515ad843ebfeed67fb076f887
   source_path: builtin/srd-5.2.1/creature/ancient_copper_dragon.md
   pages:
   - 277
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ancient_copper_dragon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: ab5510a180d2522185d2ebbb07de914da7019b6bb1a2ba722469ec3e65f704b6
 splat_clauses:
 - key: source_rules
   text: '# Ancient Copper Dragon Gargantuan Dragon (Metallic), Chaotic Good AC 21 Initiative +15 (25)
@@ -105,7 +427,8 @@ splat_clauses:
     until the start of its next turn. Pounce. The dragon moves up to half its Speed, and it makes one
     Rend attack.'
   sha256: c15e549ef12bae3eb0561ec99636af3e5312bbac7c25beee8e0a77c230a3f991
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ancient Copper Dragon

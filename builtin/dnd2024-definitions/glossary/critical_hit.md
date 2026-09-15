@@ -12,18 +12,46 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/critical_hit
-  parameters: {}
+  parameters:
+    natural_attack_die_trigger: 20
+    automatic_hit: true
+    ignore_ac_and_modifiers_for_hit: true
+    damage_dice_multiplier: 2
+    includes_all_attack_damage_dice: true
+    damage_modifiers_multiplier: 1
+  implementation: dnd2024:glossary_critical_hit
+splat_contracts:
+- id: dnd2024:glossary_critical_hit
+  inputs:
+    subject:
+      type: participant
+      required: true
+    attack:
+      type: resolution
+      required: true
+  outputs:
+  - hit
+  - critical
+  - damage_expression
+  events:
+  - attack.rolled
+  - damage.roll_pending
+  capabilities:
+  - attacks
+  - damage
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: 6c4594f8ac71c3bcd53a3faa70f50ba299afbde08d5667568de2378f7cda71d1
   source_path: builtin/srd-5.2.1/glossary/critical_hit.md
   pages:
   - 179
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_critical_hit
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: c873bc1c172bf8ca882716ea5a9ad93d17ce2de25583e5c68b8b37d09b580ffd
 splat_clauses:
 - key: source_rules
   text: '# Critical Hit If you roll a 20 on the d20 for an attack roll, you score a Critical Hit, and
@@ -31,7 +59,8 @@ splat_clauses:
     dice for the attack’s damage against the target. Roll all of the attack’s damage dice twice and add
     them together. Then add any relevant modifiers. See also “Playing the Game” (“Damage and Healing”).'
   sha256: 90222fdd86bb713c042a04f34e24e2fd495f313ea4fe52d2b82f18092fb880eb
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Critical Hit

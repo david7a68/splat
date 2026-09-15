@@ -58,17 +58,174 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/mummy
+  implementation: dnd2024:creature_mummy
+  parameters:
+    damage_vulnerabilities:
+    - fire
+    damage_immunities:
+    - necrotic
+    - poison
+    condition_immunities:
+    - charmed
+    - exhaustion
+    - frightened
+    - paralyzed
+    - poisoned
+    senses:
+    - sense: darkvision
+      range_ft: 60
+    passive_perception: 11
+    languages:
+      speak: true
+      known:
+      - common
+      additional_choice_count: 2
+    features:
+      rotting_fist:
+        economy: action
+        op: attack
+        modes:
+        - melee
+        attack_bonus: 5
+        target:
+          kind: creature_or_object
+          count: 1
+        reach_ft: 5
+        hit:
+        - op: damage
+          components:
+          - type: bludgeoning
+            amount:
+              dice:
+                count: 1
+                sides: 10
+              add: 3
+            average: 8
+          - type: necrotic
+            amount:
+              dice:
+                count: 3
+                sides: 6
+              add: 0
+            average: 10
+        - op: curse.apply
+          when:
+            target_kind: creature
+          rules:
+            healing_allowed: false
+            long_rest_restores_hp_maximum: false
+          periodic:
+            interval:
+              amount: 24
+              unit: hour
+            effect:
+              op: hp_maximum.reduce
+              amount:
+                dice:
+                  count: 3
+                  sides: 6
+                add: 0
+              average: 10
+        on_reduce_target_to_zero_hp:
+          when:
+            target_kind: creature
+          op: death
+          corpse: dust
+      dreadful_glare:
+        economy: action
+        op: saving_throw
+        ability: wisdom
+        dc: 11
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 60
+          visible_to_actor: true
+        failure:
+        - op: condition.apply
+          condition: frightened
+          duration:
+            until: actor.next_turn_end
+        success:
+        - op: feature.immunity
+          source: actor
+          feature: dreadful_glare
+          duration:
+            amount: 24
+            unit: hour
+      multiattack:
+        economy: action
+        op: multiattack
+        sequence:
+        - feature: rotting_fist
+          count: 2
+        - feature: dreadful_glare
+          count: 1
+    damage_resolution:
+      choice:
+      - printed_average
+      - roll_expression
+      chooser: controller
+      exclusive: true
+    spatial_resolution:
+      provider: caller
+      required_facts:
+      - distance
+      - area_membership
+      - visibility
+      - occupancy
+      - movement_path
+      validate_against_typed_constraints: true
+splat_contracts:
+- id: dnd2024:creature_mummy
+  inputs:
+    actor:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    choices:
+      required: false
+      type: choice
+    scene:
+      required: false
+      type: resolution
+    event:
+      required: false
+      type: event
+  outputs:
+  - effects
+  - roll_requests
+  - state_changes
+  events:
+  - creature.feature_requested
+  capabilities:
+  - action_economy
+  - attack_resolution
+  - creature_rules
+  - damage
+  - effects
+  - saving_throws
+  - spatial_constraints
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 441e7e9ba703e95b61b6cb9a575fef4cb2106f309e0b99d2420d2413223c1552
   source_path: builtin/srd-5.2.1/creature/mummy.md
   pages:
   - 309
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_mummy
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_3.md
+  specification_sha256: 74815586752b10708676cd416767212678d4883b9b6c5cfc933936ca0fdb1c79
 splat_clauses:
 - key: source_rules
   text: '# Mummy Medium or Small Undead, Lawful Evil AC 11 Initiative -1 (9) HP 58 (9d8 + 18) Speed 20
@@ -85,7 +242,8 @@ splat_clauses:
     the end of the mummy’s next turn. Success: The target is immune to this mummy’s Dreadful Glare for
     24 hours.'
   sha256: 41e8d2c8cb057801c331e01111e01ad4728218d52a7d2222ecabe50e213b3cf0
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Mummy

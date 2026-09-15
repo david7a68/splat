@@ -12,18 +12,40 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/exploration_hiding
-  parameters: {}
+  parameters:
+    apply_definitions:
+    - key: dnd2024:glossary/hide_action
+    circumstances_appropriate:
+      actor: gm
+      type: boolean
+  implementation: dnd2024:rule_exploration_hiding
+splat_contracts:
+- id: dnd2024:rule_exploration_hiding
+  inputs:
+    actor:
+      type: participant
+      required: true
+    context:
+      type: resolution
+      required: true
+  outputs:
+  - resolution
+  events: []
+  capabilities:
+  - stealth
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 11
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rule_exploration_hiding
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_2.md
+  specification_sha256: ee1b4fab58419f42edb4a9488b77c97b7ee1af11bad0e768cad3836398016a11
   parent_name: Exploration
   line_span:
     first: 654
@@ -34,7 +56,8 @@ splat_clauses:
     or set an ambush. The Game Master decides when circumstances are appropriate for hiding. When you
     try to hide, you take the Hide action.'
   sha256: 64c27dbb06f5aa191c04095b83307609132d402e6575eb4ded7b77cff24908e5
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Hiding

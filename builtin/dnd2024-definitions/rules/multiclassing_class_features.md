@@ -12,18 +12,43 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/multiclassing_class_features
-  parameters: {}
+  parameters:
+    gain_features_for: new_class_level
+    apply_class_multiclass_rules: true
+    special_handling:
+    - extra_attack
+    - spellcasting
+    - alternative_ac_calculations
+    special_handling_rules:
+    - key: dnd2024:rules/multiclassing_extra_attack
+    - key: dnd2024:rules/multiclassing_spellcasting
+    - key: dnd2024:rules/multiclassing_armor_class
+  implementation: dnd2024:rules_multiclassing_class_features
+splat_contracts:
+- id: dnd2024:rules_multiclassing_class_features
+  inputs:
+    subject:
+      type: participant
+      required: true
+  outputs:
+  - effects
+  events:
+  - character.level_gained
+  capabilities:
+  - multiclassing
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 25
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_multiclassing_class_features
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_1.md
+  specification_sha256: 725eed764b07f4585f604dc43b2091fa1860d0b32f2232a5e51c66237e2c8df5
   parent_name: Multiclassing
   line_span:
     first: 1951
@@ -35,7 +60,8 @@ splat_clauses:
     included in each of your classes’ descriptions. Special rules apply to Extra Attack, Spellcasting,
     and features (such as Unarmored Defense) that give you alternative ways to calculate your Armor Class.'
   sha256: b3ee24ca06901029d0328a1f4c1285ba0b66f92b7db29f74cda5c325b81429d9
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Class Features

@@ -58,17 +58,161 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/dretch
+  implementation: dnd2024:creature_dretch
+  parameters:
+    features:
+      rend:
+        economy: action
+        op: attack
+        attack_modes:
+        - melee
+        attack_bonus: 3
+        targets:
+          count: 1
+        hit:
+        - op: damage
+          average: 4
+          amount:
+            dice:
+              count: 1
+              sides: 6
+            add: 1
+          damage_type: slashing
+        reach_feet: 5
+      fetid_cloud:
+        economy: action
+        resource:
+          capacity: 1
+          recovery: long_rest
+          cost: 1
+        op: save
+        ability: constitution
+        dc: 11
+        targets:
+          kind: creature
+          count: all
+          area:
+            shape: emanation
+            size_feet: 10
+            origin: self
+        failure:
+        - op: condition
+          condition: poisoned
+          ends:
+            event: turn.end
+            participant: target
+            occurrence: next
+          while_active:
+            turn_economy_exclusive_choice:
+            - action
+            - bonus_action
+            reactions_allowed: false
+        success: []
+    defenses:
+      resistances:
+        damage_types:
+        - cold
+        - fire
+        - lightning
+      immunities:
+        damage_types:
+        - poison
+        conditions:
+        - poisoned
+    senses:
+      passive_perception: 9
+      special:
+      - sense: darkvision
+        range_feet: 60
+    communication:
+      speaks:
+      - abyssal
+      understands:
+      - abyssal
+      telepathy:
+        range_feet: 60
+        target_understands: abyssal
+    stat_block_conventions:
+      attack_bonus_and_skill_totals: supplied_total_before_external_modifiers
+      save_dc: supplied_total
+      damage_mode_choice:
+      - fixed_average
+      - rolled_dice
+      condition_source: self
+      multiattack_child_economy_cost: 0
+      multiattack_child_resource_costs_retained: true
+      spellcasting:
+        default_level: spell_minimum
+        spell_slots_expended: false
+        required_materials: available
+        casting_time_at_least_one_minute:
+          uses_normal_casting_duration: true
+          magic_action_each_turn: true
+          concentration_required: true
+      geometry_assumptions:
+        chooser: gm
+        supplies:
+        - range
+        - visibility
+        - line_of_sight
+        - area_membership
+        - reachable_locations
+        - unoccupied_locations
+        - terrain
+        - plane
+        - form_appearance
+splat_contracts:
+- id: dnd2024:creature_dretch
+  inputs:
+    self:
+      type: participant
+      required: true
+    targets:
+      required: false
+      type: participant_list
+    feature:
+      type: choice
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+    resolution:
+      required: false
+      type: resolution
+    campaign:
+      required: false
+      type: campaign
+  outputs:
+  - resolved_feature
+  - effects
+  - resource_changes
+  events:
+  - turn.end
+  capabilities:
+  - action_economy
+  - creature_rules
+  - dice
+  - effects
+  - resources
+  - targeting
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 44ee146c8a6f938f133624eb4e34d91bafa9c076eb8c28201bed5f2fc72f2f16
   source_path: builtin/srd-5.2.1/creature/dretch.md
   pages:
   - 281
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_dretch
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_2.md
+  specification_sha256: 1ebb66463305d74a5b37cffabe115584a4e8163abe768116a12c43336ee21e31
 splat_clauses:
 - key: source_rules
   text: '# Dretch Small Fiend (Demon), Chaotic Evil AC 11 Initiative +0 (10) HP 18 (4d6 + 4) Speed 20
@@ -81,7 +225,8 @@ splat_clauses:
     turn. While Poisoned, the creature can take either an action or a Bonus Action on its turn, not both,
     and it can’t take Reactions.'
   sha256: 913aaf00583a034f68c723c5d91af21896bdb32742a2d9d92fc94bccbde8ec61
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Dretch

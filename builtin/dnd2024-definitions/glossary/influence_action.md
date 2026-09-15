@@ -12,18 +12,123 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:glossary/influence_action
-  parameters: {}
+  parameters:
+    cost: action
+    target: monster
+    interaction_modes:
+    - deceive
+    - intimidate
+    - amuse
+    - persuade
+    - gently_coax
+    receptiveness:
+      chooser: gm
+      options:
+      - willing
+      - unwilling
+      - hesitant
+      constraints:
+        willing: urging_aligns_with_desires
+        unwilling: urging_repugnant_or_counter_to_alignment
+        hesitant: hesitant_to_comply
+    branches:
+      willing:
+        check_required: false
+        complies: true
+        fulfillment_method_chooser: monster
+      unwilling:
+        check_required: false
+        complies: false
+      hesitant:
+        check_required: true
+        check_chooser: gm
+        default_dc:
+          op: max
+          args:
+          - 15
+          - var: monster_intelligence_score
+        attitude_modes:
+          friendly: advantage
+          hostile: disadvantage
+          indifferent: normal
+        success: complies
+        failure:
+          repeat_same_urging_cooldown:
+            default_hours: 24
+            override:
+              chooser: gm
+              type: duration
+    suggested_checks:
+    - mode: deceive
+      ability: charisma
+      skill: deception
+      target_understands: true
+    - mode: intimidate
+      ability: charisma
+      skill: intimidation
+    - mode: amuse
+      ability: charisma
+      skill: performance
+    - mode: persuade
+      ability: charisma
+      skill: persuasion
+      target_understands: true
+    - mode: gently_coax
+      ability: wisdom
+      skill: animal_handling
+      target_types:
+      - beast
+      - monstrosity
+  implementation: dnd2024:glossary_influence_action
+splat_contracts:
+- id: dnd2024:glossary_influence_action
+  inputs:
+    subject:
+      type: participant
+      required: true
+    target:
+      type: participant
+      required: true
+    interaction:
+      type: choice
+      required: true
+    gm_receptiveness:
+      type: choice
+      required: true
+    gm_check:
+      type: choice
+      required: true
+    gm_dc:
+      required: false
+      type: integer
+    gm_cooldown:
+      required: false
+      type: duration
+  outputs:
+  - compliance
+  - check
+  - repeat_cooldown
+  events:
+  - action.requested
+  - ability_check.completed
+  capabilities:
+  - action_economy
+  - relationships
+  - checks
+  - gm_choices
 splat_conversion:
-  status: partial
+  status: specified
   category: glossary
   source_sha256: b72965562e6763366b449722ded72793f99c1589a5b48d91700b62c74d8fefbc
   source_path: builtin/srd-5.2.1/glossary/influence_action.md
   pages:
   - 184
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:glossary_influence_action
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/glossary.md
+  specification_sha256: 102caffb0cbd3c49d1e69868f41307a40da1852c257e93db6cf32f0188ef4357
 splat_clauses:
 - key: source_rules
   text: '# Influence [Action] With the Influence action, you urge a monster to do something. Describe
@@ -44,7 +149,8 @@ splat_clauses:
     Charisma (Persuasion) Persuading a monster that understands you Wisdom (Animal Handling) Gently coaxing
     a Beast or Monstrosity'
   sha256: 84fcd1ff6b2effb6ace2efe2544ee4d1218f7d4a4887999ad8dbeef728e3f0b4
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Influence [Action]

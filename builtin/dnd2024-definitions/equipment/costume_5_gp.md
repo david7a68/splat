@@ -17,17 +17,55 @@ splat_item:
   price:
     value: 5
     unit: gp
+  mass:
+    value: 4.0
+    unit: lb
+splat_rule:
+  mechanic: dnd2024:equipment/costume_5_gp
+  implementation: dnd2024:equipment_costume_5_gp
+  parameters:
+    while_worn:
+      roll: ability_check
+      mode: advantage
+      scope: impersonate_represented_person_or_person_type
+    mass:
+      value: 4.0
+      unit: lb
+splat_contracts:
+- id: dnd2024:equipment_costume_5_gp
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    event:
+      required: false
+      type: event
+    choices:
+      required: false
+      type: choice
+  outputs:
+  - item_properties
+  - conditional_modifiers
+  events: []
+  capabilities:
+  - equipment
+  - conditional_modifiers
 splat_conversion:
-  status: partial
+  status: specified
   category: equipment
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 97
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:equipment_costume_5_gp
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/equipment_tables.md
+  specification_sha256: c578ed838520bba16afadbf5e4da0bf25dd09867204541cd2e36632999a692c3
   line_span:
     first: 8370
     count: 4
@@ -36,7 +74,8 @@ splat_clauses:
   text: '# Costume (5 GP) While wearing a Costume, you have Advantage on any ability check you make to
     impersonate the person or type of person it represents.'
   sha256: 47a4191cc194b53748228445160142ed42a4a22795a30df79d9b979822e780a7
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Costume (5 GP)

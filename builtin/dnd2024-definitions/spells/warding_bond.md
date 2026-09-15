@@ -30,17 +30,76 @@ splat_spell:
     description: a pair of platinum rings worth 50+ GP each, which you and the target must wear for the
       duration
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/warding_bond
+  implementation: dnd2024:spell_warding_bond
+  parameters:
+    targeting:
+      kind: creature
+      count: 1
+      willing: true
+      other_than_caster: true
+      touch: true
+    ongoing_requirement:
+      caster_and_target_wear_component_rings: true
+    benefits:
+      within_caster_feet: 60
+      ac_bonus: 1
+      saving_throw_bonus: 1
+      damage_resistance: all
+      duration: spell_duration
+    shared_damage:
+      event: target.takes_damage
+      recipient: caster
+      amount: same_as_target_damage_taken
+    ends_on_any:
+    - caster_zero_hp
+    - separation_exceeds_60_feet
+    - warding_bond_cast_again_on_either_connected_creature
+    spell_lifetime:
+      concentration: false
+      maximum:
+        value: 1
+        unit: hour
+splat_contracts:
+- id: dnd2024:spell_warding_bond
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+  outputs:
+  - effects
+  - damage_results
+  events:
+  - spell.cast_completed
+  - damage.applied
+  - health.changed
+  - position.changed
+  - effect.ended
+  capabilities:
+  - spellcasting
+  - effects
+  - damage
+  - spatial_effects
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 23cf3b80dbe2d36f17a68c90594aeb9822e612b47cf77a9208b8cadbd8e101da
   source_path: builtin/srd-5.2.1/spell/warding_bond.md
   pages:
   - 173
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_warding_bond
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_2.md
+  specification_sha256: c6f1576f42b3b888d870153a73db5f6d549a3035a8e19591c402fae70815ff70
 splat_clauses:
 - key: source_rules
   text: '# Warding Bond Level 2 Abjuration (Cleric, Paladin) Casting Time: Action Range: Touch Components:
@@ -52,7 +111,8 @@ splat_clauses:
     become separated by more than 60 feet. It also ends if the spell is cast again on either of the connected
     creatures.'
   sha256: 9c7921623fa12be3a5392d87c642a3ffcc576b4a1308d1d229636258a8ed94fe
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Warding Bond

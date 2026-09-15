@@ -59,17 +59,130 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/cockatrice
+  implementation: dnd2024:creature_cockatrice
+  parameters:
+    features:
+      petrifying_bite:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 3
+          reach_ft: 5
+        hit:
+          damage:
+          - average: 3
+            roll:
+              count: 1
+              sides: 4
+              modifier: 1
+            type: piercing
+          save:
+            operation: saving_throw
+            ability: constitution
+            dc: 11
+            targets:
+              kind: creature
+            failure:
+              conditions:
+              - condition: restrained
+              repeat_save:
+                event: target.next_turn_end
+                if_still_restrained: true
+                success: end_effect
+                failure:
+                  replace_condition:
+                    from: restrained
+                    to: petrified
+                  duration_seconds: 86400
+    damage_immunities: []
+    condition_immunities:
+    - petrified
+    senses:
+      darkvision: 60
+      passive_perception: 11
+    languages:
+      speaks: []
+      understands: []
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_cockatrice
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.ended
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spatial_queries
+  - limited_resources
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: d374d459c74c5d36f69f93e220f2ee7fa6df13fe991e2a419888fd4f5170d08e
   source_path: builtin/srd-5.2.1/creature/cockatrice.md
   pages:
   - 275
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_cockatrice
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: 65c5daaceb2e99e66958fe849ee9088312b05128e4ad851df276efb93227dcd3
 splat_clauses:
 - key: source_rules
   text: '# Cockatrice Small Monstrosity, Unaligned AC 11 Initiative +1 (11) HP 22 (5d6 + 5) Speed 20 ft.,
@@ -82,7 +195,8 @@ splat_clauses:
     Second Failure: The target has the Petrified condition, instead of the Restrained condition, for 24
     hours.'
   sha256: 96a6f941a0e0c057270079e9db3924be0b9e53dbec5b973d1d86219cbdd99e7b
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Cockatrice

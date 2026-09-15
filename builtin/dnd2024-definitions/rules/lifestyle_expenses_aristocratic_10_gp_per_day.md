@@ -12,18 +12,43 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/lifestyle_expenses_aristocratic_10_gp_per_day
-  parameters: {}
+  parameters:
+    lifestyle:
+      id: aristocratic
+      cost_gp_per_day: 10
+  implementation: dnd2024:rules_lifestyle_expenses_aristocratic_10_gp_per_day
+splat_contracts:
+- id: dnd2024:rules_lifestyle_expenses_aristocratic_10_gp_per_day
+  inputs:
+    actor:
+      type: participant
+      required: true
+    choice:
+      type: choice
+      required: true
+    days:
+      required: false
+      type: integer
+  outputs:
+  - cost
+  - availability
+  events: []
+  capabilities:
+  - economy
+  - services
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 101
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_lifestyle_expenses_aristocratic_10_gp_per_day
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: 012cb3ac1c832bbeb700d702fbe0b663390c36090893e1abcb6b9764a183c7da
   parent_name: Lifestyle Expenses
   line_span:
     first: 8815
@@ -33,7 +58,8 @@ splat_clauses:
   text: '# Aristocratic (10 GP per Day) You pay for the best and might have a staff that supports your
     lifestyle. Others notice your wealth and might encourage you to share it, either legally or otherwise.'
   sha256: 560a6c6ee38932ebbd0fa407b5d9d50616a999db077bb0da882af3f11b0865a2
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Aristocratic (10 GP per Day)

@@ -28,17 +28,90 @@ splat_spell:
   material:
     description: a pinch of sulfur
     consumed: false
+splat_rule:
+  mechanic: dnd2024:spells/flame_strike
+  implementation: dnd2024:spell_flame_strike
+  parameters:
+    spell_lifetime:
+      concentration: false
+      instantaneous: true
+    area:
+      shape: cylinder
+      radius_feet: 10
+      height_feet: 40
+      origin: chosen_point
+      range_feet: 60
+    targets:
+      kind: creature
+      selection: all_in_area
+    save:
+      ability: dexterity
+      dc: spell_save_dc
+    damage:
+    - dice:
+        base_count: 5
+        sides: 6
+        extra_per_slot: 1
+        base_slot: 5
+      type: fire
+    - dice:
+        base_count: 5
+        sides: 6
+        extra_per_slot: 1
+        base_slot: 5
+      type: radiant
+    success_damage_scale:
+      numerator: 1
+      denominator: 2
+    spatial_resolution:
+      source: supplied_world_geometry
+      unknown_facts: require_resolution
+      infer_unprovided_geometry: false
+splat_contracts:
+- id: dnd2024:spell_flame_strike
+  inputs:
+    caster:
+      type: participant
+      required: true
+    cast_level:
+      type: integer
+      required: true
+    targets:
+      type: participant_list
+      required: true
+    origin:
+      type: location
+      required: true
+    save_dc:
+      type: integer
+      required: true
+    spatial_facts:
+      required: false
+      type: resolution
+  outputs:
+  - effects
+  - damage
+  events:
+  - spell.cast_completed
+  capabilities:
+  - spellcasting
+  - effects
+  - areas
+  - damage
+  - tests
 splat_conversion:
-  status: partial
+  status: specified
   category: spell
   source_sha256: 7059e3787d8fb8248101ddb10dcdcbb557ce6cdba73228886729a8cbf712f294
   source_path: builtin/srd-5.2.1/spell/flame_strike.md
   pages:
   - 132
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:spell_flame_strike
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/spells_4.md
+  specification_sha256: bd51b4630b0ada7fb3b40944694907156b17bd55f03bbc54c77af25710ed7969
 splat_clauses:
 - key: source_rules
   text: '# Flame Strike Level 5 Evocation (Cleric) Casting Time: Action Range: 60 feet Components: V,
@@ -48,7 +121,8 @@ splat_clauses:
     much damage on a successful one. Using a Higher-Level Spell Slot. The Fire damage and the Radiant
     damage increase by 1d6 for each spell slot level above 5.'
   sha256: 1e2c8201658573ac57cedcab61de1c44ebba3b8352c7b3d388152431ccdcbd38
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Flame Strike

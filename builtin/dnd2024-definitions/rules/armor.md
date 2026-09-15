@@ -12,18 +12,167 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:rules/armor
-  parameters: {}
+  parameters:
+    armor:
+    - id: padded_armor
+      category: light
+      base_ac: 11
+      dexterity_cap: null
+      add_dexterity: true
+      strength_minimum: null
+      stealth_disadvantage: true
+      weight_lb: 8
+      cost_gp: 5
+    - id: leather_armor
+      category: light
+      base_ac: 11
+      dexterity_cap: null
+      add_dexterity: true
+      strength_minimum: null
+      stealth_disadvantage: false
+      weight_lb: 10
+      cost_gp: 10
+    - id: studded_leather_armor
+      category: light
+      base_ac: 12
+      dexterity_cap: null
+      add_dexterity: true
+      strength_minimum: null
+      stealth_disadvantage: false
+      weight_lb: 13
+      cost_gp: 45
+    - id: hide_armor
+      category: medium
+      base_ac: 12
+      dexterity_cap: 2
+      add_dexterity: true
+      strength_minimum: null
+      stealth_disadvantage: false
+      weight_lb: 12
+      cost_gp: 10
+    - id: chain_shirt
+      category: medium
+      base_ac: 13
+      dexterity_cap: 2
+      add_dexterity: true
+      strength_minimum: null
+      stealth_disadvantage: false
+      weight_lb: 20
+      cost_gp: 50
+    - id: scale_mail
+      category: medium
+      base_ac: 14
+      dexterity_cap: 2
+      add_dexterity: true
+      strength_minimum: null
+      stealth_disadvantage: true
+      weight_lb: 45
+      cost_gp: 50
+    - id: breastplate
+      category: medium
+      base_ac: 14
+      dexterity_cap: 2
+      add_dexterity: true
+      strength_minimum: null
+      stealth_disadvantage: false
+      weight_lb: 20
+      cost_gp: 400
+    - id: half_plate_armor
+      category: medium
+      base_ac: 15
+      dexterity_cap: 2
+      add_dexterity: true
+      strength_minimum: null
+      stealth_disadvantage: true
+      weight_lb: 40
+      cost_gp: 750
+    - id: ring_mail
+      category: heavy
+      base_ac: 14
+      dexterity_cap: 0
+      add_dexterity: false
+      strength_minimum: null
+      stealth_disadvantage: true
+      weight_lb: 40
+      cost_gp: 30
+    - id: chain_mail
+      category: heavy
+      base_ac: 16
+      dexterity_cap: 0
+      add_dexterity: false
+      strength_minimum: 13
+      stealth_disadvantage: true
+      weight_lb: 55
+      cost_gp: 75
+    - id: splint_armor
+      category: heavy
+      base_ac: 17
+      dexterity_cap: 0
+      add_dexterity: false
+      strength_minimum: 15
+      stealth_disadvantage: true
+      weight_lb: 60
+      cost_gp: 200
+    - id: plate_armor
+      category: heavy
+      base_ac: 18
+      dexterity_cap: 0
+      add_dexterity: false
+      strength_minimum: 15
+      stealth_disadvantage: true
+      weight_lb: 65
+      cost_gp: 1500
+    don_doff_minutes:
+      light:
+        don: 1
+        doff: 1
+      medium:
+        don: 5
+        doff: 1
+      heavy:
+        don: 10
+        doff: 5
+    insufficient_strength_speed_penalty_feet: 10
+    shield:
+      ac_bonus: 2
+      don_action: utilize
+      doff_action: utilize
+      weight_lb: 6
+      cost_gp: 10
+  implementation: dnd2024:rules_armor
+splat_contracts:
+- id: dnd2024:rules_armor
+  inputs:
+    actor:
+      type: participant
+      required: true
+    item:
+      type: item_instance
+      required: true
+    choice:
+      type: choice
+      required: true
+  outputs:
+  - item_attributes
+  - actor_modifiers
+  events: []
+  capabilities:
+  - equipment
+  - armor_class
+  - crafting
 splat_conversion:
-  status: partial
+  status: specified
   category: rule
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 92
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:rules_armor
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/other_rules_3.md
+  specification_sha256: fada2ba7cfa91d06ba112f57bc875e1c879c7a1e051b8b09422b363b9cce851a
   parent_name: Armor
   line_span:
     first: 7905
@@ -46,7 +195,8 @@ splat_clauses:
     + Dex modifier (max 2) Heavy Armor (10 Minutes to Don and 5 Minutes to Doff) Ring Mail 14 Chain Mail
     16 Splint Armor 17 Plate Armor 18 Shield (Utilize Action to Don or Doff) Shield +2'
   sha256: 1257edbb30d16873184ac7d3ba7737c9ef97a768323c61c4fd252b32ccc0ce12
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Armor

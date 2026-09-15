@@ -12,18 +12,54 @@ splat_sources:
   url: https://www.dndbeyond.com/srd
 splat_rule:
   mechanic: dnd2024:class_features/life_domain_level_3_disciple_of_life
-  parameters: {}
+  parameters:
+    trigger: spell.healing
+    requires:
+      caster: actor
+      expended_spell_slot: true
+      turn: spell.cast_turn
+    additional_healing:
+      op: add
+      args:
+      - 2
+      - var: spell.slot_level
+    class_scope:
+      class: cleric
+      minimum_level: 3
+  implementation: dnd2024:class_features_life_domain_level_3_disciple_of_life
+splat_contracts:
+- id: dnd2024:class_features_life_domain_level_3_disciple_of_life
+  inputs:
+    actor:
+      type: participant
+      required: true
+    event:
+      required: false
+      type: event
+    selection:
+      required: false
+      type: choice
+  outputs:
+  - effects
+  events:
+  - spell.healing
+  capabilities:
+  - character_features
+  - spellcasting
+  - healing
 splat_conversion:
-  status: partial
+  status: specified
   category: class_feature
   source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
   source_path: builtin/srd-5.2.1/source.pdf
   pages:
   - 40
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:class_features_life_domain_level_3_disciple_of_life
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/character_options_2.md
+  specification_sha256: f328d73b8fa7aba11b9de4d6785fb2193c739fc883482b792ee072622a057739
   parent_name: Life Domain
   line_span:
     first: 3298
@@ -34,7 +70,8 @@ splat_clauses:
     creature, that creature regains additional Hit Points on the turn you cast the spell. The additional
     Hit Points equal 2 plus the spell slot’s level.'
   sha256: 1b492c24f187cc13b46c8f29e3dc52451acd8b9b8e8df15b26e8f9737adb6e51
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Level 3: Disciple of Life

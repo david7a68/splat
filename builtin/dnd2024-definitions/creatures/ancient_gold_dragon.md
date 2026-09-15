@@ -64,17 +64,346 @@ splat_stats:
     unit: ft
 splat_health:
   zero_hp: dnd2024:monster
+splat_rule:
+  mechanic: dnd2024:creatures/ancient_gold_dragon
+  implementation: dnd2024:creature_ancient_gold_dragon
+  parameters:
+    features:
+      amphibious:
+        economy: trait
+        operation: passive_rule
+        breathing:
+        - air
+        - water
+      legendary_resistance:
+        economy: trait
+        resource:
+          kind: daily
+          uses: 4
+          recovery: long_rest
+          lair_uses: 5
+        operation: replace_save_result
+        trigger: self.save_failed
+        optional: true
+        result: success
+      multiattack:
+        economy: action
+        operation: multiattack
+        sequence:
+        - operation: attack_sequence
+          feature: rend
+          count: 3
+        replacements:
+        - replace_count: 1
+          maximum_uses: 1
+          operation:
+            operation: choice
+            options:
+            - operation: use_feature
+              feature: weakening_breath
+            - operation: cast_spell
+              spell:
+                key: dnd2024:spells/guiding_bolt
+              cast_level: 4
+              spellcasting_profile: spellcasting
+      rend:
+        economy: action
+        operation: attack
+        attack:
+          mode: melee
+          targets:
+            count: 1
+            kind: creature_or_object
+          supplied_attack_total: 17
+          reach_ft: 15
+        hit:
+          damage:
+          - average: 19
+            roll:
+              count: 2
+              sides: 8
+              modifier: 10
+            type: slashing
+          - average: 9
+            roll:
+              count: 2
+              sides: 8
+              modifier: 0
+            type: fire
+      fire_breath:
+        economy: action
+        resource:
+          kind: recharge
+          die: 6
+          success_faces:
+          - 5
+          - 6
+          check: self.turn_start
+          rest_recovery:
+          - short
+          - long
+          capacity: 1
+          initial_uses: 1
+        operation: saving_throw
+        ability: dexterity
+        dc: 24
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: cone
+            size_ft: 90
+            origin: self
+        failure:
+          damage:
+          - average: 71
+            roll:
+              count: 13
+              sides: 10
+              modifier: 0
+            type: fire
+        success:
+          damage_multiplier: 0.5
+          other_effects: false
+      spellcasting:
+        economy: action
+        operation: spellcasting
+        ability: charisma
+        components_waived:
+        - material
+        save_dc: 24
+        supplied_spell_attack_total: 16
+        options:
+        - spell:
+            key: dnd2024:spells/detect_magic
+          usage:
+            kind: at_will
+        - spell:
+            key: dnd2024:spells/guiding_bolt
+          usage:
+            kind: at_will
+          cast_level: 4
+        - spell:
+            key: dnd2024:spells/shapechange
+          usage:
+            kind: at_will
+          overrides:
+            allowed_types:
+            - beast
+            - humanoid
+            gain_temporary_hp: false
+            maintain_requires_concentration: false
+            maintain_requires_temporary_hp: false
+        - spell:
+            key: dnd2024:spells/flame_strike
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+          cast_level: 6
+        - spell:
+            key: dnd2024:spells/word_of_recall
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        - spell:
+            key: dnd2024:spells/zone_of_truth
+          usage:
+            kind: daily
+            uses: 1
+            pool: per_spell
+            recovery: long_rest
+        material_components_available: true
+      weakening_breath:
+        economy: action
+        operation: saving_throw
+        ability: strength
+        dc: 24
+        targets:
+          kind: creature
+          selection: each
+          area:
+            shape: cone
+            size_ft: 90
+            origin: self
+          exclude_already_affected_by: this_breath
+        failure:
+          disadvantage_on:
+            roll: d20_test
+            ability: strength
+          damage_roll_modifier:
+            subtract:
+              count: 1
+              sides: 10
+              modifier: 0
+          repeat_save:
+            event: target.turn_end
+            success: end_effect
+          automatic_success_after_seconds: 60
+        success:
+          effects: []
+      banish:
+        economy: legendary_action
+        legendary_cost: 1
+        cooldown_until: self.next_turn_start
+        operation: saving_throw
+        ability: charisma
+        dc: 24
+        targets:
+          kind: creature
+          count: 1
+          range_ft: 120
+          visible: true
+        failure:
+          damage:
+          - average: 24
+            roll:
+              count: 7
+              sides: 6
+              modifier: 0
+            type: force
+          conditions:
+          - condition: incapacitated
+            until: self.next_turn_start
+          transport:
+            plane: harmless_demiplane
+            until: self.next_turn_start
+            return:
+              unoccupied: true
+              within_self_ft: 120
+              chooser: self
+        success:
+          effects: []
+      guiding_light:
+        economy: legendary_action
+        legendary_cost: 1
+        operation: cast_spell
+        spell:
+          key: dnd2024:spells/guiding_bolt
+        cast_level: 4
+        spellcasting_profile: spellcasting
+      pounce:
+        economy: legendary_action
+        legendary_cost: 1
+        operation: sequence
+        effects:
+        - operation: move
+          maximum_ft:
+            multiply:
+            - stat: speed
+            - 0.5
+        - operation: attack_sequence
+          feature: rend
+          count: 1
+    skill_totals:
+      insight: 10
+      perception: 17
+      persuasion: 16
+      stealth: 9
+    damage_immunities:
+    - fire
+    condition_immunities: []
+    senses:
+      blindsight: 60
+      darkvision: 120
+      passive_perception: 27
+    languages:
+      speaks:
+      - common
+      - draconic
+      understands: []
+    legendary_actions:
+      uses: 3
+      recovery: self.turn_start
+      trigger: other_creature.turn_end
+      cost_per_action: 1
+      lair_uses: 4
+      requires:
+        not_incapacitated: true
+      maximum_actions_per_trigger: 1
+    resolution_conventions:
+      distance_unit: foot
+      duration_unit: second
+      damage_roll_mode:
+        choice:
+        - listed_average
+        - roll_dice
+        chooser: gm
+      supplied_totals: before_additional_effect_modifiers
+      multiattack_nested_economy_cost: 0
+      nested_feature_resource_cost: normal
+      spell_level_unless_specified: lowest_possible
+      spell_upcast_without_permission: false
+      spell_casting_time_at_least_one_minute: normal_casting_procedure
+      geometry:
+        input: adjudication
+        assumptions:
+        - range_and_visibility_verified
+        - area_membership_verified
+        - path_and_destination_legal
+      unlisted_success_branch: no_effect
+      unlisted_duration: until_removed_by_applicable_rule
+splat_contracts:
+- id: dnd2024:creature_ancient_gold_dragon
+  inputs:
+    actor:
+      type: participant
+      required: true
+    feature:
+      required: false
+      type: choice
+    targets:
+      required: false
+      type: participant_list
+    objects:
+      required: false
+      type: object_list
+    destination:
+      required: false
+      type: location
+    adjudication:
+      required: false
+      type: resolution
+    trigger:
+      required: false
+      type: event
+  outputs:
+  - effects
+  events:
+  - creature.feature_requested
+  - turn.started
+  - turn.ended
+  - rest.completed
+  - saving_throw.resolved
+  capabilities:
+  - creature_features
+  - action_economy
+  - attacks
+  - saving_throws
+  - conditions
+  - damage
+  - spellcasting
+  - spatial_queries
+  - limited_resources
+  - legendary_actions
+  - hit_points
+  - defenses
 splat_conversion:
-  status: partial
+  status: specified
   category: creature
   source_sha256: 68c2fea8dc3519e2528b5f2ba5e0a249ec4afab3d3e13c735299b461489c2acd
   source_path: builtin/srd-5.2.1/creature/ancient_gold_dragon.md
   pages:
   - 292
-  engine_gaps: []
-  conversion_gaps:
-  - source_rules
+  engine_gaps: &id001
+  - dnd2024:creature_ancient_gold_dragon
+  conversion_gaps: []
   execution_profiles: []
+  research_path: docs/research/srd-conversion/creatures_1.md
+  specification_sha256: fd59afa39b5265b9b19069ff27a68220474b8af5512117dccf612f616e599c5f
 splat_clauses:
 - key: source_rules
   text: '# Ancient Gold Dragon Gargantuan Dragon (Metallic), Lawful Good AC 22 Initiative +16 (26) HP
@@ -106,7 +435,8 @@ splat_clauses:
     until the start of its next turn. Guiding Light. The dragon uses Spellcasting to cast Guiding Bolt
     (level 4 version). Pounce. The dragon moves up to half its Speed, and it makes one Rend attack.'
   sha256: 2e535ae251aac5e25551021a62a62a2dcf8dde599d3bfad29a59bb0fce10e335
-  status: needs_semantic_conversion
+  status: contract_specified
+splat_requires_mechanics: *id001
 ---
 
 # Ancient Gold Dragon
