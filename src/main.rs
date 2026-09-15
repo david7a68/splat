@@ -1,4 +1,5 @@
 pub mod auth;
+mod campaigns;
 mod credentials;
 mod persistence;
 mod projects;
@@ -19,6 +20,7 @@ struct Splat {
     tab: Tab,
     settings: settings::Settings,
     projects: projects::Projects,
+    campaigns: campaigns::Campaigns,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -28,20 +30,22 @@ enum Tab {
     Encounters,
     Creatures,
     Simulations,
+    Campaigns,
     Settings,
 }
 
 impl eframe::App for Splat {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         self.settings.poll(ctx);
+        let (epoch, session) = self.settings.campaign_session();
+        self.campaigns.poll(ctx, epoch, session.is_some());
         egui::SidePanel::left("navigation").show(ctx, |ui| {
             ui.heading("Splat");
             ui.label("D&D 2024");
-            if let Some(name) = self.projects.active_name() {
-                ui.label(name);
-            }
+            self.projects.selector(ui);
             ui.separator();
             for (tab, label) in [
+                (Tab::Campaigns, "D&D Beyond campaigns"),
                 (Tab::Party, "Party"),
                 (Tab::Encounters, "Encounters"),
                 (Tab::Creatures, "Creatures"),
@@ -63,8 +67,12 @@ impl eframe::App for Splat {
                 });
                 return;
             }
+            if self.tab == Tab::Campaigns {
+                self.campaigns.show(ui, session, &mut self.projects);
+                return;
+            }
             let (title, message) = match self.tab {
-                Tab::Settings => unreachable!(),
+                Tab::Settings | Tab::Campaigns => unreachable!(),
                 Tab::Party => ("Party", "No characters imported yet."),
                 Tab::Encounters => ("Encounters", "No encounters created yet."),
                 Tab::Creatures => ("Creatures", "No creatures created yet."),

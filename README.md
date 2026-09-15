@@ -58,8 +58,7 @@ cookie. If removal fails, Splat reports it and lets you retry. It does not
 invalidate the browser session. Network and keyring operations run in a worker;
 credential writes and removals run in order.
 
-This is an internal D&D Beyond endpoint, not a supported public API. No character
-or campaign data is imported yet. Authentication tests use a local mock server;
+This is an internal D&D Beyond endpoint, not a supported public API. Character data is not imported yet. Campaign details are fetched into memory only. Authentication tests use a local mock server;
 a successful live login requires a real cookie entered in the application.
 
 ## User settings and projects
@@ -67,8 +66,9 @@ a successful live login requires a real cookie entered in the application.
 Settings stores the project list at `$XDG_CONFIG_HOME/splat/settings.json`, or
 `~/.config/splat/settings.json` when XDG_CONFIG_HOME is not set on Linux.
 Project entries contain a UUID v4, display name, and absolute folder path.
-`active_project_id` refers to the selected project's UUID. Renaming or relocating
-a project keeps its UUID. The JSON schema begins at version 1.
+`active_project_ids` contains the selected projects' UUIDs. Renaming or relocating
+a project keeps its UUID. The JSON schema is version 2. Version 1 single-project selection migrates in memory
+and is saved in the new format on the next edit.
 
 Use the Projects section in Settings to add, select, edit, or remove an entry.
 Changes save immediately through a temporary file and atomic replacement.
@@ -80,3 +80,22 @@ Missing settings start with an empty list. Invalid files and unsupported version
 block writes and display an error. Repair the file and select **Reload project
 list** to continue. External edits detected before a save also require a reload.
 Session cookies and access tokens are never written to this JSON file.
+
+## Campaign links
+
+The sidebar **Projects** menu supports multiple selections, including none.
+Open **D&D Beyond campaigns**, select **Refresh campaigns**, then select campaigns
+and link them to the selected local projects. Each project can link to multiple
+campaigns. Linking adds missing IDs; it does not remove existing links. Use
+**Unlink** under a project to remove an individual association.
+
+The authenticated request reads D&D Beyond's internal
+`/api/campaign/stt/user-campaigns` endpoint. Campaign names, DM names, and player
+counts stay in memory. Refresh is manual, and disconnecting clears that list.
+Only `dndbeyond_campaign_ids` are saved in each local project entry in user
+settings. Nothing is written to project folders, and no character sheets or
+campaign snapshots are downloaded or stored.
+
+Saved links remain available without a connection and display campaign IDs until
+the live list supplies their names. Live API access can fail if D&D Beyond changes
+the endpoint or blocks the request; the app reports errors without removing links.

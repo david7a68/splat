@@ -11,6 +11,7 @@ pub struct Settings {
     session: Option<Session>,
     worker: Option<Worker>,
     generation: u64,
+    account_epoch: u64,
     busy: bool,
     initialized: bool,
     remember: bool,
@@ -25,6 +26,7 @@ impl Default for Settings {
             session: None,
             worker: None,
             generation: 0,
+            account_epoch: 0,
             busy: false,
             initialized: false,
             remember: true,
@@ -41,9 +43,14 @@ impl Drop for Settings {
 }
 
 impl Settings {
+    pub fn campaign_session(&self) -> (u64, Option<Session>) {
+        (self.account_epoch, self.session.clone())
+    }
+
     fn send(&mut self, action: Action, ctx: &egui::Context) {
         if !matches!(&action, Action::Refresh(_)) {
             self.warning = None;
+            self.account_epoch += 1;
         }
         self.generation += 1;
         self.error = None;

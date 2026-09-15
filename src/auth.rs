@@ -6,6 +6,7 @@ use zeroize::Zeroizing;
 
 const AUTH_URL: &str = "https://auth-service.dndbeyond.com/v1/cobalt-token";
 
+#[derive(Clone)]
 pub struct Session {
     cookie: Zeroizing<String>,
     token: Zeroizing<String>,
@@ -19,6 +20,15 @@ impl Session {
 
     pub fn needs_refresh(&self) -> bool {
         Instant::now() >= self.refresh_at
+    }
+
+    pub(crate) fn website_request(
+        &self,
+        request: reqwest::blocking::RequestBuilder,
+    ) -> Result<reqwest::blocking::RequestBuilder, String> {
+        Ok(self
+            .authorize(request)
+            .header(header::COOKIE, cookie_header(&self.cookie)?))
     }
 
     /// Builds an authorized request without exposing the token to callers.
