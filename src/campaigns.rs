@@ -1,306 +1,305 @@
-use crate::{auth::Session, projects::Projects};
+use crate::persistence::{Campaign, Store, UserData};
 use eframe::egui;
-use reqwest::{blocking::Client, redirect::Policy};
-use serde::Deserialize;
-use std::{
-    collections::HashSet,
-    io::Read,
-    sync::mpsc::{self, Receiver},
-    thread,
-    time::Duration,
-};
+use std::path::PathBuf;
+use uuid::Uuid;
 
-const URL: &str = "https://www.dndbeyond.com/api/campaign/stt/user-campaigns";
-const MAX_RESPONSE: u64 = 4 * 1024 * 1024;
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Campaign {
-    #[serde(deserialize_with = "campaign_id")]
-    id: String,
-    name: String,
-    dm_username: Option<String>,
-    player_count: Option<u64>,
-}
-
-fn campaign_id<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
-    let value = serde_json::Value::deserialize(deserializer)?;
-    let id = match value {
-        serde_json::Value::String(value) => value.parse::<u64>().ok(),
-        serde_json::Value::Number(value) => value.as_u64(),
-        _ => None,
-    }
-    .filter(|id| *id > 0)
-    .ok_or_else(|| serde::de::Error::custom("invalid campaign ID"))?;
-    Ok(id.to_string())
-}
-
-fn parse(bytes: &[u8]) -> Result<Vec<Campaign>, String> {
-    #[derive(Deserialize)]
-    struct Envelope {
-        status: String,
-        data: Option<Vec<Campaign>>,
-    }
-    let response: Envelope = serde_json::from_slice(bytes)
-        .map_err(|_| "D&D Beyond returned an unexpected campaign response. The site may be blocking the request.".to_owned())?;
-    if response.status != "success" {
-        return Err("D&D Beyond could not list campaigns. Try again later.".into());
-    }
-    let campaigns = response
-        .data
-        .ok_or("D&D Beyond omitted the campaign list.")?;
-    let mut ids = HashSet::new();
-    if campaigns
-        .iter()
-        .any(|c| c.name.trim().is_empty() || !ids.insert(&c.id))
-    {
-        return Err("D&D Beyond returned an invalid campaign list.".into());
-    }
-    Ok(campaigns)
-}
-
-fn fetch(session: Session) -> Result<Vec<Campaign>, String> {
-    let client = Client::builder()
-        .timeout(Duration::from_secs(20))
-        .redirect(Policy::none())
-        .user_agent("Splat/0.1")
-        .build()
-        .map_err(|_| "Could not start the campaign request.")?;
-    let response = session
-        .website_request(client.get(URL).header("Accept", "application/json"))?
-        .send()
-        .map_err(|_| "Could not reach D&D Beyond. Check your connection and try again.")?;
-    match response.status().as_u16() {
-        200..=299 => {},
-        401 | 403 => return Err("D&D Beyond rejected the request. Reconnect in Settings, or try again later if the site is blocking access.".into()),
-        429 => return Err("D&D Beyond is limiting requests. Wait before refreshing.".into()),
-        _ => return Err("D&D Beyond could not list campaigns. Try again later.".into()),
-    }
-    let mut bytes = Vec::new();
-    response
-        .take(MAX_RESPONSE + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| "Could not read the campaign response.")?;
-    if bytes.len() as u64 > MAX_RESPONSE {
-        return Err("The campaign response is too large.".into());
-    }
-    parse(&bytes)
-}
-
-#[derive(Default)]
 pub struct Campaigns {
-    account_epoch: u64,
-    campaigns: Vec<Campaign>,
-    selected: HashSet<String>,
-    pending: Option<Receiver<Result<Vec<Campaign>, String>>>,
-    loaded: bool,
+    store: Option<Store>,
+    data: UserData,
     error: Option<String>,
-    message: Option<String>,
+    writable: bool,
+    editing: Option<Uuid>,
+    name: String,
+    path: String,
+}
+
+impl Default for Campaigns {
+    fn default() -> Self {
+        let mut result = Self {
+            store: None,
+            data: UserData::default(),
+            error: None,
+            writable: false,
+            editing: None,
+            name: String::new(),
+            path: String::new(),
+        };
+        match Store::user() {
+            Ok(store) => {
+                result.store = Some(store);
+                result.reload();
+            }
+            Err(error) => result.error = Some(error),
+        }
+        result
+    }
 }
 
 impl Campaigns {
-    pub fn poll(&mut self, ctx: &egui::Context, epoch: u64, connected: bool) {
-        if epoch != self.account_epoch || !connected {
-            // Dropping the receiver discards a previous account's late response.
-            self.pending = None;
-            self.campaigns.clear();
-            self.selected.clear();
-            self.loaded = false;
-            self.account_epoch = epoch;
-            self.error = None;
-            self.message = None;
-            return;
-        }
-        if let Some(rx) = &self.pending {
-            match rx.try_recv() {
-                Ok(result) => {
-                    self.pending = None;
-                    match result {
-                        Ok(campaigns) => {
-                            self.selected
-                                .retain(|id| campaigns.iter().any(|c| &c.id == id));
-                            self.campaigns = campaigns;
-                            self.loaded = true;
-                            self.error = None;
-                        }
-                        Err(error) => {
-                            self.error = Some(error);
-                        }
-                    }
+    fn reload(&mut self) {
+        if let Some(store) = &mut self.store {
+            match store.load() {
+                Ok(data) => {
+                    self.data = data;
+                    self.error = None;
+                    self.writable = true;
+                    self.clear_form();
                 }
-                Err(mpsc::TryRecvError::Empty) => {
-                    ctx.request_repaint_after(Duration::from_millis(100));
-                }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    self.pending = None;
-                    self.error = Some("The campaign request stopped. Try refreshing.".into());
+                Err(error) => {
+                    self.error = Some(error);
+                    self.writable = false;
                 }
             }
         }
     }
 
-    fn refresh(&mut self, session: Session, ctx: &egui::Context) {
-        let (tx, rx) = mpsc::channel();
-        self.pending = Some(rx);
+    fn persist(&mut self, data: UserData) -> Result<(), String> {
+        let store = self.store.as_mut().ok_or("Settings are unavailable.")?;
+        store.save(&data)?;
+        self.data = data;
         self.error = None;
-        self.message = None;
-        let ctx = ctx.clone();
-        thread::spawn(move || {
-            let _ = tx.send(fetch(session));
-            ctx.request_repaint();
-        });
+        Ok(())
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, projects: &mut Projects) {
-        ui.heading("D&D Beyond campaigns");
-        ui.label("Campaign details stay in memory. Only campaign IDs linked to local projects are saved.");
-        let active = projects.active_projects();
-        if active.is_empty() {
-            ui.label("Select a local project from the dropdown before linking campaigns.");
+    fn save(&mut self, data: UserData) {
+        match self.persist(data) {
+            Ok(()) => self.clear_form(),
+            Err(error) => self.error = Some(error),
         }
-        if session.is_none() {
-            ui.label("Connect to D&D Beyond in Settings to load campaigns.");
-        }
-        if ui
-            .add_enabled(
-                session.is_some() && self.pending.is_none(),
-                egui::Button::new("Refresh campaigns"),
-            )
-            .clicked()
-            && let Some(session) = session
-        {
-            self.refresh(session, ui.ctx());
-        }
-        if self.pending.is_some() {
-            ui.spinner();
+    }
+
+    pub fn link(&mut self, remote_id: Option<String>) -> Result<(), String> {
+        let id = self
+            .data
+            .active_campaign_id
+            .ok_or("Select a local campaign.")?;
+        let mut data = self.data.clone();
+        let campaign = data
+            .campaigns
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or("Campaign not found.")?;
+        campaign.dndbeyond_campaign_id = remote_id;
+        self.persist(data)
+    }
+
+    pub fn linked_elsewhere(&self, remote_id: &str) -> bool {
+        self.data.campaigns.iter().any(|c| {
+            Some(c.id) != self.data.active_campaign_id
+                && c.dndbeyond_campaign_id
+                    .as_deref()
+                    .and_then(|id| id.parse::<u64>().ok())
+                    == remote_id.parse::<u64>().ok()
+        })
+    }
+
+    fn clear_form(&mut self) {
+        self.editing = None;
+        self.name.clear();
+        self.path.clear();
+    }
+
+    pub fn active_campaign(&self) -> Option<Campaign> {
+        self.data
+            .campaigns
+            .iter()
+            .find(|c| Some(c.id) == self.data.active_campaign_id)
+            .cloned()
+    }
+
+    pub fn selector(&mut self, ui: &mut egui::Ui) {
+        let current = self.data.active_campaign_id;
+        let mut selected = current;
+        let label = self
+            .data
+            .campaigns
+            .iter()
+            .find(|p| Some(p.id) == current)
+            .map(|p| p.name.as_str())
+            .unwrap_or("Select campaign");
+        ui.add_enabled_ui(self.writable, |ui| {
+            egui::ComboBox::from_id_salt("active_campaign")
+                .selected_text(label)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut selected, None, "No campaign");
+                    for campaign in &self.data.campaigns {
+                        ui.selectable_value(&mut selected, Some(campaign.id), &campaign.name);
+                    }
+                });
+        });
+        if selected != current {
+            self.select(selected);
         }
         if let Some(error) = &self.error {
             ui.colored_label(egui::Color32::LIGHT_RED, error);
         }
-        if let Some(message) = &self.message {
-            ui.label(message);
+    }
+
+    fn select(&mut self, id: Option<Uuid>) {
+        let mut data = self.data.clone();
+        data.active_campaign_id = id;
+        if let Err(error) = self.persist(data) {
+            self.error = Some(error);
         }
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            if self.loaded && self.campaigns.is_empty() {
-                ui.label("No campaigns were returned for this account.");
-            }
-            for campaign in &self.campaigns {
-                ui.push_id(&campaign.id, |ui| {
-                    let mut selected = self.selected.contains(&campaign.id);
-                    if ui.checkbox(&mut selected, &campaign.name).changed() {
-                        if selected {
-                            self.selected.insert(campaign.id.clone());
-                        } else {
-                            self.selected.remove(&campaign.id);
-                        }
-                    }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Campaigns");
+        ui.label("Register campaign folders here. Removing an entry does not delete its files.");
+        if let Some(store) = &self.store {
+            ui.weak(store.path.display().to_string());
+        }
+        if let Some(error) = &self.error {
+            ui.colored_label(egui::Color32::LIGHT_RED, error);
+        }
+        if ui.button("Reload campaign list").clicked() {
+            self.reload();
+        }
+        ui.add_enabled_ui(self.writable, |ui| {
+            for campaign in self.data.campaigns.clone() {
+                ui.group(|ui| {
                     ui.horizontal(|ui| {
-                        if let Some(dm) = &campaign.dm_username {
-                            ui.label(format!("DM: {dm}"));
+                        if ui
+                            .selectable_label(
+                                self.data.active_campaign_id == Some(campaign.id),
+                                &campaign.name,
+                            )
+                            .clicked()
+                        {
+                            self.select(Some(campaign.id));
                         }
-                        if let Some(count) = campaign.player_count {
-                            ui.label(format!("Players: {count}"));
+                        if ui.button("Edit").clicked() {
+                            self.editing = Some(campaign.id);
+                            self.name = campaign.name.clone();
+                            self.path = campaign.path.to_string_lossy().into_owned();
                         }
-                        ui.hyperlink_to(
-                            "Open campaign",
-                            format!("https://www.dndbeyond.com/campaigns/{}", campaign.id),
-                        );
+                        if ui.button("Remove").clicked() {
+                            let mut data = self.data.clone();
+                            data.campaigns.retain(|p| p.id != campaign.id);
+                            if data.active_campaign_id == Some(campaign.id) {
+                                data.active_campaign_id = None;
+                            }
+                            self.save(data);
+                        }
                     });
+                    ui.label(campaign.path.display().to_string());
+                    if !campaign.path.is_dir() {
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            "Folder not available. Edit the path to locate it again.",
+                        );
+                    }
                 });
             }
-            if ui
-                .add_enabled(
-                    !active.is_empty() && !self.selected.is_empty(),
-                    egui::Button::new("Link selected campaigns to this project"),
-                )
-                .clicked()
-            {
-                let mut ids: Vec<_> = self.selected.iter().cloned().collect();
-                ids.sort();
-                match projects.link_campaigns(&ids) {
-                    Ok(()) => {
-                        self.message = Some("Campaign links saved.".into());
-                        self.error = None;
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-            }
-            ui.separator();
-            ui.heading("Saved campaign links");
-            for project in projects.active_projects() {
-                ui.push_id(project.id, |ui| {
-                    ui.label(&project.name);
-                    if project.dndbeyond_campaign_ids.is_empty() {
-                        ui.weak("No linked campaigns.");
-                    }
-                    for id in &project.dndbeyond_campaign_ids {
-                        ui.push_id(id, |ui| {
-                            ui.horizontal(|ui| {
-                                let name = self
-                                    .campaigns
-                                    .iter()
-                                    .find(|c| &c.id == id)
-                                    .map(|c| c.name.as_str());
-                                ui.label(
-                                    name.map(|name| format!("{name} ({id})"))
-                                        .unwrap_or_else(|| format!("Campaign {id}")),
-                                );
-                                if ui.button("Unlink").clicked() {
-                                    match projects.unlink_campaign(project.id, id) {
-                                        Ok(()) => {
-                                            self.message = Some("Campaign link removed.".into());
-                                            self.error = None;
-                                        }
-                                        Err(error) => self.error = Some(error),
-                                    }
-                                }
+            ui.add_space(8.0);
+            ui.label(if self.editing.is_some() {
+                "Edit campaign"
+            } else {
+                "Add campaign"
+            });
+            ui.add(egui::TextEdit::singleline(&mut self.name).hint_text("Campaign name"));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.path)
+                    .hint_text("Absolute folder path")
+                    .desired_width(500.0),
+            );
+            ui.horizontal(|ui| {
+                if ui.button("Save campaign").clicked() {
+                    let path = PathBuf::from(self.path.trim());
+                    if self.name.trim().is_empty() || !path.is_absolute() {
+                        self.error =
+                            Some("Enter a campaign name and an absolute folder path.".into());
+                    } else {
+                        let mut data = self.data.clone();
+                        if let Some(campaign) = data
+                            .campaigns
+                            .iter_mut()
+                            .find(|p| Some(p.id) == self.editing)
+                        {
+                            campaign.name = self.name.trim().into();
+                            campaign.path = path;
+                        } else {
+                            let id = Uuid::new_v4();
+                            data.campaigns.push(Campaign {
+                                id,
+                                name: self.name.trim().into(),
+                                path,
+                                dndbeyond_campaign_id: None,
                             });
-                        });
+                            data.active_campaign_id = Some(id);
+                        }
+                        self.save(data);
                     }
-                });
-            }
+                }
+                if self.editing.is_some() && ui.button("Cancel edit").clicked() {
+                    self.clear_form();
+                }
+            });
         });
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn reads_numeric_and_string_ids_and_optional_details() {
-        let campaigns = parse(br#"{"status":"success","data":[{"id":12,"name":"One","dmUsername":"DM","playerCount":3},{"id":"34","name":"Two"}]}"#).unwrap();
-        assert_eq!(campaigns[0].id, "12");
-        assert_eq!(campaigns[1].id, "34");
-        assert_eq!(campaigns[0].player_count, Some(3));
-    }
-
-    #[test]
-    fn rejects_unexpected_and_duplicate_data() {
-        for bytes in [
-            b"<html>Login</html>".as_slice(),
-            br#"{"status":"failure","data":null}"#,
-            br#"{"status":"success","data":[{"id":"../bad","name":"Bad"}]}"#,
-            br#"{"status":"success","data":[{"id":1,"name":"One"},{"id":1,"name":"Two"}]}"#,
-        ] {
-            assert!(parse(bytes).is_err());
+    fn one_to_one_links_replace_and_unlink_without_changing_other_campaigns() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let mut store = Store::at(path.clone());
+        let mut data = store.load().unwrap();
+        let first = Uuid::new_v4();
+        let second = Uuid::new_v4();
+        for id in [first, second] {
+            data.campaigns.push(Campaign {
+                id,
+                name: "Campaign".into(),
+                path: dir.path().into(),
+                dndbeyond_campaign_id: None,
+            });
         }
-        assert!(
-            parse(br#"{"status":"success","data":[]}"#)
-                .unwrap()
-                .is_empty()
-        );
-    }
-
-    #[test]
-    fn disconnect_discards_pending_campaign_response() {
-        let (tx, rx) = mpsc::channel();
         let mut campaigns = Campaigns {
-            pending: Some(rx),
-            ..Default::default()
+            store: Some(store),
+            data,
+            error: None,
+            writable: true,
+            editing: None,
+            name: String::new(),
+            path: String::new(),
         };
-        campaigns.poll(&egui::Context::default(), 1, false);
-        assert!(tx.send(Ok(Vec::new())).is_err());
-        assert!(campaigns.campaigns.is_empty());
+        campaigns.select(Some(first));
+        campaigns.link(Some("12".into())).unwrap();
+        campaigns.select(Some(second));
+        assert!(campaigns.linked_elsewhere("12"));
+        assert!(campaigns.link(Some("12".into())).is_err());
+        assert!(
+            campaigns
+                .active_campaign()
+                .unwrap()
+                .dndbeyond_campaign_id
+                .is_none()
+        );
+        campaigns.link(Some("34".into())).unwrap();
+        campaigns.link(Some("56".into())).unwrap();
+        let saved = Store::at(path.clone()).load().unwrap();
+        assert_eq!(
+            saved.campaigns[0].dndbeyond_campaign_id.as_deref(),
+            Some("12")
+        );
+        assert_eq!(
+            saved.campaigns[1].dndbeyond_campaign_id.as_deref(),
+            Some("56")
+        );
+        campaigns.link(None).unwrap();
+        campaigns.select(Some(first));
+        campaigns.link(None).unwrap();
+        campaigns.select(Some(second));
+        campaigns.link(Some("12".into())).unwrap();
+        assert_eq!(
+            Store::at(path).load().unwrap().campaigns[1]
+                .dndbeyond_campaign_id
+                .as_deref(),
+            Some("12")
+        );
     }
 }

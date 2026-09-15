@@ -61,43 +61,32 @@ credential writes and removals run in order.
 This is an internal D&D Beyond endpoint, not a supported public API. Character data is not imported yet. Campaign details are fetched into memory only. Authentication tests use a local mock server;
 a successful live login requires a real cookie entered in the application.
 
-## User settings and projects
+## User settings and campaigns
 
-Settings stores the project list at `$XDG_CONFIG_HOME/splat/settings.json`, or
-`~/.config/splat/settings.json` when XDG_CONFIG_HOME is not set on Linux.
-Project entries contain a UUID v4, display name, and absolute folder path.
-`active_project_ids` contains at most one UUID, for the active project. Renaming or relocating
-a project keeps its UUID. The JSON schema is version 2. Version 1 single-project selection migrates in memory
-and is saved in the new format on the next edit.
+The sidebar dropdown selects one active local campaign. Manage campaigns and
+configure their D&D Beyond links in **Settings**. Each local campaign has a UUID,
+name, and absolute folder path. Renaming or relocating it preserves its UUID.
+Removing its entry does not delete files.
 
-Use the Projects section in Settings to add, select, edit, or remove an entry.
-Changes save immediately through a temporary file and atomic replacement.
-Removing an entry does not delete its folder. Unavailable folders remain listed
-and can be located again by editing their paths. Project contents are not yet
-managed by Splat.
+Settings uses `$XDG_CONFIG_HOME/splat/settings.json`, or
+`~/.config/splat/settings.json` on Linux. Schema version 3 contains
+`campaigns` and `active_campaign_id`. Each campaign has one optional
+`dndbeyond_campaign_id`. The same D&D Beyond campaign cannot be linked to two
+local campaigns. Select **Not linked** to remove a link, or choose another
+campaign to replace it.
 
-Missing settings start with an empty list. Invalid files and unsupported versions
-block writes and display an error. Repair the file and select **Reload project
-list** to continue. External edits detected before a save also require a reload.
-Session cookies and access tokens are never written to this JSON file.
+In Settings, select a local campaign, then **Refresh D&D Beyond campaigns**.
+Choose its remote campaign from the D&D Beyond link dropdown. Campaigns linked
+elsewhere are disabled. The internal `/api/campaign/stt/user-campaigns` endpoint
+supplies names, DM names, and player counts in memory only. Only the remote ID
+is saved. No campaign snapshots or character sheets are stored.
 
-## Campaign links
+Versions 1 and 2 migrate old project records without changing UUIDs, names, paths,
+or unique links. If an old record has multiple remote IDs, or two records share
+one remote ID, loading reports the conflict and blocks writes. Keep at most one
+unique remote ID per old entry in settings.json and reload. The original file
+remains untouched until a successful edit saves version 3.
 
-The sidebar project dropdown selects one active project, or **No project**.
-Older settings with multiple selections keep the first selected project; all
-project records and campaign links are preserved.
-Open **D&D Beyond campaigns**, select **Refresh campaigns**, then select campaigns
-and link them to the selected local project. Each project can link to multiple
-campaigns. Linking adds missing IDs; it does not remove existing links. Use
-**Unlink** under a project to remove an individual association.
-
-The authenticated request reads D&D Beyond's internal
-`/api/campaign/stt/user-campaigns` endpoint. Campaign names, DM names, and player
-counts stay in memory. Refresh is manual, and disconnecting clears that list.
-Only `dndbeyond_campaign_ids` are saved in each local project entry in user
-settings. Nothing is written to project folders, and no character sheets or
-campaign snapshots are downloaded or stored.
-
-Saved links remain available without a connection and display campaign IDs until
-the live list supplies their names. Live API access can fail if D&D Beyond changes
-the endpoint or blocks the request; the app reports errors without removing links.
+Settings save with atomic replacement. Invalid or unsupported files are preserved.
+External edits detected before a save require a reload. Session credentials stay
+in the desktop keyring and memory, never in settings JSON.

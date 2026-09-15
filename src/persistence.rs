@@ -5,95 +5,115 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct Project {
+pub struct Campaign {
     pub id: Uuid,
     pub name: String,
     pub path: PathBuf,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub dndbeyond_campaign_ids: Vec<String>,
+    #[serde(default)]
+    pub dndbeyond_campaign_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct UserData {
     pub version: u32,
-    pub active_project_ids: Vec<Uuid>,
-    pub projects: Vec<Project>,
+    pub active_campaign_id: Option<Uuid>,
+    pub campaigns: Vec<Campaign>,
 }
 
 impl Default for UserData {
     fn default() -> Self {
         Self {
-            version: 2,
-            active_project_ids: Vec::new(),
-            projects: Vec::new(),
+            version: 3,
+            active_campaign_id: None,
+            campaigns: Vec::new(),
         }
     }
 }
 
 impl UserData {
     fn validate(&self) -> Result<(), String> {
-        if self.version != 2 {
+        if self.version != 3 {
             return Err(
                 "This settings version is not supported. The file has not been changed.".into(),
             );
         }
         let mut ids = HashSet::new();
-        for project in &self.projects {
-            if project
-                .dndbeyond_campaign_ids
-                .iter()
-                .any(|id| id.parse::<u64>().ok().filter(|id| *id > 0).is_none())
-                || project
-                    .dndbeyond_campaign_ids
-                    .iter()
-                    .collect::<HashSet<_>>()
-                    .len()
-                    != project.dndbeyond_campaign_ids.len()
-            {
-                return Err("Campaign links must contain unique positive campaign IDs.".into());
-            }
-            if project.id.is_nil()
-                || !ids.insert(project.id)
-                || project.name.trim().is_empty()
-                || !project.path.is_absolute()
+        let mut remote_ids = HashSet::new();
+        for campaign in &self.campaigns {
+            if campaign.id.is_nil()
+                || !ids.insert(campaign.id)
+                || campaign.name.trim().is_empty()
+                || !campaign.path.is_absolute()
             {
                 return Err(
-                    "Each project needs a unique UUID, a name, and an absolute directory path."
+                    "Each campaign needs a unique UUID, a name, and an absolute folder path."
                         .into(),
                 );
             }
+            if let Some(id) = &campaign.dndbeyond_campaign_id {
+                let numeric = id
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|n| *n > 0)
+                    .ok_or("D&D Beyond campaign IDs must be positive numbers.")?;
+                if !remote_ids.insert(numeric) {
+                    return Err("A D&D Beyond campaign can only be linked to one local campaign. Remove the duplicate link before saving.".into());
+                }
+            }
         }
-        if self.active_project_ids.iter().any(|id| !ids.contains(id))
-            || self.active_project_ids.iter().collect::<HashSet<_>>().len()
-                != self.active_project_ids.len()
-        {
-            return Err("The selected project is not in the project list.".into());
+        if self.active_campaign_id.is_some_and(|id| !ids.contains(&id)) {
+            return Err("The selected campaign is not in the campaign list.".into());
         }
         Ok(())
     }
 }
 
-// Version 1 held a single active project. Migrate in memory and write version 2
-// only on the next successful user edit.
 fn decode(bytes: &[u8]) -> Result<UserData, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct LegacyProject {
+        id: Uuid,
+        name: String,
+        path: PathBuf,
+        #[serde(default)]
+        dndbeyond_campaign_ids: Vec<String>,
+    }
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
     struct Legacy {
         version: u32,
+        #[serde(default)]
         active_project_id: Option<Uuid>,
-        projects: Vec<Project>,
+        #[serde(default)]
+        active_project_ids: Vec<Uuid>,
+        projects: Vec<LegacyProject>,
     }
     let value: serde_json::Value = serde_json::from_slice(bytes)
         .map_err(|_| "The settings file is invalid. It has not been changed.".to_owned())?;
-    if value.get("version").and_then(|v| v.as_u64()) == Some(1) {
+    if matches!(value.get("version").and_then(|v| v.as_u64()), Some(1 | 2)) {
         let legacy: Legacy = serde_json::from_value(value)
-            .map_err(|_| "The settings file is invalid. It has not been changed.".to_owned())?;
-        let _ = legacy.version;
+            .map_err(|_| "The old settings file is invalid. It has not been changed.".to_owned())?;
+        let mut campaigns = Vec::new();
+        for project in legacy.projects {
+            if project.dndbeyond_campaign_ids.len() > 1 {
+                return Err("Old settings contain multiple D&D Beyond links for one campaign. Keep one ID per entry in settings.json, then reload. The file has not been changed.".into());
+            }
+            campaigns.push(Campaign {
+                id: project.id,
+                name: project.name,
+                path: project.path,
+                dndbeyond_campaign_id: project.dndbeyond_campaign_ids.into_iter().next(),
+            });
+        }
         Ok(UserData {
-            version: 2,
-            active_project_ids: legacy.active_project_id.into_iter().collect(),
-            projects: legacy.projects,
+            version: 3,
+            active_campaign_id: if legacy.version == 1 {
+                legacy.active_project_id
+            } else {
+                legacy.active_project_ids.first().copied()
+            },
+            campaigns,
         })
     } else {
         serde_json::from_value(value)
@@ -134,14 +154,11 @@ impl Store {
     pub fn load(&mut self) -> Result<UserData, String> {
         self.loaded = false;
         let bytes = self.read()?;
-        let mut data: UserData = match &bytes {
+        let data: UserData = match &bytes {
             Some(bytes) => decode(bytes)?,
             None => UserData::default(),
         };
         data.validate()?;
-        // Older builds allowed multiple selections. Keep the first selected
-        // project, preserving all project records and campaign links.
-        data.active_project_ids.truncate(1);
         self.baseline = bytes;
         self.loaded = true;
         Ok(data)
@@ -152,9 +169,6 @@ impl Store {
             return Err("Reload a valid settings file before saving changes.".into());
         }
         data.validate()?;
-        if data.active_project_ids.len() > 1 {
-            return Err("Select only one active project.".into());
-        }
         if self.read()? != self.baseline {
             return Err("Settings changed outside this window. Reload them before saving.".into());
         }
@@ -174,72 +188,82 @@ impl Store {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn migrates_single_selection_without_rewriting_until_save() {
-        let dir = tempfile::tempdir().unwrap();
-        let id = Uuid::new_v4();
-        let old = serde_json::json!({"version":1,"active_project_id":id,"projects":[{"id":id,"name":"Old","path":dir.path()}]});
-        let bytes = serde_json::to_vec(&old).unwrap();
-        let path = dir.path().join("settings.json");
-        fs::write(&path, &bytes).unwrap();
-        let mut store = Store::at(path.clone());
-        let data = store.load().unwrap();
-        assert_eq!(data.active_project_ids, vec![id]);
-        assert_eq!(data.version, 2);
-        assert_eq!(fs::read(&path).unwrap(), bytes);
-        store.save(&data).unwrap();
-        let saved: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
-        assert!(saved.get("active_project_id").is_none());
-        assert_eq!(saved["active_project_ids"], serde_json::json!([id]));
-        assert!(data.projects[0].dndbeyond_campaign_ids.is_empty());
-    }
-
-    #[test]
-    fn old_multiple_selection_loads_first_without_losing_projects() {
-        let dir = tempfile::tempdir().unwrap();
-        let ids = [Uuid::new_v4(), Uuid::new_v4()];
-        let path = dir.path().join("settings.json");
-        let data = serde_json::json!({"version":2,"active_project_ids":ids,"projects":ids.map(|id| serde_json::json!({"id":id,"name":"Project","path":dir.path(),"dndbeyond_campaign_ids":["12"]}))});
-        std::fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
-        let loaded = Store::at(path).load().unwrap();
-        assert_eq!(loaded.active_project_ids, vec![ids[0]]);
-        assert_eq!(loaded.projects.len(), 2);
-        assert_eq!(loaded.projects[1].dndbeyond_campaign_ids, vec!["12"]);
-    }
-
-    #[test]
-    fn round_trip_keeps_uuid_when_name_or_path_changes() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut store = Store::at(dir.path().join("settings.json"));
-        let mut data = store.load().unwrap();
-        let id = Uuid::new_v4();
-        data.projects.push(Project {
+    fn campaign(id: Uuid, path: PathBuf, remote: Option<&str>) -> Campaign {
+        Campaign {
             id,
             name: "Campaign".into(),
-            path: dir.path().join("missing"),
-            dndbeyond_campaign_ids: Vec::new(),
-        });
-        data.active_project_ids = vec![id];
-        store.save(&data).unwrap();
-        data.projects[0].name = "Renamed".into();
-        data.projects[0].path = dir.path().join("moved");
-        store.save(&data).unwrap();
-        assert_eq!(Store::at(store.path.clone()).load().unwrap(), data);
-        assert_eq!(data.projects[0].id, id);
+            path,
+            dndbeyond_campaign_id: remote.map(str::to_owned),
+        }
     }
 
     #[test]
-    fn invalid_and_future_files_are_never_overwritten() {
+    fn legacy_versions_preserve_ids_paths_and_unique_links_without_rewriting() {
+        let dir = tempfile::tempdir().unwrap();
+        for version in [1, 2] {
+            let id = Uuid::new_v4();
+            let mut old = serde_json::json!({"version":version,"projects":[{"id":id,"name":"Old","path":dir.path(),"dndbeyond_campaign_ids":["12"]}]});
+            if version == 1 {
+                old["active_project_id"] = serde_json::json!(id);
+            } else {
+                old["active_project_ids"] = serde_json::json!([id]);
+            }
+            let path = dir.path().join("settings.json");
+            let bytes = serde_json::to_vec(&old).unwrap();
+            fs::write(&path, &bytes).unwrap();
+            let mut store = Store::at(path.clone());
+            let data = store.load().unwrap();
+            assert_eq!(data.version, 3);
+            assert_eq!(data.active_campaign_id, Some(id));
+            assert_eq!(data.campaigns[0].id, id);
+            assert_eq!(data.campaigns[0].path, dir.path());
+            assert_eq!(
+                data.campaigns[0].dndbeyond_campaign_id.as_deref(),
+                Some("12")
+            );
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+            store.save(&data).unwrap();
+            let saved: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            assert!(saved.get("projects").is_none());
+            assert_eq!(Store::at(path).load().unwrap(), data);
+        }
+    }
+
+    #[test]
+    fn ambiguous_legacy_links_block_writes_and_preserve_file() {
+        let dir = tempfile::tempdir().unwrap();
+        for duplicate in [false, true] {
+            let mut entries = vec![
+                serde_json::json!({"id":Uuid::new_v4(),"name":"One","path":dir.path(),"dndbeyond_campaign_ids":if duplicate { vec!["12"] } else { vec!["12","34"] }}),
+            ];
+            if duplicate {
+                entries.push(serde_json::json!({"id":Uuid::new_v4(),"name":"Two","path":dir.path(),"dndbeyond_campaign_ids":["12"]}));
+            }
+            let bytes = serde_json::to_vec(
+                &serde_json::json!({"version":2,"active_project_ids":[],"projects":entries}),
+            )
+            .unwrap();
+            let path = dir.path().join("settings.json");
+            fs::write(&path, &bytes).unwrap();
+            let mut store = Store::at(path.clone());
+            assert!(store.load().is_err());
+            assert!(store.save(&UserData::default()).is_err());
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn invalid_and_future_settings_are_preserved() {
         let dir = tempfile::tempdir().unwrap();
         for content in [
             "broken",
-            r#"{"version":3,"projects":[],"active_project_ids":[]}"#,
-            r#"{"version":1,"projects":[],"active_project_id":null,"future":true}"#,
+            r#"{"version":4,"active_campaign_id":null,"campaigns":[]}"#,
+            r#"{"version":3,"active_campaign_id":null,"campaigns":[],"future":true}"#,
         ] {
             let path = dir.path().join("settings.json");
             fs::write(&path, content).unwrap();
@@ -251,32 +275,30 @@ mod tests {
     }
 
     #[test]
-    fn external_edit_is_preserved() {
+    fn rejects_duplicate_remote_links_including_numeric_aliases() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("settings.json");
-        let mut first = Store::at(path.clone());
-        first.load().unwrap();
-        fs::write(&path, "external edit").unwrap();
-        assert!(first.save(&UserData::default()).is_err());
-        assert_eq!(fs::read_to_string(path).unwrap(), "external edit");
-    }
-
-    #[test]
-    fn rejects_duplicate_ids_and_dangling_selection() {
-        let dir = tempfile::tempdir().unwrap();
-        let project = Project {
-            id: Uuid::new_v4(),
-            name: "One".into(),
-            path: dir.path().into(),
-            dndbeyond_campaign_ids: Vec::new(),
-        };
         let mut data = UserData {
-            projects: vec![project.clone(), project],
+            campaigns: vec![
+                campaign(Uuid::new_v4(), dir.path().into(), Some("12")),
+                campaign(Uuid::new_v4(), dir.path().into(), Some("012")),
+            ],
             ..Default::default()
         };
         assert!(data.validate().is_err());
-        data.projects.pop();
-        data.active_project_ids = vec![Uuid::new_v4()];
+        data.campaigns[1].dndbeyond_campaign_id = Some("34".into());
+        assert!(data.validate().is_ok());
+        data.active_campaign_id = Some(Uuid::new_v4());
         assert!(data.validate().is_err());
+    }
+
+    #[test]
+    fn external_edits_are_preserved() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let mut store = Store::at(path.clone());
+        assert!(store.load().unwrap().campaigns.is_empty());
+        fs::write(&path, "external edit").unwrap();
+        assert!(store.save(&UserData::default()).is_err());
+        assert_eq!(fs::read_to_string(path).unwrap(), "external edit");
     }
 }

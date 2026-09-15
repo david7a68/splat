@@ -1,8 +1,8 @@
 pub mod auth;
 mod campaigns;
 mod credentials;
+mod dndbeyond;
 mod persistence;
-mod projects;
 mod settings;
 
 use eframe::egui;
@@ -19,8 +19,8 @@ fn main() -> eframe::Result {
 struct Splat {
     tab: Tab,
     settings: settings::Settings,
-    projects: projects::Projects,
     campaigns: campaigns::Campaigns,
+    dndbeyond: dndbeyond::DndBeyond,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -30,7 +30,6 @@ enum Tab {
     Encounters,
     Creatures,
     Simulations,
-    Campaigns,
     Settings,
 }
 
@@ -38,14 +37,13 @@ impl eframe::App for Splat {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         self.settings.poll(ctx);
         let (epoch, session) = self.settings.campaign_session();
-        self.campaigns.poll(ctx, epoch, session.is_some());
+        self.dndbeyond.poll(ctx, epoch, session.is_some());
         egui::SidePanel::left("navigation").show(ctx, |ui| {
             ui.heading("Splat");
             ui.label("D&D 2024");
-            self.projects.selector(ui);
+            self.campaigns.selector(ui);
             ui.separator();
             for (tab, label) in [
-                (Tab::Campaigns, "D&D Beyond campaigns"),
                 (Tab::Party, "Party"),
                 (Tab::Encounters, "Encounters"),
                 (Tab::Creatures, "Creatures"),
@@ -63,16 +61,14 @@ impl eframe::App for Splat {
                     self.settings.show(ui);
                     ui.add_space(20.0);
                     ui.separator();
-                    self.projects.show(ui);
+                    self.campaigns.show(ui);
+                    ui.separator();
+                    self.dndbeyond.show(ui, session, &mut self.campaigns);
                 });
                 return;
             }
-            if self.tab == Tab::Campaigns {
-                self.campaigns.show(ui, session, &mut self.projects);
-                return;
-            }
             let (title, message) = match self.tab {
-                Tab::Settings | Tab::Campaigns => unreachable!(),
+                Tab::Settings => unreachable!(),
                 Tab::Party => ("Party", "No characters imported yet."),
                 Tab::Encounters => ("Encounters", "No encounters created yet."),
                 Tab::Creatures => ("Creatures", "No creatures created yet."),
