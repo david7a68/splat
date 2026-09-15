@@ -120,15 +120,28 @@ fn yaml(raw: &str) -> Result<Value, String> {
     serde_yaml_ng::from_str(raw).map_err(|e| format!("Invalid cell: {e}"))
 }
 fn number(raw: &str) -> Result<Value, String> {
-    let raw=raw.trim();
+    let raw = raw.trim();
     if raw.contains(',') {
-        let integer=raw.split('.').next().unwrap().trim_start_matches(['+','-']);
-        let groups: Vec<_>=integer.split(',').collect();
-        if groups[0].is_empty() || groups[0].len()>3 || groups.iter().any(|s| !s.bytes().all(|b| b.is_ascii_digit())) || groups[1..].iter().any(|s| s.len()!=3) || raw.split_once('.').is_some_and(|(_,tail)| tail.contains(',')) {
+        let integer = raw
+            .split('.')
+            .next()
+            .unwrap()
+            .trim_start_matches(['+', '-']);
+        let groups: Vec<_> = integer.split(',').collect();
+        if groups[0].is_empty()
+            || groups[0].len() > 3
+            || groups
+                .iter()
+                .any(|s| !s.bytes().all(|b| b.is_ascii_digit()))
+            || groups[1..].iter().any(|s| s.len() != 3)
+            || raw
+                .split_once('.')
+                .is_some_and(|(_, tail)| tail.contains(','))
+        {
             return Err("Invalid digit grouping".into());
         }
     }
-    let raw=raw.replace(',', "");
+    let raw = raw.replace(',', "");
     if !raw.contains(['/', '½']) {
         if let Ok(n) = raw.parse::<i64>() {
             return Ok(Value::Number(n.into()));

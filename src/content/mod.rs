@@ -477,6 +477,34 @@ fn references(value: &Value, out: &mut Vec<Reference>) -> Result<(), String> {
     Ok(())
 }
 
+/// Required content references, excluding provenance and optional selections.
+/// Engine contract names are not content entry references.
+pub fn required_references(entry: &Entry) -> Result<Vec<Reference>, String> {
+    let fields: Mapping = entry
+        .fields
+        .iter()
+        .filter(|(key, _)| {
+            key.as_str().is_some_and(|key| {
+                key.starts_with("splat_")
+                    && ![
+                        "splat_optional",
+                        "splat_origin",
+                        "splat_sources",
+                        "splat_conversion",
+                        "splat_contracts",
+                        "splat_packages",
+                    ]
+                    .contains(&key)
+            })
+        })
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    let mut result = Vec::new();
+    references(&Value::Mapping(fields), &mut result)?;
+    result.extend(entry.inventory.iter().map(|r| r.item.clone()));
+    Ok(result)
+}
+
 pub fn validate(entries: &[Entry]) -> Report {
     let mut report = Report {
         entries: entries.len(),
@@ -525,6 +553,13 @@ pub fn validate(entries: &[Entry]) -> Report {
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
         required_fields.remove(Value::String("splat_optional".into()));
+        // Provenance is optional: deleting the original must not invalidate a copy.
+        required_fields.remove(Value::String("splat_origin".into()));
+        if let Some(origin) = field(&e.fields, "splat_origin")
+            && let Err(msg) = references(origin, &mut Vec::new())
+        {
+            error(&e.path, msg);
+        }
         if let Some(optional) = field(&e.fields, "splat_optional")
             && let Err(msg) = references(optional, &mut Vec::new())
         {

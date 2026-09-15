@@ -5,6 +5,14 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+pub struct Module {
+    pub id: Uuid,
+    pub name: String,
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Campaign {
     pub id: Uuid,
     pub name: String,
@@ -21,6 +29,8 @@ pub struct UserData {
     pub version: u32,
     pub active_campaign_id: Option<Uuid>,
     pub campaigns: Vec<Campaign>,
+    #[serde(default)]
+    pub modules: Vec<Module>,
 }
 
 impl Default for UserData {
@@ -29,6 +39,7 @@ impl Default for UserData {
             version: 3,
             active_campaign_id: None,
             campaigns: Vec::new(),
+            modules: Vec::new(),
         }
     }
 }
@@ -39,6 +50,18 @@ impl UserData {
             return Err(
                 "This settings version is not supported. The file has not been changed.".into(),
             );
+        }
+        let mut module_ids = HashSet::new();
+        let mut module_paths = HashSet::new();
+        for module in &self.modules {
+            if module.id.is_nil()
+                || !module_ids.insert(module.id)
+                || !module_paths.insert(&module.path)
+                || module.name.trim().is_empty()
+                || !module.path.is_absolute()
+            {
+                return Err("Each module needs a unique UUID, folder, and a name.".into());
+            }
         }
         let mut ids = HashSet::new();
         let mut remote_ids = HashSet::new();
@@ -62,6 +85,23 @@ impl UserData {
                 if !remote_ids.insert(numeric) {
                     return Err("A D&D Beyond campaign can only be linked to one local campaign. Remove the duplicate link before saving.".into());
                 }
+            }
+        }
+        for (i, module) in self.modules.iter().enumerate() {
+            let root = module
+                .path
+                .canonicalize()
+                .unwrap_or_else(|_| module.path.clone());
+            let overlaps = |path: &PathBuf| {
+                let path = path.canonicalize().unwrap_or_else(|_| path.clone());
+                path.starts_with(&root) || root.starts_with(&path)
+            };
+            if self.campaigns.iter().any(|c| overlaps(&c.path))
+                || self.modules[..i].iter().any(|m| overlaps(&m.path))
+            {
+                return Err(
+                    "Keep module folders separate from campaign folders and other modules.".into(),
+                );
             }
         }
         if self.active_campaign_id.is_some_and(|id| !ids.contains(&id)) {
@@ -117,6 +157,7 @@ fn decode(bytes: &[u8]) -> Result<UserData, String> {
                 legacy.active_project_ids.first().copied()
             },
             campaigns,
+            modules: Vec::new(),
         })
     } else {
         serde_json::from_value(value)
@@ -293,6 +334,28 @@ mod tests {
         assert!(data.validate().is_ok());
         data.active_campaign_id = Some(Uuid::new_v4());
         assert!(data.validate().is_err());
+    }
+
+    #[test]
+    fn module_registration_round_trips_without_changing_campaigns() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = Store::at(temp.path().join("settings.json"));
+        let mut data = store.load().unwrap();
+        let campaign = campaign(Uuid::new_v4(), temp.path().join("campaign"), Some("12"));
+        data.active_campaign_id = Some(campaign.id);
+        data.campaigns.push(campaign.clone());
+        data.modules.push(Module {
+            id: Uuid::new_v4(),
+            name: "Homebrew".into(),
+            path: temp.path().join("module"),
+        });
+        store.save(&data).unwrap();
+        assert_eq!(store.load().unwrap(), data);
+        data.modules.clear();
+        store.save(&data).unwrap();
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.campaigns, vec![campaign.clone()]);
+        assert_eq!(loaded.active_campaign_id, Some(campaign.id));
     }
 
     #[test]

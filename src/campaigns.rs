@@ -36,6 +36,75 @@ impl Default for Campaigns {
 }
 
 impl Campaigns {
+    pub fn all(&self) -> &[Campaign] {
+        &self.data.campaigns
+    }
+
+    pub fn modules(&self) -> &[crate::persistence::Module] {
+        &self.data.modules
+    }
+
+    pub fn register_module(&mut self, module: crate::persistence::Module) -> Result<(), String> {
+        if self
+            .data
+            .modules
+            .iter()
+            .any(|m| m.id == module.id || m.path == module.path)
+        {
+            return Err("This module is already registered.".into());
+        }
+        if self
+            .data
+            .modules
+            .iter()
+            .any(|m| module.path.starts_with(&m.path) || m.path.starts_with(&module.path))
+            || self.data.campaigns.iter().any(|c| {
+                let path = c.path.canonicalize().unwrap_or_else(|_| c.path.clone());
+                module.path.starts_with(&path) || path.starts_with(&module.path)
+            })
+        {
+            return Err(
+                "Keep module folders separate from campaign folders and other registered modules."
+                    .into(),
+            );
+        }
+        let mut data = self.data.clone();
+        data.modules.push(module);
+        self.persist(data)
+    }
+
+    pub fn rename_module(&mut self, id: Uuid, name: String) -> Result<(), String> {
+        let mut data = self.data.clone();
+        let module = data
+            .modules
+            .iter_mut()
+            .find(|m| m.id == id)
+            .ok_or("Module is no longer registered.")?;
+        module.name = name;
+        self.persist(data)
+    }
+
+    #[cfg(test)]
+    pub fn at(path: PathBuf) -> Self {
+        let mut store = Store::at(path);
+        let data = store.load().unwrap();
+        Self {
+            store: Some(store),
+            data,
+            error: None,
+            writable: true,
+            editing: None,
+            name: String::new(),
+            path: String::new(),
+        }
+    }
+
+    pub fn unregister_module(&mut self, id: Uuid) -> Result<(), String> {
+        let mut data = self.data.clone();
+        data.modules.retain(|m| m.id != id);
+        self.persist(data)
+    }
+
     fn reload(&mut self) {
         if let Some(store) = &mut self.store {
             match store.load() {

@@ -98,11 +98,29 @@ fn detects_duplicate_ids_keys_namespaces_and_bad_references() {
         let entry = parse(
             "a",
             "item",
-            &format!("splat_item: {{}}\nsplat_origin: {reference}"),
+            &format!("splat_item: {{}}\nsplat_requires: [{reference}]"),
             "",
         );
         assert!(!validate(&[entry]).errors.is_empty());
     }
+}
+
+#[test]
+fn copy_origins_may_be_unavailable_but_must_be_valid_references() {
+    let copy = parse(
+        "copy",
+        "item",
+        "splat_item: {}\nsplat_origin: {key: 'test:removed'}",
+        "",
+    );
+    assert!(validate(&[copy]).errors.is_empty());
+    let bad = parse(
+        "copy",
+        "item",
+        "splat_item: {}\nsplat_origin: {id: invalid, key: 'test:removed'}",
+        "",
+    );
+    assert!(!validate(&[bad]).errors.is_empty());
 }
 
 #[test]
