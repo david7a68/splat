@@ -82,7 +82,8 @@ Unknown Splat properties are retained with a warning; non-Splat metadata is reta
 This is an initial structural reader, not complete schema conformance. Nested
 mechanics, ownership scopes, selections, expression types, local action bindings,
 rule compatibility, replay fingerprints and game outcomes still need their
-respective validators and engine. The report always says `executable_entries: 0`.
+respective validators and engine. The structural report says `executable_entries: 0`. The separate
+[`--executable` check](execution-proof.md) compiles the converted execution profiles.
 The 17 design notes pass the supported checks; this does not establish that a
 simulation can run them.
 

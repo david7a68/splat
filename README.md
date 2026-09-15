@@ -31,7 +31,8 @@ Code lives in `~/Projects/splat`. The vault link is
 `~/Documents/vault/D20 D&D/00-09 System/09 Tools/splat`.
 Campaign data remains in the vault. A read-only content verifier and the complete
 [built-in SRD 5.2.1 source package](docs/srd-import.md) are available; campaign
-content loading in the UI is not implemented yet.
+content loading in the UI is not implemented yet. The
+[execution proof](docs/execution-proof.md) runs converted SRD mechanics from Markdown.
 
 The link is listed in Obsidian's excluded files. This reduces visibility in
 search and related views but is not a complete indexing or filesystem exclusion.

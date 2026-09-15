@@ -742,7 +742,7 @@ pub fn validate(entries: &[Entry]) -> Report {
             }
         }
     }
-    report.limitations.push("Read-only structural/reference validation. Nested mechanics, ownership, rule selection, and runtime semantics are not fully validated. No simulator or executable rule registry is implemented; executable_entries is zero.".into());
+    report.limitations.push("Read-only structural/reference validation. Nested mechanics, ownership, rule selection, and runtime semantics are not fully validated. This structural check does not compile or execute mechanics; executable_entries is zero. Use verify-content --executable for the bounded execution profiles.".into());
     report
 }
 
