@@ -58,7 +58,7 @@ cookie. If removal fails, Splat reports it and lets you retry. It does not
 invalidate the browser session. Network and keyring operations run in a worker;
 credential writes and removals run in order.
 
-This is an internal D&D Beyond endpoint, not a supported public API. Character data is not imported yet. Campaign details are fetched into memory only. Authentication tests use a local mock server;
+This is an internal D&D Beyond endpoint, not a supported public API. Character data is not imported yet. Campaign details are fetched into memory, with linked names cached in settings. Authentication tests use a local mock server;
 a successful live login requires a real cookie entered in the application.
 
 ## User settings and campaigns
@@ -78,8 +78,8 @@ campaign to replace it.
 In Settings, select a local campaign, then **Refresh D&D Beyond campaigns**.
 Choose its remote campaign from the D&D Beyond link dropdown. Campaigns linked
 elsewhere are disabled. The internal `/api/campaign/stt/user-campaigns` endpoint
-supplies names, DM names, and player counts in memory only. Only the remote ID
-is saved. No campaign snapshots or character sheets are stored.
+supplies campaign details. The remote ID and last fetched name are saved;
+DM names and player counts stay in memory. No campaign snapshots or character sheets are stored.
 
 Versions 1 and 2 migrate old project records without changing UUIDs, names, paths,
 or unique links. If an old record has multiple remote IDs, or two records share
@@ -90,3 +90,10 @@ remains untouched until a successful edit saves version 3.
 Settings save with atomic replacement. Invalid or unsupported files are preserved.
 External edits detected before a save require a reload. Session credentials stay
 in the desktop keyring and memory, never in settings JSON.
+
+The linked campaign name refreshes once whenever its link control becomes visible,
+including returning to Settings, scrolling it back into view, switching campaigns,
+or reconnecting. UI repaints do not repeatedly request data. The last successful
+name is cached as `dndbeyond_campaign_name` and shown while offline or refreshing.
+Failed requests retain the cache. Replacing or removing a link clears its name;
+late responses cannot apply an old name to a new link.

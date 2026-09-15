@@ -37,7 +37,9 @@ impl eframe::App for Splat {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         self.settings.poll(ctx);
         let (epoch, session) = self.settings.campaign_session();
-        self.dndbeyond.poll(ctx, epoch, session.is_some());
+        self.dndbeyond.begin_frame();
+        self.dndbeyond
+            .poll(ctx, epoch, session.is_some(), &mut self.campaigns);
         egui::SidePanel::left("navigation").show(ctx, |ui| {
             ui.heading("Splat");
             ui.label("D&D 2024");

@@ -95,13 +95,31 @@ pub struct DndBeyond {
     loaded: bool,
     error: Option<String>,
     message: Option<String>,
+    visible_last_frame: bool,
+    requested_visible_link: Option<(uuid::Uuid, String)>,
+    pending_link: Option<(uuid::Uuid, String)>,
 }
 
 impl DndBeyond {
-    pub fn poll(&mut self, ctx: &egui::Context, epoch: u64, connected: bool) {
+    pub fn begin_frame(&mut self) {
+        if !self.visible_last_frame {
+            self.requested_visible_link = None;
+        }
+        self.visible_last_frame = false;
+    }
+
+    pub fn poll(
+        &mut self,
+        ctx: &egui::Context,
+        epoch: u64,
+        connected: bool,
+        local: &mut Campaigns,
+    ) {
         if epoch != self.account_epoch || !connected {
             // Dropping the receiver discards a previous account's late response.
             self.pending = None;
+            self.pending_link = None;
+            self.requested_visible_link = None;
             self.campaigns.clear();
             self.loaded = false;
             self.account_epoch = epoch;
@@ -118,6 +136,19 @@ impl DndBeyond {
                             self.campaigns = campaigns;
                             self.loaded = true;
                             self.error = None;
+                            if let Some((id, remote_id)) = self.pending_link.take() {
+                                if let Some(remote) =
+                                    self.campaigns.iter().find(|c| c.id == remote_id)
+                                {
+                                    if let Err(error) =
+                                        local.cache_remote_name(id, &remote_id, &remote.name)
+                                    {
+                                        self.error = Some(error);
+                                    }
+                                } else {
+                                    self.error = Some("The linked campaign was not returned. Keeping its cached name.".into());
+                                }
+                            }
                         }
                         Err(error) => {
                             self.error = Some(error);
@@ -163,8 +194,13 @@ impl DndBeyond {
                 egui::Button::new("Refresh D&D Beyond campaigns"),
             )
             .clicked()
-            && let Some(session) = session
+            && let Some(session) = session.clone()
         {
+            self.pending_link = campaign
+                .dndbeyond_campaign_id
+                .clone()
+                .map(|id| (campaign.id, id));
+            self.requested_visible_link = self.pending_link.clone();
             self.refresh(session, ui.ctx());
         }
         if self.pending.is_some() {
@@ -185,10 +221,11 @@ impl DndBeyond {
                     .iter()
                     .find(|c| &c.id == id)
                     .map(|c| c.name.clone())
+                    .or_else(|| campaign.dndbeyond_campaign_name.clone())
                     .unwrap_or_else(|| format!("Campaign {id}"))
             })
             .unwrap_or_else(|| "Not linked".into());
-        egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
+        let dropdown = egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
             .selected_text(label)
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut selected, None, "Not linked");
@@ -204,11 +241,34 @@ impl DndBeyond {
                     });
                 }
             });
+        if ui.is_rect_visible(dropdown.response.rect) {
+            self.visible_last_frame = true;
+            let key = current.clone().map(|id| (campaign.id, id));
+            if key.is_some()
+                && key != self.requested_visible_link
+                && self.pending.is_none()
+                && let Some(session) = session
+            {
+                self.requested_visible_link = key.clone();
+                self.pending_link = key;
+                self.refresh(session, ui.ctx());
+            }
+        }
         if selected != current {
-            match local.link(selected) {
+            match local.link(selected.clone()) {
                 Ok(()) => {
+                    self.requested_visible_link = None;
                     self.message = Some("Campaign link saved.".into());
                     self.error = None;
+                    if let Some(remote) = self
+                        .campaigns
+                        .iter()
+                        .find(|c| Some(&c.id) == selected.as_ref())
+                        && let Err(error) =
+                            local.cache_remote_name(campaign.id, &remote.id, &remote.name)
+                    {
+                        self.error = Some(error);
+                    }
                 }
                 Err(error) => self.error = Some(error),
             }
@@ -230,13 +290,28 @@ impl DndBeyond {
         if self.loaded && self.campaigns.is_empty() {
             ui.label("No campaigns returned for this account.");
         }
-        ui.weak("Only the link ID is saved. D&D Beyond campaign details stay in memory.");
+        ui.weak("The link ID and last fetched campaign name are saved. Other D&D Beyond details stay in memory.");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visibility_keeps_request_marker_until_setting_leaves_view() {
+        let key = (uuid::Uuid::new_v4(), "12".to_owned());
+        let mut remote = DndBeyond {
+            visible_last_frame: true,
+            requested_visible_link: Some(key.clone()),
+            ..Default::default()
+        };
+        remote.begin_frame();
+        assert_eq!(remote.requested_visible_link, Some(key));
+        // No show call in this frame: the settings page is hidden.
+        remote.begin_frame();
+        assert!(remote.requested_visible_link.is_none());
+    }
 
     #[test]
     fn reads_numeric_and_string_ids_and_optional_details() {
@@ -270,7 +345,12 @@ mod tests {
             pending: Some(rx),
             ..Default::default()
         };
-        campaigns.poll(&egui::Context::default(), 1, false);
+        campaigns.poll(
+            &egui::Context::default(),
+            1,
+            false,
+            &mut Campaigns::default(),
+        );
         assert!(tx.send(Ok(Vec::new())).is_err());
         assert!(campaigns.campaigns.is_empty());
     }

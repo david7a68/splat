@@ -11,6 +11,8 @@ pub struct Campaign {
     pub path: PathBuf,
     #[serde(default)]
     pub dndbeyond_campaign_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dndbeyond_campaign_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -104,6 +106,7 @@ fn decode(bytes: &[u8]) -> Result<UserData, String> {
                 name: project.name,
                 path: project.path,
                 dndbeyond_campaign_id: project.dndbeyond_campaign_ids.into_iter().next(),
+                dndbeyond_campaign_name: None,
             });
         }
         Ok(UserData {
@@ -198,6 +201,7 @@ mod tests {
             name: "Campaign".into(),
             path,
             dndbeyond_campaign_id: remote.map(str::to_owned),
+            dndbeyond_campaign_name: None,
         }
     }
 

@@ -79,7 +79,31 @@ impl Campaigns {
             .iter_mut()
             .find(|c| c.id == id)
             .ok_or("Campaign not found.")?;
+        if campaign.dndbeyond_campaign_id != remote_id {
+            campaign.dndbeyond_campaign_name = None;
+        }
         campaign.dndbeyond_campaign_id = remote_id;
+        self.persist(data)
+    }
+
+    pub fn cache_remote_name(
+        &mut self,
+        id: Uuid,
+        remote_id: &str,
+        name: &str,
+    ) -> Result<(), String> {
+        let mut data = self.data.clone();
+        let Some(campaign) = data
+            .campaigns
+            .iter_mut()
+            .find(|c| c.id == id && c.dndbeyond_campaign_id.as_deref() == Some(remote_id))
+        else {
+            return Ok(());
+        };
+        if campaign.dndbeyond_campaign_name.as_deref() == Some(name) {
+            return Ok(());
+        }
+        campaign.dndbeyond_campaign_name = Some(name.into());
         self.persist(data)
     }
 
@@ -235,6 +259,7 @@ impl Campaigns {
                                 name: self.name.trim().into(),
                                 path,
                                 dndbeyond_campaign_id: None,
+                                dndbeyond_campaign_name: None,
                             });
                             data.active_campaign_id = Some(id);
                         }
@@ -266,6 +291,7 @@ mod tests {
                 name: "Campaign".into(),
                 path: dir.path().into(),
                 dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
             });
         }
         let mut campaigns = Campaigns {
@@ -290,7 +316,30 @@ mod tests {
                 .is_none()
         );
         campaigns.link(Some("34".into())).unwrap();
+        campaigns
+            .cache_remote_name(second, "34", "Cached name")
+            .unwrap();
+        assert_eq!(
+            Store::at(path.clone()).load().unwrap().campaigns[1]
+                .dndbeyond_campaign_name
+                .as_deref(),
+            Some("Cached name")
+        );
         campaigns.link(Some("56".into())).unwrap();
+        // A response for the replaced link must not repopulate its old name.
+        campaigns
+            .cache_remote_name(second, "34", "Late name")
+            .unwrap();
+        assert!(
+            campaigns
+                .active_campaign()
+                .unwrap()
+                .dndbeyond_campaign_name
+                .is_none()
+        );
+        campaigns
+            .cache_remote_name(second, "56", "New name")
+            .unwrap();
         let saved = Store::at(path.clone()).load().unwrap();
         assert_eq!(
             saved.campaigns[0].dndbeyond_campaign_id.as_deref(),
@@ -301,6 +350,11 @@ mod tests {
             Some("56")
         );
         campaigns.link(None).unwrap();
+        assert!(
+            Store::at(path.clone()).load().unwrap().campaigns[1]
+                .dndbeyond_campaign_name
+                .is_none()
+        );
         campaigns.select(Some(first));
         campaigns.link(None).unwrap();
         campaigns.select(Some(second));
