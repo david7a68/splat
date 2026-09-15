@@ -143,7 +143,12 @@ impl Campaigns {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui) {
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        session: Option<crate::auth::Session>,
+        dndbeyond: &mut crate::dndbeyond::DndBeyond,
+    ) {
         ui.heading("Campaigns");
         ui.label("Register campaign folders here. Removing an entry does not delete its files.");
         if let Some(store) = &self.store {
@@ -182,6 +187,11 @@ impl Campaigns {
                             self.save(data);
                         }
                     });
+                    if self.data.active_campaign_id == Some(campaign.id) {
+                        ui.add_space(8.0);
+                        dndbeyond.show(ui, session.clone(), self);
+                        ui.add_space(8.0);
+                    }
                     ui.label(campaign.path.display().to_string());
                     if !campaign.path.is_dir() {
                         ui.colored_label(

@@ -61,9 +61,7 @@ impl eframe::App for Splat {
                     self.settings.show(ui);
                     ui.add_space(20.0);
                     ui.separator();
-                    self.campaigns.show(ui);
-                    ui.separator();
-                    self.dndbeyond.show(ui, session, &mut self.campaigns);
+                    self.campaigns.show(ui, session, &mut self.dndbeyond);
                 });
                 return;
             }

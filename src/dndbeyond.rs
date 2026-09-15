@@ -148,12 +148,11 @@ impl DndBeyond {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, local: &mut Campaigns) {
-        ui.heading("D&D Beyond link");
+        ui.strong("D&D Beyond link");
         let Some(campaign) = local.active_campaign() else {
             ui.label("Select a local campaign to configure its D&D Beyond link.");
             return;
         };
-        ui.label(format!("Configure {}", campaign.name));
         ui.label("Each local campaign can link to one D&D Beyond campaign. Each D&D Beyond campaign can be used once.");
         if session.is_none() {
             ui.label("Connect above to load your D&D Beyond campaigns.");
