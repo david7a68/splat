@@ -1,6 +1,6 @@
 //! Read-only schema reader. Parsing/reference validation never implies execution support.
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -15,7 +15,7 @@ mod table_mapping;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
     pub path: String,
     pub id: Uuid,
@@ -28,7 +28,7 @@ pub struct Entry {
     pub inventory_containers: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InventoryRow {
     pub key: String,
     pub item: Reference,
@@ -38,7 +38,7 @@ pub struct InventoryRow {
     pub container: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Reference {
     Id(Uuid),
     Key(String),
