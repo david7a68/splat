@@ -1,8 +1,8 @@
 # Splat
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
-Built with Rust and egui (eframe). The initial app provides navigation for
-party, encounters, creatures, and simulations; domain features are not yet implemented.
+Built with Rust and egui (eframe). The app has separate Library and Campaign workspaces. Library browsing and local
+module authoring are available; campaign encounter and simulation screens remain placeholders.
 
 ## Development
 
@@ -31,7 +31,7 @@ Code lives in `~/Projects/splat`. The vault link is
 `~/Documents/vault/D20 D&D/00-09 System/09 Tools/splat`.
 Campaign data remains in the vault. A read-only content verifier and the complete
 [built-in SRD 5.2.1 source package](docs/srd-import.md) are available; campaign
-content loading in the UI is not implemented yet. The
+module selection and local entry editing are available in **Campaign → Content**. The
 [execution proof](docs/execution-proof.md) runs converted SRD mechanics from Markdown.
 
 The link is listed in Obsidian's excluded files. This reduces visibility in
@@ -102,3 +102,51 @@ or reconnecting. UI repaints do not repeatedly request data. The last successful
 name is cached as `dndbeyond_campaign_name` and shown while offline or refreshing.
 Failed requests retain the cache. Replacing or removing a link clears its name;
 late responses cannot apply an old name to a new link.
+
+## Library workspace
+
+Select **Library** to work on reusable modules without changing the active campaign.
+The built-in D&D 2024 SRD appears as one read-only catalogue. Search entries by name
+or path, filter by kind, and select an entry to read its Markdown or inspect its source.
+Engine support remains separate from structural validity.
+
+Under **Manage modules**, register an existing folder containing exactly one package
+manifest, or enter a name, namespace (for example `my_homebrew`), and a new absolute
+folder path to create a module. The parent folder must already exist. Module
+registrations are stored in user settings; module notes remain in their own folders.
+Unregistering a module leaves its files in place. Module and campaign folders must
+be separate. Register My Homebrew in your preferred location for shared homebrew.
+
+Local modules support new draft entries and Markdown editing. **Save** checks note
+structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
+for external edits before replacing a file. Validation messages show unresolved
+references; a module-only check can report references to other modules as unresolved.
+Invalid entry notes remain available for repair. **Discard changes**, then **Reload**,
+to load external edits. Switching to Campaign or Settings keeps the draft in memory.
+Save before closing the app; drafts are not persisted.
+
+In **Campaign → Content → Modules**, enable a whole module or select individual
+entries. Required dependencies are included separately with their reasons, and rule
+groups include all members. Whole-module selections include future additions;
+individual selections do not. **Save selections** writes `splat_packages` into the
+campaign manifest while preserving unrelated fields, comments, and note text. A
+campaign without a manifest gets `Campaign.md` on first save, with its existing UUID
+and the default SRD selection. Missing modules and unresolved references remain visible.
+
+Use **Copy to…** on a library or campaign entry to make an independent copy in a
+registered module or campaign. Review the destination, name, retained dependencies,
+and Markdown before **Create copy**. Copies get a new UUID, lose the original resource
+key, and retain source attribution and optional origin identity. Existing references
+are not rewritten. A copy into a shared module cannot depend on private campaign
+entries; share or replace those dependencies first. The app checks source, dependency,
+and destination changes before writing. Destination folders must already exist.
+
+Clean destination workspaces refresh after copying; reload after saving any pending draft. **Campaign entries** provides a
+reader and Markdown editor for local entries, plus copying back to modules. Pending
+campaign edits survive workspace switches and block sidebar campaign changes until
+saved or discarded. Invalid campaign notes have a raw repair editor. Repair them before
+saving campaign selections. Raw notes can also be edited externally; reload after external changes.
+
+Moving entries between owners, automatic link repair, and running rules from the reader
+remain outside this UI. New entries are drafts, not executable rules. D&D Beyond links
+remain in Settings.

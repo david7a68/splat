@@ -187,6 +187,13 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
     Ok(Some(meta))
 }
 
+/// Original Markdown for read-only library display.
+pub fn source_file(path: &str) -> Option<&'static str> {
+    DEFINITIONS
+        .get_file(path.strip_prefix("definitions/")?)?
+        .contents_utf8()
+}
+
 pub fn entries() -> Result<Vec<Entry>, String> {
     fn walk(dir: &Dir<'_>, result: &mut Vec<Entry>) -> Result<(), String> {
         for file in dir.files() {
