@@ -2,3 +2,5 @@
 pub mod content;
 
 pub mod execution;
+
+pub mod character;

@@ -739,6 +739,7 @@ pub fn validate(entries: &[Entry]) -> Report {
         "splat_budgets",
         "splat_creature",
         "splat_effect",
+        "splat_external",
         "splat_effects",
         "splat_encounter",
         "splat_forms",

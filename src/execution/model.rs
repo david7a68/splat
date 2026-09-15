@@ -6,7 +6,7 @@ use serde_yaml_ng::Value;
 use std::collections::BTreeMap;
 
 pub type Map<T> = BTreeMap<String, T>;
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Stat {
     pub value: i64,
@@ -14,7 +14,7 @@ pub struct Stat {
     #[serde(default)]
     pub includes: Vec<String>,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Creature {
     pub size: String,
@@ -23,7 +23,7 @@ pub struct Creature {
     #[serde(default)]
     pub tags: Vec<String>,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Health {
     pub zero_hp: String,
@@ -34,13 +34,16 @@ pub struct Trait {
     pub rule: String,
     pub parameters: Value,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pool {
     pub name: String,
     pub max: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub initial: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<i64>,
 }
 #[derive(Clone, Debug, Deserialize)]
@@ -175,6 +178,7 @@ pub struct Step {
     pub key: String,
     pub operation: String,
     pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
     pub roll: Option<String>,
     pub on_hit: Option<Hit>,

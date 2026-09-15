@@ -7,6 +7,9 @@ mod credentials;
 mod dndbeyond;
 mod library;
 mod markdown_view;
+mod party;
+mod party_stream;
+mod party_sync;
 mod persistence;
 mod settings;
 
@@ -55,6 +58,7 @@ struct Splat {
     settings: settings::Settings,
     campaigns: campaigns::Campaigns,
     dndbeyond: dndbeyond::DndBeyond,
+    party: party::Party,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -157,6 +161,18 @@ impl eframe::App for Splat {
                 ui.selectable_value(&mut self.tab, Tab::Settings, "⚙ Settings");
             });
         });
+        let active = self.campaigns.active_campaign();
+        self.party.sync(
+            ctx,
+            epoch,
+            active.as_ref().and_then(|c| {
+                c.dndbeyond_campaign_id
+                    .clone()
+                    .map(|remote| (c.id, remote, c.path.clone()))
+            }),
+            session.is_some(),
+            self.workspace == Workspace::Campaign && self.tab == Tab::Party,
+        );
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.copy_dialog.is_some() {
                 ui.disable();
@@ -190,6 +206,14 @@ impl eframe::App for Splat {
             }
             if self.tab == Tab::Content {
                 self.campaign_content.show(ui, &self.campaigns);
+                return;
+            }
+            if self.tab == Tab::Party {
+                self.party.show(
+                    ui,
+                    session,
+                    active.is_some_and(|c| c.dndbeyond_campaign_id.is_some()),
+                );
                 return;
             }
             let (title, message) = match self.tab {
