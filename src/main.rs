@@ -5,6 +5,9 @@ mod content_workspace;
 mod copy_dialog;
 mod credentials;
 mod dndbeyond;
+mod encounter_run;
+mod encounter_settings;
+mod encounters;
 mod library;
 mod markdown_view;
 mod party;
@@ -59,6 +62,7 @@ struct Splat {
     campaigns: campaigns::Campaigns,
     dndbeyond: dndbeyond::DndBeyond,
     party: party::Party,
+    encounters: encounters::Encounters,
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -82,7 +86,7 @@ enum Tab {
 impl eframe::App for Splat {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         if ctx.input(|i| i.viewport().close_requested())
-            && (self.library.dirty() || self.campaign_content.dirty())
+            && (self.library.dirty() || self.campaign_content.dirty() || self.encounters.unsaved())
             && !self.discard_on_close
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -93,16 +97,23 @@ impl eframe::App for Splat {
                 .collapsible(false)
                 .resizable(false)
                 .show(ctx, |ui| {
-                    ui.label("Save your pending content changes before closing, or discard them.");
+                    ui.label(if self.encounters.has_run() {
+                        "The encounter run has unsaved changes. Return to the run and save before closing, or discard the unsaved changes."
+                    } else {
+                        "Save your pending content changes before closing, or discard them."
+                    });
                     ui.horizontal(|ui| {
                         if ui.button("Keep editing").clicked() {
                             self.confirm_close = false;
-                            self.workspace = if self.campaign_content.dirty() {
-                                Workspace::Campaign
-                            } else {
-                                Workspace::Library
-                            };
-                            self.tab = if self.campaign_content.dirty() {
+                            self.workspace =
+                                if self.campaign_content.dirty() || self.encounters.dirty() {
+                                    Workspace::Campaign
+                                } else {
+                                    Workspace::Library
+                                };
+                            self.tab = if self.encounters.dirty() {
+                                Tab::Encounters
+                            } else if self.campaign_content.dirty() {
                                 Tab::Content
                             } else {
                                 Tab::Party
@@ -140,11 +151,14 @@ impl eframe::App for Splat {
                 self.tab = Tab::Content;
             }
             if self.workspace == Workspace::Campaign {
-                ui.add_enabled_ui(!self.campaign_content.dirty(), |ui| {
-                    self.campaigns.selector(ui)
-                });
-                if self.campaign_content.dirty() {
-                    ui.weak("Unsaved content: save or discard to change campaigns.");
+                ui.add_enabled_ui(
+                    !self.campaign_content.dirty() && !self.encounters.dirty(),
+                    |ui| self.campaigns.selector(ui),
+                );
+                if self.campaign_content.dirty() || self.encounters.dirty() {
+                    ui.weak(
+                        "Save or discard content and close the encounter run to change campaigns.",
+                    );
                 }
                 ui.separator();
                 for (tab, label) in [
@@ -182,14 +196,15 @@ impl eframe::App for Splat {
                     self.settings.show(ui);
                     ui.add_space(20.0);
                     ui.separator();
-                    if self.campaign_content.dirty() {
+                    if self.campaign_content.dirty() || self.encounters.dirty() {
                         ui.label(
-                            "Save or discard campaign content changes before managing campaigns.",
+                            "Save or discard campaign content and close the encounter run before managing campaigns.",
                         );
                     }
-                    ui.add_enabled_ui(!self.campaign_content.dirty(), |ui| {
-                        self.campaigns.show(ui, session, &mut self.dndbeyond)
-                    });
+                    ui.add_enabled_ui(
+                        !self.campaign_content.dirty() && !self.encounters.dirty(),
+                        |ui| self.campaigns.show(ui, session, &mut self.dndbeyond),
+                    );
                 });
                 return;
             }
@@ -206,6 +221,16 @@ impl eframe::App for Splat {
             }
             if self.tab == Tab::Content {
                 self.campaign_content.show(ui, &self.campaigns);
+                return;
+            }
+            if self.tab == Tab::Encounters {
+                self.encounters.show(ui, &self.campaigns);
+                if self.encounters.saved {
+                    self.encounters.saved = false;
+                    if let Some(campaign) = &active {
+                        self.campaign_content.refresh_destination(&campaign.path);
+                    }
+                }
                 return;
             }
             if self.tab == Tab::Party {

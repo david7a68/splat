@@ -1,5 +1,5 @@
 //! Bounded dice expressions and a versioned, deterministic random stream.
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
 pub struct Dice {
@@ -76,7 +76,7 @@ impl Dice {
 
 /// SplitMix64 v1, with rejection sampling for unbiased die faces. Tests can supply
 /// explicit faces; those are validated against the requested die and never loop.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Random {
     state: u64,
     controlled: Option<std::collections::VecDeque<u32>>,

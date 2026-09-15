@@ -2,7 +2,7 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The app has separate Library and Campaign workspaces. Library browsing and local
-module authoring are available; campaign encounter and simulation screens remain placeholders.
+module authoring and campaign encounter planning are available. Simulation remains a placeholder.
 
 ## Development
 
@@ -40,7 +40,7 @@ Build artifacts stay in the code repository's ignored `target/` directory.
 
 Keep D&D Beyond session cookies and tokens outside Git. Authentication is available
 in Settings; read-only character sheets are available in Campaign → Party. Characters now have persistent local copies in the shared creature schema.
-Encounter-builder and simulation integration remain later work.
+The encounter builder uses these local character copies. Manual DM runs are available. Automatic combat resolution and simulation integration remain later work.
 
 ## D&D Beyond connection
 
@@ -158,3 +158,73 @@ and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
 gets the latest sheets. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
+
+## Encounter builder
+
+Open **Campaign → Encounters**, select **New encounter**, and enter a name.
+Add cached party members or search the campaign's available creatures. Add or
+duplicate a creature for each participant, assign its side, and use **Move up**
+to change roster order. Optional starting HP and temporary HP apply to that
+participant only. With an override off, the creature's starting state applies.
+The default sides, party and enemies, are hostile to each other.
+
+**Save encounter** writes a Markdown template under `Encounters/` in the campaign
+folder. Select a saved encounter to reopen it. Names can change without changing
+file or participant identities. A new campaign gets a manifest on first save.
+Existing notes and unexposed encounter data are retained. External file changes
+block saving; discard the draft and reload to read them. Unsaved encounters
+survive tab changes and block campaign switching, with a warning on app close.
+
+Party entries are local character copies from the linked D&D Beyond campaign;
+refresh **Party**, then **Reload** in Encounters to see new copies. This first
+editor saves direct creature references in campaign-local templates. Shared
+`party_slot` bindings still need the Markdown editor. Phases, assumptions,
+completion rules, and advanced starting state also remain Markdown fields.
+Saving a template does not execute rules or start a combat run.
+
+### Running an encounter as DM
+
+Save and select an encounter, then choose **Run encounter as DM**. The run takes
+an independent copy of each creature's stats and starting state. Refreshing Party
+or editing content does not change an existing run. Repeated creatures have
+numbered names and separate HP, conditions, and notes.
+
+Enter initiative totals or roll each participant using its supplied bonus.
+Use matching totals for groups and the arrow buttons to resolve ties. Fill in
+unknown HP values under **Adjust HP and initiative bonus**, then choose
+**Begin combat**. **Next turn** advances through present participants and counts
+rounds. Absent participants keep their state and initiative when they return.
+Participants at zero HP stay in turn order until you mark them absent.
+
+Select a participant to apply final damage, heal, replace temporary HP, record
+conditions or Concentration, adjust death saves, and add DM notes. Damage uses
+temporary HP first; healing stops at maximum HP. You resolve attacks, damage
+modifiers, condition effects, Concentration checks, death and recovery, phases,
+and completion conditions. Creature details and encounter notes remain available
+for reference. The dice control accepts expressions such as `2d6 + 3`.
+
+The combat log records changes. **Undo** restores up to 100 prior actions,
+including turn changes, dice rolls, and manual endings in the current session.
+**End encounter** records a manual ending and your outcome. Runs save automatically
+after changes; **Save and close run** returns to the builder. Open **Saved runs**
+and choose **Resume** to continue after restarting the app. Run changes never
+write to templates or character copies.
+
+### Run storage and campaign initiative
+
+**Campaign run settings** sets the run folder. It defaults to `Encounter Runs`
+inside the campaign, and accepts another relative folder or an absolute path.
+Saved JSON files contain the run state, combat log, initiative rule, random state,
+and frozen creature definitions. Saves use atomic replacement and detect external
+edits. Failed saves keep the current run in memory and show an error. Undo history
+is kept for the current session only. Changing the folder does not move old runs.
+
+The same settings select the campaign initiative rule. **Roll NPC initiative**
+uses that rule and leaves player totals alone. Choices are identical NPC groups
+(the D&D default), individual NPCs, one group per side, or explicit encounter
+initiative groups. Side and explicit groups use the first NPC in roster order
+for their bonus and roll mode. Normal, advantage, and disadvantage rolls are
+available; use disadvantage for surprise. Ties use the campaign's roster-order
+setting or the DM/player ordering controls. NPC status can be changed before
+combat begins. Run folder settings use `splat_run_storage.directory`; initiative
+is a campaign-local rule selected through `splat_rule_choices`.
