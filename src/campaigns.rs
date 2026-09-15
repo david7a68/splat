@@ -173,70 +173,84 @@ impl Campaigns {
         session: Option<crate::auth::Session>,
         dndbeyond: &mut crate::dndbeyond::DndBeyond,
     ) {
-        ui.heading("Campaigns");
-        ui.label("Register campaign folders here. Removing an entry does not delete its files.");
-        if let Some(store) = &self.store {
-            ui.weak(store.path.display().to_string());
-        }
+        ui.horizontal(|ui| {
+            ui.heading("Campaigns");
+            ui.weak(format!("{} configured", self.data.campaigns.len()));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .small_button("Reload")
+                    .on_hover_text("Reload campaign settings from disk")
+                    .clicked()
+                {
+                    self.reload();
+                }
+            });
+        });
         if let Some(error) = &self.error {
             ui.colored_label(egui::Color32::LIGHT_RED, error);
         }
-        if ui.button("Reload campaign list").clicked() {
-            self.reload();
-        }
         ui.add_enabled_ui(self.writable, |ui| {
-            for campaign in self.data.campaigns.clone() {
-                ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.label("Active campaign");
+                ui.push_id("settings_campaign_selector", |ui| self.selector(ui));
+            });
+            ui.add_space(8.0);
+            if let Some(campaign) = self.active_campaign() {
+                egui::Frame::group(ui.style()).inner_margin(12.0).show(ui, |ui| {
+                    ui.set_min_width((ui.available_width() - 2.0).max(0.0));
                     ui.horizontal(|ui| {
-                        if ui
-                            .selectable_label(
-                                self.data.active_campaign_id == Some(campaign.id),
-                                &campaign.name,
-                            )
-                            .clicked()
-                        {
-                            self.select(Some(campaign.id));
-                        }
-                        if ui.button("Edit").clicked() {
-                            self.editing = Some(campaign.id);
-                            self.name = campaign.name.clone();
-                            self.path = campaign.path.to_string_lossy().into_owned();
-                        }
-                        if ui.button("Remove").clicked() {
-                            let mut data = self.data.clone();
-                            data.campaigns.retain(|p| p.id != campaign.id);
-                            if data.active_campaign_id == Some(campaign.id) {
-                                data.active_campaign_id = None;
+                        ui.strong(&campaign.name);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("Edit details").clicked() {
+                                self.editing = Some(campaign.id);
+                                self.name = campaign.name.clone();
+                                self.path = campaign.path.to_string_lossy().into_owned();
                             }
+                        });
+                    });
+                    ui.add_space(6.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.weak("Folder");
+                        ui.label(campaign.path.display().to_string());
+                        if campaign.path.is_dir() {
+                            ui.weak("Available");
+                        } else {
+                            ui.colored_label(egui::Color32::YELLOW, "Folder unavailable");
+                        }
+                    });
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.add_space(8.0);
+                    dndbeyond.show(ui, session.clone(), self);
+                    ui.add_space(8.0);
+                    ui.collapsing("Campaign details", |ui| {
+                        ui.label(format!("ID: {}", campaign.id));
+                        if let Some(store) = &self.store { ui.weak(format!("Settings: {}", store.path.display())); }
+                        if ui.small_button("Remove from Splat").on_hover_text("Removes this entry and link. The campaign folder and its files are kept.").clicked() {
+                            let mut data = self.data.clone();
+                            data.campaigns.retain(|c| c.id != campaign.id);
+                            data.active_campaign_id = None;
                             self.save(data);
                         }
                     });
-                    if self.data.active_campaign_id == Some(campaign.id) {
-                        ui.add_space(8.0);
-                        dndbeyond.show(ui, session.clone(), self);
-                        ui.add_space(8.0);
-                    }
-                    ui.label(campaign.path.display().to_string());
-                    if !campaign.path.is_dir() {
-                        ui.colored_label(
-                            egui::Color32::YELLOW,
-                            "Folder not available. Edit the path to locate it again.",
-                        );
-                    }
                 });
-            }
-            ui.add_space(8.0);
-            ui.label(if self.editing.is_some() {
-                "Edit campaign"
             } else {
-                "Add campaign"
+                ui.weak("Select a campaign above, or add one below.");
+            }
+            let editing = self.editing.is_some();
+            egui::CollapsingHeader::new(if editing { "Edit campaign details" } else { "Add campaign" })
+                .id_salt(("campaign_form", self.editing))
+                .default_open(editing || self.data.campaigns.is_empty())
+                .show(ui, |ui| {
+            ui.add_space(8.0);
+            egui::Grid::new("campaign_fields").num_columns(2).spacing([16.0, 8.0]).show(ui, |ui| {
+                ui.label("Name");
+                ui.add(egui::TextEdit::singleline(&mut self.name).hint_text("Campaign name").desired_width(ui.available_width()));
+                ui.end_row();
+                ui.label("Folder");
+                ui.add(egui::TextEdit::singleline(&mut self.path).hint_text("Absolute folder path").desired_width(ui.available_width()));
+                ui.end_row();
             });
-            ui.add(egui::TextEdit::singleline(&mut self.name).hint_text("Campaign name"));
-            ui.add(
-                egui::TextEdit::singleline(&mut self.path)
-                    .hint_text("Absolute folder path")
-                    .desired_width(500.0),
-            );
             ui.horizontal(|ui| {
                 if ui.button("Save campaign").clicked() {
                     let path = PathBuf::from(self.path.trim());
@@ -269,6 +283,7 @@ impl Campaigns {
                 if self.editing.is_some() && ui.button("Cancel edit").clicked() {
                     self.clear_form();
                 }
+            });
             });
         });
     }

@@ -179,19 +179,28 @@ impl DndBeyond {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, local: &mut Campaigns) {
-        ui.strong("D&D Beyond link");
+        ui.horizontal(|ui| {
+            ui.strong("D&D Beyond");
+            if self.pending.is_some() {
+                ui.spinner();
+                ui.weak("Refreshing…");
+            } else if session.is_none() {
+                ui.weak("Offline · cached name");
+            } else {
+                ui.weak("Connected");
+            }
+        });
         let Some(campaign) = local.active_campaign() else {
             ui.label("Select a local campaign to configure its D&D Beyond link.");
             return;
         };
-        ui.label("Each local campaign can link to one D&D Beyond campaign. Each D&D Beyond campaign can be used once.");
         if session.is_none() {
-            ui.label("Connect above to load your D&D Beyond campaigns.");
+            ui.weak("Connect your account above to update this link.");
         }
         if ui
             .add_enabled(
                 session.is_some() && self.pending.is_none(),
-                egui::Button::new("Refresh D&D Beyond campaigns"),
+                egui::Button::new("Refresh list"),
             )
             .clicked()
             && let Some(session) = session.clone()
@@ -202,9 +211,6 @@ impl DndBeyond {
                 .map(|id| (campaign.id, id));
             self.requested_visible_link = self.pending_link.clone();
             self.refresh(session, ui.ctx());
-        }
-        if self.pending.is_some() {
-            ui.spinner();
         }
         if let Some(error) = &self.error {
             ui.colored_label(egui::Color32::LIGHT_RED, error);
@@ -226,6 +232,7 @@ impl DndBeyond {
             })
             .unwrap_or_else(|| "Not linked".into());
         let dropdown = egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
+            .width(ui.available_width().min(520.0))
             .selected_text(label)
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut selected, None, "Not linked");
@@ -274,23 +281,24 @@ impl DndBeyond {
             }
         }
         if let Some(id) = &current {
-            if let Some(remote) = self.campaigns.iter().find(|c| &c.id == id) {
-                if let Some(dm) = &remote.dm_username {
-                    ui.label(format!("DM: {dm}"));
+            ui.horizontal_wrapped(|ui| {
+                if let Some(remote) = self.campaigns.iter().find(|c| &c.id == id) {
+                    if let Some(dm) = &remote.dm_username {
+                        ui.label(format!("DM: {dm}"));
+                    }
+                    if let Some(count) = remote.player_count {
+                        ui.label(format!("Players: {count}"));
+                    }
                 }
-                if let Some(count) = remote.player_count {
-                    ui.label(format!("Players: {count}"));
-                }
-            }
-            ui.hyperlink_to(
-                "Open D&D Beyond campaign",
-                format!("https://www.dndbeyond.com/campaigns/{id}"),
-            );
+                ui.hyperlink_to(
+                    "Open D&D Beyond campaign",
+                    format!("https://www.dndbeyond.com/campaigns/{id}"),
+                );
+            });
         }
         if self.loaded && self.campaigns.is_empty() {
             ui.label("No campaigns returned for this account.");
         }
-        ui.weak("The link ID and last fetched campaign name are saved. Other D&D Beyond details stay in memory.");
     }
 }
 
