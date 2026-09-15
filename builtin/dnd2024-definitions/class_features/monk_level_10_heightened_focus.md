@@ -1,0 +1,66 @@
+---
+splat_schema: 1
+splat_id: 05de10ba-5e62-5333-b1d2-a121799a62b2
+splat_kind: rule
+splat_key: dnd2024:class_features/monk_level_10_heightened_focus
+splat_name: 'Level 10: Heightened Focus'
+splat_origin:
+  key: dnd2024:reference/pages/051
+splat_sources:
+- title: SRD 5.2.1
+  locator: pp. 51, 52
+  url: https://www.dndbeyond.com/srd
+splat_rule:
+  mechanic: dnd2024:class_features/monk_level_10_heightened_focus
+  parameters: {}
+splat_conversion:
+  status: partial
+  category: class_feature
+  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
+  source_path: builtin/srd-5.2.1/source.pdf
+  pages:
+  - 51
+  - 52
+  engine_gaps: []
+  conversion_gaps:
+  - source_rules
+  execution_profiles: []
+  parent_name: Monk
+  line_span:
+    first: 4299
+    count: 16
+splat_clauses:
+- key: source_rules
+  text: '# Level 10: Heightened Focus Your Flurry of Blows, Patient Defense, and Step of the Wind gain
+    the following benefits. Flurry of Blows. You can expend 1 Focus Point to use Flurry of Blows and make
+    three Unarmed Strikes with it instead of two. Patient Defense. When you expend a Focus Point to use
+    Patient Defense, you gain a number of Temporary Hit Points equal to two rolls of your Martial Arts
+    die. Step of the Wind. When you expend a Focus Point to use Step of the Wind, you can choose a willing
+    creature within 5 feet of yourself that is Large or smaller. You move the creature with you until
+    the end of your turn. The creature’s movement doesn’t provoke Opportunity Attacks.'
+  sha256: 3dac125af6b8d80623e9ac777aaff893ffd7caae5971eb6cf6fc9e304d0227f3
+  status: needs_semantic_conversion
+---
+
+# Level 10: Heightened Focus
+
+<!-- SRD page 51 -->
+
+Your Flurry of Blows, Patient Defense, and Step of\
+the Wind gain the following benefits.\
+Flurry of Blows. You can expend 1 Focus Point\
+to use Flurry of Blows and make three Unarmed\
+Strikes with it instead of two.\
+
+<!-- SRD page 52 -->
+
+Patient Defense. When you expend a Focus Point\
+to use Patient Defense, you gain a number of Tem-\
+porary Hit Points equal to two rolls of your Martial\
+Arts die.\
+Step of the Wind. When you expend a Focus Point\
+to use Step of the Wind, you can choose a willing\
+creature within 5 feet of yourself that is Large or\
+smaller. You move the creature with you until the\
+end of your turn. The creature’s movement doesn’t\
+provoke Opportunity Attacks.\

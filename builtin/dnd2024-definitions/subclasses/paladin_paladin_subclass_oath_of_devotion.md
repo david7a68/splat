@@ -1,0 +1,63 @@
+---
+splat_schema: 1
+splat_id: d4f23084-9bb3-5bee-a9a5-3af40aae9d48
+splat_kind: rule_group
+splat_key: dnd2024:subclasses/paladin_paladin_subclass_oath_of_devotion
+splat_name: 'Paladin Subclass: Oath of Devotion'
+splat_origin:
+  key: dnd2024:reference/pages/056
+splat_sources:
+- title: SRD 5.2.1
+  locator: pp. 56
+  url: https://www.dndbeyond.com/srd
+splat_rule_group:
+  category: subclass
+splat_conversion:
+  status: partial
+  category: subclass
+  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
+  source_path: builtin/srd-5.2.1/source.pdf
+  pages:
+  - 56
+  engine_gaps: []
+  conversion_gaps:
+  - source_rules
+  execution_profiles: []
+  parent_name: Paladin
+  line_span:
+    first: 4718
+    count: 17
+splat_clauses:
+- key: source_rules
+  text: '# Paladin Subclass: Oath of Devotion Uphold the Ideals of Justice and Order The Oath of Devotion
+    binds Paladins to the ideals of justice and order. These Paladins meet the archetype of the knight
+    in shining armor. They hold themselves to the highest standards of conduct, and some—for better or
+    worse—hold the rest of the world to the same standards. Many who swear this oath are devoted to gods
+    of law and good and use their gods’ tenets as the measure of personal devotion. Others hold angels
+    as their ideals and incorporate images of angelic wings into their helmets or coats of arms. These
+    paladins share the following tenets: • Let your word be your promise. • Protect the weak and never
+    fear to act. • Let your honorable deeds be an example.'
+  sha256: 338ec45dda6469b36eadd5e580f5b1c734cce57cc0fca35e0108c60b10e33504
+  status: needs_semantic_conversion
+---
+
+# Paladin Subclass: Oath of Devotion
+
+<!-- SRD page 56 -->
+
+Uphold the Ideals of Justice and Order\
+The Oath of Devotion binds Paladins to the ideals\
+of justice and order. These Paladins meet the ar-\
+chetype of the knight in shining armor. They hold\
+themselves to the highest standards of conduct, and\
+some—for better or worse—hold the rest of the\
+world to the same standards.\
+Many who swear this oath are devoted to gods\
+of law and good and use their gods’ tenets as the\
+measure of personal devotion. Others hold angels as\
+their ideals and incorporate images of angelic wings\
+into their helmets or coats of arms.\
+These paladins share the following tenets:\
+•    Let your word be your promise.\
+•    Protect the weak and never fear to act.\
+•    Let your honorable deeds be an example.\

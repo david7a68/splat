@@ -1,0 +1,63 @@
+---
+splat_schema: 1
+splat_id: 80a04f46-be96-5809-b662-9b2bdaeee518
+splat_kind: item
+splat_key: dnd2024:items/oil_of_slipperiness
+splat_name: Oil of Slipperiness
+splat_origin:
+  key: dnd2024:reference/magic_item/oil_of_slipperiness
+splat_sources:
+- title: SRD 5.2.1
+  locator: pp. 233, 234
+  url: https://www.dndbeyond.com/srd
+splat_item:
+  category: potion
+  rarity: uncommon
+  equipment:
+    attunement: none
+splat_conversion:
+  status: partial
+  category: magic_item
+  source_sha256: 41f4d66d46d293bb2d658eda403f736cca9264ceccc90f75d733bcad7d465df1
+  source_path: builtin/srd-5.2.1/magic_item/oil_of_slipperiness.md
+  pages:
+  - 233
+  - 234
+  engine_gaps: []
+  conversion_gaps:
+  - source_rules
+  execution_profiles: []
+splat_clauses:
+- key: source_rules
+  text: '# Oil of Slipperiness Potion, Uncommon One vial of this oil can cover one Medium or smaller creature,
+    along with the equipment it’s wearing and carrying (one additional vial is required for each size
+    category above Medium). Applying the oil takes 10 minutes. The affected creature then gains the effect
+    of the Freedom of Movement spell for 8 hours. Alternatively, the oil can be poured on the ground as
+    a Magic action, where it covers a 10-foot square, duplicating the effect of the Grease spell in that
+    area for 8 hours. This sticky, black unguent is thick and heavy, but it flows quickly when poured.'
+  sha256: f0aa4edb94132ca2a31b4e81a9f04f3b28a1a4f15e367c472886af37a98608d9
+  status: needs_semantic_conversion
+---
+
+# Oil of Slipperiness
+
+<!-- SRD page 233 -->
+
+Potion, Uncommon\
+One vial of this oil can cover one Medium or smaller\
+creature, along with the equipment it’s wearing and\
+carrying (one additional vial is required for each\
+size category above Medium). Applying the oil takes\
+10 minutes. The affected creature then gains the ef-\
+fect of the Freedom of Movement spell for 8 hours.\
+Alternatively, the oil can be poured on the ground\
+as a Magic action, where it covers a 10-foot square,\
+
+<!-- SRD page 234 -->
+
+duplicating the effect of the Grease spell in that area\
+for 8 hours.\
+This sticky, black unguent is thick and heavy, but\
+it flows quickly when poured.\
+
+Original layout: [[../../srd-5.2.1/pages/233|page 233]], [[../../srd-5.2.1/pages/234|page 234]].

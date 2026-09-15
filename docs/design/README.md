@@ -68,3 +68,8 @@ Next work after review is implementation and source-content validation. This
 document does not authorize that work. D&D Beyond character access still needs
 a verified live adapter and remains subject to the already agreed live-only
 data boundary.
+
+The [conversion status contract](conversion-status.md) and
+[whole-SRD catalogue report](../srd-definitions.md) record the later authorized
+conversion work. They distinguish incomplete conversion from unavailable engine
+support; neither is treated as an executable rule.

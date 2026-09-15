@@ -1,0 +1,74 @@
+---
+splat_schema: 1
+splat_id: 2f5179e0-f2fa-5e40-ab0b-947f031eb8e2
+splat_kind: spell
+splat_key: dnd2024:spells/magic_weapon
+splat_name: Magic Weapon
+splat_origin:
+  key: dnd2024:reference/spell/magic_weapon
+splat_sources:
+- title: SRD 5.2.1
+  locator: pp. 146, 147
+  url: https://www.dndbeyond.com/srd
+splat_spell:
+  level: 2
+  school: transmutation
+  classes:
+  - paladin
+  - ranger
+  - sorcerer
+  - wizard
+  components:
+  - verbal
+  - somatic
+  concentration: false
+  duration: 1 hour
+  casting_time: Bonus Action
+  ritual: false
+  range:
+    mode: touch
+splat_conversion:
+  status: partial
+  category: spell
+  source_sha256: e85f680b3d9f8a9805d74bd2e44cff44833aea5759c6dd079882cd5081aa6e21
+  source_path: builtin/srd-5.2.1/spell/magic_weapon.md
+  pages:
+  - 146
+  - 147
+  engine_gaps: []
+  conversion_gaps:
+  - source_rules
+  execution_profiles: []
+splat_clauses:
+- key: source_rules
+  text: '# Magic Weapon Level 2 Transmutation (Paladin, Ranger, Sorcerer, Wizard) Casting Time: Bonus
+    Action Range: Touch Components: V, S Duration: 1 hour You touch a nonmagical weapon. Until the spell
+    ends, that weapon becomes a magic weapon with a +1 bonus to attack rolls and damage rolls. The spell
+    ends early if you cast it again. Using a Higher-Level Spell Slot. The bonus increases to +2 with a
+    level 3–5 spell slot. The bonus increases to +3 with a level 6+ spell slot.'
+  sha256: 42ad1819fa35f8e0cc23125f0eee0357353571be724c00d33d86b1ba5aaf345a
+  status: needs_semantic_conversion
+---
+
+# Magic Weapon
+
+<!-- SRD page 146 -->
+
+Level 2 Transmutation (Paladin, Ranger, Sorcerer,\
+Wizard)\
+Casting Time: Bonus Action\
+Range: Touch\
+
+<!-- SRD page 147 -->
+
+Components: V, S\
+Duration: 1 hour\
+You touch a nonmagical weapon. Until the spell\
+ends, that weapon becomes a magic weapon with a\
++1 bonus to attack rolls and damage rolls. The spell\
+ends early if you cast it again.\
+Using a Higher-Level Spell Slot. The bonus in-\
+creases to +2 with a level 3–5 spell slot. The bonus\
+increases to +3 with a level 6+ spell slot.\
+
+Original layout: [[../../srd-5.2.1/pages/146|page 146]], [[../../srd-5.2.1/pages/147|page 147]].

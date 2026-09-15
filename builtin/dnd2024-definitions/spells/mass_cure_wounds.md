@@ -1,0 +1,68 @@
+---
+splat_schema: 1
+splat_id: 65399dfc-e071-52d4-8a0d-953570dfa950
+splat_kind: spell
+splat_key: dnd2024:spells/mass_cure_wounds
+splat_name: Mass Cure Wounds
+splat_origin:
+  key: dnd2024:reference/spell/mass_cure_wounds
+splat_sources:
+- title: SRD 5.2.1
+  locator: pp. 147
+  url: https://www.dndbeyond.com/srd
+splat_spell:
+  level: 5
+  school: abjuration
+  classes:
+  - bard
+  - cleric
+  - druid
+  components:
+  - verbal
+  - somatic
+  concentration: false
+  duration: Instantaneous
+  casting_time: Action
+  ritual: false
+  range:
+    feet: 60
+splat_conversion:
+  status: partial
+  category: spell
+  source_sha256: 308f077914bad3de0011342d7c780f9495adda7a2884e7384ef2b250e7db5b9f
+  source_path: builtin/srd-5.2.1/spell/mass_cure_wounds.md
+  pages:
+  - 147
+  engine_gaps: []
+  conversion_gaps:
+  - source_rules
+  execution_profiles: []
+splat_clauses:
+- key: source_rules
+  text: '# Mass Cure Wounds Level 5 Abjuration (Bard, Cleric, Druid) Casting Time: Action Range: 60 feet
+    Components: V, S Duration: Instantaneous A wave of healing energy washes out from a point you can
+    see within range. Choose up to six creatures in a 30-foot-radius Sphere centered on that point. Each
+    target regains Hit Points equal to 5d8 plus your spellcasting ability modifier. Using a Higher-Level
+    Spell Slot. The healing increases by 1d8 for each spell slot level above 5.'
+  sha256: fb838af2960f49db594d266ca6a121138c5d69de104689e5a0df0fac553f79b8
+  status: needs_semantic_conversion
+---
+
+# Mass Cure Wounds
+
+<!-- SRD page 147 -->
+
+Level 5 Abjuration (Bard, Cleric, Druid)\
+Casting Time: Action\
+Range: 60 feet\
+Components: V, S\
+Duration: Instantaneous\
+A wave of healing energy washes out from a point\
+you can see within range. Choose up to six crea-\
+tures in a 30-foot-radius Sphere centered on that\
+point. Each target regains Hit Points equal to 5d8\
+plus your spellcasting ability modifier.\
+Using a Higher-Level Spell Slot. The healing in-\
+creases by 1d8 for each spell slot level above 5.\
+
+Original layout: [[../../srd-5.2.1/pages/147|page 147]].

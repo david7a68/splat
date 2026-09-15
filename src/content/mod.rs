@@ -7,6 +7,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 pub mod builtin;
+pub mod definitions;
 
 #[cfg(test)]
 mod tests;
@@ -166,6 +167,7 @@ impl Entry {
             inventory_containers,
         };
         entry.validate_shape()?;
+        definitions::conversion(&entry)?;
         Ok(entry)
     }
     pub fn reference_metadata(&self) -> Option<&Mapping> {
@@ -691,6 +693,8 @@ pub fn validate(entries: &[Entry]) -> Report {
     }
     const KNOWN_FIELDS: &[&str] = &[
         "splat_actions",
+        "splat_conversion",
+        "splat_clauses",
         "splat_attack_options",
         "splat_budgets",
         "splat_creature",

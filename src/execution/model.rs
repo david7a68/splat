@@ -235,6 +235,12 @@ fn read<T: serde::de::DeserializeOwned>(entry: &Entry, name: &str) -> Result<Opt
 }
 
 pub fn compile(entry: &Entry) -> Result<Definition, String> {
+    if let Some(meta) = crate::content::definitions::conversion(entry)? {
+        return Err(format!(
+            "Definition is not executable: conversion gaps {:?}; engine gaps {:?}",
+            meta.conversion_gaps, meta.engine_gaps
+        ));
+    }
     let allowed = [
         "splat_schema",
         "splat_id",

@@ -341,3 +341,14 @@ shared content. It does not need to belong to a package.
 **Share to package**:
 Make campaign-owned content available in a shared package. The user chooses
 whether to create a shared copy or move the existing entry into the package.
+
+**Conversion gap**:
+A source rule that still needs a complete typed definition or an explicit
+interpretation. Extracting its numbers or keeping its prose does not close it.
+
+**Engine gap**:
+A specified rule contract for which the engine has no implementation.
+
+**Execution profile**:
+A bounded, executable view of a definition, with explicit limits on the rules
+and situations it supports. It does not prove support for the full definition.

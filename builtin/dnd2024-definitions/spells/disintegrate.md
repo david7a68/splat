@@ -1,0 +1,86 @@
+---
+splat_schema: 1
+splat_id: e9e546bf-ca59-56f1-89e6-bd90198954a9
+splat_kind: spell
+splat_key: dnd2024:spells/disintegrate
+splat_name: Disintegrate
+splat_origin:
+  key: dnd2024:reference/spell/disintegrate
+splat_sources:
+- title: SRD 5.2.1
+  locator: pp. 124
+  url: https://www.dndbeyond.com/srd
+splat_spell:
+  level: 6
+  school: transmutation
+  classes:
+  - sorcerer
+  - wizard
+  components:
+  - verbal
+  - somatic
+  - material
+  concentration: false
+  duration: Instantaneous
+  casting_time: Action
+  ritual: false
+  range:
+    feet: 60
+  material:
+    description: a lodestone and dust
+    consumed: false
+splat_conversion:
+  status: partial
+  category: spell
+  source_sha256: 33ac3f6de9d4619f8bae71960721c9f1df1819f099bce720521587449e6404c8
+  source_path: builtin/srd-5.2.1/spell/disintegrate.md
+  pages:
+  - 124
+  engine_gaps: []
+  conversion_gaps:
+  - source_rules
+  execution_profiles: []
+splat_clauses:
+- key: source_rules
+  text: '# Disintegrate Level 6 Transmutation (Sorcerer, Wizard) Casting Time: Action Range: 60 feet Components:
+    V, S, M (a lodestone and dust) Duration: Instantaneous You launch a green ray at a target you can
+    see within range. The target can be a creature, a nonmagical object, or a creation of magical force,
+    such as the wall created by Wall of Force. A creature targeted by this spell makes a Dexterity saving
+    throw. On a failed save, the target takes 10d6 + 40 Force damage. If this damage reduces it to 0 Hit
+    Points, it and everything nonmagical it is wearing and carrying are disintegrated into gray dust.
+    The target can be revived only by a True Resurrection or a Wish spell. This spell automatically disintegrates
+    a Large or smaller nonmagical object or a creation of magical force. If such a target is Huge or larger,
+    this spell disintegrates a 10-foot-Cube portion of it. Using a Higher-Level Spell Slot. The damage
+    increases by 3d6 for each spell slot level above 6.'
+  sha256: 81507d3b34500771036e7bac0aff14bc920497ab7768f9d6069129e33c92d8c8
+  status: needs_semantic_conversion
+---
+
+# Disintegrate
+
+<!-- SRD page 124 -->
+
+Level 6 Transmutation (Sorcerer, Wizard)\
+Casting Time: Action\
+Range: 60 feet\
+Components: V, S, M (a lodestone and dust)\
+Duration: Instantaneous\
+You launch a green ray at a target you can see\
+within range. The target can be a creature, a non-\
+magical object, or a creation of magical force, such\
+as the wall created by Wall of Force.\
+A creature targeted by this spell makes a Dexter-\
+ity saving throw. On a failed save, the target takes\
+10d6 + 40 Force damage. If this damage reduces it\
+to 0 Hit Points, it and everything nonmagical it is\
+wearing and carrying are disintegrated into gray\
+dust. The target can be revived only by a True Res-\
+urrection or a Wish spell.\
+This spell automatically disintegrates a Large or\
+smaller nonmagical object or a creation of magical\
+force. If such a target is Huge or larger, this spell\
+disintegrates a 10-foot-Cube portion of it.\
+Using a Higher-Level Spell Slot. The damage in-\
+creases by 3d6 for each spell slot level above 6.\
+
+Original layout: [[../../srd-5.2.1/pages/124|page 124]].

@@ -1,0 +1,180 @@
+---
+splat_schema: 1
+splat_id: e528d14d-5b02-5a4a-abbc-d72f5aaa14cf
+splat_kind: creature
+splat_key: dnd2024:creatures/ancient_silver_dragon
+splat_name: Ancient Silver Dragon
+splat_origin:
+  key: dnd2024:reference/creature/ancient_silver_dragon
+splat_sources:
+- title: SRD 5.2.1
+  locator: pp. 325
+  url: https://www.dndbeyond.com/srd
+splat_creature:
+  size: gargantuan
+  type: dragon
+  alignment: Lawful Good
+  tags_text: (Metallic)
+  movement_text: 40 ft., Fly 80 ft.
+  skills_text: History +11, Perception +16, Stealth +7
+  immunities_text: Cold
+  senses_text: Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26
+  languages_text: Common, Draconic
+  cr_text: 23 (XP 50,000, or 62,000 in lair; PB +7)
+  hit_points_text: 468 (24d20 + 216)
+splat_stats:
+  strength:
+    value: 30
+  save_strength:
+    value: 10
+  dexterity:
+    value: 10
+  save_dexterity:
+    value: 7
+  constitution:
+    value: 29
+  save_constitution:
+    value: 9
+  intelligence:
+    value: 18
+  save_intelligence:
+    value: 4
+  wisdom:
+    value: 15
+  save_wisdom:
+    value: 9
+  charisma:
+    value: 26
+  save_charisma:
+    value: 8
+  armor_class:
+    value: 22
+  max_hp:
+    value: 468
+  initiative:
+    value: 14
+  speed:
+    value: 40
+    unit: ft
+  fly_speed:
+    value: 80
+    unit: ft
+splat_health:
+  zero_hp: dnd2024:monster
+splat_conversion:
+  status: partial
+  category: creature
+  source_sha256: efde91130bb36a8aacca608b7c68cf8e921afeb7a94a2fd5d9dfcbecd93ea199
+  source_path: builtin/srd-5.2.1/creature/ancient_silver_dragon.md
+  pages:
+  - 325
+  engine_gaps: []
+  conversion_gaps:
+  - source_rules
+  execution_profiles: []
+splat_clauses:
+- key: source_rules
+  text: '# Ancient Silver Dragon Gargantuan Dragon (Metallic), Lawful Good AC 22 Initiative +14 (24) HP
+    468 (24d20 + 216) Speed 40 ft., Fly 80 ft. MOD SAVE MOD SAVE MOD SAVE Str 30 +10 +10 Dex 10 +0 +7
+    Con 29 +9 +9 Int 18 +4 +4 Wis 15 +2 +9 Cha 26 +8 +8 Skills History +11, Perception +16, Stealth +7
+    Immunities Cold Senses Blindsight 60 ft., Darkvision 120 ft.; Passive Perception 26 Languages Common,
+    Draconic CR 23 (XP 50,000, or 62,000 in lair; PB +7) ### Traits Legendary Resistance (4/Day, or 5/Day
+    in Lair). If the dragon fails a saving throw, it can choose to succeed instead. ### Actions Multiattack.
+    The dragon makes three Rend attacks. It can replace one attack with a use of (A) Paralyzing Breath
+    or (B) Spellcasting to cast Ice Knife (level 2 version). Rend. Melee Attack Roll: +17, reach 15 ft.
+    Hit: 19 (2d8 + 10) Slashing damage plus 9 (2d8) Cold damage. Cold Breath (Recharge 5–6). Constitution
+    Saving Throw: DC 24, each creature in a 90-foot Cone. Failure: 67 (15d8) Cold damage. Success: Half
+    damage. Paralyzing Breath. Constitution Saving Throw: DC 24, each creature in a 90-foot Cone. First
+    Failure: The target has the Incapacitated condition until the end of its next turn, when it repeats
+    the save. Second Failure: The target has the Paralyzed condition, and it repeats the save at the end
+    of each of its turns, ending the effect on itself on a success. After 1 minute, it succeeds automatically.
+    Spellcasting. The dragon casts one of the following spells, requiring no Material components and using
+    Charisma as the spellcasting ability (spell save DC 23, +15 to hit with spell attacks): At Will: Detect
+    Magic, Hold Monster, Ice Knife (level 2 version), Shapechange (Beast or Humanoid form only, no Temporary
+    Hit Points gained from the spell, and no Concentration or Temporary Hit Points required to maintain
+    the spell) 1/Day Each: Control Weather, Ice Storm (level 7 version), Teleport, Zone of Truth ### Legendary
+    Actions Legendary Action Uses: 3 (4 in Lair). Immediately after another creature’s turn, the dragon
+    can expend a use to take one of the following actions. The dragon regains all expended uses at the
+    start of each of its turns. Chill. The dragon uses Spellcasting to cast Hold Monster. The dragon can’t
+    take this action again until the start of its next turn. Cold Gale. Dexterity Saving Throw: DC 23,
+    each creature in a 60-foot-long, 10-foot-wide Line. Failure: 14 (4d6) Cold damage, and the target
+    is pushed up to 30 feet straight away from the dragon. Success: Half damage only. Failure or Success:
+    The dragon can’t take this action again until the start of its next turn. Pounce. The dragon moves
+    up to half its Speed, and it makes one Rend attack.'
+  sha256: a3e3724622668b03431afc53f08b8f30e605bda04c4fec5158ef66e76db18011
+  status: needs_semantic_conversion
+---
+
+# Ancient Silver Dragon
+
+<!-- SRD page 325 -->
+
+Gargantuan Dragon (Metallic), Lawful Good\
+AC 22  Initiative +14 (24)\
+HP 468 (24d20 + 216)\
+Speed 40 ft., Fly 80 ft.\
+MOD SAVE MOD SAVE MOD SAVE\
+Str 30 +10 +10 Dex 10 +0 +7 Con 29 +9 +9\
+Int 18 +4 +4 Wis 15 +2 +9 Cha 26 +8 +8\
+Skills History +11, Perception +16, Stealth +7\
+Immunities Cold\
+Senses Blindsight 60 ft., Darkvision 120 ft.;\
+Passive Perception 26\
+Languages Common, Draconic\
+CR 23 (XP 50,000, or 62,000 in lair; PB +7)\
+
+### Traits
+
+Legendary Resistance (4/Day, or 5/Day in Lair). If\
+the dragon fails a saving throw, it can choose to suc-\
+ceed instead.\
+
+### Actions
+
+Multiattack. The dragon makes three Rend attacks.\
+It can replace one attack with a use of (A) Paralyz-\
+ing Breath or (B) Spellcasting to cast Ice Knife (level\
+2 version).\
+Rend. Melee Attack Roll: +17, reach 15 ft. Hit: 19 (2d8\
++ 10) Slashing damage plus 9 (2d8) Cold damage.\
+Cold Breath (Recharge 5–6). Constitution Saving\
+Throw: DC 24, each creature in a 90-foot Cone. Fail-\
+ure: 67 (15d8) Cold damage. Success: Half damage.\
+Paralyzing Breath. Constitution Saving Throw: DC 24,\
+each creature in a 90-foot Cone. First Failure: The target\
+has the Incapacitated condition until the end of its next\
+turn, when it repeats the save. Second Failure: The tar-\
+get has the Paralyzed condition, and it repeats the save\
+at the end of each of its turns, ending the effect on itself\
+on a success. After 1 minute, it succeeds automatically.\
+Spellcasting. The dragon casts one of the following\
+spells, requiring no Material components and using\
+Charisma as the spellcasting ability (spell save DC 23,\
++15 to hit with spell attacks):\
+At Will: Detect Magic, Hold Monster, Ice Knife (level 2\
+version), Shapechange (Beast or Humanoid form only,\
+no Temporary Hit Points gained from the spell, and\
+no Concentration or Temporary Hit Points required to\
+maintain the spell)\
+1/Day Each: Control Weather, Ice Storm (level 7 ver-\
+sion), Teleport, Zone of Truth\
+
+### Legendary Actions
+
+Legendary Action Uses: 3 (4 in Lair). Immediately after\
+another creature’s turn, the dragon can expend a use to\
+take one of the following actions. The dragon regains all\
+expended uses at the start of each of its turns.\
+Chill. The dragon uses Spellcasting to cast Hold Mon-\
+ster. The dragon can’t take this action again until the\
+start of its next turn.\
+Cold Gale. Dexterity Saving Throw: DC 23, each crea-\
+ture in a 60-foot-long, 10-foot-wide Line. Failure: 14\
+(4d6) Cold damage, and the target is pushed up to 30\
+feet straight away from the dragon. Success: Half dam-\
+age only. Failure or Success: The dragon can’t take this\
+action again until the start of its next turn.\
+Pounce. The dragon moves up to half its Speed, and it\
+makes one Rend attack.\
+
+Original layout: [[../../srd-5.2.1/pages/325|page 325]].

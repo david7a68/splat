@@ -6,8 +6,21 @@ fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         println!(
-            "Usage: verify-content [--executable | DIRECTORY ...]\nNo arguments: verify embedded SRD completeness.\n--executable: additionally compile the converted mechanics.\nDirectories: check marked notes together for structure and references. Read-only; no simulation."
+            "Usage: verify-content [--executable | --definitions [--require-converted] | DIRECTORY ...]\nNo arguments: verify embedded SRD completeness.\n--definitions: verify the full catalogue and report conversion/engine gaps.\n--require-converted: fail if semantic conversion remains incomplete.\n--executable: additionally compile the converted mechanics.\nDirectories: check marked notes together for structure and references. Read-only; no simulation."
         );
+        return;
+    }
+    if args == ["--definitions"] || args == ["--definitions", "--require-converted"] {
+        let report = splat::content::definitions::verify();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).expect("Report is serializable")
+        );
+        if !report.structure.errors.is_empty()
+            || (args.len() == 2 && report.partial_definitions > 0)
+        {
+            std::process::exit(1);
+        }
         return;
     }
     let report = if args == ["--executable"] {
