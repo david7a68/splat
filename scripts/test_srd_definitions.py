@@ -10,6 +10,36 @@ from convert_srd_definitions import (SOURCE, OUTPUT, CONTRACTS, spell_fields,
 
 
 class DefinitionTests(unittest.TestCase):
+    def test_ammunition_excerpt_excludes_unrelated_gear_and_keeps_its_table(self):
+        import subprocess
+        import tempfile
+        from import_srd import positioned_lines
+        from convert_srd_definitions import section_sources
+        with tempfile.TemporaryDirectory() as scratch:
+            xml = Path(scratch)/'source.xml'
+            subprocess.run(['pdftohtml','-xml','-hidden','-i',str(SOURCE/'source.pdf'),str(xml)],
+                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            sources = {s['slug']: s for s in section_sources(positioned_lines(xml.read_text()))}
+        ammunition = sources['ammunition_varies']
+        self.assertNotIn('Spyglass', ammunition['body'])
+        self.assertNotIn('Adventuring Gear', ammunition['body'])
+        self.assertIn('storage must be bought separately', ammunition['body'])
+        self.assertIn('| Bullets, Sling | 20 | Pouch | 1½ lb. | 4 CP |', ammunition['body'])
+        self.assertEqual(ammunition['pages'], [94,96])
+        gear = sources['adventuring_gear']
+        self.assertIn('| Spyglass | 1 lb. | 1,000 GP |', gear['body'])
+        self.assertEqual(gear['pages'], [94,95])
+        # Every line of the inserted table belongs to its overview, once.
+        p95 = [line for source in sources.values() for line in source['positioned_lines'] if line['page']==95]
+        self.assertEqual(p95, [line for line in gear['positioned_lines'] if line['page']==95])
+        self.assertEqual(len(ammunition['line_spans']), 2)
+        addresses = []
+        for source in sources.values():
+            spans = source['line_spans'] if 'line_spans' in source else [source['line_span']]
+            self.assertEqual(sum(span['count'] for span in spans), len(source['positioned_lines']))
+            addresses.extend(i for span in spans for i in range(span['first'], span['first']+span['count']))
+        self.assertEqual(sorted(addresses), list(range(len(addresses))))
+
     def test_every_spell_header_is_converted_from_official_source(self):
         spells=list((SOURCE/'spell').glob('*.md'))
         self.assertEqual(len(spells),339)

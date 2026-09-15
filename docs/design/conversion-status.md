@@ -21,7 +21,7 @@ for verification:
 | `engine_gaps` | Required unavailable registered mechanic names |
 | `execution_profiles` | Keys of separately tested bounded projections |
 | `parent_name` | Optional original heading context |
-| `line_span` | Optional extraction inventory address: `first`, `count` |
+| `line_span` / `line_spans` | One extraction address or an ordered list of disjoint addresses: `first`, `count`. Mutually exclusive |
 | `research_path` | Authored source-research record |
 | `specification_sha256` | Fingerprint of typed fields, excluding identity/status/interface metadata |
 

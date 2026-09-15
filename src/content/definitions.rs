@@ -38,6 +38,8 @@ pub struct Conversion {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line_span: Option<LineSpan>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_spans: Option<Vec<LineSpan>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub research_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub specification_sha256: Option<String>,
@@ -87,6 +89,21 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
     }
     if meta.source_path.is_empty() || meta.category.is_empty() {
         return Err("Conversion requires source and category".into());
+    }
+    if meta.line_span.is_some() && meta.line_spans.is_some() {
+        return Err("Conversion must use line_span or line_spans, not both".into());
+    }
+    if let Some(spans) = &meta.line_spans
+        && (spans.is_empty()
+            || spans.iter().any(|s| s.count == 0)
+            || spans.windows(2).any(|pair| {
+                pair[0]
+                    .first
+                    .checked_add(pair[0].count)
+                    .is_none_or(|end| end > pair[1].first)
+            }))
+    {
+        return Err("Invalid disjoint source line spans".into());
     }
     let mut keys = BTreeSet::new();
     for clause in &clauses {

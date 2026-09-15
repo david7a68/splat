@@ -124,6 +124,39 @@ def named_sources():
                    'source_sha256':digest(path.read_bytes()),'slug':path.stem}
 
 
+def gear_source_table(lines, ammunition=False):
+    """Render the pinned source tables without PDF column/line-break artifacts."""
+    if ammunition:
+        headers = ['Type', 'Amount', 'Storage', 'Weight', 'Cost']
+        skip = {'Ammunition', 'Type Amount Storage Weight Cost'}
+        pattern = r'(.+?)\s+(\d+)\s+(Quiver|Case|Pouch)\s+(.+? lb\.)\s+(\d+ [GSC]P)'
+    else:
+        headers = ['Item', 'Weight', 'Cost']
+        skip = {'Adventuring Gear', 'Item Weight Cost'}
+        pattern = r'(.+?)\s+(—|Varies|[\d½/.,]+ lb\.(?: \(full\))?)\s+(Varies|[\d,]+ [GSC]P)'
+    rows = []
+    for line in lines:
+        text = line['text']
+        if text in skip: continue
+        match = re.fullmatch(pattern, text)
+        if not match: raise ValueError('Unexpected gear source table row: '+text)
+        rows.append(match.groups())
+    return ('| '+' | '.join(headers)+' |\n| '+' | '.join(['---']*len(headers))+' |\n'
+            + ''.join('| '+' | '.join(row)+' |\n' for row in rows))
+
+
+def source_excerpt(context, span):
+    if context['slug'] not in {'ammunition_varies', 'adventuring_gear'}:
+        return render(span[1:])
+    # These two descriptions share p.94. The gear overview table interrupts
+    # Ammunition on p.95; its own table resumes on p.96.
+    prose = '\n'.join(line['text'] for line in span[1:] if line['page']==94)
+    prose = re.sub(r'([a-z])-\n([a-z])', r'\1\2', prose).replace('\n', ' ')
+    page = 96 if context['slug']=='ammunition_varies' else 95
+    table = gear_source_table([line for line in span if line['page']==page], ammunition=page==96)
+    return f'<!-- SRD page 94 -->\n\n{prose}\n\n<!-- SRD page {page} -->\n\n{table}'
+
+
 def section_sources(lines):
     """Separate every heading/feature outside the already indexed named blocks.
 
@@ -165,12 +198,29 @@ an extraction inventory, not a claim that every table is semantically decoded.
             context={'category':category,'name':name,'slug':key,'parent_name':parent}
         current.append(line)
     if current:groups.append((context,current))
+    # A black table caption is not an entry heading. Attach the inserted
+    # overview page to its named section, not to the preceding item.
+    overview = next(span for context,span in groups if context['slug']=='adventuring_gear')
+    inserted = [line for line in selected if line['page']==95]
+    if not inserted or inserted[0]['text'] != 'Adventuring Gear':
+        raise ValueError('Pinned Adventuring Gear table layout changed')
+    for _,span in groups:
+        span[:] = [line for line in span if line['page']!=95]
+    overview.extend(inserted)
+    positions = {id(line): i for i,line in enumerate(selected)}
     for context,span in groups:
+        spans = []
+        for line in span:
+            index = positions[id(line)]
+            if spans and spans[-1]['first']+spans[-1]['count']==index:
+                spans[-1]['count'] += 1
+            else: spans.append({'first':index,'count':1})
+        address = {'line_span':spans[0]} if len(spans)==1 else {'line_spans':spans}
         pages=sorted({l['page'] for l in span})
         yield {**context,'source':'dnd2024:reference/pages/'+f'{pages[0]:03}', 'pages':pages,
-               'body':'# '+context['name']+'\n\n'+render(span[1:])+'\n',
+               'body':'# '+context['name']+'\n\n'+source_excerpt(context,span)+'\n',
                'source_path':str(SOURCE/'source.pdf'),'source_sha256':PDF_SHA256,
-               'line_span':{'first':selected.index(span[0]),'count':len(span)},
+               **address,
                'positioned_lines':span}
 
 
@@ -326,7 +376,8 @@ def generate(lines, require_complete=True):
             conversion['research_path'] = researched[key]['research_path']
             conversion['specification_sha256'] = fingerprint({k:v for k,v in fields.items() if k != 'splat_contracts'})
         if source.get('parent_name'):conversion['parent_name']=source['parent_name']
-        if 'line_span' in source:conversion['line_span']=source['line_span']
+        for field in ['line_span','line_spans']:
+            if field in source:conversion[field]=source[field]
         front={'splat_schema':1,'splat_id':ident,'splat_kind':kind,'splat_key':key,'splat_name':name,
                'splat_origin':{'key':origin},'splat_sources':[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,source['pages'])),'url':'https://www.dndbeyond.com/srd'}],
                **fields}
