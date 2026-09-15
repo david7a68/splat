@@ -1,5 +1,9 @@
 # Markdown storage
 
+> Character storage update: the [implemented character cache](character-cache.md)
+> supersedes earlier memory-only restrictions for D&D Beyond character records.
+> Encounter run state and encounter integration remain separate future work.
+
 > Historical decision record. The remaining schema details are now specified in
 > [Mechanics](mechanics-schema.md), [State](state-schema.md), and
 > [Campaign/storage](campaign-schema.md). Those contracts supersede the older

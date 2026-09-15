@@ -39,8 +39,8 @@ search and related views but is not a complete indexing or filesystem exclusion.
 Build artifacts stay in the code repository's ignored `target/` directory.
 
 Keep D&D Beyond session cookies and tokens outside Git. Authentication is available
-in Settings; character data sync is not implemented. Future simulations will use
-live character inputs held in memory, without saved character snapshots.
+in Settings; read-only character sheets are available in Campaign → Party. Characters now have persistent local copies in the shared creature schema.
+Encounter-builder and simulation integration remain later work.
 
 ## D&D Beyond connection
 
@@ -63,7 +63,7 @@ cookie. If removal fails, Splat reports it and lets you retry. It does not
 invalidate the browser session. Network and keyring operations run in a worker;
 credential writes and removals run in order.
 
-This is an internal D&D Beyond endpoint, not a supported public API. Character data is not imported yet. Campaign details are fetched into memory, with linked names cached in settings. Authentication tests use a local mock server;
+This is an internal D&D Beyond endpoint, not a supported public API. The read-only Party viewer fetches and caches character sheets. Campaign details are fetched into memory, with linked names cached in settings. Authentication tests use a local mock server;
 a successful live login requires a real cookie entered in the application.
 
 ## User settings and campaigns
@@ -84,7 +84,7 @@ In Settings, select a local campaign, then **Refresh D&D Beyond campaigns**.
 Choose its remote campaign from the D&D Beyond link dropdown. Campaigns linked
 elsewhere are disabled. The internal `/api/campaign/stt/user-campaigns` endpoint
 supplies campaign details. The remote ID and last fetched name are saved;
-DM names and player counts stay in memory. No campaign snapshots or character sheets are stored.
+DM names and player counts stay in memory. Campaign snapshots are not stored; character records are cached separately in local application data.
 
 Versions 1 and 2 migrate old project records without changing UUIDs, names, paths,
 or unique links. If an old record has multiple remote IDs, or two records share
@@ -150,3 +150,11 @@ saving campaign selections. Raw notes can also be edited externally; reload afte
 Moving entries between owners, automatic link repair, and running rules from the reader
 remain outside this UI. New entries are drafts, not executable rules. D&D Beyond links
 remain in Settings.
+
+## Character sheets
+
+Open **Campaign → Party** to read the linked D&D Beyond party. Select a character
+and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
+gets the latest sheets. Computed totals come directly from D&D Beyond. Local
+creature records remain available offline, and open sheets use the event stream
+with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).

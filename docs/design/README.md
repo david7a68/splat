@@ -1,5 +1,9 @@
 # Splat data design
 
+> Character storage update: the [implemented character cache](character-cache.md)
+> supersedes earlier memory-only restrictions for D&D Beyond character records.
+> Encounter run state and encounter integration remain separate future work.
+
 The candidate schema for the agreed scope is complete and ready for review.
 The design is committed. A [read-only verifier and SRD source import](../srd-import.md)
 now exercise part of the format. A [bounded execution proof](../execution-proof.md) now runs converted SRD mechanics.

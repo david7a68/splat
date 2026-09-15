@@ -23,7 +23,9 @@ struct RemoteCampaign {
     player_count: Option<u64>,
 }
 
-fn campaign_id<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+pub(crate) fn campaign_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<String, D::Error> {
     let value = serde_json::Value::deserialize(deserializer)?;
     let id = match value {
         serde_json::Value::String(value) => value.parse::<u64>().ok(),

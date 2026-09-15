@@ -18,6 +18,46 @@ impl Session {
         self.cookie.clone()
     }
 
+    /// The official message broker carries the short-term token in the handshake URL.
+    /// Keep this request private and never log the URL or websocket errors.
+    pub(crate) fn stream_request(
+        &self,
+        campaign: &str,
+    ) -> Result<tungstenite::http::Request<()>, String> {
+        use base64::Engine;
+        use tungstenite::client::IntoClientRequest;
+        if campaign.parse::<u64>().ok().is_none_or(|n| n == 0)
+            || !campaign.bytes().all(|b| b.is_ascii_digit())
+        {
+            return Err("Invalid campaign ID.".into());
+        }
+        let payload = self
+            .token
+            .split('.')
+            .nth(1)
+            .ok_or("Invalid session token.")?;
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(payload)
+            .map_err(|_| "Invalid session claims.")?;
+        let claims: serde_json::Value =
+            serde_json::from_slice(&bytes).map_err(|_| "Invalid session claims.")?;
+        let user = claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"]
+            .as_str()
+            .ok_or("Session has no account ID.")?;
+        if user.parse::<u64>().ok().is_none_or(|n| n == 0) {
+            return Err("Invalid session account ID.".into());
+        }
+        let mut url = reqwest::Url::parse("wss://game-log-api-live.dndbeyond.com/v1")
+            .map_err(|_| "Invalid event endpoint.")?;
+        url.query_pairs_mut()
+            .append_pair("gameId", campaign)
+            .append_pair("userId", user)
+            .append_pair("stt", self.token.as_str());
+        url.as_str()
+            .into_client_request()
+            .map_err(|_| "Could not build the event connection.".into())
+    }
+
     pub fn needs_refresh(&self) -> bool {
         Instant::now() >= self.refresh_at
     }
