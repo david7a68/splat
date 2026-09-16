@@ -11,6 +11,8 @@ pub mod character;
 pub mod contracts;
 pub mod definitions;
 mod markdown;
+mod shared;
+pub use shared::validate_with_builtin;
 mod table_mapping;
 
 #[cfg(test)]

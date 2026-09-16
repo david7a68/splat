@@ -449168,7 +449168,7 @@
         "SRD 5.2.1 pp. 93–100, especially Adventuring Gear weights p. 95; builtin/srd-5.2.1/source.txt"
       ],
       "implemented": false,
-      "specification_sha256": "669c60785e6253abc8818af1fb2c9d487cd8024ae7a0716680c294fb0317636c",
+      "specification_sha256": "bcd2c85a84eb60104ac3d8c67f36fb7616319c4a8bda1747e82645fcdce4bede",
       "schema": {
         "type": "object",
         "properties": {
@@ -449205,6 +449205,38 @@
                   },
                   "unit": {
                     "type": "string"
+                  }
+                }
+              },
+              "containment": {
+                "type": "object",
+                "properties": {
+                  "capacity": {
+                    "type": "object",
+                    "properties": {
+                      "mass": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "integer"
+                          },
+                          "unit": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "volume": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "integer"
+                          },
+                          "unit": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }

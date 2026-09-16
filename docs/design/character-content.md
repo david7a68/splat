@@ -1,7 +1,8 @@
 # Imported character content
 
-Imported characters are ordinary schema-1 creature entries. Their items and
-spells are campaign-owned entries with normal UUID references. The catalogue,
+Imported characters are ordinary schema-1 creature entries. Matching SRD items,
+spells, and features use the shared catalogue's canonical UUID references. Only
+non-SRD, different-edition, or unmatched definitions remain campaign-owned. The catalogue,
 content editor, dependency traversal, and encounter roster use the same reader
 as authored content. Structural validity does not grant simulation support.
 
@@ -78,7 +79,10 @@ Generated dependency identities are scoped to the character and source definitio
 This avoids conflicting versions of a shared provider item across independently
 refreshed characters. Repeated instances of the same definition within a sheet
 share a definition but retain separate inventory row/instance identities.
-Definitions live under `Characters/D&D Beyond/Definitions/<character UUID>/`.
+Local definitions live under `Characters/D&D Beyond/Definitions/<character UUID>/`.
+Matching SRD definitions are not emitted there. Item rows keep their separate
+instance identities, quantities, equipment, and attunement while sharing one
+catalogue definition; spell bindings keep character-specific casting details.
 
 ## Coverage and publication
 
@@ -90,13 +94,23 @@ from the SRD catalogue's source-specific `splat_conversion` contract.
 Unknown import versions or malformed gap records fail parsing. Import metadata
 cannot enable execution; the current proof compiler rejects it.
 
-All generated entries are parsed and their references validated together before
-publication. Every existing file's generated checksum is checked before any
+All generated entries are parsed and their references validated against local
+definitions plus the shared catalogue before publication. The app already loads
+the SRD catalogue and pulls dependencies of campaign creatures into its selection
+automatically; users do not need to select the entire SRD package. Offline checks
+use `verify-content --with-builtin DIRECTORY`. Every existing file's generated checksum is checked before any
 replacement. Dependencies publish before the creature, with atomic replacement
 per file. Personal notes survive refresh, and edited generated content blocks the
 whole character's publication. A disk failure or an editor racing the writes can
 still leave some updated dependencies; this is not a multi-file transaction.
-Old unreferenced generated definitions remain as historical content.
+Old unreferenced non-SRD definitions remain as historical content. The importer
+retires former SRD copies and matched item/spell wrappers by saving their exact
+bytes as `.md.splat-archive` files, which the content reader does not index.
+It keeps copies with personal annotations or references from other current
+campaign entries at their original paths, including dependencies of retained
+copies. Edited generated content or conflicting archives block publication.
+All retirement checks run before writes; archives are created only after the
+replacement creature has been saved. This migration never edits shared SRD files.
 
 Loading an old private cache automatically creates the new content on its next
 publication. The offline export example also performs this migration without

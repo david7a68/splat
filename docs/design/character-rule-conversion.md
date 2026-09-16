@@ -29,10 +29,13 @@ a fingerprint merely to make a mismatch pass.
 ## Coverage
 
 The source-matched 2024 spells, equipment, Wizard features, Barbarian features,
-and weapon mastery rules reuse the existing typed SRD catalogue. Their transitive
-content dependencies become campaign-owned notes with scoped UUID references;
-users do not need to enable an otherwise unrelated package. Repeated grants of
-the same mechanic resolve to one rule definition within a character.
+and weapon mastery rules reference the existing typed SRD catalogue directly,
+using its canonical UUIDs. Their transitive dependencies remain in that shared
+catalogue. No copied SRD mechanics, spell headers, item definitions, or private
+SRD UUIDs are emitted. Repeated grants and different characters therefore share
+one definition. The campaign dependency resolver brings in required shared
+entries without requiring selection of the whole package. Non-SRD conversions
+continue to use character-scoped local entries.
 
 Additional typed contracts cover:
 
@@ -117,8 +120,8 @@ Selections follow the D&D Beyond sheet on refresh. Clearing a selection removes
 its grant reference. Old unreferenced generated definitions may remain on disk,
 as with other imports, but are not active character grants. Unknown or changed
 selected options retain their identity and a conversion gap, with no verified
-rule reference. All referenced spell and creature rules publish as transitive
-campaign dependencies. No random Runestone draw occurs during import.
+rule reference. Referenced SRD spell and creature rules stay in the shared catalogue, including
+their transitive dependencies. No random Runestone draw occurs during import.
 
 Thread stages require earned milestones and any reward choices. They do not
 advance automatically with character level. Cursemarked replaces earlier

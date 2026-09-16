@@ -23,7 +23,7 @@ fn main() -> Result<(), String> {
         println!("{}: {}", record.definition.splat_name, path.display());
     }
     let (entries, errors) = splat::content::read_directory(&root.join("Characters/D&D Beyond"))?;
-    let report = splat::content::validate(&entries);
+    let report = splat::content::validate_with_builtin(&entries)?;
     if !errors.is_empty() || !report.errors.is_empty() {
         return Err(format!(
             "Published content validation failed: {errors:?} {:?}",
@@ -38,7 +38,7 @@ fn main() -> Result<(), String> {
         .map(Vec::len)
         .sum();
     println!(
-        "Validated {} content entries; {gaps} conversion gaps.",
+        "Validated {} local content entries against the shared catalogue; {gaps} conversion gaps.",
         entries.len()
     );
     Ok(())
