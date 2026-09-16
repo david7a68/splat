@@ -952,4 +952,20 @@ mod tests {
         );
         assert!(all.errors.is_empty(), "{:?}", all.errors);
     }
+    #[test]
+    fn private_character_pulls_shared_rules_without_explicit_package_selection() {
+        let mut cat = Catalogue::load(&[], None).unwrap();
+        let campaign = Uuid::new_v4();
+        let spell = cat
+            .resolve(&Reference::Key("dnd2024:spells/fire_bolt".into()))
+            .unwrap();
+        let mut character = entry("Imported character", "creature");
+        require(&mut character, spell);
+        cat.insert(character, campaign, true).unwrap();
+        let closure = cat.closure(&[], campaign);
+        assert!(closure.errors.is_empty(), "{:?}", closure.errors);
+        assert!(closure.required.contains_key(&spell));
+        assert!(!cat.entries[&spell].private);
+        assert_eq!(cat.entries[&spell].owner, builtin_manifest().id);
+    }
 }

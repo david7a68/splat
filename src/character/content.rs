@@ -395,7 +395,12 @@ impl EntitySnapshot {
                 continue;
             }
             let d = &item.definition;
-            let def_id = reference_id(self, "item", &item.definition_id.to_string());
+            let shared = super::rules::shared_reference(
+                &format!("item:{}", string(&d["definitionKey"])),
+                d,
+            )?;
+            let def_id = shared
+                .unwrap_or_else(|| reference_id(self, "item", &item.definition_id.to_string()));
             let row = format!("item_{}", item.source_id);
             let parent = item
                 .holder_source_id
@@ -427,6 +432,9 @@ impl EntitySnapshot {
                 item.name.replace('|', " ").replace(['\n', '\r'], " ")
             ));
             details[&row] = json!({"instance_id":item.id,"source_id":item.source_id,"source_equipped":item.equipped,"charges_used":item.source["chargesUsed"].as_u64()});
+            if shared.is_some() {
+                continue;
+            }
             let mut item_fields = json!({"splat_schema":1,"splat_id":def_id,"splat_kind":"item","splat_name":item.name,"splat_item":{"category":if d["isConsumable"]==true {"consumable".into()}else{key(string(&d["filterType"]))},"stackable":d["stackable"]==true,"equipment":{"allowed":["carried","stored","worn","wielded"],"attunement":if d["canAttune"]==true {"required"}else{"none"}}}});
             if let Some(weight) = d["weight"].as_f64() {
                 item_fields["splat_item"]["mass"] = json!({"value":weight,"unit":"lb"});
@@ -477,7 +485,8 @@ impl EntitySnapshot {
             let source = id(&d["id"])
                 .or_else(|| d["definitionKey"].as_str().map(str::to_owned))
                 .unwrap_or_else(|| name.to_owned());
-            let def_id = reference_id(self, "spell", &source);
+            let shared = super::rules::shared_reference(&format!("spell:{source}"), d)?;
+            let def_id = shared.unwrap_or_else(|| reference_id(self, "spell", &source));
             let k = named_key("spell", spell);
             let known = KnownSpell {
                 entry: EntryRef { id: def_id },
@@ -502,6 +511,9 @@ impl EntitySnapshot {
                 k
             };
             sheet.spells.insert(k, known);
+            if shared.is_some() {
+                continue;
+            }
             let components = list(&d["components"])
                 .iter()
                 .map(|v| match v.as_u64() {
@@ -715,7 +727,7 @@ impl EntitySnapshot {
             .iter()
             .map(|n| Entry::parse(&n.relative_path, &n.markdown))
             .collect::<Result<Vec<_>, _>>()?;
-        let report = crate::content::validate(&entries);
+        let report = crate::content::validate_with_builtin(&entries)?;
         if !report.errors.is_empty() {
             return Err(format!("Invalid imported content: {:?}", report.errors));
         }

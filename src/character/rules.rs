@@ -44,6 +44,63 @@ fn builtin() -> Result<&'static BTreeMap<String, Entry>, String> {
         .as_ref()
         .map_err(Clone::clone)
 }
+/// Resolve only a source-pinned match to its canonical shared definition.
+pub(super) fn shared_reference(identity: &str, source: &Value) -> Result<Option<Uuid>, String> {
+    let Some(spec) = registry()
+        .sources
+        .get(identity)
+        .filter(|s| s.source_sha256 == fingerprint(source))
+    else {
+        return Ok(None);
+    };
+    let Some(key) = &spec.builtin else {
+        return Ok(None);
+    };
+    let entry = builtin()?
+        .get(key)
+        .ok_or_else(|| format!("Missing converted rule {key}"))?;
+    let meta = crate::content::definitions::conversion(entry)?.ok_or("Missing builtin coverage")?;
+    if !meta.conversion_gaps.is_empty() {
+        return Err(format!("Builtin rule still has conversion gaps: {key}"));
+    }
+    Ok(Some(entry.id))
+}
+
+/// Paths emitted by the former copying importer that now resolve to the shared catalogue.
+pub(super) fn retired_shared_paths(record: &EntitySnapshot) -> Result<Vec<String>, String> {
+    let folder = format!("Definitions/{}", record.definition.splat_id);
+    let mut paths = BTreeSet::new();
+    for key in builtin()?.keys() {
+        paths.insert(format!(
+            "{folder}/Rules/{}.md",
+            reference_id(record, "rule", key)
+        ));
+    }
+    for item in &record.inventory {
+        if shared_reference(
+            &format!("item:{}", string(&item.definition["definitionKey"])),
+            &item.definition,
+        )?
+        .is_some()
+        {
+            paths.insert(format!(
+                "{folder}/{}.md",
+                reference_id(record, "item", &item.definition_id.to_string())
+            ));
+        }
+    }
+    for spell in &record.character.spells {
+        let source = source_id(&spell["definition"]["id"]);
+        if shared_reference(&format!("spell:{source}"), &spell["definition"])?.is_some() {
+            paths.insert(format!(
+                "{folder}/{}.md",
+                reference_id(record, "spell", &source)
+            ));
+        }
+    }
+    Ok(paths.into_iter().collect())
+}
+
 fn fingerprint(source: &Value) -> String {
     let keys = [
         "id",
@@ -114,6 +171,7 @@ struct Rules<'a> {
     record: &'a EntitySnapshot,
     notes: BTreeMap<Uuid, ContentNote>,
     identities: BTreeMap<String, Uuid>,
+    shared_engine_gaps: BTreeSet<String>,
 }
 impl<'a> Rules<'a> {
     fn new(record: &'a EntitySnapshot) -> Self {
@@ -121,6 +179,7 @@ impl<'a> Rules<'a> {
             record,
             notes: BTreeMap::new(),
             identities: BTreeMap::new(),
+            shared_engine_gaps: BTreeSet::new(),
         }
     }
     fn remap(&mut self, value: &mut Value) -> Result<(), String> {
@@ -172,38 +231,22 @@ impl<'a> Rules<'a> {
         if !meta.conversion_gaps.is_empty() {
             return Err(format!("Builtin rule still has conversion gaps: {key}"));
         }
-        let id = reference_id(self.record, "rule", key);
+        let id = original.id;
         self.identities.insert(key.into(), id);
-        let mut fields = serde_json::to_value(&original.fields).map_err(|e| e.to_string())?;
-        for key in ["splat_key", "splat_conversion", "splat_clauses"] {
-            fields.as_object_mut().unwrap().remove(key);
-        }
-        fields["splat_id"] = json!(id);
-        fields["splat_origin"] = json!({"key":key});
-        for (name, value) in fields.as_object_mut().unwrap().iter_mut() {
-            if !["splat_origin", "splat_sources", "splat_contracts"].contains(&name.as_str()) {
-                self.remap(value)?;
+        self.shared_engine_gaps.extend(meta.engine_gaps);
+        // Keep the catalogue's identity and dependencies. Never publish an SRD copy.
+        for dependency in crate::content::required_references(&original)? {
+            let key = match dependency {
+                crate::content::Reference::Key(key) => Some(key),
+                crate::content::Reference::Id(id) => builtin()?
+                    .iter()
+                    .find(|(_, entry)| entry.id == id)
+                    .map(|(key, _)| key.clone()),
+            };
+            if let Some(key) = key {
+                self.add_builtin(&key)?;
             }
         }
-        let mut report = empty_report();
-        report.engine_gaps = meta.engine_gaps;
-        put_coverage(&mut fields, report)?;
-        // Typed fields are in frontmatter. Original body markers must not duplicate them.
-        let body = format!(
-            "# {}\n\nConverted rule from `{key}`. The engine adapters are not implemented.",
-            original.name
-        );
-        self.notes.insert(
-            id,
-            note(
-                format!(
-                    "Definitions/{}/Rules/{id}.md",
-                    self.record.definition.splat_id
-                ),
-                fields,
-                &body,
-            )?,
-        );
         Ok(id)
     }
     fn apply(
@@ -220,51 +263,19 @@ impl<'a> Rules<'a> {
             return Ok(false);
         };
         let mut report = coverage(fields)?;
-        if let Some(key) = &spec.builtin {
-            let rule_id = self.add_builtin(key)?;
-            let converted = self
-                .notes
-                .get(&rule_id)
-                .ok_or("Missing converted dependency")?;
-            let converted = Entry::parse(&converted.relative_path, &converted.markdown)?;
-            let converted = serde_json::to_value(converted.fields).map_err(|e| e.to_string())?;
-            for key in [
-                "splat_rule",
-                "splat_actions",
-                "splat_traits",
-                "splat_effects",
-                "splat_parameters",
-                "splat_requires_mechanics",
-                "splat_contracts",
-            ] {
-                if let Some(value) = converted.get(key) {
-                    fields[key] = value.clone();
-                }
-            }
-            // Spell header includes exact casting triggers and component restrictions.
-            if fields["splat_kind"] == "spell" {
-                fields["splat_spell"] = converted["splat_spell"].clone();
-            }
-            if fields["splat_kind"] == "item"
-                && let Some(item) = converted["splat_item"].as_object()
-            {
-                fields["splat_item"]
-                    .as_object_mut()
-                    .ok_or("Missing item")?
-                    .extend(item.clone());
-            }
-            report.engine_gaps.extend(coverage(&converted)?.engine_gaps);
-        } else {
-            let parameters = spec
-                .parameters
-                .as_ref()
-                .ok_or("Conversion requires typed parameters")?;
-            let implementation = format!("dndbeyond:rules/{}", spec.mechanic);
-            fields["splat_rule"] = json!({"mechanic":implementation,"implementation":implementation,"parameters":parameters});
-            fields["splat_requires_mechanics"] = json!([implementation]);
-            fields["splat_contracts"] = json!([{"id":implementation,"inputs":{"actor":{"type":"participant","required":true},"selection":{"type":"choice","required":false},"event":{"type":"event","required":false},"targets":{"type":"participant_list","required":false},"source_item":{"type":"item_instance","required":false}},"outputs":["grants","state_changes"],"events":["rule.invoked","rule.completed"],"capabilities":["declarative_rule_parameters","character_grants"]}]);
-            report.engine_gaps.push(implementation);
+        if spec.builtin.is_some() {
+            return Err("Shared source definitions must be referenced, not copied".into());
         }
+        let mut parameters = spec
+            .parameters
+            .clone()
+            .ok_or("Conversion requires typed parameters")?;
+        self.remap(&mut parameters)?;
+        let implementation = format!("dndbeyond:rules/{}", spec.mechanic);
+        fields["splat_rule"] = json!({"mechanic":implementation,"implementation":implementation,"parameters":parameters});
+        fields["splat_requires_mechanics"] = json!([implementation]);
+        fields["splat_contracts"] = json!([{"id":implementation,"inputs":{"actor":{"type":"participant","required":true},"selection":{"type":"choice","required":false},"event":{"type":"event","required":false},"targets":{"type":"participant_list","required":false},"source_item":{"type":"item_instance","required":false}},"outputs":["grants","state_changes"],"events":["rule.invoked","rule.completed"],"capabilities":["declarative_rule_parameters","character_grants"]}]);
+        report.engine_gaps.push(implementation);
         report.gaps.clear();
         report.required_inputs.extend(spec.required_inputs.clone());
         put_coverage(fields, report)?;
@@ -370,6 +381,18 @@ pub(super) fn complete(
         *original = note(original.relative_path.clone(), fields, &entry.body)?;
     }
     let entry = Entry::parse(&creature.relative_path, &creature.markdown)?;
+    for reference in crate::content::required_references(&entry)? {
+        let key = match reference {
+            crate::content::Reference::Id(id) => builtin()?
+                .iter()
+                .find(|(_, e)| e.id == id)
+                .map(|(k, _)| k.clone()),
+            crate::content::Reference::Key(key) => builtin()?.contains_key(&key).then_some(key),
+        };
+        if let Some(key) = key {
+            rules.add_builtin(&key)?;
+        }
+    }
     let mut fields = serde_json::to_value(&entry.fields).map_err(|e| e.to_string())?;
     let mut sheet: Sheet =
         serde_json::from_value(fields["splat_character"].clone()).map_err(|e| e.to_string())?;
@@ -455,11 +478,17 @@ pub(super) fn complete(
             .collect::<Vec<_>>();
         let mut refs = Vec::new();
         for item in &matched {
-            let target = reference_id(record, "item", &item.definition_id.to_string());
-            let is_converted = notes.iter().any(|n| {
-                Entry::parse(&n.relative_path, &n.markdown)
-                    .is_ok_and(|e| e.id == target && e.fields.contains_key("splat_rule"))
-            });
+            let shared = shared_reference(
+                &format!("item:{}", string(&item.definition["definitionKey"])),
+                &item.definition,
+            )?;
+            let target = shared
+                .unwrap_or_else(|| reference_id(record, "item", &item.definition_id.to_string()));
+            let is_converted = shared.is_some()
+                || notes.iter().any(|n| {
+                    Entry::parse(&n.relative_path, &n.markdown)
+                        .is_ok_and(|e| e.id == target && e.fields.contains_key("splat_rule"))
+                });
             if is_converted {
                 refs.push(json!({"id":target}));
             }
@@ -471,10 +500,12 @@ pub(super) fn complete(
             fields["splat_attack_bindings"][key] = json!({"rules":refs,"inventory_rows":matched.iter().map(|i|format!("item_{}",i.source_id)).collect::<Vec<_>>(),"supplied_attack_bonus":attack.attack_bonus,"select_one_item_instance":!matched.is_empty(),"requires_equipment_state":if matched.is_empty(){"none"}else{"wielded"},"mastery_from":"splat_character.rules","damage_ability_already_included":true});
             converted.insert(format!("splat_actions/{key}"));
         } else if let Some(spell) = sheet.spells.values().find(|s| s.name == attack.name) {
-            let is_converted = notes.iter().any(|n| {
-                Entry::parse(&n.relative_path, &n.markdown)
-                    .is_ok_and(|e| e.id == spell.entry.id && e.fields.contains_key("splat_rule"))
-            });
+            let is_converted = builtin()?.values().any(|e| e.id == spell.entry.id)
+                || notes.iter().any(|n| {
+                    Entry::parse(&n.relative_path, &n.markdown).is_ok_and(|e| {
+                        e.id == spell.entry.id && e.fields.contains_key("splat_rule")
+                    })
+                });
             if is_converted {
                 fields["splat_attack_bindings"][key] = json!({"rules":[spell.entry],"cast_via":"splat_character.spells","standalone_attack_is_cast":false});
                 converted.insert(format!("splat_character/attacks/{key}"));
@@ -509,6 +540,7 @@ pub(super) fn complete(
             }
         }
     }
+    report.engine_gaps.extend(rules.shared_engine_gaps);
     fields["splat_character"] = serde_json::to_value(sheet).map_err(|e| e.to_string())?;
     put_coverage(&mut fields, report)?;
     let mut body = entry
@@ -765,6 +797,101 @@ mod tests {
 #[cfg(test)]
 mod conversion_tests {
     use super::*;
+    #[test]
+    fn matching_items_spells_and_features_reference_shared_entries_without_copies() {
+        let data: Value =
+            serde_json::from_str(include_str!("rules/fixtures/shared-srd.json")).unwrap();
+        let mut record = super::super::tests::sample();
+        for item in &mut record.inventory {
+            item.definition = data["item"].clone();
+            item.name = "Dagger".into();
+        }
+        record.character.spells = vec![
+            json!({"id":17,"definition":data["spell"],"prepared":true,"usesSpellSlot":false,"spellCastingAbilityId":4}),
+        ];
+        record.character.features = vec![data["feature"].clone()];
+        let notes = record.content_notes().unwrap();
+        assert_eq!(
+            notes.len(),
+            1,
+            "Matching definitions belong only to the shared catalogue"
+        );
+        let entry = Entry::parse(&notes[0].relative_path, &notes[0].markdown).unwrap();
+        let dagger = builtin().unwrap()["dnd2024:equipment/dagger"].id;
+        assert!(
+            entry
+                .inventory
+                .iter()
+                .all(|i| matches!(i.item, crate::content::Reference::Id(id) if id == dagger))
+        );
+        assert_eq!(entry.inventory.len(), 2);
+        assert_ne!(entry.inventory[0].key, entry.inventory[1].key);
+        let sheet: Sheet =
+            serde_yaml_ng::from_value(entry.fields["splat_character"].clone()).unwrap();
+        assert_eq!(
+            sheet.spells.values().next().unwrap().entry.id,
+            builtin().unwrap()["dnd2024:spells/fire_bolt"].id
+        );
+        assert_eq!(
+            sheet.rules.values().next().unwrap().id,
+            builtin().unwrap()[data["feature_key"].as_str().unwrap()].id
+        );
+        assert!(
+            !crate::content::validate(std::slice::from_ref(&entry))
+                .errors
+                .is_empty()
+        );
+        assert!(
+            crate::content::validate_with_builtin(std::slice::from_ref(&entry))
+                .unwrap()
+                .errors
+                .is_empty()
+        );
+        // Two characters share the same rules, but keep distinct creature and item instances.
+        record.source.character_id = "999".into();
+        record.definition.splat_id = Uuid::new_v4();
+        let other = record.entry().unwrap();
+        let other: Sheet =
+            serde_yaml_ng::from_value(other.fields["splat_character"].clone()).unwrap();
+        assert_eq!(
+            other.spells.values().next().unwrap().entry.id,
+            sheet.spells.values().next().unwrap().entry.id
+        );
+        // A changed provider definition must fall back to its own unconverted local entry.
+        record.character.spells[0]["definition"]["description"] = json!("Different behavior");
+        let changed = record.content_notes().unwrap();
+        assert_eq!(changed.len(), 2);
+        assert!(
+            changed
+                .iter()
+                .any(|n| Entry::parse(&n.relative_path, &n.markdown).unwrap().kind == "spell")
+        );
+    }
+    #[test]
+    fn shared_backpack_supports_imported_contents() {
+        let data: Value =
+            serde_json::from_str(include_str!("rules/fixtures/shared-srd.json")).unwrap();
+        let mut record = super::super::tests::sample();
+        record.inventory[0].definition = data["backpack"].clone();
+        record.inventory[0].definition_id = stable_id("backpack");
+        record.inventory[0].name = "Backpack".into();
+        record.inventory[0].quantity = 1;
+        record.inventory[1].definition = data["item"].clone();
+        record.inventory[1].name = "Dagger".into();
+        record.inventory[1].holder_source_id = Some(record.inventory[0].source_id.clone());
+        let notes = record.content_notes().unwrap();
+        assert_eq!(notes.len(), 1);
+        let entry = record.entry().unwrap();
+        let backpack = &builtin().unwrap()["dnd2024:equipment/backpack_2_gp"];
+        assert!(
+            matches!(entry.inventory[0].item, crate::content::Reference::Id(id) if id == backpack.id)
+        );
+        assert_eq!(entry.inventory[1].container.as_deref(), Some("item_7"));
+        assert_eq!(
+            backpack.fields["splat_item"]["containment"]["capacity"]["mass"]["value"].as_i64(),
+            Some(30)
+        );
+    }
     fn small() -> Value {
         json!({"activation":null,"definitionKey":"racial-trait:8429473","description":"<p>You are Small.</p>","snippet":"You are Small.","entityTypeId":1960452172_u64,"id":8429473,"name":"Size","sources":[{"pageNumber":20,"sourceId":85,"sourceType":1}]})
     }

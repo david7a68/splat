@@ -3,10 +3,14 @@ use splat::content::{Diagnostic, builtin, read_directory, validate};
 use std::path::Path;
 
 fn main() {
-    let args: Vec<_> = std::env::args().skip(1).collect();
+    let mut args: Vec<_> = std::env::args().skip(1).collect();
+    let with_builtin = args.first().is_some_and(|arg| arg == "--with-builtin");
+    if with_builtin {
+        args.remove(0);
+    }
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         println!(
-            "Usage: verify-content [--executable | --definitions [--require-converted] | DIRECTORY ...]\nNo arguments: verify embedded SRD completeness.\n--definitions: verify the full catalogue and report conversion/engine gaps.\n--require-converted: fail if semantic conversion remains incomplete.\n--executable: additionally compile the converted mechanics.\nDirectories: check marked notes together for structure and references. Read-only; no simulation."
+            "Usage: verify-content [--executable | --definitions [--require-converted] | [--with-builtin] DIRECTORY ...]\nNo arguments: verify embedded SRD completeness.\n--definitions: verify the full catalogue and report conversion/engine gaps.\n--require-converted: fail if semantic conversion remains incomplete.\n--executable: additionally compile the converted mechanics.\nDirectories: check marked notes together for structure and references. --with-builtin resolves shared SRD dependencies. Read-only; no simulation."
         );
         return;
     }
@@ -68,7 +72,20 @@ fn main() {
                 Err(message) => errors.push(Diagnostic { path, message }),
             }
         }
-        let mut report = validate(&entries);
+        let mut report = if with_builtin {
+            match splat::content::validate_with_builtin(&entries) {
+                Ok(report) => report,
+                Err(message) => {
+                    errors.push(Diagnostic {
+                        path: "builtin".into(),
+                        message,
+                    });
+                    validate(&entries)
+                }
+            }
+        } else {
+            validate(&entries)
+        };
         report.errors.extend(errors);
         if report.entries == 0 {
             report.errors.push(Diagnostic {

@@ -1,0 +1,153 @@
+{
+  "item": {
+    "id": 3,
+    "entityTypeId": 1782728300,
+    "definitionKey": "1782728300:3",
+    "name": "Dagger",
+    "description": "<p>Proficiency with a Dagger allows you to add your proficiency bonus to the attack roll for any attack you make with it.</p>\r\n<div class=\"mastery-container\"><hr />\r\n<p>This weapon has the following mastery property. To use this property, you must have a feature that lets you use it.</p>\r\n<p><strong><em>Nick.</em></strong> When you make the extra attack of the Light property, you can make it as part of the Attack action instead of as a Bonus Action. You can make this extra attack only once per turn.</p>\r\n</div>",
+    "snippet": null,
+    "sources": [
+      {
+        "pageNumber": null,
+        "sourceId": 148,
+        "sourceType": 1
+      },
+      {
+        "pageNumber": null,
+        "sourceId": 1,
+        "sourceType": 2
+      }
+    ],
+    "isLegacy": false,
+    "damage": {
+      "diceCount": 1,
+      "diceMultiplier": null,
+      "diceString": "1d4",
+      "diceValue": 4,
+      "fixedValue": null
+    },
+    "damageType": "Piercing",
+    "properties": [
+      {
+        "description": "<p>When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls.</p>",
+        "id": 2,
+        "name": "Finesse",
+        "notes": null
+      },
+      {
+        "description": "<p>When you take the [action]Attack[/action] action on your turn and attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don’t add your ability modifier to the extra attack’s damage unless that modifier is negative. For example, you can attack with a [items]Shortsword[/items] in one hand and a [items]Dagger[/items] in the other using the [action]Attack[/action] action and a Bonus Action, but you don’t add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative.</p>",
+        "id": 4,
+        "name": "Light",
+        "notes": null
+      },
+      {
+        "description": "<p>If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon.</p>",
+        "id": 10,
+        "name": "Thrown",
+        "notes": null
+      },
+      {
+        "description": "<p>When you make the extra attack of the [wprop]Light[/wprop] property, you can make it as part of the [action]Attack[/action] action instead of as a Bonus Action. You can make this extra attack only once per turn.</p>",
+        "id": 20,
+        "name": "Nick",
+        "notes": null
+      }
+    ],
+    "range": 20,
+    "longRange": 60,
+    "armorClass": null,
+    "armorTypeId": null,
+    "filterType": "Weapon",
+    "weight": 1.0,
+    "isContainer": false,
+    "stackable": false
+  },
+  "spell": {
+    "id": 2618890,
+    "definitionKey": "1118725998:2618890",
+    "name": "Fire Bolt",
+    "description": "<p>You hurl a mote of fire at a creature or an object within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 Fire damage. A flammable object hit by this spell starts burning if it isn’t being worn or carried.</p>\r\n<p><strong><em>Cantrip Upgrade.</em></strong> The damage increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).</p>",
+    "snippet": "",
+    "sources": [
+      {
+        "pageNumber": 274,
+        "sourceId": 145,
+        "sourceType": 1
+      }
+    ],
+    "isLegacy": false,
+    "level": 0,
+    "range": {
+      "aoeType": null,
+      "aoeValue": null,
+      "origin": "Ranged",
+      "rangeValue": 120
+    },
+    "components": [
+      1,
+      2
+    ],
+    "duration": {
+      "durationInterval": 0,
+      "durationType": "Instantaneous",
+      "durationUnit": null
+    },
+    "activation": {
+      "activationTime": 1,
+      "activationType": 1
+    },
+    "school": "Evocation",
+    "concentration": false,
+    "ritual": false
+  },
+  "feature": {
+    "id": 10292384,
+    "entityTypeId": 12168134,
+    "definitionKey": "class-feature:10292384",
+    "name": "Ritual Adept",
+    "description": "<p>You can cast any spell as a Ritual if that spell has the Ritual tag and the spell is in your spellbook. You needn’t have the spell prepared, but you must read from the book to cast a spell in this way.</p>",
+    "snippet": "",
+    "sources": [
+      {
+        "pageNumber": 166,
+        "sourceId": 145,
+        "sourceType": 1
+      }
+    ],
+    "activation": null
+  },
+  "feature_key": "dnd2024:class_features/wizard_level_1_ritual_adept",
+  "backpack": {
+    "armorClass": null,
+    "armorTypeId": null,
+    "capacityWeight": 30.0,
+    "damage": null,
+    "damageType": null,
+    "definitionKey": "2103445194:399",
+    "description": "<p>A Backpack holds up to 30 pounds within 1 cubic foot. It can also serve as a saddlebag.</p>",
+    "entityTypeId": 2103445194,
+    "filterType": "Other Gear",
+    "id": 399,
+    "isContainer": true,
+    "isLegacy": false,
+    "longRange": null,
+    "name": "Backpack",
+    "properties": null,
+    "range": null,
+    "snippet": null,
+    "sources": [
+      {
+        "pageNumber": null,
+        "sourceId": 145,
+        "sourceType": 1
+      },
+      {
+        "pageNumber": null,
+        "sourceId": 148,
+        "sourceType": 2
+      }
+    ],
+    "stackable": false,
+    "weight": 5.0
+  }
+}

@@ -2375,6 +2375,10 @@ definitions:
         mass:
           value: 5.0
           unit: lb
+        containment:
+          capacity:
+            mass: {value: 30, unit: lb}
+            volume: {value: 1, unit: ft3}
       splat_rule:
         mechanic: dnd2024:equipment/backpack_2_gp
         implementation: dnd2024:equipment_backpack_2_gp

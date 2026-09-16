@@ -41257,12 +41257,12 @@
       "conversion_gaps": [],
       "execution_profiles": [],
       "research_path": "docs/research/srd-conversion/equipment_tables.md",
-      "specification_sha256": "669c60785e6253abc8818af1fb2c9d487cd8024ae7a0716680c294fb0317636c",
+      "specification_sha256": "bcd2c85a84eb60104ac3d8c67f36fb7616319c4a8bda1747e82645fcdce4bede",
       "line_span": {
         "first": 8277,
         "count": 3
       },
-      "sha256": "81e36240942bd5621d7a464c978831c80c0508a3b351ae733f12f26717e41453"
+      "sha256": "f009b479a9b681091a2db5085cc294c3c047cac7c134e0ef2bd4402c72efb4de"
     },
     {
       "key": "dnd2024:equipment/ball_bearings_1_gp",

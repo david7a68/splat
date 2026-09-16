@@ -356,7 +356,7 @@ mod tests {
             .values()
             .map(|n| Entry::parse(&n.relative_path, &n.markdown).unwrap())
             .collect();
-        let report = crate::content::validate(&entries);
+        let report = crate::content::validate_with_builtin(&entries).unwrap();
         assert!(report.errors.is_empty(), "{:?}", report.errors);
     }
     #[test]
@@ -413,6 +413,11 @@ mod tests {
             .iter()
             .map(|n| Entry::parse(&n.relative_path, &n.markdown).unwrap())
             .collect();
-        assert!(!crate::content::validate(&entries).errors.is_empty());
+        assert!(
+            !crate::content::validate_with_builtin(&entries)
+                .unwrap()
+                .errors
+                .is_empty()
+        );
     }
 }

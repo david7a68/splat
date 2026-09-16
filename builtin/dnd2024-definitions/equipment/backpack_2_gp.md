@@ -55,6 +55,21 @@ foot. It can also serve as a saddlebag.\
 | ` value ` | ` 5.0 ` |
 | ` unit ` | ` lb ` |
 
+### Containment
+
+#### Capacity
+
+<!-- splat:yaml path=splat_item/containment/capacity -->
+
+```yaml
+mass:
+  value: 30
+  unit: lb
+volume:
+  value: 1
+  unit: ft3
+```
+
 ## Rule
 
 <!-- splat:values path=splat_rule -->
