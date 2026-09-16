@@ -4,6 +4,7 @@ use crate::content::character::{
     Attack, CastingTotal, Check, Class, EntryRef, Feature, Gap, Import, KnownSpell, Sense, Sheet,
 };
 
+#[derive(Clone)]
 pub struct ContentNote {
     pub relative_path: String,
     pub markdown: String,
@@ -49,7 +50,7 @@ fn duration(value: &Value) -> String {
         None => string(&value["durationType"]).to_lowercase(),
     }
 }
-fn reference_id(record: &EntitySnapshot, kind: &str, source: &str) -> Uuid {
+pub(super) fn reference_id(record: &EntitySnapshot, kind: &str, source: &str) -> Uuid {
     stable_id(&format!(
         "dndbeyond:character:{}:{kind}:{source}",
         record.source.character_id
@@ -67,7 +68,7 @@ fn gap(gaps: &mut Vec<Gap>, path: impl Into<String>, reason: impl Into<String>) 
         reason: reason.into(),
     });
 }
-fn named_key(prefix: &str, value: &Value) -> String {
+pub(super) fn named_key(prefix: &str, value: &Value) -> String {
     // A change to totals or remaining uses must not change identity.
     format!(
         "{prefix}_{}",
@@ -80,7 +81,14 @@ fn named_key(prefix: &str, value: &Value) -> String {
     )
 }
 fn import(gaps: Vec<Gap>) -> Value {
-    serde_json::to_value(Import { version: 1, gaps }).expect("serializable import")
+    serde_json::to_value(Import {
+        version: 1,
+        gaps,
+        engine_gaps: Vec::new(),
+        required_inputs: Vec::new(),
+        rule_fingerprint: None,
+    })
+    .expect("serializable import")
 }
 
 impl EntitySnapshot {
@@ -485,6 +493,7 @@ impl EntitySnapshot {
                 save_dc: spell["overrideSaveDc"].as_i64(),
                 cast_at_level: spell["castAtLevel"].as_u64(),
                 restriction: string(&spell["restriction"]).into(),
+                casting: None,
             };
             // Same spell can be granted by several sources with distinct casting permissions.
             let k = if sheet.spells.contains_key(&k) {
@@ -701,6 +710,7 @@ impl EntitySnapshot {
             relative_path: format!("{}.md", self.definition.splat_id),
             markdown: note(fields, &body)?,
         });
+        super::rules::complete(self, &mut notes)?;
         let entries = notes
             .iter()
             .map(|n| Entry::parse(&n.relative_path, &n.markdown))

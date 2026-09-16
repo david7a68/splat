@@ -1,0 +1,94 @@
+# Character rule conversion
+
+The importer now converts the 119 source definitions present in the three cached
+party sheets. This covers features, actions, spells, and items. Conversion means
+that the source behavior has typed data and references. It does not mean that an
+engine adapter exists or that a participant has supplied every required choice.
+
+## Source evidence and matching
+
+`builtin/dndbeyond/conversions.json` maps provider definition identities to either
+an existing converted SRD rule or authored typed parameters for that exact source.
+The mapping is explicit. Names are not used to choose a rule or an edition.
+
+Each mapping pins SHA-256 of canonical JSON containing these provider fields:
+`id`, `entityTypeId`, `definitionKey`, `name`, `description`, `snippet`, `sources`,
+`isLegacy`, `level`, `damage`, `damageType`, `properties`, `range`, `longRange`,
+`armorClass`, `armorTypeId`, `components`, `duration`, and `activation`.
+Absent values are null; object keys are sorted. In particular, `snippet` is
+source evidence, not just display text: Circle Magic puts its general casting
+and contribution rules there. Character names, accounts, inventory instance
+identities, and full provider responses are not in this registry.
+
+A new definition or changed source keeps its conversion gap. The previous mapping
+is not applied on ID or name alone. Tests cover both source drift and changes to
+the converted mechanics. To extend coverage, inspect both description and snippet,
+author or select the exact rule, and update the source fingerprint. Do not update
+a fingerprint merely to make a mismatch pass.
+
+## Coverage
+
+The source-matched 2024 spells, equipment, Wizard features, Barbarian features,
+and weapon mastery rules reuse the existing typed SRD catalogue. Their transitive
+content dependencies become campaign-owned notes with scoped UUID references;
+users do not need to enable an otherwise unrelated package. Repeated grants of
+the same mechanic resolve to one rule definition within a character.
+
+Additional typed contracts cover:
+
+- Witch Bolt and Mind Sliver (2024), and Cause Fear (2017).
+- The 2014 Sorcerer and Draconic Bloodline features, with source class progression.
+- Goblin features, species choices, lineage grants, rest behavior, and Tough.
+- Circle Magic initiation and all six enhancement options. The contract includes
+  primary/secondary caster requirements, contribution timing and range, ongoing
+  Concentration, slot costs, failure outcomes, and option-specific limits.
+- Legacy equipment rules that differ from 2024 equipment. For example, the old
+  Tinderbox takes an Action to light exposed fuel; the revised version takes a
+  Bonus Action. The old Rope's burst check is Strength DC 17 and its HP is 2;
+  the revised Rope has different checks and binding behavior.
+- Character-creation grants and optional campaign-system prompts. A prompt is
+  not a selected Dark Bargain, Thread, or Runestone effect. Missing selected
+  effects remain required inputs; no benefit is invented.
+
+Rage recovery overrides the provider's coarse reset category with the actual
+2024 contract: restore one use on a Short Rest and all uses on a Long Rest.
+Resource bindings identify the actor's actual pool for each mapped feature.
+Spell bindings identify the source class/ability, supplied DC/attack values,
+available slot pools, and at-will/ritual status. Class spells use that class's
+computed totals, including supplied bonuses; species spells keep their separate
+casting ability. An attack profile never bypasses spell casting costs.
+
+## Data and engine boundaries
+
+`splat_character.rules` maps source feature/action keys to normal entry references.
+`resource_bindings` associates these rule entries with imported pool keys.
+`choices` preserves selected option IDs, labels, and source/component identity. Unset choices
+and choices whose labels are unavailable remain explicit. Future class choices
+are retained but do not create a current missing-input warning.
+`class_progression` preserves the provider's level-indexed spell tables and
+casting ability. `contributions` records source modifier facts and restrictions.
+
+`splat_attack_bindings` links supplied attack profiles to their item, Unarmed
+Strike, or spell rules. Duplicate carried weapons remain separate instances;
+using an item requires selecting an instance and establishing equipment state.
+The provider's equipped flag does not establish which hands hold a weapon.
+
+`splat_stat_policy` defines the supplied-baseline contract. Recorded source
+contributions must not be added again. If an included source changes, a fresh
+provider total or a separately validated rebuild is required. Dynamic effects
+may apply only changes not already included in the baseline. This closes the
+snapshot representation contract without inventing an unknown base calculation.
+
+Import metadata version 2 separates:
+
+- `gaps`: missing or unmatched rule conversion.
+- `engine_gaps`: unavailable engine adapter names.
+- `required_inputs`: unset source selections or encounter-specific facts.
+- `rule_fingerprint`: a fingerprint of the typed rule/action/trait/effect fields,
+  parameters, contracts, character bindings, stats, resources, spell/item rules,
+  attack bindings, stat policy and required mechanics. Changing those fields
+  invalidates the old coverage declaration.
+
+Version-1 metadata remains readable. Neither version grants execution. Native
+source-specific parameters remain data; they do not register scripts or engine
+implementations. The proof executor continues to reject imported records.

@@ -757,6 +757,8 @@ pub fn validate(entries: &[Entry]) -> Report {
         "splat_contracts",
         "splat_clauses",
         "splat_attack_options",
+        "splat_attack_bindings",
+        "splat_stat_policy",
         "splat_budgets",
         "splat_creature",
         "splat_effect",

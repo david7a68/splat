@@ -10,6 +10,8 @@ simulation format. Both fresh responses and old version-1 caches go through
 `content_notes()` when published. Campaign Markdown never embeds that snapshot.
 The provider cache retains choices, custom fields, and source data for future
 conversion; incomplete semantics are reported rather than inferred from prose.
+The [rule conversion registry](character-rule-conversion.md) now supplies typed
+behavior for the source definitions in the cached party.
 
 ## Character fields
 
@@ -39,9 +41,10 @@ The typed `splat_character` extension contains:
   casting ability, supplied override DC, cast level, and restriction text.
 
 A weapon attack with sufficient data also produces `splat_actions` with normal
-activation, targets, rolls and attack steps. Its conversion gaps still cover
-equipment and feature interactions. Spell attack totals never create free
-weapon actions: casting costs and effects require separate rule conversion.
+activation, targets, rolls and attack steps. Its source-matched rule bindings specify
+equipment and feature interactions; unresolved encounter equipment choices are
+required inputs. Spell attack totals never create free
+weapon actions: casting costs and effects come from their separate spell rules.
 
 `content::character::Sheet` is the strict serialized contract. The entry reader
 checks its shape, local keys, stat/resource references and positive levels.
@@ -55,7 +58,7 @@ Each row retains quantity and attunement. `splat_inventory_details` maps row key
 to stable `instance_id`, provider `source_id`, `source_equipped`, and nullable
 `charges_used`. An unknown charge maximum does not become an invented pool.
 Beyond's equipped flag does not establish hand allocation; ambiguous items are
-carried with an explicit gap. Known equipped body armor is worn.
+carried with an explicit required input. Known equipped body armor is worn.
 
 Item entries contain category, known mass, equipment facts, described properties,
 known armor/weapon values and containment facts. The import extends `splat_item`
@@ -76,7 +79,9 @@ Definitions live under `Characters/D&D Beyond/Definitions/<character UUID>/`.
 
 ## Coverage and publication
 
-`splat_import: {version: 1, gaps: [{path, reason}]}` records incomplete conversion
+`splat_import` version 2 records incomplete conversion, unavailable engine adapters,
+and required inputs separately, with a fingerprint of the converted mechanics.
+Version 1 (`{version: 1, gaps: [{path, reason}]}`) remains readable. Gaps record incomplete conversion
 at specific fields. It is valid on creatures, spells and items, and is separate
 from the SRD catalogue's source-specific `splat_conversion` contract.
 Unknown import versions or malformed gap records fail parsing. Import metadata
