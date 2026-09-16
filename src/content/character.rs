@@ -26,6 +26,27 @@ pub struct Sheet {
     pub class_progression: BTreeMap<String, ClassProgression>,
     #[serde(default)]
     pub resource_bindings: BTreeMap<String, ResourceBinding>,
+    #[serde(default)]
+    pub campaign_options: BTreeMap<String, CampaignOptionState>,
+}
+/// Inactive means no selected grant, not that the campaign has disabled the system.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CampaignOptionState {
+    Inactive,
+    Unselected,
+    Active {
+        selections: Vec<CampaignOptionSelection>,
+    },
+    Unknown,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CampaignOptionSelection {
+    pub choice_id: String,
+    pub option_id: String,
+    pub name: String,
+    pub rule: Option<EntryRef>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -218,6 +239,24 @@ pub fn validate(entry: &super::Entry) -> Result<(), String> {
                     .is_none()
             {
                 return Err(format!("Feature {key} refers to missing resource {pool}"));
+            }
+        }
+        for (system, state) in &sheet.campaign_options {
+            if !["dark_bargain", "character_threads", "runestones"].contains(&system.as_str()) {
+                return Err(format!("Unknown campaign option system: {system}"));
+            }
+            if let CampaignOptionState::Active { selections } = state {
+                let mut ids = std::collections::BTreeSet::new();
+                if selections.is_empty()
+                    || selections.iter().any(|s| {
+                        s.choice_id.is_empty()
+                            || s.option_id.is_empty()
+                            || s.name.is_empty()
+                            || !ids.insert(&s.choice_id)
+                    })
+                {
+                    return Err("Active campaign options require distinct, named selections".into());
+                }
             }
         }
         for (key, spell) in &sheet.spells {

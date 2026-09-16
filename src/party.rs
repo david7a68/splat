@@ -219,6 +219,7 @@ impl Party {
                 ui.heading("Source & parity");ui.label("Displayed totals come directly from D&D Beyond’s computed-character service. Splat does not add modifiers to these totals.");
                 for message in &record.coverage{ui.label(message);}
                 if let Some((_, Ok(entry))) = &self.content_entry {
+                    campaign_option_status(ui, entry);
                     ui.label(format!("Campaign content: {} inventory rows, {} action definitions.", entry.inventory.len(), entry.fields.get("splat_actions").and_then(serde_yaml_ng::Value::as_mapping).map_or(0, |v| v.len())));
                     if let Some(import) = entry.fields.get("splat_import") {
                         let conversion_count = import.get("gaps").and_then(serde_yaml_ng::Value::as_sequence).map_or(0, Vec::len);
@@ -246,6 +247,32 @@ impl Party {
             }else{details(ui,record,self.page,&self.search);}
         });
     }
+}
+fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
+    use splat::content::character::{CampaignOptionState, Sheet};
+    let Some(value) = entry.fields.get("splat_character") else {
+        return;
+    };
+    let Ok(sheet) = serde_yaml_ng::from_value::<Sheet>(value.clone()) else {
+        return;
+    };
+    ui.collapsing("Optional character rules", |ui| {
+        for (key, name) in [("dark_bargain", "Dark Bargain"), ("character_threads", "Character Threads"), ("runestones", "Runestones")] {
+            match sheet.campaign_options.get(key) {
+                Some(CampaignOptionState::Inactive) => { ui.label(format!("{name}: inactive (not granted on the sheet).")); }
+                Some(CampaignOptionState::Unselected) => { ui.label(format!("{name}: no effect selected. No effect imported.")); }
+                Some(CampaignOptionState::Unknown) => { ui.label(format!("{name}: source selection data is unavailable.")); }
+                Some(CampaignOptionState::Active { selections }) => {
+                    for selected in selections {
+                        let status = if selected.rule.is_some() { "converted" } else { "needs rule conversion" };
+                        ui.label(format!("{name}: {} ({status}).", selected.name));
+                    }
+                }
+                None => (),
+            }
+        }
+        ui.weak("Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.");
+    });
 }
 fn text(v: &Value) -> &str {
     v.as_str().unwrap_or("—")
