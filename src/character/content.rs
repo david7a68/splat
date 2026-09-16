@@ -10,27 +10,7 @@ pub struct ContentNote {
     pub markdown: String,
 }
 fn prose(value: &Value) -> String {
-    let mut result = String::new();
-    let mut tag = false;
-    for c in string(value).chars() {
-        match c {
-            '<' => {
-                tag = true;
-                result.push(' ');
-            }
-            '>' => tag = false,
-            _ if !tag => result.push(c),
-            _ => (),
-        }
-    }
-    result
-        .replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    super::description_text(string(value))
 }
 fn activation(value: &Value) -> Option<String> {
     match value["activationType"].as_u64()? {
@@ -555,10 +535,16 @@ impl EntitySnapshot {
         }
         fields["splat_import"] = import(gaps);
         let mut body = format!(
-            "# {}\n\nLevel {} {}. HP: {}; temporary HP: {}.\n\n[Open D&D Beyond sheet](https://www.dndbeyond.com/characters/{})\n\n",
+            "# {}\n\nLevel {} {} · {}. HP: {}; temporary HP: {}.\n\n[Open D&D Beyond sheet](https://www.dndbeyond.com/characters/{})\n\n",
             self.definition.splat_name,
             sheet.level,
             sheet.species,
+            sheet
+                .classes
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect::<Vec<_>>()
+                .join(" / "),
             self.initial.hp,
             self.initial.temporary_hp,
             self.source.character_id
@@ -568,12 +554,17 @@ impl EntitySnapshot {
             self.stat("armor_class").unwrap_or(0),
             self.stat("initiative").unwrap_or(0),
             self.stat("max_hp").unwrap_or(0),
-            self.initial.inspiration
+            if self.initial.inspiration {
+                "Yes"
+            } else {
+                "No"
+            }
         ));
         body.push_str("| Ability | Score | Modifier | Save |\n| --- | --- | --- | --- |\n");
         for ability in ABILITIES {
             body.push_str(&format!(
-                "| {ability} | {} | {:+} | {:+} |\n",
+                "| {} | {} | {:+} | {:+} |\n",
+                ability[..1].to_uppercase() + &ability[1..],
                 self.stat(ability).unwrap_or(0),
                 self.stat(&format!("{ability}_modifier")).unwrap_or(0),
                 self.stat(&format!("{ability}_save")).unwrap_or(0)
@@ -615,11 +606,10 @@ impl EntitySnapshot {
         }
         body.push_str("\n## Training, movement, and senses\n\n");
         for group in &self.character.proficiencies {
-            body.push_str(&format!(
-                "- {}: {}\n",
-                string(&group["group"]),
-                string(&group["values"])
-            ));
+            let values = string(&group["values"]);
+            if !values.is_empty() {
+                body.push_str(&format!("- {}: {values}\n", string(&group["group"])));
+            }
         }
         for (key, stat) in &self.definition.splat_stats {
             if key.starts_with("speed_") || key.starts_with("passive_") {
@@ -677,19 +667,13 @@ impl EntitySnapshot {
                 }
             ));
         }
-        body.push_str("\n## Features\n\n");
-        for feature in sheet.features.values() {
-            body.push_str(&format!(
-                "### {}\n\n{}\n\n",
-                feature.name, feature.description
-            ));
-        }
         body.push_str("## Spells\n\n");
         for spell in sheet.spells.values() {
+            let link = super::rules::shared_source_link(spell.entry.id)?
+                .unwrap_or_else(|| format!("{folder}/{}.md", spell.entry.id));
             body.push_str(&format!(
-                "- [{}]({folder}/{}.md){}\n",
+                "- [{}]({link}){}\n",
                 spell.name,
-                spell.entry.id,
                 if spell.always_prepared {
                     " (always prepared)"
                 } else if spell.prepared {
@@ -711,6 +695,13 @@ impl EntitySnapshot {
                 body.push('\n');
             }
             body.push('\n');
+        }
+        body.push_str("\n## Features\n\n");
+        for feature in sheet.features.values() {
+            body.push_str(&format!(
+                "### {}\n\n{}\n\n",
+                feature.name, feature.description
+            ));
         }
         body.push_str("## Import gaps\n\n");
         let coverage: Import =

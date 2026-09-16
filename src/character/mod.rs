@@ -3,6 +3,7 @@
 mod cache;
 mod campaign;
 mod content;
+mod presentation;
 mod rules;
 use crate::{
     content::Entry,
@@ -10,6 +11,7 @@ use crate::{
 };
 pub use cache::Cache;
 pub use content::ContentNote;
+pub use presentation::description_text;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};

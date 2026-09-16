@@ -115,3 +115,17 @@ replacement creature has been saved. This migration never edits shared SRD files
 Loading an old private cache automatically creates the new content on its next
 publication. The offline export example also performs this migration without
 fetching source data. Existing creature UUIDs and note paths stay unchanged.
+
+## Sheet presentation
+
+The generated page puts spells and equipment before the longer feature reference.
+Descriptions retain paragraph and list breaks. Shared spell links open the official
+SRD PDF at the source page; local spell links point to their generated definition
+files. The structured spell bindings still use canonical catalogue UUIDs.
+
+The Splat content reader displays named imported inventory tables without the
+storage keys and UUID columns. Those columns remain in Markdown source because
+they carry the inventory schema. Tables without item names retain all columns.
+The Party viewer groups spells by level, keeps casting details visible under each
+name, and opens full descriptions on demand. Source and conversion details remain
+on the Source & parity tab.
