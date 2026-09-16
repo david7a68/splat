@@ -146,7 +146,12 @@ impl Party {
             return;
         };
         ui.horizontal(|ui| {
-            ui.heading(&record.definition.splat_name);
+            ui.label(
+                egui::RichText::new(&record.definition.splat_name)
+                    .size(30.0)
+                    .strong()
+                    .color(ui.visuals().strong_text_color()),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.hyperlink_to(
                     "Open on D&D Beyond ↗",
@@ -293,6 +298,27 @@ fn text(v: &Value) -> &str {
 fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
+fn section_heading(ui: &mut egui::Ui, title: &str) {
+    ui.add_space(12.0);
+    ui.label(
+        egui::RichText::new(title)
+            .size(21.0)
+            .strong()
+            .color(ui.visuals().strong_text_color()),
+    );
+    ui.separator();
+    ui.add_space(3.0);
+}
+fn subsection_heading(ui: &mut egui::Ui, title: &str) {
+    ui.add_space(6.0);
+    ui.label(
+        egui::RichText::new(title)
+            .size(17.0)
+            .strong()
+            .color(ui.visuals().strong_text_color()),
+    );
+    ui.add_space(2.0);
+}
 fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
     egui::Frame::group(ui.style())
         .inner_margin(12.0)
@@ -317,6 +343,7 @@ fn signed(record: &EntitySnapshot, key: &str) -> String {
         .unwrap_or("—".into())
 }
 pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
+    section_heading(ui, "Combat");
     ui.horizontal_wrapped(|ui| {
         metric(
             ui,
@@ -337,7 +364,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
             },
         );
     });
-    ui.add_space(8.0);
+    section_heading(ui, "Ability scores");
     ui.horizontal_wrapped(|ui| {
         for ability in ABILITIES {
             metric(
@@ -347,7 +374,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
             );
         }
     });
-    ui.add_space(8.0);
+    section_heading(ui, "Awareness & movement");
     ui.horizontal_wrapped(|ui| {
         for (label, key) in [
             ("Passive perception", "passive_perception"),
@@ -362,9 +389,9 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
             }
         }
     });
-    ui.add_space(10.0);
+    section_heading(ui, "Saving throws & skills");
     ui.columns(3, |cols| {
-        cols[0].strong("Saving throws");
+        subsection_heading(&mut cols[0], "Saving throws");
         egui::Grid::new("saves").show(&mut cols[0], |ui| {
             for ability in ABILITIES {
                 ui.label(signed(record, &format!("{ability}_save")));
@@ -375,7 +402,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
             }
         });
         for (column, col) in cols.iter_mut().enumerate().skip(1) {
-            col.strong("Skills");
+            subsection_heading(col, "Skills");
             egui::Grid::new(("skills", column)).show(col, |ui| {
                 for skill in record
                     .character
@@ -406,8 +433,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
         }
     });
     ui.weak("P: proficient · E: expertise · ½: half proficiency · Adv/Dis: advantage/disadvantage");
-    ui.add_space(12.0);
-    ui.strong("Resources");
+    section_heading(ui, "Resources");
     if record.definition.splat_resources.is_empty() {
         ui.label("No limited-use pools returned.");
     }
@@ -426,14 +452,14 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
     }
     ui.add_space(10.0);
     ui.columns(2, |cols| {
-        cols[0].strong("Proficiencies & languages");
+        subsection_heading(&mut cols[0], "Proficiencies & languages");
         for group in &record.character.proficiencies {
             let values = text(&group["values"]);
             if !values.is_empty() {
                 cols[0].label(format!("{}: {values}", text(&group["group"])));
             }
         }
-        cols[1].strong("Defenses & senses");
+        subsection_heading(&mut cols[1], "Defenses & senses");
         for (label, values) in [
             ("Resistance", &record.character.resistances),
             ("Immunity", &record.character.immunities),
@@ -450,12 +476,12 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
                 text(&sense["distance"])
             ));
         }
-        cols[1].strong("Death saves");
+        subsection_heading(&mut cols[1], "Death saves");
         cols[1].label(format!(
             "{} successes · {} failures",
             record.initial.death_saves.successes, record.initial.death_saves.failures
         ));
-        cols[1].strong("Conditions");
+        subsection_heading(&mut cols[1], "Conditions");
         if record.initial.conditions.is_empty() {
             cols[1].label("None");
         }
@@ -575,7 +601,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     };
     match page {
         1 => {
-            ui.strong("Attacks from D&D Beyond");
+            section_heading(ui, "Attacks");
             for attack in &record.character.attacks {
                 let value = &attack["damage"]["value"];
                 let damage = if let Some(n) = value.as_i64() {
@@ -613,7 +639,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                 }
             }
             ui.add_space(10.0);
-            ui.strong("Action descriptions");
+            section_heading(ui, "Action descriptions");
             for (source, values) in d["actions"].as_object().into_iter().flat_map(|o| o.iter()) {
                 for v in array(values) {
                     add(v, source);
@@ -624,6 +650,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             }
         }
         2 => {
+            section_heading(ui, "Spellcasting");
             ui.weak("Spell descriptions use their printed values. Upcasting and character-specific formulas are not evaluated.");
             for (label, key) in [
                 ("Spell save DC", "saveDcs"),
@@ -670,6 +697,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             }
         }
         3 => {
+            section_heading(ui, "Equipment & coins");
             for v in array(&d["inventory"]) {
                 add(v, "");
             }
@@ -686,6 +714,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             ));
         }
         _ => {
+            section_heading(ui, "Features & traits");
             for v in array(&d["race"]["racialTraits"]) {
                 add(v, "Species");
             }
@@ -729,26 +758,32 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     let mut last_level = None;
     for (i, (name, meta, description, level)) in filtered.into_iter().enumerate() {
         if page == 2 && (i == 0 || last_level != *level) {
-            ui.add_space(10.0);
-            ui.strong(match level {
-                Some(0) => "Cantrips".to_owned(),
-                Some(n) => format!("Level {n} spells"),
-                None => "Other spells".to_owned(),
-            });
-            ui.separator();
+            section_heading(
+                ui,
+                &match level {
+                    Some(0) => "Cantrips".to_owned(),
+                    Some(n) => format!("Level {n} spells"),
+                    None => "Other spells".to_owned(),
+                },
+            );
             last_level = *level;
         }
-        let response = egui::CollapsingHeader::new(egui::RichText::new(name).strong())
-            .id_salt((page, i, name))
-            .show(ui, |ui| {
-                ui.set_max_width(ui.available_width().min(760.0));
-                ui.weak(meta);
-                ui.add_space(6.0);
-                for paragraph in description.split("\n\n") {
-                    ui.add(egui::Label::new(paragraph).wrap());
-                    ui.add_space(5.0);
-                }
-            });
+        let response = egui::CollapsingHeader::new(
+            egui::RichText::new(name)
+                .size(17.0)
+                .strong()
+                .color(ui.visuals().strong_text_color()),
+        )
+        .id_salt((page, i, name))
+        .show(ui, |ui| {
+            ui.set_max_width(ui.available_width().min(760.0));
+            ui.weak(meta);
+            ui.add_space(6.0);
+            for paragraph in description.split("\n\n") {
+                ui.add(egui::Label::new(paragraph).wrap());
+                ui.add_space(5.0);
+            }
+        });
         if response.body_returned.is_none() {
             ui.horizontal_wrapped(|ui| {
                 ui.add_space(20.0);
