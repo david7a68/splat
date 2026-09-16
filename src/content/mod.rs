@@ -7,6 +7,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 pub mod builtin;
+pub mod character;
 pub mod contracts;
 pub mod definitions;
 mod markdown;
@@ -171,6 +172,7 @@ impl Entry {
             inventory_containers,
         };
         entry.validate_shape()?;
+        character::validate(&entry)?;
         definitions::conversion(&entry)?;
         Ok(entry)
     }
@@ -574,6 +576,23 @@ pub fn validate(entries: &[Entry]) -> Report {
                 error(&e.path, format!("Unresolved reference {r:?}"))
             }
         }
+        if let Some(character) = field(&e.fields, "splat_character") {
+            match serde_yaml_ng::from_value::<character::Sheet>(character.clone()) {
+                Ok(sheet) => {
+                    for spell in sheet.spells.values() {
+                        if resolve(&Reference::Id(spell.entry.id))
+                            .is_some_and(|e| e.kind != "spell")
+                        {
+                            error(
+                                &e.path,
+                                format!("{} must reference a spell entry", spell.name),
+                            );
+                        }
+                    }
+                }
+                Err(message) => error(&e.path, message.to_string()),
+            }
+        }
         for row in &e.inventory {
             if let Some(item) = resolve(&row.item) {
                 if !["item", "container"].contains(&item.kind.as_str()) {
@@ -732,6 +751,8 @@ pub fn validate(entries: &[Entry]) -> Report {
     }
     const KNOWN_FIELDS: &[&str] = &[
         "splat_actions",
+        "splat_character",
+        "splat_import",
         "splat_conversion",
         "splat_contracts",
         "splat_clauses",

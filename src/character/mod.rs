@@ -1,12 +1,14 @@
 //! Imported creature records. Provider totals are supplied stats, never recalculated.
-//! These records are read-only inputs for later encounter integration, not executable rules.
+//! Source records project into shared campaign content; simulation support is separate.
 mod cache;
 mod campaign;
+mod content;
 use crate::{
     content::Entry,
     execution::model::{Creature, Health, Pool, Stat},
 };
 pub use cache::Cache;
+pub use content::ContentNote;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -184,7 +186,7 @@ impl EntitySnapshot {
         }
         // Different revisions can arrive from these two independent services. Do not hide it.
         let mut coverage = vec!["Computed totals, checks, attacks, defenses and casting values are supplied by D&D Beyond; their internal modifier contributions are not exposed.".into(),
-            "Descriptions, choices, inventory and custom fields are retained from character v5. This is a read-only record; executable character mechanics and encounter integration are later work.".into()];
+            "Descriptions, choices, inventory and custom fields are retained from character v5. Campaign copies use the shared content schema. Simulation rule conversion is reported separately.".into()];
         if string(&raw["name"]) != name {
             coverage.push("The two D&D Beyond services returned different names. A later refresh may reconcile them.".into());
         }
@@ -584,15 +586,9 @@ impl EntitySnapshot {
         Entry::parse("imported-character.md", &self.entry_markdown()?)
     }
     pub fn entry_markdown(&self) -> Result<String, String> {
-        let mut value = serde_json::to_value(&self.definition)
-            .map_err(|_| "Could not encode creature definition.")?;
-        value["splat_initial"] =
-            serde_json::to_value(&self.initial).map_err(|_| "Could not encode creature state.")?;
-        value["splat_external"] = json!({"provider":self.source.provider,"character_id":self.source.character_id,"campaign_id":self.source.campaign_id,"fetched_at":self.source.fetched_at,"read_only":true,"executable":false});
-        let yaml =
-            serde_yaml_ng::to_string(&value).map_err(|_| "Could not encode creature entry.")?;
-        Ok(format!(
-            "---\n{yaml}---\n\nRead-only imported character. Current state and supplied totals are a fetched snapshot, not executable mechanics.\n"
-        ))
+        self.content_notes()?
+            .pop()
+            .map(|n| n.markdown)
+            .ok_or_else(|| "No creature content generated".into())
     }
 }

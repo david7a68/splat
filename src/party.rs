@@ -11,6 +11,7 @@ pub struct Party {
     search: String,
     combat: crate::combat_sync::CombatSync,
     epoch: u64,
+    content_entry: Option<(String, Result<splat::content::Entry, String>)>,
 }
 impl Party {
     pub fn sync(
@@ -205,10 +206,28 @@ impl Party {
                 }
             });
         }
+        if self.page == 5
+            && self
+                .content_entry
+                .as_ref()
+                .is_none_or(|(hash, _)| hash != &record.source.content_hash)
+        {
+            self.content_entry = Some((record.source.content_hash.clone(), record.entry()));
+        }
         egui::ScrollArea::vertical().scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible).id_salt((id,self.page)).auto_shrink([false,false]).show(ui,|ui|{
             if self.page==0{overview(ui,record);}else if self.page==5{
                 ui.heading("Source & parity");ui.label("Displayed totals come directly from D&D Beyond’s computed-character service. Splat does not add modifiers to these totals.");
                 for message in &record.coverage{ui.label(message);}
+                if let Some((_, Ok(entry))) = &self.content_entry {
+                    ui.label(format!("Campaign content: {} inventory rows, {} action definitions.", entry.inventory.len(), entry.fields.get("splat_actions").and_then(serde_yaml_ng::Value::as_mapping).map_or(0, |v| v.len())));
+                    if let Some(import) = entry.fields.get("splat_import") {
+                        ui.collapsing("Rule conversion gaps", |ui| {
+                            if let Some(gaps) = import.get("gaps").and_then(serde_yaml_ng::Value::as_sequence) {
+                                for gap in gaps { if let Some(reason) = gap.get("reason").and_then(serde_yaml_ng::Value::as_str) { ui.label(reason); } }
+                            }
+                        });
+                    }
+                }
                 ui.label(format!("Local creature UUID: {}",record.definition.splat_id));ui.label(format!("Source character: {} · Campaign: {}",record.source.character_id,record.source.campaign_id));
                 ui.label(format!("Computed response fetched at {} UTC epoch seconds; source details at {}.",record.source.fetched_at,record.source.raw_fetched_at));
                 if let Some(modified)=&record.source.source_modified{ui.label(format!("Beyond source modification: {modified}"));}

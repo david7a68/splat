@@ -107,7 +107,7 @@ fn campaign_copy_is_complete_parseable_and_keeps_personal_notes() {
     let entry = Entry::parse(path.to_str().unwrap(), &text).unwrap();
     assert_eq!(entry.id, record.definition.splat_id);
     assert_eq!(entry.kind, "creature");
-    assert!(text.contains("otherNotes"));
+    assert!(!text.contains("\"raw\""));
     assert!(text.contains("Wand"));
     std::fs::write(&path, format!("{text}\nMy own campaign notes.\n")).unwrap();
     record.definition.splat_name = "Renamed".into();
@@ -123,6 +123,28 @@ fn campaign_copy_is_complete_parseable_and_keeps_personal_notes() {
 }
 
 #[test]
+fn campaign_bundle_uses_content_inventory_and_normalized_sheet() {
+    let record = sample();
+    let dir = tempfile::tempdir().unwrap();
+    record.save_campaign_copy(dir.path()).unwrap();
+    let (entries, errors) = crate::content::read_directory(dir.path()).unwrap();
+    assert!(errors.is_empty(), "{errors:?}");
+    let report = crate::content::validate(&entries);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    let creature = entries.iter().find(|e| e.kind == "creature").unwrap();
+    assert_eq!(creature.inventory.len(), 2);
+    assert_ne!(creature.inventory[0].key, creature.inventory[1].key);
+    assert!(creature.fields.contains_key("splat_character"));
+    assert!(creature.fields.contains_key("splat_import"));
+    assert_eq!(
+        creature.fields["splat_initial"]["resources"]["spell_slots_1"].as_i64(),
+        Some(1)
+    );
+    assert!(crate::execution::model::compile(creature).is_err());
+}
+
+#[test]
 fn campaign_copy_does_not_overwrite_unmanaged_notes() {
     let dir = tempfile::tempdir().unwrap();
     let record = sample();
@@ -131,4 +153,122 @@ fn campaign_copy_does_not_overwrite_unmanaged_notes() {
     std::fs::write(&path, "My creature note").unwrap();
     assert!(record.save_campaign_copy(dir.path()).is_err());
     assert_eq!(std::fs::read_to_string(path).unwrap(), "My creature note");
+}
+
+#[test]
+fn imported_attack_totals_and_duplicate_profiles_survive_refresh() {
+    let mut record = sample();
+    let attack = json!({"name":"Unarmed Strike","toHit":4,"damage":{"type":"Bludgeoning","value":{"diceString":"1d4","fixedValue":-1}},"range":{"label":"Reach","value":5},"saveInfo":null});
+    record.character.attacks = vec![attack.clone(), attack];
+    let first = record.entry().unwrap();
+    let actions = first.fields["splat_actions"].as_mapping().unwrap();
+    assert_eq!(actions.len(), 2);
+    let keys = actions.keys().cloned().collect::<Vec<_>>();
+    assert_eq!(
+        actions[&keys[0]]["rolls"]["damage"]["expression"].as_str(),
+        Some("1d4-1")
+    );
+    record.character.attacks[0]["toHit"] = json!(6);
+    let refreshed = record.entry().unwrap();
+    assert_eq!(
+        refreshed.fields["splat_actions"]
+            .as_mapping()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>(),
+        keys
+    );
+    assert_eq!(
+        refreshed.fields["splat_actions"][&keys[0]]["rolls"]["attack"]["modifier"].as_i64(),
+        Some(6)
+    );
+}
+
+#[test]
+fn spells_are_referenced_content_without_free_attack_actions() {
+    let mut record = sample();
+    record.character.spells = vec![
+        json!({"id":17,"prepared":true,"usesSpellSlot":true,"spellCastingAbilityId":4,"definition":{"id":18,"name":"Test spell","level":1,"school":"Evocation","description":"<p>Spell text.</p>","components":[1,2],"range":{"rangeValue":60,"origin":"Ranged"},"duration":{"durationType":"Instantaneous"}}}),
+    ];
+    record.character.attacks = vec![
+        json!({"name":"Test spell","toHit":7,"damage":{"type":"Fire","value":5},"range":{"value":60,"origin":"Ranged"}}),
+    ];
+    let notes = record.content_notes().unwrap();
+    let entries = notes
+        .iter()
+        .map(|n| Entry::parse(&n.relative_path, &n.markdown).unwrap())
+        .collect::<Vec<_>>();
+    let creature = entries.last().unwrap();
+    assert!(
+        creature.fields["splat_actions"]
+            .as_mapping()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        creature.fields["splat_character"]["attacks"]
+            .as_mapping()
+            .unwrap()
+            .len(),
+        1
+    );
+    let spell = creature.fields["splat_character"]["spells"]
+        .as_mapping()
+        .unwrap()
+        .values()
+        .next()
+        .unwrap();
+    assert_eq!(spell["prepared"].as_bool(), Some(true));
+    assert_eq!(spell["uses_spell_slot"].as_bool(), Some(true));
+    assert_eq!(spell["ability"].as_str(), Some("intelligence"));
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.kind == "spell" && e.name == "Test spell")
+    );
+    assert!(crate::content::validate(&entries).errors.is_empty());
+    let missing = entries
+        .iter()
+        .filter(|e| e.kind != "spell")
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(!crate::content::validate(&missing).errors.is_empty());
+}
+
+#[test]
+fn containers_are_structured_and_dependency_edits_block_the_whole_refresh() {
+    let mut record = sample();
+    record.inventory[0].quantity = 1;
+    record.inventory[1].holder_source_id = Some(record.inventory[0].source_id.clone());
+    let dir = tempfile::tempdir().unwrap();
+    let creature_path = record.save_campaign_copy(dir.path()).unwrap();
+    let before = std::fs::read_to_string(&creature_path).unwrap();
+    let entry = Entry::parse("character.md", &before).unwrap();
+    assert_eq!(entry.inventory[1].container.as_deref(), Some("item_7"));
+    assert_eq!(entry.inventory[1].equipment, "stored");
+    let dependency = record.content_notes().unwrap().remove(0);
+    let path = dir
+        .path()
+        .join("Characters/D&D Beyond")
+        .join(dependency.relative_path);
+    std::fs::write(&path, "A local edit").unwrap();
+    record.definition.splat_name = "Changed".into();
+    assert!(record.save_campaign_copy(dir.path()).is_err());
+    assert_eq!(std::fs::read_to_string(creature_path).unwrap(), before);
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "A local edit");
+}
+
+#[test]
+fn malformed_character_extensions_are_rejected() {
+    let entry = sample().entry().unwrap();
+    let mut fields = entry.fields.clone();
+    fields["splat_character"]["features"] =
+        serde_yaml_ng::from_str("{bad: {name: Broken}}").unwrap();
+    let text = format!("---\n{}---\n", serde_yaml_ng::to_string(&fields).unwrap());
+    assert!(Entry::parse("bad.md", &text).is_err());
+    let mut fields = entry.fields;
+    fields["splat_import"]["version"] = serde_yaml_ng::Value::from(99);
+    let text = format!("---\n{}---\n", serde_yaml_ng::to_string(&fields).unwrap());
+    assert!(Entry::parse("bad.md", &text).is_err());
 }
