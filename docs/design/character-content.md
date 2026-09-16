@@ -39,6 +39,9 @@ The typed `splat_character` extension contains:
   and source identity. Descriptions do not implement rules.
 - `spells`: normal spell entry references, preparation flags, slot requirement,
   casting ability, supplied override DC, cast level, and restriction text.
+- `campaign_options`: inactive, unselected, active, or unknown Dark Bargain,
+  Character Thread, and Runestone selections. Active choices have source IDs
+  and references to the converted benefits and costs.
 
 A weapon attack with sufficient data also produces `splat_actions` with normal
 activation, targets, rolls and attack steps. Its source-matched rule bindings specify

@@ -1,0 +1,87 @@
+{
+  "features": [
+    {
+      "id": 2048517,
+      "name": "Dark Bargain",
+      "description": "<p>At your GM's discretion, you can take a Dark Bargain.</p>",
+      "snippet": "At your GM's discretion, you have taken a Dark Bargain.",
+      "sources": [
+        {
+          "pageNumber": null,
+          "sourceId": 193,
+          "sourceType": 1
+        }
+      ],
+      "activation": {
+        "activationTime": null,
+        "activationType": null
+      },
+      "definitionKey": "1088085227:2048517",
+      "entityTypeId": 1088085227
+    },
+    {
+      "id": 2331813,
+      "name": "Character Threads",
+      "description": "<p>Threads are aspects added to characters at any time during their career that have a specific short or long-term goal.</p>",
+      "snippet": "Threads are aspects added to characters at any time during their career that have a specific short or long-term goal.",
+      "sources": [
+        {
+          "pageNumber": 125,
+          "sourceId": 238,
+          "sourceType": 1
+        }
+      ],
+      "activation": {
+        "activationTime": null,
+        "activationType": null
+      },
+      "definitionKey": "1088085227:2331813",
+      "entityTypeId": 1088085227
+    },
+    {
+      "id": 2331889,
+      "name": "Runestones",
+      "description": "<p>At the beginning of the <em>Northlands Sagas</em> adventure path, each player should draw one Runestone randomly.</p>",
+      "snippet": "At the beginning of the <em>Northlands Sagas</em> adventure path, each player should draw one Runestone randomly.",
+      "sources": [
+        {
+          "pageNumber": 6,
+          "sourceId": 239,
+          "sourceType": 1
+        }
+      ],
+      "activation": {
+        "activationTime": null,
+        "activationType": null
+      },
+      "definitionKey": "1088085227:2331889",
+      "entityTypeId": 1088085227
+    }
+  ],
+  "options": [
+    {
+      "description": "<p>Ancient and primeval power dwells within the oldest forests of Druskenvald. These powers pour their strength into you but can overwhelm you with their unchanging nature.</p>\r\n<p><strong><em>Ancient Might.</em></strong> Your Strength score increases by 2, to a maximum of 22, and your Dexterity score decreases by 2.</p>\r\n<p><strong><em>Primeval Strength.</em></strong> As a Bonus Action, you can call upon the might of the ancients to raise your Strength score to 25 for 1 minute, during which time you deal double damage to objects. Once you use this Bonus Action, you can’t use it again until you finish a Long Rest.</p>\r\n<p><strong><em>Pyre’s Price.</em></strong> When you activate Primeval Strength, your skin takes on a bark-like texture, during which time you have Vulnerability to Fire damage. Your skin returns to normal when you finish a Long Rest.</p>",
+      "id": 5098965,
+      "label": "Might of the Old",
+      "sourceId": null
+    },
+    {
+      "description": "<h4>Least Milestone Feature</h4>\r\n<p>When you achieve the first milestone of this thread, you gain the following benefits.</p>\r\n<p><em><strong>Tides of Fate [1&ndash;3, Saving Throws].</strong></em> Your Speed is reduced by 10 feet. When this occurs, the Speed of another creature of your choice within 30 feet of you increases by 10 feet. These effects last until the end of your next turn.</p>\r\n<p><em><strong>Greater Sacrifice.</strong></em> When your Tides of Fate is triggered, you can choose to reduce your Speed to 0 until the start of your next turn. If you do so, in addition to the normal benefit, the chosen creature does not provoke opportunity attacks and ignores Difficult Terrain until the end of your next turn. Once you use your Greater Sacrifice feature, you can’t use it again until you finish a Long Rest.</p>\r\n<hr />\r\n<p><em>You bear the brunt of a curse of ill luck, and it’ll get worse before the end.</em></p>\r\n<p>Northlanders place great faith in the existence of luck. The gods can bestow good fortune upon the faithful, and honorable actions can directly lead to successful endeavors. Likewise, disreputable behavior can bring failure not only to you, but to future generations of your family.</p>\r\n<p>You are one of the unfortunates, chosen by fate or the gods to suffer from ill luck wherever you go. Perhaps you earned this curse through dishonor, oathbreaking, or cowardice. You might bear misfortune as a virtual heirloom, passed down to you by a disreputable ancestor. Other cursemarked are victims of witch’s curses or similar supernatural effects. Whatever the reason, you can’t seem to catch a break.</p>\r\n<p>Strangely, the presence of a Cursemarked can often bring good fortune to those nearby. As long as your friends are willing to put up with your occasional mishaps, the long-term benefit might well be worthwhile. Meanwhile, however, the cursemarked searches for some way to atone for their misdeeds, real or imagined, knowing such a road will be long and will certainly grow worse before the end. Yet when the hand of fortune is turned against you, what else can you do?</p>\r\n<p><em><strong>Goals.</strong></em> Work with your GM to create a goal specific to your campaign or use one from the Cursemarked Goals table. The specific nature of each milestone is dependent on the goal selected and should be agreed upon by both player and GM. Use the suggested milestone benefits described in this section or create new ones based on the rules for creating a thread.</p>\r\n<table class=\"table-compendium table--sub-features\" style=\"--sb-table-row-bg-hover: #b3d3df; --sb-table-row-bg-dark: #d7e8ee; --sb-table-row-bg-light: #f1f7f9; --dark-sb-table-row-bg-light: #5e7982; --dark-sb-table-row-bg-dark: #5c7f8c; --dark-sb-table-row-bg-hover: #78a2b0;\"><caption>\r\n<h5 id=\"Cursemarked\" class=\"compendium-hr quick-menu-exclude\">Cursemarked Goals</h5>\r\n</caption>\r\n<thead>\r\n<tr>\r\n<th>d6</th>\r\n<th>Goal</th>\r\n</tr>\r\n</thead>\r\n<tbody>\r\n<tr>\r\n<td>1</td>\r\n<td>I will atone for my dishonor by returning a sacred relic to a distant tomb.</td>\r\n</tr>\r\n<tr>\r\n<td>2</td>\r\n<td>I can only lift this curse by clearing the name of an ancestor falsely accused of murder.</td>\r\n</tr>\r\n<tr>\r\n<td>3</td>\r\n<td>I must prove my courage to the gods by defeating a tribe of marauding giants.</td>\r\n</tr>\r\n<tr>\r\n<td>4</td>\r\n<td>I will invoke Freyr’s blessing by forging peace between two warring clans.</td>\r\n</tr>\r\n<tr>\r\n<td>5</td>\r\n<td>To end this curse, I shall endure trials of my honor, my valor, and my selflessness.</td>\r\n</tr>\r\n<tr>\r\n<td>6</td>\r\n<td>I must convince Wotan himself to intervene and convince the Norns to reshape my fate.</td>\r\n</tr>\r\n</tbody>\r\n</table>\r\n<hr />\r\n<h5>Cursemarked Milestone Rules</h5>\r\n<p>Cursemarked milestones work a bit differently than those of other character threads. The milestone features described below trigger when you roll for specific mechanics (saving throws, ability checks or attack roll, depending on the feature) and get a result within the range of numbers indicated in the bracket for each milestone. Milestone features never overlap, so if you trigger a feature, you can’t trigger another until the start of your next turn after the duration of the previous one expires.</p>",
+      "id": 5807813,
+      "label": "Cursemarked (Level 1)",
+      "sourceId": null
+    },
+    {
+      "description": "<p><em><strong>Least Power:</strong></em> Once per day, you can sketch <em>algiz</em> in the air (no action required). When you do so, for a number of hours equal to your level, you can’t be surprised, and you gain a bonus to Wisdom (Perception) checks equal to your Proficiency Bonus. Additionally, while your <em>algiz</em> rune is active, you can end your rune early as a reaction to gain a bonus to an initiative roll equal to your Proficiency Bonus.</p>",
+      "id": 5807896,
+      "label": "Algiz (Level 1)",
+      "sourceId": null
+    },
+    {
+      "description": "<h4>Lesser Milestone Feature</h4>\r\n<p>When you achieve this level of milestone, you gain your choice of one of the following benefits.</p>\r\n<p><em><strong>Enemy of My Enemy.</strong></em> You’ve made an ally, a person who is also sworn to oppose your enemy. They have granted you an underground hideout from which to conduct your campaign of vengeance.</p>\r\n<p><em><strong>Wrath.</strong></em> You can cast Wrathful Smite, using your choice of INT, WIS, or CHA as your spellcasting ability score. Once you use this feature, you can’t use it again until you finish a Long Rest.</p>\r\n<hr />\r\n<h4>Least Milestone Feature</h4>\r\n<p>When you achieve the first milestone of this thread, you gain your choice of one of the following benefits.</p>\r\n<p><em><strong>Cunning.</strong></em> You gain proficiency in your choice of one of the following skills: Deception, Insight, or Intimidation.</p>\r\n<p><em><strong>Tool of Vengeance.</strong></em> You gain a Common magic item of your choice.</p>",
+      "id": 5807810,
+      "label": "Bloodsworn (Level 5)",
+      "sourceId": null
+    }
+  ]
+}

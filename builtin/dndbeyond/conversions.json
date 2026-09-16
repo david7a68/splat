@@ -1491,14 +1491,12 @@
       "parameters": {
         "system": "dark_bargain",
         "selection_required_before_granting_effect": true,
-        "automatic_combat_effect": false
+        "automatic_combat_effect": false,
+        "selection_state_from": "splat_character.campaign_options",
+        "grant_only_explicit_active_selection": true,
+        "inactive_or_unselected_grants_nothing": true
       },
-      "required_inputs": [
-        {
-          "path": "campaign_options/dark_bargain",
-          "reason": "Source provides no selected effect or its rules."
-        }
-      ],
+      "required_inputs": [],
       "mechanic": "optional_dark_bargain"
     },
     "feature:2331813": {
@@ -1508,14 +1506,12 @@
       "parameters": {
         "system": "character_threads",
         "selection_required_before_granting_effect": true,
-        "automatic_combat_effect": false
+        "automatic_combat_effect": false,
+        "selection_state_from": "splat_character.campaign_options",
+        "grant_only_explicit_active_selection": true,
+        "inactive_or_unselected_grants_nothing": true
       },
-      "required_inputs": [
-        {
-          "path": "campaign_options/character_threads",
-          "reason": "Source provides no selected effect or its rules."
-        }
-      ],
+      "required_inputs": [],
       "mechanic": "optional_character_threads"
     },
     "feature:2331889": {
@@ -1525,14 +1521,12 @@
       "parameters": {
         "system": "runestones",
         "selection_required_before_granting_effect": true,
-        "automatic_combat_effect": false
+        "automatic_combat_effect": false,
+        "selection_state_from": "splat_character.campaign_options",
+        "grant_only_explicit_active_selection": true,
+        "inactive_or_unselected_grants_nothing": true
       },
-      "required_inputs": [
-        {
-          "path": "campaign_options/runestones",
-          "reason": "Source provides no selected effect or its rules."
-        }
-      ],
+      "required_inputs": [],
       "mechanic": "optional_runestones"
     },
     "feature:13856164": {

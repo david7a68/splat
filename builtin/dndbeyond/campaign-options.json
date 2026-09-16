@@ -1,0 +1,5341 @@
+{
+  "version": 1,
+  "options": {
+    "5098955": {
+      "system": "dark_bargain",
+      "name": "Bestial Awakening (Intelligence)",
+      "family": "bestial_awakening",
+      "stage": 0,
+      "source_sha256": "7bda53692ae6402af45fecf51055b47acdee25e24adabc5443a9976cf67c47e7",
+      "parameters": {
+        "beast_skin": {
+          "spell": {
+            "key": "dnd2024:spells/polymorph"
+          },
+          "uses": 1,
+          "recovery": "long_rest",
+          "spell_slot_cost": 0,
+          "components": [],
+          "always_prepared": true,
+          "target": "self",
+          "allow_appropriate_spell_slots": true,
+          "ability": "intelligence"
+        },
+        "searing_silver": {
+          "silvered_weapon_damage_ignores": [
+            "resistance",
+            "immunity"
+          ],
+          "healing_prevented_on": [
+            "silvered_weapon_damage",
+            "bare_skin_touches_silver"
+          ],
+          "healing_prevented_until": "short_or_long_rest"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098956": {
+      "system": "dark_bargain",
+      "name": "Bestial Awakening (Wisdom)",
+      "family": "bestial_awakening",
+      "stage": 0,
+      "source_sha256": "d7f57af1cb8b86e9ae60e3bdfc40414463929800478dbd547423a1dbcb834f2e",
+      "parameters": {
+        "beast_skin": {
+          "spell": {
+            "key": "dnd2024:spells/polymorph"
+          },
+          "uses": 1,
+          "recovery": "long_rest",
+          "spell_slot_cost": 0,
+          "components": [],
+          "always_prepared": true,
+          "target": "self",
+          "allow_appropriate_spell_slots": true,
+          "ability": "wisdom"
+        },
+        "searing_silver": {
+          "silvered_weapon_damage_ignores": [
+            "resistance",
+            "immunity"
+          ],
+          "healing_prevented_on": [
+            "silvered_weapon_damage",
+            "bare_skin_touches_silver"
+          ],
+          "healing_prevented_until": "short_or_long_rest"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098957": {
+      "system": "dark_bargain",
+      "name": "Bestial Awakening (Charisma)",
+      "family": "bestial_awakening",
+      "stage": 0,
+      "source_sha256": "90ecdd828173032921c02788f2175d2947812ec0f02c827a0070715559cbe085",
+      "parameters": {
+        "beast_skin": {
+          "spell": {
+            "key": "dnd2024:spells/polymorph"
+          },
+          "uses": 1,
+          "recovery": "long_rest",
+          "spell_slot_cost": 0,
+          "components": [],
+          "always_prepared": true,
+          "target": "self",
+          "allow_appropriate_spell_slots": true,
+          "ability": "charisma"
+        },
+        "searing_silver": {
+          "silvered_weapon_damage_ignores": [
+            "resistance",
+            "immunity"
+          ],
+          "healing_prevented_on": [
+            "silvered_weapon_damage",
+            "bare_skin_touches_silver"
+          ],
+          "healing_prevented_until": "short_or_long_rest"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098958": {
+      "system": "dark_bargain",
+      "name": "Call of the Lonely",
+      "family": "call_of_the_lonely",
+      "stage": 0,
+      "source_sha256": "0f377a057912a60b6e8daba69d379aea4e54a98c5ac8c0d9da92f334d4df02d5",
+      "parameters": {
+        "summon": {
+          "uses": 1,
+          "recovery": "long_rest",
+          "economy": "bonus_action",
+          "requires": "no_other_creature_can_see_actor",
+          "unoccupied_space_within_ft": 10,
+          "creature": {
+            "key": "dnd2024:creatures/doppelganger"
+          },
+          "appearance": [
+            "person",
+            "vague_silhouette"
+          ],
+          "attitude": "friendly",
+          "ally": true,
+          "initiative": "actor",
+          "duration_hours": 1,
+          "ends_on": [
+            "companion_dies",
+            "actor_dies",
+            "actor_action_polite_dismissal"
+          ],
+          "drops_worn_and_carried_items_on_end": true
+        },
+        "precocious_friend": {
+          "items": "gm_choice",
+          "provenance": "gm_choice",
+          "owners_may_seek_return": true
+        },
+        "unsettling_presence": {
+          "sources": [
+            "actor",
+            "companion"
+          ],
+          "while": "companion_summoned",
+          "trigger": "non_hostile_creature_turn_start_sees_either_source",
+          "save": {
+            "ability": "wisdom",
+            "dc": 15
+          },
+          "failure": {
+            "condition": "frightened",
+            "until": "target_next_turn_start"
+          }
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098959": {
+      "system": "dark_bargain",
+      "name": "Collector of Stories (Intelligence)",
+      "family": "collector_of_stories",
+      "stage": 0,
+      "source_sha256": "6b64dd7cb312d9235aabc3373d507fc915737236af6776991aa51bd70dfad07f",
+      "parameters": {
+        "gathered_tales": {
+          "spell": {
+            "key": "dnd2024:spells/legend_lore"
+          },
+          "uses": 1,
+          "recovery": "long_rest",
+          "spell_slot_cost": 0,
+          "components": [],
+          "always_prepared": true,
+          "allow_appropriate_spell_slots": true,
+          "ability": "intelligence"
+        },
+        "hoarded_stories": {
+          "trigger": "free_cast_from_this_bargain",
+          "target": "gm_selected_friendly_npc",
+          "forgets_ever_meeting_actor": true,
+          "may_meet_and_rebuild_relationship": true,
+          "maximum_future_attitude": "indifferent",
+          "actor_charisma_checks_against_target": "disadvantage",
+          "duration": "permanent"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098960": {
+      "system": "dark_bargain",
+      "name": "Collector of Stories (Wisdom)",
+      "family": "collector_of_stories",
+      "stage": 0,
+      "source_sha256": "fc8ae87527a4bcf6c2856e45094cf79259bc46c90f20eff44c1f98debfdc8508",
+      "parameters": {
+        "gathered_tales": {
+          "spell": {
+            "key": "dnd2024:spells/legend_lore"
+          },
+          "uses": 1,
+          "recovery": "long_rest",
+          "spell_slot_cost": 0,
+          "components": [],
+          "always_prepared": true,
+          "allow_appropriate_spell_slots": true,
+          "ability": "wisdom"
+        },
+        "hoarded_stories": {
+          "trigger": "free_cast_from_this_bargain",
+          "target": "gm_selected_friendly_npc",
+          "forgets_ever_meeting_actor": true,
+          "may_meet_and_rebuild_relationship": true,
+          "maximum_future_attitude": "indifferent",
+          "actor_charisma_checks_against_target": "disadvantage",
+          "duration": "permanent"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098961": {
+      "system": "dark_bargain",
+      "name": "Collector of Stories (Charisma)",
+      "family": "collector_of_stories",
+      "stage": 0,
+      "source_sha256": "6a4113c46352d5af84bf5bd7d6440aec2825796976664dc8303bbc80f924a11b",
+      "parameters": {
+        "gathered_tales": {
+          "spell": {
+            "key": "dnd2024:spells/legend_lore"
+          },
+          "uses": 1,
+          "recovery": "long_rest",
+          "spell_slot_cost": 0,
+          "components": [],
+          "always_prepared": true,
+          "allow_appropriate_spell_slots": true,
+          "ability": {
+            "unresolved": {
+              "label": "charisma",
+              "description": "wisdom"
+            }
+          }
+        },
+        "hoarded_stories": {
+          "trigger": "free_cast_from_this_bargain",
+          "target": "gm_selected_friendly_npc",
+          "forgets_ever_meeting_actor": true,
+          "may_meet_and_rebuild_relationship": true,
+          "maximum_future_attitude": "indifferent",
+          "actor_charisma_checks_against_target": "disadvantage",
+          "duration": "permanent"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/dark_bargain/5098961/casting_ability",
+          "reason": "Collector of Stories has conflicting source text: the label says Charisma but the description says Wisdom. Choose the governing ability."
+        }
+      ]
+    },
+    "5098962": {
+      "system": "dark_bargain",
+      "name": "Crooked Fortune",
+      "family": "crooked_fortune",
+      "stage": 0,
+      "source_sha256": "e2bfd2a8c07ddc5745db62cadc0da1390a4c3e56dc628fb617ca8245e71878eb",
+      "parameters": {
+        "cheat_fate": {
+          "trigger": "failed_saving_throw",
+          "optional": true,
+          "replace_result": "success",
+          "damage_if_save_normally_halves": 0,
+          "available_until_used": true,
+          "recharge": "third_qualifying_price_save_resolved"
+        },
+        "delayed_price": {
+          "next_saving_throws": 3,
+          "advantage_forbidden": true,
+          "disadvantage": true,
+          "exhaustion_per_success": 1,
+          "gm_may_exclude_saves": [
+            "intentional",
+            "without_true_consequences"
+          ]
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098963": {
+      "system": "dark_bargain",
+      "name": "Cult of Personality",
+      "family": "cult_of_personality",
+      "stage": 0,
+      "source_sha256": "28af1c360d851c7c7b626ed1051585eea1c06ff369fc132151b44fdf06ebfee0",
+      "parameters": {
+        "honeyed_words": {
+          "uses": 1,
+          "recovery": "short_or_long_rest",
+          "economy": "magic_action",
+          "target_range_ft": 60,
+          "target_count": 1,
+          "charm": {
+            "duration_hours": 24,
+            "target_is_ally": true,
+            "obeys_commands_except_self_harm": true,
+            "ends_on": [
+              "feature_used_again",
+              "actor_or_allies_damage_target",
+              "actor_or_allies_force_target_save"
+            ],
+            "odious_command_save": {
+              "ability": "wisdom",
+              "dc": 15,
+              "success": "end_charm"
+            },
+            "after_end_immunity_hours": 24
+          },
+          "charm_immune_instead": {
+            "d20_tests": "disadvantage",
+            "until": "actor_next_turn_start",
+            "actor_temporary_hp": "character_level"
+          }
+        },
+        "solitary_weakness": {
+          "trigger": "actor_turn_start",
+          "requires": "no_ally_seen_or_heard_within_20_ft",
+          "remove_all_temporary_hp": true,
+          "d20_tests": "disadvantage",
+          "until": "actor_next_turn_start"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098964": {
+      "system": "dark_bargain",
+      "name": "Hand of Death",
+      "family": "hand_of_death",
+      "stage": 0,
+      "source_sha256": "4080e5f517a50a7c1a4df4dbd45e30255105a9ec7244382c699d1566abe394d3",
+      "parameters": {
+        "adamant_endurance": {
+          "constitution_saves": "advantage"
+        },
+        "cling_to_life": {
+          "trigger_any": [
+            "turn_start_at_zero_hp",
+            "death"
+          ],
+          "optional": true,
+          "regain_hp": {
+            "half": "maximum_hp"
+          },
+          "uses": 1,
+          "after_use_healing_multiplier": 0.5,
+          "recharge_and_restore_normal_healing": "other_humanoid_dies_within_30_ft"
+        },
+        "death_knell": {
+          "other_creatures_within_ft": 10,
+          "death_saves": "disadvantage",
+          "cannot_restore_hp_to_zero_hp_creature_by_any_means": true
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098965": {
+      "system": "dark_bargain",
+      "name": "Might of the Old",
+      "family": "might_of_the_old",
+      "stage": 0,
+      "source_sha256": "a6f9c648d81bb79f5b27b509d69a61685a2e614a9b7fc5c62483df4247c8eba6",
+      "parameters": {
+        "ancient_might": {
+          "strength": {
+            "add": 2,
+            "maximum": 22
+          },
+          "dexterity": {
+            "add": -2
+          }
+        },
+        "primeval_strength": {
+          "uses": 1,
+          "recovery": "long_rest",
+          "economy": "bonus_action",
+          "strength": 25,
+          "duration_minutes": 1,
+          "object_damage_multiplier": 2
+        },
+        "pyres_price": {
+          "trigger": "primeval_strength_activation",
+          "vulnerability": "fire",
+          "until": "long_rest"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098966": {
+      "system": "dark_bargain",
+      "name": "Self-Serving Sacrifice (Intelligence)",
+      "family": "self-serving_sacrifice",
+      "stage": 0,
+      "source_sha256": "ff9f003462ef05debe1d48503786f6f373ad258dee1f41e9a23f16d0603f024f",
+      "parameters": {
+        "critical_savior": {
+          "uses": 1,
+          "recovery": "short_or_long_rest",
+          "economy": "reaction",
+          "trigger_any": [
+            "creature_suffers_critical_hit",
+            "creature_reduced_to_zero_hp"
+          ],
+          "range_ft": 120,
+          "swap_spaces_by_teleport": true,
+          "roll": {
+            "dice_count": {
+              "half": "character_level"
+            },
+            "die": 6
+          },
+          "actor": {
+            "force_damage": "rolled_total",
+            "heroic_inspiration": true,
+            "exhaustion_reduce": 1
+          },
+          "target": {
+            "healing": "rolled_total",
+            "exhaustion_add": 1
+          }
+        },
+        "draining_presence": {
+          "trigger": "actor_finishes_short_or_long_rest",
+          "creatures_within_ft": 100,
+          "hit_dice_lost_each": 1,
+          "before_short_rest_hit_dice_spending": true
+        },
+        "final_sacrifice": {
+          "spell": {
+            "key": "dnd2024:spells/true_resurrection"
+          },
+          "uses": null,
+          "recovery": null,
+          "spell_slot_cost": 0,
+          "components": [],
+          "ability": "intelligence"
+        },
+        "final_sacrifice_price": {
+          "actor_dies_unpreventably": true,
+          "cannot_be_raised_by_any_means": true,
+          "soul_bound_to_resurrected_target": true,
+          "trigger": "midpoint_of_target_long_rest",
+          "roll": "1d20",
+          "on": 1,
+          "spawn": {
+            "key": "dnd2024:creatures/wraith"
+          },
+          "within_target_ft": 100,
+          "goal": "kill_target",
+          "duration_hours": 8,
+          "ends_if_wraith_dies": true,
+          "minimum_days_between_appearances": 30
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098967": {
+      "system": "dark_bargain",
+      "name": "Self-Serving Sacrifice (Wisdom)",
+      "family": "self-serving_sacrifice",
+      "stage": 0,
+      "source_sha256": "8f17fa56e276a0f1a1ffbf8486fef2376f05d9d92abc42049b44c1f450c04516",
+      "parameters": {
+        "critical_savior": {
+          "uses": 1,
+          "recovery": "short_or_long_rest",
+          "economy": "reaction",
+          "trigger_any": [
+            "creature_suffers_critical_hit",
+            "creature_reduced_to_zero_hp"
+          ],
+          "range_ft": 120,
+          "swap_spaces_by_teleport": true,
+          "roll": {
+            "dice_count": {
+              "half": "character_level"
+            },
+            "die": 6
+          },
+          "actor": {
+            "force_damage": "rolled_total",
+            "heroic_inspiration": true,
+            "exhaustion_reduce": 1
+          },
+          "target": {
+            "healing": "rolled_total",
+            "exhaustion_add": 1
+          }
+        },
+        "draining_presence": {
+          "trigger": "actor_finishes_short_or_long_rest",
+          "creatures_within_ft": 100,
+          "hit_dice_lost_each": 1,
+          "before_short_rest_hit_dice_spending": true
+        },
+        "final_sacrifice": {
+          "spell": {
+            "key": "dnd2024:spells/true_resurrection"
+          },
+          "uses": null,
+          "recovery": null,
+          "spell_slot_cost": 0,
+          "components": [],
+          "ability": "wisdom"
+        },
+        "final_sacrifice_price": {
+          "actor_dies_unpreventably": true,
+          "cannot_be_raised_by_any_means": true,
+          "soul_bound_to_resurrected_target": true,
+          "trigger": "midpoint_of_target_long_rest",
+          "roll": "1d20",
+          "on": 1,
+          "spawn": {
+            "key": "dnd2024:creatures/wraith"
+          },
+          "within_target_ft": 100,
+          "goal": "kill_target",
+          "duration_hours": 8,
+          "ends_if_wraith_dies": true,
+          "minimum_days_between_appearances": 30
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098968": {
+      "system": "dark_bargain",
+      "name": "Self-Serving Sacrifice (Charisma)",
+      "family": "self-serving_sacrifice",
+      "stage": 0,
+      "source_sha256": "0a80d32d82e5c1256ba739cbeb876e2ac11315c444c9f6ea107c4962f2304e1c",
+      "parameters": {
+        "critical_savior": {
+          "uses": 1,
+          "recovery": "short_or_long_rest",
+          "economy": "reaction",
+          "trigger_any": [
+            "creature_suffers_critical_hit",
+            "creature_reduced_to_zero_hp"
+          ],
+          "range_ft": 120,
+          "swap_spaces_by_teleport": true,
+          "roll": {
+            "dice_count": {
+              "half": "character_level"
+            },
+            "die": 6
+          },
+          "actor": {
+            "force_damage": "rolled_total",
+            "heroic_inspiration": true,
+            "exhaustion_reduce": 1
+          },
+          "target": {
+            "healing": "rolled_total",
+            "exhaustion_add": 1
+          }
+        },
+        "draining_presence": {
+          "trigger": "actor_finishes_short_or_long_rest",
+          "creatures_within_ft": 100,
+          "hit_dice_lost_each": 1,
+          "before_short_rest_hit_dice_spending": true
+        },
+        "final_sacrifice": {
+          "spell": {
+            "key": "dnd2024:spells/true_resurrection"
+          },
+          "uses": null,
+          "recovery": null,
+          "spell_slot_cost": 0,
+          "components": [],
+          "ability": "charisma"
+        },
+        "final_sacrifice_price": {
+          "actor_dies_unpreventably": true,
+          "cannot_be_raised_by_any_means": true,
+          "soul_bound_to_resurrected_target": true,
+          "trigger": "midpoint_of_target_long_rest",
+          "roll": "1d20",
+          "on": 1,
+          "spawn": {
+            "key": "dnd2024:creatures/wraith"
+          },
+          "within_target_ft": 100,
+          "goal": "kill_target",
+          "duration_hours": 8,
+          "ends_if_wraith_dies": true,
+          "minimum_days_between_appearances": 30
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098969": {
+      "system": "dark_bargain",
+      "name": "Shrouded Spirit",
+      "family": "shrouded_spirit",
+      "stage": 0,
+      "source_sha256": "245db66af39d4cb2f387b64450f83507a1e69ff814bcaff75b85cf1009db9512",
+      "parameters": {
+        "resistance": [
+          "necrotic"
+        ],
+        "saves_against_spells_and_effects_created_by_undead": "advantage",
+        "diet": {
+          "raw_flesh_lb_per_day": 1,
+          "fresh_required": false,
+          "failure": "malnutrition"
+        },
+        "detected_creature_type": "undead",
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098970": {
+      "system": "dark_bargain",
+      "name": "Skin of Coffin Nails",
+      "family": "skin_of_coffin_nails",
+      "stage": 0,
+      "source_sha256": "c74841743f2c3b7db3ef8fdf9a8a57a7ebbbc63b709edce9d9751df748cb7e9a",
+      "parameters": {
+        "iron_grit": {
+          "damage_type": {
+            "choose": [
+              "bludgeoning",
+              "piercing",
+              "slashing"
+            ],
+            "when": [
+              "select_bargain",
+              "finish_short_or_long_rest"
+            ]
+          },
+          "resistance": "chosen_type",
+          "critical_hit_of_chosen_type": "normal_hit"
+        },
+        "watery_doom": {
+          "trigger_any": [
+            "immersed_in_water",
+            "splashed_with_at_least_one_gallon_water_including_rain",
+            "other_liquid_at_gm_discretion"
+          ],
+          "until": "short_or_long_rest",
+          "speed_multiplier": 0.5,
+          "breath_hold_time_multiplier": 0.5,
+          "chosen_resistance_replaced_by": "vulnerability"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/dark_bargain/5098970/damage_type",
+          "reason": "Choose the Iron Grit damage type: Bludgeoning, Piercing, or Slashing."
+        }
+      ]
+    },
+    "5098971": {
+      "system": "dark_bargain",
+      "name": "Stilled Hungers",
+      "family": "stilled_hungers",
+      "stage": 0,
+      "source_sha256": "b1c376837d0ee781b1caf193953f05cbb4c010bbcc1c7affd2398b66f3937d3c",
+      "parameters": {
+        "no_exhaustion_from": [
+          "lack_of_food",
+          "lack_of_drink"
+        ],
+        "resistance": [
+          "poison"
+        ],
+        "saves_to_avoid_or_end_poisoned": "advantage",
+        "tenuous_psyche": {
+          "vulnerability": "psychic",
+          "saves_to_avoid_or_end_frightened": "disadvantage",
+          "suppressed_by": {
+            "key": "dnd2024:spells/calm_emotions"
+          },
+          "suppression_duration": "spell_duration"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098972": {
+      "system": "dark_bargain",
+      "name": "Unquenchable Fury",
+      "family": "unquenchable_fury",
+      "stage": 0,
+      "source_sha256": "47d1072bb1db40bffbf1b2e6484e1be3925b68982efa5e0ca3fc3448e91b3dee",
+      "parameters": {
+        "fury": {
+          "uses": 1,
+          "recovery": "long_rest_or_kill_humanoid",
+          "activate_any": [
+            "bonus_action",
+            "when_taking_attack_action_on_own_turn"
+          ],
+          "additional_melee_attacks_per_own_attack_action": 1,
+          "all_damage_reduction": "proficiency_bonus",
+          "ends_on": [
+            "incapacitated",
+            "death",
+            "own_turn_end_no_creature_seen_or_heard_within_60_ft"
+          ]
+        },
+        "red_haze": {
+          "trigger": "own_turn_start_while_fury",
+          "save": {
+            "ability": "wisdom",
+            "dc": 15
+          },
+          "success": "choose_end_or_continue_fury",
+          "failure": {
+            "stop_future_red_haze_saves": true,
+            "enemy": "nearest_seen_or_heard_creature",
+            "ties": "random",
+            "each_turn": [
+              "move_as_close_as_possible",
+              "attack_action_melee_against_enemy"
+            ],
+            "cannot_reach_enemy": "turn_ends_after_all_available_movement",
+            "retarget_on": [
+              "enemy_dies",
+              "enemy_no_longer_seen_or_heard"
+            ]
+          }
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5098973": {
+      "system": "dark_bargain",
+      "name": "Wings of Whispers",
+      "family": "wings_of_whispers",
+      "stage": 0,
+      "source_sha256": "e82324527986bcdaa1ec92c34a0a0409506a4f045acb2e140b8bba146dc614b9",
+      "parameters": {
+        "murderous_flight": {
+          "uses": 1,
+          "recovery": "short_or_long_rest",
+          "economy": "bonus_action",
+          "fly_speed": "speed",
+          "hover": true,
+          "duration_minutes": 10,
+          "early_reuse_cost": {
+            "exhaustion_add": 1
+          },
+          "birds": {
+            "emanation_ft": 20,
+            "creatures": false
+          }
+        },
+        "whispered_secrets": {
+          "from": "activation",
+          "until": "short_or_long_rest",
+          "dexterity_stealth": "disadvantage",
+          "other_creature_wisdom_insight_and_perception_against_actor": "advantage"
+        },
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807809": {
+      "system": "character_threads",
+      "name": "Bloodsworn (Level 1)",
+      "family": "bloodsworn",
+      "stage": 0,
+      "source_sha256": "0179fb6eccc29448f6df24b20663137519cc41a716d8d8b3c2359d19d27aeef8",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "cunning": {
+                "skill_proficiency": {
+                  "choose": [
+                    "deception",
+                    "insight",
+                    "intimidation"
+                  ]
+                }
+              },
+              "tool_of_vengeance": {
+                "magic_item": {
+                  "rarity": "common",
+                  "choice": "player"
+                }
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807809/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807809/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807810": {
+      "system": "character_threads",
+      "name": "Bloodsworn (Level 5)",
+      "family": "bloodsworn",
+      "stage": 1,
+      "source_sha256": "4c6e2e4f3e4444dc5393778b3473486a5e3bb9f2eb713c6258989019270fb976",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "cunning": {
+                "skill_proficiency": {
+                  "choose": [
+                    "deception",
+                    "insight",
+                    "intimidation"
+                  ]
+                }
+              },
+              "tool_of_vengeance": {
+                "magic_item": {
+                  "rarity": "common",
+                  "choice": "player"
+                }
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "enemy_of_my_enemy": {
+                "ally": "opposes_oath_enemy",
+                "grant": "underground_hideout"
+              },
+              "wrath": {
+                "spell_selection": {
+                  "name": "Wrathful Smite",
+                  "provider_candidates": [
+                    2324,
+                    2619220
+                  ],
+                  "requires_verified_rule_reference": true
+                },
+                "ability": {
+                  "choose": [
+                    "intelligence",
+                    "wisdom",
+                    "charisma"
+                  ]
+                },
+                "uses": 1,
+                "recovery": "long_rest",
+                "components": "normal_spell_components",
+                "slot_cost": "source_unspecified"
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807810/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807810/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        },
+        {
+          "path": "campaign_options/character_threads/5807810/wrath_spell",
+          "reason": "If Wrath is chosen, select the intended Wrathful Smite version (legacy 2324 or current 2619220), bind its verified rule, and confirm the slot cost. The source names no edition and does not explicitly waive slots; normal spell components apply."
+        }
+      ],
+      "conversion_gaps": [
+        {
+          "path": "campaign_options/character_threads/5807810/wrath_spell",
+          "reason": "The optional Wrath reward names Wrathful Smite without a version. Its spell rule needs conversion after the intended source version is established; other reward branches remain available."
+        }
+      ]
+    },
+    "5807811": {
+      "system": "character_threads",
+      "name": "Bloodsworn (Level 11)",
+      "family": "bloodsworn",
+      "stage": 2,
+      "source_sha256": "96b4b755d294c20f6657ef593e8634800563119a91e3f9223cad0966ee8098d7",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "cunning": {
+                "skill_proficiency": {
+                  "choose": [
+                    "deception",
+                    "insight",
+                    "intimidation"
+                  ]
+                }
+              },
+              "tool_of_vengeance": {
+                "magic_item": {
+                  "rarity": "common",
+                  "choice": "player"
+                }
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "enemy_of_my_enemy": {
+                "ally": "opposes_oath_enemy",
+                "grant": "underground_hideout"
+              },
+              "wrath": {
+                "spell_selection": {
+                  "name": "Wrathful Smite",
+                  "provider_candidates": [
+                    2324,
+                    2619220
+                  ],
+                  "requires_verified_rule_reference": true
+                },
+                "ability": {
+                  "choose": [
+                    "intelligence",
+                    "wisdom",
+                    "charisma"
+                  ]
+                },
+                "uses": 1,
+                "recovery": "long_rest",
+                "components": "normal_spell_components",
+                "slot_cost": "source_unspecified"
+              }
+            }
+          },
+          "2": {
+            "tenacity": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "own_turn_start",
+              "end_one_condition": [
+                "frightened",
+                "incapacitated",
+                "paralyzed",
+                "stunned"
+              ]
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807811/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807811/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        },
+        {
+          "path": "campaign_options/character_threads/5807811/wrath_spell",
+          "reason": "If Wrath is chosen, select the intended Wrathful Smite version (legacy 2324 or current 2619220), bind its verified rule, and confirm the slot cost. The source names no edition and does not explicitly waive slots; normal spell components apply."
+        }
+      ],
+      "conversion_gaps": [
+        {
+          "path": "campaign_options/character_threads/5807811/wrath_spell",
+          "reason": "The optional Wrath reward names Wrathful Smite without a version. Its spell rule needs conversion after the intended source version is established; other reward branches remain available."
+        }
+      ]
+    },
+    "5807812": {
+      "system": "character_threads",
+      "name": "Bloodsworn (Level 17)",
+      "family": "bloodsworn",
+      "stage": 3,
+      "source_sha256": "dcc8232dcf62d2f2f827c922a60c3749e11287c686f63b03033349fe744bf4ff",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "cunning": {
+                "skill_proficiency": {
+                  "choose": [
+                    "deception",
+                    "insight",
+                    "intimidation"
+                  ]
+                }
+              },
+              "tool_of_vengeance": {
+                "magic_item": {
+                  "rarity": "common",
+                  "choice": "player"
+                }
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "enemy_of_my_enemy": {
+                "ally": "opposes_oath_enemy",
+                "grant": "underground_hideout"
+              },
+              "wrath": {
+                "spell_selection": {
+                  "name": "Wrathful Smite",
+                  "provider_candidates": [
+                    2324,
+                    2619220
+                  ],
+                  "requires_verified_rule_reference": true
+                },
+                "ability": {
+                  "choose": [
+                    "intelligence",
+                    "wisdom",
+                    "charisma"
+                  ]
+                },
+                "uses": 1,
+                "recovery": "long_rest",
+                "components": "normal_spell_components",
+                "slot_cost": "source_unspecified"
+              }
+            }
+          },
+          "2": {
+            "tenacity": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "own_turn_start",
+              "end_one_condition": [
+                "frightened",
+                "incapacitated",
+                "paralyzed",
+                "stunned"
+              ]
+            }
+          },
+          "3": {
+            "dire_oath": {
+              "uses": 1,
+              "recovery": "seven_days",
+              "trigger": "finish_long_rest",
+              "target": "specific_oath_enemy_or_obstacle",
+              "duration_hours": 24,
+              "attack_rolls_against_target": "advantage",
+              "skill_checks_to_locate_or_learn_about_target": "advantage"
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807812/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807812/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        },
+        {
+          "path": "campaign_options/character_threads/5807812/wrath_spell",
+          "reason": "If Wrath is chosen, select the intended Wrathful Smite version (legacy 2324 or current 2619220), bind its verified rule, and confirm the slot cost. The source names no edition and does not explicitly waive slots; normal spell components apply."
+        }
+      ],
+      "conversion_gaps": [
+        {
+          "path": "campaign_options/character_threads/5807812/wrath_spell",
+          "reason": "The optional Wrath reward names Wrathful Smite without a version. Its spell rule needs conversion after the intended source version is established; other reward branches remain available."
+        }
+      ]
+    },
+    "5807813": {
+      "system": "character_threads",
+      "name": "Cursemarked (Level 1)",
+      "family": "cursemarked",
+      "stage": 0,
+      "source_sha256": "5691c7e03a579b2af94947592a038f5828a56365b4bb5c51732e8b6894182c20",
+      "parameters": {
+        "progression": "replace_all_prior_milestone_benefits",
+        "milestone": {
+          "trigger": {
+            "rolls": [
+              "saving_throw"
+            ],
+            "result_range": [
+              1,
+              3
+            ]
+          },
+          "self": {
+            "speed_add_ft": -10
+          },
+          "target": {
+            "speed_add_ft": 10
+          },
+          "sacrifice": {
+            "self": {
+              "speed_set": 0,
+              "until": "own_next_turn_start"
+            },
+            "target": {
+              "opportunity_attacks": false,
+              "ignore_difficult_terrain": true
+            },
+            "in_addition_to_normal_benefit": true
+          }
+        },
+        "prior_sacrifice_target_benefits": {},
+        "target": "other_chosen_creature_within_30_ft",
+        "default_duration": "own_next_turn_end",
+        "greater_sacrifice": {
+          "uses": 1,
+          "recovery": "long_rest"
+        },
+        "next_trigger_earliest": "own_turn_start_after_previous_effect_duration_expires",
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807813/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807813/trigger_roll",
+          "reason": "The source does not distinguish the natural d20 result from the modified roll total for Cursemarked triggers; confirm which applies."
+        }
+      ]
+    },
+    "5807814": {
+      "system": "character_threads",
+      "name": "Cursemarked (Level 5)",
+      "family": "cursemarked",
+      "stage": 1,
+      "source_sha256": "aaa5124e67c48ee3de5e7a193a975f3bfa92aa1aaa615defe880b7244583f3f7",
+      "parameters": {
+        "progression": "replace_all_prior_milestone_benefits",
+        "milestone": {
+          "trigger": {
+            "rolls": [
+              "saving_throw",
+              "ability_check"
+            ],
+            "result_range": [
+              1,
+              5
+            ]
+          },
+          "self": {
+            "ac_add": -2
+          },
+          "target": {
+            "ac_add": 2
+          },
+          "sacrifice": {
+            "self": {
+              "ac_add": -4
+            },
+            "target_choose": [
+              {
+                "ac_add": 4
+              },
+              {
+                "previous_sacrifice_stage": 0
+              }
+            ]
+          }
+        },
+        "prior_sacrifice_target_benefits": {
+          "0": {
+            "effect": {
+              "opportunity_attacks": false,
+              "ignore_difficult_terrain": true
+            }
+          }
+        },
+        "target": "other_chosen_creature_within_30_ft",
+        "default_duration": "own_next_turn_end",
+        "greater_sacrifice": {
+          "uses": 1,
+          "recovery": "long_rest"
+        },
+        "next_trigger_earliest": "own_turn_start_after_previous_effect_duration_expires",
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807814/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807814/trigger_roll",
+          "reason": "The source does not distinguish the natural d20 result from the modified roll total for Cursemarked triggers; confirm which applies."
+        }
+      ]
+    },
+    "5807815": {
+      "system": "character_threads",
+      "name": "Cursemarked (Level 11)",
+      "family": "cursemarked",
+      "stage": 2,
+      "source_sha256": "7530497d62d489627e2d23ed39293f2ba2253332e9921dbc6dc0e9505a40d156",
+      "parameters": {
+        "progression": "replace_all_prior_milestone_benefits",
+        "milestone": {
+          "trigger": {
+            "rolls": [
+              "saving_throw",
+              "ability_check",
+              "attack_roll"
+            ],
+            "result_range": [
+              1,
+              7
+            ]
+          },
+          "self": {
+            "cannot_take": [
+              "bonus_action",
+              "reaction"
+            ]
+          },
+          "target": {
+            "economy": "reaction",
+            "immediate_choose": [
+              "dash",
+              "help",
+              "hide",
+              "single_weapon_attack_in_range"
+            ]
+          },
+          "sacrifice": {
+            "self": {
+              "only_move_this_turn": true,
+              "if_action_already_used": "forgo_next_turn_action"
+            },
+            "target_choose": [
+              {
+                "next_turn_extra_actions": 1,
+                "except": "magic_action"
+              },
+              {
+                "previous_sacrifice_stage": [
+                  0,
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        "prior_sacrifice_target_benefits": {
+          "0": {
+            "effect": {
+              "opportunity_attacks": false,
+              "ignore_difficult_terrain": true
+            }
+          },
+          "1": {
+            "choose": [
+              {
+                "ac_add": 4
+              },
+              {
+                "previous_sacrifice_stage": 0
+              }
+            ]
+          }
+        },
+        "target": "other_chosen_creature_within_30_ft",
+        "default_duration": "own_next_turn_end",
+        "greater_sacrifice": {
+          "uses": 1,
+          "recovery": "long_rest"
+        },
+        "next_trigger_earliest": "own_turn_start_after_previous_effect_duration_expires",
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807815/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807815/trigger_roll",
+          "reason": "The source does not distinguish the natural d20 result from the modified roll total for Cursemarked triggers; confirm which applies."
+        }
+      ]
+    },
+    "5807816": {
+      "system": "character_threads",
+      "name": "Cursemarked (Level 17)",
+      "family": "cursemarked",
+      "stage": 3,
+      "source_sha256": "107654963d780b7ca74c291b60de4a1cb8265c7de52c6331765f9a78bc97d0b0",
+      "parameters": {
+        "progression": "replace_all_prior_milestone_benefits",
+        "milestone": {
+          "trigger": {
+            "rolls": [
+              "saving_throw",
+              "ability_check",
+              "attack_roll"
+            ],
+            "result_range": [
+              1,
+              9
+            ]
+          },
+          "self": {
+            "weapon_and_spell_damage_multiplier": 0.5
+          },
+          "target": {
+            "first_weapon_or_spell_damage": "maximum"
+          },
+          "sacrifice": {
+            "self": {
+              "weapon_and_spell_damage": 0
+            },
+            "target_choose": [
+              {
+                "next_weapon_or_spell_attack": "automatic_critical_hit",
+                "before": "target_next_turn_end"
+              },
+              {
+                "previous_sacrifice_stage": [
+                  0,
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        },
+        "prior_sacrifice_target_benefits": {
+          "0": {
+            "effect": {
+              "opportunity_attacks": false,
+              "ignore_difficult_terrain": true
+            }
+          },
+          "1": {
+            "choose": [
+              {
+                "ac_add": 4
+              },
+              {
+                "previous_sacrifice_stage": 0
+              }
+            ]
+          },
+          "2": {
+            "choose": [
+              {
+                "next_turn_extra_actions": 1,
+                "except": "magic_action"
+              },
+              {
+                "previous_sacrifice_stage": [
+                  0,
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        "target": "other_chosen_creature_within_30_ft",
+        "default_duration": "own_next_turn_end",
+        "greater_sacrifice": {
+          "uses": 1,
+          "recovery": "long_rest"
+        },
+        "next_trigger_earliest": "own_turn_start_after_previous_effect_duration_expires",
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807816/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807816/trigger_roll",
+          "reason": "The source does not distinguish the natural d20 result from the modified roll total for Cursemarked triggers; confirm which applies."
+        }
+      ]
+    },
+    "5807817": {
+      "system": "character_threads",
+      "name": "Explorer (Level 1)",
+      "family": "explorer",
+      "stage": 0,
+      "source_sha256": "68e532a651913d211e2bb8a5ef25aa4e657c8a67aaf6637689369c1b5c744f74",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "celebrity_explorer": {
+                "discount_percent": 30,
+                "purchases": [
+                  "lodging",
+                  "supplies",
+                  "food"
+                ],
+                "occasional_free_gifts": true
+              },
+              "explorers_aptitude": {
+                "skill_proficiency": {
+                  "choose": [
+                    "athletics",
+                    "history",
+                    "perception"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807817/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807817/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807818": {
+      "system": "character_threads",
+      "name": "Explorer (Level 5)",
+      "family": "explorer",
+      "stage": 1,
+      "source_sha256": "88e4210ae15a1495ea95af32c0fbf6bfa9ed42a0ce5263ba5bf080b119c1d8e9",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "celebrity_explorer": {
+                "discount_percent": 30,
+                "purchases": [
+                  "lodging",
+                  "supplies",
+                  "food"
+                ],
+                "occasional_free_gifts": true
+              },
+              "explorers_aptitude": {
+                "skill_proficiency": {
+                  "choose": [
+                    "athletics",
+                    "history",
+                    "perception"
+                  ]
+                }
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "traversal_expert": {
+                "uses": 1,
+                "recovery": "short_or_long_rest",
+                "economy": "bonus_action",
+                "move": "speed",
+                "ignore_difficult_terrain": true,
+                "strength_athletics_climb_jump_swim": "advantage_during_movement"
+              },
+              "scouts_awareness": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "duration_hours": 1,
+                "targets": "actor_and_allies_within_30_ft_who_can_see_actor",
+                "saves_against_nonmagical_traps_and_hazards": "advantage"
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807818/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807818/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807819": {
+      "system": "character_threads",
+      "name": "Explorer (Level 11)",
+      "family": "explorer",
+      "stage": 2,
+      "source_sha256": "b511458f8572e0c2dc368837bce443291ed04276323b4914c91ca828f8c2c06f",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "celebrity_explorer": {
+                "discount_percent": 30,
+                "purchases": [
+                  "lodging",
+                  "supplies",
+                  "food"
+                ],
+                "occasional_free_gifts": true
+              },
+              "explorers_aptitude": {
+                "skill_proficiency": {
+                  "choose": [
+                    "athletics",
+                    "history",
+                    "perception"
+                  ]
+                }
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "traversal_expert": {
+                "uses": 1,
+                "recovery": "short_or_long_rest",
+                "economy": "bonus_action",
+                "move": "speed",
+                "ignore_difficult_terrain": true,
+                "strength_athletics_climb_jump_swim": "advantage_during_movement"
+              },
+              "scouts_awareness": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "duration_hours": 1,
+                "targets": "actor_and_allies_within_30_ft_who_can_see_actor",
+                "saves_against_nonmagical_traps_and_hazards": "advantage"
+              }
+            }
+          },
+          "2": {
+            "choose": 1,
+            "options": {
+              "ennobled": {
+                "grant": [
+                  "noble_title",
+                  "moderate_estate"
+                ],
+                "charisma_checks": "advantage_if_target_impressed_or_intimidated_by_title",
+                "avoid_punishment_for_minor_infractions": true,
+                "abuse_may_revoke_title": true
+              },
+              "wayfarers_steps": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "cannot_get_lost_nonmagically": true,
+                "always_retrace_steps": true,
+                "economy": "bonus_action",
+                "actor_action": "dash",
+                "willing_hearing_allies_maximum": 4,
+                "ally_economy": "reaction",
+                "ally_action": "dash",
+                "movement_provokes_opportunity_attacks": false
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807819/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807819/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807820": {
+      "system": "character_threads",
+      "name": "Explorer (Level 17)",
+      "family": "explorer",
+      "stage": 3,
+      "source_sha256": "ee324449fce04394dc5902b9f64b5e6ea6d69e71833d541df448ee25317e601d",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "celebrity_explorer": {
+                "discount_percent": 30,
+                "purchases": [
+                  "lodging",
+                  "supplies",
+                  "food"
+                ],
+                "occasional_free_gifts": true
+              },
+              "explorers_aptitude": {
+                "skill_proficiency": {
+                  "choose": [
+                    "athletics",
+                    "history",
+                    "perception"
+                  ]
+                }
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "traversal_expert": {
+                "uses": 1,
+                "recovery": "short_or_long_rest",
+                "economy": "bonus_action",
+                "move": "speed",
+                "ignore_difficult_terrain": true,
+                "strength_athletics_climb_jump_swim": "advantage_during_movement"
+              },
+              "scouts_awareness": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "duration_hours": 1,
+                "targets": "actor_and_allies_within_30_ft_who_can_see_actor",
+                "saves_against_nonmagical_traps_and_hazards": "advantage"
+              }
+            }
+          },
+          "2": {
+            "choose": 1,
+            "options": {
+              "ennobled": {
+                "grant": [
+                  "noble_title",
+                  "moderate_estate"
+                ],
+                "charisma_checks": "advantage_if_target_impressed_or_intimidated_by_title",
+                "avoid_punishment_for_minor_infractions": true,
+                "abuse_may_revoke_title": true
+              },
+              "wayfarers_steps": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "cannot_get_lost_nonmagically": true,
+                "always_retrace_steps": true,
+                "economy": "bonus_action",
+                "actor_action": "dash",
+                "willing_hearing_allies_maximum": 4,
+                "ally_economy": "reaction",
+                "ally_action": "dash",
+                "movement_provokes_opportunity_attacks": false
+              }
+            }
+          },
+          "3": {
+            "far_traveler": {
+              "fast_pace_penalties_for_party": false,
+              "always_find_good_campsites": true,
+              "camping_and_foraging_d20_rolls": "advantage",
+              "animal_handling_to_calm_wild_animals": "advantage"
+            },
+            "one_with_the_land": {
+              "uses": 1,
+              "recovery": "24_hours",
+              "study_minutes": 1,
+              "requires": "good_vantage_point",
+              "questions": 1,
+              "range_miles": 5,
+              "question_topics": [
+                "natural_world",
+                "locations"
+              ],
+              "functions_like": {
+                "key": "dnd2024:spells/commune_with_nature"
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807820/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807820/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807821": {
+      "system": "character_threads",
+      "name": "Fatebound (Level 1)",
+      "family": "fatebound",
+      "stage": 0,
+      "source_sha256": "12c9210294f950a0e7a20207a21ebff63436790ef3761f6555079e5066435baf",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "dream_gift": {
+                "magic_item": {
+                  "rarity": "common",
+                  "choice": "gm",
+                  "received_in_dream": true
+                }
+              },
+              "fates_blessing": {
+                "uses": 1,
+                "recovery": "day",
+                "requires": "bloodied",
+                "economy": "reaction",
+                "saving_throw": "advantage"
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807821/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807821/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807822": {
+      "system": "character_threads",
+      "name": "Fatebound (Level 5)",
+      "family": "fatebound",
+      "stage": 1,
+      "source_sha256": "ead5554d0a3b7330c1521ba9fa18dfd2a675e0975c9d14ab47c5a61f39062cdb",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "dream_gift": {
+                "magic_item": {
+                  "rarity": "common",
+                  "choice": "gm",
+                  "received_in_dream": true
+                }
+              },
+              "fates_blessing": {
+                "uses": 1,
+                "recovery": "day",
+                "requires": "bloodied",
+                "economy": "reaction",
+                "saving_throw": "advantage"
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "strength_of_wyrd": {
+                "uses": "proficiency_bonus",
+                "recovery": "long_rest",
+                "requires": "bloodied",
+                "maximum_per_turn": 1,
+                "damage_bonus": "proficiency_bonus"
+              },
+              "enduring_wyrd": {
+                "uses": 1,
+                "recovery": "short_or_long_rest",
+                "trigger": "take_damage",
+                "economy": "reaction",
+                "temporary_hp": "proficiency_bonus"
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807822/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807822/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807823": {
+      "system": "character_threads",
+      "name": "Fatebound (Level 11)",
+      "family": "fatebound",
+      "stage": 2,
+      "source_sha256": "fa1694267bde503379ac18a66b8b99e90336607aa1cb564e15b8b16cb59d5c3e",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "dream_gift": {
+                "magic_item": {
+                  "rarity": "common",
+                  "choice": "gm",
+                  "received_in_dream": true
+                }
+              },
+              "fates_blessing": {
+                "uses": 1,
+                "recovery": "day",
+                "requires": "bloodied",
+                "economy": "reaction",
+                "saving_throw": "advantage"
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "strength_of_wyrd": {
+                "uses": "proficiency_bonus",
+                "recovery": "long_rest",
+                "requires": "bloodied",
+                "maximum_per_turn": 1,
+                "damage_bonus": "proficiency_bonus"
+              },
+              "enduring_wyrd": {
+                "uses": 1,
+                "recovery": "short_or_long_rest",
+                "trigger": "take_damage",
+                "economy": "reaction",
+                "temporary_hp": "proficiency_bonus"
+              }
+            }
+          },
+          "2": {
+            "doom_delayed": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "would_be_killed",
+              "instead": {
+                "hp": 0,
+                "stable": true
+              }
+            },
+            "knight_of_fate": {
+              "grant": [
+                "knighthood",
+                "holdings_revert_to_monarch_on_death"
+              ],
+              "charisma_checks_with_people_of_territory": "advantage",
+              "minor_gifts_and_favors": true
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807823/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807823/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807824": {
+      "system": "character_threads",
+      "name": "Fatebound (Level 17)",
+      "family": "fatebound",
+      "stage": 3,
+      "source_sha256": "abd7bc5a3c0a7637b0791f49abd52abccde9e1b1f87d2b63090b2298cf5e95f6",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "choose": 1,
+            "options": {
+              "dream_gift": {
+                "magic_item": {
+                  "rarity": "common",
+                  "choice": "gm",
+                  "received_in_dream": true
+                }
+              },
+              "fates_blessing": {
+                "uses": 1,
+                "recovery": "day",
+                "requires": "bloodied",
+                "economy": "reaction",
+                "saving_throw": "advantage"
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "strength_of_wyrd": {
+                "uses": "proficiency_bonus",
+                "recovery": "long_rest",
+                "requires": "bloodied",
+                "maximum_per_turn": 1,
+                "damage_bonus": "proficiency_bonus"
+              },
+              "enduring_wyrd": {
+                "uses": 1,
+                "recovery": "short_or_long_rest",
+                "trigger": "take_damage",
+                "economy": "reaction",
+                "temporary_hp": "proficiency_bonus"
+              }
+            }
+          },
+          "2": {
+            "doom_delayed": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "would_be_killed",
+              "instead": {
+                "hp": 0,
+                "stable": true
+              }
+            },
+            "knight_of_fate": {
+              "grant": [
+                "knighthood",
+                "holdings_revert_to_monarch_on_death"
+              ],
+              "charisma_checks_with_people_of_territory": "advantage",
+              "minor_gifts_and_favors": true
+            }
+          },
+          "3": {
+            "last_act_of_fate": {
+              "requires": "predetermined_fated_time_to_die",
+              "trigger_any": [
+                "reduced_to_zero_hp",
+                "killed_outright"
+              ],
+              "economy": "none",
+              "hp_set": 1,
+              "end_all_detrimental_conditions_and_harmful_effects": true,
+              "until": "own_next_turn_end",
+              "attack_rolls_and_ability_checks": "advantage",
+              "immunity": [
+                "all_damage",
+                "all_conditions"
+              ],
+              "other_immunities": "gm_discretion",
+              "all_damage_roll_bonus": "character_level",
+              "at_end": "die_permanently_no_restoration_to_life"
+            },
+            "glorious_end": {
+              "requires": "destiny_earns_appropriate_heroic_afterlife",
+              "targets": "allies_who_witness_death",
+              "all_d20_rolls": "advantage",
+              "duration_hours": 24
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807824/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807824/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807825": {
+      "system": "character_threads",
+      "name": "Herald (Level 1)",
+      "family": "herald",
+      "stage": 0,
+      "source_sha256": "5a87194b3f42321be8fe6bf5d28d5598648eec464ffcd6e1b458c6659698578a",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "storytellers_knack": {
+              "languages": {
+                "choose_count": 3
+              }
+            },
+            "performers_reward": {
+              "requires": "at_least_3_days_downtime_between_adventures",
+              "activity": "perform_stories",
+              "earn_gp": {
+                "multiply": [
+                  10,
+                  "character_level"
+                ]
+              },
+              "additional_downtime_increases_reward": false
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807825/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807825/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807826": {
+      "system": "character_threads",
+      "name": "Herald (Level 5)",
+      "family": "herald",
+      "stage": 1,
+      "source_sha256": "4bf233d377f00209dbe546500cfe6fd6f0d01a22ade8459c457c1e29b6752855",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "storytellers_knack": {
+              "languages": {
+                "choose_count": 3
+              }
+            },
+            "performers_reward": {
+              "requires": "at_least_3_days_downtime_between_adventures",
+              "activity": "perform_stories",
+              "earn_gp": {
+                "multiply": [
+                  10,
+                  "character_level"
+                ]
+              },
+              "additional_downtime_increases_reward": false
+            }
+          },
+          "1": {
+            "enthralling_speaker": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "performance_training": "proficient_or_expertise_if_already_proficient",
+              "requires": "performing_before_audience",
+              "spells_choose_on_use": [
+                {
+                  "key": "dnd2024:spells/charm_person"
+                },
+                {
+                  "key": "dnd2024:spells/suggestion"
+                }
+              ],
+              "ability": "charisma",
+              "components_waived": [
+                "somatic",
+                "material"
+              ],
+              "casting": "part_of_performance"
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807826/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807826/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807827": {
+      "system": "character_threads",
+      "name": "Herald (Level 11)",
+      "family": "herald",
+      "stage": 2,
+      "source_sha256": "a72988acae85c666fb7d4c474afe2a21c032332106a3b3839bb8c3c9613f6d5c",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "storytellers_knack": {
+              "languages": {
+                "choose_count": 3
+              }
+            },
+            "performers_reward": {
+              "requires": "at_least_3_days_downtime_between_adventures",
+              "activity": "perform_stories",
+              "earn_gp": {
+                "multiply": [
+                  10,
+                  "character_level"
+                ]
+              },
+              "additional_downtime_increases_reward": false
+            }
+          },
+          "1": {
+            "enthralling_speaker": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "performance_training": "proficient_or_expertise_if_already_proficient",
+              "requires": "performing_before_audience",
+              "spells_choose_on_use": [
+                {
+                  "key": "dnd2024:spells/charm_person"
+                },
+                {
+                  "key": "dnd2024:spells/suggestion"
+                }
+              ],
+              "ability": "charisma",
+              "components_waived": [
+                "somatic",
+                "material"
+              ],
+              "casting": "part_of_performance"
+            }
+          },
+          "2": {
+            "persuasive_words": {
+              "uses": "charisma_modifier",
+              "recovery": "long_rest",
+              "requires": "charisma_check_to_change_attitude_or_convince_of_cause",
+              "d20_minimum": 10
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807827/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807827/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807828": {
+      "system": "character_threads",
+      "name": "Herald (Level 17)",
+      "family": "herald",
+      "stage": 3,
+      "source_sha256": "8ed7fa1534a9b45f54c4c649ef20f91de6818e6b10e34d6d1dae387e92dd886a",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "storytellers_knack": {
+              "languages": {
+                "choose_count": 3
+              }
+            },
+            "performers_reward": {
+              "requires": "at_least_3_days_downtime_between_adventures",
+              "activity": "perform_stories",
+              "earn_gp": {
+                "multiply": [
+                  10,
+                  "character_level"
+                ]
+              },
+              "additional_downtime_increases_reward": false
+            }
+          },
+          "1": {
+            "enthralling_speaker": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "performance_training": "proficient_or_expertise_if_already_proficient",
+              "requires": "performing_before_audience",
+              "spells_choose_on_use": [
+                {
+                  "key": "dnd2024:spells/charm_person"
+                },
+                {
+                  "key": "dnd2024:spells/suggestion"
+                }
+              ],
+              "ability": "charisma",
+              "components_waived": [
+                "somatic",
+                "material"
+              ],
+              "casting": "part_of_performance"
+            }
+          },
+          "2": {
+            "persuasive_words": {
+              "uses": "charisma_modifier",
+              "recovery": "long_rest",
+              "requires": "charisma_check_to_change_attitude_or_convince_of_cause",
+              "d20_minimum": 10
+            }
+          },
+          "3": {
+            "choose": 1,
+            "options": {
+              "heroic_saga": {
+                "uses": 1,
+                "recovery": "seven_days",
+                "story_minutes": 10,
+                "targets": "hearing_creatures_other_than_self",
+                "boons_choose_on_use": {
+                  "luck": {
+                    "maximum_targets": 3,
+                    "one_use_before_target_next_long_rest": "advantage_on_save_attack_or_ability_check"
+                  },
+                  "wyrd": {
+                    "targets": 1,
+                    "one_use_before_target_next_long_rest": "replace_failed_save_or_attack_with_success",
+                    "attack_result": "minimum_needed_to_hit_not_critical"
+                  }
+                }
+              },
+              "song_of_matrimony": {
+                "grant": "mutual_love_and_engagement_to_royal_family_member"
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807828/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807828/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807829": {
+      "system": "character_threads",
+      "name": "Legend Hunter (Level 1)",
+      "family": "legend_hunter",
+      "stage": 0,
+      "source_sha256": "a7098ff6bacca7f807db6b1263e6d556a567738dd45ebdce45cf7a554fd30f14",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "predators_mark": {
+              "wisdom_survival_tracking": "advantage",
+              "reacquire_tracks_on_failure_minutes": {
+                "confined": 5,
+                "outdoors": 30
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807829/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        }
+      ]
+    },
+    "5807830": {
+      "system": "character_threads",
+      "name": "Legend Hunter (Level 5)",
+      "family": "legend_hunter",
+      "stage": 1,
+      "source_sha256": "73af8477350d843d5bab6452c3c59abaaf22412dabd45ffa6169b7640604d2f4",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "predators_mark": {
+              "wisdom_survival_tracking": "advantage",
+              "reacquire_tracks_on_failure_minutes": {
+                "confined": 5,
+                "outdoors": 30
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "unclouded_sight": {
+                "ignore_obscurement_from_weather": true,
+                "includes_magical_clouds_and_weather": true,
+                "excludes": "darkness"
+              },
+              "reliable_senses": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "trigger": "failed_check",
+                "checks": [
+                  "intelligence_investigation",
+                  "wisdom_perception",
+                  "wisdom_survival"
+                ],
+                "reroll": "take_higher"
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807830/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807830/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807831": {
+      "system": "character_threads",
+      "name": "Legend Hunter (Level 11)",
+      "family": "legend_hunter",
+      "stage": 2,
+      "source_sha256": "238a7eb0081d7c14e3fc0fe82cf940515dca93718fdd219382a5d7b683709f95",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "predators_mark": {
+              "wisdom_survival_tracking": "advantage",
+              "reacquire_tracks_on_failure_minutes": {
+                "confined": 5,
+                "outdoors": 30
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "unclouded_sight": {
+                "ignore_obscurement_from_weather": true,
+                "includes_magical_clouds_and_weather": true,
+                "excludes": "darkness"
+              },
+              "reliable_senses": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "trigger": "failed_check",
+                "checks": [
+                  "intelligence_investigation",
+                  "wisdom_perception",
+                  "wisdom_survival"
+                ],
+                "reroll": "take_higher"
+              }
+            }
+          },
+          "2": {
+            "finish_the_fight": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "actor_causes_creature_to_become_bloodied",
+              "effect": "next_hit_against_that_creature_is_critical"
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807831/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807831/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807832": {
+      "system": "character_threads",
+      "name": "Legend Hunter (Level 17)",
+      "family": "legend_hunter",
+      "stage": 3,
+      "source_sha256": "8ae4f01255eed186cfb9b345c88e6e56b790355dcaadfb6ce3f9135fd8a6c50d",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "predators_mark": {
+              "wisdom_survival_tracking": "advantage",
+              "reacquire_tracks_on_failure_minutes": {
+                "confined": 5,
+                "outdoors": 30
+              }
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "unclouded_sight": {
+                "ignore_obscurement_from_weather": true,
+                "includes_magical_clouds_and_weather": true,
+                "excludes": "darkness"
+              },
+              "reliable_senses": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "trigger": "failed_check",
+                "checks": [
+                  "intelligence_investigation",
+                  "wisdom_perception",
+                  "wisdom_survival"
+                ],
+                "reroll": "take_higher"
+              }
+            }
+          },
+          "2": {
+            "finish_the_fight": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "actor_causes_creature_to_become_bloodied",
+              "effect": "next_hit_against_that_creature_is_critical"
+            }
+          },
+          "3": {
+            "legend_breaker": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "hit_creature_with_legendary_resistance_or_actions",
+              "cost": "forgo_damage",
+              "save": {
+                "ability": "constitution",
+                "dc": {
+                  "add": [
+                    8,
+                    {
+                      "choose": [
+                        "strength_modifier",
+                        "wisdom_modifier"
+                      ]
+                    },
+                    "proficiency_bonus"
+                  ]
+                }
+              },
+              "failure": {
+                "cannot_use": [
+                  "legendary_resistance",
+                  "legendary_actions"
+                ],
+                "repeat_save": "each_target_turn_end",
+                "success": "end_effect"
+              }
+            },
+            "ultimate_favor": {
+              "healer_service_uses": 1,
+              "spell_level": [
+                6,
+                9
+              ],
+              "spell_purpose": [
+                "heal",
+                "regenerate",
+                "resurrect",
+                "remove_condition",
+                "remove_curse"
+              ],
+              "target": "actor_or_chosen_creature",
+              "timing": "actor_choice",
+              "even_if_healer_at_great_risk": true
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807832/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807832/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807833": {
+      "system": "character_threads",
+      "name": "Sworn Huskarl (Level 1)",
+      "family": "sworn_huskarl",
+      "stage": 0,
+      "source_sha256": "549820f7afcfc193598ecad799c3357674188f7258c75bd345374cde52a9681a",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "jarls_authority": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "before_intimidation_or_persuasion_check",
+              "requires": "target_knows_and_respects_or_fears_ruler",
+              "d20_result": 15
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807833/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        }
+      ]
+    },
+    "5807834": {
+      "system": "character_threads",
+      "name": "Sworn Huskarl (Level 5)",
+      "family": "sworn_huskarl",
+      "stage": 1,
+      "source_sha256": "63b19c1b15807c242c87aab59a22b14804b7aaff5214a2af73db2ba89ec9c0d9",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "jarls_authority": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "before_intimidation_or_persuasion_check",
+              "requires": "target_knows_and_respects_or_fears_ruler",
+              "d20_result": 15
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "extreme_loyalty": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "trigger": "own_turn_end_charmed",
+                "psychic_damage": "character_level",
+                "then": "end_charmed"
+              },
+              "jarls_gift": {
+                "magic_item": {
+                  "rarity": "uncommon",
+                  "choice": "player_and_gm",
+                  "suggestions": [
+                    "bracers_of_archery",
+                    "defenders_honey",
+                    "sentinel_shield",
+                    "wand_of_the_war_mage_plus_1",
+                    "weapon_plus_1"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807834/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807834/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807835": {
+      "system": "character_threads",
+      "name": "Sworn Huskarl (Level 11)",
+      "family": "sworn_huskarl",
+      "stage": 2,
+      "source_sha256": "75fa4d0f39cc5300ab62a15d7230842485cdffd5059733612db6dfb5f2d725d0",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "jarls_authority": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "before_intimidation_or_persuasion_check",
+              "requires": "target_knows_and_respects_or_fears_ruler",
+              "d20_result": 15
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "extreme_loyalty": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "trigger": "own_turn_end_charmed",
+                "psychic_damage": "character_level",
+                "then": "end_charmed"
+              },
+              "jarls_gift": {
+                "magic_item": {
+                  "rarity": "uncommon",
+                  "choice": "player_and_gm",
+                  "suggestions": [
+                    "bracers_of_archery",
+                    "defenders_honey",
+                    "sentinel_shield",
+                    "wand_of_the_war_mage_plus_1",
+                    "weapon_plus_1"
+                  ]
+                }
+              }
+            }
+          },
+          "2": {
+            "undying_loyalty": {
+              "uses": 1,
+              "recovery": "seven_days",
+              "trigger": "reduced_to_zero_hp",
+              "instead_hp": "character_level",
+              "does_not_prevent_instant_death_without_damage": true
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807835/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807835/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807836": {
+      "system": "character_threads",
+      "name": "Sworn Huskarl (Level 17)",
+      "family": "sworn_huskarl",
+      "stage": 3,
+      "source_sha256": "2b32add4e79b85b00cd77e01b46b7d2d22831c7e04a1972f591fbddec6b5ec61",
+      "parameters": {
+        "progression": "retain_earned_prior_milestones_once",
+        "milestones": {
+          "0": {
+            "jarls_authority": {
+              "uses": 1,
+              "recovery": "long_rest",
+              "trigger": "before_intimidation_or_persuasion_check",
+              "requires": "target_knows_and_respects_or_fears_ruler",
+              "d20_result": 15
+            }
+          },
+          "1": {
+            "choose": 1,
+            "options": {
+              "extreme_loyalty": {
+                "uses": 1,
+                "recovery": "long_rest",
+                "trigger": "own_turn_end_charmed",
+                "psychic_damage": "character_level",
+                "then": "end_charmed"
+              },
+              "jarls_gift": {
+                "magic_item": {
+                  "rarity": "uncommon",
+                  "choice": "player_and_gm",
+                  "suggestions": [
+                    "bracers_of_archery",
+                    "defenders_honey",
+                    "sentinel_shield",
+                    "wand_of_the_war_mage_plus_1",
+                    "weapon_plus_1"
+                  ]
+                }
+              }
+            }
+          },
+          "2": {
+            "undying_loyalty": {
+              "uses": 1,
+              "recovery": "seven_days",
+              "trigger": "reduced_to_zero_hp",
+              "instead_hp": "character_level",
+              "does_not_prevent_instant_death_without_damage": true
+            }
+          },
+          "3": {
+            "grand_reward": {
+              "magic_item": {
+                "rarity": "very_rare",
+                "choice": "player_and_gm",
+                "suggestions": [
+                  "weapon_plus_3",
+                  "dancing_sword",
+                  "oathbow",
+                  "staff_of_thunder_and_lightning",
+                  "horn_of_the_hrimthursalr"
+                ]
+              }
+            }
+          }
+        },
+        "earned_milestone_required": true,
+        "provider_level_label_is_not_automatic_progression": true,
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads/5807836/milestone",
+          "reason": "Confirm earned thread milestones and the character goal; level alone does not grant a milestone."
+        },
+        {
+          "path": "campaign_options/character_threads/5807836/rewards",
+          "reason": "Record the earned milestone reward choices and their skill, language, item, or spellcasting ability selections before granting those rewards."
+        }
+      ]
+    },
+    "5807896": {
+      "system": "runestones",
+      "name": "Algiz (Level 1)",
+      "family": "algiz",
+      "stage": 0,
+      "source_sha256": "7a7c6dfce5e0d434441a48c2209220a8fb001b62351af2c71ae71adc44d683fd",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_hours": "character_level",
+            "cannot_be_surprised": true,
+            "wisdom_perception_bonus": "proficiency_bonus",
+            "end_early": {
+              "economy": "reaction",
+              "initiative_bonus": "proficiency_bonus"
+            }
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807897": {
+      "system": "runestones",
+      "name": "Algiz (Level 2)",
+      "family": "algiz",
+      "stage": 1,
+      "source_sha256": "7d6e9846d040314553d0049ffcbd9a38daf380e54613ae3baba4b676822a6e2d",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_hours": "character_level",
+            "cannot_be_surprised": true,
+            "wisdom_perception_bonus": "proficiency_bonus",
+            "end_early": {
+              "economy": "reaction",
+              "initiative_bonus": "proficiency_bonus"
+            }
+          },
+          "1": {
+            "end_early_on_failed_save": {
+              "replace_result": "success"
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807898": {
+      "system": "runestones",
+      "name": "Algiz (Level 7)",
+      "family": "algiz",
+      "stage": 2,
+      "source_sha256": "3a1e0c2c23c91af3cec9c7a78a6f7b22ba7c784d9383e989264f3ad76a6c3d09",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_hours": "character_level",
+            "cannot_be_surprised": true,
+            "wisdom_perception_bonus": "proficiency_bonus",
+            "end_early": {
+              "economy": "reaction",
+              "initiative_bonus": "proficiency_bonus"
+            }
+          },
+          "1": {
+            "end_early_on_failed_save": {
+              "replace_result": "success"
+            }
+          },
+          "2": {
+            "end_early_for_allies_initiative": {
+              "friendly_within_ft": 60,
+              "bonus": {
+                "half": "proficiency_bonus"
+              }
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807899": {
+      "system": "runestones",
+      "name": "Algiz (Level 12)",
+      "family": "algiz",
+      "stage": 3,
+      "source_sha256": "deb04be7e6f7fa4957390ed9a22ca4dbd5ef9c38ee5db71921415d04580b4371",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_hours": "character_level",
+            "cannot_be_surprised": true,
+            "wisdom_perception_bonus": "proficiency_bonus",
+            "end_early": {
+              "economy": "reaction",
+              "initiative_bonus": "proficiency_bonus"
+            }
+          },
+          "1": {
+            "end_early_on_failed_save": {
+              "replace_result": "success"
+            }
+          },
+          "2": {
+            "end_early_for_allies_initiative": {
+              "friendly_within_ft": 60,
+              "bonus": {
+                "half": "proficiency_bonus"
+              }
+            }
+          },
+          "3": {
+            "patron": "Heimdall",
+            "within_ft": 100,
+            "unlimited_sketches_in_range": true,
+            "end_early_for_foresight": {
+              "target": "one_seen_creature",
+              "target_attacks_against_actor": "disadvantage",
+              "until": "own_next_turn_start"
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807900": {
+      "system": "runestones",
+      "name": "Ansuz (Level 1)",
+      "family": "ansuz",
+      "stage": 0,
+      "source_sha256": "aa1d31a9c4291b0dbad1ab99c339d296d7de2442e51a8c1895d6c758fd90ccc3",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "recover": {
+              "class_feature_uses": 1,
+              "requires": "limited_uses_per_day"
+            }
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807901": {
+      "system": "runestones",
+      "name": "Ansuz (Level 2)",
+      "family": "ansuz",
+      "stage": 1,
+      "source_sha256": "44c238f3335f0f7a46ea0eee1ceab66f3ed93de5b453a8fd8f0e43285c626179",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "recover": {
+              "class_feature_uses": 1,
+              "requires": "limited_uses_per_day"
+            }
+          },
+          "1": {
+            "recover_choose_instead": [
+              {
+                "spell_slots": 1,
+                "exclude_highest_castable_spell_level": true
+              },
+              {
+                "target": "willing_creature_within_30_ft",
+                "extra_class_feature_uses": 1,
+                "expires_minutes": 1
+              }
+            ]
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807902": {
+      "system": "runestones",
+      "name": "Ansuz (Level 7)",
+      "family": "ansuz",
+      "stage": 2,
+      "source_sha256": "6baff2d5681c36b9b6765405ea35871e75e9931450227204c8a0f8969c5ce890",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "recover": {
+              "class_feature_uses": 1,
+              "requires": "limited_uses_per_day"
+            }
+          },
+          "1": {
+            "recover_choose_instead": [
+              {
+                "spell_slots": 1,
+                "exclude_highest_castable_spell_level": true
+              },
+              {
+                "target": "willing_creature_within_30_ft",
+                "extra_class_feature_uses": 1,
+                "expires_minutes": 1
+              }
+            ]
+          },
+          "2": {
+            "recover_override": {
+              "class_feature_uses_or_spell_slots": 2,
+              "spell_slots_exclude_highest_castable_level": true
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807903": {
+      "system": "runestones",
+      "name": "Ansuz (Level 12)",
+      "family": "ansuz",
+      "stage": 3,
+      "source_sha256": "847628687458913179157d45e7a816ea5b930e838dfcff3a3f0bddc001ac59af",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "recover": {
+              "class_feature_uses": 1,
+              "requires": "limited_uses_per_day"
+            }
+          },
+          "1": {
+            "recover_choose_instead": [
+              {
+                "spell_slots": 1,
+                "exclude_highest_castable_spell_level": true
+              },
+              {
+                "target": "willing_creature_within_30_ft",
+                "extra_class_feature_uses": 1,
+                "expires_minutes": 1
+              }
+            ]
+          },
+          "2": {
+            "recover_override": {
+              "class_feature_uses_or_spell_slots": 2,
+              "spell_slots_exclude_highest_castable_level": true
+            }
+          },
+          "3": {
+            "patron": "Wotan",
+            "within_ft": 100,
+            "unlimited_sketches_in_range": true,
+            "each_limited_class_feature_or_spellcasting_use": {
+              "chance_percent_to_not_expend": 50,
+              "until": "own_turn_end"
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807904": {
+      "system": "runestones",
+      "name": "Berkanan (Level 1)",
+      "family": "berkanan",
+      "stage": 0,
+      "source_sha256": "e9772b9da4558e3d338ec650adff0b9dd198fcf52145f883c0ec117a25dcb6bd",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "target": "self_or_seen_friendly_creature_within_30_ft",
+            "conditions": [
+              "frightened",
+              "petrified",
+              "poisoned",
+              "stunned"
+            ],
+            "repeat_associated_save_immediately": true,
+            "success": "end_condition"
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807905": {
+      "system": "runestones",
+      "name": "Berkanan (Level 2)",
+      "family": "berkanan",
+      "stage": 1,
+      "source_sha256": "5bf560477427b5af45fd44905fcf47edc5389baf41e968aca677b3565c5d8b5f",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "target": "self_or_seen_friendly_creature_within_30_ft",
+            "conditions": [
+              "frightened",
+              "petrified",
+              "poisoned",
+              "stunned"
+            ],
+            "repeat_associated_save_immediately": true,
+            "success": "end_condition"
+          },
+          "1": {
+            "self_resistance": {
+              "choose_damage_types": 1,
+              "until": "own_next_turn_end"
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807906": {
+      "system": "runestones",
+      "name": "Berkanan (Level 7)",
+      "family": "berkanan",
+      "stage": 2,
+      "source_sha256": "02ea98083fbf9172aa7d435fca8f2bb7c4bf48789341c137ce721dc24f2c4cbb",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "target": "self_or_seen_friendly_creature_within_30_ft",
+            "conditions": [
+              "frightened",
+              "petrified",
+              "poisoned",
+              "stunned"
+            ],
+            "repeat_associated_save_immediately": true,
+            "success": "end_condition"
+          },
+          "1": {
+            "self_resistance": {
+              "choose_damage_types": 1,
+              "until": "own_next_turn_end"
+            }
+          },
+          "2": {
+            "temporary_hp": {
+              "total": {
+                "multiply": [
+                  2,
+                  "character_level"
+                ]
+              },
+              "divide_among": "self_and_friendly_creatures_within_30_ft",
+              "duration_minutes": 1
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807907": {
+      "system": "runestones",
+      "name": "Berkanan (Level 12)",
+      "family": "berkanan",
+      "stage": 3,
+      "source_sha256": "96a65e148d1eb2a6f707cfb958e3e2abb2d0509afb0d34abd1e82c3206065d5c",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "target": "self_or_seen_friendly_creature_within_30_ft",
+            "conditions": [
+              "frightened",
+              "petrified",
+              "poisoned",
+              "stunned"
+            ],
+            "repeat_associated_save_immediately": true,
+            "success": "end_condition"
+          },
+          "1": {
+            "self_resistance": {
+              "choose_damage_types": 1,
+              "until": "own_next_turn_end"
+            }
+          },
+          "2": {
+            "temporary_hp": {
+              "total": {
+                "multiply": [
+                  2,
+                  "character_level"
+                ]
+              },
+              "divide_among": "self_and_friendly_creatures_within_30_ft",
+              "duration_minutes": 1
+            }
+          },
+          "3": {
+            "patron": "Bear Maiden",
+            "within_ft": 100,
+            "unlimited_sketches_in_range": true,
+            "resistance_override": {
+              "choose_damage_types": 2,
+              "assign_one_each": [
+                "self",
+                "friendly_creature_within_30_ft"
+              ],
+              "until": "own_next_turn_end"
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807908": {
+      "system": "runestones",
+      "name": "Eiwaz (Level 1)",
+      "family": "eiwaz",
+      "stage": 0,
+      "source_sha256": "54da7b859532a48cf9cf02270885269e105e9aad3e21a8350c72603d889c7e23",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_minutes": 1,
+            "speed_add_ft": 10,
+            "climb_speed": "speed"
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807909": {
+      "system": "runestones",
+      "name": "Eiwaz (Level 2)",
+      "family": "eiwaz",
+      "stage": 1,
+      "source_sha256": "dc50bc88fbd01964ae4de4f7323e5e185f203587a99ced56597bfe6afc6650f7",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_minutes": 1,
+            "speed_add_ft": 10,
+            "climb_speed": "speed"
+          },
+          "1": {
+            "end_early": {
+              "economy": "reaction",
+              "trigger": "seen_creature_targets_actor_with_attack",
+              "teleport": "unoccupied_seen_space_within_30_ft"
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807910": {
+      "system": "runestones",
+      "name": "Eiwaz (Level 7)",
+      "family": "eiwaz",
+      "stage": 2,
+      "source_sha256": "58a41643a926beb119fc002d587b71f5e5a953b0f5683bd3705416935df95ad8",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_minutes": 1,
+            "speed_add_ft": 10,
+            "climb_speed": "speed"
+          },
+          "1": {
+            "end_early": {
+              "economy": "reaction",
+              "trigger": "seen_creature_targets_actor_with_attack",
+              "teleport": "unoccupied_seen_space_within_30_ft"
+            }
+          },
+          "2": {
+            "end_early_portal": {
+              "economy": "action",
+              "target": "seen_creature_within_30_ft",
+              "save": {
+                "ability": "strength",
+                "dc": {
+                  "add": [
+                    8,
+                    {
+                      "choose": [
+                        "wisdom_modifier",
+                        "charisma_modifier"
+                      ]
+                    },
+                    "proficiency_bonus"
+                  ]
+                }
+              },
+              "failure": "target_relocates_to_unoccupied_seen_space_within_90_ft"
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807911": {
+      "system": "runestones",
+      "name": "Eiwaz (Level 12)",
+      "family": "eiwaz",
+      "stage": 3,
+      "source_sha256": "d9c817d4064ccbb18ee365c64276671e8f25fda752d75c35c3becc90f9ef5a84",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_minutes": 1,
+            "speed_add_ft": 10,
+            "climb_speed": "speed"
+          },
+          "1": {
+            "end_early": {
+              "economy": "reaction",
+              "trigger": "seen_creature_targets_actor_with_attack",
+              "teleport": "unoccupied_seen_space_within_30_ft"
+            }
+          },
+          "2": {
+            "end_early_portal": {
+              "economy": "action",
+              "target": "seen_creature_within_30_ft",
+              "save": {
+                "ability": "strength",
+                "dc": {
+                  "add": [
+                    8,
+                    {
+                      "choose": [
+                        "wisdom_modifier",
+                        "charisma_modifier"
+                      ]
+                    },
+                    "proficiency_bonus"
+                  ]
+                }
+              },
+              "failure": "target_relocates_to_unoccupied_seen_space_within_90_ft"
+            }
+          },
+          "3": {
+            "patron": "Ratatoskr",
+            "within_ft": 100,
+            "unlimited_sketches_for_patron_use_in_range": true,
+            "speed_add_ft_override": 20,
+            "end_early": {
+              "economy_choose": [
+                "bonus_action",
+                "reaction"
+              ],
+              "teleport": "unoccupied_seen_space_within_60_ft"
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807912": {
+      "system": "runestones",
+      "name": "Gebo (Level 1)",
+      "family": "gebo",
+      "stage": 0,
+      "source_sha256": "683441a00e1a15d1da0a6680f5d37d0b5a222ddf69b75f81c32e3242357fb5fe",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration": "own_next_turn_end",
+            "damage_reduction": {
+              "roll": "1d10",
+              "add": {
+                "multiply": [
+                  2,
+                  "proficiency_bonus"
+                ]
+              },
+              "against": [
+                "attacks",
+                "effects"
+              ]
+            },
+            "fully_prevented_damage": "heal_self_by_roll_total"
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807913": {
+      "system": "runestones",
+      "name": "Gebo (Level 2)",
+      "family": "gebo",
+      "stage": 1,
+      "source_sha256": "eb2dbd69ab42df31710a6c3d069177d9e225ac68dccd53aa31a17ed7acd04aa8",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration": "own_next_turn_end",
+            "damage_reduction": {
+              "roll": "1d10",
+              "add": {
+                "multiply": [
+                  2,
+                  "proficiency_bonus"
+                ]
+              },
+              "against": [
+                "attacks",
+                "effects"
+              ]
+            },
+            "fully_prevented_damage": "heal_self_by_roll_total"
+          },
+          "1": {
+            "damage_reduction_override": {
+              "roll_once_on_sketch": "1d10",
+              "add": [
+                "character_level",
+                "proficiency_bonus"
+              ],
+              "against": [
+                "attacks",
+                "magical_effects"
+              ]
+            },
+            "share_with": {
+              "willing_creatures": 1,
+              "within_ft": 60,
+              "until": "own_next_turn_end"
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807914": {
+      "system": "runestones",
+      "name": "Gebo (Level 7)",
+      "family": "gebo",
+      "stage": 2,
+      "source_sha256": "1af31da728cea802185b63889b8e8d5633637c6ed6bdcd65abb3f33044d8fd00",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration": "own_next_turn_end",
+            "damage_reduction": {
+              "roll": "1d10",
+              "add": {
+                "multiply": [
+                  2,
+                  "proficiency_bonus"
+                ]
+              },
+              "against": [
+                "attacks",
+                "effects"
+              ]
+            },
+            "fully_prevented_damage": "heal_self_by_roll_total"
+          },
+          "1": {
+            "damage_reduction_override": {
+              "roll_once_on_sketch": "1d10",
+              "add": [
+                "character_level",
+                "proficiency_bonus"
+              ],
+              "against": [
+                "attacks",
+                "magical_effects"
+              ]
+            },
+            "share_with": {
+              "willing_creatures": 1,
+              "within_ft": 60,
+              "until": "own_next_turn_end"
+            }
+          },
+          "2": {
+            "share_with_override": {
+              "willing_creatures": 2,
+              "within_ft": 60,
+              "until": "own_next_turn_end"
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807915": {
+      "system": "runestones",
+      "name": "Gebo (Level 12)",
+      "family": "gebo",
+      "stage": 3,
+      "source_sha256": "b96d5c3891d163b06cb57d8eda3996ea5ec1018e625f731f10043361452b6114",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration": "own_next_turn_end",
+            "damage_reduction": {
+              "roll": "1d10",
+              "add": {
+                "multiply": [
+                  2,
+                  "proficiency_bonus"
+                ]
+              },
+              "against": [
+                "attacks",
+                "effects"
+              ]
+            },
+            "fully_prevented_damage": "heal_self_by_roll_total"
+          },
+          "1": {
+            "damage_reduction_override": {
+              "roll_once_on_sketch": "1d10",
+              "add": [
+                "character_level",
+                "proficiency_bonus"
+              ],
+              "against": [
+                "attacks",
+                "magical_effects"
+              ]
+            },
+            "share_with": {
+              "willing_creatures": 1,
+              "within_ft": 60,
+              "until": "own_next_turn_end"
+            }
+          },
+          "2": {
+            "share_with_override": {
+              "willing_creatures": 2,
+              "within_ft": 60,
+              "until": "own_next_turn_end"
+            }
+          },
+          "3": {
+            "patron": "Sif",
+            "within_ft": 100,
+            "unlimited_sketches_in_range": true,
+            "on_fully_prevented_damage": {
+              "economy": "reaction",
+              "target": "attacker_or_effect_source",
+              "attack": "ranged_spell",
+              "ability_choose": [
+                "wisdom",
+                "charisma"
+              ],
+              "on_hit": {
+                "damage": "reduction_roll_total",
+                "type": "radiant"
+              }
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807916": {
+      "system": "runestones",
+      "name": "Jera (Level 1)",
+      "family": "jera",
+      "stage": 0,
+      "source_sha256": "688603ce8922c7ba7707941197cea7af2cd6496f66b28b10252a9eac94bb332d",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "partner": "willing_creature_within_30_ft",
+            "duration": "own_next_turn_end",
+            "both_attack_rolls_against_same_creature": "advantage"
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807917": {
+      "system": "runestones",
+      "name": "Jera (Level 2)",
+      "family": "jera",
+      "stage": 1,
+      "source_sha256": "2f5a7b163f13ed8fc45d9ce346e6016117e7d084ccf17f34df0ae00356b836a4",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "partner": "willing_creature_within_30_ft",
+            "duration": "own_next_turn_end",
+            "both_attack_rolls_against_same_creature": "advantage"
+          },
+          "1": {
+            "both_ac_bonus": "proficiency_bonus",
+            "ac_requires": "partners_within_30_ft",
+            "assume_partner_damage": {
+              "economy": "reaction",
+              "trigger": "partner_takes_damage",
+              "maximum_fraction": 0.5
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807918": {
+      "system": "runestones",
+      "name": "Jera (Level 7)",
+      "family": "jera",
+      "stage": 2,
+      "source_sha256": "b733e84f9b85dd7012abe62ddad351242fd6ac137e5667b106593e8bc66cb76c",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "partner": "willing_creature_within_30_ft",
+            "duration": "own_next_turn_end",
+            "both_attack_rolls_against_same_creature": "advantage"
+          },
+          "1": {
+            "both_ac_bonus": "proficiency_bonus",
+            "ac_requires": "partners_within_30_ft",
+            "assume_partner_damage": {
+              "economy": "reaction",
+              "trigger": "partner_takes_damage",
+              "maximum_fraction": 0.5
+            }
+          },
+          "2": {
+            "requires": "both_partners_hit_same_creature_before_own_next_turn_end",
+            "second_hit_extra_damage": {
+              "amount": {
+                "multiply": [
+                  2,
+                  "proficiency_bonus"
+                ]
+              },
+              "type": "force"
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807919": {
+      "system": "runestones",
+      "name": "Jera (Level 12)",
+      "family": "jera",
+      "stage": 3,
+      "source_sha256": "6ce6030f888a2bcff2b319e10c79632457f5d665d162d96ce34eabf60d18f3d9",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "partner": "willing_creature_within_30_ft",
+            "duration": "own_next_turn_end",
+            "both_attack_rolls_against_same_creature": "advantage"
+          },
+          "1": {
+            "both_ac_bonus": "proficiency_bonus",
+            "ac_requires": "partners_within_30_ft",
+            "assume_partner_damage": {
+              "economy": "reaction",
+              "trigger": "partner_takes_damage",
+              "maximum_fraction": 0.5
+            }
+          },
+          "2": {
+            "requires": "both_partners_hit_same_creature_before_own_next_turn_end",
+            "second_hit_extra_damage": {
+              "amount": {
+                "multiply": [
+                  2,
+                  "proficiency_bonus"
+                ]
+              },
+              "type": "force"
+            }
+          },
+          "3": {
+            "patron_any": [
+              "Freyr",
+              "Freyja"
+            ],
+            "within_ft": 100,
+            "choose_self_patron_partner_gets_other": true,
+            "freyr": {
+              "requires": "associated_actor_within_100_ft_of_freyr",
+              "economy": "bonus_action",
+              "heal": "rune_owner_character_level"
+            },
+            "freyja": {
+              "requires": "associated_actor_within_100_ft_of_freyja",
+              "weapon_attack_extra_damage": {
+                "amount": {
+                  "multiply": [
+                    2,
+                    "rune_owner_proficiency_bonus"
+                  ]
+                },
+                "type": "radiant"
+              }
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807920": {
+      "system": "runestones",
+      "name": "Kaunen (Level 1)",
+      "family": "kaunen",
+      "stage": 0,
+      "source_sha256": "269b46766d1443f855428ae5644640bf2f6dca7b625c31f72f97c3f7564bd2b4",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "reroll_self": [
+              "attack_roll",
+              "ability_check"
+            ],
+            "must_use_new_result": true
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807921": {
+      "system": "runestones",
+      "name": "Kaunen (Level 2)",
+      "family": "kaunen",
+      "stage": 1,
+      "source_sha256": "ed1b9227697c4a07230ab276afa81f1ddf32c36005d89b944f3d69cebee414e1",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "reroll_self": [
+              "attack_roll",
+              "ability_check"
+            ],
+            "must_use_new_result": true
+          },
+          "1": {
+            "reroll_self_override": [
+              "attack_roll",
+              "ability_check",
+              "saving_throw"
+            ]
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807922": {
+      "system": "runestones",
+      "name": "Kaunen (Level 7)",
+      "family": "kaunen",
+      "stage": 2,
+      "source_sha256": "b6273c0f8244358e7f5b4305eb1a1ea0485d430568a773967da16735005d56c1",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "reroll_self": [
+              "attack_roll",
+              "ability_check"
+            ],
+            "must_use_new_result": true
+          },
+          "1": {
+            "reroll_self_override": [
+              "attack_roll",
+              "ability_check",
+              "saving_throw"
+            ]
+          },
+          "2": {
+            "sketch_for_other": {
+              "economy": "reaction",
+              "trigger": "creature_within_30_ft_fails_attack_ability_check_or_save",
+              "target_rerolls_d20": true,
+              "must_use_new_result": true
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807923": {
+      "system": "runestones",
+      "name": "Kaunen (Level 12)",
+      "family": "kaunen",
+      "stage": 3,
+      "source_sha256": "70fc5e288d001530eb7af040607529ae8ffd0ac4e7e7b42a74ba2ab87e2e1b28",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "reroll_self": [
+              "attack_roll",
+              "ability_check"
+            ],
+            "must_use_new_result": true
+          },
+          "1": {
+            "reroll_self_override": [
+              "attack_roll",
+              "ability_check",
+              "saving_throw"
+            ]
+          },
+          "2": {
+            "sketch_for_other": {
+              "economy": "reaction",
+              "trigger": "creature_within_30_ft_fails_attack_ability_check_or_save",
+              "target_rerolls_d20": true,
+              "must_use_new_result": true
+            }
+          },
+          "3": {
+            "patron": "Volund",
+            "within_ft": 100,
+            "unlimited_sketches_in_range": true,
+            "economy": "bonus_action",
+            "attack_rolls_ability_checks_and_saves": "advantage",
+            "until": "own_next_turn_end"
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807924": {
+      "system": "runestones",
+      "name": "Laukaz (Level 1)",
+      "family": "laukaz",
+      "stage": 0,
+      "source_sha256": "66a13db719bb4b416d7e2b64cc57fbef4c900505cc8307647c27f6173f0c277e",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_hours": "character_level",
+            "cannot_get_lost": "while_exposed_to_open_air",
+            "predict_natural_weather": true,
+            "end_early": {
+              "economy_choose": [
+                "bonus_action",
+                "reaction"
+              ],
+              "swim_speed": "speed",
+              "breathe_underwater": true,
+              "duration_minutes": 1
+            }
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807925": {
+      "system": "runestones",
+      "name": "Laukaz (Level 2)",
+      "family": "laukaz",
+      "stage": 1,
+      "source_sha256": "d67484971fb4f2889420e8398da21d2ac89bcc79ab5933ad469fe2b246ffa429",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_hours": "character_level",
+            "cannot_get_lost": "while_exposed_to_open_air",
+            "predict_natural_weather": true,
+            "end_early": {
+              "economy_choose": [
+                "bonus_action",
+                "reaction"
+              ],
+              "swim_speed": "speed",
+              "breathe_underwater": true,
+              "duration_minutes": 1
+            }
+          },
+          "1": {
+            "end_early_wind": {
+              "duration_minutes": 1,
+              "ranged_weapon_attacks_against_actor": "disadvantage",
+              "exclude": [
+                "vapor",
+                "gas",
+                "fog"
+              ],
+              "exclusion_requires": "dispersible_by_strong_wind"
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/runestones/5807925/end_rune_economy",
+          "reason": "The source does not give an action cost for ending the rune to create wind or a wave; confirm the cost for the selected power."
+        }
+      ]
+    },
+    "5807926": {
+      "system": "runestones",
+      "name": "Laukaz (Level 7)",
+      "family": "laukaz",
+      "stage": 2,
+      "source_sha256": "8a9ce2303bbce3bc7fb75c7a357bd8470270aba77f5a04486474a4ad6f397b75",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_hours": "character_level",
+            "cannot_get_lost": "while_exposed_to_open_air",
+            "predict_natural_weather": true,
+            "end_early": {
+              "economy_choose": [
+                "bonus_action",
+                "reaction"
+              ],
+              "swim_speed": "speed",
+              "breathe_underwater": true,
+              "duration_minutes": 1
+            }
+          },
+          "1": {
+            "end_early_wind": {
+              "duration_minutes": 1,
+              "ranged_weapon_attacks_against_actor": "disadvantage",
+              "exclude": [
+                "vapor",
+                "gas",
+                "fog"
+              ],
+              "exclusion_requires": "dispersible_by_strong_wind"
+            }
+          },
+          "2": {
+            "end_early_wave": {
+              "area": {
+                "shape": "cone",
+                "size_ft": 60,
+                "origin": "self"
+              },
+              "save": {
+                "ability": "dexterity",
+                "dc": {
+                  "add": [
+                    8,
+                    {
+                      "choose": [
+                        "intelligence_modifier",
+                        "wisdom_modifier",
+                        "charisma_modifier"
+                      ]
+                    },
+                    "proficiency_bonus"
+                  ]
+                }
+              },
+              "failure": {
+                "damage": [
+                  {
+                    "dice": "2d8",
+                    "type": "bludgeoning"
+                  },
+                  {
+                    "dice": "3d8",
+                    "type": "cold"
+                  }
+                ],
+                "condition": "prone"
+              },
+              "success": {
+                "damage_multiplier": 0.5,
+                "prone": false
+              }
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/runestones/5807926/end_rune_economy",
+          "reason": "The source does not give an action cost for ending the rune to create wind or a wave; confirm the cost for the selected power."
+        }
+      ]
+    },
+    "5807927": {
+      "system": "runestones",
+      "name": "Laukaz (Level 12)",
+      "family": "laukaz",
+      "stage": 3,
+      "source_sha256": "fe981f7a79a9b77b8fad7d9468b7caaf935b6c3fdb479e891c6672699bde5f54",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "duration_hours": "character_level",
+            "cannot_get_lost": "while_exposed_to_open_air",
+            "predict_natural_weather": true,
+            "end_early": {
+              "economy_choose": [
+                "bonus_action",
+                "reaction"
+              ],
+              "swim_speed": "speed",
+              "breathe_underwater": true,
+              "duration_minutes": 1
+            }
+          },
+          "1": {
+            "end_early_wind": {
+              "duration_minutes": 1,
+              "ranged_weapon_attacks_against_actor": "disadvantage",
+              "exclude": [
+                "vapor",
+                "gas",
+                "fog"
+              ],
+              "exclusion_requires": "dispersible_by_strong_wind"
+            }
+          },
+          "2": {
+            "end_early_wave": {
+              "area": {
+                "shape": "cone",
+                "size_ft": 60,
+                "origin": "self"
+              },
+              "save": {
+                "ability": "dexterity",
+                "dc": {
+                  "add": [
+                    8,
+                    {
+                      "choose": [
+                        "intelligence_modifier",
+                        "wisdom_modifier",
+                        "charisma_modifier"
+                      ]
+                    },
+                    "proficiency_bonus"
+                  ]
+                }
+              },
+              "failure": {
+                "damage": [
+                  {
+                    "dice": "2d8",
+                    "type": "bludgeoning"
+                  },
+                  {
+                    "dice": "3d8",
+                    "type": "cold"
+                  }
+                ],
+                "condition": "prone"
+              },
+              "success": {
+                "damage_multiplier": 0.5,
+                "prone": false
+              }
+            }
+          },
+          "3": {
+            "patron": "Njord",
+            "within_ft": 100,
+            "unlimited_sketches_for_patron_use_in_range": true,
+            "end_early": {
+              "economy": "reaction",
+              "trigger": "seen_creature_within_60_ft_targets_actor_with_weapon_attack",
+              "result": "attack_misses"
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/runestones/5807927/end_rune_economy",
+          "reason": "The source does not give an action cost for ending the rune to create wind or a wave; confirm the cost for the selected power."
+        }
+      ]
+    },
+    "5807928": {
+      "system": "runestones",
+      "name": "Perto (Level 1)",
+      "family": "perto",
+      "stage": 0,
+      "source_sha256": "f3e6aa2e85530b0a10299fadcb318c4353eef445a86f4dfbd356dff691aa6a53",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "die": "1d6",
+            "self_d20_roll_bonus": "one_die",
+            "expires": "own_next_turn_end"
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807929": {
+      "system": "runestones",
+      "name": "Perto (Level 2)",
+      "family": "perto",
+      "stage": 1,
+      "source_sha256": "e86159dd2e31992004c1ae6b4617c93cfacfa0fec98317f9fa0ee8ad1bd410db",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "die": "1d6",
+            "self_d20_roll_bonus": "one_die",
+            "expires": "own_next_turn_end"
+          },
+          "1": {
+            "sketch_for_other": {
+              "economy": "reaction",
+              "trigger": "seen_creature_within_30_ft_makes_d20_roll",
+              "modifier": "add_or_subtract_one_perto_die"
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807930": {
+      "system": "runestones",
+      "name": "Perto (Level 7)",
+      "family": "perto",
+      "stage": 2,
+      "source_sha256": "9c17a4b605eee387518178aab6dcd61ea5bcc6396981eabf7d6f55af972305a8",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "die": "1d6",
+            "self_d20_roll_bonus": "one_die",
+            "expires": "own_next_turn_end"
+          },
+          "1": {
+            "sketch_for_other": {
+              "economy": "reaction",
+              "trigger": "seen_creature_within_30_ft_makes_d20_roll",
+              "modifier": "add_or_subtract_one_perto_die"
+            }
+          },
+          "2": {
+            "die_override": "1d8",
+            "after_adding_die_to_d20": {
+              "hide": "immediately_no_action_if_terrain_and_circumstances_permit"
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807931": {
+      "system": "runestones",
+      "name": "Perto (Level 12)",
+      "family": "perto",
+      "stage": 3,
+      "source_sha256": "b5b52dae7652490b207e03ec0cf91669e76fb508ab9661cdd87794b6207eef1f",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "die": "1d6",
+            "self_d20_roll_bonus": "one_die",
+            "expires": "own_next_turn_end"
+          },
+          "1": {
+            "sketch_for_other": {
+              "economy": "reaction",
+              "trigger": "seen_creature_within_30_ft_makes_d20_roll",
+              "modifier": "add_or_subtract_one_perto_die"
+            }
+          },
+          "2": {
+            "die_override": "1d8",
+            "after_adding_die_to_d20": {
+              "hide": "immediately_no_action_if_terrain_and_circumstances_permit"
+            }
+          },
+          "3": {
+            "patron": "Loki",
+            "within_ft": 100,
+            "unlimited_sketches_in_range": true,
+            "rolls_override": 2,
+            "assign": [
+              "one_to_self",
+              "one_to_seen_creature_within_30_ft"
+            ],
+            "both_expire": "own_next_turn_start"
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807932": {
+      "system": "runestones",
+      "name": "Sowilo (Level 1)",
+      "family": "sowilo",
+      "stage": 0,
+      "source_sha256": "e1b3c9a1d76124bb344bcba04d3a1ac74d2e54f6e0031c518009f187f4074fd7",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "bright_light_radius_ft": 20,
+            "additional_dim_light_ft": 20,
+            "duration": "own_next_turn_end",
+            "while_in_radiance": {
+              "charisma_checks_and_saves": "advantage"
+            }
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807933": {
+      "system": "runestones",
+      "name": "Sowilo (Level 2)",
+      "family": "sowilo",
+      "stage": 1,
+      "source_sha256": "e145d64dace1bb41a968c8b27088360146b83dbe7602bab729f216d339206a4b",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "bright_light_radius_ft": 20,
+            "additional_dim_light_ft": 20,
+            "duration": "own_next_turn_end",
+            "while_in_radiance": {
+              "charisma_checks_and_saves": "advantage"
+            }
+          },
+          "1": {
+            "necrotic_resistance_targets": [
+              "self",
+              "one_friendly_creature_within_light_radius"
+            ],
+            "radiant_damage": {
+              "targets": [
+                "aberration",
+                "undead"
+              ],
+              "trigger_any": [
+                "enters_light_radius",
+                "starts_turn_in_light_radius"
+              ],
+              "amount": "character_level"
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807934": {
+      "system": "runestones",
+      "name": "Sowilo (Level 7)",
+      "family": "sowilo",
+      "stage": 2,
+      "source_sha256": "a277f20a1e20b2935c9f4b7f8b23e786254e143caa29a86630cd2f04d43bb7a2",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "bright_light_radius_ft": 20,
+            "additional_dim_light_ft": 20,
+            "duration": "own_next_turn_end",
+            "while_in_radiance": {
+              "charisma_checks_and_saves": "advantage"
+            }
+          },
+          "1": {
+            "necrotic_resistance_targets": [
+              "self",
+              "one_friendly_creature_within_light_radius"
+            ],
+            "radiant_damage": {
+              "targets": [
+                "aberration",
+                "undead"
+              ],
+              "trigger_any": [
+                "enters_light_radius",
+                "starts_turn_in_light_radius"
+              ],
+              "amount": "character_level"
+            }
+          },
+          "2": {
+            "inspire": {
+              "economy": "bonus_action",
+              "target": "seen_friendly_creature_within_30_ft",
+              "target_economy": "reaction",
+              "target_effects": [
+                "move_up_to_half_speed",
+                "one_melee_attack"
+              ]
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807935": {
+      "system": "runestones",
+      "name": "Sowilo (Level 12)",
+      "family": "sowilo",
+      "stage": 3,
+      "source_sha256": "699f06568d122e595dc5a32af47c5b78883a90401b63b24416a3c98de28a420b",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "bright_light_radius_ft": 20,
+            "additional_dim_light_ft": 20,
+            "duration": "own_next_turn_end",
+            "while_in_radiance": {
+              "charisma_checks_and_saves": "advantage"
+            }
+          },
+          "1": {
+            "necrotic_resistance_targets": [
+              "self",
+              "one_friendly_creature_within_light_radius"
+            ],
+            "radiant_damage": {
+              "targets": [
+                "aberration",
+                "undead"
+              ],
+              "trigger_any": [
+                "enters_light_radius",
+                "starts_turn_in_light_radius"
+              ],
+              "amount": "character_level"
+            }
+          },
+          "2": {
+            "inspire": {
+              "economy": "bonus_action",
+              "target": "seen_friendly_creature_within_30_ft",
+              "target_economy": "reaction",
+              "target_effects": [
+                "move_up_to_half_speed",
+                "one_melee_attack"
+              ]
+            }
+          },
+          "3": {
+            "patron": "Baldur",
+            "within_ft": 100,
+            "unlimited_sketches_for_patron_use_in_range": true,
+            "beam": {
+              "economy": "action",
+              "attack": "ranged_spell",
+              "ability_choose": [
+                "dexterity",
+                "charisma"
+              ],
+              "on_hit": {
+                "damage": {
+                  "dice": "5d8",
+                  "type": "radiant"
+                },
+                "condition": "blinded",
+                "condition_until": "own_next_turn_start"
+              },
+              "ends_rune_and_light": true
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/runestones/5807935/beam_range",
+          "reason": "The source does not give a range for the patron beam; confirm it before using the beam."
+        }
+      ]
+    },
+    "5807936": {
+      "system": "runestones",
+      "name": "Thurisaz (Level 1)",
+      "family": "thurisaz",
+      "stage": 0,
+      "source_sha256": "de55ed96b84f1c89870b9adb82895ac6a9574e8d5e0ccd77155484a86dc47248",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "melee_weapon_extra_damage": {
+              "dice": "1d4",
+              "type": "lightning"
+            },
+            "duration": "own_next_turn_end",
+            "on_extra_lightning_damage": {
+              "optional_push_away_maximum_ft": 10
+            }
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807937": {
+      "system": "runestones",
+      "name": "Thurisaz (Level 2)",
+      "family": "thurisaz",
+      "stage": 1,
+      "source_sha256": "e232d85d2ace790423b00906852b798d92ad343fcc5e7d1db562f9db470774e5",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "melee_weapon_extra_damage": {
+              "dice": "1d4",
+              "type": "lightning"
+            },
+            "duration": "own_next_turn_end",
+            "on_extra_lightning_damage": {
+              "optional_push_away_maximum_ft": 10
+            }
+          },
+          "1": {
+            "extra_damage_dice_override": "1d6",
+            "on_melee_extra_lightning_damage": {
+              "second_target": "seen_creature_within_5_ft_of_initial_target",
+              "damage": "same_extra_lightning_damage"
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807938": {
+      "system": "runestones",
+      "name": "Thurisaz (Level 7)",
+      "family": "thurisaz",
+      "stage": 2,
+      "source_sha256": "066372ce5c09abb4ae866c1874d84aae80f0d8d61469b1b8a85e16703487b15b",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "melee_weapon_extra_damage": {
+              "dice": "1d4",
+              "type": "lightning"
+            },
+            "duration": "own_next_turn_end",
+            "on_extra_lightning_damage": {
+              "optional_push_away_maximum_ft": 10
+            }
+          },
+          "1": {
+            "extra_damage_dice_override": "1d6",
+            "on_melee_extra_lightning_damage": {
+              "second_target": "seen_creature_within_5_ft_of_initial_target",
+              "damage": "same_extra_lightning_damage"
+            }
+          },
+          "2": {
+            "extra_damage_dice_override": "1d8",
+            "wielded_melee_weapons": {
+              "thrown_range_ft": [
+                20,
+                60
+              ]
+            },
+            "any_thrown_weapon_on_hit": "magically_return_to_hand_at_own_turn_end"
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807939": {
+      "system": "runestones",
+      "name": "Thurisaz (Level 12)",
+      "family": "thurisaz",
+      "stage": 3,
+      "source_sha256": "6136f2ec1b3526142670053e76743eaaa91c9003b6bd035e46e9e44b10efe6d1",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "melee_weapon_extra_damage": {
+              "dice": "1d4",
+              "type": "lightning"
+            },
+            "duration": "own_next_turn_end",
+            "on_extra_lightning_damage": {
+              "optional_push_away_maximum_ft": 10
+            }
+          },
+          "1": {
+            "extra_damage_dice_override": "1d6",
+            "on_melee_extra_lightning_damage": {
+              "second_target": "seen_creature_within_5_ft_of_initial_target",
+              "damage": "same_extra_lightning_damage"
+            }
+          },
+          "2": {
+            "extra_damage_dice_override": "1d8",
+            "wielded_melee_weapons": {
+              "thrown_range_ft": [
+                20,
+                60
+              ]
+            },
+            "any_thrown_weapon_on_hit": "magically_return_to_hand_at_own_turn_end"
+          },
+          "3": {
+            "patron": "Thor",
+            "within_ft": 100,
+            "unlimited_sketches_for_patron_use_in_range": true,
+            "strike_ground_with_weapon": {
+              "economy": "action",
+              "maximum_targets": 3,
+              "targets": "seen_targets_within_60_ft",
+              "attack": "ranged_spell",
+              "ability_choose": [
+                "strength",
+                "dexterity"
+              ],
+              "on_hit": {
+                "dice": "3d12",
+                "type": "lightning"
+              },
+              "ends_rune": true
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807940": {
+      "system": "runestones",
+      "name": "Tiwaz (Level 1)",
+      "family": "tiwaz",
+      "stage": 0,
+      "source_sha256": "2424188a0a680cb0ec86b810b8f82f0959117fc37e62ff498dec655d81e2c67f",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "focused_target": "seen_creature_within_30_ft",
+            "duration_minutes": 1,
+            "detect_target_lies": true,
+            "target_cannot_be_invisible_to_actor": true,
+            "pinpoint_target_within_ft": 60
+          }
+        },
+        "selected_stage": 0,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807941": {
+      "system": "runestones",
+      "name": "Tiwaz (Level 2)",
+      "family": "tiwaz",
+      "stage": 1,
+      "source_sha256": "eb9e98ff86a88e9726c72037cc4212dcd4eacbca31c8957eb657ca83c8beffb2",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "focused_target": "seen_creature_within_30_ft",
+            "duration_minutes": 1,
+            "detect_target_lies": true,
+            "target_cannot_be_invisible_to_actor": true,
+            "pinpoint_target_within_ft": 60
+          },
+          "1": {
+            "on_hit_focused_target": {
+              "optional_next_attack_against_target": "advantage",
+              "before": "own_next_turn_end",
+              "if_subsequent_attack_hits": {
+                "extra_damage": "character_level",
+                "ends_rune": true
+              }
+            }
+          }
+        },
+        "selected_stage": 1,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807942": {
+      "system": "runestones",
+      "name": "Tiwaz (Level 7)",
+      "family": "tiwaz",
+      "stage": 2,
+      "source_sha256": "9ed5ac9c24952f3d9b49c51a9ca5069226175105c8535bd8acce199a41361882",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "focused_target": "seen_creature_within_30_ft",
+            "duration_minutes": 1,
+            "detect_target_lies": true,
+            "target_cannot_be_invisible_to_actor": true,
+            "pinpoint_target_within_ft": 60
+          },
+          "1": {
+            "on_hit_focused_target": {
+              "optional_next_attack_against_target": "advantage",
+              "before": "own_next_turn_end",
+              "if_subsequent_attack_hits": {
+                "extra_damage": "character_level",
+                "ends_rune": true
+              }
+            }
+          },
+          "2": {
+            "cannot_be_frightened_by": "focused_target",
+            "first_focused_target_hit": {
+              "resistance": "attack_damage_type",
+              "until": "own_next_turn_end",
+              "ends_rune": true
+            }
+          }
+        },
+        "selected_stage": 2,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    },
+    "5807943": {
+      "system": "runestones",
+      "name": "Tiwaz (Level 12)",
+      "family": "tiwaz",
+      "stage": 3,
+      "source_sha256": "acf7348ecbebb928bb7a7b0a3eb075053a3d096530e1f9768658813147726c05",
+      "parameters": {
+        "activation": {
+          "uses": 1,
+          "recovery": "day",
+          "economy": "none"
+        },
+        "progression": "selected_power_tier_only_no_automatic_level_upgrade",
+        "stacking": "later_overrides_replace_matching_earlier_values_never_add_both",
+        "powers": {
+          "0": {
+            "focused_target": "seen_creature_within_30_ft",
+            "duration_minutes": 1,
+            "detect_target_lies": true,
+            "target_cannot_be_invisible_to_actor": true,
+            "pinpoint_target_within_ft": 60
+          },
+          "1": {
+            "on_hit_focused_target": {
+              "optional_next_attack_against_target": "advantage",
+              "before": "own_next_turn_end",
+              "if_subsequent_attack_hits": {
+                "extra_damage": "character_level",
+                "ends_rune": true
+              }
+            }
+          },
+          "2": {
+            "cannot_be_frightened_by": "focused_target",
+            "first_focused_target_hit": {
+              "resistance": "attack_damage_type",
+              "until": "own_next_turn_end",
+              "ends_rune": true
+            }
+          },
+          "3": {
+            "patron": "Tyr",
+            "within_ft": 100,
+            "unlimited_sketches_for_patron_use_in_range": true,
+            "trigger": "focused_target_within_60_ft_damages_someone_other_than_actor",
+            "economy": "reaction",
+            "take_fraction_of_damage": 0.5,
+            "if_actor_hits_focused_target_next_turn": {
+              "extra_force_damage": "damage_taken_from_reaction",
+              "ends_rune": true
+            }
+          }
+        },
+        "selected_stage": 3,
+        "grant_scope": "selected_option_only",
+        "secondary_selections_from": "splat_character.choices",
+        "stat_contributions": "already_in_supplied_totals_do_not_add_again"
+      },
+      "required_inputs": []
+    }
+  }
+}

@@ -7,6 +7,7 @@ use crate::content::character::{
     CastingBinding, Choice, ClassProgression, Contribution, EntryRef, Gap, Import, Sheet,
 };
 use std::sync::OnceLock;
+mod campaign_options;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -417,6 +418,7 @@ pub(super) fn complete(
         }
     }
     collect_choices(record, &mut sheet, &mut report);
+    campaign_options::complete(&mut rules, &mut sheet, &mut report)?;
     for (group, values) in record.source.raw["modifiers"]
         .as_object()
         .into_iter()
@@ -495,6 +497,12 @@ pub(super) fn complete(
         let cov: Import = serde_yaml_ng::from_value(entry.fields["splat_import"].clone())
             .map_err(|e| e.to_string())?;
         report.engine_gaps.extend(cov.engine_gaps);
+        for mut gap in cov.gaps {
+            gap.path = format!("dependencies/{}/{}", entry.id, gap.path);
+            if !report.gaps.iter().any(|g| g.path == gap.path) {
+                report.gaps.push(gap);
+            }
+        }
         for input in cov.required_inputs {
             if !report.required_inputs.iter().any(|i| i.path == input.path) {
                 report.required_inputs.push(input);
@@ -594,7 +602,11 @@ fn collect_choices(record: &EntitySnapshot, sheet: &mut Sheet, report: &mut Impo
                         .map(|f| string(&f["name"]).into())
                         .unwrap_or_else(|| "Future class choice".into())
                 });
-            if active && selected.is_none() && c["isOptional"] != true {
+            if active
+                && selected.is_none()
+                && c["isOptional"] != true
+                && !campaign_options::is_system_choice(c)
+            {
                 report.required_inputs.push(Gap {
                     path: format!(
                         "choices/{group}/{}/{}",
