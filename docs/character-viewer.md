@@ -18,10 +18,13 @@ sheet falls back to 15-second checks. Closing the Party view stops synchronizati
 Character records are now persistent. This replaces the original memory-only
 viewer as explicitly requested. The cache uses the shared creature definition
 and fetched state, with stable IDs and complete source records. No character edits
-are sent to D&D Beyond. Encounter-builder integration is not part of this stage.
+are sent by the sheet importer to D&D Beyond. Campaign copies now contain normal
+creature, item, spell and inventory data for the content browser and encounter
+roster. Simulation rule conversion remains separate work.
 
 Details:
 
+- [Normalized character content and import gaps](design/character-content.md)
 - [Creature cache schema, storage, parity, and update behavior](design/character-cache.md)
 - [Avrae, DDB Importer, Beyond20, and official API references](research/dndbeyond-api.md)
 - [Initial viewer screenshots and Claude Fable review](../artifacts/screenshots/party/README.md)

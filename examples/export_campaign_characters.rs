@@ -22,5 +22,17 @@ fn main() -> Result<(), String> {
         }
         println!("{}: {}", record.definition.splat_name, path.display());
     }
+    let (entries, errors) = splat::content::read_directory(&root.join("Characters/D&D Beyond"))?;
+    let report = splat::content::validate(&entries);
+    if !errors.is_empty() || !report.errors.is_empty() {
+        return Err(format!(
+            "Published content validation failed: {errors:?} {:?}",
+            report.errors
+        ));
+    }
+    println!(
+        "Validated {} character, item, and spell entries.",
+        entries.len()
+    );
     Ok(())
 }

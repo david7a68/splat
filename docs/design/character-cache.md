@@ -1,9 +1,8 @@
 # Imported character records
 
-Status: implemented for the read-only party viewer. This is the next stage after
-the initial memory-only viewer. Persistent local character copies are now
-explicitly authorized. Encounter-builder and simulation integration remain later
-work; imported records do not claim executable mechanics.
+Status: implemented for the party viewer, campaign content, and encounter roster.
+Campaign copies use the [shared character content schema](character-content.md).
+Simulation execution remains separate work.
 
 ## Shared creature definition and fetched state
 
@@ -33,8 +32,8 @@ it through the existing creature reader. `splat_initial` carries starting state;
 `splat_external` identifies the provider and read-only source. The content reader
 recognizes this provenance field. The execution compiler continues to reject
 unsupported imported state and provenance rather than treating the record as an
-executable character. A later encounter adapter will need explicit mechanics
-coverage and must copy state into a run.
+executable character. The manual encounter roster already copies starting state into a run; simulation
+requires separate mechanics coverage.
 
 ## Data parity
 
@@ -111,9 +110,12 @@ See [API research](../research/dndbeyond-api.md) for transport and event evidenc
 Cache loads and successful sheet reads publish `Characters/D&D Beyond/<creature UUID>.md`
 in the configured campaign folder. Filenames stay stable across character renames.
 The frontmatter uses the existing creature definition, `splat_initial`, and
-`splat_external`. The body includes an equipment summary and the complete
-`EntitySnapshot` as expandable JSON, including both source responses. No separate
-item definitions or executable mechanics are inferred.
+`splat_external`. The body includes readable attacks, features, spells and authoritative inventory
+tables. Separate item and spell notes supply referenced definitions. Typed
+`splat_character` and `splat_import` fields retain sheet details and conversion
+gaps. Full provider responses remain only in the private JSON cache. See the
+[character content contract](character-content.md) for schema extensions and
+publication behavior.
 
 Each file has a checksum for generated content and a Personal notes section.
 Refreshes preserve everything after the checksum. Edits to generated content or
