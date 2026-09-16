@@ -1,5 +1,5 @@
 use super::*;
-fn sample() -> EntitySnapshot {
+pub(super) fn sample() -> EntitySnapshot {
     let abilities = ["str", "dex", "con", "int", "wis", "cha"]
         .iter()
         .map(|name| json!({"name":name,"score":14,"modifier":2,"save":4}))

@@ -1,0 +1,1996 @@
+{
+  "version": 1,
+  "sources": {
+    "spell:2619174": {
+      "name": "Thaumaturgy",
+      "source_sha256": "765f65a28388e3ffd93560ef1af00fea122f7c57d9fc64a233aae9f90133e7db",
+      "builtin": "dnd2024:spells/thaumaturgy",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2619174"
+    },
+    "spell:2618875": {
+      "name": "Poison Spray",
+      "source_sha256": "439a513063ea5ab9b21dc27181b7e280f52e0953173b095e277dcb76c1580cbc",
+      "builtin": "dnd2024:spells/poison_spray",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2618875"
+    },
+    "spell:2618839": {
+      "name": "Sorcerous Burst",
+      "source_sha256": "56240108a1b4d1ed3b39a86c3f66725500dc3588d5a795f37d6faebb339abeb6",
+      "builtin": "dnd2024:spells/sorcerous_burst",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2618839"
+    },
+    "spell:2618965": {
+      "name": "Chill Touch",
+      "source_sha256": "b17f5ab15d79cd8c9ecd7edb43154af98a9bbd02679652492e02ab3ed59e51ef",
+      "builtin": "dnd2024:spells/chill_touch",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2618965"
+    },
+    "spell:2618844": {
+      "name": "Acid Splash",
+      "source_sha256": "e97174e6fd8e14222461f5e5330b657fb6b1e38ed40d85fad60fd95c2c207b78",
+      "builtin": "dnd2024:spells/acid_splash",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2618844"
+    },
+    "spell:2619008": {
+      "name": "Mage Hand",
+      "source_sha256": "bb66e39aaddc7efeaf1df47946f65cfcf4e4d160ad494ff09b60e978d9afe9f0",
+      "builtin": "dnd2024:spells/mage_hand",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2619008"
+    },
+    "spell:2618946": {
+      "name": "Burning Hands",
+      "source_sha256": "6a2ef4881b6bf7e70f1843f987fe73f782bfe9ea27040a55c3a2691af2aad163",
+      "builtin": "dnd2024:spells/burning_hands",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2618946"
+    },
+    "spell:2618890": {
+      "name": "Fire Bolt",
+      "source_sha256": "ad11c1c5dff24edc5417327f502774735ff60e5c68a882c78d0dfeda1c325c83",
+      "builtin": "dnd2024:spells/fire_bolt",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2618890"
+    },
+    "spell:2619019": {
+      "name": "Shield",
+      "source_sha256": "b63fac6476081abd7f1517361be4e4494a3fe71b89bb668791779408c95af36d",
+      "builtin": "dnd2024:spells/shield",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2619019"
+    },
+    "spell:2619184": {
+      "name": "Thunderwave",
+      "source_sha256": "f948344f0286926eaf9e47319a0f2a23ff6c45eede21edc65104a3604f8e3f87",
+      "builtin": "dnd2024:spells/thunderwave",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2619184"
+    },
+    "spell:2618893": {
+      "name": "Prestidigitation",
+      "source_sha256": "72c15d92d76b931d988fe759bd07c0e1f9c6b8559562da04e74049a45f0e7d2f",
+      "builtin": "dnd2024:spells/prestidigitation",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "spell_2618893"
+    },
+    "spell:2619215": {
+      "name": "Witch Bolt",
+      "source_sha256": "13c28041209c82e0f6debff2495aafc4eb446b322e4f9cb4406ef5da5e0cc91a",
+      "builtin": null,
+      "parameters": {
+        "target": {
+          "kind": "creature",
+          "count": 1,
+          "range_ft": 60
+        },
+        "attack": {
+          "kind": "ranged_spell",
+          "on_hit": {
+            "dice": "2d12",
+            "type": "lightning"
+          }
+        },
+        "sustain": {
+          "economy": "bonus_action",
+          "timing": "subsequent_own_turn",
+          "damage": {
+            "dice": "1d12",
+            "type": "lightning"
+          },
+          "initial_hit_required": false
+        },
+        "ends_on": [
+          "concentration_ends",
+          "duration_expires",
+          "target_outside_range",
+          "target_has_total_cover_from_caster"
+        ],
+        "upcast": {
+          "per_slot_above": 1,
+          "initial_damage_add_dice": "1d12",
+          "sustain_scales": false
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "spell_witch_bolt_2024"
+    },
+    "spell:2619037": {
+      "name": "Mind Sliver",
+      "source_sha256": "0a286eed267fd077c3c0e998923000f6a6c45399dfaa7123cd5560f62cdd2b4e",
+      "builtin": null,
+      "parameters": {
+        "target": {
+          "kind": "creature",
+          "count": 1,
+          "visible": true,
+          "range_ft": 60
+        },
+        "save": {
+          "ability": "intelligence",
+          "success": "no_effect",
+          "failure": {
+            "damage": {
+              "dice": "1d6",
+              "type": "psychic"
+            },
+            "save_penalty": {
+              "dice": "1d4",
+              "applies_to": "next_save",
+              "expires": "caster_next_turn_end",
+              "applications": 1
+            }
+          }
+        },
+        "cantrip_dice_by_character_level": {
+          "1": "1d6",
+          "5": "2d6",
+          "11": "3d6",
+          "17": "4d6"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "spell_mind_sliver_2024"
+    },
+    "spell:14758": {
+      "name": "Cause Fear",
+      "source_sha256": "b2ab40f31ae2df72d5c659bf0041838a9eefcd0427a3bc41c232c034c3ee3e9a",
+      "builtin": null,
+      "parameters": {
+        "targets": {
+          "kind": "creature",
+          "visible": true,
+          "range_ft": 60,
+          "base_count": 1,
+          "immune_types": [
+            "construct",
+            "undead"
+          ],
+          "maximum_pairwise_distance_ft": 30
+        },
+        "save": {
+          "ability": "wisdom",
+          "success": "no_effect",
+          "failure": {
+            "condition": "frightened",
+            "of": "caster",
+            "until": "spell_ends"
+          }
+        },
+        "repeat_save": {
+          "when": "affected_target_turn_end",
+          "success": "end_effect_on_target"
+        },
+        "upcast": {
+          "extra_targets_per_slot_above_1": 1
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "spell_cause_fear_2017"
+    },
+    "item:1782728300:3": {
+      "name": "Dagger",
+      "source_sha256": "a19a0d9c20b56daa21271b987bc2f2fb9d6d4f0e228f5df88b80bb5ba61d6ea3",
+      "builtin": "dnd2024:equipment/dagger",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_1782728300_3"
+    },
+    "item:1782728300:15": {
+      "name": "Crossbow, Light",
+      "source_sha256": "2b645586e5f46bf15054cf706a38700f40c878f5bb90024824c88d8f3f03d582",
+      "builtin": "dnd2024:equipment/light_crossbow",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_1782728300_15"
+    },
+    "item:1782728300:12": {
+      "name": "Quarterstaff",
+      "source_sha256": "99e4004c9932b538dfc11c4edd49bce8c8e7df6080a5184240ca148297773cae",
+      "builtin": "dnd2024:equipment/quarterstaff",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_1782728300_12"
+    },
+    "item:1782728300:7": {
+      "name": "Handaxe",
+      "source_sha256": "5d690022e7646ee085be06535d533e35322f4f4e3ef9264a5f414d2af850c19a",
+      "builtin": "dnd2024:equipment/handaxe",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_1782728300_7"
+    },
+    "item:1782728300:19": {
+      "name": "Battleaxe",
+      "source_sha256": "8db5f2a32369aefa963e0ca9ec14e30f797ab0a6b8499e338cc117085db8384b",
+      "builtin": "dnd2024:equipment/battleaxe",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_1782728300_19"
+    },
+    "item:1782728300:22": {
+      "name": "Greatsword",
+      "source_sha256": "8921ccf1d00712d068958f5c6414a42a9a56196272a9be0daca896fb6cc80511",
+      "builtin": "dnd2024:equipment/greatsword",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_1782728300_22"
+    },
+    "item:701257905:8": {
+      "name": "Shield",
+      "source_sha256": "27a2aab43592c126c65d9d1e166f39647529986bf6b93a9495bffcd2444c6fa8",
+      "builtin": "dnd2024:equipment/shield",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_701257905_8"
+    },
+    "item:2103445194:399": {
+      "name": "Backpack",
+      "source_sha256": "ad66b72822eb5136adc03deb470fbc1cb23ae7acf2e6cf1546314e0b8a1bdf0b",
+      "builtin": "dnd2024:equipment/backpack_2_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_399"
+    },
+    "item:2103445194:412": {
+      "name": "Robe",
+      "source_sha256": "129e07c9de1c2a5cdc0bf862184badc0cc838c39ac77de2d0962e0a1a63d3b26",
+      "builtin": "dnd2024:equipment/robe_1_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_412"
+    },
+    "item:2103445194:393": {
+      "name": "Oil",
+      "source_sha256": "a8fa57aa1b75cc76d2c786b7cb3ec5b07c9ff8e9f3025d0155217af395008f3d",
+      "builtin": "dnd2024:equipment/oil_1_sp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_393"
+    },
+    "item:2103445194:395": {
+      "name": "Parchment",
+      "source_sha256": "2364ebda03da8348688088b9cfa858070ec0b28ae4cd8587d48d5edcf97d148b",
+      "builtin": "dnd2024:equipment/parchment_1_sp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_395"
+    },
+    "item:2103445194:434": {
+      "name": "Tinderbox",
+      "source_sha256": "ed0a36d9df4dbe18912732942158e33d4126ac9d411dc0e4d93d1e4e060c01be",
+      "builtin": "dnd2024:equipment/tinderbox_5_sp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_434"
+    },
+    "item:2103445194:439": {
+      "name": "Book",
+      "source_sha256": "7b8103138f81c03243dae26bc566311ca0eba7dd6e9a30f4d5972427b595abba",
+      "builtin": "dnd2024:equipment/book_25_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_439"
+    },
+    "item:2103445194:496": {
+      "name": "Lamp",
+      "source_sha256": "24c589a5e0e6396e7283df888c3cfc42812af54de77d0aae209a09b6377dc9f3",
+      "builtin": "dnd2024:equipment/lamp_5_sp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_496"
+    },
+    "item:2103445194:502": {
+      "name": "Ink Pen",
+      "source_sha256": "018fc597a9b2f1351b68d36b1b170db9356c2c54f97851a4feea6a2e4e2558c6",
+      "builtin": "dnd2024:equipment/ink_pen_2_cp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_502"
+    },
+    "item:2103445194:503": {
+      "name": "Ink",
+      "source_sha256": "a0e80110ba108f1ddf3482dd71d7a9e286878bb6a104503d7ba2901701fc6cfb",
+      "builtin": "dnd2024:equipment/ink_10_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_503"
+    },
+    "item:2103445194:541": {
+      "name": "Traveler's Clothes",
+      "source_sha256": "583ba087e9e78fa2c12b19335052f11871c6b6860cd1cef770a7d0526ec4af17",
+      "builtin": "dnd2024:equipment/clothes_traveler_s_2_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_541"
+    },
+    "item:2103445194:401": {
+      "name": "Iron Pot",
+      "source_sha256": "fa949df8cd4cfa111543d8ff2e1352227ad8d9ff419744e7204d1a7a90c37acd",
+      "builtin": "dnd2024:equipment/pot_iron_2_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_401"
+    },
+    "item:2103445194:411": {
+      "name": "Rations",
+      "source_sha256": "126932c01a6d554d8c54dd1ab28972b5af7132bfe8e710698ad3f9b00565cc38",
+      "builtin": "dnd2024:equipment/rations_5_sp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_411"
+    },
+    "item:2103445194:415": {
+      "name": "Rope",
+      "source_sha256": "298f4f1ea83a451db44a053262a8f3a982a4ae349a6290cbb5629adfc407477f",
+      "builtin": "dnd2024:equipment/rope_1_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_415"
+    },
+    "item:2103445194:420": {
+      "name": "Bedroll",
+      "source_sha256": "24505b68e8a1708f61b055482fa0eb320cfb90ac5be1a17ff92970d19f6a906b",
+      "builtin": "dnd2024:equipment/bedroll_1_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_420"
+    },
+    "item:2103445194:422": {
+      "name": "Shovel",
+      "source_sha256": "f241570a038b80101b996f4ea0847e6fda4d6d7fabc252c76a954a41f704591d",
+      "builtin": "dnd2024:equipment/shovel_2_gp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_422"
+    },
+    "item:2103445194:437": {
+      "name": "Torch",
+      "source_sha256": "be09960178f3cf1d71d2a4c956616a0f93872cd1151da26be4fdb4fd27b7f369",
+      "builtin": "dnd2024:equipment/torch_1_cp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_437"
+    },
+    "item:2103445194:442": {
+      "name": "Waterskin",
+      "source_sha256": "832ef0f4e40a845931a3e3bd03be5ec4c16bc56deed4473333c13128b0aaae1f",
+      "builtin": "dnd2024:equipment/waterskin_2_sp",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_442"
+    },
+    "item:2103445194:540": {
+      "name": "Staff",
+      "source_sha256": "ddeae666f2aa49fc652ea074b7777b4ab611634891fe1192b1afa2423430671d",
+      "builtin": "dnd2024:equipment/arcane_focus_varies",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "item_2103445194_540"
+    },
+    "item:2103445194:3": {
+      "name": "Crossbow Bolts",
+      "source_sha256": "564e9221fb8e9a0d3b271aa268aaca215224c85563cacb736f528231a7155d41",
+      "builtin": null,
+      "parameters": {
+        "ammunition_for": "crossbow",
+        "consume_per_attack": 1,
+        "draw_economy": "part_of_attack",
+        "one_handed_loading_requires_free_hand": true,
+        "recover_after_battle": {
+          "search_minutes": 1,
+          "fraction": {
+            "numerator": 1,
+            "denominator": 2
+          },
+          "rounding": "down"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "bolts_2014"
+    },
+    "item:2103445194:20": {
+      "name": "Backpack",
+      "source_sha256": "8a9cfb22ee2cb0de947079d21ed68ccf7e6bb7f8341cff3fb96382c6027ab553",
+      "builtin": null,
+      "parameters": {
+        "worn_on": "back",
+        "capacity": {
+          "volume_cubic_ft": 1,
+          "mass_lb": 30
+        },
+        "external_straps_allow": [
+          "bedroll",
+          "rope"
+        ]
+      },
+      "required_inputs": [],
+      "mechanic": "backpack_2014"
+    },
+    "item:2103445194:40": {
+      "name": "Clothes, Fine",
+      "source_sha256": "14d45e9f1a7ed001843e52e4a1b32908100daa21c6c58068eb3518d3444589e3",
+      "builtin": null,
+      "parameters": {
+        "role": "clothing",
+        "quality": "fine",
+        "numerical_bonus": null
+      },
+      "required_inputs": [],
+      "mechanic": "fine_clothes_2014"
+    },
+    "item:2103445194:84": {
+      "name": "Signet Ring",
+      "source_sha256": "c2511c1445786a1e378fd584db384e167174002a1afe462090a358cee071b857",
+      "builtin": null,
+      "parameters": {
+        "use": {
+          "material": "warm_sealing_wax",
+          "result": "distinctive_identifying_mark"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "signet_2014"
+    },
+    "item:2103445194:24": {
+      "name": "Bedroll",
+      "source_sha256": "2e55dbf2604ec76105ba941c1512a272504d56ee675dd5361521ca3c4d615e21",
+      "builtin": null,
+      "parameters": {
+        "role": "bedding",
+        "alternate_use": "emergency_stretcher",
+        "cold_save_auto_success": false
+      },
+      "required_inputs": [],
+      "mechanic": "bedroll_2014"
+    },
+    "item:2103445194:61": {
+      "name": "Mess Kit",
+      "source_sha256": "bf5dd000629f5841bedd8984904abcd750895808735d8de3057ce4e18e6c6a12",
+      "builtin": null,
+      "parameters": {
+        "contains": [
+          "cup",
+          "cutlery"
+        ],
+        "separable_box_uses": [
+          "cooking_pan",
+          "plate_or_shallow_bowl"
+        ]
+      },
+      "required_inputs": [],
+      "mechanic": "mess_kit_2014"
+    },
+    "item:2103445194:75": {
+      "name": "Rations (1 day)",
+      "source_sha256": "3b29de6de657673b28387bcab400d4c5298c63cbe22acd6befefed3ff8cf7d78",
+      "builtin": null,
+      "parameters": {
+        "role": "food",
+        "daily_rations": 1
+      },
+      "required_inputs": [],
+      "mechanic": "rations_2014"
+    },
+    "item:2103445194:77": {
+      "name": "Rope, Hempen (50 feet)",
+      "source_sha256": "8fd3b25dcdc23dd61581416976a86ddc57a04d7e3fbab5bcfe8867640534f192",
+      "builtin": null,
+      "parameters": {
+        "length_ft": 50,
+        "hp": 2,
+        "burst": {
+          "check": "strength",
+          "dc": 17
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "rope_2014"
+    },
+    "item:2103445194:90": {
+      "name": "Tinderbox",
+      "source_sha256": "f10cbb29a5e873e0f626e7d929a6bd4e7675900f6157083fd13fb9658d6f00f5",
+      "builtin": null,
+      "parameters": {
+        "light_exposed_fuel": {
+          "economy": "action"
+        },
+        "light_other_fire": {
+          "minutes": 1
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "tinderbox_2014"
+    },
+    "item:2103445194:91": {
+      "name": "Torch",
+      "source_sha256": "5bb21c0267e23050b762a245e1a34e66196ae211e94b36638774215f073999e4",
+      "builtin": null,
+      "parameters": {
+        "burn_minutes": 60,
+        "bright_radius_ft": 20,
+        "additional_dim_ft": 20,
+        "burning_melee_hit": {
+          "damage": 1,
+          "type": "fire"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "torch_2014"
+    },
+    "item:2103445194:92": {
+      "name": "Waterskin",
+      "source_sha256": "13a805ee1ff69c4048983d5816043729ff0301c9cdaf467f4f5d95cb8a75e809",
+      "builtin": null,
+      "parameters": {
+        "liquid_capacity_pints": 4
+      },
+      "required_inputs": [],
+      "mechanic": "waterskin_2014"
+    },
+    "item:2103445194:86": {
+      "name": "Spellbook",
+      "source_sha256": "4451aede97d0c7182bdf99cdcd036910e5b53fdc8d3eeeee1bb69b925c635f56",
+      "builtin": null,
+      "parameters": {
+        "pages": 100,
+        "blank": true,
+        "records": "wizard_spells"
+      },
+      "required_inputs": [],
+      "mechanic": "spellbook_2014"
+    },
+    "feature:13856159": {
+      "name": "Darkvision",
+      "source_sha256": "a044b043f598ef901953ac379afa6f970cc5199878294b11fb310e6d05e54e90",
+      "builtin": null,
+      "parameters": {
+        "sense": "darkvision",
+        "range_ft": 60,
+        "dim_light_as": "bright",
+        "darkness_as": "dim",
+        "darkness_color": "gray"
+      },
+      "required_inputs": [],
+      "mechanic": "darkvision_60"
+    },
+    "feature:13856109": {
+      "name": "Darkvision",
+      "source_sha256": "898ac6efc78f5690c2cb8759e9385419dacf59b966a739cc5ee7a01c103f428e",
+      "builtin": null,
+      "parameters": {
+        "sense": "darkvision",
+        "range_ft": 60,
+        "dim_light_as": "bright",
+        "darkness_as": "dim",
+        "darkness_color": "gray"
+      },
+      "required_inputs": [],
+      "mechanic": "darkvision_60"
+    },
+    "feature:8429475": {
+      "name": "Darkvision",
+      "source_sha256": "e2cdfda1583ae2fd94afce6d7962354ef41b2183fd5f2e61224768cc3d2a0d9b",
+      "builtin": null,
+      "parameters": {
+        "sense": "darkvision",
+        "range_ft": 60,
+        "dim_light_as": "bright",
+        "darkness_as": "dim",
+        "darkness_color": "gray"
+      },
+      "required_inputs": [],
+      "mechanic": "darkvision_60"
+    },
+    "feature:13856161": {
+      "name": "Creature Type",
+      "source_sha256": "5295d7bf6008a2c42f019cfbb3e254fc1589271790d4d2cf51b94a9bd6475ecd",
+      "builtin": null,
+      "parameters": {
+        "creature_type": "humanoid"
+      },
+      "required_inputs": [],
+      "mechanic": "humanoid"
+    },
+    "feature:13856106": {
+      "name": "Creature Type",
+      "source_sha256": "26ec048e9c283c3b7ff58a10953273e7e576ae037670f43b2ca7da50d29e75d1",
+      "builtin": null,
+      "parameters": {
+        "creature_type": "humanoid"
+      },
+      "required_inputs": [],
+      "mechanic": "humanoid"
+    },
+    "feature:8429472": {
+      "name": "Creature Type",
+      "source_sha256": "353b018d871733f9a848f7f31e1e4c4e594af1723e2164371d8cf89c1dd3ca7b",
+      "builtin": null,
+      "parameters": {
+        "creature_type": "humanoid",
+        "additional_qualification_tags": [
+          "goblinoid"
+        ]
+      },
+      "required_inputs": [],
+      "mechanic": "goblinoid"
+    },
+    "feature:13856162": {
+      "name": "Size",
+      "source_sha256": "d5ff7f4e82ea18a707a35e4701217df5b4b9f327b8460cdfdc957a8121b5f649",
+      "builtin": null,
+      "parameters": {
+        "choose_size": [
+          "medium",
+          "small"
+        ],
+        "choice_at": "species_selection"
+      },
+      "required_inputs": [],
+      "mechanic": "size_choice"
+    },
+    "feature:13856107": {
+      "name": "Size",
+      "source_sha256": "ed0ba159eeb6ca4d2264a4f1eac92dae6af254d38764d79ed7604564c5e738db",
+      "builtin": null,
+      "parameters": {
+        "size": "medium"
+      },
+      "required_inputs": [],
+      "mechanic": "medium"
+    },
+    "feature:8429473": {
+      "name": "Size",
+      "source_sha256": "e807e384b4df7b4804df26aeeac5e8bfb2732d5afae0baa29da0553d55bbb1fd",
+      "builtin": null,
+      "parameters": {
+        "size": "small"
+      },
+      "required_inputs": [],
+      "mechanic": "small"
+    },
+    "feature:13856163": {
+      "name": "Speed",
+      "source_sha256": "2febb5ee67a6fddc075d96e774383ca40a266254d2b484912147cc91cac4a341",
+      "builtin": null,
+      "parameters": {
+        "walking_speed_ft": 30
+      },
+      "required_inputs": [],
+      "mechanic": "walking_30"
+    },
+    "feature:13856108": {
+      "name": "Speed",
+      "source_sha256": "2ed6bb56d75261faeaa8fdc02f3514e61552537de329d6b6ef39a5ac37b21b02",
+      "builtin": null,
+      "parameters": {
+        "walking_speed_ft": 30
+      },
+      "required_inputs": [],
+      "mechanic": "walking_30"
+    },
+    "feature:8429474": {
+      "name": "Speed",
+      "source_sha256": "dd74b7482a8028918dd567f10edbff4d96979bcb43183fc20cda3227e1760b37",
+      "builtin": null,
+      "parameters": {
+        "walking_speed_ft": 30
+      },
+      "required_inputs": [],
+      "mechanic": "walking_30"
+    },
+    "feature:13856166": {
+      "name": "Ability Score Increases",
+      "source_sha256": "af5866cf2200617d56526079b2e4006baae5c88162c67291e9a8559a430efcce",
+      "builtin": null,
+      "parameters": {
+        "choose_distinct_abilities": true,
+        "allowed_abilities": [
+          "strength",
+          "dexterity",
+          "constitution",
+          "intelligence",
+          "wisdom",
+          "charisma"
+        ],
+        "increase_patterns": [
+          [
+            2,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ],
+        "maximum_result": 20,
+        "apply_at": "character_creation"
+      },
+      "required_inputs": [],
+      "mechanic": "origin_ability_increases"
+    },
+    "feature:13856115": {
+      "name": "Ability Score Increases",
+      "source_sha256": "9bd9ba4eafeb27b58a670c09837e6b1ad070e282beb688f1fd7df313ab09cf55",
+      "builtin": null,
+      "parameters": {
+        "choose_distinct_abilities": true,
+        "allowed_abilities": [
+          "strength",
+          "dexterity",
+          "constitution",
+          "intelligence",
+          "wisdom",
+          "charisma"
+        ],
+        "increase_patterns": [
+          [
+            2,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ],
+        "maximum_result": 20,
+        "apply_at": "character_creation"
+      },
+      "required_inputs": [],
+      "mechanic": "origin_ability_increases"
+    },
+    "feature:8429470": {
+      "name": "Ability Score Increases",
+      "source_sha256": "885ef69ebbd80513499888c9747d8535ed6b5d7b30b66e6495bd6c8a289197d8",
+      "builtin": null,
+      "parameters": {
+        "choose_distinct_abilities": true,
+        "allowed_abilities": [
+          "strength",
+          "dexterity",
+          "constitution",
+          "intelligence",
+          "wisdom",
+          "charisma"
+        ],
+        "increase_patterns": [
+          [
+            2,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ],
+        "maximum_result": 20,
+        "apply_at": "character_creation"
+      },
+      "required_inputs": [],
+      "mechanic": "origin_ability_increases"
+    },
+    "feature:1789122": {
+      "name": "Charlatan Ability Score Improvements",
+      "source_sha256": "b7f99f83a23dc6c3617e8f8b72fc39814bb3050631d9adce56239dc67cfdd701",
+      "builtin": null,
+      "parameters": {
+        "choose_distinct_abilities": true,
+        "allowed_abilities": [
+          "dexterity",
+          "constitution",
+          "charisma"
+        ],
+        "increase_patterns": [
+          [
+            2,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ],
+        "maximum_result": 20,
+        "apply_at": "character_creation"
+      },
+      "required_inputs": [],
+      "mechanic": "charlatan_ability_increases"
+    },
+    "feature:1789140": {
+      "name": "Farmer Ability Score Improvements",
+      "source_sha256": "1f49229bfd97811891151812a18997f1928faa68c8da31843c4baf4b3b469ccd",
+      "builtin": null,
+      "parameters": {
+        "choose_distinct_abilities": true,
+        "allowed_abilities": [
+          "strength",
+          "constitution",
+          "wisdom"
+        ],
+        "increase_patterns": [
+          [
+            2,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ],
+        "maximum_result": 20,
+        "apply_at": "character_creation"
+      },
+      "required_inputs": [],
+      "mechanic": "farmer_ability_increases"
+    },
+    "feature:13856167": {
+      "name": "Languages",
+      "source_sha256": "6909723c37c49c1188d1a6d259089a4bd85ff5aa9ac1d98ee0ba8b8e1bae4273",
+      "builtin": null,
+      "parameters": {
+        "automatic": [
+          "common"
+        ],
+        "choose_standard_languages": 2,
+        "proficiency": [
+          "speak",
+          "read",
+          "write"
+        ],
+        "additional_feature_languages_allowed": true
+      },
+      "required_inputs": [],
+      "mechanic": "languages_2024"
+    },
+    "feature:13856116": {
+      "name": "Languages",
+      "source_sha256": "14bcf43e44c339d4aa714822634a66798728428ea43f9019dad279c5edba197d",
+      "builtin": null,
+      "parameters": {
+        "automatic": [
+          "common"
+        ],
+        "choose_standard_languages": 2,
+        "proficiency": [
+          "speak",
+          "read",
+          "write"
+        ],
+        "additional_feature_languages_allowed": true
+      },
+      "required_inputs": [],
+      "mechanic": "languages_2024"
+    },
+    "feature:8429471": {
+      "name": "Languages",
+      "source_sha256": "a8f4e075716b66f086fddb31fc0edc3d05a81bc20ce7bed1e38170db02dfda7d",
+      "builtin": null,
+      "parameters": {
+        "automatic": [
+          "common"
+        ],
+        "choose_languages": 1,
+        "gm_agreement_required": true,
+        "proficiency": [
+          "speak",
+          "read",
+          "write"
+        ]
+      },
+      "required_inputs": [],
+      "mechanic": "languages_motm"
+    },
+    "feature:13856111": {
+      "name": "Fey Ancestry",
+      "source_sha256": "45f2aa6c568e2a5a16be368336513adea598ffbdaf92f1fdb4c601eefdb5be74",
+      "builtin": null,
+      "parameters": {
+        "advantage": {
+          "roll": "saving_throw",
+          "purpose": [
+            "avoid_charmed",
+            "end_charmed"
+          ],
+          "subject": "self"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "fey_ancestry"
+    },
+    "feature:8429476": {
+      "name": "Fey Ancestry",
+      "source_sha256": "434de0c9697567101bb63f5bb7dd05372d079054c53ef02dd21db6c922aff06d",
+      "builtin": null,
+      "parameters": {
+        "advantage": {
+          "roll": "saving_throw",
+          "purpose": [
+            "avoid_charmed",
+            "end_charmed"
+          ],
+          "subject": "self"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "fey_ancestry"
+    },
+    "feature:13856112": {
+      "name": "Keen Senses",
+      "source_sha256": "d51e8a3f15fa0ed58afeee7996a2b7c47b28aaacbc832de26528ca1d3fb61e05",
+      "builtin": null,
+      "parameters": {
+        "choose_skill_proficiencies": {
+          "count": 1,
+          "options": [
+            "insight",
+            "perception",
+            "survival"
+          ]
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "keen_senses"
+    },
+    "feature:13856113": {
+      "name": "Trance",
+      "source_sha256": "177c11f2450a13a910387c7437bd5ca4894b4ea1134383c616b34be448a766fa",
+      "builtin": null,
+      "parameters": {
+        "sleep_required": false,
+        "immune_to": [
+          "magical_sleep"
+        ],
+        "long_rest": {
+          "hours": 4,
+          "activity": "trance",
+          "conscious": true
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "trance"
+    },
+    "feature:8429477": {
+      "name": "Fury of the Small",
+      "source_sha256": "90e61a2d0e5ee8acbcb1be23f3fa16b1fd9325029892bf231f33a42ed130a3f0",
+      "builtin": null,
+      "parameters": {
+        "trigger": "damage_creature_with_attack_or_spell",
+        "requires": "target_size_larger_than_actor",
+        "optional": true,
+        "extra_damage": {
+          "stat": "proficiency_bonus"
+        },
+        "pool": {
+          "maximum": {
+            "stat": "proficiency_bonus"
+          },
+          "cost": 1,
+          "recovery": "long_rest_all"
+        },
+        "limit": {
+          "uses": 1,
+          "scope": "turn"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "fury_of_the_small_motm"
+    },
+    "action:5119104": {
+      "name": "Fury of the Small",
+      "source_sha256": "8be55d695ee6ea26545b04baf06d33c7dd93b5aee0f38d5a6117466d68642973",
+      "builtin": null,
+      "parameters": {
+        "trigger": "damage_creature_with_attack_or_spell",
+        "requires": "target_size_larger_than_actor",
+        "optional": true,
+        "extra_damage": {
+          "stat": "proficiency_bonus"
+        },
+        "pool": {
+          "maximum": {
+            "stat": "proficiency_bonus"
+          },
+          "cost": 1,
+          "recovery": "long_rest_all"
+        },
+        "limit": {
+          "uses": 1,
+          "scope": "turn"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "fury_of_the_small_motm"
+    },
+    "feature:8429478": {
+      "name": "Nimble Escape",
+      "source_sha256": "dc54dfb890c30b758718858ef17c43d79beb4740aca218941c9e446588db6faf",
+      "builtin": null,
+      "parameters": {
+        "grant_action_variants": [
+          {
+            "action": "disengage",
+            "economy": "bonus_action"
+          },
+          {
+            "action": "hide",
+            "economy": "bonus_action"
+          }
+        ],
+        "timing": "own_turn"
+      },
+      "required_inputs": [],
+      "mechanic": "nimble_escape"
+    },
+    "action:5119105": {
+      "name": "Nimble Escape: Disengage",
+      "source_sha256": "74f89dfe041bb4d0626c8bff4e0bf8008d2bc90977142124d41824bd98f003ab",
+      "builtin": null,
+      "parameters": {
+        "use_action": "disengage",
+        "economy": "bonus_action",
+        "timing": "own_turn",
+        "retain_action_requirements": true
+      },
+      "required_inputs": [],
+      "mechanic": "nimble_disengage"
+    },
+    "action:5119106": {
+      "name": "Nimble Escape: Hide",
+      "source_sha256": "ca9e07e361229de209d390b8c3b196c4fcf3f5e517da4ff93c46b67aaa7ec6ee",
+      "builtin": null,
+      "parameters": {
+        "use_action": "hide",
+        "economy": "bonus_action",
+        "timing": "own_turn",
+        "retain_action_requirements": true
+      },
+      "required_inputs": [],
+      "mechanic": "nimble_hide"
+    },
+    "feature:10292150": {
+      "name": "Rage",
+      "source_sha256": "1cb68f009e755aa03c63828588c973b2db47590361f3368f6f31b40ad82e56bf",
+      "builtin": "dnd2024:class_features/barbarian_level_1_rage",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_10292150"
+    },
+    "feature:10292174": {
+      "name": "Rage",
+      "source_sha256": "2ae3d21227348f9af7f4b879528bbd64d42a24424dbb8175e23e441f7f3d3ec2",
+      "builtin": "dnd2024:class_features/barbarian_level_1_rage",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_10292174"
+    },
+    "feature:10292151": {
+      "name": "Unarmored Defense",
+      "source_sha256": "f3a37f8d02dbcb7e020c7ccc17a9781842d5317d0e0916f98e05fb391841c730",
+      "builtin": "dnd2024:class_features/barbarian_level_1_unarmored_defense",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_10292151"
+    },
+    "feature:10292152": {
+      "name": "Weapon Mastery",
+      "source_sha256": "ff03ecfe14ba41c322a8070b89bb18ca963c484c90b41fd8fcd89b414ffe1207",
+      "builtin": "dnd2024:class_features/barbarian_level_1_weapon_mastery",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_10292152"
+    },
+    "feature:1789105": {
+      "name": "Weapon Mastery",
+      "source_sha256": "ee336ce3b08544530f00bd2ce0fffa77a037b3cc9eb8246a6b23f7cce916a417",
+      "builtin": "dnd2024:class_features/barbarian_level_1_weapon_mastery",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_1789105"
+    },
+    "feature:10292383": {
+      "name": "Spellcasting",
+      "source_sha256": "23e64d85b917ce85b4fbb71f2d9f51dbbd313b24f0f7f6ce0c84c5f4b63b5d84",
+      "builtin": "dnd2024:class_features/wizard_level_1_spellcasting",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_10292383"
+    },
+    "feature:10292384": {
+      "name": "Ritual Adept",
+      "source_sha256": "c49a9cf43986cfe295a13b70baecb1ad4d14c041a3cee2cc825e801aff1abab4",
+      "builtin": "dnd2024:class_features/wizard_level_1_ritual_adept",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_10292384"
+    },
+    "feature:10292385": {
+      "name": "Arcane Recovery",
+      "source_sha256": "e85717b8bbd8852cdd89bfcdee37d1510a9453e48656588f5bfa7c1ad85c8e3f",
+      "builtin": "dnd2024:class_features/wizard_level_1_arcane_recovery",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_10292385"
+    },
+    "action:9414000": {
+      "name": "Rage (Enter)",
+      "source_sha256": "6beb039a7dd9f616356c3fd1f7eb4c5ce1f437f73b3ec56de76f88f58361286b",
+      "builtin": "dnd2024:class_features/barbarian_level_1_rage",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "action_9414000"
+    },
+    "action:9414099": {
+      "name": "Arcane Recovery",
+      "source_sha256": "eb61080c865dc13ac9657cfba662ac93d748a77355ec13dce42bc47b1cfd1983",
+      "builtin": "dnd2024:class_features/wizard_level_1_arcane_recovery",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "action_9414099"
+    },
+    "action:9414103": {
+      "name": "Graze (Greatsword)",
+      "source_sha256": "21ed7f4161641456dbfcf1c9bf913d6b549fe9e6decd5bd162ba2fc8d9c60a57",
+      "builtin": "dnd2024:rules/weapons_graze",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "action_9414103"
+    },
+    "action:9414125": {
+      "name": "Topple (Battleaxe)",
+      "source_sha256": "03933dadecaca2205e32d2a5dbdc10c531342133ea93d43b22f12caf89eeb54a",
+      "builtin": "dnd2024:rules/weapons_topple",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "action_9414125"
+    },
+    "feature:1789189": {
+      "name": "Skilled",
+      "source_sha256": "4504c65d1fe053554102e8e2d1ab5b72690f8e74f7f6d1ba7ff5488bdaf3b021",
+      "builtin": "dnd2024:feats/origin_feats_skilled",
+      "parameters": null,
+      "required_inputs": [],
+      "mechanic": "feature_1789189"
+    },
+    "feature:1789206": {
+      "name": "Tough",
+      "source_sha256": "05a681ff77a5a779336b5ae7e4319b1dd92426f38e0cb8e4e7f3abedf9fbd767",
+      "builtin": null,
+      "parameters": {
+        "max_hp_bonus": {
+          "multiply": [
+            2,
+            {
+              "stat": "character_level"
+            }
+          ]
+        },
+        "gain_on_each_character_level": 2,
+        "not_added_twice_to_supplied_total": true
+      },
+      "required_inputs": [],
+      "mechanic": "tough_2024"
+    },
+    "feature:376": {
+      "name": "Dragon Ancestor",
+      "source_sha256": "161df44d03d3cea9dd24a39a06915dc71225635c10fdaa8549dd24fb789f81b6",
+      "builtin": null,
+      "parameters": {
+        "choose_dragon_damage": {
+          "black": "acid",
+          "blue": "lightning",
+          "brass": "fire",
+          "bronze": "lightning",
+          "copper": "acid",
+          "gold": "fire",
+          "green": "poison",
+          "red": "fire",
+          "silver": "cold",
+          "white": "cold"
+        },
+        "language": "draconic",
+        "check_bonus": {
+          "ability": "charisma",
+          "context": "interacting_with_dragons",
+          "proficiency_multiplier_if_proficient": 2
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "dragon_ancestor_2014"
+    },
+    "feature:377": {
+      "name": "Draconic Resilience",
+      "source_sha256": "d7b802af234e16807c24a044d3592ca3ceb5ff895b1fd826b44d610065f2a2f9",
+      "builtin": null,
+      "parameters": {
+        "max_hp_bonus": {
+          "stat": "classes.sorcerer.level"
+        },
+        "armor_formula": {
+          "requires": "not_wearing_armor",
+          "base": 13,
+          "add_ability_modifiers": [
+            "dexterity"
+          ]
+        },
+        "not_added_twice_to_supplied_total": true
+      },
+      "required_inputs": [],
+      "mechanic": "draconic_resilience_2014"
+    },
+    "feature:369": {
+      "name": "Spellcasting",
+      "source_sha256": "6d42f37cebc4c3e69bf899f1373a57a17d27d607bb2b7d37b529f21624b7aa94",
+      "builtin": null,
+      "parameters": {
+        "class": "sorcerer",
+        "edition": 2014,
+        "ability": "charisma",
+        "focus": "arcane",
+        "spells": "known",
+        "cantrips_at_level_1": 4,
+        "leveled_spells_at_level_1": 2,
+        "progression": "source_class_progression",
+        "level_up": {
+          "replace_known_spells": 1,
+          "new_spell_slot_level_must_be_available": true
+        },
+        "slot_recovery": "long_rest_all",
+        "minimum_slot_level": "spell_level",
+        "spell_dc": {
+          "base": 8,
+          "add": [
+            "proficiency_bonus",
+            "charisma_modifier"
+          ]
+        },
+        "spell_attack": {
+          "add": [
+            "proficiency_bonus",
+            "charisma_modifier"
+          ]
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "sorcerer_spellcasting_2014"
+    },
+    "feature:370": {
+      "name": "Sorcerous Origin",
+      "source_sha256": "cc80a3f80685d5efe5839d77cddc57a9666b8b24a62aa37e9499fa988ee0cdea",
+      "builtin": null,
+      "parameters": {
+        "subclass_choice_level": 1,
+        "subclass_feature_levels": [
+          1,
+          6,
+          14,
+          18
+        ],
+        "selected_subclass": "source_class_selection"
+      },
+      "required_inputs": [],
+      "mechanic": "sorcerous_origin_2014"
+    },
+    "feature:468": {
+      "name": "Proficiencies",
+      "source_sha256": "22550fc5f5faabe452da26a81b174e144eb5beaf2bda0a821ac3857d21f3660f",
+      "builtin": null,
+      "parameters": {
+        "armor": [],
+        "weapons": [
+          "dagger",
+          "dart",
+          "sling",
+          "quarterstaff",
+          "light_crossbow"
+        ],
+        "tools": [],
+        "saves": [
+          "constitution",
+          "charisma"
+        ],
+        "skills": {
+          "choose": 2,
+          "options": [
+            "arcana",
+            "deception",
+            "insight",
+            "intimidation",
+            "persuasion",
+            "religion"
+          ]
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "sorcerer_proficiencies_2014"
+    },
+    "feature:540": {
+      "name": "Hit Points",
+      "source_sha256": "055f7548f842dbc64246ed501ba8177f9efcfd1758b6b1de0212f7904ce249be",
+      "builtin": null,
+      "parameters": {
+        "class": "sorcerer",
+        "hit_die": "d6",
+        "level_1_hp": {
+          "base": 6,
+          "add_ability_modifier": "constitution"
+        },
+        "higher_level_hp": {
+          "choice": [
+            "1d6",
+            4
+          ],
+          "add_ability_modifier": "constitution"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "sorcerer_hp_2014"
+    },
+    "feature:9961449": {
+      "name": "Equipment",
+      "source_sha256": "c9283014092dcc035f2906fc23fb65807c3f4d3b57b4b528dea6a85855b1dc63",
+      "builtin": null,
+      "parameters": {
+        "starting_equipment": {
+          "choices": [
+            [
+              "light_crossbow_and_20_bolts",
+              "simple_weapon"
+            ],
+            [
+              "component_pouch",
+              "arcane_focus"
+            ],
+            [
+              "dungeoneers_pack",
+              "explorers_pack"
+            ]
+          ],
+          "automatic": {
+            "dagger": 2
+          }
+        },
+        "resolved_inventory_is_authoritative": true
+      },
+      "required_inputs": [],
+      "mechanic": "sorcerer_equipment_2014"
+    },
+    "feature:10292382": {
+      "name": "Core Wizard Traits",
+      "source_sha256": "cc805c575c5ee057e87a308dcd878782d8a6efe774cae8db89eb262a362d8198",
+      "builtin": null,
+      "parameters": {
+        "class": "wizard",
+        "primary_ability": "intelligence",
+        "hit_die": "d6",
+        "saves": [
+          "intelligence",
+          "wisdom"
+        ],
+        "skills": {
+          "choose": 2,
+          "options": [
+            "arcana",
+            "history",
+            "insight",
+            "investigation",
+            "medicine",
+            "nature",
+            "religion"
+          ]
+        },
+        "weapons": [
+          "simple"
+        ],
+        "armor": [],
+        "starting_equipment": {
+          "choice_a": {
+            "dagger": 2,
+            "arcane_focus_quarterstaff": 1,
+            "robe": 1,
+            "spellbook": 1,
+            "scholars_pack": 1
+          },
+          "choice_a_gp": 5,
+          "choice_b_gp": 55
+        },
+        "grants_level_1_class_features": true
+      },
+      "required_inputs": [],
+      "mechanic": "wizard_core_traits_2024"
+    },
+    "feature:10292173": {
+      "name": "Core Barbarian Traits",
+      "source_sha256": "c7c0766ccf172450155ccf2dece6d2ca3a208939b875f8654c099369671ba616",
+      "builtin": null,
+      "parameters": {
+        "class": "barbarian",
+        "primary_ability": "strength",
+        "hit_die": "d12",
+        "saves": [
+          "strength",
+          "constitution"
+        ],
+        "skills": {
+          "choose": 2,
+          "options": [
+            "animal_handling",
+            "athletics",
+            "intimidation",
+            "nature",
+            "perception",
+            "survival"
+          ]
+        },
+        "weapons": [
+          "simple",
+          "martial"
+        ],
+        "armor": [
+          "light",
+          "medium",
+          "shield"
+        ],
+        "starting_equipment": {
+          "choice_a": {
+            "greataxe": 1,
+            "handaxe": 4,
+            "explorers_pack": 1
+          },
+          "choice_a_gp": 15,
+          "choice_b_gp": 75
+        },
+        "grants_level_1_class_features": true
+      },
+      "required_inputs": [],
+      "mechanic": "barbarian_core_traits_2024"
+    },
+    "feature:2048517": {
+      "name": "Dark Bargain",
+      "source_sha256": "202f31116fb883db1eb02d308971d2565ac132ada5022f92246d3f0e729a6b86",
+      "builtin": null,
+      "parameters": {
+        "system": "dark_bargain",
+        "selection_required_before_granting_effect": true,
+        "automatic_combat_effect": false
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/dark_bargain",
+          "reason": "Source provides no selected effect or its rules."
+        }
+      ],
+      "mechanic": "optional_dark_bargain"
+    },
+    "feature:2331813": {
+      "name": "Character Threads",
+      "source_sha256": "be6b5b3a286294be4cf4844f31b9c61d70538778871b6651292ad60b91831b6a",
+      "builtin": null,
+      "parameters": {
+        "system": "character_threads",
+        "selection_required_before_granting_effect": true,
+        "automatic_combat_effect": false
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/character_threads",
+          "reason": "Source provides no selected effect or its rules."
+        }
+      ],
+      "mechanic": "optional_character_threads"
+    },
+    "feature:2331889": {
+      "name": "Runestones",
+      "source_sha256": "ad26dcf0b3d20b31b28b5e12c779e9e88055759f57e4a65ac92d09ada3bd21e5",
+      "builtin": null,
+      "parameters": {
+        "system": "runestones",
+        "selection_required_before_granting_effect": true,
+        "automatic_combat_effect": false
+      },
+      "required_inputs": [
+        {
+          "path": "campaign_options/runestones",
+          "reason": "Source provides no selected effect or its rules."
+        }
+      ],
+      "mechanic": "optional_runestones"
+    },
+    "feature:13856164": {
+      "name": "Fiendish Legacy",
+      "source_sha256": "77e9ce265e6a172e73ef4520757657c54a6511f7985f9c3bc3b00534a6235d29",
+      "builtin": null,
+      "parameters": {
+        "choose_lineage": {
+          "abyssal": {
+            "resistance": "poison",
+            "cantrip": "poison_spray",
+            "level_3": "ray_of_sickness",
+            "level_5": "hold_person"
+          },
+          "chthonic": {
+            "resistance": "necrotic",
+            "cantrip": "chill_touch",
+            "level_3": "false_life",
+            "level_5": "ray_of_enfeeblement"
+          },
+          "infernal": {
+            "resistance": "fire",
+            "cantrip": "fire_bolt",
+            "level_3": "hellish_rebuke",
+            "level_5": "darkness"
+          }
+        },
+        "ability_choice": [
+          "intelligence",
+          "wisdom",
+          "charisma"
+        ],
+        "higher_level_spells": {
+          "always_prepared": true,
+          "free_casts_per_spell": 1,
+          "recover": "long_rest_all",
+          "spell_slot_alternative": true,
+          "minimum_slot_level": "spell_level"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "fiendish_legacy_2024"
+    },
+    "feature:13856165": {
+      "name": "Fiendish Legacy Spells",
+      "source_sha256": "3f1516370fa30c333e718d71048b85ee6f6b556a5f061275ff7d9458a28f457f",
+      "builtin": null,
+      "parameters": {
+        "choose_lineage": {
+          "abyssal": {
+            "resistance": "poison",
+            "cantrip": "poison_spray",
+            "level_3": "ray_of_sickness",
+            "level_5": "hold_person"
+          },
+          "chthonic": {
+            "resistance": "necrotic",
+            "cantrip": "chill_touch",
+            "level_3": "false_life",
+            "level_5": "ray_of_enfeeblement"
+          },
+          "infernal": {
+            "resistance": "fire",
+            "cantrip": "fire_bolt",
+            "level_3": "hellish_rebuke",
+            "level_5": "darkness"
+          }
+        },
+        "ability_choice": [
+          "intelligence",
+          "wisdom",
+          "charisma"
+        ],
+        "higher_level_spells": {
+          "always_prepared": true,
+          "free_casts_per_spell": 1,
+          "recover": "long_rest_all",
+          "spell_slot_alternative": true,
+          "minimum_slot_level": "spell_level"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "fiendish_legacy_2024"
+    },
+    "feature:13856110": {
+      "name": "Elven Lineage",
+      "source_sha256": "130e0cc85ae01a13ab2c93c45471a8edd2f7d53bffbc260381d0d83b5c94ae68",
+      "builtin": null,
+      "parameters": {
+        "choose_lineage": {
+          "drow": {
+            "darkvision_ft": 120,
+            "cantrip": "dancing_lights",
+            "level_3": "faerie_fire",
+            "level_5": "darkness"
+          },
+          "high_elf": {
+            "cantrip": "prestidigitation",
+            "cantrip_replacement": {
+              "event": "long_rest",
+              "list": "wizard"
+            },
+            "level_3": "detect_magic",
+            "level_5": "misty_step"
+          },
+          "wood_elf": {
+            "speed_ft": 35,
+            "cantrip": "druidcraft",
+            "level_3": "longstrider",
+            "level_5": "pass_without_trace"
+          }
+        },
+        "ability_choice": [
+          "intelligence",
+          "wisdom",
+          "charisma"
+        ],
+        "higher_level_spells": {
+          "always_prepared": true,
+          "free_casts_per_spell": 1,
+          "recover": "long_rest_all",
+          "spell_slot_alternative": true,
+          "minimum_slot_level": "spell_level"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "elven_lineage_2024"
+    },
+    "feature:13856114": {
+      "name": "Elven Lineage Spells",
+      "source_sha256": "2264aabb090fac896d355d24b9cdb64f8ca63ac45e846eadac5f706a152670e0",
+      "builtin": null,
+      "parameters": {
+        "choose_lineage": {
+          "drow": {
+            "darkvision_ft": 120,
+            "cantrip": "dancing_lights",
+            "level_3": "faerie_fire",
+            "level_5": "darkness"
+          },
+          "high_elf": {
+            "cantrip": "prestidigitation",
+            "cantrip_replacement": {
+              "event": "long_rest",
+              "list": "wizard"
+            },
+            "level_3": "detect_magic",
+            "level_5": "misty_step"
+          },
+          "wood_elf": {
+            "speed_ft": 35,
+            "cantrip": "druidcraft",
+            "level_3": "longstrider",
+            "level_5": "pass_without_trace"
+          }
+        },
+        "ability_choice": [
+          "intelligence",
+          "wisdom",
+          "charisma"
+        ],
+        "higher_level_spells": {
+          "always_prepared": true,
+          "free_casts_per_spell": 1,
+          "recover": "long_rest_all",
+          "spell_slot_alternative": true,
+          "minimum_slot_level": "spell_level"
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "elven_lineage_2024"
+    },
+    "feature:13856160": {
+      "name": "Otherworldly Presence",
+      "source_sha256": "7315ae32b26aaa4089f7beb7a8b9184d1ee6014c77d3b6c0e140763ca23f1c20",
+      "builtin": null,
+      "parameters": {
+        "grants_cantrip": "thaumaturgy",
+        "casting_ability": "chosen_fiendish_legacy_ability"
+      },
+      "required_inputs": [],
+      "mechanic": "otherworldly_presence"
+    },
+    "feature:2158449": {
+      "name": "Circle Magic (Intelligence)",
+      "source_sha256": "ac322359e8dcb5234812d68e92da83e33107a5d9ed5ce43df3dd03e4014035af",
+      "builtin": null,
+      "parameters": {
+        "initiation": {
+          "economy": "magic_action",
+          "choose_options": 1,
+          "concentrate_until_cast_complete": true,
+          "triggers_spell_cast_reactions": true,
+          "spell_specific_circle_option_alternative": true
+        },
+        "augment": {
+          "minimum_range_ft": 5,
+          "additional_range_per_secondary_ft": 1000,
+          "maximum_additional_ft": 5280
+        },
+        "distribute": {
+          "requires_concentration_spell": true,
+          "concentration_holders": "all_contributing_casters",
+          "keep_effect_while_at_least_one_concentrates": true
+        },
+        "expand": {
+          "requires_area": true,
+          "increase_one_dimension_ft_per_secondary": 10,
+          "secondary_slot_cost": {
+            "count": 1,
+            "minimum_level": 1,
+            "economy": "none",
+            "not_spent_if_spell_fails": true
+          }
+        },
+        "prolong": {
+          "minimum_duration_seconds": 60,
+          "add_duration_hours_by_secondary_count": {
+            "1": 1,
+            "4": 8,
+            "7": 24
+          },
+          "secondary_slot_cost": {
+            "count": 1,
+            "minimum_level": 1,
+            "economy": "none",
+            "not_spent_if_spell_fails": true
+          }
+        },
+        "safeguard": {
+          "requires_area": true,
+          "safe_cubes": {
+            "side_ft": 5,
+            "count": {
+              "maximum": [
+                1,
+                {
+                  "add": [
+                    "spellcasting_modifier",
+                    "secondary_caster_count"
+                  ]
+                }
+              ]
+            },
+            "each_cube_adjacent_to_another": true,
+            "unaffected_for_spell_duration": true,
+            "moves_with_area": true
+          }
+        },
+        "supplant": {
+          "requires_consumed_material_with_cost": true,
+          "reduce_one_material_minimum_gp_per_secondary": 50,
+          "minimum_material_cost_gp": 0,
+          "secondary_slot_cost": {
+            "count": 1,
+            "minimum_level": "spell_level",
+            "economy": "none",
+            "not_spent_if_spell_fails": true
+          }
+        },
+        "casting": {
+          "allowed_base_casting_times": [
+            "action",
+            "at_least_one_minute"
+          ],
+          "spell_slot_required": true,
+          "primary_caster_controls": [
+            "targets",
+            "spell_options"
+          ],
+          "primary_caster_supplies": [
+            "components",
+            "spell_slot"
+          ],
+          "effects_originate_from": "primary_caster",
+          "secondary_casters": {
+            "minimum": 1,
+            "requires_any_feature": [
+              "spellcasting",
+              "pact_magic"
+            ],
+            "contribute_action": "magic",
+            "contribution_deadline": "primary_next_turn_start",
+            "maximum_distance_from_primary_ft": 30,
+            "remain_in_range_during_contribution": true
+          },
+          "extended_casting": {
+            "minimum_base_minutes": 1,
+            "all_casters_magic_action_each_turn": true,
+            "all_casters_concentrate": true,
+            "any_caster_loses_concentration": "spell_fails"
+          },
+          "failure": {
+            "effects": "none",
+            "primary_slot_spent": false,
+            "material_components_consumed": false,
+            "retry": "restart_casting"
+          }
+        }
+      },
+      "required_inputs": [],
+      "mechanic": "circle_magic_2025"
+    },
+    "action:11522186": {
+      "name": "Initiate a Circle Spell",
+      "source_sha256": "b26884f4bf5664474a0f3774fd03989a153d207a0cd25a2e0dc9c02501d42c67",
+      "builtin": null,
+      "parameters": {
+        "circle_option": "initiation",
+        "rules": {
+          "economy": "magic_action",
+          "choose_options": 1,
+          "concentrate_until_cast_complete": true,
+          "triggers_spell_cast_reactions": true,
+          "spell_specific_circle_option_alternative": true
+        },
+        "requires_circle_initiation": false,
+        "only_one_circle_option": true
+      },
+      "required_inputs": [],
+      "mechanic": "circle_initiation"
+    },
+    "action:11522205": {
+      "name": "Circle Spell: Augment",
+      "source_sha256": "59ec374cf8b556578a84291c2e323c30bbcc5bc475839442a831dc48a01cecb5",
+      "builtin": null,
+      "parameters": {
+        "circle_option": "augment",
+        "rules": {
+          "minimum_range_ft": 5,
+          "additional_range_per_secondary_ft": 1000,
+          "maximum_additional_ft": 5280
+        },
+        "requires_circle_initiation": true,
+        "only_one_circle_option": true
+      },
+      "required_inputs": [],
+      "mechanic": "circle_augment"
+    },
+    "action:11522206": {
+      "name": "Circle Spell: Distribute",
+      "source_sha256": "11bfffe90abca570748e365fe0fbcb3459e380ad1096af8de14bba38b86c02d8",
+      "builtin": null,
+      "parameters": {
+        "circle_option": "distribute",
+        "rules": {
+          "requires_concentration_spell": true,
+          "concentration_holders": "all_contributing_casters",
+          "keep_effect_while_at_least_one_concentrates": true
+        },
+        "requires_circle_initiation": true,
+        "only_one_circle_option": true
+      },
+      "required_inputs": [],
+      "mechanic": "circle_distribute"
+    },
+    "action:11522227": {
+      "name": "Circle Spell: Expand",
+      "source_sha256": "b145fb881608c38f7e4a8db556b316af72aaea2d79d67da296ecc50f8b4493b9",
+      "builtin": null,
+      "parameters": {
+        "circle_option": "expand",
+        "rules": {
+          "requires_area": true,
+          "increase_one_dimension_ft_per_secondary": 10,
+          "secondary_slot_cost": {
+            "count": 1,
+            "minimum_level": 1,
+            "economy": "none",
+            "not_spent_if_spell_fails": true
+          }
+        },
+        "requires_circle_initiation": true,
+        "only_one_circle_option": true
+      },
+      "required_inputs": [],
+      "mechanic": "circle_expand"
+    },
+    "action:11522263": {
+      "name": "Circle Spell: Prolong",
+      "source_sha256": "04cf31359c05b11307f9a7eb5e5c295bd092cdc3e6d1a45672a00fd59d97286f",
+      "builtin": null,
+      "parameters": {
+        "circle_option": "prolong",
+        "rules": {
+          "minimum_duration_seconds": 60,
+          "add_duration_hours_by_secondary_count": {
+            "1": 1,
+            "4": 8,
+            "7": 24
+          },
+          "secondary_slot_cost": {
+            "count": 1,
+            "minimum_level": 1,
+            "economy": "none",
+            "not_spent_if_spell_fails": true
+          }
+        },
+        "requires_circle_initiation": true,
+        "only_one_circle_option": true
+      },
+      "required_inputs": [],
+      "mechanic": "circle_prolong"
+    },
+    "action:11522278": {
+      "name": "Circle Spell: Safeguard",
+      "source_sha256": "06cfd3ab9cc513457f339bdcb38d3fb26abcd9d104695a774eb2d06fdf1825c7",
+      "builtin": null,
+      "parameters": {
+        "circle_option": "safeguard",
+        "rules": {
+          "requires_area": true,
+          "safe_cubes": {
+            "side_ft": 5,
+            "count": {
+              "maximum": [
+                1,
+                {
+                  "add": [
+                    "spellcasting_modifier",
+                    "secondary_caster_count"
+                  ]
+                }
+              ]
+            },
+            "each_cube_adjacent_to_another": true,
+            "unaffected_for_spell_duration": true,
+            "moves_with_area": true
+          }
+        },
+        "requires_circle_initiation": true,
+        "only_one_circle_option": true
+      },
+      "required_inputs": [],
+      "mechanic": "circle_safeguard"
+    },
+    "action:11522299": {
+      "name": "Circle Spell: Supplant",
+      "source_sha256": "5c932f7500fdc799829f02a15a8344f9d48919d56ad46a9b3c52eea5e75c774e",
+      "builtin": null,
+      "parameters": {
+        "circle_option": "supplant",
+        "rules": {
+          "requires_consumed_material_with_cost": true,
+          "reduce_one_material_minimum_gp_per_secondary": 50,
+          "minimum_material_cost_gp": 0,
+          "secondary_slot_cost": {
+            "count": 1,
+            "minimum_level": "spell_level",
+            "economy": "none",
+            "not_spent_if_spell_fails": true
+          }
+        },
+        "requires_circle_initiation": true,
+        "only_one_circle_option": true
+      },
+      "required_inputs": [],
+      "mechanic": "circle_supplant"
+    }
+  }
+}

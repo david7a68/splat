@@ -221,9 +221,17 @@ impl Party {
                 if let Some((_, Ok(entry))) = &self.content_entry {
                     ui.label(format!("Campaign content: {} inventory rows, {} action definitions.", entry.inventory.len(), entry.fields.get("splat_actions").and_then(serde_yaml_ng::Value::as_mapping).map_or(0, |v| v.len())));
                     if let Some(import) = entry.fields.get("splat_import") {
+                        let conversion_count = import.get("gaps").and_then(serde_yaml_ng::Value::as_sequence).map_or(0, Vec::len);
+                        let engine_count = import.get("engine_gaps").and_then(serde_yaml_ng::Value::as_sequence).map_or(0, Vec::len);
+                        ui.label(format!("{conversion_count} conversion gaps; {engine_count} engine adapters still needed."));
                         ui.collapsing("Rule conversion gaps", |ui| {
                             if let Some(gaps) = import.get("gaps").and_then(serde_yaml_ng::Value::as_sequence) {
                                 for gap in gaps { if let Some(reason) = gap.get("reason").and_then(serde_yaml_ng::Value::as_str) { ui.label(reason); } }
+                            }
+                        });
+                        ui.collapsing("Required character or encounter inputs", |ui| {
+                            if let Some(inputs) = import.get("required_inputs").and_then(serde_yaml_ng::Value::as_sequence) {
+                                for input in inputs { if let Some(reason) = input.get("reason").and_then(serde_yaml_ng::Value::as_str) { ui.label(reason); } }
                             }
                         });
                     }

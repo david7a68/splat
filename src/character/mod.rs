@@ -3,6 +3,7 @@
 mod cache;
 mod campaign;
 mod content;
+mod rules;
 use crate::{
     content::Entry,
     execution::model::{Creature, Health, Pool, Stat},

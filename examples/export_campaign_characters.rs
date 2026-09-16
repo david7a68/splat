@@ -30,8 +30,15 @@ fn main() -> Result<(), String> {
             report.errors
         ));
     }
+    let gaps: usize = entries
+        .iter()
+        .filter_map(|entry| entry.fields.get("splat_import"))
+        .filter_map(|v| v.get("gaps"))
+        .filter_map(serde_yaml_ng::Value::as_sequence)
+        .map(Vec::len)
+        .sum();
     println!(
-        "Validated {} character, item, and spell entries.",
+        "Validated {} content entries; {gaps} conversion gaps.",
         entries.len()
     );
     Ok(())
