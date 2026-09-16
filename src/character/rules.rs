@@ -66,6 +66,22 @@ pub(super) fn shared_reference(identity: &str, source: &Value) -> Result<Option<
     Ok(Some(entry.id))
 }
 
+/// Public source link for a shared rule, usable both in Splat and other Markdown readers.
+pub(super) fn shared_source_link(id: Uuid) -> Result<Option<String>, String> {
+    let Some(entry) = builtin()?.values().find(|entry| entry.id == id) else {
+        return Ok(None);
+    };
+    let meta = crate::content::definitions::conversion(entry)?.ok_or("Missing builtin coverage")?;
+    let page = meta
+        .pages
+        .first()
+        .ok_or("Missing shared rule source page")?;
+    Ok(Some(format!(
+        "{}#page={page}",
+        crate::content::builtin::SOURCE_URL
+    )))
+}
+
 /// Paths emitted by the former copying importer that now resolve to the shared catalogue.
 pub(super) fn retired_shared_paths(record: &EntitySnapshot) -> Result<Vec<String>, String> {
     let folder = format!("Definitions/{}", record.definition.splat_id);
@@ -823,6 +839,24 @@ mod conversion_tests {
                 .inventory
                 .iter()
                 .all(|i| matches!(i.item, crate::content::Reference::Id(id) if id == dagger))
+        );
+        let links: Vec<_> = pulldown_cmark::Parser::new(&entry.body)
+            .filter_map(|event| match event {
+                pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link { dest_url, .. }) => {
+                    Some(dest_url.into_string())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            links
+                .iter()
+                .any(|url| url.starts_with(crate::content::builtin::SOURCE_URL)
+                    && url.contains("#page="))
+        );
+        assert!(
+            !links.iter().any(|url| url.starts_with("Definitions/")),
+            "Shared spell links must not point to nonexistent private files"
         );
         assert_eq!(entry.inventory.len(), 2);
         assert_ne!(entry.inventory[0].key, entry.inventory[1].key);

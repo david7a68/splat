@@ -171,13 +171,13 @@ impl Party {
             && !self.reader.errors.contains_key(id)
             && self.reader.error.is_none();
         ui.weak(format!(
-            "{} · Fetched {}s ago",
+            "{} · Updated {}",
             if live {
                 "D&D Beyond supplied totals"
             } else {
                 "Cached copy · Not checked this session"
             },
-            now().saturating_sub(record.source.fetched_at)
+            fetch_age(now().saturating_sub(record.source.fetched_at))
         ));
         ui.horizontal_wrapped(|ui| {
             for (i, name) in [
@@ -191,7 +191,11 @@ impl Party {
             .iter()
             .enumerate()
             {
-                if ui.selectable_value(&mut self.page, i, *name).clicked() {
+                if ui
+                    .add(egui::Button::new(*name).selected(self.page == i))
+                    .clicked()
+                {
+                    self.page = i;
                     self.search.clear();
                 }
             }
@@ -273,6 +277,15 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
         }
         ui.weak("Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.");
     });
+}
+fn fetch_age(seconds: u64) -> String {
+    match seconds {
+        0..60 => "just now".into(),
+        60..3600 => format!("{} min ago", seconds / 60),
+        3600..86400 => format!("{} h ago", seconds / 3600),
+        86400..172800 => "1 day ago".into(),
+        _ => format!("{} days ago", seconds / 86400),
+    }
 }
 fn text(v: &Value) -> &str {
     v.as_str().unwrap_or("—")
@@ -456,33 +469,9 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
         }
     });
 }
-fn plain(input: &str) -> String {
-    let mut out = String::new();
-    let mut tag = false;
-    for ch in input.chars() {
-        match ch {
-            '<' => {
-                tag = true;
-                out.push(' ');
-            }
-            '>' => tag = false,
-            _ if !tag => out.push(ch),
-            _ => {}
-        }
-    }
-    out.replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&rsquo;", "’")
-        .replace("&mdash;", "—")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
 pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     let d = &record.source.raw;
-    let mut entries: Vec<(String, String, String)> = Vec::new();
+    let mut entries: Vec<(String, String, String, Option<u64>)> = Vec::new();
     let mut add = |v: &Value, source: &str| {
         let def = if v["definition"].is_object() {
             &v["definition"]
@@ -496,6 +485,12 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             .as_str()
             .or_else(|| def["snippet"].as_str())
             .unwrap_or("No description supplied.");
+        let source = match source {
+            "race" => "Species",
+            "class" => "Class",
+            "feat" => "Feat",
+            other => other,
+        };
         let meta = match page {
             3 => format!(
                 "Qty {} · {}{}",
@@ -571,7 +566,12 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         } else {
             format!("{meta} · {}", extra.join(" · "))
         };
-        entries.push((name.into(), meta, plain(desc)));
+        entries.push((
+            name.into(),
+            meta,
+            splat::character::description_text(desc),
+            def["level"].as_u64(),
+        ));
     };
     match page {
         1 => {
@@ -703,14 +703,20 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             }
         }
     }
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    entries.sort_by(|a, b| {
+        if page == 2 {
+            a.3.cmp(&b.3).then_with(|| a.0.cmp(&b.0))
+        } else {
+            a.0.cmp(&b.0)
+        }
+    });
     if page != 3 && page != 1 {
         entries.dedup();
     }
     let search = search.to_lowercase();
     let filtered: Vec<_> = entries
         .iter()
-        .filter(|(name, source, _)| format!("{name} {source}").to_lowercase().contains(&search))
+        .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
     ui.weak(format!("{} entries", filtered.len()));
     if filtered.is_empty() {
@@ -720,12 +726,35 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             "No entries match this filter."
         });
     }
-    for (i, (name, meta, description)) in filtered.into_iter().enumerate() {
-        egui::CollapsingHeader::new(format!("{name}  ·  {meta}"))
+    let mut last_level = None;
+    for (i, (name, meta, description, level)) in filtered.into_iter().enumerate() {
+        if page == 2 && (i == 0 || last_level != *level) {
+            ui.add_space(10.0);
+            ui.strong(match level {
+                Some(0) => "Cantrips".to_owned(),
+                Some(n) => format!("Level {n} spells"),
+                None => "Other spells".to_owned(),
+            });
+            ui.separator();
+            last_level = *level;
+        }
+        let response = egui::CollapsingHeader::new(egui::RichText::new(name).strong())
             .id_salt((page, i, name))
             .show(ui, |ui| {
-                ui.set_max_width(760.0);
-                ui.label(description);
+                ui.set_max_width(ui.available_width().min(760.0));
+                ui.weak(meta);
+                ui.add_space(6.0);
+                for paragraph in description.split("\n\n") {
+                    ui.add(egui::Label::new(paragraph).wrap());
+                    ui.add_space(5.0);
+                }
             });
+        if response.body_returned.is_none() {
+            ui.horizontal_wrapped(|ui| {
+                ui.add_space(20.0);
+                ui.weak(meta);
+            });
+        }
+        ui.add_space(4.0);
     }
 }
