@@ -120,11 +120,19 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
             }
             Event::Start(Tag::Heading { level, .. }) => {
                 flush(ui, &mut job, &mut target);
-                ui.add_space(8.0);
+                ui.add_space(match level {
+                    pulldown_cmark::HeadingLevel::H1 => 8.0,
+                    pulldown_cmark::HeadingLevel::H2 => 18.0,
+                    _ => 12.0,
+                });
                 heading = Some(level);
             }
-            Event::End(TagEnd::Heading(_)) => {
+            Event::End(TagEnd::Heading(level)) => {
                 flush(ui, &mut job, &mut target);
+                if level == pulldown_cmark::HeadingLevel::H2 {
+                    ui.separator();
+                    ui.add_space(3.0);
+                }
                 heading = None;
             }
             Event::Start(Tag::CodeBlock(_)) => {
@@ -185,9 +193,12 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
                 .resolve(ui.style());
                 let font_id = if let Some(level) = heading {
                     egui::FontId::proportional(match level {
-                        pulldown_cmark::HeadingLevel::H1 => 26.0,
-                        pulldown_cmark::HeadingLevel::H2 => 21.0,
-                        _ => 17.0,
+                        pulldown_cmark::HeadingLevel::H1 => 30.0,
+                        pulldown_cmark::HeadingLevel::H2 => 22.0,
+                        pulldown_cmark::HeadingLevel::H3 => 18.0,
+                        pulldown_cmark::HeadingLevel::H4 => 16.0,
+                        pulldown_cmark::HeadingLevel::H5 => 15.0,
+                        pulldown_cmark::HeadingLevel::H6 => 14.0,
                     })
                 } else {
                     font_id
@@ -199,7 +210,7 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
                         font_id,
                         color: if in_link {
                             ui.visuals().hyperlink_color
-                        } else if strong {
+                        } else if strong || heading.is_some() {
                             ui.visuals().strong_text_color()
                         } else {
                             ui.visuals().text_color()
