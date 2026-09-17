@@ -35,7 +35,6 @@ impl Party {
         self.reader.tick(session.clone(), ui.ctx());
         ui.horizontal(|ui| {
             ui.heading("Party");
-            ui.weak("D&D Beyond · Combat sync available");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .add_enabled(
@@ -53,36 +52,100 @@ impl Party {
             ui.label("Link this campaign to D&D Beyond in Settings to see its party.");
             return;
         }
-        if session.is_none() {
-            ui.label("Offline · Showing local copies. Connect in Settings to get updates.");
+        let cached = self
+            .reader
+            .selected
+            .as_ref()
+            .and_then(|id| self.reader.sheets.get(id));
+        let checked = self.reader.selected.as_ref().is_some_and(|id| {
+            self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
+        }) && self.reader.error.is_none();
+        let status = if session.is_none() {
+            "Offline"
+        } else if self.reader.loading() {
+            "Refreshing"
+        } else if !checked {
+            "Connected · Cached sheet"
+        } else if self.reader.stream_open {
+            "Live updates"
         } else {
-            ui.weak(if self.reader.stream_open {
-                "Event stream connected · Refresh on changes · Safety check every 5 minutes"
-            } else {
-                "Event stream reconnecting · Checking the open sheet every 15 seconds"
-            });
-        }
+            "Connected · Checking for updates"
+        };
+        ui.horizontal_wrapped(|ui| {
+            if self.reader.loading() {
+                ui.spinner();
+            }
+            let age = cached
+                .map(|record| {
+                    format!(
+                        " · Fetched {}",
+                        fetch_age(now().saturating_sub(record.source.fetched_at))
+                    )
+                })
+                .unwrap_or_default();
+            ui.weak(format!("{status}{age}"))
+                .on_hover_text(if session.is_none() {
+                    "Showing saved sheets. Connect in Settings to get updates."
+                } else {
+                    "Sheets refresh automatically. Use Refresh party to request the latest data."
+                });
+        });
         if let Some(e) = &self.reader.error {
             ui.colored_label(egui::Color32::LIGHT_RED, e);
-            ui.label("Local copies may be out of date.");
         }
         if let Some(e) = &self.reader.warning {
             ui.colored_label(egui::Color32::LIGHT_YELLOW, format!("Local storage: {e}"));
-        }
-        if self.reader.loading() {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label("Checking for updates…");
-            });
         }
         ui.ctx().request_repaint_after(Duration::from_secs(1));
         let mut selected = self.reader.selected.clone();
         ui.horizontal_wrapped(|ui| {
             for m in &self.reader.members {
+                let record = self.reader.sheets.get(&m.id);
+                let level = record.map(|r| r.character.level).or(m.level);
+                let classes = record
+                    .map(|r| {
+                        r.character
+                            .classes
+                            .iter()
+                            .filter_map(|c| c["name"].as_str())
+                            .collect::<Vec<_>>()
+                            .join(" / ")
+                    })
+                    .unwrap_or_default();
+                let summary = [
+                    level.map(|n| format!("Level {n}")).unwrap_or_default(),
+                    classes,
+                ]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" · ");
+                let mut label = egui::text::LayoutJob::default();
+                label.append(
+                    &m.name,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: egui::FontId::proportional(18.0),
+                        color: ui.visuals().strong_text_color(),
+                        ..Default::default()
+                    },
+                );
+                if !summary.is_empty() {
+                    label.append(
+                        &format!("\n{summary}"),
+                        0.0,
+                        egui::TextFormat {
+                            font_id: egui::FontId::proportional(13.0),
+                            color: ui.visuals().weak_text_color(),
+                            ..Default::default()
+                        },
+                    );
+                }
                 if ui
-                    .selectable_label(
-                        selected.as_ref() == Some(&m.id),
-                        format!("{} · L{}", m.name, m.level.unwrap_or(0)),
+                    .add(
+                        egui::Button::new(label)
+                            .selected(selected.as_ref() == Some(&m.id))
+                            .min_size(egui::vec2(190.0, 58.0)),
                     )
                     .clicked()
                 {
@@ -107,7 +170,6 @@ impl Party {
         };
         if let Some(error) = self.reader.errors.get(id) {
             ui.colored_label(egui::Color32::LIGHT_RED, error);
-            ui.label("The previous local copy was kept; it may be out of date.");
         }
         if let Some(record) = self.reader.sheets.get(id) {
             self.combat.tick(
@@ -134,15 +196,15 @@ impl Party {
             }
             self.combat.updated = false;
         }
-        egui::CollapsingHeader::new("Combat stats · two-way sync")
-            .id_salt("party_combat_sync")
-            .show(ui, |ui| self.combat.show(ui));
+        if session.is_some() {
+            egui::CollapsingHeader::new("Combat sync")
+                .id_salt("party_combat_sync")
+                .show(ui, |ui| self.combat.show(ui));
+        }
         let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) else {
-            ui.label(if self.reader.loading() {
-                "Waiting for this character’s sheet."
-            } else {
-                "No local copy is available for this character."
-            });
+            if !self.reader.loading() {
+                ui.label("No local copy is available for this character.");
+            }
             return;
         };
         ui.horizontal(|ui| {
@@ -159,31 +221,21 @@ impl Party {
                 );
             });
         });
-        ui.label(format!(
-            "{} · {} · Level {}",
-            record.character.species,
-            record
-                .character
-                .classes
-                .iter()
-                .map(|c| text(&c["name"]))
-                .collect::<Vec<_>>()
-                .join(" / "),
-            record.character.level
-        ));
-        let live = session.is_some()
-            && self.reader.online_ids.contains(id)
-            && !self.reader.errors.contains_key(id)
-            && self.reader.error.is_none();
-        ui.weak(format!(
-            "{} · Updated {}",
-            if live {
-                "D&D Beyond supplied totals"
-            } else {
-                "Cached copy · Not checked this session"
-            },
-            fetch_age(now().saturating_sub(record.source.fetched_at))
-        ));
+        ui.label(
+            egui::RichText::new(format!(
+                "{} · {} · Level {}",
+                record.character.species,
+                record
+                    .character
+                    .classes
+                    .iter()
+                    .map(|c| text(&c["name"]))
+                    .collect::<Vec<_>>()
+                    .join(" / "),
+                record.character.level
+            ))
+            .size(17.0),
+        );
         ui.horizontal_wrapped(|ui| {
             for (i, name) in [
                 "Overview",
