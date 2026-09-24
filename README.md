@@ -118,17 +118,15 @@ Spells, Items, Character options, Rules, Glossary, and Encounters in the section
 sidebar. Sections use subject metadata as well as entry kinds, so spell references
 appear with spells. Other entries includes package notes and invalid notes for repair.
 Search covers all sections by name, path, or section; clear it to return to the
-selected section. The reader shows source text first, with separate expandable
-sections for structured details, engine support, and source identifiers. Markdown
-source and local editing remain available. Engine support remains separate from
-structural validity.
+selected section. Entries share stat cards, headings, and compact detail rows.
+Structured details, engine support, and source identifiers remain expandable;
+Markdown source and local editing remain available. Engine support is separate
+from structural validity.
 
-The built-in overview reflows printed PDF lines into paragraphs and keeps page
-references under **Source and identifiers**. Structured data uses compact label/value
-rows under collapsed **Technical details**. Classes show core traits as separate
-labeled rows, equipment choices as a list, and named features in level order.
-Select a feature to read it. These display changes do not alter the
-stored Markdown or rule definitions.
+The built-in reader reflows printed PDF lines into paragraphs and keeps page
+references under **Source and identifiers**. Raw definitions stay under collapsed
+**Technical details**. Classes show separate traits, equipment choices, and
+feature links in level order. Display changes do not alter saved content.
 
 Under **Package actions → Manage packages**, register an existing folder containing exactly one package
 manifest, or enter a name, namespace (for example `my_homebrew`), and a new absolute

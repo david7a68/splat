@@ -1,10 +1,10 @@
 //! A reading view of creature values, with the original rules prose retained.
 use super::presentation;
-use eframe::egui::{self, Color32, RichText};
+use crate::reader_style::{self, ACCENT, card, section_heading};
+use eframe::egui::{self, RichText};
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use splat::content::{Entry, Reference};
 
-const ACCENT: Color32 = Color32::from_rgb(100, 199, 194);
 const ABILITIES: [&str; 6] = [
     "strength",
     "dexterity",
@@ -174,41 +174,11 @@ pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
 
 fn prose(ui: &mut egui::Ui, text: &str, spell_links: &mut impl FnMut(&mut egui::Ui)) {
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
-        if let Some(title) = paragraph.strip_prefix("### ") {
-            section_heading(ui, title);
-        } else {
-            let markdown = if let Some((name, rest)) = paragraph.split_once(". ") {
-                if name.len() < 65 && !name.contains('\n') && !name.contains('*') {
-                    format!("**{name}.** {rest}")
-                } else {
-                    paragraph.into()
-                }
-            } else {
-                paragraph.into()
-            };
-            crate::markdown_view::show(ui, &markdown);
-            if paragraph.starts_with("Spellcasting.") {
-                spell_links(ui);
-            }
+        reader_style::source_prose(ui, paragraph);
+        if paragraph.starts_with("Spellcasting.") {
+            spell_links(ui);
         }
     }
-}
-
-fn section_heading(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(10.0);
-    ui.label(RichText::new(title).size(20.0).color(ACCENT).strong());
-    ui.separator();
-}
-
-fn card(ui: &mut egui::Ui, margin: i8, contents: impl FnOnce(&mut egui::Ui)) {
-    egui::Frame::new()
-        .fill(ui.visuals().faint_bg_color)
-        .corner_radius(6.0)
-        .inner_margin(margin)
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            contents(ui);
-        });
 }
 
 fn ability_card(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
@@ -267,28 +237,19 @@ pub(super) fn show(
         .flatten()
         .collect::<Vec<_>>()
         .join(" · ");
-    ui.label(
-        RichText::new(identity)
-            .italics()
-            .color(ui.visuals().weak_text_color()),
-    );
-    ui.add_space(8.0);
+    reader_style::identity(ui, &identity);
     let hp = field(entry, "hit_points_text")
         .map(str::to_owned)
         .unwrap_or_else(|| value(entry, "max_hp"));
     let initiative = stat(entry, "initiative").map_or_else(|| "—".into(), |v| format!("{v:+}"));
-    ui.columns(3, |columns| {
-        for (column, (label, text)) in columns.iter_mut().zip([
-            ("ARMOR CLASS", value(entry, "armor_class")),
-            ("HIT POINTS", hp),
-            ("INITIATIVE", initiative),
-        ]) {
-            card(column, 10, |ui| {
-                ui.label(RichText::new(label).size(11.0).color(ACCENT).strong());
-                ui.label(RichText::new(text).size(20.0).strong());
-            });
-        }
-    });
+    reader_style::facts(
+        ui,
+        &[
+            ("Armor class".into(), value(entry, "armor_class")),
+            ("Hit points".into(), hp),
+            ("Initiative".into(), initiative),
+        ],
+    );
     ui.add_space(10.0);
     let per_row = if ui.available_width() < 480.0 { 3 } else { 6 };
     for abilities in ABILITIES.chunks(per_row) {
@@ -302,10 +263,7 @@ pub(super) fn show(
     ui.add_space(4.0);
     for (key, label) in DETAILS {
         if let Some(text) = detail(entry, key).filter(|text| !text.is_empty()) {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new(label).strong().color(ACCENT));
-                ui.label(text);
-            });
+            reader_style::detail(ui, label, &text);
         }
     }
     ui.add_space(8.0);
@@ -324,7 +282,7 @@ pub(super) fn show(
             if section.title != "Overview" {
                 section_heading(ui, &section.title);
             }
-            crate::markdown_view::show(ui, &body);
+            reader_style::markdown(ui, &body, false);
         }
     }
 }
