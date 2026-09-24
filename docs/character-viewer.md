@@ -27,7 +27,6 @@ Details:
 - [Normalized character content and import gaps](design/character-content.md)
 - [Creature cache schema, storage, parity, and update behavior](design/character-cache.md)
 - [Avrae, DDB Importer, Beyond20, and official API references](research/dndbeyond-api.md)
-- [Initial viewer screenshots and Claude Fable review](../artifacts/screenshots/party/README.md)
 
 ## Validation
 
