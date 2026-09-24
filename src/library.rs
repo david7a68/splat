@@ -103,10 +103,28 @@ const ENTRY_ROW_HEIGHT: f32 = 44.0;
 
 // Fixed height keeps the virtual scroll position independent of label length.
 fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
-    let response = ui.add_sized(
-        [ui.available_width(), ENTRY_ROW_HEIGHT],
-        egui::Button::selectable(selected, ""),
+    let (rect, mut response) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), ENTRY_ROW_HEIGHT),
+        egui::Sense::click(),
     );
+    // egui hit-tests the previous frame's rectangles. Paint hover at the current
+    // position so it does not trail the pointer while the list scrolls.
+    let hovered = response.enabled()
+        && ui.rect_contains_pointer(rect)
+        && (!ui.ctx().is_using_pointer() || response.is_pointer_button_down_on());
+    response.flags.set(egui::response::Flags::HOVERED, hovered);
+    if ui.is_rect_visible(rect)
+        && (selected || hovered || response.is_pointer_button_down_on() || response.has_focus())
+    {
+        let visuals = ui.style().interact_selectable(&response, selected);
+        ui.painter().rect(
+            rect.expand(visuals.expansion),
+            visuals.corner_radius,
+            visuals.weak_bg_fill,
+            visuals.bg_stroke,
+            egui::StrokeKind::Inside,
+        );
+    }
     response.widget_info(|| {
         egui::WidgetInfo::selected(
             egui::WidgetType::SelectableLabel,
