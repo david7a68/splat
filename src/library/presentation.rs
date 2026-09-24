@@ -103,20 +103,32 @@ pub(super) struct ReadingSection<'a> {
 /// its reading view; authored Markdown and the stored source are never rewritten.
 pub(super) fn overview_markdown(source: &str) -> String {
     let mut output = String::new();
-    for raw in source.lines() {
-        let line = raw.trim().trim_end_matches('\\');
+    let mut row = false;
+    let mut lines = source
+        .lines()
+        .map(|raw| raw.trim().trim_end_matches('\\'))
+        .peekable();
+    while let Some(line) = lines.next() {
         if line.starts_with("<!-- SRD page ") || line.starts_with("Original layout: [[") {
             continue;
         }
         if line.is_empty() {
+            row = false;
             output.push_str("\n\n");
             continue;
         }
+        // The imported text has lost cell boundaries. Recognize known headers
+        // rather than guessing that title-case prose starts a printed table.
+        let table_heading = source_table_header(line)
+            || (source_heading(line) && lines.peek().is_some_and(|next| source_table_header(next)));
+        row = source_table_row(line) || (row && line.starts_with(char::is_lowercase));
         let block = line.starts_with('#')
             || line.starts_with("* ")
             || line.starts_with("- ")
-            || line.starts_with("Using a Higher-Level Spell Slot.");
-        let stat = source_stat_line(line);
+            || line
+                .split_once(". ")
+                .is_some_and(|(title, _)| source_heading(title));
+        let stat = table_heading || source_stat_line(line);
         if (block || stat) && !output.ends_with('\n') {
             output.push_str("\n\n");
         } else if !output.is_empty() && !output.ends_with('\n') {
@@ -127,17 +139,63 @@ pub(super) fn overview_markdown(source: &str) -> String {
             } else {
                 output.push(' ');
             }
-        } else if output.ends_with("  \n") && !stat {
+        } else if output.ends_with("  \n") && !stat && !row {
             output.push('\n');
         }
         output.push_str(line);
-        if stat {
+        if stat
+            || (row
+                && lines
+                    .peek()
+                    .is_none_or(|next| !next.starts_with(char::is_lowercase)))
+        {
             output.push_str("  \n");
         } else if line.starts_with('#') || line.starts_with("* ") || line.starts_with("- ") {
             output.push_str("\n\n");
         }
     }
     output
+}
+
+fn source_heading(line: &str) -> bool {
+    line.starts_with(char::is_uppercase)
+        && line.ends_with(char::is_alphabetic)
+        && line
+            .chars()
+            .all(|c| c.is_alphabetic() || c.is_whitespace() || c == '-')
+        && line.split_whitespace().all(|word| {
+            word.starts_with(char::is_uppercase)
+                || matches!(word, "a" | "an" | "and" | "for" | "of" | "the" | "to")
+        })
+}
+
+fn source_table_header(line: &str) -> bool {
+    matches!(
+        line,
+        "Ability Make a Check To …"
+            | "Ability Make a Save To …"
+            | "Ability Attack Type"
+            | "Omen For Results That Will Be …"
+    )
+}
+
+fn source_table_row(line: &str) -> bool {
+    line.starts_with("Weal and woe ")
+        || line.split_once(' ').is_some_and(|(label, cells)| {
+            matches!(
+                label,
+                "Strength"
+                    | "Dexterity"
+                    | "Constitution"
+                    | "Intelligence"
+                    | "Wisdom"
+                    | "Charisma"
+                    | "Varies"
+                    | "Weal"
+                    | "Woe"
+                    | "Indifference"
+            ) && cells.starts_with(char::is_uppercase)
+        })
 }
 
 fn source_stat_line(line: &str) -> bool {

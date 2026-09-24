@@ -41,6 +41,32 @@ struct Loaded {
     notes: Vec<Note>,
     diagnostics: Vec<String>,
 }
+impl Loaded {
+    fn subtitles(&self) -> Vec<String> {
+        let mut subtitles: Vec<_> = self
+            .notes
+            .iter()
+            .map(|note| {
+                note.entry
+                    .as_ref()
+                    .map_or_else(|| "Invalid note".into(), presentation::subtitle)
+            })
+            .collect();
+        let mut labels = std::collections::HashMap::new();
+        for (i, note) in self.notes.iter().enumerate() {
+            labels
+                .entry((note.name(), subtitles[i].clone()))
+                .or_insert_with(Vec::new)
+                .push(i);
+        }
+        for indices in labels.values().filter(|indices| indices.len() > 1) {
+            for &i in indices {
+                subtitles[i].push_str(&format!(" · {}", self.notes[i].path));
+            }
+        }
+        subtitles
+    }
+}
 
 fn local_module(path: &Path) -> Result<Module, String> {
     let path = path.canonicalize().map_err(|e| e.to_string())?;
@@ -559,6 +585,7 @@ impl Library {
             }
         }
         let selected = select.or(self.selected);
+        let subtitles = loaded.subtitles();
         let list_width = (ui.available_width() * 0.32).clamp(190.0, 290.0);
         egui::SidePanel::left("library_entries")
             .resizable(true)
@@ -589,10 +616,7 @@ impl Library {
                         }
                         for i in matches {
                             let note = &loaded.notes[i];
-                            let subtitle = note
-                                .entry
-                                .as_ref()
-                                .map_or_else(|| "Invalid note".into(), presentation::subtitle);
+                            let subtitle = &subtitles[i];
                             let mut text = egui::text::LayoutJob::default();
                             for (line, size, color) in [
                                 (note.name().to_owned(), 15.0, ui.visuals().text_color()),
@@ -635,7 +659,11 @@ impl Library {
             self.draft = self.loaded.as_ref().unwrap().notes[i].text.clone();
             self.error = None;
         }
-        egui::CentralPanel::default().show_inside(ui, |ui| self.editor(ui));
+        let subtitle = self
+            .selected
+            .map(|i| subtitles[i].as_str())
+            .unwrap_or_default();
+        egui::CentralPanel::default().show_inside(ui, |ui| self.editor(ui, subtitle));
     }
 
     fn new_entry(&mut self, ui: &mut egui::Ui, dirty: bool) {
@@ -697,7 +725,7 @@ impl Library {
         });
     }
 
-    fn editor(&mut self, ui: &mut egui::Ui) {
+    fn editor(&mut self, ui: &mut egui::Ui, subtitle: &str) {
         let Some(i) = self.selected else {
             ui.label("Select an entry to read or edit it.");
             return;
@@ -710,9 +738,9 @@ impl Library {
                 .color(ui.visuals().weak_text_color()),
         );
         ui.label(egui::RichText::new(note.name()).size(28.0).strong());
-        if let Some(entry) = &note.entry {
+        if note.entry.is_some() {
             ui.label(
-                egui::RichText::new(presentation::subtitle(entry))
+                egui::RichText::new(subtitle)
                     .size(13.0)
                     .color(ui.visuals().weak_text_color()),
             );
@@ -952,6 +980,19 @@ impl Library {
 mod tests {
     use super::*;
     #[test]
+    fn same_name_entries_have_distinct_visible_labels() {
+        let loaded = load(None).unwrap();
+        let subtitles = loaded.subtitles();
+        let labels: std::collections::HashSet<_> = loaded
+            .notes
+            .iter()
+            .zip(&subtitles)
+            .map(|(note, subtitle)| (note.name(), subtitle))
+            .collect();
+        assert_eq!(labels.len(), loaded.notes.len());
+    }
+
+    #[test]
     fn imported_overview_renders_as_prose_without_source_markup() {
         for (path, expected) in [
             (
@@ -962,9 +1003,51 @@ mod tests {
                 "definitions/spells/bless.md",
                 "Whenever a target makes an attack roll",
             ),
+            (
+                "definitions/spells/command.md",
+                "Approach. The target moves toward you by the shortest",
+            ),
+            (
+                "definitions/rules/d20_tests_ability_modifier_2.md",
+                "Strength Physically resist direct force\nDexterity Dodge",
+            ),
+            (
+                "definitions/rules/d20_tests_ability_modifier.md",
+                "Wisdom Notice things in the environment or in creatures’ behavior\nCharisma",
+            ),
+            (
+                "definitions/spells/divine_smite.md",
+                "if the target is a Fiend or an Undead.",
+            ),
+            (
+                "definitions/spells/augury.md",
+                "circumstances, such as other spells, that might change the results.",
+            ),
         ] {
             let text = content::definitions::source_file(path).unwrap().to_owned();
             let entry = Entry::parse(path, &text).unwrap();
+            let overview = presentation::reading_sections(&entry.body, &entry.name)
+                .into_iter()
+                .find(|section| section.title == "Source text")
+                .unwrap();
+            let readable = presentation::overview_markdown(overview.body);
+            if path.ends_with("command.md") {
+                for option in ["Approach.", "Drop.", "Flee.", "Grovel.", "Halt."] {
+                    assert!(readable.contains(&format!("\n\n{option}")), "{readable}");
+                }
+                assert!(
+                    readable.contains("holding and then ends its turn."),
+                    "{readable}"
+                );
+            }
+            if path.ends_with("augury.md") {
+                assert!(
+                    readable.contains(
+                        "Weal Good  \nWoe Bad  \nWeal and woe Good and bad  \nIndifference"
+                    ),
+                    "{readable}"
+                );
+            }
             let mut library = Library {
                 loaded: Some(Loaded {
                     notes: vec![Note {
@@ -980,6 +1063,7 @@ mod tests {
                 ..Default::default()
             };
             let ctx = egui::Context::default();
+            let subtitles = library.loaded.as_ref().unwrap().subtitles();
             let output = ctx.run(
                 egui::RawInput {
                     screen_rect: Some(egui::Rect::from_min_size(
@@ -989,7 +1073,7 @@ mod tests {
                     ..Default::default()
                 },
                 |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| library.editor(ui));
+                    egui::CentralPanel::default().show(ctx, |ui| library.editor(ui, &subtitles[0]));
                 },
             );
             let text = output
