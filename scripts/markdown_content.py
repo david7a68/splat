@@ -7,7 +7,7 @@ from functools import partial
 
 DUMP = getattr(yaml, 'CSafeDumper', yaml.SafeDumper)
 IDENTITY = {'splat_schema', 'splat_id', 'splat_kind', 'splat_key', 'splat_name',
-            'splat_origin', 'splat_sources', 'tags'}
+            'splat_origin', 'splat_sources', 'splat_reading', 'tags'}
 REPORT_FIELDS = {'splat_conversion', 'splat_clauses', 'splat_contracts'}
 
 

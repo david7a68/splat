@@ -1,0 +1,13 @@
+# Reviewed reading text. Keep the source hash in sync only after checking the
+# published wording. These links aid navigation; they do not restrict choices.
+dnd2024:class_features/bard_level_3_bard_subclass:
+  source_sha256: 8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87
+  reading:
+    title: Bard Subclass
+    summary: |-
+      Choose a Bard subclass. Your subclass grants additional features as you gain Bard levels.
+
+      You gain all features from your chosen subclass whose required level is equal to or below your Bard level.
+    related_heading: Available in this package
+    related:
+      dnd2024:subclasses/bard_college_of_lore: College of Lore

@@ -53,6 +53,17 @@ used the original page layout to place those mechanics under the right owner,
 including the Apparatus of the Crab controls, species tables, and Giant Fly's
 neighboring item prose. Source references and the PDF remain unchanged.
 
+## Edited reading text
+
+[`scripts/srd_inputs/reading.yaml`](../scripts/srd_inputs/reading.yaml) supplies
+reviewed reading summaries and explicit links, starting with Bard Subclass.
+Regeneration adds these as optional `splat_reading` metadata and preserves the
+published source body. Each summary pins its source hash; conversion fails if
+that source changes or an entry or link target is unknown. Update a summary and
+its hash only after comparing the published wording. Do not paraphrase rules in
+the renderer. Reading metadata is excluded from mechanical fingerprints and
+required dependencies.
+
 ## Conversion is distinct from engine support
 
 A **conversion gap** means a rule lacks a complete typed specification. There

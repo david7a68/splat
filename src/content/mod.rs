@@ -11,6 +11,8 @@ pub mod builtin;
 pub mod character;
 pub mod contracts;
 pub mod definitions;
+mod reading;
+pub use reading::Reading;
 mod markdown;
 mod shared;
 pub use shared::validate_with_builtin;
@@ -174,6 +176,7 @@ impl Entry {
             inventory_containers,
         };
         entry.validate_shape()?;
+        entry.reading()?;
         character::validate(&entry)?;
         definitions::conversion(&entry)?;
         Ok(entry)
@@ -500,6 +503,7 @@ pub fn required_references(entry: &Entry) -> Result<Vec<Reference>, String> {
                         "splat_optional",
                         "splat_origin",
                         "splat_sources",
+                        "splat_reading",
                         "splat_conversion",
                         "splat_contracts",
                         "splat_packages",
@@ -563,6 +567,7 @@ pub fn validate(entries: &[Entry]) -> Report {
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
         required_fields.remove(Value::String("splat_optional".into()));
+        required_fields.remove(Value::String("splat_reading".into()));
         // Provenance is optional: deleting the original must not invalidate a copy.
         required_fields.remove(Value::String("splat_origin".into()));
         if let Some(origin) = field(&e.fields, "splat_origin")
@@ -758,6 +763,7 @@ pub fn validate(entries: &[Entry]) -> Report {
         }
     }
     const KNOWN_FIELDS: &[&str] = &[
+        "splat_reading",
         "splat_actions",
         "splat_character",
         "splat_import",

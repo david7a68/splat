@@ -94,6 +94,20 @@ pub(super) fn subtitle(entry: &Entry) -> String {
     }
 }
 
+/// Class scope already owns the feature's class and required level.
+pub(super) fn class_level(entry: &Entry) -> Option<String> {
+    let scope = entry
+        .fields
+        .get("splat_rule")?
+        .get("parameters")?
+        .get("class_scope")?;
+    let class = scope.get("class")?.as_str()?;
+    let level = scope.get("minimum_level")?.as_u64()?;
+    let mut letters = class.chars();
+    let name = format!("{}{}", letters.next()?.to_uppercase(), letters.as_str());
+    Some(format!("{name} · Level {level}"))
+}
+
 pub(super) struct ReadingSection<'a> {
     pub title: String,
     pub body: &'a str,
