@@ -1,6 +1,8 @@
-//! Module authoring is independent of the active campaign.
+//! Package authoring is independent of the active campaign.
+mod presentation;
 use crate::{campaigns::Campaigns, persistence::Module};
 use eframe::egui;
+use presentation::Section;
 use splat::content::{self, Entry};
 use std::{
     fs,
@@ -20,10 +22,19 @@ impl Note {
     fn name(&self) -> &str {
         self.entry.as_ref().map_or(&self.path, |e| &e.name)
     }
-    fn kind(&self) -> &str {
+    fn section(&self) -> Section {
         self.entry
             .as_ref()
-            .map_or("Invalid note", |e| e.kind.as_str())
+            .map_or(Section::Other, Section::for_entry)
+    }
+    fn matches(&self, section: Section, query: &str) -> bool {
+        if !query.is_empty() {
+            self.name().to_lowercase().contains(query)
+                || self.path.to_lowercase().contains(query)
+                || self.section().label().to_lowercase().contains(query)
+        } else {
+            section == Section::All || self.section() == section
+        }
     }
 }
 struct Loaded {
@@ -231,7 +242,7 @@ pub struct Library {
     selected: Option<usize>,
     draft: String,
     search: String,
-    kind: String,
+    section: Section,
     error: Option<String>,
     form: bool,
     path: String,
@@ -276,6 +287,11 @@ impl Library {
         });
     }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
+        let dark = ui.visuals().dark_mode;
+        ui.visuals_mut().override_text_color =
+            Some(egui::Color32::from_gray(if dark { 218 } else { 35 }));
+        ui.visuals_mut().weak_text_color =
+            Some(egui::Color32::from_gray(if dark { 165 } else { 85 }));
         if self.loaded.is_none() && self.pending.is_none() && self.error.is_none() {
             self.start_load(ui.ctx());
         }
@@ -299,7 +315,7 @@ impl Library {
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
-                    self.error = Some("Module loading stopped. Reload to retry.".into());
+                    self.error = Some("Package loading stopped. Reload to retry.".into());
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
@@ -317,8 +333,13 @@ impl Library {
                 self.error = Some(e);
             }
         }
-        ui.heading("Library");
-        ui.label("Work on reusable modules. Campaign selection does not change this workspace.");
+        ui.label(egui::RichText::new("Library").size(26.0).strong());
+        ui.label(
+            egui::RichText::new("Shared content for all campaigns")
+                .small()
+                .color(ui.visuals().weak_text_color()),
+        );
+        ui.add_space(3.0);
         let dirty = self.dirty();
         ui.horizontal(|ui| {
             ui.add_enabled_ui(!dirty && self.pending.is_none(), |ui| {
@@ -343,84 +364,91 @@ impl Library {
                         .find(|m| Some(m.id) == id)
                         .cloned();
                     self.search.clear();
-                    self.kind.clear();
+                    self.section = Section::All;
                     self.start_load(ui.ctx());
                 }
-                if ui.button("Reload").clicked() {
-                    self.start_load(ui.ctx());
-                }
-                if ui.button("Manage modules").clicked() {
-                    self.form = !self.form;
-                }
+                ui.menu_button("Package actions", |ui| {
+                    if ui.button("Reload package").clicked() {
+                        self.start_load(ui.ctx());
+                        ui.close();
+                    }
+                    if ui.button("Manage packages…").clicked() {
+                        self.form = true;
+                        ui.close();
+                    }
+                });
             });
             ui.weak(if self.module.is_none() {
                 "Built-in · Read only"
             } else {
-                "Local module"
+                "Local package"
             });
         });
         if self.form {
-            egui::Frame::group(ui.style()).show(ui, |ui| {
-                ui.label("Register an existing module folder, or create a new module.");
-                ui.horizontal(|ui| {
-                    ui.label("Absolute folder path");
-                    ui.text_edit_singleline(&mut self.path);
-                });
-                ui.label("For a new module only:");
-                ui.horizontal(|ui| {
-                    ui.label("Name");
-                    ui.text_edit_singleline(&mut self.name);
-                    ui.label("Namespace");
-                    ui.text_edit_singleline(&mut self.namespace);
-                });
-                ui.add_enabled_ui(!dirty && self.pending.is_none(), |ui| {
+            let mut open = true;
+            egui::Window::new("Manage packages")
+                .open(&mut open)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| {
+                    ui.label("Register an existing package folder, or create a new package.");
                     ui.horizontal(|ui| {
-                        let register = ui.button("Register folder").clicked();
-                        let create = ui.button("Create module").clicked();
-                        if register || create {
-                            let result = if create {
-                                create_module(
-                                    Path::new(self.path.trim()),
-                                    &self.name,
-                                    self.namespace.trim(),
-                                )
-                            } else {
-                                local_module(Path::new(self.path.trim()))
-                            };
-                            match result.and_then(|m| {
-                                campaigns.register_module(m.clone())?;
-                                Ok(m)
-                            }) {
-                                Ok(m) => {
-                                    self.module = Some(m);
-                                    self.form = false;
-                                    self.search.clear();
-                                    self.kind.clear();
-                                    self.start_load(ui.ctx());
+                        ui.label("Absolute folder path");
+                        ui.text_edit_singleline(&mut self.path);
+                    });
+                    ui.label("For a new package only:");
+                    ui.horizontal(|ui| {
+                        ui.label("Name");
+                        ui.text_edit_singleline(&mut self.name);
+                        ui.label("Namespace");
+                        ui.text_edit_singleline(&mut self.namespace);
+                    });
+                    ui.add_enabled_ui(!dirty && self.pending.is_none(), |ui| {
+                        ui.horizontal(|ui| {
+                            let register = ui.button("Register folder").clicked();
+                            let create = ui.button("Create package").clicked();
+                            if register || create {
+                                let result = if create {
+                                    create_module(
+                                        Path::new(self.path.trim()),
+                                        &self.name,
+                                        self.namespace.trim(),
+                                    )
+                                } else {
+                                    local_module(Path::new(self.path.trim()))
+                                };
+                                match result.and_then(|m| {
+                                    campaigns.register_module(m.clone())?;
+                                    Ok(m)
+                                }) {
+                                    Ok(m) => {
+                                        self.module = Some(m);
+                                        self.form = false;
+                                        self.search.clear();
+                                        self.section = Section::All;
+                                        self.start_load(ui.ctx());
+                                    }
+                                    Err(e) => self.error = Some(e),
                                 }
-                                Err(e) => self.error = Some(e),
                             }
-                        }
-                        if self.module.is_some()
-                            && ui
-                                .button("Unregister module")
-                                .on_hover_text("Remove the app registration. Keep all files.")
-                                .clicked()
-                        {
-                            match campaigns.unregister_module(self.module.as_ref().unwrap().id) {
-                                Ok(()) => {
-                                    self.module = None;
-                                    self.start_load(ui.ctx());
+                            if self.module.is_some()
+                                && ui
+                                    .button("Unregister package")
+                                    .on_hover_text("Remove the app registration. Keep all files.")
+                                    .clicked()
+                            {
+                                match campaigns.unregister_module(self.module.as_ref().unwrap().id)
+                                {
+                                    Ok(()) => {
+                                        self.module = None;
+                                        self.start_load(ui.ctx());
+                                    }
+                                    Err(e) => self.error = Some(e),
                                 }
-                                Err(e) => self.error = Some(e),
                             }
-                        }
+                        });
                     });
                 });
-            });
-        }
-        if let Some(m) = &self.module {
-            ui.weak(m.path.display().to_string());
+            self.form &= open;
         }
         if let Some(e) = &self.error {
             ui.colored_label(egui::Color32::LIGHT_RED, format!("Error: {e}"));
@@ -430,11 +458,11 @@ impl Library {
         }
         if self.pending.is_some() {
             ui.spinner();
-            ui.label("Loading module…");
+            ui.label("Loading package…");
             return;
         }
         if dirty {
-            ui.label("Unsaved changes. Save or discard before selecting another entry or module.");
+            ui.label("Unsaved changes. Save or discard before selecting another entry or package.");
         }
         self.new_entry(ui, dirty);
         let Some(loaded) = &self.loaded else {
@@ -448,64 +476,176 @@ impl Library {
                 ui.weak("References to other modules may remain unresolved in this module-only check.");
             });
         }
+        ui.add_space(6.0);
         ui.horizontal(|ui| {
             ui.label("Search");
-            ui.text_edit_singleline(&mut self.search);
-            egui::ComboBox::from_id_salt("library_kind")
-                .selected_text(if self.kind.is_empty() {
-                    "All kinds"
-                } else {
-                    &self.kind
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.kind, String::new(), "All kinds");
-                    let kinds: std::collections::BTreeSet<_> =
-                        loaded.notes.iter().map(Note::kind).collect();
-                    for kind in kinds {
-                        ui.selectable_value(&mut self.kind, kind.to_owned(), kind);
-                    }
-                });
+            ui.add(
+                egui::TextEdit::singleline(&mut self.search)
+                    .hint_text("Search all sections by name or path…")
+                    .desired_width((ui.available_width() - 70.0).max(120.0)),
+            );
+            if !self.search.is_empty() && ui.button("Clear").clicked() {
+                self.search.clear();
+            }
         });
+        ui.add_space(6.0);
         ui.separator();
-        let query = self.search.to_lowercase();
-        let matches: Vec<_> = loaded
-            .notes
-            .iter()
-            .enumerate()
-            .filter(|(_, n)| {
-                (self.kind.is_empty() || n.kind() == self.kind)
-                    && (n.name().to_lowercase().contains(&query)
-                        || n.path.to_lowercase().contains(&query))
-            })
-            .map(|(i, _)| i)
-            .collect();
-        ui.label(format!(
-            "{} of {} entries",
-            matches.len(),
-            loaded.notes.len()
-        ));
-        let mut select = None;
-        egui::SidePanel::left("library_entries")
+        let query = self.search.trim().to_lowercase();
+        let searching = !query.is_empty();
+        egui::SidePanel::left("library_sections")
             .resizable(true)
-            .default_width(250.0)
+            .default_width(200.0)
+            .width_range(175.0..=250.0)
             .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for i in matches {
-                        let note = &loaded.notes[i];
+                egui::ScrollArea::vertical()
+                    .id_salt("section_list")
+                    .show(ui, |ui| {
+                        ui.add_space(8.0);
                         if ui
                             .add_enabled(
                                 !dirty,
                                 egui::Button::selectable(
-                                    self.selected == Some(i),
-                                    format!("{}\n{}", note.name(), note.kind()),
-                                ),
+                                    self.section == Section::All && !searching,
+                                    format!("All entries   {}", loaded.notes.len()),
+                                )
+                                .min_size(egui::vec2(ui.available_width(), 30.0)),
                             )
                             .clicked()
                         {
-                            select = Some(i);
+                            self.section = Section::All;
+                            self.search.clear();
                         }
-                    }
-                });
+                        for &(group, sections) in Section::GROUPS {
+                            // Keep the empty encounter section discoverable, but hide an unused fallback.
+                            if sections == [Section::Other]
+                                && !loaded.notes.iter().any(|n| n.section() == Section::Other)
+                            {
+                                continue;
+                            }
+                            ui.add_space(16.0);
+                            ui.label(
+                                egui::RichText::new(group.to_uppercase())
+                                    .size(11.0)
+                                    .color(ui.visuals().weak_text_color()),
+                            );
+                            for &section in sections {
+                                let count = loaded
+                                    .notes
+                                    .iter()
+                                    .filter(|n| n.section() == section)
+                                    .count();
+                                if ui
+                                    .add_enabled(
+                                        !dirty,
+                                        egui::Button::selectable(
+                                            self.section == section && !searching,
+                                            format!("{}   {count}", section.label()),
+                                        )
+                                        .min_size(egui::vec2(ui.available_width(), 30.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    self.section = section;
+                                    self.search.clear();
+                                }
+                            }
+                        }
+                    });
+            });
+        // A query always searches the whole package. Clearing it returns to the selected section.
+        let query = self.search.trim().to_lowercase();
+        let searching = !query.is_empty();
+        let matches: Vec<_> = loaded
+            .notes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.matches(self.section, &query))
+            .map(|(i, _)| i)
+            .collect();
+        // Keep the reader in sync with the visible list without dropping an unsaved draft.
+        let mut select = None;
+        if !dirty && self.selected.is_none_or(|i| !matches.contains(&i)) {
+            select = matches.first().copied();
+            if select.is_none() {
+                self.selected = None;
+                self.draft.clear();
+            }
+        }
+        let selected = select.or(self.selected);
+        let list_width = (ui.available_width() * 0.32).clamp(190.0, 290.0);
+        egui::SidePanel::left("library_entries")
+            .resizable(true)
+            .default_width(list_width)
+            .width_range(170.0..=360.0)
+            .show_inside(ui, |ui| {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(if searching {
+                        "Search results"
+                    } else {
+                        self.section.label()
+                    })
+                    .size(18.0)
+                    .strong(),
+                );
+                ui.weak(format!(
+                    "{} entries{}",
+                    matches.len(),
+                    if searching { " · all sections" } else { "" }
+                ));
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .id_salt("entry_list")
+                    .show(ui, |ui| {
+                        if matches.is_empty() {
+                            ui.weak("No entries found.");
+                        }
+                        for i in matches {
+                            let note = &loaded.notes[i];
+                            let mut text = egui::text::LayoutJob::default();
+                            text.append(
+                                note.name(),
+                                0.0,
+                                egui::TextFormat {
+                                    font_id: egui::TextStyle::Body.resolve(ui.style()),
+                                    color: if selected == Some(i) {
+                                        ui.visuals().selection.stroke.color
+                                    } else {
+                                        ui.visuals().text_color()
+                                    },
+                                    ..Default::default()
+                                },
+                            );
+                            let subtitle = note
+                                .entry
+                                .as_ref()
+                                .map_or_else(|| "Invalid note".into(), presentation::subtitle);
+                            text.append(
+                                &format!("\n{subtitle}"),
+                                0.0,
+                                egui::TextFormat {
+                                    font_id: egui::FontId::proportional(12.0),
+                                    color: if selected == Some(i) {
+                                        ui.visuals().selection.stroke.color
+                                    } else {
+                                        ui.visuals().weak_text_color()
+                                    },
+                                    ..Default::default()
+                                },
+                            );
+                            if ui
+                                .add_enabled(
+                                    !dirty,
+                                    egui::Button::selectable(selected == Some(i), text)
+                                        .min_size(egui::vec2(ui.available_width(), 40.0)),
+                                )
+                                .on_hover_text(&note.path)
+                                .clicked()
+                            {
+                                select = Some(i);
+                            }
+                        }
+                    });
             });
         if let Some(i) = select {
             self.selected = Some(i);
@@ -561,7 +701,7 @@ impl Library {
                             l.notes.sort_by_cached_key(|n| n.name().to_lowercase());
                             self.selected = l.notes.iter().position(|n| n.path == created_path);
                             self.search.clear();
-                            self.kind.clear();
+                            self.section = Section::All;
                             self.source = true;
                             self.draft = text;
                             self.new_name.clear();
@@ -580,20 +720,21 @@ impl Library {
             return;
         };
         let note = &self.loaded.as_ref().unwrap().notes[i];
-        ui.heading(note.name());
-        ui.weak(&note.path);
-        if let Some(e) = &note.entry {
-            ui.weak(format!("{} · {}", e.kind, e.id));
-            if let Ok(Some(c)) = content::definitions::conversion(e) {
-                ui.label(if c.engine_gaps.is_empty() {
-                    "Reference information"
-                } else {
-                    "Rules specified · Engine support incomplete"
-                });
-            } else {
-                ui.weak("Draft structure does not establish engine support.");
-            }
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new(format!("Library / {}", note.section().label()))
+                .size(12.0)
+                .color(ui.visuals().weak_text_color()),
+        );
+        ui.label(egui::RichText::new(note.name()).size(28.0).strong());
+        if let Some(entry) = &note.entry {
+            ui.label(
+                egui::RichText::new(presentation::subtitle(entry))
+                    .size(13.0)
+                    .color(ui.visuals().weak_text_color()),
+            );
         }
+        ui.add_space(8.0);
         if let Some(error) = &note.error {
             ui.colored_label(egui::Color32::LIGHT_RED, error);
         }
@@ -653,10 +794,127 @@ impl Library {
                     );
                 } else {
                     let parsed = Entry::parse(&note.path, &self.draft);
-                    crate::markdown_view::show(
-                        ui,
-                        parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body),
-                    );
+                    let body = parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body);
+                    ui.push_id(&note.path, |ui| {
+                        let mut first_data = true;
+                        for (index, section) in presentation::reading_sections(body, note.name())
+                            .iter()
+                            .enumerate()
+                        {
+                            let overview =
+                                section.title == "Source text" || section.title == "Overview";
+                            let data = section.body.contains("<!-- splat:");
+                            let label = if section.title == "Source text" {
+                                "Overview".to_owned()
+                            } else if data {
+                                format!("{} data", section.title)
+                            } else {
+                                section.title.clone()
+                            };
+                            let open = overview || !data || first_data;
+                            if data {
+                                first_data = false;
+                            }
+                            ui.add_space(if index == 0 { 14.0 } else { 10.0 });
+                            egui::CollapsingHeader::new(
+                                egui::RichText::new(label).size(17.0).strong(),
+                            )
+                            .id_salt(("reading_section", index))
+                            .default_open(open)
+                            .show_unindented(ui, |ui| {
+                                ui.add_space(5.0);
+                                if data {
+                                    egui::Frame::new()
+                                        .fill(ui.visuals().faint_bg_color)
+                                        .inner_margin(10.0)
+                                        .corner_radius(4.0)
+                                        .show(ui, |ui| {
+                                            ui.set_width(ui.available_width());
+                                            crate::markdown_view::show_compact(ui, section.body);
+                                        });
+                                } else if self.module.is_none() && section.title == "Source text" {
+                                    let readable = presentation::overview_markdown(section.body);
+                                    crate::markdown_view::show(ui, &readable);
+                                } else {
+                                    crate::markdown_view::show(ui, section.body);
+                                }
+                            });
+                        }
+                        ui.add_space(16.0);
+                        ui.separator();
+                        let support_label = note
+                            .entry
+                            .as_ref()
+                            .and_then(|e| e.fields.get("splat_conversion"))
+                            .and_then(|c| c.get("status"))
+                            .and_then(|s| s.as_str())
+                            .map_or("Engine support · Not established", |s| match s {
+                                "specified" => "Engine support · Incomplete",
+                                "informational" => "Engine support · Reference only",
+                                _ => "Engine support · Conversion incomplete",
+                            });
+                        ui.collapsing(support_label, |ui| {
+                            if let Some(entry) = &note.entry {
+                                match content::definitions::conversion(entry) {
+                                    Ok(Some(c)) => {
+                                        ui.label(match c.status {
+                                            content::definitions::Status::Informational => {
+                                                "Reference information"
+                                            }
+                                            content::definitions::Status::Partial => {
+                                                "Rule conversion incomplete"
+                                            }
+                                            content::definitions::Status::Specified => {
+                                                "Rules specified · Engine support incomplete"
+                                            }
+                                        });
+                                        for gap in c.conversion_gaps.iter().chain(&c.engine_gaps) {
+                                            ui.monospace(gap);
+                                        }
+                                    }
+                                    Ok(None) => {
+                                        ui.label(
+                                            "Draft structure does not establish engine support.",
+                                        );
+                                    }
+                                    Err(error) => {
+                                        ui.colored_label(egui::Color32::LIGHT_RED, error);
+                                    }
+                                }
+                            }
+                        });
+                        ui.collapsing("Source and identifiers", |ui| {
+                            ui.label(if self.module.is_none() {
+                                "Built-in package · Read only"
+                            } else {
+                                "Local package"
+                            });
+                            ui.label(&note.path);
+                            if let Some(entry) = &note.entry {
+                                ui.label(format!("{} · {}", entry.kind, entry.id));
+                                if let Some(key) = &entry.key {
+                                    ui.monospace(key);
+                                }
+                                if let Some(sources) = entry
+                                    .fields
+                                    .get("splat_sources")
+                                    .and_then(|v| v.as_sequence())
+                                {
+                                    for source in sources {
+                                        let title = source
+                                            .get("title")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("Source");
+                                        let locator = source
+                                            .get("locator")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        ui.label(format!("{title} · {locator}"));
+                                    }
+                                }
+                            }
+                        });
+                    });
                 }
             });
         if save {
@@ -722,6 +980,79 @@ impl Library {
 mod tests {
     use super::*;
     #[test]
+    fn imported_overview_renders_as_prose_without_source_markup() {
+        let text = content::definitions::source_file("definitions/glossary/ability_check.md")
+            .unwrap()
+            .to_owned();
+        let entry = Entry::parse("definitions/glossary/ability_check.md", &text).unwrap();
+        let mut library = Library {
+            loaded: Some(Loaded {
+                notes: vec![Note {
+                    path: entry.path.clone(),
+                    text: text.clone(),
+                    entry: Some(entry),
+                    error: None,
+                }],
+                diagnostics: vec![],
+            }),
+            selected: Some(0),
+            draft: text,
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 700.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| library.editor(ui));
+            },
+        );
+        let text = output
+            .shapes
+            .iter()
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Text(t) => Some(t.galley.job.text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            text.contains("represents using one of the six abilities"),
+            "{text}"
+        );
+        assert!(!text.contains('\\'), "{text}");
+        assert!(!text.contains("[["), "{text}");
+        assert!(!text.contains("Original layout:"), "{text}");
+    }
+    #[test]
+    fn search_crosses_sections_and_invalid_notes_remain_reachable() {
+        let text = note_text("Goblin", "creature", None);
+        let note = Note {
+            path: "Monsters/Goblin.md".into(),
+            entry: Some(Entry::parse("Monsters/Goblin.md", &text).unwrap()),
+            text,
+            error: None,
+        };
+        assert!(note.matches(Section::Creatures, ""));
+        assert!(!note.matches(Section::Spells, ""));
+        assert!(note.matches(Section::Spells, "goblin"));
+        assert!(note.matches(Section::Spells, "monsters/"));
+        let broken = Note {
+            path: "Broken.md".into(),
+            text: "invalid".into(),
+            entry: None,
+            error: Some("Invalid note".into()),
+        };
+        assert!(broken.matches(Section::Other, ""));
+        assert!(broken.matches(Section::All, ""));
+        assert!(broken.matches(Section::Spells, "broken"));
+    }
+    #[test]
     fn create_register_and_edit_preserves_identity_and_external_changes() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("module");
@@ -771,6 +1102,7 @@ mod tests {
         library.draft = library.loaded.as_ref().unwrap().notes[0].text.clone();
         library.draft.push_str("Unsaved description");
         let expected = library.draft.clone();
+        library.search = "no matching entry".into();
         let ctx = egui::Context::default();
         for size in [egui::vec2(1000.0, 700.0), egui::vec2(800.0, 600.0)] {
             let output = ctx.run(
