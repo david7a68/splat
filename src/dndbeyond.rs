@@ -123,6 +123,7 @@ impl DndBeyond {
             self.pending_link = None;
             self.requested_visible_link = None;
             self.campaigns.clear();
+            local.cancel_import();
             self.loaded = false;
             self.account_epoch = epoch;
             self.error = None;
@@ -178,6 +179,51 @@ impl DndBeyond {
             let _ = tx.send(fetch(session));
             ctx.request_repaint();
         });
+    }
+
+    pub fn show_import(
+        &mut self,
+        ui: &mut egui::Ui,
+        session: Option<Session>,
+        local: &mut Campaigns,
+    ) {
+        egui::CollapsingHeader::new("Add from D&D Beyond")
+            .default_open(local.all().is_empty())
+            .show(ui, |ui| {
+                let Some(session) = session else {
+                    ui.label(
+                        "Connect to D&D Beyond in Settings, or open an existing folder below.",
+                    );
+                    return;
+                };
+                if (!self.loaded && self.error.is_none() && self.pending.is_none())
+                    || ui
+                        .add_enabled(
+                            self.pending.is_none(),
+                            egui::Button::new("Refresh campaigns"),
+                        )
+                        .clicked()
+                {
+                    self.refresh(session, ui.ctx());
+                }
+                if self.pending.is_some() {
+                    ui.spinner();
+                }
+                if let Some(error) = &self.error {
+                    ui.colored_label(egui::Color32::LIGHT_RED, error);
+                }
+                if self.loaded && self.campaigns.is_empty() {
+                    ui.label("No campaigns returned for this account.");
+                }
+                for remote in &self.campaigns {
+                    if ui
+                        .button(format!("{} · {}", remote.name, remote.id))
+                        .clicked()
+                    {
+                        local.start_import(&remote.id, &remote.name);
+                    }
+                }
+            });
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, local: &mut Campaigns) {

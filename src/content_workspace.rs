@@ -422,6 +422,50 @@ pub fn patch_fields(text: &str, changes: &[(&str, Option<Value>)]) -> Result<Str
     Ok(output)
 }
 
+fn campaign_manifest(root: &Path) -> Result<Option<Entry>, String> {
+    let (entries, errors) = content::read_directory(root)?;
+    if !errors.is_empty() && !entries.iter().any(|e| e.kind == "campaign") {
+        return Err("Repair invalid notes before creating a campaign manifest.".into());
+    }
+    if entries.iter().any(|e| e.kind == "package") {
+        return Err("A campaign folder cannot contain a module manifest.".into());
+    }
+    let mut manifests = entries.into_iter().filter(|e| e.kind == "campaign");
+    let manifest = manifests.next();
+    if manifests.next().is_some() {
+        return Err("A campaign needs exactly one manifest.".into());
+    }
+    Ok(manifest)
+}
+
+fn campaign_metadata(entry: &Entry, mut campaign: Campaign) -> Result<Campaign, String> {
+    campaign.name = entry.name.clone();
+    for (field, target) in [
+        (
+            "splat_dndbeyond_campaign_id",
+            &mut campaign.dndbeyond_campaign_id,
+        ),
+        (
+            "splat_dndbeyond_campaign_name",
+            &mut campaign.dndbeyond_campaign_name,
+        ),
+    ] {
+        if let Some(value) = entry.fields.get(field) {
+            *target = serde_yaml_ng::from_value(value.clone())
+                .map_err(|_| format!("Invalid {field}."))?;
+        }
+    }
+    if let Some(id) = &mut campaign.dndbeyond_campaign_id {
+        *id = id
+            .parse::<u64>()
+            .ok()
+            .filter(|id| *id > 0)
+            .ok_or("Invalid D&D Beyond campaign ID.")?
+            .to_string();
+    }
+    Ok(campaign)
+}
+
 pub struct CampaignDocument {
     pub campaign: Campaign,
     pub path: String,
@@ -430,19 +474,77 @@ pub struct CampaignDocument {
     pub selections: Vec<PackageSelection>,
 }
 impl CampaignDocument {
+    pub fn discover(root: &Path) -> Result<Option<Campaign>, String> {
+        let root = root.canonicalize().map_err(|e| e.to_string())?;
+        campaign_manifest(&root)?
+            .map(|entry| {
+                campaign_metadata(
+                    &entry,
+                    Campaign {
+                        id: entry.id,
+                        name: entry.name.clone(),
+                        path: root,
+                        dndbeyond_campaign_id: None,
+                        dndbeyond_campaign_name: None,
+                    },
+                )
+            })
+            .transpose()
+    }
+
+    pub fn reload_metadata(campaign: &mut Campaign) -> Result<(), String> {
+        if !campaign.path.exists() {
+            return Ok(());
+        }
+        let document = Self::load(campaign)?;
+        let entry = Entry::parse(&document.path, &document.text)?;
+        *campaign = campaign_metadata(&entry, campaign.clone())?;
+        if !entry.fields.contains_key("splat_dndbeyond_campaign_id") {
+            Self::save_metadata(campaign, None)?;
+        }
+        Ok(())
+    }
+
+    pub fn save_metadata(campaign: &Campaign, previous: Option<&Campaign>) -> Result<(), String> {
+        let document = Self::load(campaign)?;
+        let entry = Entry::parse(&document.path, &document.text)?;
+        if let Some(previous) = previous
+            && entry.fields.contains_key("splat_dndbeyond_campaign_id")
+            && campaign_metadata(&entry, previous.clone())? != *previous
+        {
+            return Err("Campaign settings changed on disk. Reload before saving.".into());
+        }
+        let text = patch_fields(
+            &document.text,
+            &[
+                ("splat_name", Some(campaign.name.clone().into())),
+                (
+                    "splat_dndbeyond_campaign_id",
+                    Some(
+                        serde_yaml_ng::to_value(&campaign.dndbeyond_campaign_id)
+                            .map_err(|e| e.to_string())?,
+                    ),
+                ),
+                (
+                    "splat_dndbeyond_campaign_name",
+                    Some(
+                        serde_yaml_ng::to_value(&campaign.dndbeyond_campaign_name)
+                            .map_err(|e| e.to_string())?,
+                    ),
+                ),
+            ],
+        )?;
+        write_note(
+            &campaign.path,
+            &document.path,
+            document.baseline.as_deref(),
+            &text,
+        )?;
+        Ok(())
+    }
+
     pub fn load(campaign: &Campaign) -> Result<Self, String> {
-        let (entries, errors) = content::read_directory(&campaign.path)?;
-        if !errors.is_empty() && !entries.iter().any(|e| e.kind == "campaign") {
-            return Err("Repair invalid notes before creating a campaign manifest.".into());
-        }
-        if entries.iter().any(|e| e.kind == "package") {
-            return Err("A campaign folder cannot contain a module manifest.".into());
-        }
-        let manifests: Vec<_> = entries.iter().filter(|e| e.kind == "campaign").collect();
-        if manifests.len() > 1 {
-            return Err("A campaign needs exactly one manifest.".into());
-        }
-        let (path, baseline, text) = if let Some(manifest) = manifests.first() {
+        let (path, baseline, text) = if let Some(manifest) = campaign_manifest(&campaign.path)? {
             if manifest.id != campaign.id {
                 return Err("Campaign manifest identity differs from its registration. Repair the mismatch before saving.".into());
             }
