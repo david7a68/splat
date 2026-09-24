@@ -46,6 +46,59 @@ struct Loaded {
     counts: std::sync::OnceLock<Vec<(Section, usize)>>,
 }
 impl Loaded {
+    fn resolve_spell(&self, reference: &content::Reference) -> Option<usize> {
+        let mut matches = self.notes.iter().enumerate().filter_map(|(i, note)| {
+            let entry = note.entry.as_ref()?;
+            let matches = match reference {
+                content::Reference::Id(id) => entry.id == *id,
+                content::Reference::Key(key) => entry.key.as_ref() == Some(key),
+            };
+            matches.then_some(i)
+        });
+        let first = matches.next()?;
+        (matches.next().is_none()
+            && self.notes[first]
+                .entry
+                .as_ref()
+                .is_some_and(|e| e.kind == "spell"))
+        .then_some(first)
+    }
+
+    fn spell_links(
+        &self,
+        ui: &mut egui::Ui,
+        references: &[content::Reference],
+        dirty: bool,
+    ) -> Option<usize> {
+        let mut selected = None;
+        if references.is_empty() {
+            return selected;
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.weak("Spell descriptions:");
+            for reference in references {
+                if let Some(i) = self.resolve_spell(reference) {
+                    if ui
+                        .add_enabled(!dirty, egui::Link::new(self.notes[i].name()))
+                        .on_hover_text(if dirty {
+                            "Save or discard changes before opening a spell."
+                        } else {
+                            "Open spell in the library"
+                        })
+                        .clicked()
+                    {
+                        selected = Some(i);
+                    }
+                } else {
+                    ui.weak("Spell unavailable").on_hover_text(
+                        "This spell is missing or has a duplicate identity in this package.",
+                    );
+                }
+            }
+        });
+        selected
+    }
+
     fn subtitles(&self) -> &Vec<String> {
         self.subtitles.get_or_init(|| self.build_subtitles())
     }
@@ -382,6 +435,23 @@ pub struct Library {
     pub copy: Option<crate::content_workspace::CopySource>,
 }
 impl Library {
+    fn open_entry(&mut self, index: usize) {
+        if self.dirty() {
+            return;
+        }
+        let Some(note) = self.loaded.as_ref().and_then(|l| l.notes.get(index)) else {
+            return;
+        };
+        self.selected = Some(index);
+        self.draft = note.text.clone();
+        self.section = note.section();
+        self.search.clear();
+        self.matches = None;
+        self.source = false;
+        self.error = None;
+        self.message = None;
+    }
+
     pub fn dirty(&self) -> bool {
         self.loaded
             .as_ref()
@@ -890,8 +960,9 @@ impl Library {
                 }
             }
         });
+        let mut open_spell = None;
         egui::ScrollArea::both()
-            .id_salt("entry_body")
+            .id_salt(("entry_body", &note.path))
             .show(ui, |ui| {
                 if self.source {
                     ui.add(
@@ -910,7 +981,14 @@ impl Library {
                             .ok()
                             .filter(|entry| creature::supports(entry, &sections));
                         if let Some(entry) = styled {
-                            creature::show(ui, entry, &sections);
+                            let references = creature::spell_references(entry);
+                            creature::show(ui, entry, &sections, |ui| {
+                                open_spell = self.loaded.as_ref().unwrap().spell_links(
+                                    ui,
+                                    &references,
+                                    dirty,
+                                );
+                            });
                         } else {
                             let mut first_data = true;
                             for (index, section) in sections.iter().enumerate() {
@@ -1083,6 +1161,9 @@ impl Library {
                 }
                 Err(e) => self.error = Some(e),
             }
+        }
+        if let Some(index) = open_spell {
+            self.open_entry(index);
         }
     }
 }
@@ -1365,6 +1446,194 @@ mod tests {
             assert!(!text.contains("Original layout:"), "{text}");
         }
     }
+    #[test]
+    fn creature_spell_links_open_named_spells_and_protect_drafts() {
+        let notes = [
+            "creatures/adult_bronze_dragon",
+            "spells/detect_magic",
+            "spells/guiding_bolt",
+            "spells/shapechange",
+            "spells/speak_with_animals",
+            "spells/thaumaturgy",
+            "spells/detect_thoughts",
+            "spells/water_breathing",
+        ]
+        .map(|name| {
+            let path = format!("definitions/{name}.md");
+            let source = content::definitions::source_file(&path).unwrap();
+            Note {
+                entry: Some(Entry::parse(&path, source).unwrap()),
+                path,
+                text: source.into(),
+                error: None,
+            }
+        })
+        .into_iter()
+        .collect();
+        let loaded = Loaded {
+            notes,
+            ..Default::default()
+        };
+        let references = creature::spell_references(loaded.notes[0].entry.as_ref().unwrap());
+        assert_eq!(references.len(), 7);
+        for (reference, index) in references.iter().zip(1..8) {
+            assert_eq!(loaded.resolve_spell(reference), Some(index));
+        }
+        let by_id = content::Reference::Id(loaded.notes[2].entry.as_ref().unwrap().id);
+        assert_eq!(loaded.resolve_spell(&by_id), Some(2));
+        assert_eq!(
+            loaded.resolve_spell(&content::Reference::Key("missing:spell".into())),
+            None
+        );
+
+        let mut library = Library {
+            draft: loaded.notes[0].text.clone(),
+            loaded: Some(loaded),
+            selected: Some(0),
+            section: Section::Creatures,
+            search: "bronze".into(),
+            ..Default::default()
+        };
+        for width in [390.0, 900.0] {
+            for dirty in [true, false] {
+                library.open_entry(0);
+                library.search = "bronze".into();
+                library.matches = Some((Section::Creatures, "bronze".into(), vec![0]));
+                if dirty {
+                    library.draft.push_str("\nUnsaved note.\n");
+                }
+                let ctx = egui::Context::default();
+                let mut frame = |events| {
+                    ctx.run(
+                        egui::RawInput {
+                            screen_rect: Some(egui::Rect::from_min_size(
+                                egui::Pos2::ZERO,
+                                egui::vec2(width, 6000.0),
+                            )),
+                            events,
+                            ..Default::default()
+                        },
+                        |ctx| {
+                            egui::CentralPanel::default()
+                                .show(ctx, |ui| library.editor(ui, "Definition · creature"));
+                        },
+                    )
+                };
+                frame(vec![]);
+                let output = frame(vec![]);
+                let texts: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(text),
+                        _ => None,
+                    })
+                    .collect();
+                let link = texts
+                    .iter()
+                    .find(|t| t.galley.job.text == "Guiding Bolt")
+                    .unwrap();
+                let spellcasting = texts
+                    .iter()
+                    .find(|t| t.galley.job.text.starts_with("Spellcasting."))
+                    .unwrap();
+                let legendary = texts
+                    .iter()
+                    .find(|t| t.galley.job.text == "Legendary Actions")
+                    .unwrap();
+                assert!(link.pos.y > spellcasting.pos.y && link.pos.y < legendary.pos.y);
+                assert!(!texts.iter().any(|t| t.galley.job.text.contains("^splat-")));
+                let position = link.pos
+                    + link.galley.rows[0]
+                        .rect_without_leading_space()
+                        .center()
+                        .to_vec2();
+                frame(vec![egui::Event::PointerMoved(position)]);
+                for pressed in [true, false] {
+                    frame(vec![egui::Event::PointerButton {
+                        pos: position,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    }]);
+                }
+                if dirty {
+                    assert_eq!(library.selected, Some(0));
+                    assert!(library.draft.ends_with("Unsaved note.\n"));
+                    library.draft = library.loaded.as_ref().unwrap().notes[0].text.clone();
+                } else {
+                    assert_eq!(library.selected, Some(2));
+                    assert_eq!(library.section, Section::Spells);
+                    assert!(library.search.is_empty());
+                    assert!(library.matches.is_none());
+                    assert!(!library.source);
+                    assert!(library.draft.contains("# Guiding Bolt"));
+                }
+            }
+        }
+        // Conflicting identities must not choose an arbitrary destination.
+        let loaded = library.loaded.as_mut().unwrap();
+        let duplicate = &loaded.notes[2];
+        loaded.notes.push(Note {
+            path: "duplicate.md".into(),
+            text: duplicate.text.clone(),
+            entry: duplicate.entry.clone(),
+            error: None,
+        });
+        assert_eq!(loaded.resolve_spell(&by_id), None);
+    }
+
+    #[test]
+    fn creature_read_view_hides_rule_anchors() {
+        let path = "definitions/creatures/adult_bronze_dragon.md";
+        let source = content::definitions::source_file(path).unwrap();
+        let mut library = Library {
+            loaded: Some(Loaded {
+                notes: vec![Note {
+                    path: path.into(),
+                    text: source.into(),
+                    entry: Some(Entry::parse(path, source).unwrap()),
+                    error: None,
+                }],
+                ..Default::default()
+            }),
+            selected: Some(0),
+            draft: source.into(),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900.0, 6000.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| library.editor(ui, "Definition · creature"));
+            },
+        );
+        let text = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(text.iter().any(|text| text.contains("Spellcasting.")));
+        assert!(
+            !text.iter().any(|text| text.contains("^splat-")),
+            "{text:?}"
+        );
+        assert!(
+            !text.contains(&"Rule"),
+            "Empty mechanics section should be hidden"
+        );
+    }
+
     #[test]
     fn creature_read_view_shows_one_styled_stat_block() {
         let path = "definitions/creatures/vampire_familiar.md";
