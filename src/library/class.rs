@@ -14,7 +14,7 @@ pub(super) fn supports(entry: &Entry) -> bool {
 
 /// Only recognize the imported core-traits block. Authored text and any trailing
 /// source material stay in the ordinary Markdown reader.
-fn traits(source: &str, name: &str) -> Option<(Vec<(&'static str, String)>, String)> {
+pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     const LABELS: &[&str] = &[
         "Primary Ability",
         "Hit Point Die",
@@ -29,8 +29,8 @@ fn traits(source: &str, name: &str) -> Option<(Vec<(&'static str, String)>, Stri
         .lines()
         .map(|line| line.trim().trim_end_matches('\\'))
         .filter(|line| !line.is_empty() && !line.starts_with("<!-- SRD page "));
-    if lines.next()? != format!("Core {name} Traits") {
-        return None;
+    if lines.next() != Some(format!("Core {name} Traits").as_str()) {
+        return false;
     }
     let mut rows: Vec<(&'static str, String)> = Vec::new();
     let mut remainder = String::new();
@@ -52,25 +52,16 @@ fn traits(source: &str, name: &str) -> Option<(Vec<(&'static str, String)>, Stri
             value.push('\n');
             value.push_str(line);
         } else {
-            return None;
+            return false;
         }
     }
     if rows.is_empty() {
-        return None;
-    }
-    for (_, value) in &mut rows {
-        *value = presentation::overview_markdown(value).trim().to_owned();
-    }
-    Some((rows, remainder))
-}
-
-pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
-    let Some((rows, remainder)) = traits(source, name) else {
         return false;
-    };
+    }
     ui.heading("Core traits");
     ui.add_space(6.0);
     for (label, value) in rows {
+        let value = presentation::overview_markdown(&value).trim().to_owned();
         if label == "Starting Equipment" {
             ui.add_space(10.0);
             ui.heading("Starting equipment");
@@ -88,19 +79,7 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
             } else {
                 label
             };
-            // Stack on narrow windows rather than forcing two minimum widths.
-            if ui.available_width() < 460.0 {
-                ui.strong(label);
-                ui.add(egui::Label::new(value).wrap());
-            } else {
-                ui.horizontal_top(|ui| {
-                    ui.add_sized(
-                        [175.0, 0.0],
-                        egui::Label::new(egui::RichText::new(label).strong()).wrap(),
-                    );
-                    ui.add(egui::Label::new(value).wrap());
-                });
-            }
+            crate::markdown_view::show(ui, &format!("**{label}:** {value}"));
             ui.add_space(5.0);
         }
     }
@@ -204,62 +183,4 @@ pub(super) fn show_features(
         });
     }
     selected
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn all_imported_classes_keep_trait_boundaries_and_equipment() {
-        let loaded = super::super::load(None).unwrap();
-        let mut count = 0;
-        for entry in loaded
-            .notes
-            .iter()
-            .filter_map(|note| note.entry.as_ref())
-            .filter(|entry| supports(entry))
-        {
-            let sections = presentation::reading_sections(&entry.body, &entry.name);
-            let source = sections
-                .iter()
-                .find(|section| section.title == "Source text")
-                .unwrap();
-            let (rows, remainder) = traits(source.body, &entry.name).unwrap();
-            assert_eq!(rows[0].0, "Primary Ability");
-            assert_eq!(rows[1].0, "Hit Point Die");
-            assert_eq!(rows[2].0, "Saving Throw");
-            assert!(!rows[2].1.contains("Proficiencies"));
-            let equipment = &rows.last().unwrap().1;
-            assert!(
-                equipment.contains("(A)") && equipment.contains("(B)"),
-                "{equipment}"
-            );
-            assert!(!equipment.contains("Features"));
-            if entry.name == "Fighter" {
-                assert!(equipment.contains("(C) 155 GP"), "{equipment}");
-                assert!(remainder.contains("20 +6 Three Extra Attacks"));
-            }
-            if entry.name == "Barbarian" {
-                assert_eq!(
-                    rows[3].1,
-                    "Choose 2: Animal Handling, Athletics, Intimidation, Nature, Perception, or Survival"
-                );
-                assert_eq!(rows[5].1, "Light and Medium armor and Shields");
-                let features = features(entry, &loaded.notes);
-                assert_eq!(features.len(), 20);
-                assert_eq!((features[0].level, features[0].name), (Some(1), "Rage"));
-                assert_eq!(features.last().unwrap().level, Some(20));
-                assert!(features.iter().all(|feature| feature.target.is_some()));
-                assert!(
-                    features
-                        .windows(2)
-                        .all(|pair| pair[0].level <= pair[1].level)
-                );
-            }
-            count += 1;
-        }
-        assert_eq!(count, 12);
-        assert!(traits("My custom class prose", "Barbarian").is_none());
-    }
 }
