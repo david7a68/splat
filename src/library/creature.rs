@@ -2,7 +2,7 @@
 use super::presentation;
 use eframe::egui::{self, Color32, RichText};
 use pulldown_cmark::{Event, Options, Parser, Tag};
-use splat::content::Entry;
+use splat::content::{Entry, Reference};
 
 const ACCENT: Color32 = Color32::from_rgb(100, 199, 194);
 const ABILITIES: [&str; 6] = [
@@ -124,7 +124,9 @@ fn authored_prose(body: &str) -> String {
                 if depth == 0 && !matches!(tag, Tag::Heading { .. } | Tag::HtmlBlock) {
                     if data && matches!(tag, Tag::Table(_) | Tag::CodeBlock(_)) {
                         data = false;
-                    } else {
+                    } else if !matches!(tag, Tag::Paragraph)
+                        || !block_anchor(body[range.clone()].trim())
+                    {
                         output.push_str(&body[range]);
                         output.push_str("\n\n");
                     }
@@ -138,7 +140,39 @@ fn authored_prose(body: &str) -> String {
     output
 }
 
-fn prose(ui: &mut egui::Ui, text: &str) {
+fn block_anchor(text: &str) -> bool {
+    text.strip_prefix("^splat-").is_some_and(|id| {
+        !id.is_empty()
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    })
+}
+
+pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
+    let mut value = entry.fields.get("splat_rule");
+    for key in ["parameters", "features", "spellcasting", "spells"] {
+        value = value.and_then(|v| v.get(key));
+    }
+    value
+        .and_then(|v| v.as_sequence())
+        .into_iter()
+        .flatten()
+        .filter_map(|row| {
+            let spell = row.get("spell")?;
+            if let Some(id) = spell.get("id").and_then(|v| v.as_str()) {
+                id.parse().ok().map(Reference::Id)
+            } else {
+                spell
+                    .get("key")
+                    .and_then(|v| v.as_str())
+                    .map(|key| Reference::Key(key.into()))
+            }
+        })
+        .collect()
+}
+
+fn prose(ui: &mut egui::Ui, text: &str, spell_links: &mut impl FnMut(&mut egui::Ui)) {
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
         if let Some(title) = paragraph.strip_prefix("### ") {
             section_heading(ui, title);
@@ -153,6 +187,9 @@ fn prose(ui: &mut egui::Ui, text: &str) {
                 paragraph.into()
             };
             crate::markdown_view::show(ui, &markdown);
+            if paragraph.starts_with("Spellcasting.") {
+                spell_links(ui);
+            }
         }
     }
 }
@@ -222,6 +259,7 @@ pub(super) fn show(
     ui: &mut egui::Ui,
     entry: &Entry,
     sections: &[presentation::ReadingSection<'_>],
+    mut spell_links: impl FnMut(&mut egui::Ui),
 ) {
     ui.add_space(12.0);
     let identity = [size(entry), field(entry, "type"), field(entry, "alignment")]
@@ -273,7 +311,7 @@ pub(super) fn show(
     ui.add_space(8.0);
     for section in sections {
         if section.title == "Source text" {
-            prose(ui, &rules_prose(entry, section.body));
+            prose(ui, &rules_prose(entry, section.body), &mut spell_links);
         } else {
             let body = if section.body.contains("<!-- splat:") {
                 authored_prose(section.body)
@@ -303,6 +341,17 @@ mod tests {
         assert!(result.contains("After."));
         assert!(result.contains("- Keep this list."));
         assert!(!result.contains("medium"));
+    }
+
+    #[test]
+    fn internal_anchors_are_hidden_without_removing_authored_text() {
+        let body = "###### Detect magic\n\n^splat-68a383d1-detect_magic\n\n<!-- splat:yaml path=splat_rule/cast_level -->\n\n```yaml\nspell_minimum\n```\n\nUse this spell before entering.\n\n^splat-example is explained here.\n\n`^splat-example`\n";
+        let result = authored_prose(body);
+        assert!(!result.contains("^splat-68a383d1-detect_magic"));
+        assert!(!result.contains("spell_minimum"));
+        assert!(result.contains("Use this spell before entering."));
+        assert!(result.contains("^splat-example is explained here."));
+        assert!(result.contains("`^splat-example`"));
     }
 
     #[test]
