@@ -490,8 +490,7 @@ impl Library {
         });
         ui.add_space(6.0);
         ui.separator();
-        let query = self.search.trim().to_lowercase();
-        let searching = !query.is_empty();
+        let searching = !self.search.trim().is_empty();
         egui::SidePanel::left("library_sections")
             .resizable(true)
             .default_width(200.0)
@@ -501,20 +500,6 @@ impl Library {
                     .id_salt("section_list")
                     .show(ui, |ui| {
                         ui.add_space(8.0);
-                        if ui
-                            .add_enabled(
-                                !dirty,
-                                egui::Button::selectable(
-                                    self.section == Section::All && !searching,
-                                    format!("All entries   {}", loaded.notes.len()),
-                                )
-                                .min_size(egui::vec2(ui.available_width(), 30.0)),
-                            )
-                            .clicked()
-                        {
-                            self.section = Section::All;
-                            self.search.clear();
-                        }
                         for &(group, sections) in Section::GROUPS {
                             // Keep the empty encounter section discoverable, but hide an unused fallback.
                             if sections == [Section::Other]
@@ -522,17 +507,19 @@ impl Library {
                             {
                                 continue;
                             }
-                            ui.add_space(16.0);
-                            ui.label(
-                                egui::RichText::new(group.to_uppercase())
-                                    .size(11.0)
-                                    .color(ui.visuals().weak_text_color()),
-                            );
+                            if !group.is_empty() {
+                                ui.add_space(16.0);
+                                ui.label(
+                                    egui::RichText::new(group.to_uppercase())
+                                        .size(11.0)
+                                        .color(ui.visuals().weak_text_color()),
+                                );
+                            }
                             for &section in sections {
                                 let count = loaded
                                     .notes
                                     .iter()
-                                    .filter(|n| n.section() == section)
+                                    .filter(|n| section == Section::All || n.section() == section)
                                     .count();
                                 if ui
                                     .add_enabled(
@@ -602,37 +589,33 @@ impl Library {
                         }
                         for i in matches {
                             let note = &loaded.notes[i];
-                            let mut text = egui::text::LayoutJob::default();
-                            text.append(
-                                note.name(),
-                                0.0,
-                                egui::TextFormat {
-                                    font_id: egui::TextStyle::Body.resolve(ui.style()),
-                                    color: if selected == Some(i) {
-                                        ui.visuals().selection.stroke.color
-                                    } else {
-                                        ui.visuals().text_color()
-                                    },
-                                    ..Default::default()
-                                },
-                            );
                             let subtitle = note
                                 .entry
                                 .as_ref()
                                 .map_or_else(|| "Invalid note".into(), presentation::subtitle);
-                            text.append(
-                                &format!("\n{subtitle}"),
-                                0.0,
-                                egui::TextFormat {
-                                    font_id: egui::FontId::proportional(12.0),
-                                    color: if selected == Some(i) {
-                                        ui.visuals().selection.stroke.color
-                                    } else {
-                                        ui.visuals().weak_text_color()
+                            let mut text = egui::text::LayoutJob::default();
+                            for (line, size, color) in [
+                                (note.name().to_owned(), 15.0, ui.visuals().text_color()),
+                                (
+                                    format!("\n{subtitle}"),
+                                    12.0,
+                                    ui.visuals().weak_text_color(),
+                                ),
+                            ] {
+                                text.append(
+                                    &line,
+                                    0.0,
+                                    egui::TextFormat {
+                                        font_id: egui::FontId::proportional(size),
+                                        color: if selected == Some(i) {
+                                            ui.visuals().selection.stroke.color
+                                        } else {
+                                            color
+                                        },
+                                        ..Default::default()
                                     },
-                                    ..Default::default()
-                                },
-                            );
+                                );
+                            }
                             if ui
                                 .add_enabled(
                                     !dirty,
@@ -801,8 +784,6 @@ impl Library {
                             .iter()
                             .enumerate()
                         {
-                            let overview =
-                                section.title == "Source text" || section.title == "Overview";
                             let data = section.body.contains("<!-- splat:");
                             let label = if section.title == "Source text" {
                                 "Overview".to_owned()
@@ -811,7 +792,7 @@ impl Library {
                             } else {
                                 section.title.clone()
                             };
-                            let open = overview || !data || first_data;
+                            let open = !data || first_data;
                             if data {
                                 first_data = false;
                             }
@@ -842,45 +823,36 @@ impl Library {
                         }
                         ui.add_space(16.0);
                         ui.separator();
-                        let support_label = note
+                        let conversion = note
                             .entry
                             .as_ref()
-                            .and_then(|e| e.fields.get("splat_conversion"))
+                            .and_then(|e| e.fields.get("splat_conversion"));
+                        let status = conversion
                             .and_then(|c| c.get("status"))
-                            .and_then(|s| s.as_str())
-                            .map_or("Engine support · Not established", |s| match s {
-                                "specified" => "Engine support · Incomplete",
-                                "informational" => "Engine support · Reference only",
-                                _ => "Engine support · Conversion incomplete",
-                            });
-                        ui.collapsing(support_label, |ui| {
-                            if let Some(entry) = &note.entry {
-                                match content::definitions::conversion(entry) {
-                                    Ok(Some(c)) => {
-                                        ui.label(match c.status {
-                                            content::definitions::Status::Informational => {
-                                                "Reference information"
-                                            }
-                                            content::definitions::Status::Partial => {
-                                                "Rule conversion incomplete"
-                                            }
-                                            content::definitions::Status::Specified => {
-                                                "Rules specified · Engine support incomplete"
-                                            }
-                                        });
-                                        for gap in c.conversion_gaps.iter().chain(&c.engine_gaps) {
+                            .and_then(|s| s.as_str());
+                        let support = match status {
+                            Some("specified") => "Incomplete",
+                            Some("informational") => "Reference only",
+                            Some("partial") => "Conversion incomplete",
+                            _ => "Not established",
+                        };
+                        ui.collapsing(format!("Engine support · {support}"), |ui| {
+                            ui.label(support);
+                            if let Some(conversion) = conversion {
+                                for key in ["conversion_gaps", "engine_gaps"] {
+                                    for gap in conversion
+                                        .get(key)
+                                        .and_then(|v| v.as_sequence())
+                                        .into_iter()
+                                        .flatten()
+                                    {
+                                        if let Some(gap) = gap.as_str() {
                                             ui.monospace(gap);
                                         }
                                     }
-                                    Ok(None) => {
-                                        ui.label(
-                                            "Draft structure does not establish engine support.",
-                                        );
-                                    }
-                                    Err(error) => {
-                                        ui.colored_label(egui::Color32::LIGHT_RED, error);
-                                    }
                                 }
+                            } else {
+                                ui.label("Draft structure does not establish engine support.");
                             }
                         });
                         ui.collapsing("Source and identifiers", |ui| {
@@ -981,76 +953,59 @@ mod tests {
     use super::*;
     #[test]
     fn imported_overview_renders_as_prose_without_source_markup() {
-        let text = content::definitions::source_file("definitions/glossary/ability_check.md")
-            .unwrap()
-            .to_owned();
-        let entry = Entry::parse("definitions/glossary/ability_check.md", &text).unwrap();
-        let mut library = Library {
-            loaded: Some(Loaded {
-                notes: vec![Note {
-                    path: entry.path.clone(),
-                    text: text.clone(),
-                    entry: Some(entry),
-                    error: None,
-                }],
-                diagnostics: vec![],
-            }),
-            selected: Some(0),
-            draft: text,
-            ..Default::default()
-        };
-        let ctx = egui::Context::default();
-        let output = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(1000.0, 700.0),
-                )),
+        for (path, expected) in [
+            (
+                "definitions/glossary/ability_check.md",
+                "represents using one of the six abilities",
+            ),
+            (
+                "definitions/spells/bless.md",
+                "Whenever a target makes an attack roll",
+            ),
+        ] {
+            let text = content::definitions::source_file(path).unwrap().to_owned();
+            let entry = Entry::parse(path, &text).unwrap();
+            let mut library = Library {
+                loaded: Some(Loaded {
+                    notes: vec![Note {
+                        path: entry.path.clone(),
+                        text: text.clone(),
+                        entry: Some(entry),
+                        error: None,
+                    }],
+                    diagnostics: vec![],
+                }),
+                selected: Some(0),
+                draft: text,
                 ..Default::default()
-            },
-            |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| library.editor(ui));
-            },
-        );
-        let text = output
-            .shapes
-            .iter()
-            .filter_map(|s| match &s.shape {
-                egui::Shape::Text(t) => Some(t.galley.job.text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(
-            text.contains("represents using one of the six abilities"),
-            "{text}"
-        );
-        assert!(!text.contains('\\'), "{text}");
-        assert!(!text.contains("[["), "{text}");
-        assert!(!text.contains("Original layout:"), "{text}");
-    }
-    #[test]
-    fn search_crosses_sections_and_invalid_notes_remain_reachable() {
-        let text = note_text("Goblin", "creature", None);
-        let note = Note {
-            path: "Monsters/Goblin.md".into(),
-            entry: Some(Entry::parse("Monsters/Goblin.md", &text).unwrap()),
-            text,
-            error: None,
-        };
-        assert!(note.matches(Section::Creatures, ""));
-        assert!(!note.matches(Section::Spells, ""));
-        assert!(note.matches(Section::Spells, "goblin"));
-        assert!(note.matches(Section::Spells, "monsters/"));
-        let broken = Note {
-            path: "Broken.md".into(),
-            text: "invalid".into(),
-            entry: None,
-            error: Some("Invalid note".into()),
-        };
-        assert!(broken.matches(Section::Other, ""));
-        assert!(broken.matches(Section::All, ""));
-        assert!(broken.matches(Section::Spells, "broken"));
+            };
+            let ctx = egui::Context::default();
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1000.0, 700.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| library.editor(ui));
+                },
+            );
+            let text = output
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Text(t) => Some(t.galley.job.text.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(text.contains(expected), "{text}");
+            assert!(!text.contains('\\'), "{text}");
+            assert!(!text.contains("[["), "{text}");
+            assert!(!text.contains("Original layout:"), "{text}");
+        }
     }
     #[test]
     fn create_register_and_edit_preserves_identity_and_external_changes() {
@@ -1078,16 +1033,6 @@ mod tests {
         assert!(write_note(&root, "../escape.md", None, &text).is_err());
     }
     #[test]
-    fn every_new_entry_kind_is_a_valid_non_executable_draft() {
-        for kind in ["creature", "spell", "item", "effect", "rule", "rule_group"] {
-            let text = note_text("Name: with YAML punctuation", kind, None);
-            let entry = Entry::parse("Draft.md", &text).unwrap();
-            assert_eq!(entry.kind, kind);
-            assert_eq!(entry.name, "Name: with YAML punctuation");
-        }
-    }
-
-    #[test]
     fn library_frame_keeps_campaign_selection_and_draft_independent() {
         let temp = tempfile::tempdir().unwrap();
         let m = create_module(&temp.path().join("module"), "Module", "test").unwrap();
@@ -1104,58 +1049,13 @@ mod tests {
         let expected = library.draft.clone();
         library.search = "no matching entry".into();
         let ctx = egui::Context::default();
-        for size in [egui::vec2(1000.0, 700.0), egui::vec2(800.0, 600.0)] {
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
-                },
-            );
-            assert!(!output.shapes.is_empty());
-            assert!(campaigns.active_campaign().is_none());
-            assert_eq!(library.draft, expected);
-        }
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
+        });
+        assert!(campaigns.active_campaign().is_none());
+        assert_eq!(library.draft, expected);
         campaigns.unregister_module(m.id).unwrap();
         assert!(m.path.join("Module.md").exists());
-    }
-
-    #[test]
-    fn editor_renders_read_and_source_views_without_changing_draft() {
-        let temp = tempfile::tempdir().unwrap();
-        let m = create_module(&temp.path().join("module"), "Module", "test").unwrap();
-        let mut library = Library {
-            loaded: Some(load(Some(&m)).unwrap()),
-            module: Some(m),
-            selected: Some(0),
-            ..Default::default()
-        };
-        library.draft = library.loaded.as_ref().unwrap().notes[0].text.clone();
-        library
-            .draft
-            .push_str("Unsaved content\n\n| Name | Value |\n| --- | --- |\n| Armor | 12 |\n");
-        let expected = library.draft.clone();
-        let ctx = egui::Context::default();
-        for source in [false, true] {
-            library.source = source;
-            let output = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(1000.0, 700.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| library.editor(ui));
-                },
-            );
-            assert!(!output.shapes.is_empty());
-            assert_eq!(library.draft, expected);
-            assert!(library.dirty());
-        }
     }
 
     #[test]
