@@ -37,12 +37,43 @@ impl Note {
         }
     }
 }
+#[derive(Default)]
 struct Loaded {
     notes: Vec<Note>,
     diagnostics: Vec<String>,
+    subtitles: std::sync::OnceLock<Vec<String>>,
+    counts: std::sync::OnceLock<Vec<(Section, usize)>>,
 }
 impl Loaded {
-    fn subtitles(&self) -> Vec<String> {
+    fn subtitles(&self) -> &Vec<String> {
+        self.subtitles.get_or_init(|| self.build_subtitles())
+    }
+    fn count(&self, section: Section) -> usize {
+        self.counts
+            .get_or_init(|| {
+                Section::GROUPS
+                    .iter()
+                    .flat_map(|(_, sections)| sections.iter())
+                    .map(|&section| {
+                        (
+                            section,
+                            self.notes
+                                .iter()
+                                .filter(|n| section == Section::All || n.section() == section)
+                                .count(),
+                        )
+                    })
+                    .collect()
+            })
+            .iter()
+            .find(|(s, _)| *s == section)
+            .map_or(0, |(_, n)| *n)
+    }
+    fn invalidate(&mut self) {
+        self.subtitles.take();
+        self.counts.take();
+    }
+    fn build_subtitles(&self) -> Vec<String> {
         let mut subtitles: Vec<_> = self
             .notes
             .iter()
@@ -66,6 +97,46 @@ impl Loaded {
         }
         subtitles
     }
+}
+
+const ENTRY_ROW_HEIGHT: f32 = 44.0;
+
+// Fixed height keeps the virtual scroll position independent of label length.
+fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
+    let response = ui.add_sized(
+        [ui.available_width(), ENTRY_ROW_HEIGHT],
+        egui::Button::selectable(selected, ""),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            ui.is_enabled(),
+            selected,
+            format!("{name} · {subtitle}"),
+        )
+    });
+    let padding = ui.spacing().button_padding.x;
+    for (text, size, y, color) in [
+        (name, 15.0, 4.0, ui.visuals().text_color()),
+        (subtitle, 12.0, 24.0, ui.visuals().weak_text_color()),
+    ] {
+        let color = if selected {
+            ui.visuals().selection.stroke.color
+        } else {
+            color
+        };
+        let mut job = egui::text::LayoutJob::simple_singleline(
+            text.replace(['\n', '\r'], " "),
+            egui::FontId::proportional(size),
+            color,
+        );
+        job.wrap.max_width = (response.rect.width() - 2.0 * padding).max(0.0);
+        job.wrap.max_rows = 1;
+        let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+        ui.painter()
+            .galley(response.rect.min + egui::vec2(padding, y), galley, color);
+    }
+    response
 }
 
 fn local_module(path: &Path) -> Result<Module, String> {
@@ -257,7 +328,11 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
         }
     }
     notes.sort_by_cached_key(|n| n.name().to_lowercase());
-    Ok(Loaded { notes, diagnostics })
+    Ok(Loaded {
+        notes,
+        diagnostics,
+        ..Default::default()
+    })
 }
 
 #[derive(Default)]
@@ -268,6 +343,7 @@ pub struct Library {
     selected: Option<usize>,
     draft: String,
     search: String,
+    matches: Option<(Section, String, Vec<usize>)>,
     section: Section,
     error: Option<String>,
     form: bool,
@@ -305,6 +381,7 @@ impl Library {
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.loaded = None;
+        self.matches = None;
         self.selected = None;
         self.error = None;
         std::thread::spawn(move || {
@@ -335,6 +412,7 @@ impl Library {
                                 self.draft = l.notes[i].text.clone();
                             }
                             self.loaded = Some(l);
+                            self.matches = None;
                         }
                         Err(e) => self.error = Some(e),
                     }
@@ -528,9 +606,7 @@ impl Library {
                         ui.add_space(8.0);
                         for &(group, sections) in Section::GROUPS {
                             // Keep the empty encounter section discoverable, but hide an unused fallback.
-                            if sections == [Section::Other]
-                                && !loaded.notes.iter().any(|n| n.section() == Section::Other)
-                            {
+                            if sections == [Section::Other] && loaded.count(Section::Other) == 0 {
                                 continue;
                             }
                             if !group.is_empty() {
@@ -542,11 +618,7 @@ impl Library {
                                 );
                             }
                             for &section in sections {
-                                let count = loaded
-                                    .notes
-                                    .iter()
-                                    .filter(|n| section == Section::All || n.section() == section)
-                                    .count();
+                                let count = loaded.count(section);
                                 if ui
                                     .add_enabled(
                                         !dirty,
@@ -568,13 +640,26 @@ impl Library {
         // A query always searches the whole package. Clearing it returns to the selected section.
         let query = self.search.trim().to_lowercase();
         let searching = !query.is_empty();
-        let matches: Vec<_> = loaded
-            .notes
-            .iter()
-            .enumerate()
-            .filter(|(_, n)| n.matches(self.section, &query))
-            .map(|(i, _)| i)
-            .collect();
+        if self
+            .matches
+            .as_ref()
+            .is_none_or(|(section, cached_query, _)| {
+                *section != self.section || *cached_query != query
+            })
+        {
+            self.matches = Some((
+                self.section,
+                query.clone(),
+                loaded
+                    .notes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, n)| n.matches(self.section, &query))
+                    .map(|(i, _)| i)
+                    .collect(),
+            ));
+        }
+        let matches = &self.matches.as_ref().unwrap().2;
         // Keep the reader in sync with the visible list without dropping an unsaved draft.
         let mut select = None;
         if !dirty && self.selected.is_none_or(|i| !matches.contains(&i)) {
@@ -608,45 +693,31 @@ impl Library {
                     if searching { " · all sections" } else { "" }
                 ));
                 ui.separator();
+                if matches.is_empty() {
+                    ui.weak("No entries found.");
+                }
                 egui::ScrollArea::vertical()
-                    .id_salt("entry_list")
-                    .show(ui, |ui| {
-                        if matches.is_empty() {
-                            ui.weak("No entries found.");
-                        }
-                        for i in matches {
+                    .id_salt(("entry_list", self.section.label(), &query))
+                    .show_rows(ui, ENTRY_ROW_HEIGHT, matches.len(), |ui, range| {
+                        for row in range {
+                            let i = matches[row];
                             let note = &loaded.notes[i];
                             let subtitle = &subtitles[i];
-                            let mut text = egui::text::LayoutJob::default();
-                            for (line, size, color) in [
-                                (note.name().to_owned(), 15.0, ui.visuals().text_color()),
-                                (
-                                    format!("\n{subtitle}"),
-                                    12.0,
-                                    ui.visuals().weak_text_color(),
-                                ),
-                            ] {
-                                text.append(
-                                    &line,
-                                    0.0,
-                                    egui::TextFormat {
-                                        font_id: egui::FontId::proportional(size),
-                                        color: if selected == Some(i) {
-                                            ui.visuals().selection.stroke.color
-                                        } else {
-                                            color
-                                        },
-                                        ..Default::default()
-                                    },
-                                );
-                            }
-                            if ui
-                                .add_enabled(
-                                    !dirty,
-                                    egui::Button::selectable(selected == Some(i), text)
-                                        .min_size(egui::vec2(ui.available_width(), 40.0)),
-                                )
-                                .on_hover_text(&note.path)
+                            let response = ui
+                                .push_id(i, |ui| {
+                                    ui.add_enabled_ui(!dirty, |ui| {
+                                        entry_row(ui, note.name(), subtitle, selected == Some(i))
+                                    })
+                                    .inner
+                                })
+                                .inner;
+                            if response
+                                .on_hover_text(format!(
+                                    "{}\n{}\n{}",
+                                    note.name(),
+                                    subtitle,
+                                    note.path
+                                ))
                                 .clicked()
                             {
                                 select = Some(i);
@@ -661,9 +732,9 @@ impl Library {
         }
         let subtitle = self
             .selected
-            .map(|i| subtitles[i].as_str())
+            .map(|i| subtitles[i].clone())
             .unwrap_or_default();
-        egui::CentralPanel::default().show_inside(ui, |ui| self.editor(ui, subtitle));
+        egui::CentralPanel::default().show_inside(ui, |ui| self.editor(ui, &subtitle));
     }
 
     fn new_entry(&mut self, ui: &mut egui::Ui, dirty: bool) {
@@ -710,6 +781,8 @@ impl Library {
                                 error: None,
                             });
                             l.notes.sort_by_cached_key(|n| n.name().to_lowercase());
+                            l.invalidate();
+                            self.matches = None;
                             self.selected = l.notes.iter().position(|n| n.path == created_path);
                             self.search.clear();
                             self.section = Section::All;
@@ -954,6 +1027,8 @@ impl Library {
                     l.notes[i].entry = Some(entry);
                     l.notes[i].text = self.draft.clone();
                     l.notes[i].error = None;
+                    l.invalidate();
+                    self.matches = None;
                     self.message = Some("Saved: entry changes.".into());
                     let entries: Vec<_> = l.notes.iter().filter_map(|n| n.entry.clone()).collect();
                     let r = content::validate(&entries);
@@ -980,13 +1055,123 @@ impl Library {
 mod tests {
     use super::*;
     #[test]
+    fn entry_rows_keep_both_lines_at_a_fixed_height() {
+        let ctx = egui::Context::default();
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(186.0, 100.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.set_width(170.0);
+                    let response = entry_row(
+                        ui,
+                        &"Long entry name ".repeat(30),
+                        &"Long subtitle ".repeat(30),
+                        false,
+                    );
+                    assert_eq!(response.rect.height(), 44.0);
+                });
+            },
+        );
+        let rows: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if !text.galley.job.text.is_empty() => Some(&text.galley),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(rows.len(), 2);
+        assert!(
+            rows.iter()
+                .all(|galley| galley.rows.len() == 1 && galley.rect.width() <= 162.0)
+        );
+    }
+
+    #[test]
+    fn list_metadata_is_refreshed_after_content_changes() {
+        let mut loaded = Loaded {
+            notes: vec![Note {
+                path: "first.md".into(),
+                text: String::new(),
+                entry: None,
+                error: None,
+            }],
+            ..Default::default()
+        };
+        assert_eq!(loaded.count(Section::All), 1);
+        assert_eq!(loaded.subtitles().len(), 1);
+        loaded.notes.push(Note {
+            path: "second.md".into(),
+            text: String::new(),
+            entry: None,
+            error: None,
+        });
+        loaded.invalidate();
+        assert_eq!(loaded.count(Section::All), 2);
+        assert_eq!(loaded.subtitles().len(), 2);
+    }
+
+    /// Run explicitly to measure the complete library UI while scrolling the built-in package.
+    #[test]
+    #[ignore]
+    fn library_scroll_frame_times() {
+        let mut library = Library {
+            loaded: Some(load(None).unwrap()),
+            ..Default::default()
+        };
+        let mut campaigns = Campaigns::default();
+        let ctx = egui::Context::default();
+        let mut times = Vec::new();
+        for frame in 0..150 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1200.0, 800.0),
+                )),
+                time: Some(frame as f64 / 60.0),
+                events: vec![
+                    egui::Event::PointerMoved(egui::pos2(300.0, 450.0)),
+                    egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, -30.0),
+                        modifiers: Default::default(),
+                    },
+                ],
+                ..Default::default()
+            };
+            let start = std::time::Instant::now();
+            let output = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| library.show(ui, &mut campaigns));
+            });
+            let _ = ctx.tessellate(output.shapes, output.pixels_per_point);
+            if frame >= 30 {
+                times.push(start.elapsed().as_secs_f64() * 1000.0);
+            }
+        }
+        times.sort_by(f64::total_cmp);
+        println!(
+            "Library entries: {}; frame CPU ms: median={:.3}, p95={:.3}, max={:.3}",
+            library.loaded.as_ref().unwrap().notes.len(),
+            times[times.len() / 2],
+            times[times.len() * 95 / 100],
+            times.last().unwrap()
+        );
+    }
+
+    #[test]
     fn same_name_entries_have_distinct_visible_labels() {
         let loaded = load(None).unwrap();
         let subtitles = loaded.subtitles();
         let labels: std::collections::HashSet<_> = loaded
             .notes
             .iter()
-            .zip(&subtitles)
+            .zip(subtitles)
             .map(|(note, subtitle)| (note.name(), subtitle))
             .collect();
         assert_eq!(labels.len(), loaded.notes.len());
@@ -1057,13 +1242,14 @@ mod tests {
                         error: None,
                     }],
                     diagnostics: vec![],
+                    ..Default::default()
                 }),
                 selected: Some(0),
                 draft: text,
                 ..Default::default()
             };
             let ctx = egui::Context::default();
-            let subtitles = library.loaded.as_ref().unwrap().subtitles();
+            let subtitles = library.loaded.as_ref().unwrap().subtitles().clone();
             let output = ctx.run(
                 egui::RawInput {
                     screen_rect: Some(egui::Rect::from_min_size(

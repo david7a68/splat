@@ -9,3 +9,16 @@ __pycache__/
 *.pyc
 /artifacts/screenshots/
 /output/prototypes/
+
+# Visual test captures are temporary; do not commit image files.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
+*.tif
+*.tiff
+*.ico
+*.svg
+*.avif
