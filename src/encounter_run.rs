@@ -1459,45 +1459,4 @@ mod tests {
         run.apply(Command::RollNpcs).unwrap();
         assert_eq!(run.state.participants[0].initiative, Some(6));
     }
-
-    #[test]
-    #[ignore = "Creates synthetic campaign data for screenshot review in SPLAT_UI_FIXTURE"]
-    fn create_screenshot_fixture() {
-        let root = PathBuf::from(
-            std::env::var("SPLAT_UI_FIXTURE").expect("Set SPLAT_UI_FIXTURE to a temporary folder"),
-        );
-        fs::create_dir_all(root.join("campaign")).unwrap();
-        let campaign = crate::persistence::Campaign {
-            id: Uuid::new_v4(),
-            name: "Northreach · Sample campaign".into(),
-            path: root.join("campaign"),
-            dndbeyond_campaign_id: None,
-            dndbeyond_campaign_name: None,
-        };
-        let mut document = crate::content_workspace::CampaignDocument::load(&campaign).unwrap();
-        document.save().unwrap();
-        let data = crate::persistence::UserData {
-            active_campaign_id: Some(campaign.id),
-            campaigns: vec![campaign.clone()],
-            ..Default::default()
-        };
-        let mut store = crate::persistence::Store::at(root.join("config/splat/settings.json"));
-        store.load().unwrap();
-        store.save(&data).unwrap();
-        let mut run = run();
-        run.name = "Ambush at the Old Bridge".into();
-        run.state.participants[0].name = "Mira · Ranger".into();
-        run.state.participants[0].npc = false;
-        run.state.participants[0].side = "party".into();
-        run.state.participants[0].conditions.clear();
-        run.state.participants[1].name = "Bridge guard 1".into();
-        run.state.participants[2].name = "Bridge guard 2".into();
-        run.apply(Command::Initiative(0, Some(17))).unwrap();
-        run.configure_storage(
-            campaign.id,
-            &campaign.path.join("Encounter Runs"),
-            Initiative::default(),
-        )
-        .unwrap();
-    }
 }

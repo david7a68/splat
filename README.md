@@ -113,11 +113,22 @@ late responses cannot apply an old name to a new link.
 ## Library workspace
 
 Select **Library** to work on reusable modules without changing the active campaign.
-The built-in D&D 2024 SRD appears as one read-only catalogue. Search entries by name
-or path, filter by kind, and select an entry to read its Markdown or inspect its source.
-Engine support remains separate from structural validity.
+The built-in D&D 2024 SRD appears as one read-only catalogue. Browse Creatures,
+Spells, Items, Character options, Rules, Glossary, and Encounters in the section
+sidebar. Sections use subject metadata as well as entry kinds, so spell references
+appear with spells. Other entries includes package notes and invalid notes for repair.
+Search covers all sections by name, path, or section; clear it to return to the
+selected section. The reader shows source text first, with separate expandable
+sections for structured details, engine support, and source identifiers. Markdown
+source and local editing remain available. Engine support remains separate from
+structural validity.
 
-Under **Manage modules**, register an existing folder containing exactly one package
+The built-in overview reflows printed PDF lines into paragraphs and keeps page
+references under **Source and identifiers**. Structured data uses compact label/value
+rows; its first section opens by default. These display changes do not alter the
+stored Markdown or rule definitions.
+
+Under **Package actions → Manage packages**, register an existing folder containing exactly one package
 manifest, or enter a name, namespace (for example `my_homebrew`), and a new absolute
 folder path to create a module. The parent folder must already exist. Module
 registrations are stored in user settings; module notes remain in their own folders.

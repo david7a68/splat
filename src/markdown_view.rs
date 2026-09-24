@@ -3,6 +3,18 @@ use eframe::egui::{self, text::LayoutJob};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
+    show_with_density(ui, markdown, false);
+}
+
+/// Dense structured library details; ordinary Markdown elsewhere keeps its layout.
+pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 3.0;
+        show_with_density(ui, markdown, true);
+    });
+}
+
+fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let mut job = LayoutJob::default();
     let mut heading = None;
     let mut inventory_table = false;
@@ -47,6 +59,11 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
             }
             Event::End(TagEnd::Table) => {
                 if let Some(rows) = table.take() {
+                    if dense && rows.first().is_some_and(|row| row == &["Field", "Value"]) {
+                        show_fields(ui, &rows[1..]);
+                        inventory_table = false;
+                        continue;
+                    }
                     let compact = inventory_table
                         && rows
                             .first()
@@ -120,10 +137,14 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
             }
             Event::Start(Tag::Heading { level, .. }) => {
                 flush(ui, &mut job, &mut target);
-                ui.add_space(match level {
-                    pulldown_cmark::HeadingLevel::H1 => 8.0,
-                    pulldown_cmark::HeadingLevel::H2 => 18.0,
-                    _ => 12.0,
+                ui.add_space(if dense {
+                    6.0
+                } else {
+                    match level {
+                        pulldown_cmark::HeadingLevel::H1 => 8.0,
+                        pulldown_cmark::HeadingLevel::H2 => 18.0,
+                        _ => 12.0,
+                    }
                 });
                 heading = Some(level);
             }
@@ -192,13 +213,17 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
                 }
                 .resolve(ui.style());
                 let font_id = if let Some(level) = heading {
-                    egui::FontId::proportional(match level {
-                        pulldown_cmark::HeadingLevel::H1 => 30.0,
-                        pulldown_cmark::HeadingLevel::H2 => 22.0,
-                        pulldown_cmark::HeadingLevel::H3 => 18.0,
-                        pulldown_cmark::HeadingLevel::H4 => 16.0,
-                        pulldown_cmark::HeadingLevel::H5 => 15.0,
-                        pulldown_cmark::HeadingLevel::H6 => 14.0,
+                    egui::FontId::proportional(if dense {
+                        14.0
+                    } else {
+                        match level {
+                            pulldown_cmark::HeadingLevel::H1 => 30.0,
+                            pulldown_cmark::HeadingLevel::H2 => 22.0,
+                            pulldown_cmark::HeadingLevel::H3 => 18.0,
+                            pulldown_cmark::HeadingLevel::H4 => 16.0,
+                            pulldown_cmark::HeadingLevel::H5 => 15.0,
+                            pulldown_cmark::HeadingLevel::H6 => 14.0,
+                        }
                     })
                 } else {
                     font_id
@@ -228,6 +253,63 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
         }
     }
     flush(ui, &mut job, &mut target);
+}
+
+fn show_fields(ui: &mut egui::Ui, rows: &[Vec<String>]) {
+    let available = ui.available_width();
+    let label_width = (available * 0.25).clamp(100.0, 145.0);
+    let value_width = (available - label_width - 16.0).max(70.0);
+    ui.push_id(ui.next_auto_id(), |ui| {
+        egui::Grid::new("library_fields")
+            .num_columns(2)
+            .spacing([16.0, 3.0])
+            .striped(true)
+            .min_col_width(0.0)
+            .max_col_width(value_width.max(label_width))
+            .show(ui, |ui| {
+                for row in rows {
+                    let field = row
+                        .first()
+                        .map_or("", String::as_str)
+                        .trim()
+                        .replace('_', " ");
+                    let value = row.get(1).map_or("", String::as_str).trim();
+                    let value = display_field_value(value);
+                    field_cell(
+                        ui,
+                        label_width,
+                        egui::RichText::new(field)
+                            .size(13.0)
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                    field_cell(ui, value_width, egui::RichText::new(value).size(13.0));
+                    ui.end_row();
+                }
+            });
+    });
+}
+
+fn field_cell(ui: &mut egui::Ui, width: f32, text: egui::RichText) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, 0.0),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
+            ui.set_width(width);
+            ui.add(egui::Label::new(text).wrap());
+        },
+    );
+}
+
+fn display_field_value(value: &str) -> String {
+    match serde_json::from_str::<serde_json::Value>(value) {
+        Ok(serde_json::Value::Array(values)) if values.iter().all(|v| v.is_string()) => values
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
+        Ok(serde_json::Value::Bool(value)) => if value { "Yes" } else { "No" }.into(),
+        _ => value.to_owned(),
+    }
 }
 
 fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Option<String>) {
