@@ -4,15 +4,6 @@ Status: implemented for the party viewer, campaign content, and encounter roster
 Campaign copies use the [shared character content schema](character-content.md).
 Simulation execution remains separate work.
 
-## Portable storage
-
-Records now live under the campaign's `.splat/characters/<local UUID>/<remote ID>/`
-folder. `splat_storage.character_cache` in the campaign manifest can change that
-relative path. Existing app caches are copied on first use when the destination
-is absent, with the original retained. Existing campaign caches are never replaced
-by migration. `splat_storage.characters` sets the generated Markdown folder and
-defaults to `Characters/D&D Beyond`. Relative paths survive moving the campaign.
-
 ## Shared creature definition and fetched state
 
 `character::EntitySnapshot` holds these parts:
@@ -72,13 +63,13 @@ and preserves the previous local copy. No guessed stat replaces a missing total.
 
 ## Local storage
 
-Campaign-owned records live at:
+Application-owned records live at:
 
 ```text
-<campaign-folder>/.splat/characters/<local-campaign-uuid>/<remote-campaign-id>/<character-id>.json
+$XDG_DATA_HOME/splat/characters/<local-campaign-uuid>/<remote-campaign-id>/<character-id>.json
 ```
 
-The previous Linux root, `~/.local/share/splat/characters`, is retained during migration. Each JSON file is
+On Linux, the default root is `~/.local/share/splat/characters`. Each JSON file is
 a versioned snapshot envelope containing the shared creature definition and its
 current state, details, and source records. The app also writes a campaign Markdown copy as described below. Neither form
 introduces a second authoritative inventory table.

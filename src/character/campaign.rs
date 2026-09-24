@@ -13,24 +13,18 @@ const PERSONAL_NOTES: &str =
     "\n## Personal notes\n\nThis section is kept when the sheet refreshes.\n";
 
 impl EntitySnapshot {
-    pub fn campaign_path(&self, campaign: &Path) -> Result<PathBuf, String> {
-        let storage =
-            crate::campaign_storage::Storage::for_link(campaign, None, &self.source.campaign_id)?;
-        Ok(
-            crate::campaign_storage::relative_directory(campaign, &storage.characters)?
-                .join(format!("{}.md", self.definition.splat_id)),
-        )
+    pub fn campaign_path(&self, campaign: &Path) -> PathBuf {
+        campaign
+            .join("Characters")
+            .join("D&D Beyond")
+            .join(format!("{}.md", self.definition.splat_id))
     }
     pub fn save_campaign_copy(&self, campaign: &Path) -> Result<PathBuf, String> {
         self.validate()?;
         if !campaign.is_absolute() || !campaign.is_dir() {
             return Err("Campaign folder is unavailable; character copy was not saved.".into());
         }
-        let destination = self.campaign_path(campaign)?;
-        let root = destination
-            .parent()
-            .ok_or("Invalid character folder.")?
-            .to_path_buf();
+        let root = campaign.join("Characters").join("D&D Beyond");
         let mut staged = Vec::new();
         for note in self.content_notes()? {
             let path = root.join(note.relative_path);
@@ -105,7 +99,7 @@ impl EntitySnapshot {
             }
             fs::remove_file(&path).map_err(|e| e.to_string())?;
         }
-        Ok(destination)
+        Ok(self.campaign_path(campaign))
     }
 }
 

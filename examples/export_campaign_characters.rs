@@ -9,7 +9,7 @@ fn main() -> Result<(), String> {
         .parse()
         .map_err(|_| "Invalid local campaign UUID.")?;
     let root = std::path::Path::new(&args[2]);
-    let records = Cache::campaign(root, local, &args[1])?.load_all(local, &args[1])?;
+    let records = Cache::user()?.load_all(local, &args[1])?;
     if records.is_empty() {
         return Err("No cached party members found.".into());
     }
@@ -22,9 +22,7 @@ fn main() -> Result<(), String> {
         }
         println!("{}: {}", record.definition.splat_name, path.display());
     }
-    let storage = splat::campaign_storage::Storage::load(root)?;
-    let folder = splat::campaign_storage::relative_directory(root, &storage.characters)?;
-    let (entries, errors) = splat::content::read_directory(&folder)?;
+    let (entries, errors) = splat::content::read_directory(&root.join("Characters/D&D Beyond"))?;
     let report = splat::content::validate_with_builtin(&entries)?;
     if !errors.is_empty() || !report.errors.is_empty() {
         return Err(format!(

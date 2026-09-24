@@ -148,7 +148,7 @@ fn campaign_bundle_uses_content_inventory_and_normalized_sheet() {
 fn campaign_copy_does_not_overwrite_unmanaged_notes() {
     let dir = tempfile::tempdir().unwrap();
     let record = sample();
-    let path = record.campaign_path(dir.path()).unwrap();
+    let path = record.campaign_path(dir.path());
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, "My creature note").unwrap();
     assert!(record.save_campaign_copy(dir.path()).is_err());
@@ -271,29 +271,4 @@ fn malformed_character_extensions_are_rejected() {
     fields["splat_import"]["version"] = serde_yaml_ng::Value::from(99);
     let text = format!("---\n{}---\n", serde_yaml_ng::to_string(&fields).unwrap());
     assert!(Entry::parse("bad.md", &text).is_err());
-}
-
-#[test]
-fn custom_campaign_storage_survives_moving_the_folder() {
-    let temp = tempfile::tempdir().unwrap();
-    let root = temp.path().join("original");
-    std::fs::create_dir(&root).unwrap();
-    let local = Uuid::new_v4();
-    std::fs::write(root.join("Campaign.md"), format!("---\nsplat_schema: 1\nsplat_id: {local}\nsplat_kind: campaign\nsplat_name: Test\nsplat_namespace: test_campaign\nsplat_storage:\n  characters: Party/Sheets\n  character_cache: Data/Cache\n---\n")).unwrap();
-    let record = sample();
-    let cache = Cache::for_campaign(&root).unwrap();
-    cache.save(local, &record).unwrap();
-    cache.save_roster(local, "456", &["123".into()]).unwrap();
-    let path = record.save_campaign_copy(&root).unwrap();
-    assert!(path.starts_with(root.join("Party/Sheets")));
-    assert!(!root.join("Characters").exists());
-    let moved = temp.path().join("moved");
-    std::fs::rename(&root, &moved).unwrap();
-    let restored = Cache::for_campaign(&moved)
-        .unwrap()
-        .load_all(local, "456")
-        .unwrap();
-    assert_eq!(restored.len(), 1);
-    assert_eq!(restored[0].definition.splat_id, record.definition.splat_id);
-    assert!(record.campaign_path(&moved).unwrap().exists());
 }

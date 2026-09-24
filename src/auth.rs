@@ -14,15 +14,6 @@ pub struct Session {
 }
 
 impl Session {
-    #[cfg(test)]
-    pub(crate) fn test_session() -> Self {
-        Self {
-            cookie: Zeroizing::new("test-cookie".into()),
-            token: Zeroizing::new("test-token".into()),
-            refresh_at: Instant::now() + Duration::from_secs(300),
-        }
-    }
-
     pub fn cookie(&self) -> Zeroizing<String> {
         self.cookie.clone()
     }

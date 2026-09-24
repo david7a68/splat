@@ -79,19 +79,11 @@ expands in the campaign's ordered members list; reserved `all` cannot also name
 an individual binding.
 
 External IDs are mappings, not character-sheet snapshots. D&D Beyond campaign
-link and campaign-name cache are stored in the campaign manifest under
-`splat_campaign: {version: 1, dndbeyond_campaign_id: string|null,
-dndbeyond_campaign_name: string|null}`. `splat_name` supplies the display name.
-App configuration retains folder registrations and cached metadata; manifests
-are authoritative on startup and reload. Existing registrations migrate without
-changing UUIDs or replacing authored content.
-
-Optional `splat_storage` sets relative `characters` and `character_cache` paths,
-defaulting to `Characters/D&D Beyond` and `.splat/characters`. These paths stay
-inside the campaign root and reject parent traversal and symlink components.
-Changing paths moves no files. Existing run paths remain in `splat_run_storage`.
-The old app character cache is copied only if the campaign cache is absent;
-the original remains available for recovery.
+link and campaign-name cache live in the campaign manifest as
+`splat_dndbeyond_campaign_id` and `splat_dndbeyond_campaign_name` (nullable strings).
+`splat_name` supplies the local display name. App configuration retains the folder
+registration and cached metadata; startup and reload read the manifest. Existing
+registrations gain these fields without replacing custom paths, selections, or notes.
 Credentials remain in the existing session/keyring handling, never frontmatter,
 logs, source metadata or fingerprints. No new writes to D&D Beyond are authorized.
 
