@@ -183,7 +183,9 @@ impl Party {
         if self.combat.updated {
             if let Some(record) = self.combat.record().cloned() {
                 if let Some(scope) = self.reader.local_scope()
-                    && let Err(error) = Cache::user().and_then(|cache| cache.save(scope, &record))
+                    && let Some(root) = self.reader.campaign_path()
+                    && let Err(error) = Cache::campaign(root, scope, &record.source.campaign_id)
+                        .and_then(|cache| cache.save(scope, &record))
                 {
                     self.reader.warning = Some(error);
                 }
@@ -303,8 +305,8 @@ impl Party {
                 if let Some(modified)=&record.source.source_modified{ui.label(format!("Beyond source modification: {modified}"));}
                 ui.label(format!("Preserved {} source fields and {} computed fields.",record.source.raw.as_object().map_or(0,|o|o.len()),record.source.computed.as_object().map_or(0,|o|o.len())));
                 ui.label("A cache read or a successful fetch does not prove that the two Beyond services represent the same edit. The next check can reconcile delayed results.");
-                if let Some(root) = self.reader.campaign_path() { ui.label(format!("Campaign copy: {}",record.campaign_path(root).display())); }
-                if let Some(scope)=self.reader.local_scope() && let Ok(cache)=Cache::user() && let Ok(path)=cache.path(scope,&record.source.campaign_id,&record.source.character_id){ui.label(format!("Local copy: {}",path.display()));}
+                if let Some(root) = self.reader.campaign_path() && let Ok(path) = record.campaign_path(root) { ui.label(format!("Campaign copy: {}", path.display())); }
+                if let Some(scope)=self.reader.local_scope() && let Some(root)=self.reader.campaign_path() && let Ok(cache)=Cache::for_campaign(root) && let Ok(path)=cache.path(scope,&record.source.campaign_id,&record.source.character_id){ui.label(format!("Local copy: {}",path.display()));}
             }else{details(ui,record,self.page,&self.search);}
         });
     }

@@ -63,45 +63,62 @@ cookie. If removal fails, Splat reports it and lets you retry. It does not
 invalidate the browser session. Network and keyring operations run in a worker;
 credential writes and removals run in order.
 
-This is an internal D&D Beyond endpoint, not a supported public API. The Party viewer fetches and caches character sheets. Campaign details are fetched into memory, with linked names cached in settings. Authentication tests use a local mock server;
+This is an internal D&D Beyond endpoint, not a supported public API. The Party viewer fetches and caches character sheets. Campaign names and links are stored in the campaign folder. Authentication tests use a local mock server;
 a successful live login requires a real cookie entered in the application.
 
 ## User settings and campaigns
 
-The sidebar dropdown selects one active local campaign. Manage campaigns and
-configure their D&D Beyond links in **Settings**. Each local campaign has a UUID,
-name, and absolute folder path. Renaming or relocating it preserves its UUID.
-Removing its entry does not delete files.
+In **Settings**, connect to D&D Beyond, then use **Add from D&D Beyond**:
 
-Settings uses `$XDG_CONFIG_HOME/splat/settings.json`, or
-`~/.config/splat/settings.json` on Linux. Schema version 3 contains
-`campaigns` and `active_campaign_id`. Each campaign has one optional
-`dndbeyond_campaign_id`. The same D&D Beyond campaign cannot be linked to two
-local campaigns. Select **Not linked** to remove a link, or choose another
-campaign to replace it.
+1. Select a campaign from your account. Splat fills in its name and campaign ID.
+2. Select its data folder with **Browse…**, or enter an absolute folder path.
+3. Select **Open campaign**.
 
-In Settings, select a local campaign, then **Refresh D&D Beyond campaigns**.
-Choose its remote campaign from the D&D Beyond link dropdown. Campaigns linked
-elsewhere are disabled. The internal `/api/campaign/stt/user-campaigns` endpoint
-supplies campaign details. The remote ID and last fetched name are saved;
-DM names and player counts stay in memory. Campaign snapshots are not stored; character records are cached separately in local application data.
+Choose an existing folder (the system folder picker can create one). Splat discovers
+an existing campaign manifest anywhere in that folder, or creates `Campaign.md`.
+Cancel does not create files. A folder linked to a different remote campaign,
+multiple manifests, invalid settings, or duplicate registrations must be repaired
+before opening. Campaign and package folders cannot overlap.
 
-Versions 1 and 2 migrate old project records without changing UUIDs, names, paths,
-or unique links. If an old record has multiple remote IDs, or two records share
-one remote ID, loading reports the conflict and blocks writes. Keep at most one
-unique remote ID per old entry in settings.json and reload. The original file
-remains untouched until a successful edit saves version 3.
+Use **Open existing campaign folder** to restore a campaign without connecting to
+D&D Beyond. Its manifest supplies its UUID, name, link, custom paths, content
+selections, and rules. To relocate a campaign, move its whole folder, then open
+that folder in Splat. Missing folders stay registered. **Remove from Splat** removes
+only the registration; files and the saved link stay in the folder.
 
-Settings save with atomic replacement. Invalid or unsupported files are preserved.
-External edits detected before a save require a reload. Session credentials stay
-in the desktop keyring and memory, never in settings JSON.
+The campaign manifest is the source of campaign settings. Its `splat_name` is the
+local display name; `splat_campaign` contains version 1, `dndbeyond_campaign_id`,
+and `dndbeyond_campaign_name`. Credentials stay in the desktop keyring and memory.
+Optional paths can be edited in the manifest:
 
-The linked campaign name refreshes once whenever its link control becomes visible,
-including returning to Settings, scrolling it back into view, switching campaigns,
-or reconnecting. UI repaints do not repeatedly request data. The last successful
-name is cached as `dndbeyond_campaign_name` and shown while offline or refreshing.
-Failed requests retain the cache. Replacing or removing a link clears its name;
-late responses cannot apply an old name to a new link.
+```yaml
+splat_storage:
+  characters: "Characters/D&D Beyond"
+  character_cache: ".splat/characters"
+splat_run_storage:
+  directory: "Encounter Runs"
+```
+
+Character paths must be relative folders inside the campaign, without `..` or
+symbolic links. Run storage retains support for existing absolute paths. Relative
+paths work after a folder move. Changing a path does not move old files. Character
+JSON records, including provider responses, are stored in the campaign cache;
+its default location is `.splat/characters/<local UUID>/<remote ID>/`. The old app
+cache is copied on first use if no campaign cache exists, and is kept for recovery.
+
+App settings use `$XDG_CONFIG_HOME/splat/settings.json`, or
+`~/.config/splat/settings.json` on Linux. They retain folder registrations, cached
+campaign metadata, shared package registrations, and the active selection. On
+startup or **Reload**, existing manifests take precedence over cached metadata.
+Legacy campaigns gain manifest settings while retaining their UUIDs, links,
+custom fields, and note text. Invalid or unsupported files are kept unchanged.
+External edits require a reload before a conflicting save.
+
+Each campaign can have one D&D Beyond link. A remote campaign cannot be linked
+to two registered campaigns. The existing link control can replace or remove a
+link. Remote name refreshes preserve a custom local display name; DM names and
+player counts stay in memory. Failed requests keep the cached remote name, and
+late responses cannot apply a name to a replaced link.
 
 ## Library workspace
 
@@ -130,7 +147,7 @@ entries. Required dependencies are included separately with their reasons, and r
 groups include all members. Whole-module selections include future additions;
 individual selections do not. **Save selections** writes `splat_packages` into the
 campaign manifest while preserving unrelated fields, comments, and note text. A
-campaign without a manifest gets `Campaign.md` on first save, with its existing UUID
+campaign without a manifest gets `Campaign.md` during setup, with its existing UUID
 and the default SRD selection. Missing modules and unresolved references remain visible.
 
 Use **Copy to…** on a library or campaign entry to make an independent copy in a
@@ -170,7 +187,7 @@ The default sides, party and enemies, are hostile to each other.
 
 **Save encounter** writes a Markdown template under `Encounters/` in the campaign
 folder. Select a saved encounter to reopen it. Names can change without changing
-file or participant identities. A new campaign gets a manifest on first save.
+file or participant identities. A new campaign gets a manifest during setup.
 Existing notes and unexposed encounter data are retained. External file changes
 block saving; discard the draft and reload to read them. Unsaved encounters
 survive tab changes and block campaign switching, with a warning on app close.

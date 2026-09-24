@@ -1,5 +1,6 @@
 pub mod auth;
 mod campaign_content;
+mod campaign_folder;
 mod campaigns;
 mod combat_sync;
 mod content_workspace;
@@ -9,6 +10,7 @@ mod dndbeyond;
 mod encounter_run;
 mod encounter_settings;
 mod encounters;
+mod folder_picker;
 mod library;
 mod markdown_view;
 mod party;

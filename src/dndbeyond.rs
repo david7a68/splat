@@ -100,6 +100,9 @@ pub struct DndBeyond {
     visible_last_frame: bool,
     requested_visible_link: Option<(uuid::Uuid, String)>,
     pending_link: Option<(uuid::Uuid, String)>,
+    import_selected: Option<RemoteCampaign>,
+    import_path: String,
+    picker: crate::folder_picker::FolderPicker,
 }
 
 impl DndBeyond {
@@ -123,6 +126,9 @@ impl DndBeyond {
             self.pending_link = None;
             self.requested_visible_link = None;
             self.campaigns.clear();
+            self.import_selected = None;
+            self.import_path.clear();
+            self.picker = Default::default();
             self.loaded = false;
             self.account_epoch = epoch;
             self.error = None;
@@ -177,6 +183,107 @@ impl DndBeyond {
         thread::spawn(move || {
             let _ = tx.send(fetch(session));
             ctx.request_repaint();
+        });
+    }
+
+    pub fn show_import(
+        &mut self,
+        ui: &mut egui::Ui,
+        session: Option<Session>,
+        local: &mut Campaigns,
+    ) {
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.strong("Add from D&D Beyond");
+            let Some(session) = session else {
+                ui.label(
+                    "Connect your account in Settings, or open an existing campaign folder below.",
+                );
+                return;
+            };
+            if !self.loaded && self.pending.is_none() && self.error.is_none() {
+                self.refresh(session.clone(), ui.ctx());
+            }
+            if self.pending.is_some() {
+                ui.spinner();
+            }
+            if ui
+                .add_enabled(
+                    self.pending.is_none(),
+                    egui::Button::new("Refresh campaigns"),
+                )
+                .clicked()
+            {
+                self.refresh(session, ui.ctx());
+            }
+            if let Some(error) = &self.error {
+                ui.colored_label(egui::Color32::LIGHT_RED, error);
+            }
+            if self.loaded && self.campaigns.is_empty() {
+                ui.label("No campaigns returned for this account.");
+            }
+            egui::ComboBox::from_id_salt("import_campaign")
+                .selected_text(
+                    self.import_selected
+                        .as_ref()
+                        .map_or("Select campaign", |c| c.name.as_str()),
+                )
+                .show_ui(ui, |ui| {
+                    for remote in &self.campaigns {
+                        if ui
+                            .selectable_label(
+                                self.import_selected
+                                    .as_ref()
+                                    .is_some_and(|c| c.id == remote.id),
+                                format!("{} · {}", remote.name, remote.id),
+                            )
+                            .clicked()
+                        {
+                            self.import_selected = Some(remote.clone());
+                            self.import_path.clear();
+                            self.picker = Default::default();
+                        }
+                    }
+                });
+            if let Some(remote) = self.import_selected.clone() {
+                ui.label(format!("D&D Beyond campaign ID: {}", remote.id));
+                ui.label("Choose the folder for this campaign's data.");
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.import_path)
+                            .hint_text("Absolute folder path"),
+                    );
+                    self.picker.show(ui, &mut self.import_path);
+                });
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(
+                            !self.import_path.trim().is_empty(),
+                            egui::Button::new("Open campaign"),
+                        )
+                        .clicked()
+                    {
+                        match local.open_folder(
+                            std::path::Path::new(self.import_path.trim()),
+                            Some((&remote.id, &remote.name)),
+                        ) {
+                            Ok(()) => {
+                                self.import_selected = None;
+                                self.import_path.clear();
+                                self.error = None;
+                                self.message = Some(
+                                    "Campaign opened. Settings are stored in its folder.".into(),
+                                );
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                    if ui.button("Cancel").clicked() {
+                        self.import_selected = None;
+                        self.import_path.clear();
+                        self.picker = Default::default();
+                    }
+                });
+            }
         });
     }
 
@@ -307,6 +414,48 @@ impl DndBeyond {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selected_remote_renders_before_any_local_campaign_and_cancel_writes_nothing() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut local = Campaigns::at(temp.path().join("settings.json"));
+        let remote = RemoteCampaign {
+            id: "12".into(),
+            name: "Example campaign".into(),
+            dm_username: None,
+            player_count: None,
+        };
+        let mut beyond = DndBeyond {
+            campaigns: vec![remote.clone()],
+            loaded: true,
+            import_selected: Some(remote),
+            import_path: temp.path().to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(720.0, 600.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    beyond.show_import(ui, Some(Session::test_session()), &mut local)
+                });
+            },
+        );
+        assert!(!output.shapes.is_empty());
+        assert!(local.all().is_empty());
+        assert!(!temp.path().join("Campaign.md").exists());
+        // Disconnect cancels the pending selection just like Cancel does.
+        beyond.poll(&ctx, 1, false, &mut local);
+        assert!(beyond.import_selected.is_none());
+        assert!(beyond.import_path.is_empty());
+        assert!(!temp.path().join("settings.json").exists());
+    }
 
     #[test]
     fn visibility_keeps_request_marker_until_setting_leaves_view() {

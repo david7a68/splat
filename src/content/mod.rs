@@ -786,6 +786,8 @@ pub fn validate(entries: &[Entry]) -> Report {
         "splat_parameters",
         "splat_party",
         "splat_placement",
+        "splat_campaign",
+        "splat_storage",
         "splat_proficiencies",
         "splat_relationships",
         "splat_requires",
