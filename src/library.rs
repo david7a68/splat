@@ -1,4 +1,5 @@
 //! Package authoring is independent of the active campaign.
+mod creature;
 mod presentation;
 use crate::{campaigns::Campaigns, persistence::Module};
 use eframe::egui;
@@ -898,47 +899,59 @@ impl Library {
                     let parsed = Entry::parse(&note.path, &self.draft);
                     let body = parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body);
                     ui.push_id(&note.path, |ui| {
-                        let mut first_data = true;
-                        for (index, section) in presentation::reading_sections(body, note.name())
-                            .iter()
-                            .enumerate()
-                        {
-                            let data = section.body.contains("<!-- splat:");
-                            let label = if section.title == "Source text" {
-                                "Overview".to_owned()
-                            } else if data {
-                                format!("{} data", section.title)
-                            } else {
-                                section.title.clone()
-                            };
-                            let open = !data || first_data;
-                            if data {
-                                first_data = false;
-                            }
-                            ui.add_space(if index == 0 { 14.0 } else { 10.0 });
-                            egui::CollapsingHeader::new(
-                                egui::RichText::new(label).size(17.0).strong(),
-                            )
-                            .id_salt(("reading_section", index))
-                            .default_open(open)
-                            .show_unindented(ui, |ui| {
-                                ui.add_space(5.0);
-                                if data {
-                                    egui::Frame::new()
-                                        .fill(ui.visuals().faint_bg_color)
-                                        .inner_margin(10.0)
-                                        .corner_radius(4.0)
-                                        .show(ui, |ui| {
-                                            ui.set_width(ui.available_width());
-                                            crate::markdown_view::show_compact(ui, section.body);
-                                        });
-                                } else if self.module.is_none() && section.title == "Source text" {
-                                    let readable = presentation::overview_markdown(section.body);
-                                    crate::markdown_view::show(ui, &readable);
+                        let sections = presentation::reading_sections(body, note.name());
+                        let styled = parsed
+                            .as_ref()
+                            .ok()
+                            .filter(|entry| creature::supports(entry, &sections));
+                        if let Some(entry) = styled {
+                            creature::show(ui, entry, &sections);
+                        } else {
+                            let mut first_data = true;
+                            for (index, section) in sections.iter().enumerate() {
+                                let data = section.body.contains("<!-- splat:");
+                                let label = if section.title == "Source text" {
+                                    "Overview".to_owned()
+                                } else if data {
+                                    format!("{} data", section.title)
                                 } else {
-                                    crate::markdown_view::show(ui, section.body);
+                                    section.title.clone()
+                                };
+                                let open = !data || first_data;
+                                if data {
+                                    first_data = false;
                                 }
-                            });
+                                ui.add_space(if index == 0 { 14.0 } else { 10.0 });
+                                egui::CollapsingHeader::new(
+                                    egui::RichText::new(label).size(17.0).strong(),
+                                )
+                                .id_salt(("reading_section", index))
+                                .default_open(open)
+                                .show_unindented(ui, |ui| {
+                                    ui.add_space(5.0);
+                                    if data {
+                                        egui::Frame::new()
+                                            .fill(ui.visuals().faint_bg_color)
+                                            .inner_margin(10.0)
+                                            .corner_radius(4.0)
+                                            .show(ui, |ui| {
+                                                ui.set_width(ui.available_width());
+                                                crate::markdown_view::show_compact(
+                                                    ui,
+                                                    section.body,
+                                                );
+                                            });
+                                    } else if self.module.is_none()
+                                        && section.title == "Source text"
+                                    {
+                                        let readable =
+                                            presentation::overview_markdown(section.body);
+                                        crate::markdown_view::show(ui, &readable);
+                                    } else {
+                                        crate::markdown_view::show(ui, section.body);
+                                    }
+                                });
+                            }
                         }
                         ui.add_space(16.0);
                         ui.separator();
@@ -1295,6 +1308,82 @@ mod tests {
             assert!(!text.contains("Original layout:"), "{text}");
         }
     }
+    #[test]
+    fn creature_read_view_shows_one_styled_stat_block() {
+        let path = "definitions/creatures/vampire_familiar.md";
+        let source = content::definitions::source_file(path).unwrap();
+        let entry = Entry::parse(path, source).unwrap();
+        for width in [390.0, 800.0] {
+            let mut library = Library {
+                loaded: Some(Loaded {
+                    notes: vec![Note {
+                        path: path.into(),
+                        text: source.into(),
+                        entry: Some(entry.clone()),
+                        error: None,
+                    }],
+                    diagnostics: vec![],
+                    ..Default::default()
+                }),
+                selected: Some(0),
+                draft: source.into(),
+                ..Default::default()
+            };
+            let ctx = egui::Context::default();
+            let mut rendered = String::new();
+            for _ in 0..2 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 2400.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default()
+                            .show(ctx, |ui| library.editor(ui, "Definition · creature"));
+                    },
+                );
+                rendered = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+            assert_eq!(rendered.matches("65 (10d8 + 20)").count(), 1, "{rendered}");
+            for expected in [
+                "ARMOR CLASS",
+                "STR",
+                "Save +5",
+                "Vampiric Connection.",
+                "Umbral Dagger.",
+                "Deathless Agility.",
+                "except from its vampire master",
+                "Paralyzed",
+            ] {
+                assert!(
+                    rendered.contains(expected),
+                    "Missing {expected}: {rendered}"
+                );
+            }
+            for duplicate in [
+                "Creature data",
+                "Abilities data",
+                "Stats data",
+                "MOD SAVE",
+                "AC 15",
+            ] {
+                assert!(!rendered.contains(duplicate), "{rendered}");
+            }
+            assert_eq!(library.draft, source);
+        }
+    }
+
     #[test]
     fn create_register_and_edit_preserves_identity_and_external_changes() {
         let temp = tempfile::tempdir().unwrap();
