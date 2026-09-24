@@ -15,6 +15,7 @@ mod party;
 mod party_stream;
 mod party_sync;
 mod persistence;
+mod reader_style;
 mod settings;
 
 use eframe::egui;

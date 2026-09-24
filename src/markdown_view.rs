@@ -3,18 +3,20 @@ use eframe::egui::{self, text::LayoutJob};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
-    show_with_density(ui, markdown, false);
+    show_with_density(ui, markdown, false, false);
 }
 
-/// Dense structured library details; ordinary Markdown elsewhere keeps its layout.
-pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
+/// Library Markdown uses the shared accent and compact field rows when requested.
+pub fn show_reader(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = 3.0;
-        show_with_density(ui, markdown, true);
+        if dense {
+            ui.spacing_mut().item_spacing.y = 3.0;
+        }
+        show_with_density(ui, markdown, dense, true);
     });
 }
 
-fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
+fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, styled: bool) {
     let mut job = LayoutJob::default();
     let mut heading = None;
     let mut inventory_table = false;
@@ -60,7 +62,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             Event::End(TagEnd::Table) => {
                 if let Some(rows) = table.take() {
                     if dense && rows.first().is_some_and(|row| row == &["Field", "Value"]) {
-                        show_fields(ui, &rows[1..]);
+                        show_fields(ui, &rows[1..], styled);
                         inventory_table = false;
                         continue;
                     }
@@ -111,7 +113,11 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                                         let text = egui::RichText::new(cell);
                                         ui.add(
                                             egui::Label::new(if i == 0 {
-                                                text.strong()
+                                                text.strong().color(if styled {
+                                                    crate::reader_style::ACCENT
+                                                } else {
+                                                    ui.visuals().strong_text_color()
+                                                })
                                             } else {
                                                 text
                                             })
@@ -150,7 +156,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             }
             Event::End(TagEnd::Heading(level)) => {
                 flush(ui, &mut job, &mut target);
-                if level == pulldown_cmark::HeadingLevel::H2 {
+                if level == pulldown_cmark::HeadingLevel::H2
+                    || (styled && !dense && level == pulldown_cmark::HeadingLevel::H3)
+                {
                     ui.separator();
                     ui.add_space(3.0);
                 }
@@ -215,6 +223,13 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 let font_id = if let Some(level) = heading {
                     egui::FontId::proportional(if dense {
                         14.0
+                    } else if styled
+                        && matches!(
+                            level,
+                            pulldown_cmark::HeadingLevel::H2 | pulldown_cmark::HeadingLevel::H3
+                        )
+                    {
+                        crate::reader_style::SECTION_SIZE
                     } else {
                         match level {
                             pulldown_cmark::HeadingLevel::H1 => 30.0,
@@ -235,6 +250,8 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                         font_id,
                         color: if in_link {
                             ui.visuals().hyperlink_color
+                        } else if styled && heading.is_some() {
+                            crate::reader_style::ACCENT
                         } else if strong || heading.is_some() {
                             ui.visuals().strong_text_color()
                         } else {
@@ -255,7 +272,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     flush(ui, &mut job, &mut target);
 }
 
-fn show_fields(ui: &mut egui::Ui, rows: &[Vec<String>]) {
+fn show_fields(ui: &mut egui::Ui, rows: &[Vec<String>], styled: bool) {
     let available = ui.available_width();
     let label_width = (available * 0.25).clamp(100.0, 145.0);
     let value_width = (available - label_width - 16.0).max(70.0);
@@ -278,9 +295,11 @@ fn show_fields(ui: &mut egui::Ui, rows: &[Vec<String>]) {
                     field_cell(
                         ui,
                         label_width,
-                        egui::RichText::new(field)
-                            .size(13.0)
-                            .color(ui.visuals().weak_text_color()),
+                        egui::RichText::new(field).size(13.0).color(if styled {
+                            crate::reader_style::ACCENT
+                        } else {
+                            ui.visuals().weak_text_color()
+                        }),
                     );
                     field_cell(ui, value_width, egui::RichText::new(value).size(13.0));
                     ui.end_row();

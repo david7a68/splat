@@ -2,6 +2,7 @@
 mod class;
 mod creature;
 mod presentation;
+mod reader;
 use crate::{campaigns::Campaigns, persistence::Module};
 use eframe::egui;
 use presentation::Section;
@@ -992,41 +993,12 @@ impl Library {
                                 );
                             });
                         } else {
-                            let class_entry =
-                                parsed.as_ref().ok().filter(|entry| class::supports(entry));
-                            for (index, section) in sections.iter().enumerate() {
-                                let data = section.body.contains("<!-- splat:");
-                                let label = if section.title == "Source text" {
-                                    "Overview".to_owned()
-                                } else {
-                                    section.title.clone()
-                                };
-                                if data {
-                                    continue;
-                                }
-                                ui.add_space(if index == 0 { 14.0 } else { 10.0 });
-                                egui::CollapsingHeader::new(
-                                    egui::RichText::new(label).size(17.0).strong(),
-                                )
-                                .id_salt(("reading_section", index))
-                                .default_open(true)
-                                .show_unindented(ui, |ui| {
-                                    ui.add_space(5.0);
-                                    let class_source = section.title == "Source text"
-                                        && class_entry.is_some()
-                                        && class::show_source(ui, section.body, note.name());
-                                    if class_source {
-                                        return;
-                                    }
-                                    if self.module.is_none() && section.title == "Source text" {
-                                        let readable =
-                                            presentation::overview_markdown(section.body);
-                                        crate::markdown_view::show(ui, &readable);
-                                    } else {
-                                        crate::markdown_view::show(ui, section.body);
-                                    }
-                                });
-                            }
+                            reader::show(
+                                ui,
+                                parsed.as_ref().ok(),
+                                &sections,
+                                self.module.is_none(),
+                            );
                         }
                         if let Some(entry) =
                             parsed.as_ref().ok().filter(|entry| class::supports(entry))
@@ -1050,7 +1022,9 @@ impl Library {
                                     .filter(|section| section.body.contains("<!-- splat:"))
                                 {
                                     ui.collapsing(&section.title, |ui| {
-                                        crate::markdown_view::show_compact(ui, section.body);
+                                        crate::reader_style::card(ui, 10, |ui| {
+                                            crate::reader_style::markdown(ui, section.body, true);
+                                        });
                                     });
                                 }
                             });

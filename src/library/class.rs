@@ -1,5 +1,6 @@
 //! Class reading layout. Keep source wording and raw definitions available.
 use super::{Note, presentation};
+use crate::reader_style as style;
 use eframe::egui;
 use splat::content::Entry;
 
@@ -58,13 +59,13 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     if rows.is_empty() {
         return false;
     }
-    ui.heading("Core traits");
+    style::section_heading(ui, "Core traits");
     ui.add_space(6.0);
     for (label, value) in rows {
         let value = presentation::overview_markdown(&value).trim().to_owned();
         if label == "Starting Equipment" {
             ui.add_space(10.0);
-            ui.heading("Starting equipment");
+            style::section_heading(ui, "Starting equipment");
             // Preserve the choice instruction and each option, including classes
             // with three alternatives. Do not split on punctuation inside items.
             let value = value
@@ -72,14 +73,14 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
                 .replace("; or (B)", "\n\n- **B:**")
                 .replace("; (B)", "\n\n- **B:**")
                 .replace("; or (C)", "\n\n- **C:**");
-            crate::markdown_view::show(ui, &value);
+            style::markdown(ui, &value, false);
         } else {
             let label = if label == "Saving Throw" {
                 "Saving throw proficiencies"
             } else {
                 label
             };
-            crate::markdown_view::show(ui, &format!("**{label}:** {value}"));
+            style::markdown(ui, &format!("**{label}:** {value}"), false);
             ui.add_space(5.0);
         }
     }
@@ -87,7 +88,11 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
         ui.collapsing("Additional source text", |ui| {
             // Keep printed progression rows separate instead of joining a table
             // into prose; the named feature list is shown below.
-            crate::markdown_view::show(ui, &remainder.lines().collect::<Vec<_>>().join("  \n"));
+            style::markdown(
+                ui,
+                &remainder.lines().collect::<Vec<_>>().join("  \n"),
+                false,
+            );
         });
     }
     true
@@ -156,7 +161,7 @@ pub(super) fn show_features(
         return None;
     }
     ui.add_space(14.0);
-    ui.heading("Class features");
+    style::section_heading(ui, "Class features");
     ui.add_space(6.0);
     let mut selected = None;
     for feature in features {
