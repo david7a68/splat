@@ -16,6 +16,47 @@ impl Cache {
             .ok_or("Could not locate local application data.")?;
         Ok(Self::at(dirs.data_local_dir().join("characters")))
     }
+    /// Use portable storage, copying the old application cache only on first use.
+    pub fn campaign(root: &Path, local: Uuid, remote: &str) -> Result<Self, String> {
+        let storage = crate::campaign_storage::Storage::for_link(root, Some(local), remote)?;
+        let cache = Self::at(crate::campaign_storage::relative_directory(
+            root,
+            &storage.character_cache,
+        )?);
+        let legacy = Self::user()?;
+        cache.migrate_from(&legacy, local, remote)?;
+        Ok(cache)
+    }
+    pub fn for_campaign(root: &Path) -> Result<Self, String> {
+        let storage = crate::campaign_storage::Storage::load(root)?;
+        Ok(Self::at(crate::campaign_storage::relative_directory(
+            root,
+            &storage.character_cache,
+        )?))
+    }
+    pub fn migrate_from(&self, legacy: &Self, local: Uuid, remote: &str) -> Result<(), String> {
+        let destination = self.directory(local, remote)?;
+        let source = legacy.directory(local, remote)?;
+        if destination.exists() || !source.is_dir() {
+            return Ok(());
+        }
+        // Validate before copying; retain the original cache for recovery.
+        legacy.load_all(local, remote)?;
+        let parent = destination.parent().ok_or("Invalid cache folder.")?;
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        let staging = tempfile::tempdir_in(parent).map_err(|e| e.to_string())?;
+        for item in fs::read_dir(source).map_err(|e| e.to_string())? {
+            let item = item.map_err(|e| e.to_string())?;
+            if item.file_type().map_err(|e| e.to_string())?.is_file() {
+                fs::copy(item.path(), staging.path().join(item.file_name()))
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        if !destination.exists() {
+            fs::rename(staging.path(), &destination).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
     pub fn at(root: PathBuf) -> Self {
         Self { root }
     }
@@ -140,4 +181,34 @@ fn read(path: &Path) -> Result<EntitySnapshot, String> {
         .map_err(|_| "Invalid or unsupported character cache. The file was kept.")?;
     record.validate()?;
     Ok(record)
+}
+
+#[cfg(test)]
+mod portable_tests {
+    use super::*;
+    #[test]
+    fn migration_preserves_roster_and_never_replaces_local_data() {
+        let old = tempfile::tempdir().unwrap();
+        let new = tempfile::tempdir().unwrap();
+        let legacy = Cache::at(old.path().into());
+        let portable = Cache::at(new.path().into());
+        let local = Uuid::new_v4();
+        legacy.save_roster(local, "12", &[]).unwrap();
+        portable.migrate_from(&legacy, local, "12").unwrap();
+        let target = portable
+            .directory(local, "12")
+            .unwrap()
+            .join("roster-index");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "[]");
+        assert!(
+            legacy
+                .directory(local, "12")
+                .unwrap()
+                .join("roster-index")
+                .exists()
+        );
+        fs::write(&target, "[\"42\"]").unwrap();
+        portable.migrate_from(&legacy, local, "12").unwrap();
+        assert_eq!(fs::read_to_string(target).unwrap(), "[\"42\"]");
+    }
 }

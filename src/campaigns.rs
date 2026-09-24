@@ -11,6 +11,7 @@ pub struct Campaigns {
     editing: Option<Uuid>,
     name: String,
     path: String,
+    picker: crate::folder_picker::FolderPicker,
 }
 
 impl Default for Campaigns {
@@ -23,6 +24,7 @@ impl Default for Campaigns {
             editing: None,
             name: String::new(),
             path: String::new(),
+            picker: Default::default(),
         };
         match Store::user() {
             Ok(store) => {
@@ -38,6 +40,56 @@ impl Default for Campaigns {
 impl Campaigns {
     pub fn all(&self) -> &[Campaign] {
         &self.data.campaigns
+    }
+
+    pub fn open_folder(
+        &mut self,
+        path: &std::path::Path,
+        remote: Option<(&str, &str)>,
+    ) -> Result<(), String> {
+        let mut campaign = crate::campaign_folder::open(path, remote)?;
+        if let Some(entry) = splat::campaign_storage::discover(&campaign.path)? {
+            let namespace = entry.fields.get("splat_namespace");
+            for root in self
+                .data
+                .campaigns
+                .iter()
+                .filter(|c| c.id != campaign.id)
+                .map(|c| &c.path)
+                .chain(self.data.modules.iter().map(|m| &m.path))
+            {
+                if !root.exists() {
+                    continue;
+                }
+                let (entries, _) = splat::content::read_directory(root)?;
+                if entries.iter().any(|e| {
+                    matches!(e.kind.as_str(), "campaign" | "package")
+                        && e.fields.get("splat_namespace") == namespace
+                }) {
+                    return Err("This campaign namespace is already used by another registered campaign or package.".into());
+                }
+            }
+        }
+        let mut data = self.data.clone();
+        if let Some(old) = data.campaigns.iter_mut().find(|c| c.id == campaign.id) {
+            if old.path.canonicalize().unwrap_or_else(|_| old.path.clone()) != campaign.path
+                && old.path.exists()
+            {
+                return Err("This campaign is already registered at another folder. Remove that registration first.".into());
+            }
+            if remote.is_none()
+                && splat::campaign_storage::discover(&campaign.path)?
+                    .is_some_and(|entry| !entry.fields.contains_key("splat_campaign"))
+            {
+                campaign.dndbeyond_campaign_id = old.dndbeyond_campaign_id.clone();
+                campaign.dndbeyond_campaign_name = old.dndbeyond_campaign_name.clone();
+            }
+            *old = campaign.clone();
+        } else {
+            data.campaigns.push(campaign.clone());
+        }
+        data.active_campaign_id = Some(campaign.id);
+        self.persist(data)
     }
 
     pub fn modules(&self) -> &[crate::persistence::Module] {
@@ -96,6 +148,7 @@ impl Campaigns {
             editing: None,
             name: String::new(),
             path: String::new(),
+            picker: Default::default(),
         }
     }
 
@@ -108,7 +161,18 @@ impl Campaigns {
     fn reload(&mut self) {
         if let Some(store) = &mut self.store {
             match store.load() {
-                Ok(data) => {
+                Ok(mut data) => {
+                    let result = data
+                        .campaigns
+                        .iter_mut()
+                        .try_for_each(crate::campaign_folder::reload)
+                        .and_then(|()| data.validate());
+                    if let Err(error) = result {
+                        self.data = data;
+                        self.error = Some(error);
+                        self.writable = false;
+                        return;
+                    }
                     self.data = data;
                     self.error = None;
                     self.writable = true;
@@ -123,7 +187,17 @@ impl Campaigns {
     }
 
     fn persist(&mut self, data: UserData) -> Result<(), String> {
+        if !self.writable {
+            return Err("Reload valid campaign settings before saving.".into());
+        }
         let store = self.store.as_mut().ok_or("Settings are unavailable.")?;
+        store.check_save(&data)?;
+        for campaign in &data.campaigns {
+            let previous = self.data.campaigns.iter().find(|c| c.id == campaign.id);
+            if previous != Some(campaign) {
+                crate::campaign_folder::save(campaign, previous)?;
+            }
+        }
         store.save(&data)?;
         self.data = data;
         self.error = None;
@@ -193,6 +267,9 @@ impl Campaigns {
     }
 
     pub fn active_campaign(&self) -> Option<Campaign> {
+        if !self.writable {
+            return None;
+        }
         self.data
             .campaigns
             .iter()
@@ -264,6 +341,7 @@ impl Campaigns {
                 ui.push_id("settings_campaign_selector", |ui| self.selector(ui));
             });
             ui.add_space(8.0);
+            dndbeyond.show_import(ui, session.clone(), self);
             if let Some(campaign) = self.active_campaign() {
                 egui::Frame::group(ui.style()).inner_margin(12.0).show(ui, |ui| {
                     ui.set_min_width((ui.available_width() - 2.0).max(0.0));
@@ -294,8 +372,8 @@ impl Campaigns {
                     ui.add_space(8.0);
                     ui.collapsing("Campaign details", |ui| {
                         ui.label(format!("ID: {}", campaign.id));
-                        if let Some(store) = &self.store { ui.weak(format!("Settings: {}", store.path.display())); }
-                        if ui.small_button("Remove from Splat").on_hover_text("Removes this entry and link. The campaign folder and its files are kept.").clicked() {
+                        ui.weak("Campaign settings are stored in the campaign manifest.");
+                        if ui.small_button("Remove from Splat").on_hover_text("Removes this registration. The campaign folder, link, and files are kept.").clicked() {
                             let mut data = self.data.clone();
                             data.campaigns.retain(|c| c.id != campaign.id);
                             data.active_campaign_id = None;
@@ -317,15 +395,25 @@ impl Campaigns {
                 ui.add(egui::TextEdit::singleline(&mut self.name).hint_text("Campaign name").desired_width(ui.available_width()));
                 ui.end_row();
                 ui.label("Folder");
-                ui.add(egui::TextEdit::singleline(&mut self.path).hint_text("Absolute folder path").desired_width(ui.available_width()));
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.path).hint_text("Absolute folder path").desired_width((ui.available_width() - 90.0).max(100.0)));
+                    self.picker.show(ui, &mut self.path);
+                });
                 ui.end_row();
             });
+            if self.editing.is_none() && ui.button("Open existing campaign folder").clicked() {
+                let path = PathBuf::from(self.path.trim());
+                match self.open_folder(&path, None) {
+                    Ok(()) => self.clear_form(),
+                    Err(error) => self.error = Some(error),
+                }
+            }
             ui.horizontal(|ui| {
                 if ui.button("Save campaign").clicked() {
                     let path = PathBuf::from(self.path.trim());
-                    if self.name.trim().is_empty() || !path.is_absolute() {
+                    if self.name.trim().is_empty() || !path.is_absolute() || !path.is_dir() {
                         self.error =
-                            Some("Enter a campaign name and an absolute folder path.".into());
+                            Some("Enter a campaign name and choose an existing absolute folder path.".into());
                     } else {
                         let mut data = self.data.clone();
                         if let Some(campaign) = data
@@ -333,9 +421,25 @@ impl Campaigns {
                             .iter_mut()
                             .find(|p| Some(p.id) == self.editing)
                         {
+                            if campaign.path != path {
+                                match crate::campaign_folder::open(&path, None) {
+                                    Ok(found) if found.id == campaign.id && !campaign.path.exists() => *campaign = found,
+                                    _ => {
+                                        self.error = Some("To relocate a campaign, move its folder first, then select that folder. Its manifest must keep the same ID.".into());
+                                        return;
+                                    }
+                                }
+                            }
                             campaign.name = self.name.trim().into();
-                            campaign.path = path;
                         } else {
+                            let existing = splat::campaign_storage::discover(&path);
+                            if !matches!(existing, Ok(None)) {
+                                match self.open_folder(&path, None) {
+                                    Ok(()) => self.clear_form(),
+                                    Err(error) => self.error = Some(error),
+                                }
+                                return;
+                            }
                             let id = Uuid::new_v4();
                             data.campaigns.push(Campaign {
                                 id,
@@ -362,6 +466,91 @@ mod tests {
     use super::*;
 
     #[test]
+    fn fresh_setup_reopens_moved_folder_and_rejects_duplicate_links_before_writing() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("campaign");
+        std::fs::create_dir(&root).unwrap();
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns
+            .open_folder(&root, Some(("12", "Remote name")))
+            .unwrap();
+        let original = campaigns.active_campaign().unwrap();
+        let other = temp.path().join("other");
+        std::fs::create_dir(&other).unwrap();
+        assert!(
+            campaigns
+                .open_folder(&other, Some(("012", "Duplicate")))
+                .is_err()
+        );
+        assert!(!other.join("Campaign.md").exists());
+        assert_eq!(campaigns.active_campaign().unwrap(), original);
+        let moved = temp.path().join("moved");
+        std::fs::rename(&root, &moved).unwrap();
+        campaigns.reload();
+        assert_eq!(campaigns.all().len(), 1); // Missing roots remain registered.
+        campaigns.open_folder(&moved, None).unwrap();
+        assert_eq!(campaigns.active_campaign().unwrap().id, original.id);
+        let mut fresh = Campaigns::at(temp.path().join("fresh-settings.json"));
+        fresh.open_folder(&moved, None).unwrap();
+        assert_eq!(fresh.active_campaign(), campaigns.active_campaign());
+    }
+
+    #[test]
+    fn relocating_a_legacy_manifest_preserves_the_registered_link() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("original");
+        std::fs::create_dir(&root).unwrap();
+        let c = crate::campaign_folder::open(&root, Some(("12", "Remote name"))).unwrap();
+        let document = crate::content_workspace::CampaignDocument::load(&c).unwrap();
+        std::fs::write(root.join("Campaign.md"), document.text).unwrap();
+        let settings = temp.path().join("settings.json");
+        let mut store = Store::at(settings.clone());
+        let mut data = store.load().unwrap();
+        data.campaigns.push(c.clone());
+        store.save(&data).unwrap();
+        let moved = temp.path().join("moved");
+        std::fs::rename(&root, &moved).unwrap();
+        let mut campaigns = Campaigns::at(settings);
+        campaigns.open_folder(&moved, None).unwrap();
+        let restored = crate::campaign_folder::open(&moved, None).unwrap();
+        assert_eq!(restored.id, c.id);
+        assert_eq!(restored.dndbeyond_campaign_id.as_deref(), Some("12"));
+    }
+
+    #[test]
+    fn invalid_manifest_reload_stops_active_campaign_work() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("campaign");
+        std::fs::create_dir(&root).unwrap();
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns
+            .open_folder(&root, Some(("12", "Remote name")))
+            .unwrap();
+        std::fs::write(root.join("Campaign.md"), "---\nsplat_id: [\n---\n").unwrap();
+        campaigns.reload();
+        assert!(campaigns.active_campaign().is_none());
+        assert!(campaigns.error.is_some());
+        assert_eq!(campaigns.all().len(), 1);
+    }
+
+    #[test]
+    fn failed_registry_preflight_leaves_folder_and_selection_unchanged() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("campaign");
+        std::fs::create_dir(&root).unwrap();
+        let settings = temp.path().join("settings.json");
+        let mut campaigns = Campaigns::at(settings.clone());
+        std::fs::write(settings, "external edit").unwrap();
+        assert!(
+            campaigns
+                .open_folder(&root, Some(("12", "Remote name")))
+                .is_err()
+        );
+        assert!(!root.join("Campaign.md").exists());
+        assert!(campaigns.active_campaign().is_none());
+    }
+
+    #[test]
     fn one_to_one_links_replace_and_unlink_without_changing_other_campaigns() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
@@ -370,10 +559,12 @@ mod tests {
         let first = Uuid::new_v4();
         let second = Uuid::new_v4();
         for id in [first, second] {
+            let folder = dir.path().join(id.to_string());
+            std::fs::create_dir(&folder).unwrap();
             data.campaigns.push(Campaign {
                 id,
                 name: "Campaign".into(),
-                path: dir.path().into(),
+                path: folder,
                 dndbeyond_campaign_id: None,
                 dndbeyond_campaign_name: None,
             });
@@ -386,6 +577,7 @@ mod tests {
             editing: None,
             name: String::new(),
             path: String::new(),
+            picker: Default::default(),
         };
         campaigns.select(Some(first));
         campaigns.link(Some("12".into())).unwrap();

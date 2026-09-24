@@ -45,7 +45,7 @@ impl Default for UserData {
 }
 
 impl UserData {
-    fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), String> {
         if self.version != 3 {
             return Err(
                 "This settings version is not supported. The file has not been changed.".into(),
@@ -85,6 +85,21 @@ impl UserData {
                 if !remote_ids.insert(numeric) {
                     return Err("A D&D Beyond campaign can only be linked to one local campaign. Remove the duplicate link before saving.".into());
                 }
+            }
+        }
+        for (i, campaign) in self.campaigns.iter().enumerate() {
+            let root = campaign
+                .path
+                .canonicalize()
+                .unwrap_or_else(|_| campaign.path.clone());
+            if self.campaigns[..i].iter().any(|c| {
+                let other = c.path.canonicalize().unwrap_or_else(|_| c.path.clone());
+                root.starts_with(&other) || other.starts_with(&root)
+            }) {
+                return Err(
+                    "Keep each campaign in a separate folder, outside other campaign folders."
+                        .into(),
+                );
             }
         }
         for (i, module) in self.modules.iter().enumerate() {
@@ -208,7 +223,7 @@ impl Store {
         Ok(data)
     }
 
-    pub fn save(&mut self, data: &UserData) -> Result<(), String> {
+    pub(crate) fn check_save(&self, data: &UserData) -> Result<(), String> {
         if !self.loaded {
             return Err("Reload a valid settings file before saving changes.".into());
         }
@@ -216,6 +231,11 @@ impl Store {
         if self.read()? != self.baseline {
             return Err("Settings changed outside this window. Reload them before saving.".into());
         }
+        Ok(())
+    }
+
+    pub fn save(&mut self, data: &UserData) -> Result<(), String> {
+        self.check_save(data)?;
         let parent = self.path.parent().ok_or("Invalid settings directory.")?;
         fs::create_dir_all(parent).map_err(|_| "Could not create the settings directory.")?;
         let mut bytes =
@@ -324,8 +344,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut data = UserData {
             campaigns: vec![
-                campaign(Uuid::new_v4(), dir.path().into(), Some("12")),
-                campaign(Uuid::new_v4(), dir.path().into(), Some("012")),
+                campaign(Uuid::new_v4(), dir.path().join("one"), Some("12")),
+                campaign(Uuid::new_v4(), dir.path().join("two"), Some("012")),
             ],
             ..Default::default()
         };
