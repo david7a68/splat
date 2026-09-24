@@ -14,6 +14,7 @@ use uuid::Uuid;
 struct Snapshot {
     document: CampaignDocument,
     catalogue: Catalogue,
+    local_entries: std::sync::OnceLock<Vec<Uuid>>,
 }
 #[derive(Default)]
 pub struct CampaignContent {
@@ -23,6 +24,7 @@ pub struct CampaignContent {
     saved_selections: Vec<PackageSelection>,
     module: Option<Uuid>,
     search: String,
+    entry_matches: Option<(Uuid, String, Vec<Uuid>)>,
     local: bool,
     selected: Option<Uuid>,
     baseline: String,
@@ -69,6 +71,7 @@ impl CampaignContent {
         let modules = campaigns.modules().to_vec();
         self.active = Some(campaign.clone());
         self.snapshot = None;
+        self.entry_matches = None;
         self.selected = None;
         self.draft.clear();
         self.baseline.clear();
@@ -82,6 +85,7 @@ impl CampaignContent {
                 Ok(Snapshot {
                     document,
                     catalogue: Catalogue::load(&modules, Some(&campaign))?,
+                    local_entries: Default::default(),
                 })
             });
             let _ = tx.send(result);
@@ -433,43 +437,63 @@ impl CampaignContent {
                     .desired_width(ui.available_width()),
             );
             let query = self.search.to_lowercase();
-            let mut ids: Vec<_> = entry_ids
-                .iter()
-                .copied()
-                .filter(|id| {
-                    catalogue.entries[id]
-                        .entry
-                        .name
-                        .to_lowercase()
-                        .contains(&query)
+            if self
+                .entry_matches
+                .as_ref()
+                .is_none_or(|(module_id, cached_query, _)| {
+                    *module_id != module.id || *cached_query != query
                 })
-                .collect();
-            ids.sort_by_key(|id| catalogue.entries[id].entry.name.to_lowercase());
+            {
+                let mut ids: Vec<_> = entry_ids
+                    .iter()
+                    .copied()
+                    .filter(|id| {
+                        catalogue.entries[id]
+                            .entry
+                            .name
+                            .to_lowercase()
+                            .contains(&query)
+                    })
+                    .collect();
+                ids.sort_by_cached_key(|id| catalogue.entries[id].entry.name.to_lowercase());
+                self.entry_matches = Some((module.id, query.clone(), ids));
+            }
+            let ids = &self.entry_matches.as_ref().unwrap().2;
             let mut toggled = None;
-            egui::ScrollArea::vertical().show_rows(ui, 26.0, ids.len(), |ui, range| {
-                for index in range {
-                    let id = ids[index];
-                    let entry = &catalogue.entries[&id].entry;
-                    let required = closure.required.contains_key(&id);
-                    let mut selected = closure.direct.contains(&id) || required;
-                    ui.horizontal(|ui| {
-                        ui.set_min_height(26.0);
-                        if ui
-                            .add_enabled(!required, egui::Checkbox::new(&mut selected, &entry.name))
-                            .changed()
-                        {
-                            toggled = Some((id, selected));
-                        }
-                        ui.weak(&entry.kind);
-                        if let Some(reasons) = closure.required.get(&id) {
-                            ui.weak("Required").on_hover_text(format!(
-                                "Required by {}",
-                                reasons.iter().cloned().collect::<Vec<_>>().join(", ")
-                            ));
-                        }
-                    });
-                }
-            });
+            egui::ScrollArea::vertical()
+                .id_salt(("package_entries", module.id, &query))
+                .show_rows(ui, 26.0, ids.len(), |ui, range| {
+                    for index in range {
+                        let id = ids[index];
+                        let entry = &catalogue.entries[&id].entry;
+                        let required = closure.required.contains_key(&id);
+                        let mut selected = closure.direct.contains(&id) || required;
+                        ui.push_id(id, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                                ui.set_min_height(26.0);
+                                if ui
+                                    .add_enabled(
+                                        !required,
+                                        egui::Checkbox::new(&mut selected, &entry.name),
+                                    )
+                                    .on_hover_text(&entry.name)
+                                    .on_disabled_hover_text(&entry.name)
+                                    .changed()
+                                {
+                                    toggled = Some((id, selected));
+                                }
+                                ui.weak(&entry.kind);
+                                if let Some(reasons) = closure.required.get(&id) {
+                                    ui.weak("Required").on_hover_text(format!(
+                                        "Required by {}",
+                                        reasons.iter().cloned().collect::<Vec<_>>().join(", ")
+                                    ));
+                                }
+                            });
+                        });
+                    }
+                });
             if let Some((id, checked)) = toggled {
                 let selection_index = document
                     .selections
@@ -511,14 +535,18 @@ impl CampaignContent {
         let campaign = &snapshot.document.campaign;
         let dirty = self.draft != self.baseline;
         ui.weak("Independent campaign entries. Shared module originals remain unchanged.");
-        let mut entries: Vec<_> = snapshot
-            .catalogue
-            .entries
-            .values()
-            .filter(|e| e.private && !["campaign", "package"].contains(&e.entry.kind.as_str()))
-            .map(|e| &e.entry)
-            .collect();
-        entries.sort_by_key(|e| e.name.to_lowercase());
+        let entry_ids = snapshot.local_entries.get_or_init(|| {
+            let mut ids: Vec<_> = snapshot
+                .catalogue
+                .entries
+                .values()
+                .filter(|e| e.private && !["campaign", "package"].contains(&e.entry.kind.as_str()))
+                .map(|e| e.entry.id)
+                .collect();
+            ids.sort_by_cached_key(|id| snapshot.catalogue.entries[id].entry.name.to_lowercase());
+            ids
+        });
+        let entries = entry_ids;
         if entries.is_empty() {
             ui.label("No campaign entries yet. Copy an entry from Library to this campaign.");
             return;
@@ -526,37 +554,51 @@ impl CampaignContent {
         egui::SidePanel::left("local_entries")
             .default_width(235.0)
             .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for entry in &entries {
-                        if ui
-                            .add_enabled(
-                                !dirty,
-                                egui::Button::selectable(
-                                    self.selected == Some(entry.id),
-                                    &entry.name,
-                                ),
-                            )
-                            .clicked()
-                        {
-                            match note_path(root, &entry.path)
-                                .and_then(|p| fs::read_to_string(p).map_err(|e| e.to_string()))
-                            {
-                                Ok(text) => {
-                                    self.message = None;
-                                    self.selected = Some(entry.id);
-                                    self.baseline = text.clone();
-                                    self.draft = text;
-                                    self.error = None;
+                let row_height = ui.spacing().interact_size.y;
+                egui::ScrollArea::vertical()
+                    .id_salt("campaign_local_entries")
+                    .show_rows(ui, row_height, entries.len(), |ui, range| {
+                        for row in range {
+                            let entry = &snapshot.catalogue.entries[&entries[row]].entry;
+                            let response = ui
+                                .push_id(entry.id, |ui| {
+                                    ui.add_enabled_ui(!dirty, |ui| {
+                                        ui.add_sized(
+                                            [ui.available_width(), row_height],
+                                            egui::Button::selectable(
+                                                self.selected == Some(entry.id),
+                                                &entry.name,
+                                            )
+                                            .truncate(),
+                                        )
+                                    })
+                                    .inner
+                                })
+                                .inner;
+                            if response.on_hover_text(&entry.name).clicked() {
+                                match note_path(root, &entry.path)
+                                    .and_then(|p| fs::read_to_string(p).map_err(|e| e.to_string()))
+                                {
+                                    Ok(text) => {
+                                        self.message = None;
+                                        self.selected = Some(entry.id);
+                                        self.baseline = text.clone();
+                                        self.draft = text;
+                                        self.error = None;
+                                    }
+                                    Err(e) => self.error = Some(e),
                                 }
-                                Err(e) => self.error = Some(e),
                             }
                         }
-                    }
-                });
+                    });
             });
         let mut updated = None;
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            let Some(entry) = entries.iter().find(|e| Some(e.id) == self.selected) else {
+            let Some(entry) = entries
+                .iter()
+                .find(|id| Some(**id) == self.selected)
+                .map(|id| &snapshot.catalogue.entries[id].entry)
+            else {
                 ui.label("Select a campaign entry.");
                 return;
             };
@@ -624,14 +666,10 @@ impl CampaignContent {
         });
         if let Some(entry) = updated {
             let id = entry.id;
-            self.snapshot
-                .as_mut()
-                .unwrap()
-                .catalogue
-                .entries
-                .get_mut(&id)
-                .unwrap()
-                .entry = entry;
+            let snapshot = self.snapshot.as_mut().unwrap();
+            snapshot.local_entries.take();
+            self.entry_matches = None;
+            snapshot.catalogue.entries.get_mut(&id).unwrap().entry = entry;
         }
     }
 }
