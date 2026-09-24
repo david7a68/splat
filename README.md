@@ -125,7 +125,9 @@ structural validity.
 
 The built-in overview reflows printed PDF lines into paragraphs and keeps page
 references under **Source and identifiers**. Structured data uses compact label/value
-rows; its first section opens by default. These display changes do not alter the
+rows under collapsed **Technical details**. Classes show core traits as separate
+labeled rows, equipment choices as a list, and named features in level order.
+Select a feature to read it. These display changes do not alter the
 stored Markdown or rule definitions.
 
 Under **Package actions → Manage packages**, register an existing folder containing exactly one package

@@ -1,4 +1,5 @@
 //! Package authoring is independent of the active campaign.
+mod class;
 mod creature;
 mod presentation;
 use crate::{campaigns::Campaigns, persistence::Module};
@@ -960,7 +961,7 @@ impl Library {
                 }
             }
         });
-        let mut open_spell = None;
+        let mut open_link = None;
         egui::ScrollArea::both()
             .id_salt(("entry_body", &note.path))
             .show(ui, |ui| {
@@ -975,6 +976,7 @@ impl Library {
                     let parsed = Entry::parse(&note.path, &self.draft);
                     let body = parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body);
                     ui.push_id(&note.path, |ui| {
+                        ui.set_max_width(ui.available_width().min(760.0));
                         let sections = presentation::reading_sections(body, note.name());
                         let styled = parsed
                             .as_ref()
@@ -983,50 +985,40 @@ impl Library {
                         if let Some(entry) = styled {
                             let references = creature::spell_references(entry);
                             creature::show(ui, entry, &sections, |ui| {
-                                open_spell = self.loaded.as_ref().unwrap().spell_links(
+                                open_link = self.loaded.as_ref().unwrap().spell_links(
                                     ui,
                                     &references,
                                     dirty,
                                 );
                             });
                         } else {
-                            let mut first_data = true;
+                            let class_entry =
+                                parsed.as_ref().ok().filter(|entry| class::supports(entry));
                             for (index, section) in sections.iter().enumerate() {
                                 let data = section.body.contains("<!-- splat:");
                                 let label = if section.title == "Source text" {
                                     "Overview".to_owned()
-                                } else if data {
-                                    format!("{} data", section.title)
                                 } else {
                                     section.title.clone()
                                 };
-                                let open = !data || first_data;
                                 if data {
-                                    first_data = false;
+                                    continue;
                                 }
                                 ui.add_space(if index == 0 { 14.0 } else { 10.0 });
                                 egui::CollapsingHeader::new(
                                     egui::RichText::new(label).size(17.0).strong(),
                                 )
                                 .id_salt(("reading_section", index))
-                                .default_open(open)
+                                .default_open(true)
                                 .show_unindented(ui, |ui| {
                                     ui.add_space(5.0);
-                                    if data {
-                                        egui::Frame::new()
-                                            .fill(ui.visuals().faint_bg_color)
-                                            .inner_margin(10.0)
-                                            .corner_radius(4.0)
-                                            .show(ui, |ui| {
-                                                ui.set_width(ui.available_width());
-                                                crate::markdown_view::show_compact(
-                                                    ui,
-                                                    section.body,
-                                                );
-                                            });
-                                    } else if self.module.is_none()
-                                        && section.title == "Source text"
-                                    {
+                                    let class_source = section.title == "Source text"
+                                        && class_entry.is_some()
+                                        && class::show_source(ui, section.body, note.name());
+                                    if class_source {
+                                        return;
+                                    }
+                                    if self.module.is_none() && section.title == "Source text" {
                                         let readable =
                                             presentation::overview_markdown(section.body);
                                         crate::markdown_view::show(ui, &readable);
@@ -1035,6 +1027,33 @@ impl Library {
                                     }
                                 });
                             }
+                        }
+                        if let Some(entry) =
+                            parsed.as_ref().ok().filter(|entry| class::supports(entry))
+                        {
+                            open_link = class::show_features(
+                                ui,
+                                entry,
+                                &self.loaded.as_ref().unwrap().notes,
+                                dirty,
+                            );
+                        }
+                        if styled.is_none()
+                            && sections
+                                .iter()
+                                .any(|section| section.body.contains("<!-- splat:"))
+                        {
+                            ui.add_space(14.0);
+                            ui.collapsing("Technical details", |ui| {
+                                for section in sections
+                                    .iter()
+                                    .filter(|section| section.body.contains("<!-- splat:"))
+                                {
+                                    ui.collapsing(&section.title, |ui| {
+                                        crate::markdown_view::show_compact(ui, section.body);
+                                    });
+                                }
+                            });
                         }
                         ui.add_space(16.0);
                         ui.separator();
@@ -1162,7 +1181,7 @@ impl Library {
                 Err(e) => self.error = Some(e),
             }
         }
-        if let Some(index) = open_spell {
+        if let Some(index) = open_link {
             self.open_entry(index);
         }
     }
@@ -1632,6 +1651,79 @@ mod tests {
             !text.contains(&"Rule"),
             "Empty mechanics section should be hidden"
         );
+    }
+
+    #[test]
+    fn class_reader_is_readable_and_opens_features() {
+        let loaded = load(None).unwrap();
+        let index = loaded
+            .notes
+            .iter()
+            .position(|note| note.name() == "Barbarian")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            ..Default::default()
+        };
+        library.open_entry(index);
+        let ctx = egui::Context::default();
+        let mut frame = |events| {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(390.0, 2400.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| library.editor(ui, "Definition · class"));
+                },
+            )
+        };
+        frame(vec![]);
+        let output = frame(vec![]);
+        let texts: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            texts
+                .iter()
+                .all(|text| text.pos.x + text.galley.size().x <= 390.0)
+        );
+        let rendered = texts
+            .iter()
+            .map(|text| text.galley.job.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(rendered.contains("Primary Ability: Strength"));
+        assert!(rendered.contains("Starting equipment"));
+        assert!(!rendered.contains("dnd2024:class_features/"));
+        assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());
+        let link = texts
+            .iter()
+            .find(|text| text.galley.job.text == "Relentless Rage")
+            .unwrap();
+        let pos = link.pos + link.galley.size() * 0.5;
+        for pressed in [true, false] {
+            frame(vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                },
+            ]);
+        }
+        assert!(library.draft.contains("# Level 11: Relentless Rage"));
     }
 
     #[test]
