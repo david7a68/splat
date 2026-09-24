@@ -79,7 +79,11 @@ expands in the campaign's ordered members list; reserved `all` cannot also name
 an individual binding.
 
 External IDs are mappings, not character-sheet snapshots. D&D Beyond campaign
-link and campaign-name cache stay in the existing app configuration as agreed.
+link and campaign-name cache live in the campaign manifest as
+`splat_dndbeyond_campaign_id` and `splat_dndbeyond_campaign_name` (nullable strings).
+`splat_name` supplies the local display name. App configuration retains the folder
+registration and cached metadata; startup and reload read the manifest. Existing
+registrations gain these fields without replacing custom paths, selections, or notes.
 Credentials remain in the existing session/keyring handling, never frontmatter,
 logs, source metadata or fingerprints. No new writes to D&D Beyond are authorized.
 

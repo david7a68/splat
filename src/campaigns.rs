@@ -1,4 +1,7 @@
-use crate::persistence::{Campaign, Store, UserData};
+use crate::{
+    content_workspace::CampaignDocument,
+    persistence::{Campaign, Store, UserData},
+};
 use eframe::egui;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -11,6 +14,7 @@ pub struct Campaigns {
     editing: Option<Uuid>,
     name: String,
     path: String,
+    remote: Option<(String, String)>,
 }
 
 impl Default for Campaigns {
@@ -23,6 +27,7 @@ impl Default for Campaigns {
             editing: None,
             name: String::new(),
             path: String::new(),
+            remote: None,
         };
         match Store::user() {
             Ok(store) => {
@@ -36,6 +41,70 @@ impl Default for Campaigns {
 }
 
 impl Campaigns {
+    pub fn start_import(&mut self, id: &str, name: &str) {
+        self.clear_form();
+        self.name = name.into();
+        self.remote = Some((id.into(), name.into()));
+    }
+
+    pub fn cancel_import(&mut self) {
+        if self.remote.is_some() {
+            self.clear_form();
+        }
+    }
+
+    fn save_form(&mut self) -> Result<(), String> {
+        let path = PathBuf::from(self.path.trim())
+            .canonicalize()
+            .map_err(|_| "Choose an existing campaign folder.")?;
+        let found = CampaignDocument::discover(&path)?;
+        if self.editing.is_some() && found.is_none() {
+            return Err("Choose the folder containing this campaign’s manifest.".into());
+        }
+        let mut campaign = found.unwrap_or_else(|| Campaign {
+            id: self.editing.unwrap_or_else(Uuid::new_v4),
+            name: self.name.trim().into(),
+            path,
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        });
+        if let Some(id) = self.editing {
+            if campaign.id != id {
+                return Err("This folder belongs to another campaign.".into());
+            }
+            campaign.name = self.name.trim().into();
+        }
+        if let Some((id, name)) = &self.remote {
+            if campaign
+                .dndbeyond_campaign_id
+                .as_ref()
+                .is_some_and(|current| current != id)
+            {
+                return Err("This folder is linked to another D&D Beyond campaign.".into());
+            }
+            campaign.dndbeyond_campaign_id = Some(id.clone());
+            campaign.dndbeyond_campaign_name = Some(name.clone());
+        }
+        let mut data = self.data.clone();
+        if let Some(old) = data.campaigns.iter_mut().find(|c| c.id == campaign.id) {
+            if old
+                .path
+                .canonicalize()
+                .ok()
+                .is_some_and(|path| path != campaign.path)
+            {
+                return Err("This campaign is registered at another folder. Move that folder or remove its registration first.".into());
+            }
+            *old = campaign.clone();
+        } else {
+            data.campaigns.push(campaign.clone());
+        }
+        data.active_campaign_id = Some(campaign.id);
+        self.persist(data)?;
+        self.clear_form();
+        Ok(())
+    }
+
     pub fn all(&self) -> &[Campaign] {
         &self.data.campaigns
     }
@@ -96,6 +165,7 @@ impl Campaigns {
             editing: None,
             name: String::new(),
             path: String::new(),
+            remote: None,
         }
     }
 
@@ -108,7 +178,17 @@ impl Campaigns {
     fn reload(&mut self) {
         if let Some(store) = &mut self.store {
             match store.load() {
-                Ok(data) => {
+                Ok(mut data) => {
+                    if let Err(error) = data
+                        .campaigns
+                        .iter_mut()
+                        .try_for_each(CampaignDocument::reload_metadata)
+                        .and_then(|()| data.validate())
+                    {
+                        self.error = Some(error);
+                        self.writable = false;
+                        return;
+                    }
                     self.data = data;
                     self.error = None;
                     self.writable = true;
@@ -123,7 +203,17 @@ impl Campaigns {
     }
 
     fn persist(&mut self, data: UserData) -> Result<(), String> {
+        if !self.writable {
+            return Err("Reload valid campaign settings before saving.".into());
+        }
         let store = self.store.as_mut().ok_or("Settings are unavailable.")?;
+        store.check_save(&data)?;
+        for campaign in &data.campaigns {
+            let previous = self.data.campaigns.iter().find(|c| c.id == campaign.id);
+            if previous != Some(campaign) {
+                CampaignDocument::save_metadata(campaign, previous)?;
+            }
+        }
         store.save(&data)?;
         self.data = data;
         self.error = None;
@@ -190,9 +280,13 @@ impl Campaigns {
         self.editing = None;
         self.name.clear();
         self.path.clear();
+        self.remote = None;
     }
 
     pub fn active_campaign(&self) -> Option<Campaign> {
+        if !self.writable {
+            return None;
+        }
         self.data
             .campaigns
             .iter()
@@ -263,6 +357,7 @@ impl Campaigns {
                 ui.label("Active campaign");
                 ui.push_id("settings_campaign_selector", |ui| self.selector(ui));
             });
+            dndbeyond.show_import(ui, session.clone(), self);
             ui.add_space(8.0);
             if let Some(campaign) = self.active_campaign() {
                 egui::Frame::group(ui.style()).inner_margin(12.0).show(ui, |ui| {
@@ -271,6 +366,7 @@ impl Campaigns {
                         ui.strong(&campaign.name);
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.small_button("Edit details").clicked() {
+                                self.clear_form();
                                 self.editing = Some(campaign.id);
                                 self.name = campaign.name.clone();
                                 self.path = campaign.path.to_string_lossy().into_owned();
@@ -294,8 +390,8 @@ impl Campaigns {
                     ui.add_space(8.0);
                     ui.collapsing("Campaign details", |ui| {
                         ui.label(format!("ID: {}", campaign.id));
-                        if let Some(store) = &self.store { ui.weak(format!("Settings: {}", store.path.display())); }
-                        if ui.small_button("Remove from Splat").on_hover_text("Removes this entry and link. The campaign folder and its files are kept.").clicked() {
+                        ui.weak("Settings are stored in the campaign manifest.");
+                        if ui.small_button("Remove from Splat").on_hover_text("Removes this registration. The campaign folder and link are kept.").clicked() {
                             let mut data = self.data.clone();
                             data.campaigns.retain(|c| c.id != campaign.id);
                             data.active_campaign_id = None;
@@ -309,47 +405,29 @@ impl Campaigns {
             let editing = self.editing.is_some();
             egui::CollapsingHeader::new(if editing { "Edit campaign details" } else { "Add campaign" })
                 .id_salt(("campaign_form", self.editing))
+                .open(self.remote.as_ref().map(|_| true))
                 .default_open(editing || self.data.campaigns.is_empty())
                 .show(ui, |ui| {
             ui.add_space(8.0);
+            if let Some((id, name)) = &self.remote { ui.label(format!("{name} · D&D Beyond ID {id}")); }
             egui::Grid::new("campaign_fields").num_columns(2).spacing([16.0, 8.0]).show(ui, |ui| {
                 ui.label("Name");
                 ui.add(egui::TextEdit::singleline(&mut self.name).hint_text("Campaign name").desired_width(ui.available_width()));
                 ui.end_row();
                 ui.label("Folder");
-                ui.add(egui::TextEdit::singleline(&mut self.path).hint_text("Absolute folder path").desired_width(ui.available_width()));
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.path);
+                    if ui.button("Browse…").clicked() && let Some(path) = rfd::FileDialog::new().pick_folder() {
+                        self.path = path.to_string_lossy().into_owned();
+                    }
+                });
                 ui.end_row();
             });
             ui.horizontal(|ui| {
-                if ui.button("Save campaign").clicked() {
-                    let path = PathBuf::from(self.path.trim());
-                    if self.name.trim().is_empty() || !path.is_absolute() {
-                        self.error =
-                            Some("Enter a campaign name and an absolute folder path.".into());
-                    } else {
-                        let mut data = self.data.clone();
-                        if let Some(campaign) = data
-                            .campaigns
-                            .iter_mut()
-                            .find(|p| Some(p.id) == self.editing)
-                        {
-                            campaign.name = self.name.trim().into();
-                            campaign.path = path;
-                        } else {
-                            let id = Uuid::new_v4();
-                            data.campaigns.push(Campaign {
-                                id,
-                                name: self.name.trim().into(),
-                                path,
-                                dndbeyond_campaign_id: None,
-                                dndbeyond_campaign_name: None,
-                            });
-                            data.active_campaign_id = Some(id);
-                        }
-                        self.save(data);
-                    }
+                if ui.button("Open campaign").clicked() && let Err(error) = self.save_form() {
+                    self.error = Some(error);
                 }
-                if self.editing.is_some() && ui.button("Cancel edit").clicked() {
+                if ui.button("Cancel").clicked() {
                     self.clear_form();
                 }
             });
@@ -362,6 +440,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn import_and_reopen_preserve_campaign_identity_and_custom_settings() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("campaign");
+        std::fs::create_dir(&folder).unwrap();
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns.start_import("12", "Remote name");
+        campaigns.path = folder.to_string_lossy().into_owned();
+        campaigns.save_form().unwrap();
+        let campaign = campaigns.active_campaign().unwrap();
+        let file = folder.join("Campaign.md");
+        let text = std::fs::read_to_string(&file).unwrap().replace(
+            "splat_schema: 1",
+            "splat_schema: 1\nsplat_run_storage: {directory: Sessions/Combat}",
+        ) + "\nMy notes.\n";
+        std::fs::write(&file, &text).unwrap();
+        let mut reopened = Campaigns::at(temp.path().join("other-settings.json"));
+        reopened.path = folder.to_string_lossy().into_owned();
+        reopened.save_form().unwrap();
+        assert_eq!(reopened.active_campaign(), Some(campaign));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
+        reopened.start_import("34", "Other campaign");
+        reopened.path = folder.to_string_lossy().into_owned();
+        assert!(reopened.save_form().is_err());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
+    }
+
+    #[test]
     fn one_to_one_links_replace_and_unlink_without_changing_other_campaigns() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
@@ -370,10 +475,12 @@ mod tests {
         let first = Uuid::new_v4();
         let second = Uuid::new_v4();
         for id in [first, second] {
+            let folder = dir.path().join(id.to_string());
+            std::fs::create_dir(&folder).unwrap();
             data.campaigns.push(Campaign {
                 id,
                 name: "Campaign".into(),
-                path: dir.path().into(),
+                path: folder,
                 dndbeyond_campaign_id: None,
                 dndbeyond_campaign_name: None,
             });
@@ -386,6 +493,7 @@ mod tests {
             editing: None,
             name: String::new(),
             path: String::new(),
+            remote: None,
         };
         campaigns.select(Some(first));
         campaigns.link(Some("12".into())).unwrap();

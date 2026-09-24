@@ -63,7 +63,7 @@ cookie. If removal fails, Splat reports it and lets you retry. It does not
 invalidate the browser session. Network and keyring operations run in a worker;
 credential writes and removals run in order.
 
-This is an internal D&D Beyond endpoint, not a supported public API. The Party viewer fetches and caches character sheets. Campaign details are fetched into memory, with linked names cached in settings. Authentication tests use a local mock server;
+This is an internal D&D Beyond endpoint, not a supported public API. The Party viewer fetches and caches character sheets. Campaign details are fetched into memory, with linked names cached in the campaign manifest. Authentication tests use a local mock server;
 a successful live login requires a real cookie entered in the application.
 
 ## User settings and campaigns
@@ -80,11 +80,18 @@ Settings uses `$XDG_CONFIG_HOME/splat/settings.json`, or
 local campaigns. Select **Not linked** to remove a link, or choose another
 campaign to replace it.
 
-In Settings, select a local campaign, then **Refresh D&D Beyond campaigns**.
-Choose its remote campaign from the D&D Beyond link dropdown. Campaigns linked
-elsewhere are disabled. The internal `/api/campaign/stt/user-campaigns` endpoint
-supplies campaign details. The remote ID and last fetched name are saved;
-DM names and player counts stay in memory. Campaign snapshots are not stored; character records are cached separately in local application data.
+After connecting, expand **Add from D&D Beyond** and select a campaign. Its
+name and ID fill the campaign form. Then choose its data folder with **Browse…**
+or enter a path, and select **Open campaign**. No local campaign is required first.
+You can also choose an existing folder and select **Open campaign** without connecting.
+
+Splat creates or discovers the campaign manifest in that folder. It stores the
+name and D&D Beyond link there, alongside existing custom paths and content
+settings. Opening a folder preserves its UUID, settings, and notes. Existing
+registrations load their manifest settings on startup or **Reload**. App settings
+retain the folder registration and cached metadata. Credentials stay in the keyring.
+The remote link uses `splat_dndbeyond_campaign_id` and
+`splat_dndbeyond_campaign_name`; character cache storage is unchanged.
 
 Versions 1 and 2 migrate old project records without changing UUIDs, names, paths,
 or unique links. If an old record has multiple remote IDs, or two records share
@@ -99,7 +106,7 @@ in the desktop keyring and memory, never in settings JSON.
 The linked campaign name refreshes once whenever its link control becomes visible,
 including returning to Settings, scrolling it back into view, switching campaigns,
 or reconnecting. UI repaints do not repeatedly request data. The last successful
-name is cached as `dndbeyond_campaign_name` and shown while offline or refreshing.
+name is cached as `splat_dndbeyond_campaign_name` and shown while offline or refreshing.
 Failed requests retain the cache. Replacing or removing a link clears its name;
 late responses cannot apply an old name to a new link.
 
