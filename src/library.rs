@@ -1,4 +1,5 @@
 //! Package authoring is independent of the active campaign.
+mod class;
 mod creature;
 mod presentation;
 use crate::{campaigns::Campaigns, persistence::Module};
@@ -961,6 +962,7 @@ impl Library {
             }
         });
         let mut open_spell = None;
+        let mut open_feature = None;
         egui::ScrollArea::both()
             .id_salt(("entry_body", &note.path))
             .show(ui, |ui| {
@@ -975,6 +977,7 @@ impl Library {
                     let parsed = Entry::parse(&note.path, &self.draft);
                     let body = parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body);
                     ui.push_id(&note.path, |ui| {
+                        ui.set_max_width(ui.available_width().min(760.0));
                         let sections = presentation::reading_sections(body, note.name());
                         let styled = parsed
                             .as_ref()
@@ -990,43 +993,33 @@ impl Library {
                                 );
                             });
                         } else {
-                            let mut first_data = true;
+                            let class_entry =
+                                parsed.as_ref().ok().filter(|entry| class::supports(entry));
                             for (index, section) in sections.iter().enumerate() {
                                 let data = section.body.contains("<!-- splat:");
                                 let label = if section.title == "Source text" {
                                     "Overview".to_owned()
-                                } else if data {
-                                    format!("{} data", section.title)
                                 } else {
                                     section.title.clone()
                                 };
-                                let open = !data || first_data;
                                 if data {
-                                    first_data = false;
+                                    continue;
                                 }
                                 ui.add_space(if index == 0 { 14.0 } else { 10.0 });
                                 egui::CollapsingHeader::new(
                                     egui::RichText::new(label).size(17.0).strong(),
                                 )
                                 .id_salt(("reading_section", index))
-                                .default_open(open)
+                                .default_open(true)
                                 .show_unindented(ui, |ui| {
                                     ui.add_space(5.0);
-                                    if data {
-                                        egui::Frame::new()
-                                            .fill(ui.visuals().faint_bg_color)
-                                            .inner_margin(10.0)
-                                            .corner_radius(4.0)
-                                            .show(ui, |ui| {
-                                                ui.set_width(ui.available_width());
-                                                crate::markdown_view::show_compact(
-                                                    ui,
-                                                    section.body,
-                                                );
-                                            });
-                                    } else if self.module.is_none()
-                                        && section.title == "Source text"
-                                    {
+                                    let class_source = section.title == "Source text"
+                                        && class_entry.is_some()
+                                        && class::show_source(ui, section.body, note.name());
+                                    if class_source {
+                                        return;
+                                    }
+                                    if self.module.is_none() && section.title == "Source text" {
                                         let readable =
                                             presentation::overview_markdown(section.body);
                                         crate::markdown_view::show(ui, &readable);
@@ -1035,6 +1028,40 @@ impl Library {
                                     }
                                 });
                             }
+                        }
+                        if let Some(entry) =
+                            parsed.as_ref().ok().filter(|entry| class::supports(entry))
+                        {
+                            open_feature = class::show_features(
+                                ui,
+                                entry,
+                                &self.loaded.as_ref().unwrap().notes,
+                                dirty,
+                            );
+                        }
+                        if styled.is_none()
+                            && sections
+                                .iter()
+                                .any(|section| section.body.contains("<!-- splat:"))
+                        {
+                            ui.add_space(14.0);
+                            ui.collapsing("Technical details", |ui| {
+                                for section in sections
+                                    .iter()
+                                    .filter(|section| section.body.contains("<!-- splat:"))
+                                {
+                                    ui.collapsing(&section.title, |ui| {
+                                        egui::ScrollArea::horizontal()
+                                            .id_salt(&section.title)
+                                            .show(ui, |ui| {
+                                                crate::markdown_view::show_compact(
+                                                    ui,
+                                                    section.body,
+                                                );
+                                            });
+                                    });
+                                }
+                            });
                         }
                         ui.add_space(16.0);
                         ui.separator();
@@ -1162,7 +1189,7 @@ impl Library {
                 Err(e) => self.error = Some(e),
             }
         }
-        if let Some(index) = open_spell {
+        if let Some(index) = open_spell.or(open_feature) {
             self.open_entry(index);
         }
     }
@@ -1632,6 +1659,121 @@ mod tests {
             !text.contains(&"Rule"),
             "Empty mechanics section should be hidden"
         );
+    }
+
+    #[test]
+    fn class_reader_shows_traits_and_named_features_without_raw_tables() {
+        for width in [390.0, 1000.0] {
+            let loaded = load(None).unwrap();
+            let index = loaded
+                .notes
+                .iter()
+                .position(|note| {
+                    note.entry.as_ref().is_some_and(|entry| {
+                        entry.key.as_deref() == Some("dnd2024:classes/barbarian")
+                    })
+                })
+                .unwrap();
+            let mut library = Library {
+                draft: loaded.notes[index].text.clone(),
+                loaded: Some(loaded),
+                selected: Some(index),
+                ..Default::default()
+            };
+            let ctx = egui::Context::default();
+            let mut rendered = String::new();
+            let mut feature_position = egui::Pos2::ZERO;
+            for _ in 0..2 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 2400.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default()
+                            .show(ctx, |ui| library.editor(ui, "Definition · class"));
+                    },
+                );
+                let texts: Vec<_> = output
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(text),
+                        _ => None,
+                    })
+                    .collect();
+                feature_position = texts
+                    .iter()
+                    .find(|text| text.galley.job.text == "Relentless Rage")
+                    .map(|text| text.pos + text.galley.size() * 0.5)
+                    .unwrap();
+                for text in &texts {
+                    assert!(
+                        text.pos.x + text.galley.size().x <= width,
+                        "Overflow: {}",
+                        text.galley.job.text
+                    );
+                }
+                rendered = texts
+                    .iter()
+                    .map(|text| text.galley.job.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+            for expected in [
+                "Core traits",
+                "Primary Ability",
+                "Strength",
+                "Saving throw proficiencies",
+                "Starting equipment",
+                "Class features",
+                "Level 1",
+                "Relentless Rage",
+                "Technical details",
+            ] {
+                assert!(
+                    rendered.contains(expected),
+                    "Missing {expected}: {rendered}"
+                );
+            }
+            assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());
+            assert!(!rendered.contains("dnd2024:class_features/"));
+            assert!(!rendered.contains("Members"));
+            library.search = "Barbarian".into();
+            for pressed in [true, false] {
+                let _ = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 2400.0),
+                        )),
+                        events: vec![
+                            egui::Event::PointerMoved(feature_position),
+                            egui::Event::PointerButton {
+                                pos: feature_position,
+                                button: egui::PointerButton::Primary,
+                                pressed,
+                                modifiers: Default::default(),
+                            },
+                        ],
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default()
+                            .show(ctx, |ui| library.editor(ui, "Definition · class"));
+                    },
+                );
+            }
+            assert_eq!(
+                library.loaded.as_ref().unwrap().notes[library.selected.unwrap()].name(),
+                "Level 11: Relentless Rage"
+            );
+            assert!(library.search.is_empty());
+            assert!(library.draft.contains("Your Rage can keep you fighting"));
+        }
     }
 
     #[test]
