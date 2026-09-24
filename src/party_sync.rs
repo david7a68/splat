@@ -292,16 +292,7 @@ impl Reader {
         let ctx = ctx.clone();
         let gate = self.gate.clone();
         thread::spawn(move || {
-            let result = {
-                let Ok(active) = gate.lock() else {
-                    return;
-                };
-                if !*active {
-                    return;
-                }
-                Cache::campaign(&scope.path, scope.local, &scope.remote)
-                    .and_then(|c| c.load_all(scope.local, &scope.remote))
-            };
+            let result = Cache::user().and_then(|c| c.load_all(scope.local, &scope.remote));
             if let Ok(records) = &result {
                 for record in records {
                     if let Ok(active) = gate.lock() {
@@ -437,14 +428,13 @@ impl Reader {
                     // The authoritative roster prevents removed members from returning offline.
                     if let Ok(active) = gate.lock()
                         && *active
-                        && let Err(e) = Cache::campaign(&scope.path, scope.local, &scope.remote)
-                            .and_then(|c| {
-                                c.save_roster(
-                                    scope.local,
-                                    &scope.remote,
-                                    &members.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),
-                                )
-                            })
+                        && let Err(e) = Cache::user().and_then(|c| {
+                            c.save_roster(
+                                scope.local,
+                                &scope.remote,
+                                &members.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),
+                            )
+                        })
                     {
                         let _ = tx.send(Event::Warning(e));
                     }
@@ -466,8 +456,7 @@ impl Reader {
                             break;
                         }
                         if let Ok(record) = &result
-                            && let Err(e) = Cache::campaign(&scope.path, scope.local, &scope.remote)
-                                .and_then(|c| c.save(scope.local, record))
+                            && let Err(e) = Cache::user().and_then(|c| c.save(scope.local, record))
                         {
                             let _ = tx.send(Event::Warning(e));
                         }
