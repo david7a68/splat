@@ -196,7 +196,7 @@ pub fn declarations(entry: &Entry) -> Result<Vec<Interface>, String> {
         return Ok(vec![]);
     };
     let interfaces: Vec<Interface> =
-        serde_yaml_ng::from_value(value.clone()).map_err(|e| e.to_string())?;
+        Vec::<Interface>::deserialize(value).map_err(|e| e.to_string())?;
     let mut seen = std::collections::BTreeSet::new();
     for interface in &interfaces {
         interface.validate()?;

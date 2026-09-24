@@ -463,11 +463,11 @@ fn check_fence(raw: &str) -> Result<(), String> {
 
 pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
     let mut root = Node::default();
-    for (key, value) in fields.iter() {
+    for (key, value) in std::mem::take(fields) {
         root.children.insert(
             key.as_str().ok_or("Field name must be a string")?.into(),
             Node {
-                value: Some(value.clone()),
+                value: Some(value),
                 ..Node::default()
             },
         );
@@ -619,11 +619,10 @@ pub fn read(body: &str, fields: &mut Mapping) -> Result<(), String> {
         .iter()
         .map(|path| resolved_path(path, &aliases))
         .collect::<Result<BTreeSet<_>, _>>()?;
-    *fields = root
-        .finish("", &arrays)?
-        .as_mapping()
-        .ok_or("Invalid data root")?
-        .clone();
+    let Value::Mapping(resolved) = root.finish("", &arrays)? else {
+        return Err("Invalid data root".into());
+    };
+    *fields = resolved;
     // A normal note does not need a package report to declare its adapter.
     if field(fields, "splat_requires_mechanics").is_none()
         && let Some(id) = field(fields, "splat_rule")

@@ -1,9 +1,11 @@
 //! Whole-SRD catalogue. Structural validity and execution readiness are separate.
 use super::{Diagnostic, Entry, Report, builtin, field, resource_key, validate};
-use include_dir::{Dir, include_dir};
+use include_dir::{Dir, File, include_dir};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 static DEFINITIONS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/dnd2024-definitions");
 
@@ -74,9 +76,9 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
         }
         return Ok(None);
     };
-    let meta: Conversion = serde_yaml_ng::from_value(value.clone()).map_err(|e| e.to_string())?;
+    let meta = Conversion::deserialize(value).map_err(|e| e.to_string())?;
     let clauses: Vec<Clause> = field(&entry.fields, "splat_clauses")
-        .map(|value| serde_yaml_ng::from_value(value.clone()))
+        .map(Vec::<Clause>::deserialize)
         .transpose()
         .map_err(|e| e.to_string())?
         .unwrap_or_default();
@@ -165,7 +167,7 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
         }
     }
     let required: Vec<String> = field(&entry.fields, "splat_requires_mechanics")
-        .map(|v| serde_yaml_ng::from_value(v.clone()))
+        .map(Vec::<String>::deserialize)
         .transpose()
         .map_err(|e| e.to_string())?
         .unwrap_or_default();
@@ -189,31 +191,39 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
 
 /// Original Markdown for read-only library display.
 pub fn source_file(path: &str) -> Option<&'static str> {
-    DEFINITIONS
-        .get_file(path.strip_prefix("definitions/")?)?
+    let path = Path::new(path.strip_prefix("definitions/")?);
+    let mut dir = &DEFINITIONS;
+    // Follow the containing directory instead of searching unrelated subtrees.
+    while let Some(child) = dir.dirs().find(|child| path.starts_with(child.path())) {
+        dir = child;
+    }
+    dir.files()
+        .find(|file| file.path() == path)?
         .contents_utf8()
 }
 
 pub fn entries() -> Result<Vec<Entry>, String> {
-    fn walk(dir: &Dir<'_>, result: &mut Vec<Entry>) -> Result<(), String> {
-        for file in dir.files() {
-            if file.path().extension().is_some_and(|e| e == "md") {
-                result.push(
-                    Entry::parse(
-                        &format!("definitions/{}", file.path().display()),
-                        file.contents_utf8().ok_or("Definition must be UTF-8")?,
-                    )
-                    .map_err(|e| format!("{}: {e}", file.path().display()))?,
-                );
-            }
-        }
+    fn walk<'a>(dir: &Dir<'a>, files: &mut Vec<&'a File<'a>>) {
+        files.extend(
+            dir.files()
+                .filter(|file| file.path().extension().is_some_and(|e| e == "md")),
+        );
         for child in dir.dirs() {
-            walk(child, result)?;
+            walk(child, files);
         }
-        Ok(())
     }
-    let mut result = Vec::new();
-    walk(&DEFINITIONS, &mut result)?;
+    let mut files = Vec::new();
+    walk(&DEFINITIONS, &mut files);
+    let mut result: Vec<_> = files
+        .par_iter()
+        .map(|file| {
+            Entry::parse(
+                &format!("definitions/{}", file.path().display()),
+                file.contents_utf8().ok_or("Definition must be UTF-8")?,
+            )
+            .map_err(|e| format!("{}: {e}", file.path().display()))
+        })
+        .collect::<Result<_, _>>()?;
     result.sort_by(|a, b| a.key.cmp(&b.key));
     attach_reports(
         &mut result,
@@ -256,7 +266,7 @@ fn attach_reports(entries: &mut [Entry], coverage: &str, contracts: &str) -> Res
     if interfaces.len() != registry.contracts.len() {
         return Err("Duplicate contract definition".into());
     }
-    for entry in entries {
+    entries.par_iter_mut().try_for_each(|entry| {
         let record = entry
             .key
             .as_deref()
@@ -286,8 +296,8 @@ fn attach_reports(entries: &mut [Entry], coverage: &str, contracts: &str) -> Res
             contract.validate(entry)?;
         }
         conversion(entry)?;
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 #[derive(Serialize)]

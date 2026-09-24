@@ -161,6 +161,10 @@ fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> e
 fn local_module(path: &Path) -> Result<Module, String> {
     let path = path.canonicalize().map_err(|e| e.to_string())?;
     let (entries, _) = content::read_directory(&path)?;
+    module_from_entries(path, &entries)
+}
+
+fn module_from_entries(path: PathBuf, entries: &[Entry]) -> Result<Module, String> {
     let manifests: Vec<_> = entries.iter().filter(|e| e.kind == "package").collect();
     if manifests.len() != 1 || entries.iter().any(|e| e.kind == "campaign") {
         return Err(
@@ -296,14 +300,15 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     let mut notes = Vec::new();
     let mut diagnostics = Vec::new();
     if let Some(module) = module {
-        let actual = local_module(&module.path)?;
+        let path = module.path.canonicalize().map_err(|e| e.to_string())?;
+        let (entries, errors) = content::read_directory(&path)?;
+        let actual = module_from_entries(path, &entries)?;
         if actual.id != module.id {
             return Err(
                 "The module at this folder has a different identity. Register it separately."
                     .into(),
             );
         }
-        let (entries, errors) = content::read_directory(&module.path)?;
         let report = content::validate(&entries);
         diagnostics.extend(
             report
@@ -1085,6 +1090,58 @@ impl Library {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Run alone so the first load starts without a warmed process cache.
+    #[test]
+    #[ignore]
+    fn srd_library_load_time() {
+        for run in 0..3 {
+            let start = std::time::Instant::now();
+            let loaded = load(None).unwrap();
+            assert_eq!(loaded.notes.len(), 2065);
+            let load_time = start.elapsed();
+            let _ = loaded.subtitles();
+            let _ = loaded.count(Section::All);
+            let elapsed = start.elapsed();
+            eprintln!("SRD run {run}: load={load_time:?}, ready={elapsed:?}");
+            assert!(elapsed.as_secs_f64() < 1.0, "SRD library must load in <1s");
+        }
+    }
+
+    /// Exercise the editable package path with the same notes, read from disk.
+    #[test]
+    #[ignore]
+    fn user_library_load_time() {
+        fn copy_notes(source: &Path, destination: &Path) {
+            fs::create_dir_all(destination).unwrap();
+            for item in fs::read_dir(source).unwrap() {
+                let path = item.unwrap().path();
+                let target = destination.join(path.file_name().unwrap());
+                if path.is_dir() {
+                    copy_notes(&path, &target);
+                } else if path.extension().is_some_and(|ext| ext == "md") {
+                    fs::copy(path, target).unwrap();
+                }
+            }
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "User package", "user").unwrap();
+        copy_notes(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("builtin/dnd2024-definitions"),
+            &module.path,
+        );
+        for run in 0..3 {
+            let start = std::time::Instant::now();
+            let loaded = load(Some(&module)).unwrap();
+            assert_eq!(loaded.notes.len(), 2066);
+            assert!(loaded.notes.iter().all(|note| note.entry.is_some()));
+            let _ = loaded.subtitles();
+            let _ = loaded.count(Section::All);
+            let elapsed = start.elapsed();
+            eprintln!("User package run {run}: ready={elapsed:?}");
+            assert!(elapsed.as_secs_f64() < 1.0, "User library must load in <1s");
+        }
+    }
+
     #[test]
     fn entry_rows_keep_both_lines_at_a_fixed_height() {
         let ctx = egui::Context::default();

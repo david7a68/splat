@@ -62,6 +62,49 @@ fn preserves_unknown_properties_and_body_without_writes() {
 }
 
 #[test]
+fn parallel_directory_reads_preserve_order_errors_and_external_edits() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut expected = Vec::new();
+    let mut broken = Vec::new();
+    for i in 0..64 {
+        let path = format!("{i:02}.md");
+        let raw = if i % 7 == 0 {
+            broken.push(path.clone());
+            "---\nsplat_schema: 999\n---\n".to_owned()
+        } else {
+            let raw = note(&format!("item_{i}"), "item", "splat_item: {}", "Original");
+            expected.push(Entry::parse(&path, &raw).unwrap());
+            raw
+        };
+        std::fs::write(temp.path().join(path), raw).unwrap();
+    }
+    std::fs::write(temp.path().join("ordinary.md"), "# Ordinary note").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(temp.path().join("01.md"), temp.path().join("link.md")).unwrap();
+    for _ in 0..2 {
+        let (entries, errors) = read_directory(temp.path()).unwrap();
+        assert_eq!(
+            serde_json::to_value(entries).unwrap(),
+            serde_json::to_value(&expected).unwrap()
+        );
+        assert_eq!(
+            errors.iter().map(|e| &e.path).collect::<Vec<_>>(),
+            broken.iter().collect::<Vec<_>>()
+        );
+    }
+    let changed = note(
+        "replacement",
+        "item",
+        "splat_item: {}",
+        "Changed externally",
+    );
+    std::fs::write(temp.path().join("01.md"), &changed).unwrap();
+    let (entries, _) = read_directory(temp.path()).unwrap();
+    assert_eq!(entries[0].key.as_deref(), Some("test:replacement"));
+    assert_eq!(entries[0].body, "Changed externally");
+}
+
+#[test]
 fn rejects_duplicate_yaml_keys_at_any_depth_and_future_schema() {
     for extra in [
         "splat_item: {}\nsplat_name: Again",

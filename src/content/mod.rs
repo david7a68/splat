@@ -1,5 +1,6 @@
 //! Read-only schema reader. Parsing/reference validation never implies execution support.
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -113,10 +114,9 @@ impl Entry {
             .ok_or("Unclosed YAML frontmatter")?;
         let value: Value =
             serde_yaml_ng::from_str(&rest[..end]).map_err(|e| format!("Invalid YAML: {e}"))?;
-        let mut fields = value
-            .as_mapping()
-            .ok_or("Frontmatter must be a mapping")?
-            .clone();
+        let Value::Mapping(mut fields) = value else {
+            return Err("Frontmatter must be a mapping".into());
+        };
         if field(&fields, "splat_schema").and_then(Value::as_u64) != Some(1) {
             return Err(
                 "Unsupported content schema (expected 1); raw source remains unchanged".into(),
@@ -289,6 +289,12 @@ impl Entry {
 }
 
 fn inventory(body: &str) -> Result<(Vec<InventoryRow>, Vec<String>), String> {
+    // The parser only recognizes this literal marker. Avoid a second Markdown
+    // pass for notes without one; code examples containing it still go through
+    // the parser so they cannot become inventory data.
+    if !body.contains("<!-- splat:inventory") {
+        return Ok((Vec::new(), Vec::new()));
+    }
     let mut result = Vec::new();
     let mut keys = BTreeSet::new();
     let mut targets = BTreeSet::new();
@@ -819,12 +825,7 @@ pub fn validate(entries: &[Entry]) -> Report {
 }
 
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
-    fn walk(
-        root: &Path,
-        current: &Path,
-        entries: &mut Vec<Entry>,
-        errors: &mut Vec<Diagnostic>,
-    ) -> Result<(), String> {
+    fn walk(root: &Path, current: &Path, files: &mut Vec<(String, String)>) -> Result<(), String> {
         let mut paths = std::fs::read_dir(current)
             .map_err(|e| e.to_string())?
             .map(|e| e.map(|e| e.path()))
@@ -837,7 +838,7 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
                 continue;
             }
             if meta.is_dir() {
-                walk(root, &path, entries, errors)?
+                walk(root, &path, files)?
             } else if path.extension().is_some_and(|x| x == "md") {
                 let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
                 let normalized = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
@@ -848,20 +849,32 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
                 if !frontmatter.lines().any(|line| line.starts_with("splat_")) {
                     continue;
                 }
-                let name = path.strip_prefix(root).unwrap_or(&path).to_string_lossy();
-                match Entry::parse(&name, &text) {
-                    Ok(e) => entries.push(e),
-                    Err(message) => errors.push(Diagnostic {
-                        path: name.into(),
-                        message,
-                    }),
-                }
+                let name = path
+                    .strip_prefix(root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .into_owned();
+                files.push((name, text));
             }
         }
         Ok(())
     }
+    let mut files = Vec::new();
+    walk(root, root, &mut files)?;
+    // Parallel parsing preserves traversal order for entries and diagnostics.
+    let parsed: Vec<_> = files
+        .into_par_iter()
+        .map(|(path, text)| {
+            Entry::parse(&path, &text).map_err(|message| Diagnostic { path, message })
+        })
+        .collect();
     let mut entries = Vec::new();
     let mut errors = Vec::new();
-    walk(root, root, &mut entries, &mut errors)?;
+    for result in parsed {
+        match result {
+            Ok(entry) => entries.push(entry),
+            Err(error) => errors.push(error),
+        }
+    }
     Ok((entries, errors))
 }
