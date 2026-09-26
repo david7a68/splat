@@ -48,7 +48,7 @@ struct Loaded {
     counts: std::sync::OnceLock<Vec<(Section, usize)>>,
 }
 impl Loaded {
-    fn resolve_spell(&self, reference: &content::Reference) -> Option<usize> {
+    fn resolve_reference(&self, reference: &content::Reference) -> Option<usize> {
         let mut matches = self.notes.iter().enumerate().filter_map(|(i, note)| {
             let entry = note.entry.as_ref()?;
             let matches = match reference {
@@ -58,12 +58,49 @@ impl Loaded {
             matches.then_some(i)
         });
         let first = matches.next()?;
-        (matches.next().is_none()
-            && self.notes[first]
+        matches.next().is_none().then_some(first)
+    }
+
+    fn resolve_spell(&self, reference: &content::Reference) -> Option<usize> {
+        self.resolve_reference(reference).filter(|&index| {
+            self.notes[index]
                 .entry
                 .as_ref()
-                .is_some_and(|e| e.kind == "spell"))
-        .then_some(first)
+                .is_some_and(|entry| entry.kind == "spell")
+        })
+    }
+
+    fn reading_view(
+        &self,
+        ui: &mut egui::Ui,
+        reading: &content::Reading,
+        dirty: bool,
+    ) -> Option<usize> {
+        ui.add_space(14.0);
+        crate::reader_style::markdown(ui, &reading.summary, false);
+        let mut selected = None;
+        if !reading.related.is_empty() {
+            ui.add_space(8.0);
+            crate::reader_style::section_heading(ui, &reading.related_heading);
+            for (target, label) in &reading.related {
+                let reference = Uuid::parse_str(target).map_or_else(
+                    |_| content::Reference::Key(target.clone()),
+                    content::Reference::Id,
+                );
+                if let Some(index) = self.resolve_reference(&reference) {
+                    if ui
+                        .add_enabled(!dirty, egui::Link::new(label))
+                        .on_disabled_hover_text("Save or discard changes before opening an entry.")
+                        .clicked()
+                    {
+                        selected = Some(index);
+                    }
+                } else {
+                    ui.weak(format!("{label} (unavailable)"));
+                }
+            }
+        }
+        selected
     }
 
     fn spell_links(
@@ -900,16 +937,27 @@ impl Library {
             return;
         };
         let note = &self.loaded.as_ref().unwrap().notes[i];
+        let parsed = Entry::parse(&note.path, &self.draft);
+        let reading = parsed
+            .as_ref()
+            .ok()
+            .and_then(|entry| entry.reading().ok().flatten());
+        let title = reading
+            .as_ref()
+            .map_or(note.name(), |reading| reading.title.as_str());
+        let reading_subtitle = reading
+            .as_ref()
+            .and_then(|_| presentation::class_level(parsed.as_ref().ok()?));
         ui.add_space(8.0);
         ui.label(
             egui::RichText::new(format!("Library / {}", note.section().label()))
                 .size(12.0)
                 .color(ui.visuals().weak_text_color()),
         );
-        ui.label(egui::RichText::new(note.name()).size(28.0).strong());
+        ui.label(egui::RichText::new(title).size(28.0).strong());
         if note.entry.is_some() {
             ui.label(
-                egui::RichText::new(subtitle)
+                egui::RichText::new(reading_subtitle.as_deref().unwrap_or(subtitle))
                     .size(13.0)
                     .color(ui.visuals().weak_text_color()),
             );
@@ -974,7 +1022,6 @@ impl Library {
                             .interactive(self.module.is_some()),
                     );
                 } else {
-                    let parsed = Entry::parse(&note.path, &self.draft);
                     let body = parsed.as_ref().map_or(self.draft.as_str(), |e| &e.body);
                     ui.push_id(&note.path, |ui| {
                         ui.set_max_width(ui.available_width().min(760.0));
@@ -983,7 +1030,14 @@ impl Library {
                             .as_ref()
                             .ok()
                             .filter(|entry| creature::supports(entry, &sections));
-                        if let Some(entry) = styled {
+                        if let Some(reading) = &reading {
+                            open_link = self
+                                .loaded
+                                .as_ref()
+                                .unwrap()
+                                .reading_view(ui, reading, dirty);
+                        }
+                        if let Some(entry) = styled.filter(|_| reading.is_none()) {
                             let references = creature::spell_references(entry);
                             creature::show(ui, entry, &sections, |ui| {
                                 open_link = self.loaded.as_ref().unwrap().spell_links(
@@ -998,19 +1052,20 @@ impl Library {
                                 parsed.as_ref().ok(),
                                 &sections,
                                 self.module.is_none(),
+                                reading.is_some(),
                             );
                         }
                         if let Some(entry) =
                             parsed.as_ref().ok().filter(|entry| class::supports(entry))
                         {
-                            open_link = class::show_features(
+                            open_link = open_link.or(class::show_features(
                                 ui,
                                 entry,
                                 &self.loaded.as_ref().unwrap().notes,
                                 dirty,
-                            );
+                            ));
                         }
-                        if styled.is_none()
+                        if (styled.is_none() || reading.is_some())
                             && sections
                                 .iter()
                                 .any(|section| section.body.contains("<!-- splat:"))
@@ -1625,6 +1680,111 @@ mod tests {
             !text.contains(&"Rule"),
             "Empty mechanics section should be hidden"
         );
+    }
+
+    #[test]
+    fn reviewed_summary_keeps_rules_and_source_and_opens_related_entry() {
+        let loaded = load(None).unwrap();
+        let index = loaded
+            .notes
+            .iter()
+            .position(|note| note.name() == "Level 3: Bard Subclass")
+            .unwrap();
+        let entry = loaded.notes[index].entry.as_ref().unwrap();
+        let mut original = entry.clone();
+        original.fields.remove("splat_reading");
+        assert_eq!(
+            content::contracts::specification(entry).unwrap(),
+            content::contracts::specification(&original).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(content::required_references(entry).unwrap()).unwrap(),
+            serde_json::to_value(content::required_references(&original).unwrap()).unwrap()
+        );
+        assert!(
+            entry
+                .body
+                .contains("of Lore subclass is detailed after this class’s descrip-")
+        );
+        for width in [390.0, 900.0] {
+            let mut library = Library {
+                loaded: Some(load(None).unwrap()),
+                ..Default::default()
+            };
+            library.open_entry(index);
+            let ctx = egui::Context::default();
+            let mut frame = |events| {
+                ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 1400.0),
+                        )),
+                        events,
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            library.editor(ui, "Definition · class feature · Bard")
+                        });
+                    },
+                )
+            };
+            frame(vec![]);
+            let output = frame(vec![]);
+            let texts: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some(text),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                texts
+                    .iter()
+                    .all(|text| text.pos.x + text.galley.size().x <= width)
+            );
+            let rendered = texts
+                .iter()
+                .map(|text| text.galley.job.text.as_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+            for expected in [
+                "Bard Subclass",
+                "Bard · Level 3",
+                "Choose a Bard subclass.",
+                "Available in this package",
+                "Source text",
+            ] {
+                assert!(rendered.contains(expected), "{rendered}");
+            }
+            assert!(!rendered.contains("You gain a Bard subclass of your choice."));
+            // The published wording is still readable, and the related link navigates.
+            for label in ["Source text", "College of Lore"] {
+                let text = texts
+                    .iter()
+                    .find(|text| text.galley.job.text == label)
+                    .unwrap();
+                let pos = text.pos + text.galley.size() * 0.5;
+                for pressed in [true, false] {
+                    frame(vec![
+                        egui::Event::PointerMoved(pos),
+                        egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: Default::default(),
+                        },
+                    ]);
+                }
+                if label == "Source text" {
+                    let output = frame(vec![]);
+                    assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text.contains("You gain a Bard subclass of your choice."))));
+                }
+            }
+            assert!(library.draft.contains("# College of Lore"));
+        }
     }
 
     #[test]

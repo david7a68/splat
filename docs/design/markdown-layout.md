@@ -9,6 +9,32 @@ citations and tags in frontmatter. Put readable descriptions in ordinary
 Markdown. Game fields belong in marked tables or local YAML blocks. Headings
 have no parsing role: users can rename, move and fold them in Obsidian.
 
+## Optional reading summaries
+
+`splat_reading` holds edited reading text in frontmatter. It does not change an
+entry's identity, mechanical specification, execution status, or required
+references. The library uses it when present and otherwise keeps the ordinary
+reader. Published wording remains under **Source text**.
+
+```yaml
+splat_reading:
+  title: Bard Subclass
+  summary: |-
+    Choose a Bard subclass. Your subclass grants additional features as you gain Bard levels.
+
+    You gain all features from your chosen subclass whose required level is equal to or below your Bard level.
+  related_heading: Available in this package
+  related:
+    dnd2024:subclasses/bard_college_of_lore: College of Lore
+```
+
+Title and summary are required nonempty strings. `related` is an optional map
+from resource keys or UUIDs to display labels; `related_heading` defaults to
+“Related entries”. Links resolve within the current package. Missing or duplicate
+identities show as unavailable and do not become required game dependencies.
+The library obtains class and level from the existing rule `class_scope`, when
+present. Related links describe navigation, not the limits of a rule's choices.
+
 ## Mapped record tables
 
 Use a `splat:table` comment to declare the collection, its stable row identities,

@@ -220,6 +220,7 @@ pub fn specification(entry: &Entry) -> Result<Json, String> {
                 "splat_name",
                 "splat_origin",
                 "splat_sources",
+                "splat_reading",
                 "splat_conversion",
                 "splat_clauses",
                 "splat_requires_mechanics",

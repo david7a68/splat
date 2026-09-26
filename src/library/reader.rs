@@ -252,6 +252,7 @@ pub(super) fn show(
     entry: Option<&Entry>,
     sections: &[ReadingSection<'_>],
     builtin: bool,
+    has_summary: bool,
 ) {
     ui.add_space(12.0);
     if let Some(entry) = entry {
@@ -259,6 +260,10 @@ pub(super) fn show(
         preparation_summary(ui, entry, sections.iter().any(|s| s.title == "Source text"));
     }
     for section in sections {
+        if section.title == "Source text" && has_summary {
+            ui.collapsing("Source text", |ui| style::markdown(ui, section.body, false));
+            continue;
+        }
         if section.body.contains("<!-- splat:") {
             continue;
         } else {

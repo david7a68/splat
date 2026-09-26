@@ -10,6 +10,16 @@ splat_sources:
 - title: SRD 5.2.1
   locator: pp. 32
   url: https://www.dndbeyond.com/srd
+splat_reading:
+  title: Bard Subclass
+  summary: 'Choose a Bard subclass. Your subclass grants additional features as you gain Bard levels.
+
+
+    You gain all features from your chosen subclass whose required level is equal to or below your Bard
+    level.'
+  related_heading: Available in this package
+  related:
+    dnd2024:subclasses/bard_college_of_lore: College of Lore
 ---
 
 # Level 3: Bard Subclass

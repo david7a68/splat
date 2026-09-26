@@ -336,6 +336,7 @@ def deduplicate_source_tables(key, body, fields, boundaries):
 
 def generate(lines, require_complete=True):
     researched = read_research()
+    readings = yaml.safe_load(Path('scripts/srd_inputs/reading.yaml').read_text())
     registry = []
     table_boundaries=yaml.safe_load(Path('scripts/srd_inputs/table_excerpts.yaml').read_text())
     missing = []
@@ -411,6 +412,14 @@ def generate(lines, require_complete=True):
         front={'splat_schema':1,'splat_id':ident,'splat_kind':kind,'splat_key':key,'splat_name':name,
                'splat_origin':{'key':origin},'splat_sources':[{'title':'SRD 5.2.1','locator':'pp. '+', '.join(map(str,source['pages'])),'url':'https://www.dndbeyond.com/srd'}],
                **fields}
+        if key in readings:
+            reviewed = readings[key]
+            if reviewed['source_sha256'] != source['source_sha256']:
+                raise ValueError('Reading summary source changed: '+key)
+            reading = reviewed['reading']
+            if any(target not in names for target in reading.get('related', {})):
+                raise ValueError('Reading summary links to an unknown definition: '+key)
+            front['splat_reading'] = reading
         if required:front['splat_requires_mechanics']=required
         path=folder+'/'+s+'.md'
         body=source['body'].strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')
@@ -419,6 +428,8 @@ def generate(lines, require_complete=True):
         body=deduplicate_source_tables(key,body,fields,table_boundaries)
         outputs[path]=render_note(front, body, names, path)
         records.append({'key':key,'id':ident,'path':path,'source':origin,**conversion,'sha256':digest(outputs[path].encode())})
+    if readings.keys() - keys:
+        raise ValueError('Reading summaries name unknown definitions: '+', '.join(sorted(readings.keys() - keys)))
     extra = researched.keys() - keys
     if extra: raise ValueError('Research names unknown definitions: '+', '.join(sorted(extra)))
     if require_complete and missing:

@@ -115,7 +115,7 @@ def specification_fields(fields):
     return {key: value for key, value in fields.items()
             if key.startswith('splat_') and key not in {
                 'splat_schema', 'splat_id', 'splat_kind', 'splat_key', 'splat_name',
-                'splat_origin', 'splat_sources', 'splat_conversion', 'splat_clauses',
+                'splat_origin', 'splat_sources', 'splat_reading', 'splat_conversion', 'splat_clauses',
                 'splat_requires_mechanics', 'splat_contracts',
             }}
 
