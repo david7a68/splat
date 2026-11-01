@@ -180,7 +180,7 @@ mod live_monitor {
             .find(|v| v["id"] == config["active_campaign_id"])
             .unwrap();
         let remote = campaign["dndbeyond_campaign_id"].as_str().unwrap();
-        let session = crate::auth::connect(zeroize::Zeroizing::new(
+        let session = crate::auth::connect_live(zeroize::Zeroizing::new(
             keyring::Entry::new("splat", "dndbeyond-session")
                 .unwrap()
                 .get_password()

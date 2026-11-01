@@ -418,6 +418,18 @@ struct Pending {
     receiver: mpsc::Receiver<Result<Outcome, String>>,
     sent: Groups,
 }
+/// The sync states the brief names. Each has a word and an icon on the participant row.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SyncState {
+    Off,
+    FirstRead,
+    Matching,
+    Pending,
+    Conflict,
+    ReadOnly,
+    Error,
+}
+
 #[derive(Default)]
 pub struct CombatSync {
     pub enabled: bool,
@@ -432,6 +444,9 @@ pub struct CombatSync {
     refresh_only: bool,
     pub error: Option<String>,
     pub updated: bool,
+    /// Never talks to D&D Beyond. It only shows the state it was given.
+    #[cfg(test)]
+    simulated: bool,
 }
 impl Drop for CombatSync {
     fn drop(&mut self) {
@@ -441,6 +456,64 @@ impl Drop for CombatSync {
     }
 }
 impl CombatSync {
+    /// A sync in a state test builds cannot read from a live sheet. It only shows that.
+    #[cfg(test)]
+    pub fn simulated_state(state: SyncState, character: u64, max_hp: i64, damage: i64) -> Self {
+        if state == SyncState::Conflict {
+            return Self::simulated_conflict(character, max_hp, damage);
+        }
+        let mut sync = Self::default();
+        sync.simulated = true;
+        sync.enabled = state != SyncState::Off;
+        if matches!(state, SyncState::FirstRead | SyncState::Off) {
+            return sync;
+        }
+        let read = Remote::from_raw(
+            character,
+            max_hp,
+            &json!({"id":character,"canEdit":state != SyncState::ReadOnly,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
+        )
+        .expect("simulated sheet");
+        sync.desired = read.groups.clone();
+        sync.remote = Some(read);
+        if state == SyncState::Pending {
+            sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 1).into();
+        }
+        if state == SyncState::Error {
+            sync.error = Some("Could not read this character from D&D Beyond.".into());
+        }
+        sync
+    }
+
+    /// The state after a refresh finds that D&D Beyond and Splat changed the same HP.
+    /// Test builds cannot read a live sheet, so a visual test shows the panel this way.
+    #[cfg(test)]
+    pub fn simulated_conflict(character: u64, max_hp: i64, damage: i64) -> Self {
+        let read = Remote::from_raw(
+            character,
+            max_hp,
+            &json!({"id":character,"canEdit":true,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
+        )
+        .expect("simulated sheet");
+        let mut sync = Self::default();
+        sync.enabled = true;
+        sync.simulated = true;
+        sync.remote = Some(read.clone());
+        sync.desired = read.groups.clone();
+        sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 4).into();
+        let sent = sync.desired.clone();
+        let mut changed = read;
+        changed.groups.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 9).into();
+        sync.accept(
+            Outcome {
+                remote: changed,
+                blocked: BTreeMap::new(),
+            },
+            &sent,
+        );
+        sync
+    }
+
     pub fn stop(&mut self) {
         if let Some(gate) = &self.gate {
             gate.store(false, Ordering::SeqCst);
@@ -451,6 +524,38 @@ impl CombatSync {
     }
     pub fn ready(&self) -> bool {
         self.enabled && self.remote.is_some()
+    }
+    pub fn state(&self) -> SyncState {
+        if !self.blocked.is_empty() {
+            SyncState::Conflict
+        } else if self.error.is_some() {
+            SyncState::Error
+        } else if !self.enabled {
+            SyncState::Off
+        } else {
+            match &self.remote {
+                None => SyncState::FirstRead,
+                Some(remote) if !remote.can_edit => SyncState::ReadOnly,
+                Some(_) if self.busy() || self.dirty() => SyncState::Pending,
+                Some(_) => SyncState::Matching,
+            }
+        }
+    }
+    /// Test builds have no session, and `tick` stops sync without one. Keep it on.
+    #[cfg(test)]
+    pub fn keep_without_connection(&mut self) {
+        self.simulated = true;
+    }
+    #[cfg(not(test))]
+    pub fn keep_without_connection(&mut self) {}
+    /// Turn sync on. It reads the sheet before it writes anything.
+    pub fn start(&mut self) {
+        self.enabled = true;
+        self.remote = None;
+        self.desired.clear();
+        self.blocked.clear();
+        self.next = None;
+        self.error = None;
     }
     pub fn busy(&self) -> bool {
         self.pending.is_some()
@@ -487,6 +592,10 @@ impl CombatSync {
         campaign: &str,
         id: &str,
     ) {
+        #[cfg(test)]
+        if self.simulated {
+            return;
+        }
         let scope = (epoch, campaign.to_owned(), id.to_owned());
         if self.scope.as_ref() != Some(&scope) {
             let enabled = self.enabled;
@@ -649,6 +758,73 @@ impl CombatSync {
         self.error = None;
         self.updated = true;
     }
+    /// Each conflict with both values and its two ways out. The run shows this beside
+    /// the roster, so it does not stop the table.
+    pub fn conflicts(&mut self, ui: &mut egui::Ui) {
+        use crate::design::{self, Action, Density, Tone, Type, colors};
+        for (key, message) in self.blocked.clone() {
+            design::message(
+                ui,
+                Tone::Warning,
+                &format!("{}: {message}", group_label(&key)),
+            );
+            for (label, value) in [
+                ("Splat", self.desired.get(&key)),
+                (
+                    "D&D Beyond",
+                    self.remote.as_ref().and_then(|r| r.groups.get(&key)),
+                ),
+            ] {
+                ui.label(
+                    Type::Body
+                        .rich(
+                            ui,
+                            format!(
+                                "{label}: {}",
+                                describe(&key, value, self.max_hp().unwrap_or(0))
+                            ),
+                        )
+                        .color(colors().text),
+                );
+            }
+            ui.push_id(&key, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    let busy = self.busy().then_some("Wait for the current sheet read.");
+                    if Action::secondary("Use D&D Beyond values")
+                        .density(Density::Read)
+                        .blocked(busy)
+                        .show(ui)
+                        .clicked()
+                    {
+                        if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(&key)) {
+                            self.desired.insert(key.clone(), value.clone());
+                        } else {
+                            self.desired.remove(&key);
+                        }
+                        self.blocked.remove(&key);
+                    }
+                    let writable = self
+                        .remote
+                        .as_ref()
+                        .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
+                    if Action::quiet("Keep Splat values and retry")
+                        .density(Density::Read)
+                        .blocked(busy.or(
+                            (!writable).then_some(
+                                "This session cannot edit this character on D&D Beyond.",
+                            ),
+                        ))
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.blocked.remove(&key);
+                        self.changed = None;
+                        self.next = None;
+                    }
+                });
+            });
+        }
+    }
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let was = self.enabled;
         ui.checkbox(&mut self.enabled, "Sync combat stats with D&D Beyond");
@@ -656,15 +832,11 @@ impl CombatSync {
             self.stop();
         }
         if !was && self.enabled {
-            self.remote = None;
-            self.desired.clear();
-            self.blocked.clear();
-            self.next = None;
-            self.error = None;
+            self.start();
         }
         if !self.enabled {
             if let Some(error) = &self.error {
-                ui.colored_label(egui::Color32::LIGHT_RED, error);
+                ui.colored_label(crate::design::colors().result.error, error);
             }
             ui.weak("Enable to read the live sheet. Edits made here will then update D&D Beyond.");
             return;
@@ -677,11 +849,13 @@ impl CombatSync {
             });
         }
         if let Some(e) = &self.error {
-            ui.colored_label(egui::Color32::LIGHT_RED, e);
+            ui.colored_label(crate::design::colors().result.error, e);
         }
         ui.horizontal(|ui| {
-            if ui
-                .add_enabled(!self.busy(), egui::Button::new("Refresh / verify"))
+            if crate::design::Action::secondary("Refresh / verify")
+                .density(crate::design::Density::Read)
+                .blocked_if(self.busy(), "Wait for the current sheet read.")
+                .show(ui)
                 .clicked()
             {
                 self.refresh_only = true;
@@ -693,54 +867,7 @@ impl CombatSync {
                 ui.label("Combat values match the last read");
             }
         });
-        for (key, message) in self.blocked.clone() {
-            ui.group(|ui| {
-                ui.colored_label(
-                    egui::Color32::LIGHT_YELLOW,
-                    format!("{}: {message}", group_label(&key)),
-                );
-                for (label, value) in [
-                    ("Splat", self.desired.get(&key)),
-                    (
-                        "D&D Beyond",
-                        self.remote.as_ref().and_then(|r| r.groups.get(&key)),
-                    ),
-                ] {
-                    ui.label(format!(
-                        "{label}: {}",
-                        describe(&key, value, self.max_hp().unwrap_or(0))
-                    ));
-                }
-                ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .add_enabled(!self.busy(), egui::Button::new("Use D&D Beyond values"))
-                        .clicked()
-                    {
-                        if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(&key)) {
-                            self.desired.insert(key.clone(), value.clone());
-                        } else {
-                            self.desired.remove(&key);
-                        }
-                        self.blocked.remove(&key);
-                    }
-                    if ui
-                        .add_enabled(
-                            !self.busy()
-                                && self
-                                    .remote
-                                    .as_ref()
-                                    .is_some_and(|r| r.can_edit && r.groups.contains_key(&key)),
-                            egui::Button::new("Keep Splat values and retry"),
-                        )
-                        .clicked()
-                    {
-                        self.blocked.remove(&key);
-                        self.changed = None;
-                        self.next = None;
-                    }
-                });
-            });
-        }
+        self.conflicts(ui);
         let Some(remote) = &self.remote else {
             ui.label("Connect in Settings and wait for the first sheet read.");
             return;
@@ -787,7 +914,7 @@ impl CombatSync {
                     }
                 });
             }
-            ui.collapsing("Sheet conditions", |ui| {
+            crate::design::section(ui, "Sheet conditions", |ui| {
                 if let Some(Value::Object(conditions)) = self.desired.get_mut("conditions") {
                     ui.horizontal_wrapped(|ui| {
                         for (id, name) in CONDITIONS {
@@ -816,7 +943,7 @@ impl CombatSync {
                     });
                 }
             });
-            ui.collapsing("Spell slots spent", |ui| {
+            crate::design::section(ui, "Spell slots spent", |ui| {
                 for (key, label, levels) in
                     [("slots", "Ordinary slots", 9), ("pact", "Pact slots", 5)]
                 {
@@ -838,7 +965,7 @@ impl CombatSync {
                     }
                 }
             });
-            ui.collapsing("Limited uses spent", |ui| {
+            crate::design::section(ui, "Limited uses spent", |ui| {
                 for (key, label) in labels {
                     if let Some(resource) = self.desired.get_mut(&key) {
                         ui.push_id(&key, |ui| {

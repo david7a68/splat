@@ -12,13 +12,16 @@ trait Vault: Send {
     fn forget(&self) -> Result<(), String>;
 }
 
+#[cfg(not(test))]
 struct DesktopVault;
 
+#[cfg(not(test))]
 fn entry() -> Result<keyring::Entry, String> {
     keyring::Entry::new("splat", "dndbeyond-session")
         .map_err(|_| "The desktop keyring is unavailable.".into())
 }
 
+#[cfg(not(test))]
 impl Vault for DesktopVault {
     fn load(&self) -> Result<Option<Zeroizing<String>>, String> {
         match entry()?.get_password() {
@@ -42,6 +45,25 @@ impl Vault for DesktopVault {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(_) => Err("Local session cleared, but the saved cookie could not be removed. Unlock your keyring and select Disconnect again.".into()),
         }
+    }
+}
+
+// Test builds have no route to the desktop keyring: nothing to load, nothing saved.
+#[cfg(test)]
+struct DesktopVault;
+
+#[cfg(test)]
+impl Vault for DesktopVault {
+    fn load(&self) -> Result<Option<Zeroizing<String>>, String> {
+        Ok(None)
+    }
+
+    fn save(&self, _: &str) -> Result<(), String> {
+        Err("Connected, but the session could not be saved in the desktop keyring.".into())
+    }
+
+    fn forget(&self) -> Result<(), String> {
+        Ok(())
     }
 }
 

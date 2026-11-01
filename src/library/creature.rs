@@ -1,7 +1,10 @@
 //! A reading view of creature values, with the original rules prose retained.
 use super::presentation;
-use crate::reader_style::{self, ACCENT, card, section_heading};
-use eframe::egui::{self, RichText};
+use crate::design::{
+    self, Type, colors,
+    reader::{self as reader_style, heavy_rule, section_heading},
+};
+use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use splat::content::{Entry, Reference};
 
@@ -79,6 +82,11 @@ fn rules_prose(entry: &Entry, source: &str) -> String {
                 return false;
             }
             if line.starts_with("HP ") && field(entry, "hit_points_text").is_some() {
+                return false;
+            }
+            if line.starts_with("Passive Perception")
+                && field(entry, "senses_text").is_some_and(|senses| senses.contains(line))
+            {
                 return false;
             }
             if line == "MOD SAVE MOD SAVE MOD SAVE"
@@ -172,34 +180,106 @@ pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
         .collect()
 }
 
-fn prose(ui: &mut egui::Ui, text: &str, spell_links: &mut impl FnMut(&mut egui::Ui)) {
+fn prose(ui: &mut egui::Ui, text: &str, spell_links: &mut impl FnMut(&mut egui::Ui, &str)) {
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
         reader_style::source_prose(ui, paragraph);
         if paragraph.starts_with("Spellcasting.") {
-            spell_links(ui);
+            spell_links(ui, paragraph);
         }
     }
 }
 
-fn ability_card(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
-    card(ui, 8, |ui| {
-        ui.vertical_centered(|ui| {
-            ui.label(
-                RichText::new(ability[..3].to_uppercase())
-                    .color(ACCENT)
-                    .strong(),
-            );
-            ui.label(RichText::new(value(entry, ability)).size(22.0).strong());
-            let modifier = stat(entry, ability).map(|score| (score - 10).div_euclid(2));
-            ui.label(modifier.map_or_else(|| "Mod —".into(), |v| format!("Mod {v:+}")));
-            // An absent override does not establish proficiency or a save total.
-            let save = stat(entry, &format!("save_{ability}"));
-            ui.label(
-                RichText::new(save.map_or_else(|| "Save —".into(), |v| format!("Save {v:+}")))
-                    .small(),
-            );
-        });
+/// One ability row of the stat block's attribute table.
+fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
+    let c = colors();
+    let modifier = stat(entry, ability).map(|score| (score - 10).div_euclid(2));
+    // An absent override does not establish proficiency or a save total.
+    let save = stat(entry, &format!("save_{ability}"));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = design::XS;
+        cell(
+            ui,
+            30.0,
+            &ability[..3].to_uppercase(),
+            Type::StatLabel,
+            c.text,
+        );
+        cell(ui, 24.0, &value(entry, ability), Type::Stat, c.text);
+        cell(
+            ui,
+            26.0,
+            &modifier.map_or_else(|| "—".into(), |v| format!("{v:+}")),
+            Type::Stat,
+            c.muted,
+        );
+        cell(
+            ui,
+            56.0,
+            &save.map_or_else(|| "Save —".into(), |v| format!("Save {v:+}")),
+            Type::Stat,
+            c.muted,
+        );
     });
+}
+
+fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Color32) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, role.line()), egui::Sense::hover());
+    let galley = design::one_line(ui, text, role.font(ui), color, width + design::S);
+    ui.painter().galley(rect.min, galley, color);
+}
+
+/// Armor class, hit points and initiative, under capital labels.
+fn vitals(ui: &mut egui::Ui, entry: &Entry) {
+    let c = colors();
+    let hp = field(entry, "hit_points_text")
+        .map(str::to_owned)
+        .or_else(|| {
+            hit_points_line(entry).and_then(|line| {
+                line.strip_prefix("HP ")
+                    .map(|text| text.trim_end_matches('\\').trim().to_owned())
+            })
+        })
+        .unwrap_or_else(|| value(entry, "max_hp"));
+    let initiative = stat(entry, "initiative").map_or_else(|| "—".into(), |v| format!("{v:+}"));
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);
+        for (label, text) in [
+            ("ARMOR CLASS", value(entry, "armor_class")),
+            ("HIT POINTS", hp),
+            ("INITIATIVE", initiative),
+        ] {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.label(Type::Label.rich(ui, label).color(c.muted));
+                ui.label(Type::Prose.rich(ui, text).color(c.text));
+            });
+        }
+    });
+}
+
+/// The body line that gives this creature's hit points, such as `HP 22 (4d8 + 4)`. The
+/// vitals show it, with the dice, so the page says it once.
+fn hit_points_line(entry: &Entry) -> Option<&str> {
+    let max = stat(entry, "max_hp")?;
+    entry.body.lines().map(str::trim).find(|line| {
+        line.strip_prefix("HP ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|number| number.parse::<i64>().ok())
+            == Some(max)
+    })
+}
+
+fn without_line(body: &str, line: Option<&str>) -> String {
+    let Some(line) = line else {
+        return body.to_owned();
+    };
+    let mut out = String::with_capacity(body.len());
+    for text in body.split_inclusive('\n') {
+        if text.trim() != line {
+            out.push_str(text);
+        }
+    }
+    out
 }
 
 fn detail(entry: &Entry, key: &str) -> Option<String> {
@@ -229,52 +309,72 @@ pub(super) fn show(
     ui: &mut egui::Ui,
     entry: &Entry,
     sections: &[presentation::ReadingSection<'_>],
-    mut spell_links: impl FnMut(&mut egui::Ui),
+    mut spell_links: impl FnMut(&mut egui::Ui, &str),
 ) {
-    ui.add_space(12.0);
+    ui.add_space(design::S);
     let identity = [size(entry), field(entry, "type"), field(entry, "alignment")]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>()
         .join(" · ");
-    reader_style::identity(ui, &identity);
-    let hp = field(entry, "hit_points_text")
-        .map(str::to_owned)
-        .unwrap_or_else(|| value(entry, "max_hp"));
-    let initiative = stat(entry, "initiative").map_or_else(|| "—".into(), |v| format!("{v:+}"));
-    reader_style::facts(
-        ui,
-        &[
-            ("Armor class".into(), value(entry, "armor_class")),
-            ("Hit points".into(), hp),
-            ("Initiative".into(), initiative),
-        ],
-    );
-    ui.add_space(10.0);
-    let per_row = if ui.available_width() < 480.0 { 3 } else { 6 };
-    for abilities in ABILITIES.chunks(per_row) {
-        ui.columns(abilities.len(), |columns| {
-            for (column, ability) in columns.iter_mut().zip(abilities) {
-                ability_card(column, entry, ability);
+    reader_style::identity(ui, &reader_style::human_label(&identity));
+    heavy_rule(ui);
+    ui.add_space(design::S);
+    vitals(ui, entry);
+    ui.add_space(design::S);
+    // The rulebook's table: physical abilities beside mental ones.
+    let two_columns = ui.available_width() >= 300.0;
+    let any_ability = ABILITIES
+        .iter()
+        .any(|ability| stat(entry, ability).is_some());
+    if any_ability {
+        design::rule(ui);
+        ui.add_space(design::XS);
+    }
+    if !any_ability {
+        // An authored creature can have no scores. There is nothing to tabulate.
+    } else if two_columns {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = design::M;
+            for column in ABILITIES.chunks(3) {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 1.0;
+                    for ability in column {
+                        ability_row(ui, entry, ability);
+                    }
+                });
             }
         });
-        ui.add_space(6.0);
+    } else {
+        ui.spacing_mut().item_spacing.y = 1.0;
+        for ability in ABILITIES {
+            ability_row(ui, entry, ability);
+        }
     }
-    ui.add_space(4.0);
+    if any_ability {
+        ui.add_space(design::XS);
+        design::rule(ui);
+        ui.add_space(design::XS);
+    }
+    ui.spacing_mut().item_spacing.y = 2.0;
     for (key, label) in DETAILS {
         if let Some(text) = detail(entry, key).filter(|text| !text.is_empty()) {
             reader_style::detail(ui, label, &text);
         }
     }
-    ui.add_space(8.0);
+    ui.add_space(design::XS);
+    heavy_rule(ui);
+    ui.add_space(design::S);
+    ui.spacing_mut().item_spacing.y = design::XS;
     for section in sections {
         if section.title == "Source text" {
-            prose(ui, &rules_prose(entry, section.body), &mut spell_links);
+            let body = without_line(section.body, hit_points_line(entry));
+            prose(ui, &rules_prose(entry, &body), &mut spell_links);
         } else {
             let body = if section.body.contains("<!-- splat:") {
                 authored_prose(section.body)
             } else {
-                section.body.to_owned()
+                without_line(section.body, hit_points_line(entry))
             };
             if body.trim().is_empty() {
                 continue;

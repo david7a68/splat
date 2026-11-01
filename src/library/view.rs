@@ -1,0 +1,211 @@
+//! The one entry reader. The Library, Lookup, the run's side panel, and campaign
+//! entries all call `show`, so an entry looks the same everywhere (T6.4).
+use super::{class, creature, presentation, reader};
+use crate::design::{self, Type, colors, reader as style};
+use eframe::egui;
+use splat::content::{Entry, Reading, Reference};
+use uuid::Uuid;
+
+/// What the reader's links can open. An index belongs to the implementer.
+pub(crate) trait Links {
+    /// The one entry a reference names, or nothing if it is missing or ambiguous.
+    fn find(&self, reference: &Reference) -> Option<(usize, String)>;
+    /// Like `find`, for a reference that must name a spell.
+    fn find_spell(&self, reference: &Reference) -> Option<(usize, String)>;
+    /// Spells named in the words of a stat block paragraph.
+    fn spells_named_in(&self, text: &str) -> Vec<(usize, String)>;
+}
+
+/// For an entry shown with nothing to link to.
+pub(crate) struct NoLinks;
+impl Links for NoLinks {
+    fn find(&self, _: &Reference) -> Option<(usize, String)> {
+        None
+    }
+    fn find_spell(&self, _: &Reference) -> Option<(usize, String)> {
+        None
+    }
+    fn spells_named_in(&self, _: &str) -> Vec<(usize, String)> {
+        Vec::new()
+    }
+}
+
+fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Option<usize> {
+    ui.add_space(design::M);
+    style::markdown(ui, &reading.summary, false);
+    let mut selected = None;
+    if !reading.related.is_empty() {
+        ui.add_space(design::S);
+        style::section_heading(ui, &reading.related_heading);
+        for (target, label) in &reading.related {
+            let reference = Uuid::parse_str(target)
+                .map_or_else(|_| Reference::Key(target.clone()), Reference::Id);
+            if let Some((index, _)) = links.find(&reference) {
+                if design::link(ui, label).clicked() {
+                    selected = Some(index);
+                }
+            } else {
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("{label} (unavailable)"))
+                        .color(colors().muted),
+                );
+            }
+        }
+    }
+    selected
+}
+
+fn spell_links(
+    ui: &mut egui::Ui,
+    references: &[Reference],
+    paragraph: &str,
+    links: &dyn Links,
+) -> Option<usize> {
+    let mut targets: Vec<Option<(usize, String)>> = references
+        .iter()
+        .map(|reference| links.find_spell(reference))
+        .collect();
+    for named in links.spells_named_in(paragraph) {
+        if !targets.contains(&Some(named.clone())) {
+            targets.push(Some(named));
+        }
+    }
+    if targets.is_empty() {
+        return None;
+    }
+    let mut selected = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(
+            Type::Small
+                .rich(ui, "Spell descriptions:")
+                .color(colors().muted),
+        );
+        for target in targets {
+            if let Some((index, name)) = target {
+                if design::link(ui, &name).clicked() {
+                    selected = Some(index);
+                }
+            } else {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "Spell unavailable")
+                        .color(colors().muted),
+                )
+                .on_hover_text(
+                    "This spell is missing or has a duplicate identity in this package.",
+                );
+            }
+        }
+    });
+    selected
+}
+
+/// What the footer of an entry says about where it comes from.
+pub(crate) struct Origin<'a> {
+    pub path: &'a str,
+    pub owner: &'a str,
+}
+
+/// Draw an entry's content. Returns the index of a link the DM followed.
+pub(crate) fn show(
+    ui: &mut egui::Ui,
+    name: &str,
+    entry: Option<&Entry>,
+    body: &str,
+    origin: &Origin<'_>,
+    builtin: bool,
+    links: &dyn Links,
+) -> Option<usize> {
+    // Rules text keeps its measure in a wide side panel too.
+    style::measure(ui, |ui| {
+        let mut open_link = None;
+        let reading = entry.and_then(|entry| entry.reading().ok().flatten());
+        let sections = presentation::reading_sections(body, name);
+        let styled = entry.filter(|entry| creature::supports(entry, &sections));
+        if let Some(reading) = &reading {
+            open_link = reading_view(ui, reading, links);
+        }
+        if let Some(entry) = styled.filter(|_| reading.is_none()) {
+            let references = creature::spell_references(entry);
+            creature::show(ui, entry, &sections, |ui, paragraph| {
+                open_link = open_link.or(spell_links(ui, &references, paragraph, links));
+            });
+        } else {
+            reader::show(ui, entry, &sections, builtin, reading.is_some());
+        }
+        if let Some(entry) = entry.filter(|entry| class::supports(entry)) {
+            open_link = open_link.or(class::show_features(ui, entry, links));
+        }
+        let technical: Vec<_> = sections
+            .iter()
+            .filter(|section| section.body.contains("<!-- splat:"))
+            .collect();
+        if (styled.is_none() || reading.is_some()) && !technical.is_empty() {
+            ui.add_space(design::M);
+            design::quiet_section(ui, "Technical details", |ui| {
+                for section in technical {
+                    design::quiet_section(ui, &section.title, |ui| {
+                        style::markdown(ui, section.body, true);
+                    });
+                }
+            });
+        }
+        ui.add_space(design::L);
+        design::rule(ui);
+        let conversion = entry.and_then(|e| e.fields.get("splat_conversion"));
+        let status = conversion
+            .and_then(|c| c.get("status"))
+            .and_then(|s| s.as_str());
+        let support = match status {
+            Some("specified") => "Incomplete",
+            Some("informational") => "Reference only",
+            Some("partial") => "Conversion incomplete",
+            _ => "Not established",
+        };
+        design::quiet_section(ui, &format!("Engine support · {support}"), |ui| {
+            ui.label(support);
+            if let Some(conversion) = conversion {
+                for key in ["conversion_gaps", "engine_gaps"] {
+                    for gap in conversion
+                        .get(key)
+                        .and_then(|v| v.as_sequence())
+                        .into_iter()
+                        .flatten()
+                    {
+                        if let Some(gap) = gap.as_str() {
+                            ui.monospace(gap);
+                        }
+                    }
+                }
+            } else {
+                ui.label("Draft structure does not establish engine support.");
+            }
+        });
+        design::quiet_section(ui, "Source and identifiers", |ui| {
+            ui.label(origin.owner);
+            ui.label(origin.path);
+            if let Some(entry) = entry {
+                ui.label(format!("{} · {}", entry.kind, entry.id));
+                if let Some(key) = &entry.key {
+                    ui.monospace(key);
+                }
+                if let Some(sources) = entry
+                    .fields
+                    .get("splat_sources")
+                    .and_then(|v| v.as_sequence())
+                {
+                    for source in sources {
+                        let title = source
+                            .get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Source");
+                        let locator = source.get("locator").and_then(|v| v.as_str()).unwrap_or("");
+                        ui.label(format!("{title} · {locator}"));
+                    }
+                }
+            }
+        });
+        open_link
+    })
+}

@@ -1,4 +1,3 @@
-use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, io::Write, path::PathBuf};
 use uuid::Uuid;
@@ -60,7 +59,7 @@ impl UserData {
                 || module.name.trim().is_empty()
                 || !module.path.is_absolute()
             {
-                return Err("Each module needs a unique UUID, folder, and a name.".into());
+                return Err("Each package needs a unique UUID, folder, and a name.".into());
             }
         }
         let mut ids = HashSet::new();
@@ -115,7 +114,8 @@ impl UserData {
                 || self.modules[..i].iter().any(|m| overlaps(&m.path))
             {
                 return Err(
-                    "Keep module folders separate from campaign folders and other modules.".into(),
+                    "Keep package folders separate from campaign folders and other packages."
+                        .into(),
                 );
             }
         }
@@ -188,10 +188,17 @@ pub struct Store {
 }
 
 impl Store {
+    #[cfg(not(test))]
     pub fn user() -> Result<Self, String> {
-        let dirs = ProjectDirs::from("", "", "splat")
+        let dirs = directories::ProjectDirs::from("", "", "splat")
             .ok_or("Could not find your user settings directory.")?;
         Ok(Self::at(dirs.config_dir().join("settings.json")))
+    }
+
+    // Test builds must name a temporary file. They cannot open the user's settings.
+    #[cfg(test)]
+    pub fn user() -> Result<Self, String> {
+        Err("Test builds have no user settings.".into())
     }
 
     pub(crate) fn at(path: PathBuf) -> Self {

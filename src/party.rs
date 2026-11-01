@@ -1,8 +1,12 @@
 //! Character viewer with optional combat synchronization.
-use crate::{auth::Session, party_sync::Reader};
+use crate::{
+    auth::Session,
+    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    party_sync::Reader,
+};
 use eframe::egui;
 use serde_json::Value;
-use splat::character::{ABILITIES, Cache, EntitySnapshot, now};
+use splat::character::{ABILITIES, EntitySnapshot};
 use std::time::Duration;
 #[derive(Default)]
 pub struct Party {
@@ -12,8 +16,18 @@ pub struct Party {
     combat: crate::combat_sync::CombatSync,
     epoch: u64,
     content_entry: Option<(String, Result<splat::content::Entry, String>)>,
+    /// Sync was on when the DM left this page, so it stopped. The rail says so.
+    pub sync_stopped: bool,
+    /// The DM asked to go where this campaign's D&D Beyond link is set.
+    pub wants_link_page: bool,
+    pub wants_settings: bool,
 }
 impl Party {
+    #[cfg(test)]
+    pub fn busy(&self) -> bool {
+        self.reader.loading()
+    }
+
     pub fn sync(
         &mut self,
         ctx: &egui::Context,
@@ -24,32 +38,58 @@ impl Party {
     ) {
         self.epoch = epoch;
         if !visible || !connected {
+            if self.combat.enabled {
+                self.sync_stopped = true;
+            }
             self.combat.stop();
+        }
+        if visible {
+            self.sync_stopped = false;
         }
         self.reader.sync(ctx, epoch, campaign, connected, visible);
     }
+    /// The Party page's copy of a character, for the run's side panel.
+    pub fn sheet(&self, id: &str) -> Option<&EntitySnapshot> {
+        self.reader.sheets.get(id)
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
-        ui.visuals_mut().override_text_color = Some(egui::Color32::from_gray(205));
-        ui.visuals_mut().weak_text_color = Some(egui::Color32::from_gray(165));
-        ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
+        let c = colors();
         self.reader.tick(session.clone(), ui.ctx());
-        ui.horizontal(|ui| {
-            ui.heading("Party");
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui
-                    .add_enabled(
-                        session.is_some() && linked && !self.reader.loading(),
-                        egui::Button::new("Refresh party"),
-                    )
-                    .clicked()
-                    && let Some(session) = session.clone()
-                {
-                    self.reader.refresh(session, ui.ctx(), true);
-                }
-            });
+        let can_refresh = if session.is_none() {
+            Some("Connect to D&D Beyond in Settings to refresh.")
+        } else if !linked {
+            Some("Link this campaign to D&D Beyond first.")
+        } else if self.reader.loading() {
+            Some("Already refreshing.")
+        } else {
+            None
+        };
+        let mut refresh = false;
+        let mut open_link = false;
+        design::page_header(ui, "Party", None, |ui| {
+            if linked {
+                refresh = Action::secondary("Refresh party")
+                    .icon(icons::REFRESH)
+                    .blocked(can_refresh)
+                    .show(ui)
+                    .clicked();
+            } else {
+                open_link = Action::primary("Link this campaign").show(ui).clicked();
+            }
         });
+        self.wants_link_page = open_link;
+        if refresh && let Some(session) = session.clone() {
+            self.reader.refresh(session, ui.ctx(), true);
+        }
         if !linked {
-            ui.label("Link this campaign to D&D Beyond in Settings to see its party.");
+            design::empty_state(
+                ui,
+                icons::PARTY,
+                "Link this campaign to D&D Beyond to see its party",
+                "Choose its D&D Beyond campaign under Campaign, Link and folder. The rest of Splat works without a link.",
+                |_| {},
+            );
             return;
         }
         let cached = self
@@ -60,116 +100,123 @@ impl Party {
         let checked = self.reader.selected.as_ref().is_some_and(|id| {
             self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
         }) && self.reader.error.is_none();
-        let status = if session.is_none() {
-            "Offline"
+        let (status_icon, status_word, status_color) = if session.is_none() {
+            (icons::OFFLINE, "Offline", c.connection.offline)
         } else if self.reader.loading() {
-            "Refreshing"
+            (icons::BUSY, "Refreshing", c.connection.busy)
         } else if !checked {
-            "Connected · Cached sheet"
+            (icons::ONLINE, "Connected · Cached sheet", c.connection.busy)
         } else if self.reader.stream_open {
-            "Live updates"
+            (icons::ONLINE, "Live updates", c.connection.connected)
         } else {
-            "Connected · Checking for updates"
+            (
+                icons::ONLINE,
+                "Connected · Checking for updates",
+                c.connection.connected,
+            )
         };
         ui.horizontal_wrapped(|ui| {
             if self.reader.loading() {
                 ui.spinner();
             }
             let age = cached
-                .map(|record| {
-                    format!(
-                        " · Fetched {}",
-                        fetch_age(now().saturating_sub(record.source.fetched_at))
-                    )
-                })
+                .map(|record| format!(" · Fetched {}", record_age(record)))
                 .unwrap_or_default();
-            ui.weak(format!("{status}{age}"))
-                .on_hover_text(if session.is_none() {
-                    "Showing saved sheets. Connect in Settings to get updates."
-                } else {
-                    "Sheets refresh automatically. Use Refresh party to request the latest data."
-                });
+            design::status(
+                ui,
+                Status {
+                    icon: status_icon,
+                    word: &format!("{status_word}{age}"),
+                    color: status_color,
+                },
+            )
+            .on_hover_text(if session.is_none() {
+                "Showing saved sheets. Connect in Settings to get updates."
+            } else {
+                "Sheets refresh automatically. Use Refresh party to request the latest data."
+            });
         });
         if let Some(e) = &self.reader.error {
-            ui.colored_label(egui::Color32::LIGHT_RED, e);
+            design::message(ui, Tone::Error, e);
         }
         if let Some(e) = &self.reader.warning {
-            ui.colored_label(egui::Color32::LIGHT_YELLOW, format!("Local storage: {e}"));
+            design::message(ui, Tone::Warning, &format!("Local storage: {e}"));
         }
         ui.ctx().request_repaint_after(Duration::from_secs(1));
-        let mut selected = self.reader.selected.clone();
-        ui.horizontal_wrapped(|ui| {
-            for m in &self.reader.members {
-                let record = self.reader.sheets.get(&m.id);
-                let level = record.map(|r| r.character.level).or(m.level);
-                let classes = record
-                    .map(|r| {
-                        r.character
-                            .classes
-                            .iter()
-                            .filter_map(|c| c["name"].as_str())
-                            .collect::<Vec<_>>()
-                            .join(" / ")
-                    })
-                    .unwrap_or_default();
-                let summary = [
-                    level.map(|n| format!("Level {n}")).unwrap_or_default(),
-                    classes,
-                ]
-                .into_iter()
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" · ");
-                let mut label = egui::text::LayoutJob::default();
-                label.append(
-                    &m.name,
-                    0.0,
-                    egui::TextFormat {
-                        font_id: egui::FontId::proportional(18.0),
-                        color: ui.visuals().strong_text_color(),
-                        ..Default::default()
+        if self.reader.members.is_empty() {
+            if self.reader.loaded {
+                ui.label("This campaign has no party members.");
+            } else if !self.reader.loading() {
+                design::empty_state(
+                    ui,
+                    icons::PARTY,
+                    "No local characters yet",
+                    "Connect to D&D Beyond in Settings to load this party.",
+                    |ui| {
+                        if Action::primary("Open Settings").show(ui).clicked() {
+                            self.wants_settings = true;
+                        }
                     },
                 );
-                if !summary.is_empty() {
-                    label.append(
-                        &format!("\n{summary}"),
-                        0.0,
-                        egui::TextFormat {
-                            font_id: egui::FontId::proportional(13.0),
-                            color: ui.visuals().weak_text_color(),
-                            ..Default::default()
-                        },
-                    );
-                }
-                if ui
-                    .add(
-                        egui::Button::new(label)
-                            .selected(selected.as_ref() == Some(&m.id))
-                            .min_size(egui::vec2(190.0, 58.0)),
-                    )
-                    .clicked()
-                {
-                    selected = Some(m.id.clone());
-                    self.search.clear();
-                }
             }
-        });
+            return;
+        }
+        let list_width = (ui.available_width() * 0.42).clamp(330.0, 520.0);
+        let mut selected = self.reader.selected.clone();
+        egui::SidePanel::left("party_members")
+            .resizable(false)
+            .exact_width(list_width)
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
+                left: 0,
+                right: design::M as i8,
+                top: 0,
+                bottom: 0,
+            }))
+            .show_inside(ui, |ui| {
+                member_header(ui);
+                design::rule(ui);
+                egui::ScrollArea::vertical()
+                    .id_salt("party_members_list")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        for m in &self.reader.members {
+                            let record = self.reader.sheets.get(&m.id);
+                            if member_row(ui, m, record, selected.as_ref() == Some(&m.id)).clicked()
+                            {
+                                selected = Some(m.id.clone());
+                                self.search.clear();
+                            }
+                        }
+                    });
+            });
         if selected != self.reader.selected
             && let Some(id) = selected
         {
             self.reader.select(id);
         }
-        ui.separator();
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
+                left: design::M as i8,
+                right: 0,
+                top: 0,
+                bottom: 0,
+            }))
+            .show_inside(ui, |ui| self.sheet_view(ui, session));
+    }
+
+    fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
+        let c = colors();
         let Some(id) = &self.reader.selected else {
-            if self.reader.loaded {
-                ui.label("This campaign has no party members.");
-            } else if !self.reader.loading() {
-                ui.label("No local characters yet. Connect to load this party.");
-            }
+            ui.label(
+                Type::Body
+                    .rich(ui, "Select a character to read their sheet.")
+                    .color(c.muted),
+            );
             return;
         };
         if let Some(error) = self.reader.errors.get(id) {
-            ui.colored_label(egui::Color32::LIGHT_RED, error);
+            design::message(ui, Tone::Error, error);
         }
         if let Some(record) = self.reader.sheets.get(id) {
             self.combat.tick(
@@ -183,7 +230,8 @@ impl Party {
         if self.combat.updated {
             if let Some(record) = self.combat.record().cloned() {
                 if let Some(scope) = self.reader.local_scope()
-                    && let Err(error) = Cache::user().and_then(|cache| cache.save(scope, &record))
+                    && let Err(error) = crate::hermetic::character_cache()
+                        .and_then(|cache| cache.save(scope, &record))
                 {
                     self.reader.warning = Some(error);
                 }
@@ -197,77 +245,69 @@ impl Party {
             self.combat.updated = false;
         }
         if session.is_some() {
-            egui::CollapsingHeader::new("Combat sync")
-                .id_salt("party_combat_sync")
-                .show(ui, |ui| self.combat.show(ui));
+            design::section(ui, "Combat sync", |ui| self.combat.show(ui));
         }
         let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) else {
             if !self.reader.loading() {
-                ui.label("No local copy is available for this character.");
+                ui.label(
+                    Type::Body
+                        .rich(ui, "No local copy is available for this character.")
+                        .color(c.muted),
+                );
             }
             return;
         };
         ui.horizontal(|ui| {
             ui.label(
-                egui::RichText::new(&record.definition.splat_name)
-                    .size(30.0)
-                    .strong()
-                    .color(ui.visuals().strong_text_color()),
+                Type::Display
+                    .rich(ui, &record.definition.splat_name)
+                    .color(c.text),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.hyperlink_to(
-                    "Open on D&D Beyond ↗",
-                    format!("https://www.dndbeyond.com/characters/{id}"),
-                );
+                if design::link(ui, "D&D Beyond ↗").clicked() {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+                        "https://www.dndbeyond.com/characters/{id}"
+                    )));
+                }
             });
         });
-        ui.label(
-            egui::RichText::new(format!(
-                "{} · {} · Level {}",
-                record.character.species,
-                record
-                    .character
-                    .classes
-                    .iter()
-                    .map(|c| text(&c["name"]))
-                    .collect::<Vec<_>>()
-                    .join(" / "),
-                record.character.level
-            ))
-            .size(17.0),
+        ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
+        let before = self.page;
+        design::segmented(
+            ui,
+            &mut self.page,
+            &[
+                (0, "Overview"),
+                (1, "Actions"),
+                (2, "Spells"),
+                (3, "Equipment"),
+                (4, "Features"),
+            ],
         );
-        ui.horizontal_wrapped(|ui| {
-            for (i, name) in [
-                "Overview",
-                "Actions",
-                "Spells",
-                "Equipment",
-                "Features",
-                "Source & parity",
-            ]
-            .iter()
-            .enumerate()
-            {
-                if ui
-                    .add(egui::Button::new(*name).selected(self.page == i))
-                    .clicked()
-                {
-                    self.page = i;
-                    self.search.clear();
-                }
-            }
-        });
-        ui.separator();
-        if (1..5).contains(&self.page) {
+        if before != self.page {
+            self.search.clear();
+        }
+        design::rule(ui);
+        if self.page > 0 {
             ui.horizontal(|ui| {
-                ui.label("Filter");
-                ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("Filter entries…"));
-                if !self.search.is_empty() && ui.small_button("Clear").clicked() {
+                design::search_field(
+                    ui,
+                    "Filter this page",
+                    &mut self.search,
+                    "Filter entries…",
+                    240.0_f32.min(ui.available_width() - 70.0),
+                );
+                if !self.search.is_empty()
+                    && Action::quiet("Clear")
+                        .density(Density::Scan)
+                        .show(ui)
+                        .clicked()
+                {
                     self.search.clear();
                 }
             });
         }
-        if self.page == 5
+        if self.page == 0
             && self
                 .content_entry
                 .as_ref()
@@ -275,38 +315,382 @@ impl Party {
         {
             self.content_entry = Some((record.source.content_hash.clone(), record.entry()));
         }
-        egui::ScrollArea::vertical().scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible).id_salt((id,self.page)).auto_shrink([false,false]).show(ui,|ui|{
-            if self.page==0{overview(ui,record);}else if self.page==5{
-                ui.heading("Source & parity");ui.label("Displayed totals come directly from D&D Beyond’s computed-character service. Splat does not add modifiers to these totals.");
-                for message in &record.coverage{ui.label(message);}
-                if let Some((_, Ok(entry))) = &self.content_entry {
-                    campaign_option_status(ui, entry);
-                    ui.label(format!("Campaign content: {} inventory rows, {} action definitions.", entry.inventory.len(), entry.fields.get("splat_actions").and_then(serde_yaml_ng::Value::as_mapping).map_or(0, |v| v.len())));
-                    if let Some(import) = entry.fields.get("splat_import") {
-                        let conversion_count = import.get("gaps").and_then(serde_yaml_ng::Value::as_sequence).map_or(0, Vec::len);
-                        let engine_count = import.get("engine_gaps").and_then(serde_yaml_ng::Value::as_sequence).map_or(0, Vec::len);
-                        ui.label(format!("{conversion_count} conversion gaps; {engine_count} engine adapters still needed."));
-                        ui.collapsing("Rule conversion gaps", |ui| {
-                            if let Some(gaps) = import.get("gaps").and_then(serde_yaml_ng::Value::as_sequence) {
-                                for gap in gaps { if let Some(reason) = gap.get("reason").and_then(serde_yaml_ng::Value::as_str) { ui.label(reason); } }
-                            }
-                        });
-                        ui.collapsing("Required character or encounter inputs", |ui| {
-                            if let Some(inputs) = import.get("required_inputs").and_then(serde_yaml_ng::Value::as_sequence) {
-                                for input in inputs { if let Some(reason) = input.get("reason").and_then(serde_yaml_ng::Value::as_str) { ui.label(reason); } }
-                            }
-                        });
-                    }
+        egui::ScrollArea::vertical()
+            .id_salt((id, self.page))
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                sheet_page(ui, record, self.page, &self.search, None);
+                if self.page == 0 {
+                    ui.add_space(design::M);
+                    design::quiet_section(ui, "Source & parity", |ui| {
+                        source_and_parity(
+                            ui,
+                            record,
+                            self.content_entry.as_ref().map(|(_, entry)| entry),
+                            self.reader.campaign_path(),
+                            self.reader.local_scope(),
+                        );
+                    });
                 }
-                ui.label(format!("Local creature UUID: {}",record.definition.splat_id));ui.label(format!("Source character: {} · Campaign: {}",record.source.character_id,record.source.campaign_id));
-                ui.label(format!("Computed response fetched at {} UTC epoch seconds; source details at {}.",record.source.fetched_at,record.source.raw_fetched_at));
-                if let Some(modified)=&record.source.source_modified{ui.label(format!("Beyond source modification: {modified}"));}
-                ui.label(format!("Preserved {} source fields and {} computed fields.",record.source.raw.as_object().map_or(0,|o|o.len()),record.source.computed.as_object().map_or(0,|o|o.len())));
-                ui.label("A cache read or a successful fetch does not prove that the two Beyond services represent the same edit. The next check can reconcile delayed results.");
-                if let Some(root) = self.reader.campaign_path() { ui.label(format!("Campaign copy: {}",record.campaign_path(root).display())); }
-                if let Some(scope)=self.reader.local_scope() && let Ok(cache)=Cache::user() && let Ok(path)=cache.path(scope,&record.source.campaign_id,&record.source.character_id){ui.label(format!("Local copy: {}",path.display()));}
-            }else{details(ui,record,self.page,&self.search);}
-        });
+            });
+    }
+}
+
+/// What the row and side panel know now. A run's values outrank a stored sheet's.
+pub struct LiveValues {
+    pub hp: Option<i64>,
+    pub max_hp: Option<i64>,
+    pub temporary_hp: i64,
+    pub conditions: Vec<String>,
+}
+
+/// How old a sheet is, as a status with words.
+pub struct Freshness {
+    word: String,
+    icon: &'static str,
+    color: egui::Color32,
+}
+
+impl Freshness {
+    pub fn as_status(&self) -> Status<'_> {
+        Status {
+            icon: self.icon,
+            word: &self.word,
+            color: self.color,
+        }
+    }
+}
+
+pub fn freshness(record: &EntitySnapshot, connected: bool) -> Freshness {
+    let age = record_age(record);
+    let c = colors().connection;
+    if connected {
+        Freshness {
+            word: format!("Connected · Fetched {age}"),
+            icon: icons::ONLINE,
+            color: c.connected,
+        }
+    } else {
+        Freshness {
+            word: format!("Offline · Fetched {age}"),
+            icon: icons::OFFLINE,
+            color: c.offline,
+        }
+    }
+}
+
+fn record_age(record: &EntitySnapshot) -> String {
+    fetch_age(crate::hermetic::now().saturating_sub(record.source.fetched_at))
+}
+
+fn class_line(record: &EntitySnapshot) -> String {
+    format!(
+        "{} · {} · Level {}",
+        record.character.species,
+        record
+            .character
+            .classes
+            .iter()
+            .map(|c| text(&c["name"]))
+            .collect::<Vec<_>>()
+            .join(" / "),
+        record.character.level
+    )
+}
+
+const AC_WIDTH: f32 = 34.0;
+const HP_WIDTH: f32 = 112.0;
+const MEMBER_ROW: f32 = 54.0;
+
+fn member_header(ui: &mut egui::Ui) {
+    let c = colors();
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 18.0), egui::Sense::hover());
+    let font = Type::Label.font(ui);
+    let hp_right = rect.right() - design::S;
+    ui.painter().text(
+        egui::pos2(rect.left() + design::S, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        "NAME",
+        font.clone(),
+        c.muted,
+    );
+    ui.painter().text(
+        egui::pos2(hp_right, rect.center().y),
+        egui::Align2::RIGHT_CENTER,
+        "HP",
+        font.clone(),
+        c.muted,
+    );
+    ui.painter().text(
+        egui::pos2(hp_right - HP_WIDTH, rect.center().y),
+        egui::Align2::RIGHT_CENTER,
+        "AC",
+        font,
+        c.muted,
+    );
+}
+
+/// One member, to compare at a glance: name, AC, HP, then class and conditions.
+fn member_row(
+    ui: &mut egui::Ui,
+    member: &crate::party_sync::Member,
+    record: Option<&EntitySnapshot>,
+    selected: bool,
+) -> egui::Response {
+    let c = colors();
+    let level = record.map(|r| r.character.level).or(member.level);
+    let classes = record.map_or_else(String::new, |r| {
+        r.character
+            .classes
+            .iter()
+            .filter_map(|c| c["name"].as_str())
+            .collect::<Vec<_>>()
+            .join(" / ")
+    });
+    let conditions: Vec<String> = record.map_or_else(Vec::new, |r| {
+        r.initial
+            .conditions
+            .iter()
+            .filter_map(|condition| condition["name"].as_str().map(str::to_owned))
+            .collect()
+    });
+    let mut summary = [
+        level.map(|n| format!("Level {n}")).unwrap_or_default(),
+        classes,
+    ]
+    .into_iter()
+    .filter(|s| !s.is_empty())
+    .collect::<Vec<_>>()
+    .join(" ");
+    if record.is_none() {
+        summary = "No local copy yet".into();
+    }
+    let hp = record.map(|r| r.initial.hp);
+    let max_hp = record.and_then(|r| r.stat("max_hp"));
+    let ac = record.and_then(|r| r.stat("armor_class"));
+    let temp = record.map_or(0, |r| r.initial.temporary_hp);
+    let name = format!(
+        "{} · {summary} · HP {}/{} · AC {}{}",
+        member.name,
+        hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+        max_hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+        ac.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+        conditions
+            .iter()
+            .map(|c| format!(" · {c}"))
+            .collect::<String>(),
+    );
+    design::row(ui, MEMBER_ROW, selected, &name, |ui, rect| {
+        let painter = ui.painter();
+        let hp_right = rect.right() - design::S;
+        let line = rect.top() + 18.0;
+        let room = rect.width() - HP_WIDTH - AC_WIDTH - 2.0 * design::S;
+        let title = design::one_line(ui, &member.name, Type::Name.font(ui), c.text, room);
+        painter.galley(
+            egui::pos2(rect.left() + design::S, line - 10.0),
+            title,
+            c.text,
+        );
+        let mut job = egui::text::LayoutJob::default();
+        job.wrap.max_width = rect.width() - HP_WIDTH - design::M;
+        job.wrap.max_rows = 1;
+        let small = Type::Small.font(ui);
+        job.append(
+            &summary,
+            0.0,
+            egui::TextFormat {
+                font_id: small.clone(),
+                color: c.muted,
+                ..Default::default()
+            },
+        );
+        for condition in &conditions {
+            job.append(
+                &format!(" · {condition}"),
+                0.0,
+                egui::TextFormat {
+                    font_id: small.clone(),
+                    color: c.participant.condition,
+                    ..Default::default()
+                },
+            );
+        }
+        let second = ui.fonts_mut(|fonts| fonts.layout_job(job));
+        painter.galley(
+            egui::pos2(rect.left() + design::S, rect.bottom() - 22.0),
+            second,
+            c.muted,
+        );
+        design::number(
+            painter,
+            hp_right - HP_WIDTH,
+            line,
+            &ac.map_or_else(|| "?".to_owned(), |n| n.to_string()),
+            &Type::Numeral.font(ui),
+            c.text,
+        );
+        let left = design::hp_readout(
+            ui,
+            painter,
+            hp_right,
+            line,
+            hp,
+            max_hp,
+            &design::HpFonts::standard(ui),
+        );
+        if temp > 0 {
+            painter.text(
+                egui::pos2(left - design::XS, line),
+                egui::Align2::RIGHT_CENTER,
+                format!("+{temp}"),
+                Type::Numeral.font(ui),
+                c.hp.temp,
+            );
+        }
+        let bar = egui::Rect::from_min_max(
+            egui::pos2(hp_right - 86.0, rect.bottom() - 12.0),
+            egui::pos2(hp_right, rect.bottom() - 9.0),
+        );
+        design::hp_bar(painter, bar, hp, max_hp, temp);
+        painter.hline(
+            rect.x_range(),
+            rect.bottom() - 0.5,
+            egui::Stroke::new(design::HAIRLINE_WIDTH, c.hairline),
+        );
+    })
+}
+
+/// The technical record behind a sheet. It stays collapsed: most DMs never need it.
+fn source_and_parity(
+    ui: &mut egui::Ui,
+    record: &EntitySnapshot,
+    content_entry: Option<&Result<splat::content::Entry, String>>,
+    campaign_path: Option<&std::path::Path>,
+    local_scope: Option<uuid::Uuid>,
+) {
+    let small = |ui: &mut egui::Ui, text: String| {
+        ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)).wrap());
+    };
+    small(
+        ui,
+        "Displayed totals come directly from D&D Beyond’s computed-character service. Splat does not add modifiers to these totals.".into(),
+    );
+    for message in &record.coverage {
+        small(ui, message.clone());
+    }
+    if let Some(Ok(entry)) = content_entry {
+        campaign_option_status(ui, entry);
+        small(
+            ui,
+            format!(
+                "Campaign content: {} inventory rows, {} action definitions.",
+                entry.inventory.len(),
+                entry
+                    .fields
+                    .get("splat_actions")
+                    .and_then(serde_yaml_ng::Value::as_mapping)
+                    .map_or(0, |v| v.len())
+            ),
+        );
+        if let Some(import) = entry.fields.get("splat_import") {
+            let list = |key: &str| {
+                import
+                    .get(key)
+                    .and_then(serde_yaml_ng::Value::as_sequence)
+                    .cloned()
+                    .unwrap_or_default()
+            };
+            small(
+                ui,
+                format!(
+                    "{} conversion gaps; {} engine adapters still needed.",
+                    list("gaps").len(),
+                    list("engine_gaps").len()
+                ),
+            );
+            for (title, key) in [
+                ("Rule conversion gaps", "gaps"),
+                ("Required character or encounter inputs", "required_inputs"),
+            ] {
+                design::quiet_section(ui, title, |ui| {
+                    for item in list(key) {
+                        if let Some(reason) =
+                            item.get("reason").and_then(serde_yaml_ng::Value::as_str)
+                        {
+                            ui.add(egui::Label::new(reason).wrap());
+                        }
+                    }
+                });
+            }
+        }
+    }
+    small(
+        ui,
+        format!(
+            "Fetched {} UTC. Source details {} UTC.",
+            crate::encounter_run::calendar_time(record.source.fetched_at),
+            crate::encounter_run::calendar_time(record.source.raw_fetched_at),
+        ),
+    );
+    if let Some(modified) = &record.source.source_modified {
+        small(ui, format!("Beyond source modification: {modified}"));
+    }
+    small(
+        ui,
+        "A cache read or a successful fetch does not prove that the two Beyond services represent the same edit. The next check can reconcile delayed results.".into(),
+    );
+    design::quiet_section(ui, "Technical details", |ui| {
+        small(
+            ui,
+            format!(
+                "Preserved {} source fields and {} computed fields.",
+                record.source.raw.as_object().map_or(0, |o| o.len()),
+                record.source.computed.as_object().map_or(0, |o| o.len())
+            ),
+        );
+        small(
+            ui,
+            format!("Local creature UUID: {}", record.definition.splat_id),
+        );
+        small(
+            ui,
+            format!(
+                "Source character: {} · Campaign: {}",
+                record.source.character_id, record.source.campaign_id
+            ),
+        );
+        if let Some(root) = campaign_path {
+            small(
+                ui,
+                format!("Campaign copy: {}", record.campaign_path(root).display()),
+            );
+        }
+        if let Some(scope) = local_scope
+            && let Ok(cache) = crate::hermetic::character_cache()
+            && let Ok(path) = cache.path(
+                scope,
+                &record.source.campaign_id,
+                &record.source.character_id,
+            )
+        {
+            small(ui, format!("Local copy: {}", path.display()));
+        }
+    });
+}
+
+/// One page of a sheet. The Party page and the run's side panel both use this.
+pub fn sheet_page(
+    ui: &mut egui::Ui,
+    record: &EntitySnapshot,
+    page: usize,
+    search: &str,
+    live: Option<&LiveValues>,
+) {
+    if page == 0 {
+        overview(ui, record, live);
+    } else {
+        details(ui, record, page, search);
     }
 }
 fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
@@ -317,15 +701,29 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
     let Ok(sheet) = serde_yaml_ng::from_value::<Sheet>(value.clone()) else {
         return;
     };
-    ui.collapsing("Optional character rules", |ui| {
-        for (key, name) in [("dark_bargain", "Dark Bargain"), ("character_threads", "Character Threads"), ("runestones", "Runestones")] {
+    design::section(ui, "Optional character rules", |ui| {
+        for (key, name) in [
+            ("dark_bargain", "Dark Bargain"),
+            ("character_threads", "Character Threads"),
+            ("runestones", "Runestones"),
+        ] {
             match sheet.campaign_options.get(key) {
-                Some(CampaignOptionState::Inactive) => { ui.label(format!("{name}: inactive (not granted on the sheet).")); }
-                Some(CampaignOptionState::Unselected) => { ui.label(format!("{name}: no effect selected. No effect imported.")); }
-                Some(CampaignOptionState::Unknown) => { ui.label(format!("{name}: source selection data is unavailable.")); }
+                Some(CampaignOptionState::Inactive) => {
+                    ui.label(format!("{name}: inactive (not granted on the sheet)."));
+                }
+                Some(CampaignOptionState::Unselected) => {
+                    ui.label(format!("{name}: no effect selected. No effect imported."));
+                }
+                Some(CampaignOptionState::Unknown) => {
+                    ui.label(format!("{name}: source selection data is unavailable."));
+                }
                 Some(CampaignOptionState::Active { selections }) => {
                     for selected in selections {
-                        let status = if selected.rule.is_some() { "converted" } else { "needs rule conversion" };
+                        let status = if selected.rule.is_some() {
+                            "converted"
+                        } else {
+                            "needs rule conversion"
+                        };
                         ui.label(format!("{name}: {} ({status}).", selected.name));
                     }
                 }
@@ -351,36 +749,36 @@ fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
 fn section_heading(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(12.0);
-    ui.label(
-        egui::RichText::new(title)
-            .size(21.0)
-            .strong()
-            .color(ui.visuals().strong_text_color()),
-    );
-    ui.separator();
-    ui.add_space(3.0);
+    design::reader::section_heading(ui, title);
 }
 fn subsection_heading(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(6.0);
-    ui.label(
-        egui::RichText::new(title)
-            .size(17.0)
-            .strong()
-            .color(ui.visuals().strong_text_color()),
-    );
-    ui.add_space(2.0);
+    ui.add_space(design::XS);
+    ui.label(Type::Heading.rich(ui, title).color(colors().text));
 }
+const TILE_WIDTH: f32 = 112.0;
+
+/// A row of stat tiles that breaks evenly: six across, or three, or two. A lone tile on a
+/// second line reads as a different kind of value.
+fn tiles(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    let each = TILE_WIDTH + ui.spacing().item_spacing.x;
+    let room = ui.available_width();
+    let across = [6.0, 3.0]
+        .into_iter()
+        .find(|n| n * each <= room)
+        .unwrap_or(2.0);
+    ui.allocate_ui_with_layout(
+        egui::vec2(across * each, 0.0),
+        egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
+        add,
+    );
+}
+
+/// One label line and one value line, so tiles in a row keep their values level.
 fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
-    egui::Frame::group(ui.style())
-        .inner_margin(12.0)
-        .show(ui, |ui| {
-            ui.vertical(|ui| {
-                ui.set_min_width(82.0);
-                ui.weak(label);
-                ui.label(egui::RichText::new(value.to_string()).size(23.0).strong());
-            });
-        });
+    ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
+        ui.set_width(TILE_WIDTH - 4.0);
+        design::stat_tile(ui, label, &value.to_string());
+    });
 }
 fn val(record: &EntitySnapshot, key: &str) -> String {
     record
@@ -394,16 +792,27 @@ fn signed(record: &EntitySnapshot, key: &str) -> String {
         .map(|n| format!("{n:+}"))
         .unwrap_or("—".into())
 }
-pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
+pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
+    let narrow = ui.available_width() < 560.0;
     section_heading(ui, "Combat");
-    ui.horizontal_wrapped(|ui| {
-        metric(
-            ui,
-            "Hit points",
-            format!("{} / {}", record.initial.hp, val(record, "max_hp")),
+    tiles(ui, |ui| {
+        let (hp, max, temp) = live.map_or_else(
+            || {
+                (
+                    record.initial.hp.to_string(),
+                    val(record, "max_hp"),
+                    record.initial.temporary_hp,
+                )
+            },
+            |live| {
+                let known =
+                    |value: Option<i64>| value.map_or_else(|| "?".to_owned(), |n| n.to_string());
+                (known(live.hp), known(live.max_hp), live.temporary_hp)
+            },
         );
+        metric(ui, "Hit points", format!("{hp} / {max}"));
         metric(ui, "Armor class", val(record, "armor_class"));
-        metric(ui, "Temp HP", record.initial.temporary_hp);
+        metric(ui, "Temp HP", temp);
         metric(ui, "Proficiency", signed(record, "proficiency_bonus"));
         metric(ui, "Initiative", signed(record, "initiative"));
         metric(
@@ -417,21 +826,21 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
         );
     });
     section_heading(ui, "Ability scores");
-    ui.horizontal_wrapped(|ui| {
+    tiles(ui, |ui| {
         for ability in ABILITIES {
             metric(
                 ui,
-                &format!("{} · {}", ability[..3].to_uppercase(), val(record, ability)),
+                &format!("{} {}", ability[..3].to_uppercase(), val(record, ability)),
                 signed(record, &format!("{ability}_modifier")),
             );
         }
     });
-    section_heading(ui, "Awareness & movement");
-    ui.horizontal_wrapped(|ui| {
+    section_heading(ui, "Passive scores & movement");
+    tiles(ui, |ui| {
         for (label, key) in [
-            ("Passive perception", "passive_perception"),
-            ("Passive insight", "passive_insight"),
-            ("Passive investigation", "passive_investigation"),
+            ("Perception", "passive_perception"),
+            ("Insight", "passive_insight"),
+            ("Investigation", "passive_investigation"),
         ] {
             metric(ui, label, val(record, key));
         }
@@ -442,9 +851,9 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
         }
     });
     section_heading(ui, "Saving throws & skills");
-    ui.columns(3, |cols| {
-        subsection_heading(&mut cols[0], "Saving throws");
-        egui::Grid::new("saves").show(&mut cols[0], |ui| {
+    let saves = |ui: &mut egui::Ui| {
+        subsection_heading(ui, "Saving throws");
+        egui::Grid::new("saves").show(ui, |ui| {
             for ability in ABILITIES {
                 ui.label(signed(record, &format!("{ability}_save")));
                 let mut name = ability.to_string();
@@ -453,38 +862,55 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
                 ui.end_row();
             }
         });
-        for (column, col) in cols.iter_mut().enumerate().skip(1) {
-            subsection_heading(col, "Skills");
-            egui::Grid::new(("skills", column)).show(col, |ui| {
-                for skill in record
-                    .character
-                    .skills
-                    .iter()
-                    .skip((column - 1) * 9)
-                    .take(if column == 1 { 9 } else { usize::MAX })
-                {
-                    ui.label(signed(record, &skill.stat));
-                    let flags = format!(
-                        "{}{}{}",
-                        if skill.expertise {
-                            " (E)"
-                        } else if skill.proficient {
-                            " (P)"
-                        } else if skill.half_proficient {
-                            " (½)"
-                        } else {
-                            ""
-                        },
-                        if skill.advantage { " Adv" } else { "" },
-                        if skill.disadvantage { " Dis" } else { "" }
-                    );
-                    ui.label(format!("{}{flags}", skill.name));
-                    ui.end_row();
-                }
-            });
-        }
-    });
-    ui.weak("P: proficient · E: expertise · ½: half proficiency · Adv/Dis: advantage/disadvantage");
+    };
+    let skills = |ui: &mut egui::Ui, salt: usize, skip: usize, take: usize| {
+        egui::Grid::new(("skills", salt)).show(ui, |ui| {
+            for skill in record.character.skills.iter().skip(skip).take(take) {
+                ui.label(signed(record, &skill.stat));
+                let flags = format!(
+                    "{}{}{}",
+                    if skill.expertise {
+                        " (E)"
+                    } else if skill.proficient {
+                        " (P)"
+                    } else if skill.half_proficient {
+                        " (½)"
+                    } else {
+                        ""
+                    },
+                    if skill.advantage { " Adv" } else { "" },
+                    if skill.disadvantage { " Dis" } else { "" }
+                );
+                ui.label(format!("{}{flags}", skill.name));
+                ui.end_row();
+            }
+        });
+    };
+    if narrow {
+        saves(ui);
+        subsection_heading(ui, "Skills");
+        skills(ui, 0, 0, usize::MAX);
+    } else {
+        ui.columns(3, |cols| {
+            saves(&mut cols[0]);
+            subsection_heading(&mut cols[1], "Skills");
+            skills(&mut cols[1], 1, 0, 9);
+            // The same list, continued, under the same heading's level.
+            subsection_heading(&mut cols[2], " ");
+            skills(&mut cols[2], 2, 9, usize::MAX);
+        });
+    }
+    ui.add(
+        egui::Label::new(
+            Type::Small
+                .rich(
+                    ui,
+                    "P: proficient · E: expertise · ½: half proficiency · Adv/Dis: advantage/disadvantage",
+                )
+                .color(colors().muted),
+        )
+        .wrap(),
+    );
     section_heading(ui, "Resources");
     if record.definition.splat_resources.is_empty() {
         ui.label("No limited-use pools returned.");
@@ -502,50 +928,72 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot) {
             pool.max
         ));
     }
-    ui.add_space(10.0);
-    ui.columns(2, |cols| {
-        subsection_heading(&mut cols[0], "Proficiencies & languages");
+    ui.add_space(design::S);
+    let proficiencies = |ui: &mut egui::Ui| {
+        subsection_heading(ui, "Proficiencies & languages");
         for group in &record.character.proficiencies {
             let values = text(&group["values"]);
             if !values.is_empty() {
-                cols[0].label(format!("{}: {values}", text(&group["group"])));
+                ui.add(egui::Label::new(format!("{}: {values}", text(&group["group"]))).wrap());
             }
         }
-        subsection_heading(&mut cols[1], "Defenses & senses");
+    };
+    let defenses = |ui: &mut egui::Ui| {
+        subsection_heading(ui, "Defenses & senses");
         for (label, values) in [
             ("Resistance", &record.character.resistances),
             ("Immunity", &record.character.immunities),
             ("Vulnerability", &record.character.vulnerabilities),
         ] {
             for value in values {
-                cols[1].label(format!("{label}: {}", text(&value["name"])));
+                ui.label(format!("{label}: {}", text(&value["name"])));
             }
         }
         for sense in &record.character.senses {
-            cols[1].label(format!(
+            ui.label(format!(
                 "{} · {}",
                 text(&sense["name"]),
                 text(&sense["distance"])
             ));
         }
-        subsection_heading(&mut cols[1], "Death saves");
-        cols[1].label(format!(
+        subsection_heading(ui, "Death saves");
+        ui.label(format!(
             "{} successes · {} failures",
             record.initial.death_saves.successes, record.initial.death_saves.failures
         ));
-        subsection_heading(&mut cols[1], "Conditions");
-        if record.initial.conditions.is_empty() {
-            cols[1].label("None");
+        subsection_heading(ui, "Conditions");
+        let names: Vec<String> = live.map_or_else(
+            || {
+                record
+                    .initial
+                    .conditions
+                    .iter()
+                    .map(|condition| {
+                        condition["name"]
+                            .as_str()
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| condition.to_string())
+                    })
+                    .collect()
+            },
+            |live| live.conditions.clone(),
+        );
+        if names.is_empty() {
+            ui.label("None");
         }
-        for condition in &record.initial.conditions {
-            cols[1].label(
-                condition["name"]
-                    .as_str()
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| condition.to_string()),
-            );
+        for name in names {
+            ui.label(name);
         }
-    });
+    };
+    if narrow {
+        proficiencies(ui);
+        defenses(ui);
+    } else {
+        ui.columns(2, |cols| {
+            proficiencies(&mut cols[0]);
+            defenses(&mut cols[1]);
+        });
+    }
 }
 pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     let d = &record.source.raw;
@@ -690,7 +1138,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                     ));
                 }
             }
-            ui.add_space(10.0);
+            ui.add_space(design::S);
             section_heading(ui, "Action descriptions");
             for (source, values) in d["actions"].as_object().into_iter().flat_map(|o| o.iter()) {
                 for v in array(values) {
@@ -799,7 +1247,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         .iter()
         .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
-    ui.weak(format!("{} entries", filtered.len()));
+    ui.weak(design::count(filtered.len(), "entry", "entries"));
     if filtered.is_empty() {
         ui.label(if search.is_empty() {
             "No entries returned for this character."
@@ -820,25 +1268,28 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             );
             last_level = *level;
         }
-        let response = egui::CollapsingHeader::new(
-            egui::RichText::new(name)
-                .size(17.0)
-                .strong()
-                .color(ui.visuals().strong_text_color()),
-        )
-        .id_salt((page, i, name))
-        .show(ui, |ui| {
-            ui.set_max_width(ui.available_width().min(760.0));
-            ui.weak(meta);
-            ui.add_space(6.0);
-            for paragraph in description.split("\n\n") {
-                ui.add(egui::Label::new(paragraph).wrap());
-                ui.add_space(5.0);
-            }
-        });
+        let response =
+            egui::CollapsingHeader::new(Type::Strong.rich(ui, name).color(colors().text))
+                .icon(design::section_icon)
+                .icon(design::section_icon)
+                .id_salt((page, i, name))
+                .show(ui, |ui| {
+                    ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+                    ui.weak(meta);
+                    ui.add_space(design::XS);
+                    for paragraph in description.split("\n\n") {
+                        ui.add(
+                            egui::Label::new(
+                                Type::ProseCompact.rich(ui, paragraph).color(colors().text),
+                            )
+                            .wrap(),
+                        );
+                        ui.add_space(design::XS);
+                    }
+                });
         if response.body_returned.is_none() {
             ui.horizontal_wrapped(|ui| {
-                ui.add_space(20.0);
+                ui.add_space(design::L);
                 ui.weak(meta);
             });
         }

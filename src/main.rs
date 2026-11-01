@@ -5,19 +5,25 @@ mod combat_sync;
 mod content_workspace;
 mod copy_dialog;
 mod credentials;
+mod design;
 mod dndbeyond;
 mod encounter_run;
 mod encounter_settings;
 mod encounters;
+mod hermetic;
 mod library;
+mod lookup;
 mod markdown_view;
 mod party;
 mod party_stream;
 mod party_sync;
 mod persistence;
-mod reader_style;
 mod settings;
+mod ui_state;
+#[cfg(test)]
+mod visual_tests;
 
+use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
 
 fn main() -> eframe::Result {
@@ -31,30 +37,16 @@ fn main() -> eframe::Result {
         "Splat",
         options,
         Box::new(|cc| {
-            let mut style = (*cc.egui_ctx.style()).clone();
-            style
-                .text_styles
-                .insert(egui::TextStyle::Heading, egui::FontId::proportional(22.0));
-            style
-                .text_styles
-                .insert(egui::TextStyle::Body, egui::FontId::proportional(15.0));
-            style
-                .text_styles
-                .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
-            style
-                .text_styles
-                .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
-            style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-            cc.egui_ctx.set_style(style);
+            design::theme::install(&cc.egui_ctx);
             Ok(Box::<Splat>::default())
         }),
     )
 }
 
-#[derive(Default)]
 struct Splat {
-    tab: Tab,
-    workspace: Workspace,
+    page: Page,
+    campaign_tab: CampaignTab,
+    started: bool,
     confirm_close: bool,
     discard_on_close: bool,
     library: library::Library,
@@ -65,118 +57,763 @@ struct Splat {
     dndbeyond: dndbeyond::DndBeyond,
     party: party::Party,
     encounters: encounters::Encounters,
+    lookup: lookup::Lookup,
+    ui_store: ui_state::Store,
+    tab_direction: Option<egui::FocusDirection>,
+    step_past: Option<(egui::Id, egui::FocusDirection)>,
+    #[cfg(test)]
+    gallery: bool,
 }
 
-#[derive(Default, PartialEq, Clone, Copy)]
-enum Workspace {
+impl Default for Splat {
+    fn default() -> Self {
+        Self {
+            page: Page::default(),
+            campaign_tab: CampaignTab::default(),
+            started: false,
+            confirm_close: false,
+            discard_on_close: false,
+            library: Default::default(),
+            campaign_content: Default::default(),
+            copy_dialog: None,
+            settings: Default::default(),
+            campaigns: Default::default(),
+            dndbeyond: Default::default(),
+            party: Default::default(),
+            encounters: Default::default(),
+            lookup: Default::default(),
+            ui_store: ui_state::Store::user(),
+            tab_direction: None,
+            step_past: None,
+            #[cfg(test)]
+            gallery: false,
+        }
+    }
+}
+
+/// One flat level. A run is a place, not a mode of a tab.
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+enum Page {
+    Run,
     #[default]
+    Encounters,
+    Party,
     Library,
     Campaign,
+    Settings,
 }
 
-#[derive(Default, PartialEq, Clone, Copy)]
-enum Tab {
+impl Page {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Run => "Run",
+            Self::Encounters => "Encounters",
+            Self::Party => "Party",
+            Self::Library => "Library",
+            Self::Campaign => "Campaign",
+            Self::Settings => "Settings",
+        }
+    }
+    fn from_name(name: &str) -> Option<Self> {
+        [
+            Self::Encounters,
+            Self::Party,
+            Self::Library,
+            Self::Campaign,
+            Self::Settings,
+        ]
+        .into_iter()
+        .find(|page| page.name() == name)
+    }
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+enum CampaignTab {
     #[default]
-    Party,
-    Content,
-    Encounters,
-    Creatures,
-    Simulations,
-    Settings,
+    Packages,
+    RunSettings,
+    Link,
+}
+
+impl Splat {
+    /// Open where the DM left off: the open run, then the last page. The first time,
+    /// Encounters if a campaign is active, otherwise the Library, which needs none.
+    fn start(&mut self) {
+        self.started = true;
+        let saved = self.ui_store.load();
+        let active = self.campaigns.active_campaign();
+        self.page =
+            saved
+                .page
+                .as_deref()
+                .and_then(Page::from_name)
+                .unwrap_or(if active.is_some() {
+                    Page::Encounters
+                } else {
+                    Page::Library
+                });
+        if let (Some(open), Some(active)) = (&saved.open_run, &active)
+            && open.campaign == active.id
+        {
+            self.encounters
+                .restore_run(&open.path, active.id, &open.synced);
+        }
+    }
+
+    fn remember(&mut self) {
+        let active = self.campaigns.active_campaign();
+        let state = ui_state::UiState {
+            page: Some(self.page.name().to_owned()).filter(|_| self.page != Page::Run),
+            open_run: self.encounters.run().and_then(|run| {
+                Some(ui_state::OpenRun {
+                    campaign: active.as_ref()?.id,
+                    path: run.path()?.to_path_buf(),
+                    synced: run.synced_keys(),
+                })
+            }),
+        };
+        self.ui_store.save(&state);
+    }
+
+    /// Tab must not stop on a scroll handle: it has no name and no visible focus. egui
+    /// has no way to take one out of the order, so step over it here.
+    fn skip_unnamed_focus(&mut self, ctx: &egui::Context) {
+        let (forward, back) = ctx.input(|i| {
+            (
+                i.key_pressed(egui::Key::Tab) && !i.modifiers.shift,
+                i.key_pressed(egui::Key::Tab) && i.modifiers.shift,
+            )
+        });
+        if forward {
+            self.tab_direction = Some(egui::FocusDirection::Next);
+        } else if back {
+            self.tab_direction = Some(egui::FocusDirection::Previous);
+        }
+        self.step_past = None;
+        let Some(direction) = self.tab_direction else {
+            return;
+        };
+        let Some(id) = ctx.memory(|memory| memory.focused()) else {
+            return;
+        };
+        let unnamed = ctx
+            .accesskit_node_builder(id, |node| {
+                node.role() == egui::accesskit::Role::Unknown && node.label().is_none()
+            })
+            .unwrap_or(false);
+        if unnamed {
+            self.step_past = Some((id, direction));
+            ctx.request_repaint();
+        } else {
+            self.tab_direction = None;
+        }
+    }
+
+    /// Egui drops a focus move at the start of each frame, so a move made at the end of
+    /// `update` is lost. The move is made here, before any widget asks for focus.
+    fn apply_focus_step(&mut self, ctx: &egui::Context) {
+        if let Some((id, direction)) = self.step_past
+            && ctx.memory(|memory| memory.focused()) == Some(id)
+        {
+            ctx.memory_mut(|memory| memory.move_focus(direction));
+        }
+    }
+
+    #[cfg(test)]
+    fn active_campaign_name(&self) -> Option<String> {
+        self.campaigns.active_campaign().map(|c| c.name)
+    }
+
+    /// The page the rail marks. The design gallery is not one of them.
+    fn visible_page(&self) -> Option<Page> {
+        #[cfg(test)]
+        if self.gallery {
+            return None;
+        }
+        Some(self.page)
+    }
+
+    fn blocked_switch(&self) -> Option<&'static str> {
+        if self.encounters.has_run() {
+            Some("Close the run to change campaigns.")
+        } else if self.campaign_content.dirty()
+            || self.encounters.dirty()
+            || self.library.campaign_draft()
+        {
+            Some("Save or discard your changes to change campaigns.")
+        } else {
+            None
+        }
+    }
+
+    fn close_prompt(&mut self, ctx: &egui::Context) {
+        let mut reasons: Vec<String> = Vec::new();
+        if self.library.dirty() {
+            reasons.push("A Library entry has unsaved changes.".into());
+        }
+        if self.campaign_content.dirty() {
+            reasons.push("Campaign content has unsaved changes.".into());
+        }
+        if self.encounters.draft_dirty() {
+            reasons.push("An encounter has unsaved changes.".into());
+        }
+        let names = self.encounters.pending_sync_names();
+        if !names.is_empty() {
+            reasons.push(format!(
+                "D&D Beyond has not confirmed changes to {}. They can be lost.",
+                names.join(", ")
+            ));
+        }
+        if self.encounters.unsaved() && reasons.is_empty() {
+            reasons.push("The run or run settings have changes that could not be saved.".into());
+        }
+        let only_sync = !names.is_empty() && reasons.len() == 1;
+        let (title, keep_label, discard_label, advice) = if only_sync {
+            (
+                "Sync has not finished",
+                "Return to run",
+                "Close anyway",
+                "Return, and wait for sync or resolve the conflict. Or close and lose these changes.",
+            )
+        } else {
+            (
+                "Unsaved changes",
+                "Keep editing",
+                "Discard and close",
+                "Return and save, or close and lose these changes.",
+            )
+        };
+        let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        let mut discard = false;
+        design::dialog(ctx, "unsaved_on_close", title, |ui| {
+            for reason in &reasons {
+                ui.add(egui::Label::new(reason.as_str()).wrap());
+            }
+            ui.label(Type::Small.rich(ui, advice).color(colors().muted));
+            ui.add_space(design::S);
+            ui.horizontal(|ui| {
+                keep |= Action::primary(keep_label).show(ui).clicked();
+                ui.add_space(design::L);
+                discard = Action::destructive(discard_label).show(ui).clicked();
+            });
+        });
+        if keep {
+            self.confirm_close = false;
+            self.page = if self.encounters.draft_dirty() {
+                Page::Encounters
+            } else if self.campaign_content.dirty() {
+                Page::Campaign
+            } else if self.encounters.has_run() {
+                Page::Run
+            } else {
+                Page::Library
+            };
+        }
+        if discard {
+            self.discard_on_close = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    fn rail(&mut self, ctx: &egui::Context, session_connected: bool, busy: bool) {
+        let c = colors();
+        let rail = if ctx.content_rect().width() >= design::RAIL_WIDE_FROM {
+            design::RAIL_WIDE_WIDTH
+        } else {
+            design::RAIL_WIDTH
+        };
+        let page = self.visible_page();
+        egui::SidePanel::left("navigation")
+            .resizable(false)
+            .exact_width(rail)
+            .frame(
+                egui::Frame::new()
+                    .fill(c.rail)
+                    .inner_margin(egui::Margin::same(design::S as i8)),
+            )
+            .show(ctx, |ui| {
+                if self.copy_dialog.is_some() || self.confirm_close {
+                    ui.disable();
+                }
+                ui.spacing_mut().item_spacing.y = 2.0;
+                ui.label(Type::Title.rich(ui, "Splat").color(c.text));
+                ui.add_space(design::XS);
+                let blocked = self.blocked_switch();
+                ui.add_enabled_ui(blocked.is_none(), |ui| {
+                    ui.spacing_mut().interact_size.y = Density::Read.control();
+                    self.campaigns.selector(ui, blocked);
+                });
+                ui.add_space(design::S);
+                if self.encounters.has_run() {
+                    let strip = self.encounters.run().map(|run| run.strip());
+                    let detail = strip.as_ref().map(|strip| {
+                        if strip.running {
+                            format!("Round {}", strip.round)
+                        } else {
+                            "Not in combat".to_owned()
+                        }
+                    });
+                    if design::nav_item(
+                        ui,
+                        icons::RUN,
+                        Page::Run.name(),
+                        detail.as_deref(),
+                        page == Some(Page::Run),
+                    )
+                    .clicked()
+                    {
+                        self.page = Page::Run;
+                    }
+                }
+                for (page, icon) in [
+                    (Page::Encounters, icons::ENCOUNTERS),
+                    (Page::Party, icons::PARTY),
+                    (Page::Library, icons::LIBRARY),
+                    (Page::Campaign, icons::CAMPAIGN),
+                ] {
+                    let current = self.visible_page() == Some(page);
+                    if design::nav_item(ui, icon, page.name(), None, current).clicked() {
+                        self.page = page;
+                    }
+                }
+                // Push the rest down in tree order, so Tab still follows reading order.
+                let statuses = self.statuses(session_connected, busy);
+                let status_height = statuses.len() as f32 * (Type::Small.line() + 2.0);
+                let bottom = 2.0 * (Density::Scan.control() + 2.0) + status_height + design::S;
+                ui.add_space((ui.available_height() - bottom).max(0.0));
+                for state in statuses {
+                    design::status(ui, state);
+                }
+                ui.add_space(design::XS);
+                if design::nav_toggle(ui, icons::SEARCH, "Lookup", "Ctrl+K", self.lookup.open)
+                    .on_hover_text("Search everything, beside this page (Ctrl+K)")
+                    .clicked()
+                {
+                    self.lookup.toggle();
+                }
+                if design::nav_item(
+                    ui,
+                    icons::SETTINGS,
+                    Page::Settings.name(),
+                    None,
+                    page == Some(Page::Settings),
+                )
+                .clicked()
+                {
+                    self.page = Page::Settings;
+                }
+            });
+    }
+
+    /// What is unsure, always where the DM looks (principle 6).
+    fn statuses(&self, connected: bool, busy: bool) -> Vec<Status<'static>> {
+        let c = colors();
+        let mut statuses = Vec::new();
+        statuses.push(if busy {
+            Status {
+                icon: icons::BUSY,
+                word: "Connecting",
+                color: c.connection.busy,
+            }
+        } else if connected {
+            Status {
+                icon: icons::ONLINE,
+                word: "Connected",
+                color: c.connection.connected,
+            }
+        } else {
+            Status {
+                icon: icons::OFFLINE,
+                word: "Offline",
+                color: c.connection.offline,
+            }
+        });
+        for (dirty, word) in [
+            (self.library.dirty(), "Library draft"),
+            (self.encounters.draft_dirty(), "Encounter draft"),
+            (self.campaign_content.dirty(), "Campaign draft"),
+        ] {
+            if dirty {
+                statuses.push(Status {
+                    icon: icons::DRAFT,
+                    word,
+                    color: c.document.unsaved,
+                });
+            }
+        }
+        if self.party.sync_stopped {
+            statuses.push(Status {
+                icon: icons::SYNC_OFF,
+                word: "Party sync stopped",
+                color: c.sync.pending,
+            });
+        }
+        statuses
+    }
+
+    /// While a run is open, every other page keeps the turn in view.
+    fn run_strip(&mut self, ctx: &egui::Context) {
+        let Some(strip) = self
+            .encounters
+            .run()
+            .filter(|_| self.page != Page::Run)
+            .map(encounter_run::Run::strip)
+        else {
+            return;
+        };
+        let c = colors();
+        egui::TopBottomPanel::top("run_strip")
+            .resizable(false)
+            .exact_height(Density::Glance.control() + design::S)
+            .frame(
+                egui::Frame::new()
+                    .fill(c.current_row)
+                    .inner_margin(egui::Margin::symmetric(design::M as i8, design::XS as i8)),
+            )
+            .show(ctx, |ui| {
+                ui.horizontal_centered(|ui| {
+                    if strip.running {
+                        ui.label(
+                            Type::Heading
+                                .rich(ui, format!("Round {}", strip.round))
+                                .color(c.text),
+                        );
+                        ui.add(
+                            egui::Label::new(
+                                Type::Name
+                                    .rich(
+                                        ui,
+                                        format!(
+                                            "{}’s turn",
+                                            strip.current.as_deref().unwrap_or("?")
+                                        ),
+                                    )
+                                    .color(c.turn.current),
+                            )
+                            .truncate(),
+                        );
+                        if let Some(next) = &strip.next {
+                            ui.add(
+                                egui::Label::new(
+                                    Type::Small
+                                        .rich(ui, format!("Next: {next}"))
+                                        .color(c.turn.next),
+                                )
+                                .truncate(),
+                            );
+                        }
+                    } else {
+                        ui.label(
+                            Type::Heading
+                                .rich(ui, format!("Run · {}", strip.name))
+                                .color(c.text),
+                        );
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if strip.running
+                            && Action::primary("Next turn")
+                                .icon(icons::NEXT)
+                                .show(ui)
+                                .clicked()
+                            && let Some(run) = self.encounters.run_mut()
+                        {
+                            run.next_turn();
+                        }
+                        if Action::secondary("Back to run").show(ui).clicked() {
+                            self.page = Page::Run;
+                        }
+                        if let Some(name) = &strip.conflict {
+                            if Action::quiet("Review")
+                                .name("Review sync conflict")
+                                .show(ui)
+                                .clicked()
+                                && let Some(run) = self.encounters.run_mut()
+                            {
+                                run.review_conflict();
+                                self.page = Page::Run;
+                            }
+                            design::status(
+                                ui,
+                                Status {
+                                    icon: icons::WARN,
+                                    word: &format!("Conflict: {name}"),
+                                    color: c.sync.conflict,
+                                },
+                            );
+                        }
+                    });
+                });
+            });
+    }
+
+    fn no_campaign(&mut self, ui: &mut egui::Ui, title: &str) {
+        let mut settings = false;
+        design::empty_state(
+            ui,
+            icons::CAMPAIGN,
+            title,
+            "Add a campaign in Settings, or choose one above Encounters. The Library works without one.",
+            |ui| {
+                settings = Action::primary("Open Settings").show(ui).clicked();
+            },
+        );
+        if settings {
+            self.page = Page::Settings;
+        }
+    }
+
+    fn page(&mut self, ui: &mut egui::Ui) {
+        let active = self.campaigns.active_campaign();
+        let (_, session) = self.settings.campaign_session();
+        match self.page {
+            Page::Settings => {
+                design::page_header(
+                    ui,
+                    "Settings",
+                    Some("Your D&D Beyond account and your campaign list"),
+                    |_| {},
+                );
+                let blocked = self.blocked_switch();
+                egui::ScrollArea::vertical()
+                    .id_salt("settings_page")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.add_space(design::S);
+                        let account = |ui: &mut egui::Ui, settings: &mut settings::Settings| {
+                            settings.show(ui);
+                        };
+                        let list =
+                            |ui: &mut egui::Ui,
+                             campaigns: &mut campaigns::Campaigns,
+                             dndbeyond: &mut dndbeyond::DndBeyond| {
+                                if let Some(reason) = blocked {
+                                    design::message(ui, Tone::Info, reason);
+                                }
+                                ui.add_enabled_ui(blocked.is_none(), |ui| {
+                                    campaigns.show(ui, session.clone(), dndbeyond);
+                                });
+                            };
+                        if ui.available_width() >= 720.0 {
+                            // A clear gutter, so that the left column's text does not run on.
+                            let spacing = ui.spacing().item_spacing.x;
+                            ui.spacing_mut().item_spacing.x = design::L;
+                            ui.columns(2, |columns| {
+                                columns[0].spacing_mut().item_spacing.x = spacing;
+                                columns[1].spacing_mut().item_spacing.x = spacing;
+                                account(&mut columns[0], &mut self.settings);
+                                list(&mut columns[1], &mut self.campaigns, &mut self.dndbeyond);
+                            });
+                        } else {
+                            account(ui, &mut self.settings);
+                            ui.add_space(design::L);
+                            list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                        }
+                    });
+            }
+            Page::Library => {
+                self.library.show(ui, &mut self.campaigns);
+                if let Some((id, name)) = self.library.renamed.take()
+                    && let Err(error) = self.campaigns.rename_module(id, name)
+                {
+                    design::message(ui, Tone::Error, &error);
+                }
+                if std::mem::take(&mut self.library.wants_settings) {
+                    self.page = Page::Settings;
+                }
+                if let Some(root) = self.library.content_changed.take() {
+                    self.campaign_content.refresh_destination(&root);
+                    self.encounters
+                        .refresh_content(ui.ctx(), &self.campaigns, &root);
+                    self.lookup.refresh();
+                }
+            }
+            Page::Encounters => {
+                if active.is_some() {
+                    self.encounters.save_shortcut(ui.ctx(), &self.campaigns);
+                    self.encounters.show(ui, &self.campaigns);
+                    if self.encounters.saved {
+                        self.encounters.saved = false;
+                        if let Some(campaign) = &active {
+                            self.campaign_content.refresh_destination(&campaign.path);
+                            self.lookup.refresh();
+                        }
+                    }
+                } else {
+                    self.no_campaign(ui, "No campaign to prepare yet");
+                }
+            }
+            Page::Party => {
+                if active.is_some() {
+                    self.party.show(
+                        ui,
+                        session,
+                        active.is_some_and(|c| c.dndbeyond_campaign_id.is_some()),
+                    );
+                } else {
+                    self.no_campaign(ui, "No campaign, so no party yet");
+                }
+            }
+            Page::Campaign => {
+                let Some(campaign) = active else {
+                    self.no_campaign(ui, "No campaign selected");
+                    return;
+                };
+                let mut open_entries = false;
+                design::page_header(ui, "Campaign", Some(&campaign.name), |ui| {
+                    open_entries = Action::quiet("Campaign entries")
+                        .icon(icons::DOCUMENT)
+                        .hint("This campaign's own entries, in the Library")
+                        .show(ui)
+                        .clicked();
+                });
+                if open_entries {
+                    self.library.show_campaign_entries();
+                    self.page = Page::Library;
+                    return;
+                }
+                design::segmented(
+                    ui,
+                    &mut self.campaign_tab,
+                    &[
+                        (CampaignTab::Packages, "Packages"),
+                        (CampaignTab::RunSettings, "Rules and runs"),
+                        (CampaignTab::Link, "Link and folder"),
+                    ],
+                );
+                ui.add_space(design::XS);
+                match self.campaign_tab {
+                    CampaignTab::Packages => {
+                        self.campaign_content.show(ui, &self.campaigns);
+                    }
+                    CampaignTab::RunSettings => {
+                        self.encounters.run_settings(ui, &self.campaigns);
+                        if self.encounters.saved {
+                            self.encounters.saved = false;
+                            self.campaign_content.refresh_destination(&campaign.path);
+                        }
+                    }
+                    CampaignTab::Link => {
+                        egui::ScrollArea::vertical()
+                            .id_salt("campaign_link")
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                self.campaigns.show_active(ui, session, &mut self.dndbeyond);
+                                self.campaigns.show_form_if_editing(ui);
+                            });
+                    }
+                }
+            }
+            Page::Run => {
+                let Some(campaign) = active else {
+                    self.page = Page::Encounters;
+                    return;
+                };
+                if !self.encounters.has_run() {
+                    self.page = Page::Encounters;
+                    return;
+                }
+                let party = &self.party;
+                if let Some(run) = self.encounters.run_mut() {
+                    run.hide_panel = self.lookup.open;
+                    run.content = self.lookup.index();
+                    let sheet = run.wanted_sheet().and_then(|id| party.sheet(&id));
+                    run.set_sheet(sheet);
+                }
+                if self.encounters.show_run(ui, &campaign) {
+                    self.page = Page::Encounters;
+                }
+                if self
+                    .encounters
+                    .run_mut()
+                    .is_some_and(|run| std::mem::take(&mut run.close_lookup))
+                {
+                    self.lookup.close();
+                }
+            }
+        }
+    }
+
+    /// Requests that cross pages: read beside a draft, or open an entry where it lives.
+    fn route(&mut self, ctx: &egui::Context) {
+        if let Some(id) = self
+            .library
+            .peek
+            .take()
+            .or_else(|| self.encounters.peek.take())
+        {
+            self.lookup.open_id(id);
+        }
+        if let Some(position) = self
+            .encounters
+            .run_mut()
+            .and_then(|run| run.lookup_request.take())
+        {
+            self.lookup.open_position(position);
+        }
+        if std::mem::take(&mut self.encounters.go_to_run) {
+            self.page = Page::Run;
+        }
+        if std::mem::take(&mut self.party.wants_settings) {
+            self.page = Page::Settings;
+        }
+        if std::mem::take(&mut self.party.wants_link_page) {
+            self.page = Page::Campaign;
+            self.campaign_tab = CampaignTab::Link;
+        }
+        if let Some(source) = self.library.copy.take() {
+            self.copy_dialog = Some(copy_dialog::CopyDialog::new(source, &self.campaigns, ctx));
+        }
+        if let Some(entry) = self.lookup.open_in_library.take()
+            && self.library.reveal(&entry)
+        {
+            self.page = Page::Library;
+        }
+    }
 }
 
 impl eframe::App for Splat {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        if !self.started {
+            self.start();
+        }
         if ctx.input(|i| i.viewport().close_requested())
-            && (self.library.dirty() || self.campaign_content.dirty() || self.encounters.unsaved())
+            && (self.library.dirty()
+                || self.campaign_content.dirty()
+                || self.encounters.unsaved()
+                || self.encounters.pending_sync())
             && !self.discard_on_close
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.confirm_close = true;
         }
         if self.confirm_close {
-            egui::Window::new("Unsaved changes")
-                .collapsible(false)
-                .resizable(false)
-                .show(ctx, |ui| {
-                    ui.label(if self.encounters.has_run() {
-                        "The encounter run has unsaved changes. Return to the run and save before closing, or discard the unsaved changes."
-                    } else {
-                        "Save your pending content changes before closing, or discard them."
-                    });
-                    ui.horizontal(|ui| {
-                        if ui.button("Keep editing").clicked() {
-                            self.confirm_close = false;
-                            self.workspace =
-                                if self.campaign_content.dirty() || self.encounters.dirty() {
-                                    Workspace::Campaign
-                                } else {
-                                    Workspace::Library
-                                };
-                            self.tab = if self.encounters.dirty() {
-                                Tab::Encounters
-                            } else if self.campaign_content.dirty() {
-                                Tab::Content
-                            } else {
-                                Tab::Party
-                            };
-                        }
-                        if ui.button("Discard and close").clicked() {
-                            self.discard_on_close = true;
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-                });
+            self.close_prompt(ctx);
         }
+        self.apply_focus_step(ctx);
         self.settings.poll(ctx);
         let (epoch, session) = self.settings.campaign_session();
         self.dndbeyond.begin_frame();
         self.dndbeyond
             .poll(ctx, epoch, session.is_some(), &mut self.campaigns);
-        egui::SidePanel::left("navigation").show(ctx, |ui| {
-            if self.copy_dialog.is_some() {
-                ui.disable();
+        self.lookup.poll(ctx, &self.campaigns);
+        self.encounters.poll(ctx, &self.campaigns);
+        self.lookup.library_draft = self.library.dirty();
+        let modal = self.copy_dialog.is_some() || self.confirm_close;
+        if !modal {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
+                self.lookup.toggle();
             }
-            ui.heading("Splat");
-            ui.label("D&D 2024");
-            ui.separator();
-            if ui
-                .selectable_value(&mut self.workspace, Workspace::Library, "Library")
-                .clicked()
+            if self.lookup.open
+                && !egui::Popup::is_any_open(ctx)
+                && !self.library.form_open()
+                && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
             {
-                self.tab = Tab::Party;
+                self.lookup.close();
             }
-            if ui
-                .selectable_value(&mut self.workspace, Workspace::Campaign, "Campaign")
-                .clicked()
-            {
-                self.tab = Tab::Content;
-            }
-            if self.workspace == Workspace::Campaign {
-                ui.add_enabled_ui(
-                    !self.campaign_content.dirty() && !self.encounters.dirty(),
-                    |ui| self.campaigns.selector(ui),
-                );
-                if self.campaign_content.dirty() || self.encounters.dirty() {
-                    ui.weak(
-                        "Save or discard content and close the encounter run to change campaigns.",
-                    );
-                }
-                ui.separator();
-                for (tab, label) in [
-                    (Tab::Content, "Content"),
-                    (Tab::Party, "Party"),
-                    (Tab::Encounters, "Encounters"),
-                    (Tab::Creatures, "Creatures"),
-                    (Tab::Simulations, "Simulations"),
-                ] {
-                    ui.selectable_value(&mut self.tab, tab, label);
-                }
-            }
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.selectable_value(&mut self.tab, Tab::Settings, "⚙ Settings");
-            });
-        });
+        }
+        let connected = session.is_some();
+        let connecting = self.settings.connecting();
+        self.rail(ctx, connected, connecting);
         let active = self.campaigns.active_campaign();
         self.party.sync(
             ctx,
@@ -187,93 +824,49 @@ impl eframe::App for Splat {
                     .map(|remote| (c.id, remote, c.path.clone()))
             }),
             session.is_some(),
-            self.workspace == Workspace::Campaign && self.tab == Tab::Party,
+            self.page == Page::Party,
         );
         self.encounters
             .tick_sync(ctx, session.clone(), epoch, active.as_ref());
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if self.copy_dialog.is_some() {
-                ui.disable();
-            }
-            if self.tab == Tab::Settings {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.settings.show(ui);
-                    ui.add_space(20.0);
-                    ui.separator();
-                    if self.campaign_content.dirty() || self.encounters.dirty() {
-                        ui.label(
-                            "Save or discard campaign content and close the encounter run before managing campaigns.",
-                        );
-                    }
-                    ui.add_enabled_ui(
-                        !self.campaign_content.dirty() && !self.encounters.dirty(),
-                        |ui| self.campaigns.show(ui, session, &mut self.dndbeyond),
-                    );
-                });
-                return;
-            }
-            if self.workspace == Workspace::Library {
-                self.library.show(ui, &mut self.campaigns);
-                return;
-            }
-            if let Some(campaign) = self.campaigns.active_campaign() {
-                ui.weak(format!("Campaign · {}", campaign.name));
-            } else {
-                ui.heading("Campaign workspace");
-                ui.label("Select a campaign in the sidebar, or add one in Settings.");
-                return;
-            }
-            if self.tab == Tab::Content {
-                self.campaign_content.show(ui, &self.campaigns);
-                return;
-            }
-            if self.tab == Tab::Encounters {
-                self.encounters.show(ui, &self.campaigns);
-                if self.encounters.saved {
-                    self.encounters.saved = false;
-                    if let Some(campaign) = &active {
-                        self.campaign_content.refresh_destination(&campaign.path);
-                    }
-                }
-                return;
-            }
-            if self.tab == Tab::Party {
-                self.party.show(
-                    ui,
-                    session,
-                    active.is_some_and(|c| c.dndbeyond_campaign_id.is_some()),
-                );
-                return;
-            }
-            let (title, message) = match self.tab {
-                Tab::Settings | Tab::Content => unreachable!(),
-                Tab::Party => ("Party", "No characters imported yet."),
-                Tab::Encounters => ("Encounters", "No encounters created yet."),
-                Tab::Creatures => ("Creatures", "No creatures created yet."),
-                Tab::Simulations => ("Simulations", "No simulations run yet."),
-            };
-            ui.heading(title);
-            ui.label(message);
-            ui.separator();
-            ui.label("Campaign content editing and simulation controls are not implemented yet.");
-        });
-        if let Some(source) = self
-            .library
-            .copy
-            .take()
-            .or_else(|| self.campaign_content.copy.take())
-        {
-            self.copy_dialog = Some(copy_dialog::CopyDialog::new(source, &self.campaigns, ctx));
+        self.run_strip(ctx);
+        if self.lookup.open {
+            self.lookup.show(ctx);
         }
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::new()
+                    .fill(colors().page)
+                    .inner_margin(egui::Margin::symmetric(design::M as i8, design::S as i8)),
+            )
+            .show(ctx, |ui| {
+                if self.copy_dialog.is_some() || self.confirm_close {
+                    ui.disable();
+                }
+                #[cfg(test)]
+                if self.gallery {
+                    design::gallery::show(ui);
+                    return;
+                }
+                self.page(ui);
+            });
+        self.route(ctx);
         if let Some(dialog) = &mut self.copy_dialog {
+            dialog.draft = self.encounters.draft_name();
             let open = dialog.show(ctx, &self.campaigns);
+            if let Some(id) = dialog.add_to_draft.take() {
+                self.encounters.add_to_draft(id);
+            }
             if let Some(root) = dialog.refresh.take() {
                 self.library.refresh_destination(&root, ctx);
                 self.campaign_content.refresh_destination(&root);
+                self.encounters.refresh_content(ctx, &self.campaigns, &root);
+                self.lookup.refresh();
             }
             if !open {
                 self.copy_dialog = None;
             }
         }
+        self.skip_unnamed_focus(ctx);
+        self.remember();
     }
 }

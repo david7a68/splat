@@ -3,7 +3,7 @@ use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 use splat::content::Entry;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
-pub(super) enum Section {
+pub(crate) enum Section {
     #[default]
     All,
     Creatures,
@@ -59,7 +59,7 @@ impl Section {
     }
 }
 
-pub(super) fn category(entry: &Entry) -> &str {
+pub(crate) fn category(entry: &Entry) -> &str {
     entry
         .fields
         .get("splat_conversion")
@@ -68,8 +68,22 @@ pub(super) fn category(entry: &Entry) -> &str {
         .unwrap_or_else(|| entry.category())
 }
 
-pub(super) fn subtitle(entry: &Entry) -> String {
+/// A list's second line. Everyday words and existing facts only: never schema terms.
+pub(crate) fn subtitle(entry: &Entry) -> String {
+    if entry.kind == "package" {
+        return "Package manifest".into();
+    }
     let category = category(entry).replace('_', " ");
+    let mut category = {
+        let mut letters = category.chars();
+        letters.next().map_or_else(String::new, |first| {
+            first.to_uppercase().collect::<String>() + letters.as_str()
+        })
+    };
+    if let Some(fact) = list_fact(entry) {
+        category.push_str(" · ");
+        category.push_str(&fact);
+    }
     let parent = entry
         .fields
         .get("splat_conversion")
@@ -82,20 +96,34 @@ pub(super) fn subtitle(entry: &Entry) -> String {
             .to_string_lossy()
             .replace('_', " ")
     });
-    let kind = if entry.kind == "reference" {
-        "Reference"
+    // A file named by its identity says nothing to a reader.
+    if context.eq_ignore_ascii_case(&entry.name) || uuid::Uuid::parse_str(&context).is_ok() {
+        category
     } else {
-        "Definition"
-    };
-    if context.eq_ignore_ascii_case(&entry.name) {
-        format!("{kind} · {category}")
-    } else {
-        format!("{kind} · {category} · {context}")
+        format!("{category} · {context}")
     }
 }
 
+/// The one fact a DM scans for: CR, spell level, or item rarity. Nothing is invented.
+fn list_fact(entry: &Entry) -> Option<String> {
+    use serde_yaml_ng::Value;
+    if let Some(creature) = entry.fields.get("splat_creature") {
+        let cr = creature.get("cr_text").and_then(Value::as_str)?;
+        let cr = cr.split_whitespace().next()?;
+        return Some(format!("CR {cr}"));
+    }
+    if let Some(spell) = entry.fields.get("splat_spell") {
+        return match spell.get("level").and_then(Value::as_u64)? {
+            0 => Some("Cantrip".into()),
+            level => Some(format!("Level {level}")),
+        };
+    }
+    let rarity = entry.fields.get("splat_item")?.get("rarity")?.as_str()?;
+    Some(rarity.replace('_', " "))
+}
+
 /// Class scope already owns the feature's class and required level.
-pub(super) fn class_level(entry: &Entry) -> Option<String> {
+pub(crate) fn class_level(entry: &Entry) -> Option<String> {
     let scope = entry
         .fields
         .get("splat_rule")?
@@ -108,14 +136,14 @@ pub(super) fn class_level(entry: &Entry) -> Option<String> {
     Some(format!("{name} · Level {level}"))
 }
 
-pub(super) struct ReadingSection<'a> {
+pub(crate) struct ReadingSection<'a> {
     pub title: String,
     pub body: &'a str,
 }
 
 /// The embedded SRD preserves printed column wraps for provenance. Reflow only
 /// its reading view; authored Markdown and the stored source are never rewritten.
-pub(super) fn overview_markdown(source: &str) -> String {
+pub(crate) fn overview_markdown(source: &str) -> String {
     let mut output = String::new();
     let mut row = false;
     let mut lines = source
@@ -130,6 +158,31 @@ pub(super) fn overview_markdown(source: &str) -> String {
             row = false;
             output.push_str("\n\n");
             continue;
+        }
+        if let Some(columns) = dc_table_columns(line) {
+            let mut table = String::new();
+            while let Some(row) = lines
+                .peek()
+                .copied()
+                .filter(|row| number_row(row, columns.len()))
+            {
+                table.push_str("| ");
+                table.push_str(&row.split_whitespace().collect::<Vec<_>>().join(" | "));
+                table.push_str(" |\n");
+                lines.next();
+            }
+            if !table.is_empty() {
+                if !output.is_empty() && !output.ends_with("\n\n") {
+                    output.push_str("\n\n");
+                }
+                output.push_str(&format!(
+                    "| {} |\n|{}\n{table}\n",
+                    columns.join(" | "),
+                    " --- |".repeat(columns.len())
+                ));
+                row = false;
+                continue;
+            }
         }
         // The imported text has lost cell boundaries. Recognize known headers
         // rather than guessing that title-case prose starts a printed table.
@@ -181,6 +234,25 @@ fn source_heading(line: &str) -> bool {
             word.starts_with(char::is_uppercase)
                 || matches!(word, "a" | "an" | "and" | "for" | "of" | "the" | "to")
         })
+}
+
+/// A printed header of difficulty columns, such as `Foraging DC Navigation DC Search DC`.
+fn dc_table_columns(line: &str) -> Option<Vec<String>> {
+    let names = line.strip_suffix(" DC")?;
+    let columns: Vec<String> = names
+        .split(" DC ")
+        .map(|name| format!("{} DC", name.trim()))
+        .collect();
+    (columns.len() >= 2
+        && line
+            .split_whitespace()
+            .all(|word| word.starts_with(char::is_uppercase)))
+    .then_some(columns)
+}
+
+fn number_row(line: &str, columns: usize) -> bool {
+    let cells: Vec<&str> = line.split_whitespace().collect();
+    cells.len() == columns && cells.iter().all(|cell| cell.parse::<u32>().is_ok())
 }
 
 fn source_table_header(line: &str) -> bool {
@@ -242,17 +314,11 @@ fn source_stat_line(line: &str) -> bool {
 }
 
 fn printed_word_break(before: &str, after: &str) -> bool {
-    // Remove a printed hyphen only when the intact word is attested elsewhere
-    // in this same source. Retain compounds such as "half-elf" and unknown words.
     static WORDS: std::sync::OnceLock<std::collections::HashSet<String>> =
         std::sync::OnceLock::new();
     let words = WORDS.get_or_init(|| {
         let source = splat::content::builtin::source_file("source.txt").unwrap_or_default();
-        String::from_utf8_lossy(source)
-            .split(|c: char| !c.is_alphabetic() && c != '-')
-            .filter(|s| !s.is_empty())
-            .map(str::to_lowercase)
-            .collect()
+        attested_words(&String::from_utf8_lossy(source))
     });
     let left = before
         .trim_end_matches('-')
@@ -263,15 +329,46 @@ fn printed_word_break(before: &str, after: &str) -> bool {
         .split(|c: char| !c.is_alphabetic())
         .next()
         .unwrap_or("");
-    !left.is_empty()
-        && !right.is_empty()
-        && words.contains(&format!("{left}{right}").to_lowercase())
-        && !words.contains(&format!("{left}-{right}").to_lowercase())
+    joins_across_break(left, right, words)
+}
+
+/// Words the source prints whole. A word that follows a line ending in a hyphen is half
+/// of a broken word, so it does not count.
+fn attested_words(source: &str) -> std::collections::HashSet<String> {
+    let mut words = std::collections::HashSet::new();
+    let mut broken = false;
+    for line in source.lines() {
+        let line = line.trim().trim_end_matches('\\');
+        let tokens = line
+            .split(|c: char| !c.is_alphabetic() && c != '-')
+            .filter(|s| !s.is_empty());
+        for (position, token) in tokens.enumerate() {
+            if (!broken || position > 0) && !token.ends_with('-') {
+                words.insert(token.to_lowercase());
+            }
+        }
+        broken = line.ends_with('-');
+    }
+    words
+}
+
+/// Whether a hyphen at a line break is a printer's, and not part of the word. A compound
+/// the source prints, or two real words, keeps its hyphen. Otherwise the hyphen goes.
+fn joins_across_break(left: &str, right: &str, words: &std::collections::HashSet<String>) -> bool {
+    if left.is_empty() || right.is_empty() || right.starts_with(char::is_uppercase) {
+        return false;
+    }
+    let (left, right) = (left.to_lowercase(), right.to_lowercase());
+    if words.contains(&format!("{left}{right}")) {
+        return !words.contains(&format!("{left}-{right}"));
+    }
+    !words.contains(&format!("{left}-{right}"))
+        && (!words.contains(&left) || !words.contains(&right))
 }
 
 /// Split at real Markdown headings; headings in fenced examples remain content.
 /// Keep every section, including custom homebrew prose and structured tables.
-pub(super) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>> {
+pub(crate) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSection<'a>> {
     let body = body.trim_start();
     let body = body.strip_prefix(&format!("# {name}\n")).unwrap_or(body);
     let headings: Vec<_> = Parser::new(body)
@@ -311,4 +408,45 @@ pub(super) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSect
         });
     }
     sections
+}
+
+#[cfg(test)]
+mod reading_tests {
+    use super::*;
+
+    #[test]
+    fn a_printed_difficulty_table_reads_as_a_table() {
+        let result = overview_markdown(
+            "Before.\\\nForaging DC Navigation DC Search DC\\\n20 10 10\\\n10 5 15\\\nAfter.\n",
+        );
+        assert!(
+            result.contains("| Foraging DC | Navigation DC | Search DC |"),
+            "{result}"
+        );
+        assert!(result.contains("| --- | --- | --- |"), "{result}");
+        assert!(result.contains("| 10 | 5 | 15 |"), "{result}");
+        assert!(result.contains("Before."), "{result}");
+        assert!(result.contains("After."), "{result}");
+    }
+
+    #[test]
+    fn a_header_without_number_rows_stays_prose() {
+        let result = overview_markdown("Foraging DC Search DC\nThe rest is prose.\n");
+        assert!(!result.contains('|'), "{result}");
+        assert!(result.contains("Foraging DC Search DC"), "{result}");
+    }
+
+    #[test]
+    fn printed_hyphens_go_and_real_compounds_stay() {
+        let words = attested_words(
+            "half-elf well known festi-\nvals con-\ndenses con shield bearer shield-bearer non\nnonmagical",
+        );
+        assert!(joins_across_break("festi", "vals", &words));
+        assert!(joins_across_break("con", "denses", &words));
+        assert!(joins_across_break("non", "magical", &words));
+        assert!(!joins_across_break("half", "elf", &words));
+        assert!(!joins_across_break("well", "known", &words));
+        assert!(!joins_across_break("shield", "bearer", &words));
+        assert!(!joins_across_break("Sword", "Coast", &words));
+    }
 }

@@ -1,5 +1,6 @@
 use crate::{
     content_workspace::CampaignDocument,
+    design::{self, Action, Density, Status, Tone, Type, colors, icons},
     persistence::{Campaign, Store, UserData},
 };
 use eframe::egui;
@@ -15,6 +16,7 @@ pub struct Campaigns {
     name: String,
     path: String,
     remote: Option<(String, String)>,
+    confirm_remove: Option<Uuid>,
 }
 
 impl Default for Campaigns {
@@ -28,6 +30,7 @@ impl Default for Campaigns {
             name: String::new(),
             path: String::new(),
             remote: None,
+            confirm_remove: None,
         };
         match Store::user() {
             Ok(store) => {
@@ -120,7 +123,7 @@ impl Campaigns {
             .iter()
             .any(|m| m.id == module.id || m.path == module.path)
         {
-            return Err("This module is already registered.".into());
+            return Err("This package is already registered.".into());
         }
         if self
             .data
@@ -133,7 +136,7 @@ impl Campaigns {
             })
         {
             return Err(
-                "Keep module folders separate from campaign folders and other registered modules."
+                "Keep package folders separate from campaign folders and other registered packages."
                     .into(),
             );
         }
@@ -148,7 +151,7 @@ impl Campaigns {
             .modules
             .iter_mut()
             .find(|m| m.id == id)
-            .ok_or("Module is no longer registered.")?;
+            .ok_or("Package is no longer registered.")?;
         module.name = name;
         self.persist(data)
     }
@@ -166,7 +169,16 @@ impl Campaigns {
             name: String::new(),
             path: String::new(),
             remote: None,
+            confirm_remove: None,
         }
+    }
+
+    /// The same startup load as `default`, from a temporary settings file.
+    #[cfg(test)]
+    pub fn open_at(path: PathBuf) -> Self {
+        let mut campaigns = Self::at(path);
+        campaigns.reload();
+        campaigns
     }
 
     pub fn unregister_module(&mut self, id: Uuid) -> Result<(), String> {
@@ -294,7 +306,8 @@ impl Campaigns {
             .cloned()
     }
 
-    pub fn selector(&mut self, ui: &mut egui::Ui) {
+    /// The always-visible campaign switcher. `blocked` says why it cannot change now.
+    pub fn selector(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) {
         let current = self.data.active_campaign_id;
         let mut selected = current;
         let label = self
@@ -304,21 +317,34 @@ impl Campaigns {
             .find(|p| Some(p.id) == current)
             .map(|p| p.name.as_str())
             .unwrap_or("Select campaign");
-        ui.add_enabled_ui(self.writable, |ui| {
-            egui::ComboBox::from_id_salt("active_campaign")
+        let reason = if self.writable {
+            blocked
+        } else {
+            Some("Reload valid campaign settings in Settings first.")
+        };
+        ui.add_enabled_ui(self.writable && blocked.is_none(), |ui| {
+            // A name wraps to two lines here, rather than ending in dots.
+            let combo = egui::ComboBox::from_id_salt("active_campaign")
+                .icon(design::combo_icon)
+                .width(ui.available_width())
+                .wrap()
                 .selected_text(label)
                 .show_ui(ui, |ui| {
+                    ui.set_min_width(220.0);
                     ui.selectable_value(&mut selected, None, "No campaign");
                     for campaign in &self.data.campaigns {
                         ui.selectable_value(&mut selected, Some(campaign.id), &campaign.name);
                     }
                 });
+            design::named_combo(ui, &combo, &format!("Active campaign: {label}"));
+            let response = combo.response;
+            match reason {
+                Some(reason) => response.on_disabled_hover_text(reason),
+                None => response.on_hover_text(label),
+            };
         });
         if selected != current {
             self.select(selected);
-        }
-        if let Some(error) = &self.error {
-            ui.colored_label(egui::Color32::LIGHT_RED, error);
         }
     }
 
@@ -330,19 +356,151 @@ impl Campaigns {
         }
     }
 
+    /// The active campaign's folder and D&D Beyond link.
+    pub fn show_active(
+        &mut self,
+        ui: &mut egui::Ui,
+        session: Option<crate::auth::Session>,
+        dndbeyond: &mut crate::dndbeyond::DndBeyond,
+    ) {
+        let c = colors();
+        let Some(campaign) = self.active_campaign() else {
+            ui.label(
+                Type::Body
+                    .rich(ui, "Select a campaign, or add one in Settings.")
+                    .color(c.muted),
+            );
+            return;
+        };
+        ui.add_space(design::S);
+        ui.set_max_width(ui.available_width().min(design::FORM_WIDTH + 120.0));
+        ui.horizontal(|ui| {
+            design::group_label(ui, "Folder");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if Action::quiet("Edit details")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.clear_form();
+                    self.editing = Some(campaign.id);
+                    self.name = campaign.name.clone();
+                    self.path = campaign.path.to_string_lossy().into_owned();
+                }
+            });
+        });
+        ui.add(egui::Label::new(campaign.path.display().to_string()).wrap());
+        Self::folder_status(ui, &campaign);
+        ui.add_space(design::S);
+        design::rule(ui);
+        ui.add_space(design::S);
+        dndbeyond.show(ui, session, self);
+        ui.add_space(design::S);
+        design::quiet_section(ui, "Technical details", |ui| {
+            ui.label(format!("ID: {}", campaign.id));
+            ui.label(
+                Type::Small
+                    .rich(ui, "Settings are stored in the campaign manifest.")
+                    .color(c.muted),
+            );
+        });
+    }
+
+    fn folder_status(ui: &mut egui::Ui, campaign: &Campaign) -> egui::Response {
+        let c = colors();
+        if campaign.path.is_dir() {
+            design::status(
+                ui,
+                Status {
+                    icon: icons::OK,
+                    word: "Folder available",
+                    color: c.result.success,
+                },
+            )
+        } else {
+            design::status(
+                ui,
+                Status {
+                    icon: icons::WARN,
+                    word: "Folder unavailable",
+                    color: c.result.warning,
+                },
+            )
+        }
+    }
+
+    fn remove_dialog(&mut self, ctx: &egui::Context) {
+        let Some(id) = self.confirm_remove else {
+            return;
+        };
+        let Some(campaign) = self.data.campaigns.iter().find(|c| c.id == id).cloned() else {
+            self.confirm_remove = None;
+            return;
+        };
+        let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        let mut remove = false;
+        design::dialog(
+            ctx,
+            "remove_campaign",
+            &format!("Remove {}?", campaign.name),
+            |ui| {
+                ui.add(
+                egui::Label::new(
+                    "Splat forgets this campaign. Its encounters, runs and D&D Beyond link stay in its folder. To use it again, add the folder back.",
+                )
+                .wrap(),
+            );
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, campaign.path.display().to_string())
+                            .color(colors().muted),
+                    )
+                    .wrap(),
+                );
+                ui.add_space(design::S);
+                ui.horizontal(|ui| {
+                    keep |= Action::secondary("Keep the campaign").show(ui).clicked();
+                    ui.add_space(design::L);
+                    remove = Action::destructive("Remove from Splat").show(ui).clicked();
+                });
+            },
+        );
+        if keep {
+            self.confirm_remove = None;
+        }
+        if remove {
+            self.confirm_remove = None;
+            let mut data = self.data.clone();
+            data.campaigns.retain(|c| c.id != id);
+            if data.active_campaign_id == Some(id) {
+                data.active_campaign_id = None;
+            }
+            self.save(data);
+        }
+    }
+
+    /// The campaign list. Which exist, where, and how each is linked.
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
         session: Option<crate::auth::Session>,
         dndbeyond: &mut crate::dndbeyond::DndBeyond,
     ) {
+        let c = colors();
+        self.remove_dialog(ui.ctx());
         ui.horizontal(|ui| {
-            ui.heading("Campaigns");
-            ui.weak(format!("{} configured", self.data.campaigns.len()));
+            ui.label(Type::Section.rich(ui, "Campaigns").color(c.text));
+            ui.label(
+                Type::Small
+                    .rich(ui, format!("{} configured", self.data.campaigns.len()))
+                    .color(c.muted),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui
-                    .small_button("Reload")
-                    .on_hover_text("Reload campaign settings from disk")
+                if Action::quiet("Reload")
+                    .density(Density::Read)
+                    .hint("Reload campaign settings from disk")
+                    .show(ui)
                     .clicked()
                 {
                     self.reload();
@@ -350,91 +508,164 @@ impl Campaigns {
             });
         });
         if let Some(error) = &self.error {
-            ui.colored_label(egui::Color32::LIGHT_RED, error);
+            design::message(ui, Tone::Error, error);
         }
         ui.add_enabled_ui(self.writable, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Active campaign");
-                ui.push_id("settings_campaign_selector", |ui| self.selector(ui));
-            });
-            dndbeyond.show_import(ui, session.clone(), self);
-            ui.add_space(8.0);
-            if let Some(campaign) = self.active_campaign() {
-                egui::Frame::group(ui.style()).inner_margin(12.0).show(ui, |ui| {
-                    ui.set_min_width((ui.available_width() - 2.0).max(0.0));
+            design::rule(ui);
+            if self.data.campaigns.is_empty() {
+                ui.add_space(design::XS);
+                ui.label(
+                    Type::Body
+                        .rich(
+                            ui,
+                            "No campaigns yet. Add one below, from a folder or from D&D Beyond.",
+                        )
+                        .color(c.muted),
+                );
+            }
+            let mut open = None;
+            let mut edit = None;
+            for campaign in self.data.campaigns.clone() {
+                let active = self.data.active_campaign_id == Some(campaign.id);
+                ui.push_id(campaign.id, |ui| {
                     ui.horizontal(|ui| {
-                        ui.strong(&campaign.name);
+                        ui.set_min_height(Density::Glance.row() + design::XS);
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            ui.set_max_width((ui.available_width() - 196.0).max(120.0));
+                            ui.horizontal(|ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Name.rich(ui, &campaign.name).color(c.text),
+                                    )
+                                    .truncate(),
+                                );
+                                if active {
+                                    ui.label(Type::Small.rich(ui, "Active").color(c.accent));
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                Self::folder_status(ui, &campaign)
+                                    .on_hover_text(campaign.path.display().to_string());
+                                let link = campaign
+                                    .dndbeyond_campaign_name
+                                    .as_deref()
+                                    .map(|name| format!("Linked: {name}"))
+                                    .or(campaign
+                                        .dndbeyond_campaign_id
+                                        .as_deref()
+                                        .map(|id| format!("Linked: campaign {id}")))
+                                    .unwrap_or_else(|| "Not linked".to_owned());
+                                ui.add(
+                                    egui::Label::new(Type::Small.rich(ui, link).color(c.muted))
+                                        .truncate(),
+                                );
+                            });
+                        });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("Edit details").clicked() {
-                                self.clear_form();
-                                self.editing = Some(campaign.id);
-                                self.name = campaign.name.clone();
-                                self.path = campaign.path.to_string_lossy().into_owned();
+                            // Buttons keep every letter. The name and status give way first.
+                            ui.spacing_mut().item_spacing.x = design::XS;
+                            if Action::destructive("Remove…")
+                                .density(Density::Read)
+                                .name(&format!("Remove {} from Splat", campaign.name))
+                                .show(ui)
+                                .clicked()
+                            {
+                                self.confirm_remove = Some(campaign.id);
+                            }
+                            if active {
+                                if Action::quiet("Edit details")
+                                    .density(Density::Read)
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    edit = Some(campaign.clone());
+                                }
+                            } else if Action::secondary("Open")
+                                .density(Density::Read)
+                                .name(&format!("Make {} the active campaign", campaign.name))
+                                .show(ui)
+                                .clicked()
+                            {
+                                open = Some(campaign.id);
                             }
                         });
                     });
-                    ui.add_space(6.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.weak("Folder");
-                        ui.label(campaign.path.display().to_string());
-                        if campaign.path.is_dir() {
-                            ui.weak("Available");
-                        } else {
-                            ui.colored_label(egui::Color32::YELLOW, "Folder unavailable");
-                        }
-                    });
-                    ui.add_space(8.0);
-                    ui.separator();
-                    ui.add_space(8.0);
-                    dndbeyond.show(ui, session.clone(), self);
-                    ui.add_space(8.0);
-                    ui.collapsing("Campaign details", |ui| {
-                        ui.label(format!("ID: {}", campaign.id));
-                        ui.weak("Settings are stored in the campaign manifest.");
-                        if ui.small_button("Remove from Splat").on_hover_text("Removes this registration. The campaign folder and link are kept.").clicked() {
-                            let mut data = self.data.clone();
-                            data.campaigns.retain(|c| c.id != campaign.id);
-                            data.active_campaign_id = None;
-                            self.save(data);
-                        }
-                    });
                 });
-            } else {
-                ui.weak("Select a campaign above, or add one below.");
+                design::rule(ui);
             }
-            let editing = self.editing.is_some();
-            egui::CollapsingHeader::new(if editing { "Edit campaign details" } else { "Add campaign" })
-                .id_salt(("campaign_form", self.editing))
-                .open(self.remote.as_ref().map(|_| true))
-                .default_open(editing || self.data.campaigns.is_empty())
-                .show(ui, |ui| {
-            ui.add_space(8.0);
-            if let Some((id, name)) = &self.remote { ui.label(format!("{name} · D&D Beyond ID {id}")); }
-            egui::Grid::new("campaign_fields").num_columns(2).spacing([16.0, 8.0]).show(ui, |ui| {
-                ui.label("Name");
-                ui.add(egui::TextEdit::singleline(&mut self.name).hint_text("Campaign name").desired_width(ui.available_width()));
-                ui.end_row();
-                ui.label("Folder");
-                ui.horizontal(|ui| {
-                    ui.text_edit_singleline(&mut self.path);
-                    if ui.button("Browse…").clicked() && let Some(path) = rfd::FileDialog::new().pick_folder() {
-                        self.path = path.to_string_lossy().into_owned();
-                    }
+            if let Some(id) = open {
+                self.select(Some(id));
+            }
+            if let Some(campaign) = edit {
+                self.clear_form();
+                self.editing = Some(campaign.id);
+                self.name = campaign.name.clone();
+                self.path = campaign.path.to_string_lossy().into_owned();
+            }
+            ui.add_space(design::S);
+            dndbeyond.show_import(ui, session.clone(), self);
+            self.form(ui);
+        });
+    }
+
+    /// Edit the active campaign's details from the page that links to them.
+    pub fn show_form_if_editing(&mut self, ui: &mut egui::Ui) {
+        if self.editing.is_some() {
+            ui.add_space(design::S);
+            self.form(ui);
+        }
+    }
+
+    fn form(&mut self, ui: &mut egui::Ui) {
+        let editing = self.editing.is_some();
+        egui::CollapsingHeader::new(if editing {
+            "Edit campaign details"
+        } else {
+            "Add campaign"
+        })
+        .icon(design::section_icon)
+        .icon(design::section_icon)
+        .id_salt(("campaign_form", self.editing))
+        .open(self.remote.as_ref().map(|_| true))
+        .default_open(editing || self.data.campaigns.is_empty())
+        .show(ui, |ui| {
+            ui.add_space(design::XS);
+            if let Some((id, name)) = &self.remote {
+                ui.label(format!("{name} · D&D Beyond ID {id}"));
+            }
+            design::text_field(ui, "Campaign name", &mut self.name, None, None);
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.set_max_width((ui.available_width() - 112.0).max(120.0));
+                    design::text_field(ui, "Folder", &mut self.path, None, None);
                 });
-                ui.end_row();
+                if Action::secondary("Browse…")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                    && let Some(path) = crate::hermetic::pick_folder()
+                {
+                    self.path = path.to_string_lossy().into_owned();
+                }
             });
             ui.horizontal(|ui| {
-                if ui.button("Open campaign").clicked() && let Err(error) = self.save_form() {
+                if Action::primary("Open campaign").show(ui).clicked()
+                    && let Err(error) = self.save_form()
+                {
                     self.error = Some(error);
                 }
-                if ui.button("Cancel").clicked() {
+                if Action::quiet("Cancel").show(ui).clicked() {
                     self.clear_form();
                 }
             });
-            });
+            if let Some(error) = &self.error {
+                design::message(ui, Tone::Error, error);
+            }
         });
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,6 +725,7 @@ mod tests {
             name: String::new(),
             path: String::new(),
             remote: None,
+            confirm_remove: None,
         };
         campaigns.select(Some(first));
         campaigns.link(Some("12".into())).unwrap();

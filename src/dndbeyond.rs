@@ -188,20 +188,19 @@ impl DndBeyond {
         local: &mut Campaigns,
     ) {
         egui::CollapsingHeader::new("Add from D&D Beyond")
+            .icon(crate::design::section_icon)
+            .icon(crate::design::section_icon)
             .default_open(local.all().is_empty())
             .show(ui, |ui| {
                 let Some(session) = session else {
-                    ui.label(
-                        "Connect to D&D Beyond in Settings, or open an existing folder below.",
-                    );
+                    ui.label("Connect your account first, or open an existing folder below.");
                     return;
                 };
                 if (!self.loaded && self.error.is_none() && self.pending.is_none())
-                    || ui
-                        .add_enabled(
-                            self.pending.is_none(),
-                            egui::Button::new("Refresh campaigns"),
-                        )
+                    || crate::design::Action::secondary("Refresh campaigns")
+                        .density(crate::design::Density::Read)
+                        .blocked_if(self.pending.is_some(), "Already refreshing.")
+                        .show(ui)
                         .clicked()
                 {
                     self.refresh(session, ui.ctx());
@@ -210,7 +209,7 @@ impl DndBeyond {
                     ui.spinner();
                 }
                 if let Some(error) = &self.error {
-                    ui.colored_label(egui::Color32::LIGHT_RED, error);
+                    crate::design::message(ui, crate::design::Tone::Error, error);
                 }
                 if self.loaded && self.campaigns.is_empty() {
                     ui.label("No campaigns returned for this account.");
@@ -228,7 +227,11 @@ impl DndBeyond {
 
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, local: &mut Campaigns) {
         ui.horizontal(|ui| {
-            ui.strong("D&D Beyond");
+            ui.label(
+                crate::design::Type::Heading
+                    .rich(ui, "D&D Beyond")
+                    .color(crate::design::colors().text),
+            );
             if self.pending.is_some() {
                 ui.spinner();
                 ui.weak("Refreshing…");
@@ -243,13 +246,18 @@ impl DndBeyond {
             return;
         };
         if session.is_none() {
-            ui.weak("Connect your account above to update this link.");
+            ui.weak("Connect your account in Settings to update this link.");
         }
-        if ui
-            .add_enabled(
-                session.is_some() && self.pending.is_none(),
-                egui::Button::new("Refresh list"),
-            )
+        if crate::design::Action::secondary("Refresh list")
+            .density(crate::design::Density::Read)
+            .blocked(if session.is_none() {
+                Some("Connect to D&D Beyond in Settings first.")
+            } else if self.pending.is_some() {
+                Some("Already refreshing.")
+            } else {
+                None
+            })
+            .show(ui)
             .clicked()
             && let Some(session) = session.clone()
         {
@@ -261,7 +269,7 @@ impl DndBeyond {
             self.refresh(session, ui.ctx());
         }
         if let Some(error) = &self.error {
-            ui.colored_label(egui::Color32::LIGHT_RED, error);
+            crate::design::message(ui, crate::design::Tone::Error, error);
         }
         if let Some(message) = &self.message {
             ui.label(message);
@@ -280,6 +288,7 @@ impl DndBeyond {
             })
             .unwrap_or_else(|| "Not linked".into());
         let dropdown = egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
+            .icon(crate::design::combo_icon)
             .width(ui.available_width().min(520.0))
             .selected_text(label)
             .show_ui(ui, |ui| {
@@ -296,6 +305,7 @@ impl DndBeyond {
                     });
                 }
             });
+        crate::design::named_combo(ui, &dropdown, "D&D Beyond campaign link");
         if ui.is_rect_visible(dropdown.response.rect) {
             self.visible_last_frame = true;
             let key = current.clone().map(|id| (campaign.id, id));
@@ -338,10 +348,11 @@ impl DndBeyond {
                         ui.label(format!("Players: {count}"));
                     }
                 }
-                ui.hyperlink_to(
-                    "Open D&D Beyond campaign",
-                    format!("https://www.dndbeyond.com/campaigns/{id}"),
-                );
+                if crate::design::link(ui, "Open D&D Beyond campaign").clicked() {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+                        "https://www.dndbeyond.com/campaigns/{id}"
+                    )));
+                }
             });
         }
         if self.loaded && self.campaigns.is_empty() {

@@ -1,6 +1,6 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
+mod view;
 use crate::encounter_settings::{Grouping, Initiative};
-use crate::markdown_view;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -154,8 +154,11 @@ pub(crate) struct Run {
     dirty: bool,
     state: State,
     history: Vec<State>,
+    /// What each history step did, for a named Undo.
+    history_labels: Vec<String>,
     selected: usize,
-    amount: i64,
+    /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
+    amount: String,
     condition: String,
     note: String,
     dice: String,
@@ -165,6 +168,53 @@ pub(crate) struct Run {
     setup_details: String,
     syncs: BTreeMap<usize, crate::combat_sync::CombatSync>,
     sync_shadows: BTreeMap<usize, SheetShadow>,
+    panel: Panel,
+    closing: bool,
+    ending: bool,
+    focus_amount: bool,
+    roster_height: f32,
+    sync_to_restore: Vec<String>,
+    connected: bool,
+    /// Test builds have no session. This lets the party-sync control be exercised.
+    simulate_connection: bool,
+    scroll_to_selected: bool,
+    notice: Option<String>,
+    setup_inputs: BTreeMap<usize, String>,
+    /// The participant whose initiative the last step set, to merge keystrokes.
+    last_initiative: Option<usize>,
+    /// Lookup is beside the run, so the run's own panel gives up its space.
+    pub hide_panel: bool,
+    pub content: Option<Arc<crate::lookup::ContentIndex>>,
+    /// A link the DM followed in the side panel.
+    pub lookup_request: Option<usize>,
+    /// The Party page's sheet for the selected participant, when there is one.
+    sheet: Option<Arc<splat::character::EntitySnapshot>>,
+    sheet_for: Option<usize>,
+    sheet_page: usize,
+    setup_expanded: Option<usize>,
+    focus_field: Option<usize>,
+    focus_first_missing: bool,
+    /// The panel needs its space back, so Lookup should close.
+    pub close_lookup: bool,
+}
+#[derive(Clone, Copy, Default, PartialEq)]
+enum Panel {
+    #[default]
+    Reference,
+    Conditions,
+    Record,
+    Log,
+    Encounter,
+    Keys,
+}
+/// What the run strip shows on other pages.
+pub struct Strip {
+    pub round: u64,
+    pub current: Option<String>,
+    pub next: Option<String>,
+    pub conflict: Option<String>,
+    pub running: bool,
+    pub name: String,
 }
 #[derive(Clone)]
 enum Command {
@@ -212,7 +262,7 @@ impl Run {
             }
         }
         let seed = u64::from_le_bytes(
-            Uuid::new_v4().as_bytes()[..8]
+            crate::hermetic::new_uuid().as_bytes()[..8]
                 .try_into()
                 .expect("UUID seed"),
         );
@@ -234,8 +284,9 @@ impl Run {
                 random: Random::seeded(seed),
             },
             history: Vec::new(),
+            history_labels: Vec::new(),
             selected: 0,
-            amount: 1,
+            amount: String::new(),
             condition: String::new(),
             note: String::new(),
             dice: "1d20".into(),
@@ -245,6 +296,28 @@ impl Run {
             setup_details,
             syncs: BTreeMap::new(),
             sync_shadows: BTreeMap::new(),
+            panel: Panel::default(),
+            closing: false,
+            ending: false,
+            focus_amount: false,
+            roster_height: 0.0,
+            sync_to_restore: Vec::new(),
+            connected: false,
+            simulate_connection: false,
+            scroll_to_selected: false,
+            notice: None,
+            setup_inputs: BTreeMap::new(),
+            last_initiative: None,
+            hide_panel: false,
+            content: None,
+            lookup_request: None,
+            close_lookup: false,
+            sheet: None,
+            sheet_for: None,
+            sheet_page: 0,
+            setup_expanded: None,
+            focus_field: None,
+            focus_first_missing: true,
         })
     }
     fn current(&self) -> Option<usize> {
@@ -260,6 +333,15 @@ impl Run {
         if matches!(self.state.phase, Phase::Ended { .. }) {
             return Err("This encounter has ended. Undo the ending to continue.".into());
         }
+        // Merge typed digits of one initiative into one undo step.
+        let initiative_edit = match &command {
+            Command::Initiative(index, _) => Some(*index),
+            _ => None,
+        };
+        if initiative_edit.is_some() && initiative_edit == self.last_initiative {
+            self.undo();
+        }
+        let undo_label = self.describe(&command);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let follow_turn = matches!(command, Command::Begin | Command::Next);
         let mut next = self.state.clone();
@@ -417,8 +499,11 @@ impl Run {
         next.log.push(label);
         if self.history.len() == 100 {
             self.history.remove(0);
+            self.history_labels.remove(0);
         }
         self.history.push(std::mem::replace(&mut self.state, next));
+        self.history_labels.push(undo_label);
+        self.last_initiative = initiative_edit;
         if follow_turn && let Some(current) = self.current() {
             self.selected = current;
         }
@@ -604,212 +689,186 @@ impl Run {
     }
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
+            self.history_labels.pop();
             self.state = previous;
             self.dirty = true;
             self.error = None;
+            self.last_initiative = None;
         }
     }
-    /// Returns true only after the user chooses to discard the in-memory run.
-    pub fn show(&mut self, ui: &mut egui::Ui) -> bool {
-        ui.visuals_mut().override_text_color = Some(egui::Color32::from_gray(215));
-        ui.visuals_mut().weak_text_color = Some(egui::Color32::from_gray(165));
-        ui.heading(format!("DM view · {}", self.name));
-        ui.label(
-            "You resolve attacks and rules. Apply final damage after resistance and other effects.",
-        );
-        ui.weak("Changes are saved to this run. Templates and character records stay separate.");
-        if let Some(storage) = &self.storage {
-            ui.weak(if self.dirty {
-                "Unsaved run changes"
-            } else {
-                "Run saved automatically"
-            })
-            .on_hover_text(storage.path.display().to_string());
+    /// The words a named Undo uses for this command.
+    fn describe(&self, command: &Command) -> String {
+        let name = |index: &usize| {
+            self.state
+                .participants
+                .get(*index)
+                .map_or("a participant", |p| p.name.as_str())
+        };
+        match command {
+            Command::RollNpcs => "NPC initiative roll".into(),
+            Command::Npc(i, _) => format!("NPC control on {}", name(i)),
+            Command::RollMode(i, _) => format!("roll mode on {}", name(i)),
+            Command::Begin => "begin combat".into(),
+            Command::Next => "next turn".into(),
+            Command::Move(..) => "tie order".into(),
+            Command::End(_) => "end encounter".into(),
+            Command::Health(i, ..) => format!("HP correction on {}", name(i)),
+            Command::TempHp(i, amount) => format!("{amount} temporary HP on {}", name(i)),
+            Command::Damage(i, amount) => format!("{amount} damage to {}", name(i)),
+            Command::Heal(i, amount) => format!("{amount} healing to {}", name(i)),
+            Command::Initiative(i, _) | Command::RollInitiative(i) => {
+                format!("initiative for {}", name(i))
+            }
+            Command::Bonus(i, _) => format!("initiative bonus on {}", name(i)),
+            Command::Presence(i, present) => format!(
+                "{} {}",
+                name(i),
+                if *present { "present" } else { "absent" }
+            ),
+            // A long effect stays readable on the panel, and the label stays whole.
+            Command::Condition(i, condition) if condition.trim().chars().count() > 24 => {
+                format!("effect on {}", name(i))
+            }
+            Command::Condition(i, condition) => format!("{} on {}", condition.trim(), name(i)),
+            Command::RemoveCondition(i, at) => format!(
+                "{} off {}",
+                self.state
+                    .participants
+                    .get(*i)
+                    .and_then(|p| p.conditions.get(*at))
+                    .filter(|condition| condition.trim().chars().count() <= 24)
+                    .map_or("an effect", String::as_str),
+                name(i)
+            ),
+            Command::Concentration(i, _) => format!("concentration on {}", name(i)),
+            Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
+            Command::Note(i, _) => format!("note on {}", name(i)),
+            Command::Roll(expression) => format!("{expression} roll"),
         }
-        ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
-        let mut command = None;
-        ui.horizontal_wrapped(|ui| {
-            match &self.state.phase {
-                Phase::Setup => {
-                    if ui.button("Roll NPC initiative").clicked() {
-                        command = Some(Command::RollNpcs);
-                    }
-                    if ui.button("Begin combat").clicked() {
-                        command = Some(Command::Begin);
-                    }
-                }
-                Phase::Running => {
-                    ui.strong(format!("Round {}", self.state.round));
-                    if ui.button("Next turn").clicked() {
-                        command = Some(Command::Next);
-                    }
-                }
-                Phase::Ended { outcome } => {
-                    ui.strong(format!(
-                        "Ended manually · {outcome} · Round {}",
-                        self.state.round
-                    ));
-                }
-            }
-            if ui
-                .add_enabled(!self.history.is_empty(), egui::Button::new("Undo"))
-                .clicked()
-            {
-                self.undo();
-            }
-            if ui
-                .add_enabled(
-                    !self.syncs.values().any(|s| s.enabled && (s.busy() || s.dirty())),
-                    egui::Button::new("Save and close run"),
-                )
-                .on_hover_text("Wait for pending sync changes, resolve conflicts, or disable combat sync before closing.")
-                .clicked()
-            {
-                match self.save() {
-                    Ok(()) => self.confirm_close = true,
-                    Err(e) => self.error = Some(e),
-                }
-            }
-            if ui.button("Save now").clicked()
-                && let Err(e) = self.save()
-            {
-                self.error = Some(e);
-            }
-        });
-        if self.confirm_close {
-            return true;
+    }
+    fn undo_label(&self) -> String {
+        self.history_labels
+            .last()
+            .map_or_else(|| "Undo".to_owned(), |label| format!("Undo: {label}"))
+    }
+    fn next_up(&self) -> Option<usize> {
+        if self.state.phase != Phase::Running {
+            return None;
         }
-        if let Some(error) = &self.error {
-            ui.colored_label(egui::Color32::LIGHT_RED, error);
-        }
-        if self.state.phase == Phase::Setup {
-            ui.label(format!(
-                "Campaign initiative: {} · {}",
-                self.initiative.grouping.label(),
-                if self.initiative.roster_ties {
-                    "Roster order breaks ties"
-                } else {
-                    "DM / players resolve ties"
-                }
-            ));
-            if matches!(
-                self.initiative.grouping,
-                Grouping::BySide | Grouping::Explicit
-            ) {
-                ui.weak(
-                    "Each group uses the first NPC in roster order for its bonus and roll mode.",
-                );
-            }
-            ui.label("Enter initiative totals or roll each participant. Use the same total for a group. Resolve ties with Up and Down before combat begins.");
-        }
-        let ended = matches!(self.state.phase, Phase::Ended { .. });
-        let current = self.current();
-        egui::ScrollArea::vertical().scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible).id_salt("dm_run").show(ui, |ui| {
-            for (position, &index) in self.state.order.iter().enumerate() {
-                let p = &self.state.participants[index];
-                ui.push_id(&p.key, |ui| { ui.group(|ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        if current == Some(index) { ui.colored_label(egui::Color32::LIGHT_BLUE, "CURRENT TURN"); }
-                        if ui.selectable_label(self.selected == index, egui::RichText::new(&p.name).strong()).clicked() { self.selected = index; self.condition.clear(); self.note.clear(); }
-                        ui.weak(&p.side);
-                        ui.label(format!("HP {}/{} · Temp {} · AC {}", display(p.hp), display(p.max_hp), p.temporary_hp, display(p.armor_class)));
-                        if self.state.phase != Phase::Setup { ui.label(format!("Initiative {}", display(p.initiative))); }
-                        if !p.present { ui.weak("Absent"); }
-                        if p.hp == Some(0) { ui.colored_label(egui::Color32::YELLOW, "0 HP · resolve death or unconsciousness"); }
-                        if p.concentration { ui.label("Concentrating"); }
-                        if !p.conditions.is_empty() { ui.label(p.conditions.join(", ")); }
-                    });
-                    if self.state.phase == Phase::Setup { ui.horizontal_wrapped(|ui| {
-                        let mut npc = p.npc; if ui.checkbox(&mut npc, "NPC").changed() { command = Some(Command::Npc(index, npc)); }
-                        let mut total = p.initiative; optional_number(ui, "Initiative", &mut total, -1000..=1000);
-                        if total != p.initiative { command = Some(Command::Initiative(index, total)); }
-                        let mut mode = p.initiative_mode;
-                        egui::ComboBox::from_id_salt("initiative_mode").selected_text(mode_label(mode)).show_ui(ui, |ui| { for m in [-1, 0, 1] { ui.selectable_value(&mut mode, m, mode_label(m)); } });
-                        if mode != p.initiative_mode { command = Some(Command::RollMode(index, mode)); }
-                        if ui.add_enabled(p.initiative_bonus.is_some(), egui::Button::new("Roll")).clicked() { command = Some(Command::RollInitiative(index)); }
-                        if ui.add_enabled(position > 0 && !self.initiative.roster_ties, egui::Button::new("Up")).clicked() { command = Some(Command::Move(position, position - 1)); }
-                        if ui.add_enabled(position + 1 < self.state.order.len() && !self.initiative.roster_ties, egui::Button::new("Down")).clicked() { command = Some(Command::Move(position, position + 1)); }
-                    }); }
-                }); });
-            }
-            ui.separator();
-            let p = &self.state.participants[self.selected]; let index = self.selected;
-            ui.heading(&p.name);
-            ui.add_enabled_ui(!ended, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    let mut present = p.present; if ui.checkbox(&mut present, "Present in turn order").changed() { command = Some(Command::Presence(index, present)); }
-                    let mut concentrating = p.concentration; if ui.checkbox(&mut concentrating, "Concentrating").changed() { command = Some(Command::Concentration(index, concentrating)); }
-                });
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Amount"); ui.add(egui::DragValue::new(&mut self.amount).range(0..=1_000_000));
-                    if ui.button("Apply damage").clicked() { command = Some(Command::Damage(index, self.amount)); }
-                    if ui.button("Heal").clicked() { command = Some(Command::Heal(index, self.amount)); }
-                    if ui.button("Replace temporary HP").clicked() { command = Some(Command::TempHp(index, self.amount)); }
-                });
-                ui.collapsing("Adjust HP and initiative bonus", |ui| {
-                    let mut hp = p.hp; let mut max = p.max_hp;
-                    ui.horizontal_wrapped(|ui| { optional_number(ui, "Current HP", &mut hp, 0..=1_000_000); optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000); });
-                    if hp != p.hp || max != p.max_hp { command = Some(Command::Health(index, hp, max)); }
-                    if self.state.phase == Phase::Setup {
-                        let mut bonus = p.initiative_bonus; optional_number(ui, "Initiative bonus", &mut bonus, -1000..=1000);
-                        if bonus != p.initiative_bonus { command = Some(Command::Bonus(index, bonus)); }
-                    }
-                });
-                ui.horizontal_wrapped(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.condition).hint_text("Condition or effect"));
-                    if ui.button("Add condition").clicked() { command = Some(Command::Condition(index, self.condition.clone())); }
-                });
-                for (i, condition) in p.conditions.iter().enumerate() { ui.horizontal(|ui| { ui.label(condition); if ui.small_button("Remove").clicked() { command = Some(Command::RemoveCondition(index, i)); } }); }
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Death saves (manual)"); let mut successes = p.successes; let mut failures = p.failures;
-                    ui.label("Successes"); ui.add(egui::DragValue::new(&mut successes).range(0..=3)); ui.label("Failures"); ui.add(egui::DragValue::new(&mut failures).range(0..=3));
-                    if successes != p.successes || failures != p.failures { command = Some(Command::DeathSaves(index, successes, failures)); }
-                });
-                ui.weak("Conditions, Concentration checks, death saves, and recovery are resolved by the DM. Zero HP does not remove a turn.");
-                ui.horizontal_wrapped(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.note).hint_text("DM note: resources, targets, rulings…"));
-                    if ui.button("Record note").clicked() { command = Some(Command::Note(index, self.note.clone())); }
-                });
-            });
-            if !p.notes.is_empty() { ui.label(&p.notes); }
-            if p.definition.fields.contains_key("splat_external") {
-                ui.collapsing("D&D Beyond combat sync", |ui| self.syncs.entry(index).or_default().show(ui));
-            }
-            ui.collapsing("Creature details (starting snapshot)", |ui| {
-                markdown_view::show(ui, &p.definition.body);
-                ui.collapsing("Structured stats and starting state", |ui| {
-                    ui.monospace(serde_yaml_ng::to_string(&p.definition.fields).unwrap_or_default());
-                    ui.monospace(serde_yaml_ng::to_string(&p.initial).unwrap_or_default());
-                });
-            });
-            ui.collapsing("Encounter setup and DM notes", |ui| { markdown_view::show(ui, &self.setup_details); });
-            ui.separator();
-            ui.add_enabled_ui(!ended, |ui| {
-                ui.horizontal_wrapped(|ui| { ui.label("Dice"); ui.text_edit_singleline(&mut self.dice); if ui.button("Roll dice").clicked() { command = Some(Command::Roll(self.dice.clone())); } });
-                if self.state.phase == Phase::Running {
-                    ui.horizontal_wrapped(|ui| { ui.label("Outcome"); ui.text_edit_singleline(&mut self.outcome);
-                        if ui.button("End encounter").clicked() { command = Some(Command::End(if self.outcome.trim().is_empty() { "Undecided".into() } else { self.outcome.trim().into() })); }
-                    });
-                }
-            });
-            ui.heading("Combat log");
-            for line in self.state.log.iter().rev() { ui.label(line); }
-        });
-        if let Some(command) = command {
-            if let Err(error) = self.apply(command) {
-                self.error = Some(error);
-            } else {
-                self.condition.clear();
-                self.note.clear();
-            }
-        }
+        let count = self.state.order.len();
+        (1..=count)
+            .map(|step| self.state.order[(self.state.cursor + step) % count])
+            .find(|index| self.state.participants[*index].present)
+            .filter(|index| Some(*index) != self.current())
+    }
+    fn linked_participants(&self) -> Vec<usize> {
+        self.state
+            .participants
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| remote_identity(p).is_some())
+            .map(|(index, _)| index)
+            .collect()
+    }
+    pub fn autosave(&mut self) {
         if self.dirty
             && self.storage.is_some()
             && let Err(e) = self.save()
         {
             self.error = Some(e);
         }
-        false
+    }
+    pub fn strip(&self) -> Strip {
+        let name = |index: usize| self.state.participants[index].name.clone();
+        let conflict = self
+            .syncs
+            .iter()
+            .find(|(_, sync)| sync.state() == crate::combat_sync::SyncState::Conflict)
+            .map(|(index, _)| name(*index));
+        Strip {
+            round: self.state.round,
+            current: self.current().map(name),
+            next: self.next_up().map(name),
+            conflict,
+            running: self.state.phase == Phase::Running,
+            name: self.name.clone(),
+        }
+    }
+    /// The strip's Next turn, usable from any page.
+    pub fn next_turn(&mut self) {
+        if let Err(error) = self.apply(Command::Next) {
+            self.error = Some(error);
+        } else {
+            self.amount.clear();
+            self.scroll_to_selected = true;
+            self.focus_amount = true;
+        }
+    }
+    /// Show the first participant with a conflict, so it can be resolved.
+    pub fn review_conflict(&mut self) {
+        if let Some(index) = self
+            .syncs
+            .iter()
+            .find(|(_, sync)| sync.state() == crate::combat_sync::SyncState::Conflict)
+            .map(|(index, _)| *index)
+        {
+            self.selected = index;
+            self.scroll_to_selected = true;
+        }
+    }
+    /// The character whose sheet the side panel wants, if the selection is linked.
+    pub fn wanted_sheet(&self) -> Option<String> {
+        remote_identity(self.state.participants.get(self.selected)?).map(|(_, id)| id)
+    }
+    /// A sheet the shell found for the selected participant, or none.
+    pub fn set_sheet(&mut self, record: Option<&splat::character::EntitySnapshot>) {
+        let unchanged = self.sheet_for == Some(self.selected)
+            && self.sheet.as_deref().map(|r| &r.source.content_hash)
+                == record.map(|r| &r.source.content_hash);
+        if !unchanged {
+            self.sheet = record.cloned().map(Arc::new);
+            self.sheet_for = Some(self.selected);
+        }
+    }
+    /// The names of characters with sync changes not yet confirmed.
+    pub fn pending_sync_names(&self) -> Vec<String> {
+        self.syncs
+            .iter()
+            .filter(|(_, sync)| sync.enabled && (sync.busy() || sync.dirty()))
+            .filter_map(|(index, _)| self.state.participants.get(*index))
+            .map(|p| p.name.clone())
+            .collect()
+    }
+    pub fn pending_sync(&self) -> bool {
+        self.syncs
+            .values()
+            .any(|sync| sync.enabled && (sync.busy() || sync.dirty()))
+    }
+    pub fn path(&self) -> Option<&Path> {
+        self.storage.as_ref().map(|storage| storage.path.as_path())
+    }
+    /// Participants with sync on, to restore after a restart. Sync reads first.
+    pub fn synced_keys(&self) -> Vec<String> {
+        self.syncs
+            .iter()
+            .filter(|(_, sync)| sync.enabled)
+            .filter_map(|(index, _)| self.state.participants.get(*index))
+            .map(|p| p.key.clone())
+            .chain(self.sync_to_restore.iter().cloned())
+            .collect()
+    }
+    /// The session comes back after the run does, and sync without one stops itself,
+    /// so these wait for the connection.
+    pub fn restore_sync(&mut self, keys: &[String]) {
+        self.sync_to_restore = keys.to_vec();
+    }
+    fn resume_restored_sync(&mut self) {
+        let keys = std::mem::take(&mut self.sync_to_restore);
+        for index in self.linked_participants() {
+            if keys.contains(&self.state.participants[index].key) {
+                self.syncs.entry(index).or_default().start();
+            }
+        }
     }
 }
 fn mode_label(mode: i8) -> &'static str {
@@ -881,6 +940,10 @@ impl Run {
         epoch: u64,
         linked: Option<&str>,
     ) {
+        self.connected = session.is_some();
+        if self.connected && !self.sync_to_restore.is_empty() {
+            self.resume_restored_sync();
+        }
         let mut identities = std::collections::BTreeSet::new();
         let mut changes = Vec::new();
         let mut external_change = false;
@@ -983,7 +1046,7 @@ impl Run {
                 changes.join(", ")
             ));
             if external_change {
-                self.history.clear();
+                self.note_sheet_update(&changes);
             }
             self.dirty = true;
             if self.storage.is_some()
@@ -992,6 +1055,17 @@ impl Run {
                 self.error = Some(e);
             }
         }
+    }
+}
+impl Run {
+    /// A sheet changed outside Splat, so earlier steps can no longer be undone safely.
+    pub(crate) fn note_sheet_update(&mut self, names: &[String]) {
+        self.history.clear();
+        self.history_labels.clear();
+        self.notice = Some(format!(
+            "Undo history was cleared: D&D Beyond changed {}.",
+            names.join(", ")
+        ));
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -1108,6 +1182,10 @@ impl Run {
             id: saved.id,
             name: saved.name,
             initiative: saved.initiative,
+            selected: match saved.state.phase {
+                Phase::Running => saved.state.order[saved.state.cursor],
+                _ => 0,
+            },
             state: saved.state,
             setup_details: saved.setup_details,
             storage: Some(Storage {
@@ -1117,8 +1195,8 @@ impl Run {
             }),
             dirty: false,
             history: Vec::new(),
-            selected: 0,
-            amount: 1,
+            history_labels: Vec::new(),
+            amount: String::new(),
             condition: String::new(),
             note: String::new(),
             dice: "1d20".into(),
@@ -1127,9 +1205,31 @@ impl Run {
             confirm_close: false,
             syncs: BTreeMap::new(),
             sync_shadows: BTreeMap::new(),
+            panel: Panel::default(),
+            closing: false,
+            ending: false,
+            focus_amount: true,
+            roster_height: 0.0,
+            sync_to_restore: Vec::new(),
+            connected: false,
+            simulate_connection: false,
+            scroll_to_selected: true,
+            notice: None,
+            setup_inputs: BTreeMap::new(),
+            last_initiative: None,
+            hide_panel: false,
+            content: None,
+            lookup_request: None,
+            close_lookup: false,
+            sheet: None,
+            sheet_for: None,
+            sheet_page: 0,
+            setup_expanded: None,
+            focus_field: None,
+            focus_first_missing: true,
         })
     }
-    pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<(PathBuf, String)>, String> {
+    pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, String> {
         if !directory.exists() {
             return Ok(Vec::new());
         }
@@ -1137,59 +1237,176 @@ impl Run {
         for file in fs::read_dir(directory).map_err(|e| e.to_string())? {
             let path = file.map_err(|e| e.to_string())?.path();
             if path.extension().is_some_and(|e| e == "json") {
+                let modified = fs::metadata(&path)
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|elapsed| elapsed.as_secs());
                 match Self::open(&path, campaign) {
-                    Ok(run) => runs.push((
-                        path,
-                        format!(
-                            "{} · Round {} · {}",
-                            run.name,
-                            run.state.round,
-                            match run.state.phase {
-                                Phase::Setup => "Preparing",
-                                Phase::Running => "In progress",
-                                Phase::Ended { .. } => "Ended",
-                            }
-                        ),
-                    )),
-                    Err(_) => runs.push((
-                        path.clone(),
-                        format!(
-                            "Unreadable run: {}",
-                            path.file_name().unwrap_or_default().to_string_lossy()
-                        ),
-                    )),
+                    Ok(run) => {
+                        let (status, finished) = match run.state.phase {
+                            Phase::Setup => ("Preparing", false),
+                            Phase::Running => ("In progress", false),
+                            Phase::Ended { .. } => ("Ended", true),
+                        };
+                        runs.push(SavedRunInfo {
+                            path,
+                            encounter: run.name.clone(),
+                            label: format!(
+                                "Round {} · {status}{}",
+                                run.state.round,
+                                modified.map_or_else(String::new, |at| format!(
+                                    " · {} UTC",
+                                    calendar_time(at)
+                                )),
+                            ),
+                            finished,
+                            readable: true,
+                        });
+                    }
+                    Err(_) => {
+                        let name = path.file_name().unwrap_or_default().to_string_lossy();
+                        runs.push(SavedRunInfo {
+                            label: format!("Unreadable run: {name}"),
+                            encounter: String::new(),
+                            finished: false,
+                            readable: false,
+                            path,
+                        });
+                    }
                 }
             }
         }
-        runs.sort_by(|a, b| a.1.cmp(&b.1));
+        runs.sort_by(|a, b| a.encounter.cmp(&b.encounter).then(a.label.cmp(&b.label)));
         Ok(runs)
     }
+}
+
+/// One saved run, as the Encounters page lists it.
+pub struct SavedRunInfo {
+    pub path: PathBuf,
+    pub encounter: String,
+    pub label: String,
+    pub finished: bool,
+    pub readable: bool,
+}
+
+/// A UTC date and time, so two runs saved on one day can be told apart.
+pub fn calendar_time(seconds: u64) -> String {
+    format!(
+        "{} {:02}:{:02}",
+        calendar_date(seconds),
+        (seconds / 3600) % 24,
+        (seconds / 60) % 60
+    )
+}
+
+/// A UTC date from seconds since 1970, by Howard Hinnant's `civil_from_days`.
+pub fn calendar_date(seconds: u64) -> String {
+    let days = (seconds / 86_400) as i64 + 719_468;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days.rem_euclid(146_097);
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 {
+        month_index + 3
+    } else {
+        month_index - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+#[cfg(test)]
+impl Run {
+    pub fn simulate_connection(&mut self) {
+        self.simulate_connection = true;
+    }
+    /// Show one participant in a sync state test builds cannot reach by themselves.
+    pub fn simulate_sync_state(&mut self, name: &str, state: crate::combat_sync::SyncState) {
+        let (index, participant) = self
+            .state
+            .participants
+            .iter()
+            .enumerate()
+            .find(|(_, p)| p.name == name)
+            .expect("participant in this run");
+        let (_, character) = remote_identity(participant).expect("D&D Beyond participant");
+        let max_hp = participant.max_hp.unwrap_or(1);
+        let damage = max_hp - participant.hp.unwrap_or(max_hp);
+        self.syncs.insert(
+            index,
+            crate::combat_sync::CombatSync::simulated_state(
+                state,
+                character.parse().expect("numeric ID"),
+                max_hp,
+                damage,
+            ),
+        );
+    }
+    /// Give one participant a D&D Beyond conflict, as the sync panel would show it.
+    pub fn simulate_sync_conflict(&mut self, name: &str) {
+        let (index, participant) = self
+            .state
+            .participants
+            .iter()
+            .enumerate()
+            .find(|(_, p)| p.name == name)
+            .expect("participant in this run");
+        let (_, character) = remote_identity(participant).expect("D&D Beyond participant");
+        let max_hp = participant.max_hp.unwrap_or(1);
+        let damage = max_hp - participant.hp.unwrap_or(max_hp);
+        self.syncs.insert(
+            index,
+            crate::combat_sync::CombatSync::simulated_conflict(
+                character.parse().expect("numeric ID"),
+                max_hp,
+                damage,
+            ),
+        );
+    }
+}
+
+/// A saved run in its second round, written by the same commands the DM controls use.
+#[cfg(test)]
+pub(crate) fn write_in_progress_run(
+    campaign: Uuid,
+    directory: &Path,
+    name: &str,
+    participants: Vec<(Participant, i64)>,
+) -> Result<(), String> {
+    let (participants, initiatives): (Vec<_>, Vec<_>) = participants.into_iter().unzip();
+    let mut run = Run::new(
+        name.into(),
+        participants,
+        format!("# {name}\n\nPhases and completion are resolved manually."),
+    )?;
+    run.state.random = Random::seeded(20_260_101);
+    for (index, total) in initiatives.into_iter().enumerate() {
+        run.apply(Command::Initiative(index, Some(total)))?;
+    }
+    run.apply(Command::Begin)?;
+    let first = run.state.order[0];
+    run.apply(Command::Note(first, "Holding the bridge.".into()))?;
+    run.apply(Command::Next)?;
+    let enemy = run.state.order[run.state.cursor];
+    run.apply(Command::Damage(enemy, 9))?;
+    run.apply(Command::Condition(enemy, "Prone".into()))?;
+    run.apply(Command::Next)?;
+    let caster = run.state.order[run.state.cursor];
+    run.apply(Command::Concentration(caster, true))?;
+    for _ in 0..run.state.order.len() {
+        run.apply(Command::Next)?;
+    }
+    run.configure_storage(campaign, directory, Initiative::default())
 }
 
 fn display(value: Option<i64>) -> String {
     value.map_or_else(|| "?".into(), |n| n.to_string())
 }
-fn optional_number(
-    ui: &mut egui::Ui,
-    label: &str,
-    value: &mut Option<i64>,
-    range: std::ops::RangeInclusive<i64>,
-) {
-    let mut known = value.is_some();
-    if ui.checkbox(&mut known, label).changed() {
-        *value = if known {
-            Some(*range.start().max(&0))
-        } else {
-            None
-        };
-    }
-    if let Some(n) = value {
-        ui.add(egui::DragValue::new(n).range(range));
-    } else {
-        ui.weak("Unknown");
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1440,6 +1657,66 @@ mod tests {
         run.state.participants[2].initiative_group = Some("wave".into());
         run.apply(Command::RollNpcs).unwrap();
         assert_eq!(run.state.participants[2].initiative, Some(12));
+    }
+    #[test]
+    fn undo_names_the_last_action_and_each_step_goes_back() {
+        let mut run = run();
+        begin(&mut run);
+        assert_eq!(run.undo_label(), "Undo: begin combat");
+        let name = run.state.participants[1].name.clone();
+        run.apply(Command::Damage(1, 7)).unwrap();
+        assert_eq!(run.undo_label(), format!("Undo: 7 damage to {name}"));
+        run.undo();
+        assert_eq!(run.undo_label(), "Undo: begin combat");
+    }
+    #[test]
+    fn initiative_digits_merge_into_one_undo_step() {
+        let mut run = run();
+        run.apply(Command::Initiative(0, Some(1))).unwrap();
+        run.apply(Command::Initiative(0, Some(15))).unwrap();
+        assert_eq!(run.history.len(), 1);
+        assert_eq!(run.state.participants[0].initiative, Some(15));
+        run.apply(Command::Initiative(1, Some(3))).unwrap();
+        assert_eq!(run.history.len(), 2);
+    }
+    #[test]
+    fn resume_selects_the_current_participant() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Next).unwrap();
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        let path = run.storage.as_ref().unwrap().path.clone();
+        let reopened = Run::open(&path, campaign).unwrap();
+        assert_eq!(Some(reopened.selected), reopened.current());
+    }
+    #[test]
+    fn a_sheet_update_clears_undo_and_says_so() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        run.note_sheet_update(&["Guard 1".to_owned()]);
+        assert!(run.history.is_empty());
+        assert_eq!(run.undo_label(), "Undo");
+        assert!(
+            run.notice
+                .as_ref()
+                .unwrap()
+                .contains("Undo history was cleared")
+        );
+    }
+    #[test]
+    fn next_up_skips_absent_and_dates_are_calendar_dates() {
+        let mut run = run();
+        begin(&mut run);
+        assert_eq!(run.next_up(), Some(1));
+        run.apply(Command::Presence(1, false)).unwrap();
+        assert_eq!(run.next_up(), Some(2));
+        assert_eq!(calendar_date(0), "1970-01-01");
+        assert_eq!(calendar_date(1_767_236_400), "2026-01-01");
     }
     #[test]
     fn failed_npc_roll_is_atomic_and_surprise_uses_disadvantage() {

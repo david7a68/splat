@@ -106,7 +106,21 @@ fn cookie_header(cookie: &str) -> Result<header::HeaderValue, String> {
     Ok(value)
 }
 
+#[cfg(not(test))]
 pub fn connect(cookie: Zeroizing<String>) -> Result<Session, String> {
+    exchange(AUTH_URL, cookie)
+}
+
+// Every D&D Beyond request needs a Session. Test builds cannot sign in, so they
+// cannot reach the network, and the UI shows its ordinary connection failure.
+#[cfg(test)]
+pub fn connect(_: Zeroizing<String>) -> Result<Session, String> {
+    Err("Could not reach D&D Beyond. Check your connection and try again.".into())
+}
+
+/// For the `#[ignore]`d live tests only, which a person runs on purpose.
+#[cfg(test)]
+pub fn connect_live(cookie: Zeroizing<String>) -> Result<Session, String> {
     exchange(AUTH_URL, cookie)
 }
 
