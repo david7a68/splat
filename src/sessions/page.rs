@@ -188,7 +188,7 @@ pub struct Sessions {
     break_before_words: bool,
     note_editor_id: Option<egui::Id>,
     /// When a recording last stopped, so the rail can say it was kept.
-    saved_at: Option<Instant>,
+    saved_at: Option<crate::hermetic::Moment>,
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
@@ -836,7 +836,7 @@ impl Sessions {
     /// A recording stopped a moment ago, and its file is kept.
     pub fn just_saved(&self) -> bool {
         self.saved_at
-            .is_some_and(|at| at.elapsed() < SAVED_WORD_FOR)
+            .is_some_and(|at| crate::hermetic::since(at) < SAVED_WORD_FOR)
     }
 
     /// A job finished, and the DM has not looked at it yet.
@@ -922,7 +922,7 @@ impl Sessions {
         if tell {
             self.notice_session = Some(session);
             self.notice = Some(if has_audio {
-                self.saved_at = Some(Instant::now());
+                self.saved_at = Some(crate::hermetic::moment());
                 (
                     Tone::Success,
                     format!("Recording of {label} saved: {}.", recording_title(&path)),

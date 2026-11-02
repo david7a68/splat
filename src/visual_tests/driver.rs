@@ -608,6 +608,12 @@ impl<'a> Driver<'a> {
             .map(|node| node.rect.min.y)
     }
 
+    /// Let time pass on the clock that times a word on screen.
+    pub fn pass_time(&mut self, time: Duration) {
+        crate::hermetic::closed::pass_time(time);
+        self.settle();
+    }
+
     /// Drop keyboard focus, as a click on plain text does.
     pub fn harness_focus_nothing(&mut self) {
         self.clear_focus();

@@ -31,6 +31,21 @@ pub fn now() -> u64 {
     splat::character::now()
 }
 
+/// A point on the clock that times a word on screen.
+#[cfg(not(test))]
+pub type Moment = std::time::Instant;
+
+#[cfg(not(test))]
+pub fn moment() -> Moment {
+    Moment::now()
+}
+
+/// How long ago this moment was.
+#[cfg(not(test))]
+pub fn since(at: Moment) -> std::time::Duration {
+    at.elapsed()
+}
+
 /// When a file last changed, in seconds since the epoch.
 #[cfg(not(test))]
 pub fn file_time(path: &std::path::Path) -> Option<u64> {
@@ -73,12 +88,15 @@ pub fn local_stamp() -> String {
 }
 
 #[cfg(test)]
-pub use closed::{character_cache, file_time, local_stamp, new_uuid, now, pick_folder, today};
+pub use closed::{
+    Moment, character_cache, file_time, local_stamp, moment, new_uuid, now, pick_folder, since,
+    today,
+};
 
 #[cfg(test)]
 pub mod closed {
     use super::*;
-    use std::{cell::Cell, sync::OnceLock};
+    use std::{cell::Cell, sync::OnceLock, time::Duration};
 
     /// A fixed clock, so "Fetched 3 h ago" renders the same on every run.
     pub const FIXED_NOW: u64 = 1_767_236_400;
@@ -87,6 +105,23 @@ pub mod closed {
 
     thread_local! {
         static NEXT_UUID: Cell<Option<u128>> = const { Cell::new(None) };
+        static CLOCK: Cell<Duration> = const { Cell::new(Duration::ZERO) };
+    }
+
+    /// Time on a clock that moves only when a test says so, so that a word on a timer is on
+    /// screen in the same captures of every run.
+    pub type Moment = Duration;
+
+    pub fn moment() -> Moment {
+        CLOCK.get()
+    }
+
+    pub fn since(at: Moment) -> Duration {
+        CLOCK.get().saturating_sub(at)
+    }
+
+    pub fn pass_time(time: Duration) {
+        CLOCK.set(CLOCK.get() + time);
     }
 
     /// Open the character cache at a temporary folder for this test process.

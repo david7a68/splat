@@ -209,7 +209,7 @@ pub struct Recorder {
     health: Health,
     size: u64,
     grew: Instant,
-    heard: Instant,
+    heard: crate::hermetic::Moment,
     checked: Instant,
 }
 
@@ -266,7 +266,7 @@ impl Recorder {
             health: Health::Starting,
             size: 0,
             grew: now,
-            heard: now,
+            heard: crate::hermetic::moment(),
             checked: now,
         }
     }
@@ -283,7 +283,7 @@ impl Recorder {
 
     /// Sound in the last few seconds.
     pub fn heard_just_now(&self) -> bool {
-        self.heard.elapsed() < HEARD_FOR
+        crate::hermetic::since(self.heard) < HEARD_FOR
     }
 
     pub fn health(&self) -> &Health {
@@ -292,7 +292,7 @@ impl Recorder {
 
     #[cfg(test)]
     pub fn simulate_health(&mut self, health: Health) {
-        self.heard = Instant::now();
+        self.heard = crate::hermetic::moment();
         self.health = health;
     }
 
@@ -331,9 +331,9 @@ impl Recorder {
             self.grew = now;
             let peak = last_second_peak(&self.path, size);
             if peak.is_some_and(|peak| peak >= SILENCE_PEAK) {
-                self.heard = now;
+                self.heard = crate::hermetic::moment();
                 self.health = Health::Hearing;
-            } else if now.duration_since(self.heard) >= SILENT_AFTER {
+            } else if crate::hermetic::since(self.heard) >= SILENT_AFTER {
                 self.health = Health::Silent;
             } else if self.health == Health::Stalled {
                 self.health = Health::Starting;
@@ -863,7 +863,7 @@ mod tests {
         // A quiet moment is normal at a table, and says nothing yet.
         assert_eq!(recorder.health(), &Health::Starting);
         recorder.size = 0;
-        recorder.heard = Instant::now() - SILENT_AFTER;
+        crate::hermetic::closed::pass_time(SILENT_AFTER);
         recorder.checked = Instant::now() - CHECK_EVERY;
         recorder.poll();
         assert_eq!(recorder.health(), &Health::Silent);

@@ -4347,6 +4347,8 @@ pub mod session_recording {
 
     const TITLE: &str = "The Bridge";
     const RECORDING: &str = "19:00";
+    const RECORDING_SAVED: &str = "Recording saved";
+    const SAVED_WORD_FOR: std::time::Duration = std::time::Duration::from_secs(8);
     const WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -4475,6 +4477,17 @@ pub mod session_recording {
             "Stop keeps the recording in the session",
         );
         d.state("recording-saved-no-key", Sizes::Default);
+        d.observe(
+            "T11.5",
+            d.rail_words().contains(RECORDING_SAVED),
+            "Just after Stop, the rail says the recording is saved",
+        );
+        d.pass_time(SAVED_WORD_FOR);
+        d.observe(
+            "T11.5",
+            !d.rail_words().contains(RECORDING_SAVED),
+            "After a few seconds, the rail's word goes",
+        );
 
         // T11.6: the default services are named, and what is missing is said.
         d.observe(
@@ -4686,6 +4699,7 @@ pub mod session_recording {
         d.state("input-during-recording", Sizes::Default);
         d.click_containing("Sessions · ");
         d.click("Stop recording");
+        d.pass_time(SAVED_WORD_FOR);
 
         // A note renamed in Obsidian keeps the DM's words, and no two rows share one session.
         d.click("Write");
