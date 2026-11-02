@@ -48,6 +48,8 @@ fn main() -> eframe::Result {
 }
 
 struct Splat {
+    /// Settings opened with no campaigns, so its campaign column comes first until the DM leaves.
+    settings_list_first: bool,
     page: Page,
     campaign_tab: CampaignTab,
     settings_tab: SettingsTab,
@@ -84,6 +86,7 @@ struct Splat {
 impl Default for Splat {
     fn default() -> Self {
         Self {
+            settings_list_first: false,
             page: Page::default(),
             campaign_tab: CampaignTab::default(),
             settings_tab: SettingsTab::default(),
@@ -188,6 +191,7 @@ impl Splat {
     /// Encounters if a campaign is active, otherwise the Library, which needs none.
     fn start(&mut self) {
         self.started = true;
+        self.settings_list_first = self.campaigns.all().is_empty();
         let saved = self.ui_store.load();
         let active = self.campaigns.active_campaign();
         self.page =
@@ -864,6 +868,9 @@ impl Splat {
     }
 
     fn page(&mut self, ui: &mut egui::Ui) {
+        if self.page != Page::Settings {
+            self.settings_list_first = self.campaigns.all().is_empty();
+        }
         let active = self.campaigns.active_campaign();
         let (_, session) = self.settings.campaign_session();
         match self.page {
@@ -924,8 +931,9 @@ impl Splat {
                                 ui.spacing_mut().item_spacing.x = design::XL;
                                 let column = egui::vec2(width, 0.0);
                                 let layout = egui::Layout::top_down(egui::Align::Min);
-                                // A first campaign needs no account, so that path comes first.
-                                let list_first = self.campaigns.all().is_empty();
+                                // A first campaign needs no account, so that path comes first. The
+                                // columns stay as they opened until the DM leaves the page.
+                                let list_first = self.settings_list_first;
                                 for place in 0..2 {
                                     ui.allocate_ui_with_layout(column, layout, |ui| {
                                         // Both ways, so the second column starts in one place.
@@ -939,7 +947,7 @@ impl Splat {
                                     });
                                 }
                             });
-                        } else if self.campaigns.all().is_empty() {
+                        } else if self.settings_list_first {
                             list(ui, &mut self.campaigns, &mut self.dndbeyond);
                             ui.add_space(design::L);
                             account(ui, &mut self.settings);
@@ -1059,8 +1067,12 @@ impl Splat {
                     }
                     CampaignTab::Link => {
                         // The same guard as Settings: a link or folder change would stop
-                        // the run's sync, or hide an open draft.
+                        // the run's sync, or hide an open draft. It says what is locked here.
                         let blocked = self.blocked_switch();
+                        let words = blocked.map(|reason| {
+                            reason.replace("change campaigns", "change this link or folder")
+                        });
+                        let blocked = words.as_deref();
                         egui::ScrollArea::vertical()
                             .id_salt("campaign_link")
                             .auto_shrink([false, false])
@@ -1069,8 +1081,13 @@ impl Splat {
                                     ui.add_space(design::S);
                                     design::message(ui, Tone::Info, reason);
                                 }
+                                self.campaigns.show_active(
+                                    ui,
+                                    session,
+                                    &mut self.dndbeyond,
+                                    blocked,
+                                );
                                 design::locked(ui, blocked, |ui| {
-                                    self.campaigns.show_active(ui, session, &mut self.dndbeyond);
                                     self.campaigns.show_form_if_editing(ui);
                                 });
                             });

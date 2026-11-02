@@ -196,7 +196,7 @@ impl Loaded {
                         line
                     }
                     Owner::Package(module) => format!("{line} · {}", module.name),
-                    Owner::Campaign(_) => format!("{line} · Campaign"),
+                    Owner::Campaign(_) => format!("{line} · Campaign entry"),
                 }
             })
             .collect();
@@ -842,7 +842,7 @@ impl Library {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 design::locked(ui, locked, |ui| {
                     ui.menu_button("Packages", |ui| {
-                        if ui.button("Reload the Library").clicked() {
+                        if ui.button("Refresh the Library").clicked() {
                             reload = true;
                             ui.close();
                         }
@@ -1265,7 +1265,7 @@ impl Library {
                     .map_or_else(|| "A package".to_owned(), |m| m.name.clone()),
                 Scope::Campaign => active.as_ref().map_or_else(
                     || "This campaign".to_owned(),
-                    |c| format!("Own entries · {}", c.name),
+                    |c| format!("Campaign entries · {}", c.name),
                 ),
             }
         };
@@ -1345,7 +1345,8 @@ impl Library {
             );
             ui.add_space(design::S);
             ui.horizontal(|ui| {
-                keep |= Action::secondary("Keep the package").show(ui).clicked();
+                // The action that loses nothing is the filled one.
+                keep |= Action::primary("Keep the package").show(ui).clicked();
                 ui.add_space(design::L);
                 remove = Action::destructive("Unregister").show(ui).clicked();
             });
@@ -1790,7 +1791,7 @@ impl Library {
                 },
                 Owner::Campaign(_) => Status {
                     icon: icons::EDIT,
-                    word: "Campaign-owned",
+                    word: "Campaign entry",
                     color: d.clean,
                 },
             }
@@ -1925,7 +1926,7 @@ impl Library {
                         change.show = !change.show;
                     }
                 }
-                ui.add_space(design::XL);
+                ui.add_space(design::S);
                 if Action::destructive("Overwrite with my draft")
                     .density(Density::Read)
                     .show(ui)

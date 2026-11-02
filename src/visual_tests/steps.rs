@@ -158,5 +158,5 @@ pub fn copy_open_entry_to_campaign(d: &mut Driver<'_>) {
     d.click(REVIEW_COPY);
     d.expect("Ready to copy");
     d.click(CREATE_COPY);
-    d.expect("Saved: ");
+    d.expect("Saved to ");
 }

@@ -81,7 +81,11 @@ impl Party {
                 ui,
                 icons::PARTY,
                 "Link this campaign to D&D Beyond to see its party",
-                "Choose its D&D Beyond campaign under Campaign, Link and folder. The rest of Splat works without a link.",
+                if session.is_none() {
+                    "Connect your account first, then link this campaign under Campaign, Link and folder. The rest of Splat works without a link."
+                } else {
+                    "Choose its D&D Beyond campaign under Campaign, Link and folder. The rest of Splat works without a link."
+                },
                 |ui| {
                     // Linking needs a session, so that comes first.
                     if session.is_none() {
@@ -639,13 +643,17 @@ fn source_and_parity(
         small(
             ui,
             format!(
-                "Campaign content: {} inventory rows, {} action definitions.",
-                entry.inventory.len(),
-                entry
-                    .fields
-                    .get("splat_actions")
-                    .and_then(serde_yaml_ng::Value::as_mapping)
-                    .map_or(0, |v| v.len())
+                "Saved with the campaign: {}, {}.",
+                design::count(entry.inventory.len(), "item", "items"),
+                design::count(
+                    entry
+                        .fields
+                        .get("splat_actions")
+                        .and_then(serde_yaml_ng::Value::as_mapping)
+                        .map_or(0, |v| v.len()),
+                    "action",
+                    "actions"
+                ),
             ),
         );
         if let Some(import) = entry.fields.get("splat_import") {
@@ -659,14 +667,14 @@ fn source_and_parity(
             small(
                 ui,
                 format!(
-                    "{} conversion gaps; {} engine adapters still needed.",
-                    list("gaps").len(),
-                    list("engine_gaps").len()
+                    "{} not yet converted; {} cannot yet run.",
+                    design::count(list("gaps").len(), "rule", "rules"),
+                    design::count(list("engine_gaps").len(), "rule", "rules"),
                 ),
             );
             for (title, key) in [
-                ("Rule conversion gaps", "gaps"),
-                ("Required character or encounter inputs", "required_inputs"),
+                ("Rules not yet converted", "gaps"),
+                ("What these rules still need to know", "required_inputs"),
             ] {
                 design::quiet_section(ui, title, |ui| {
                     for item in list(key) {
@@ -683,13 +691,13 @@ fn source_and_parity(
     small(
         ui,
         format!(
-            "Fetched {} UTC. Source details {} UTC.",
+            "Fetched {} UTC. Full sheet read {} UTC.",
             crate::encounter_run::calendar_time(record.source.fetched_at),
             crate::encounter_run::calendar_time(record.source.raw_fetched_at),
         ),
     );
     if let Some(modified) = &record.source.source_modified {
-        small(ui, format!("Beyond source modification: {modified}"));
+        small(ui, format!("Last changed on D&D Beyond: {modified}"));
     }
     small(
         ui,
@@ -706,7 +714,7 @@ fn source_and_parity(
         );
         small(
             ui,
-            format!("Local creature UUID: {}", record.definition.splat_id),
+            format!("Local creature ID: {}", record.definition.splat_id),
         );
         small(
             ui,
@@ -756,7 +764,8 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
     let Ok(sheet) = serde_yaml_ng::from_value::<Sheet>(value.clone()) else {
         return;
     };
-    design::section(ui, "Optional character rules", |ui| {
+    // No heavier than the section it sits in.
+    design::quiet_section(ui, "Optional character rules", |ui| {
         for (key, name) in [
             ("dark_bargain", "Dark Bargain"),
             ("character_threads", "Character Threads"),
@@ -830,9 +839,12 @@ fn tiles(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
 
 /// One label line and one value line, so tiles in a row keep their values level.
 fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
+    metric_in(ui, label, value, colors().text);
+}
+fn metric_in(ui: &mut egui::Ui, label: &str, value: impl ToString, color: egui::Color32) {
     ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
         ui.set_width(TILE_WIDTH - 4.0);
-        design::stat_tile(ui, label, &value.to_string());
+        design::stat_tile(ui, label, &value.to_string(), color);
     });
 }
 fn val(record: &EntitySnapshot, key: &str) -> String {
@@ -842,13 +854,25 @@ fn val(record: &EntitySnapshot, key: &str) -> String {
         .unwrap_or("—".into())
 }
 fn signed(record: &EntitySnapshot, key: &str) -> String {
-    record
-        .stat(key)
-        .map(|n| format!("{n:+}"))
-        .unwrap_or("—".into())
+    record.stat(key).map(design::signed).unwrap_or("—".into())
+}
+/// A column as wide as a number of stat tiles, so that the sections under them line up.
+fn grid_column(ui: &mut egui::Ui, width: f32, add: impl FnOnce(&mut egui::Ui)) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, 0.0),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing.x = design::S;
+            add(ui);
+        },
+    );
 }
 pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
-    let narrow = ui.available_width() < 560.0;
+    // Columns only where they can sit on the tiles' own grid.
+    let each = TILE_WIDTH + ui.spacing().item_spacing.x;
+    let wide = ui.available_width() >= 6.0 * each;
+    let medium = ui.available_width() >= 4.0 * each;
     section_heading(ui, "Combat");
     tiles(ui, |ui| {
         let (hp, max, temp) = live.map_or_else(
@@ -865,7 +889,16 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
                 (known(live.hp), known(live.max_hp), live.temporary_hp)
             },
         );
-        metric(ui, "Hit points", format!("{hp} / {max}"));
+        // Tinted as on the roster and the list, so one number has one colour everywhere.
+        let (current, maximum) = live.map_or_else(
+            || (Some(record.initial.hp), record.stat("max_hp")),
+            |live| (live.hp, live.max_hp),
+        );
+        let tint = match design::hp_state(current, maximum) {
+            design::HpState::Healthy | design::HpState::Unknown => colors().text,
+            state => design::hp_color(state),
+        };
+        metric_in(ui, "Hit points", format!("{hp} / {max}"), tint);
         metric(ui, "Armor class", val(record, "armor_class"));
         metric(ui, "Temp HP", temp);
         metric(ui, "Proficiency", signed(record, "proficiency_bonus"));
@@ -941,19 +974,33 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             }
         });
     };
-    if narrow {
+    if wide {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            grid_column(ui, 2.0 * each, |ui| saves(ui));
+            grid_column(ui, 2.0 * each, |ui| {
+                subsection_heading(ui, "Skills");
+                skills(ui, 1, 0, 9);
+            });
+            // The same list, continued, under the same heading's level.
+            grid_column(ui, 2.0 * each, |ui| {
+                subsection_heading(ui, " ");
+                skills(ui, 2, 9, usize::MAX);
+            });
+        });
+    } else if medium {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            grid_column(ui, 2.0 * each, |ui| saves(ui));
+            grid_column(ui, 2.0 * each, |ui| {
+                subsection_heading(ui, "Skills");
+                skills(ui, 1, 0, usize::MAX);
+            });
+        });
+    } else {
         saves(ui);
         subsection_heading(ui, "Skills");
         skills(ui, 0, 0, usize::MAX);
-    } else {
-        ui.columns(3, |cols| {
-            saves(&mut cols[0]);
-            subsection_heading(&mut cols[1], "Skills");
-            skills(&mut cols[1], 1, 0, 9);
-            // The same list, continued, under the same heading's level.
-            subsection_heading(&mut cols[2], " ");
-            skills(&mut cols[2], 2, 9, usize::MAX);
-        });
     }
     ui.add(
         egui::Label::new(
@@ -1040,14 +1087,16 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             ui.label(name);
         }
     };
-    if narrow {
+    if medium {
+        let half = if wide { 3.0 } else { 2.0 } * each;
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            grid_column(ui, half, |ui| proficiencies(ui));
+            grid_column(ui, half, |ui| defenses(ui));
+        });
+    } else {
         proficiencies(ui);
         defenses(ui);
-    } else {
-        ui.columns(2, |cols| {
-            proficiencies(&mut cols[0]);
-            defenses(&mut cols[1]);
-        });
     }
 }
 pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
@@ -1156,42 +1205,47 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     match page {
         1 => {
             section_heading(ui, "Attacks");
-            for attack in &record.character.attacks {
-                let value = &attack["damage"]["value"];
-                let damage = if let Some(n) = value.as_i64() {
-                    n.to_string()
-                } else {
-                    format!(
-                        "{}{}",
-                        text(&value["diceString"]),
-                        value["fixedValue"]
-                            .as_i64()
-                            .filter(|n| *n != 0)
-                            .map(|n| format!("{n:+}"))
-                            .unwrap_or_default()
-                    )
-                };
-                let hit = attack["toHit"]
-                    .as_i64()
-                    .map(|n| format!("{n:+} to hit"))
-                    .unwrap_or_else(|| {
-                        format!(
-                            "Save DC {} {}",
-                            attack["saveInfo"]["value"],
-                            text(&attack["saveInfo"]["label"])
-                        )
-                    });
-                if text(&attack["name"])
-                    .to_lowercase()
-                    .contains(&search.to_lowercase())
-                {
-                    ui.label(format!(
-                        "{} · {hit} · {damage} {}",
-                        text(&attack["name"]),
-                        text(&attack["damage"]["type"])
-                    ));
-                }
-            }
+            // Columns, so that bonuses and damage can be read down.
+            egui::Grid::new("attacks")
+                .num_columns(3)
+                .spacing([design::L, design::XS])
+                .show(ui, |ui| {
+                    for attack in &record.character.attacks {
+                        let value = &attack["damage"]["value"];
+                        let damage = if let Some(n) = value.as_i64() {
+                            n.to_string()
+                        } else {
+                            format!(
+                                "{}{}",
+                                text(&value["diceString"]),
+                                value["fixedValue"]
+                                    .as_i64()
+                                    .filter(|n| *n != 0)
+                                    .map(design::signed)
+                                    .unwrap_or_default()
+                            )
+                        };
+                        let hit = attack["toHit"].as_i64().map_or_else(
+                            || {
+                                format!(
+                                    "Save DC {} {}",
+                                    attack["saveInfo"]["value"],
+                                    text(&attack["saveInfo"]["label"])
+                                )
+                            },
+                            |n| format!("{} to hit", design::signed(n)),
+                        );
+                        if text(&attack["name"])
+                            .to_lowercase()
+                            .contains(&search.to_lowercase())
+                        {
+                            ui.label(text(&attack["name"]));
+                            ui.label(hit);
+                            ui.label(format!("{damage} {}", text(&attack["damage"]["type"])));
+                            ui.end_row();
+                        }
+                    }
+                });
             ui.add_space(design::S);
             section_heading(ui, "Action descriptions");
             for (source, values) in d["actions"].as_object().into_iter().flat_map(|o| o.iter()) {
@@ -1307,7 +1361,9 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         .iter()
         .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
-    ui.weak(design::count(filtered.len(), "entry", "entries"));
+    if !filtered.is_empty() {
+        ui.weak(design::count(filtered.len(), "entry", "entries"));
+    }
     if filtered.is_empty() {
         ui.label(if search.is_empty() {
             "No entries returned for this character."

@@ -307,10 +307,11 @@ impl Settings {
                 word: "Not connected: the last attempt failed",
                 color: c.result.error,
             },
+            // The warning below says what is wrong, and this says only the connection.
             Account::KeyringWarning => Status {
-                icon: icons::WARN,
-                word: "Connected, but the session was not saved",
-                color: c.result.warning,
+                icon: icons::ONLINE,
+                word: "Connected to D&D Beyond",
+                color: c.connection.connected,
             },
             Account::RefreshFailing => Status {
                 icon: icons::WARN,

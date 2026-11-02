@@ -1094,22 +1094,20 @@ impl CombatSync {
         if let Some(e) = &self.error {
             ui.colored_label(crate::design::colors().result.error, e);
         }
-        ui.horizontal(|ui| {
-            if crate::design::Action::secondary("Refresh / verify")
-                .density(crate::design::Density::Read)
-                .blocked_if(self.busy(), "Wait for the current sheet read.")
-                .show(ui)
-                .clicked()
-            {
-                self.refresh_only = true;
-                self.next = None;
-            }
-            if self.dirty() {
-                ui.label("Local combat changes pending");
-            } else if self.remote.is_some() {
-                ui.label("Combat values match the last read");
-            }
-        });
+        if crate::design::Action::secondary("Refresh / verify")
+            .density(crate::design::Density::Read)
+            .blocked_if(self.busy(), "Wait for the current sheet read.")
+            .show(ui)
+            .clicked()
+        {
+            self.refresh_only = true;
+            self.next = None;
+        }
+        if self.dirty() {
+            ui.add(egui::Label::new("Local combat changes pending").wrap());
+        } else if self.remote.is_some() {
+            ui.add(egui::Label::new("Combat values match the last read").wrap());
+        }
         self.conflicts(ui);
         let Some(remote) = &self.remote else {
             ui.label("Waiting for the first sheet read. If it does not come, check the connection in Settings.");
@@ -1128,18 +1126,16 @@ impl CombatSync {
                     let mut current =
                         (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0);
                     ui.label(format!("HP / {max_hp}"));
-                    if ui
-                        .add(egui::DragValue::new(&mut current).range(0..=max_hp))
-                        .changed()
-                    {
+                    let response = ui.add(egui::DragValue::new(&mut current).range(0..=max_hp));
+                    crate::design::named(ui, &response, "Current HP on the sheet");
+                    if response.changed() {
                         hp["removedHitPoints"] = (max_hp - current).into();
                     }
                     let mut temp = hp["temporaryHitPoints"].as_i64().unwrap_or(0);
                     ui.label("Temporary HP");
-                    if ui
-                        .add(egui::DragValue::new(&mut temp).range(0..=1_000_000))
-                        .changed()
-                    {
+                    let response = ui.add(egui::DragValue::new(&mut temp).range(0..=1_000_000));
+                    crate::design::named(ui, &response, "Temporary HP on the sheet");
+                    if response.changed() {
                         hp["temporaryHitPoints"] = temp.into();
                     }
                 });
@@ -1151,7 +1147,13 @@ impl CombatSync {
                     {
                         let mut n = death[field].as_i64().unwrap_or(0);
                         ui.label(label);
-                        if ui.add(egui::DragValue::new(&mut n).range(0..=3)).changed() {
+                        let response = ui.add(egui::DragValue::new(&mut n).range(0..=3));
+                        crate::design::named(
+                            ui,
+                            &response,
+                            &format!("Death save {} on the sheet", label.to_lowercase()),
+                        );
+                        if response.changed() {
                             death[field] = n.into();
                         }
                     }
@@ -1175,10 +1177,10 @@ impl CombatSync {
                             }
                             if id == 4 && present {
                                 let mut level = conditions[&key].as_u64().unwrap_or(1);
-                                if ui
-                                    .add(egui::DragValue::new(&mut level).range(1..=6))
-                                    .changed()
-                                {
+                                let response =
+                                    ui.add(egui::DragValue::new(&mut level).range(1..=6));
+                                crate::design::named(ui, &response, "Exhaustion level");
+                                if response.changed() {
                                     conditions.insert(key, level.into());
                                 }
                             }
@@ -1197,10 +1199,14 @@ impl CombatSync {
                                 let field = format!("level{level}");
                                 let mut used = slots[&field].as_i64().unwrap_or(0);
                                 ui.label(format!("L{level}"));
-                                if ui
-                                    .add(egui::DragValue::new(&mut used).range(0..=99))
-                                    .changed()
-                                {
+                                let response =
+                                    ui.add(egui::DragValue::new(&mut used).range(0..=99));
+                                crate::design::named(
+                                    ui,
+                                    &response,
+                                    &format!("{label} spent at level {level}"),
+                                );
+                                if response.changed() {
                                     slots[&field] = used.into();
                                 }
                             }
@@ -1215,10 +1221,10 @@ impl CombatSync {
                             ui.horizontal_wrapped(|ui| {
                                 ui.label(label);
                                 let mut used = resource["uses"].as_i64().unwrap_or(0);
-                                if ui
-                                    .add(egui::DragValue::new(&mut used).range(0..=1_000_000))
-                                    .changed()
-                                {
+                                let response =
+                                    ui.add(egui::DragValue::new(&mut used).range(0..=1_000_000));
+                                crate::design::named(ui, &response, "Uses spent");
+                                if response.changed() {
                                     resource["uses"] = used.into();
                                 }
                             });

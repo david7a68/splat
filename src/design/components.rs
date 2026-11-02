@@ -917,14 +917,14 @@ pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
 }
 
 /// A label over a large value, with no box. The label stays on one line.
-pub fn stat_tile(ui: &mut Ui, label: &str, value: &str) {
+pub fn stat_tile(ui: &mut Ui, label: &str, value: &str, color: Color32) {
     let c = colors();
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         ui.add(
             egui::Label::new(Type::Label.rich(ui, label.to_uppercase()).color(c.muted)).truncate(),
         );
-        ui.label(Type::NumeralLarge.rich(ui, value).color(c.text));
+        ui.label(Type::NumeralLarge.rich(ui, value).color(color));
     });
 }
 

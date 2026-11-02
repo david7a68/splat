@@ -371,10 +371,12 @@ pub mod campaign_content {
     const SAVE_ENTRY: &str = "Save";
     const SAVED: &str = "Saved";
     const REQUIRED: &str = "Required dependencies";
-    const REQUIRED_BY: &str = "required by";
+    const REQUIRED_BY: &str = "REQUIRED BY";
+    const OWN_GROUP: &str = "Campaign entries (";
+    const IN_PACKAGE_ONLY: &str = "Ash Exposure · Rule";
     const ENTRIES_LISTING: &str = "Entries";
     const OWN_ENTRY_SEARCH: &str = "varra";
-    const RELOAD: &str = "Reload content";
+    const RELOAD: &str = "Refresh content";
     const REPAIR: &str = "Repair invalid note";
     const SAVE_SELECTIONS: &str = "Save selections";
     const BROKEN_NOTE: &str = "campaigns/emberfall/Notes/Broken.md";
@@ -385,21 +387,34 @@ pub mod campaign_content {
         d.state("packages-tab", Sizes::Default);
         d.check_tab_order("campaign, packages");
         // No click: the brief asks for these on screen, with the built-in package open.
-        let reasons = d.visible_text(REQUIRED_BY);
+        let reasons = d.visible_text(REQUIRED_BY) && d.visible_text(OWN_GROUP);
         let counted = d.has_containing(REQUIRED);
+        // Membership: a row sits only under the package that holds it, or the campaign's group.
+        let not_here = !d.has_containing(IN_PACKAGE_ONLY);
         // The list fills its pane, rather than stopping short of the end.
         d.state("required-dependencies", Sizes::All);
         d.click(ENTRIES_LISTING);
         d.observe(
             "T9.1",
-            reasons && counted,
-            "Required dependencies and their reasons are on screen, with the built-in package open",
+            reasons && counted && not_here,
+            "With the built-in package open, the campaign's own required entries have their group and reasons, and another package's are not listed",
         );
         d.begin_task();
         d.click_containing(MODULE_ROW);
         d.expect(PARTIAL);
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
+        d.click_containing(REQUIRED);
+        d.state("required-in-this-package", Sizes::Default);
+        d.observe(
+            "T9.1",
+            d.has_containing(IN_PACKAGE_ONLY)
+                && d.has_containing("required by Ember Cultist")
+                && d.visible_text("In Ashen Marches (1)"),
+            "With the package that holds it open, the required entry is listed under it, with its reason",
+        );
+        d.click(ENTRIES_LISTING);
+        d.begin_task();
 
         d.click(UNSELECTED_ENTRY);
         d.expect(CHANGED);
@@ -915,7 +930,7 @@ pub mod settings {
         (Account::Connected, "Connected to D&D Beyond"),
         (Account::NotConnected, "Not connected"),
         (Account::Failed, "the last attempt failed"),
-        (Account::KeyringWarning, "was not saved"),
+        (Account::KeyringWarning, "could not be saved"),
     ];
     const REMOVE_CAMPAIGN: &str = "Remove Quiet Harbor from Splat";
     const REMOVE_TITLE: &str = "Remove Quiet Harbor?";
@@ -929,7 +944,7 @@ pub mod settings {
     const OFFLINE_ERROR: &str = "Could not reach D&D Beyond";
     const CAMPAIGNS_SECTION: &str = "Campaigns";
     const EDIT_DETAILS: &str = "Edit details";
-    const EDIT_FORM: &str = "Edit campaign details";
+    const EDIT_FORM: &str = "Edit The Emberfall Marches";
     const CANCEL: &str = "Cancel";
     const ADD_FROM_REMOTE: &str = "Add from D&D Beyond";
 
@@ -1039,7 +1054,7 @@ pub mod dialogs {
             "The review ends in one row of actions",
         );
         d.click(CREATE_COPY);
-        d.expect("Saved: ");
+        d.expect("Saved to ");
         d.state("copy-complete", Sizes::Default);
         d.click(CLOSE_COPY);
         d.goal("copy an entry to a campaign");
@@ -1074,7 +1089,7 @@ pub mod empty {
     const ADD_CAMPAIGN: &str = "Add campaign";
     const NAME_FIELD: &str = "Campaign name";
     const FOLDER_FIELD: &str = "Folder";
-    const OPEN_CAMPAIGN: &str = "Open campaign";
+    const OPEN_CAMPAIGN: &str = "Add this campaign";
     const NEW_CAMPAIGN: &str = "Ashes of Emberfall";
     const NEW_FOLDER: &str = "new-campaign";
     const NO_ENTRIES: &str = "No campaign entries yet";
@@ -1120,9 +1135,16 @@ pub mod empty {
         std::fs::create_dir_all(&folder).expect("create campaign folder");
         d.type_into(NAME_FIELD, NEW_CAMPAIGN);
         d.type_into(FOLDER_FIELD, &folder.display().to_string());
+        let column = d.place_of(ADD_CAMPAIGN).map(|rect| rect.min.x);
         d.click(OPEN_CAMPAIGN);
         d.expect(NEW_CAMPAIGN);
         d.state("campaign-added", Sizes::Default);
+        let kept = d.place_of(ADD_CAMPAIGN).map(|rect| rect.min.x);
+        d.observe(
+            "L7-5",
+            column.is_some() && column == kept,
+            format!("The Settings columns do not swap when the first campaign is added: {column:?} then {kept:?}"),
+        );
         d.goal("add a first campaign");
         d.observe(
             "Campaign added",
@@ -1842,6 +1864,8 @@ pub mod run_sync_conflict {
     const UNDO_CLEARED: &str = "Earlier Undo steps ended";
     const CLOSE_PROMPT: &str = "has not confirmed changes";
     const DISABLED_REASON: &str = "Wait for pending sync";
+    const STEP_ROW: &str = "Ember Cultist";
+    const STEP_UNDO: &str = "Undo: 1 damage to Ember Cultist";
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
@@ -1881,6 +1905,11 @@ pub mod run_sync_conflict {
             "T3.5",
             d.has_containing(&format!("{CLOSE_PROMPT} to {SYNCED}")),
             "Closing the app with pending sync warns, and the warning names the character",
+        );
+        d.observe(
+            "L7-4",
+            !d.visible_text("are lost") && d.visible_text("the saved run asks you next time"),
+            "With no unsent slot, the app's close says nothing is lost",
         );
         d.state("close-with-pending-sync", Sizes::Default);
         d.press(Key::Escape);
@@ -1942,6 +1971,11 @@ pub mod run_sync_conflict {
         if d.has(DISMISS_NOTICE) {
             d.click(DISMISS_NOTICE);
         }
+        // T7-2: a named step of the DM's, so that the read has something to end.
+        d.click_row(STEP_ROW);
+        d.type_text("1");
+        d.press(Key::Enter);
+        let named = d.has_containing(STEP_UNDO);
         let clear_before = !d.has_containing(UNDO_CLEARED);
         let rows_before = roster_places(d);
         let hp_before = d.row_hp(SYNCED).unwrap_or(0);
@@ -1964,6 +1998,11 @@ pub mod run_sync_conflict {
             clear_before
                 && d.visible_text(&format!("From D&D Beyond: {changed}. {UNDO_CLEARED}")),
             format!("Simulated sheet read: a message says, only after it, what changed from what to what: {changed}"),
+        );
+        d.observe(
+            "T7-2",
+            named && !d.has_containing(STEP_UNDO) && d.visible_text("No Undo since sync update"),
+            format!("The named step before the read ({STEP_UNDO}) has gone after it, and the button says why"),
         );
         // It stays through what the DM does next, and the DM dismisses it.
         d.click(NEXT_TURN);
@@ -2534,6 +2573,7 @@ pub mod run_sync_states {
     const FIRST_READ: (&str, SyncState, &str) =
         ("Sable Harrowgate", SyncState::FirstRead, "Reading…");
     const UNSYNCED_ROW: &str = "Cinder Wolf 1";
+    const SYNCED_ROW: &str = "Iselle Marrowind";
     const DISMISS: &str = "Dismiss this message";
     const TWO_LINES: [(&str, &str); 5] = [
         ("Brannoch Vale", "HP 58 → 54"),
@@ -2591,6 +2631,17 @@ pub mod run_sync_states {
         d.settle();
         d.state("every-sync-state", Sizes::All);
         d.goal("show every sync state");
+        // T8-1: Record on a row that sync reads: the locked maximum, with its reason in view.
+        d.click_row(SYNCED_ROW);
+        d.click("Record");
+        d.state("record-on-synced-row", Sizes::Default);
+        d.observe(
+            "T8-1",
+            d.visible_text("Maximum HP comes from the D&D Beyond sheet"),
+            "On a synced row, Maximum HP is locked, and the reason is in view",
+        );
+        d.click("Sheet");
+        d.begin_task();
 
         // A DM's value made through a real step leaves no message behind it.
         d.observe(
@@ -2720,12 +2771,8 @@ pub mod run_roster_conflict {
     const DISMISS: &str = "Dismiss this message";
     const IN_HEADER: &str = "See the Log";
     const LOG_MARKED: &str = "Log, new message";
-    const MORE_MARKS: [&str; 4] = [
-        "Cinder Wolf 1",
-        "Cinder Wolf 2",
-        "Cinder Wolf 4",
-        "Cinder Wolf 5",
-    ];
+    const FIRST_MARK: &str = "Cinder Wolf 1";
+    const MORE_MARKS: [&str; 3] = ["Cinder Wolf 2", "Cinder Wolf 4", "Cinder Wolf 5"];
     const LOADED_CONDITIONS: [&str; 5] =
         ["Blinded", "Charmed", "Grappled", "Paralyzed", "Restrained"];
 
@@ -2778,6 +2825,10 @@ pub mod run_roster_conflict {
         for condition in LOADED_CONDITIONS {
             d.click(condition);
         }
+        // One monster's mark, so that the list is near its limit before the message comes.
+        d.click_row(FIRST_MARK);
+        d.click(CONDITIONS);
+        d.click(ONE_MORE_CONDITION);
         // A message the DM has not dismissed takes one line here, so no row has to scroll.
         d.app_mut().encounters.simulate_sheet_update(&LONG_MESSAGE);
         d.settle();
@@ -2927,6 +2978,7 @@ pub mod signed_in {
     const RAIL_CONNECTED: &str = "Connected";
     const REMOTE: &str = "Add from D&D Beyond";
     const REMOTE_NAME: &str = "Salt Road";
+    const ADD_REMOTE: &str = "Add Salt Road";
     const FRESHNESS: &str = "Connected · Cached sheet · Fetched";
     const PAGES: [&str; 4] = ["Actions", "Spells", "Gear", "Features"];
     const OVERVIEW: &str = "Overview";
@@ -2938,7 +2990,7 @@ pub mod signed_in {
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const LINK_TAB: &str = "Link and folder";
-    const BLOCKED_REASON: &str = "Close the run to change campaigns.";
+    const BLOCKED_REASON: &str = "Close the run to change this link or folder.";
     const EDIT_DETAILS: &str = "Edit details";
     const RETRYING: &str = "renewing the session failed";
     const CONFLICT: &str = "Conflict";
@@ -2965,24 +3017,35 @@ pub mod signed_in {
         );
         d.state("settings-connected", Sizes::All);
         d.click(REMOTE);
-        d.expect(REMOTE_NAME);
+        d.expect(ADD_REMOTE);
         d.state("remote-campaign-list", Sizes::Default);
         d.goal("see the remote campaign list");
         d.observe(
             "Added campaigns",
             d.is_disabled("The Emberfall Marches · Added")
                 && d.is_disabled("Quiet Harbor · Added")
-                && !d.is_disabled(REMOTE_NAME),
+                && !d.is_disabled(ADD_REMOTE),
             "A remote campaign already in the list, active or not, says so and is off",
         );
-        d.click_containing(REMOTE_NAME);
+        d.click(ADD_REMOTE);
         d.state("import-remote-campaign", Sizes::Default);
+        d.observe(
+            "M7-1",
+            d.has_containing("Choose a folder.") && !d.has_containing("Enter a campaign name"),
+            "With the name filled in, the form asks only for the folder",
+        );
+        d.observe(
+            "L7-14",
+            d.has(&format!("Adding {REMOTE_NAME}")) && !d.visible_text("ID 9002"),
+            "The chosen campaign has a selected state, and no D&D Beyond number is on show",
+        );
         d.observe(
             "T10.3",
             d.has_containing(REMOTE_NAME),
             "Choosing a remote campaign opens its import, with the name filled in",
         );
         d.click("Cancel");
+        d.scroll_up_at(pos2(780.0, 300.0), 10);
         d.begin_task();
 
         go_party(d);

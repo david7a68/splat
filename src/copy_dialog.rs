@@ -282,7 +282,11 @@ impl CopyDialog {
                                     .ok()
                                     .filter(|entry| to_active && entry.kind == "creature")
                                     .map(|entry| entry.id);
-                            self.completed = Some(format!("Saved: {}", plan.relative));
+                            let place = destinations
+                                .iter()
+                                .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
+                                .map_or("the destination", |d| d.2.as_str());
+                            self.completed = Some(format!("Saved to {place}: {}", plan.relative));
                             self.refresh = Some(plan.root.clone());
                             self.error = None;
                         }

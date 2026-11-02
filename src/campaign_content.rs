@@ -14,6 +14,172 @@ use splat::content::Entry;
 use std::{fs, sync::mpsc};
 use uuid::Uuid;
 
+/// The line a parser's message names, as a line of the whole note. The parser counts from
+/// the line after the note's opening `---`.
+fn problem_line(problem: &str) -> Option<usize> {
+    let (_, rest) = problem.split_once(" line ")?;
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    Some(digits.parse::<usize>().ok()? + 1)
+}
+
+/// The note's text with one line marked, in the error's colour and on a raised ground.
+fn marked_line_job(
+    ui: &egui::Ui,
+    text: &str,
+    marked: Option<usize>,
+    wrap: f32,
+) -> egui::text::LayoutJob {
+    let font = Type::Mono.font(ui);
+    let c = colors();
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap.max_width = wrap;
+    for (at, line) in text.split_inclusive('\n').enumerate() {
+        let on = marked == Some(at + 1);
+        job.append(
+            line,
+            0.0,
+            egui::TextFormat {
+                font_id: font.clone(),
+                color: if on { c.result.error } else { c.text },
+                background: if on {
+                    c.selected
+                } else {
+                    egui::Color32::TRANSPARENT
+                },
+                ..Default::default()
+            },
+        );
+    }
+    job
+}
+
+/// What the campaign's choices pull in, in columns: first what this package holds, then
+/// the campaign's own, which need no choice. A row is never listed under a package that
+/// does not hold it.
+fn required_table(
+    ui: &mut egui::Ui,
+    catalogue: &Catalogue,
+    closure: &Closure,
+    module: &crate::content_workspace::ModuleIndex,
+) {
+    enum Row<'a> {
+        Group(String),
+        Empty(String),
+        Entry(&'a Uuid, &'a std::collections::BTreeSet<String>),
+    }
+    let c = colors();
+    let sorted = |private: bool| {
+        let mut found: Vec<_> = closure
+            .required
+            .iter()
+            .filter(|(id, _)| {
+                let e = &catalogue.entries[*id];
+                if private {
+                    e.private
+                } else {
+                    !e.private && e.owner == module.id
+                }
+            })
+            .collect();
+        found.sort_by_key(|(id, _)| catalogue.entries[*id].entry.name.to_lowercase());
+        found
+    };
+    let (here, own) = (sorted(false), sorted(true));
+    let mut rows = Vec::with_capacity(here.len() + own.len() + 2);
+    if here.is_empty() {
+        rows.push(Row::Empty(format!(
+            "Nothing in {} is needed by what is chosen.",
+            module.name
+        )));
+    } else {
+        rows.push(Row::Group(format!("In {} ({})", module.name, here.len())));
+        rows.extend(here.into_iter().map(|(id, why)| Row::Entry(id, why)));
+    }
+    if !own.is_empty() {
+        rows.push(Row::Group(format!(
+            "Campaign entries ({}), always available",
+            own.len()
+        )));
+        rows.extend(own.into_iter().map(|(id, why)| Row::Entry(id, why)));
+    }
+    const ROW: f32 = 26.0;
+    let width = ui.available_width();
+    let kind_width = 84.0;
+    let name_width = ((width - kind_width) * 0.45).max(150.0);
+    let cell = |ui: &egui::Ui, rect: egui::Rect, x: f32, room: f32, text: &str, font, color| {
+        let galley = design::one_line(ui, text, font, color, room);
+        ui.painter().galley(
+            egui::pos2(rect.left() + x, rect.center().y - galley.size().y / 2.0),
+            galley,
+            color,
+        );
+    };
+    let reason_at = name_width + kind_width;
+    let (head, _) =
+        ui.allocate_exact_size(egui::vec2(width, ROW - design::S), egui::Sense::hover());
+    for (x, word) in [
+        (design::S, "NAME"),
+        (name_width, "KIND"),
+        (reason_at, "REQUIRED BY"),
+    ] {
+        cell(ui, head, x, width, word, Type::Label.font(ui), c.muted);
+    }
+    // Before `show_rows`, which reads the pitch from it.
+    ui.spacing_mut().item_spacing.y = 0.0;
+    egui::ScrollArea::vertical()
+        .id_salt(("required_entries", module.id))
+        .auto_shrink([false, false])
+        .show_rows(ui, ROW, rows.len(), |ui, range| {
+            for row in &rows[range] {
+                match row {
+                    Row::Group(title) => {
+                        let (rect, _) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), ROW),
+                            egui::Sense::hover(),
+                        );
+                        let font = Type::Heading.font(ui);
+                        cell(ui, rect, design::S, rect.width(), title, font, c.text);
+                    }
+                    Row::Empty(words) => {
+                        let (rect, _) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), ROW),
+                            egui::Sense::hover(),
+                        );
+                        let font = Type::Body.font(ui);
+                        cell(ui, rect, design::S, rect.width(), words, font, c.muted);
+                    }
+                    Row::Entry(id, reasons) => {
+                        let entry = &catalogue.entries[*id].entry;
+                        let kind = crate::design::reader::human_label(&entry.kind);
+                        let reason = match reasons.iter().collect::<Vec<_>>().as_slice() {
+                            [only] => (*only).clone(),
+                            [first, rest @ ..] => format!("{first} and {} more", rest.len()),
+                            [] => String::new(),
+                        };
+                        let every = reasons.iter().cloned().collect::<Vec<_>>().join(", ");
+                        let name = format!("{} · {kind} · required by {every}", entry.name);
+                        let response = ui.push_id(id, |ui| {
+                            design::row(ui, ROW, false, &name, |ui, rect| {
+                                let body = Type::Body.font(ui);
+                                let small = Type::Small.font(ui);
+                                let room = name_width - design::S - design::XS;
+                                cell(ui, rect, design::S, room, &entry.name, body.clone(), c.text);
+                                let (x, room) = (name_width, kind_width - design::XS);
+                                cell(ui, rect, x, room, &kind, small, c.muted);
+                                let room = rect.width() - reason_at;
+                                cell(ui, rect, reason_at, room, &reason, body, c.text);
+                            })
+                        });
+                        // The rest of a long list: `and 1 more` leads somewhere.
+                        response
+                            .inner
+                            .on_hover_text(format!("{}\nRequired by {every}", entry.name));
+                    }
+                }
+            }
+        });
+}
+
 struct Snapshot {
     document: CampaignDocument,
     catalogue: Catalogue,
@@ -209,17 +375,41 @@ impl CampaignContent {
                 format!("{} Repair invalid note: {path}", icons::ERROR),
                 |ui| {
                     // What is wrong comes first, and stays true as the DM edits.
-                    if let Err(problem) = Entry::parse(path, draft) {
-                        design::message(ui, Tone::Error, &problem);
+                    let problem = Entry::parse(path, draft).err();
+                    let line = problem.as_deref().and_then(problem_line);
+                    if let Some(problem) = &problem {
+                        if let Some(line) = line {
+                            design::message(
+                                ui,
+                                Tone::Error,
+                                &format!(
+                                    "The details at the top of this note stop making sense at line {line}, marked below. The mistake is there or just above it. Often a bracket or a quote is not closed."
+                                ),
+                            );
+                            ui.add(
+                                egui::Label::new(
+                                    Type::Small.rich(ui, problem.as_str()).color(colors().muted),
+                                )
+                                .wrap(),
+                            );
+                        } else {
+                            design::message(ui, Tone::Error, problem);
+                        }
                     }
                     egui::ScrollArea::vertical()
                         .max_height(220.0)
                         .id_salt(("repair", path.as_str()))
                         .show(ui, |ui| {
+                            let mut layouter =
+                                |ui: &egui::Ui, text: &dyn egui::TextBuffer, wrap: f32| {
+                                    let job = marked_line_job(ui, text.as_str(), line, wrap);
+                                    ui.fonts_mut(|fonts| fonts.layout_job(job))
+                                };
                             let response = ui.add(
                                 egui::TextEdit::multiline(draft)
                                     .font(egui::TextStyle::Monospace)
-                                    .desired_width(f32::INFINITY),
+                                    .desired_width(f32::INFINITY)
+                                    .layouter(&mut layouter),
                             );
                             design::named(ui, &response, "Note text");
                         });
@@ -325,8 +515,25 @@ impl CampaignContent {
                 .blocked(repair.or((!dirty).then_some("No changes to save.")))
                 .show(ui)
                 .clicked();
-            if !dirty && repair.is_none() {
-                ui.label(Type::Small.rich(ui, "No changes").color(c.document.clean));
+            // One status slot, in both states, as beside the Library's Save.
+            if dirty {
+                design::status(
+                    ui,
+                    design::Status {
+                        icon: icons::DRAFT,
+                        word: "Unsaved",
+                        color: c.document.unsaved,
+                    },
+                );
+            } else if repair.is_none() {
+                design::status(
+                    ui,
+                    design::Status {
+                        icon: icons::OK,
+                        word: "No changes",
+                        color: c.document.clean,
+                    },
+                );
             }
             if pressed || save_key {
                 match document.save() {
@@ -372,7 +579,7 @@ impl CampaignContent {
                 );
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                reload = Action::quiet("Reload content")
+                reload = Action::quiet("Refresh content")
                     .icon(icons::REFRESH)
                     .density(Density::Read)
                     .blocked_if(
@@ -650,7 +857,16 @@ impl CampaignContent {
                             .color(c.muted),
                     );
                 });
-                let required_label = format!("Required dependencies ({})", closure.required.len());
+                // What this package holds, and the campaign's own. Another package's are its own.
+                let needed_here = closure
+                    .required
+                    .keys()
+                    .filter(|id| {
+                        let e = &catalogue.entries[*id];
+                        e.private || e.owner == module.id
+                    })
+                    .count();
+                let required_label = format!("Required dependencies ({needed_here})");
                 // The built-in package opens on what the chosen entries pull in, with the reasons.
                 let mut listing = self.listing.unwrap_or(
                     if module.id == crate::content_workspace::builtin_manifest().id
@@ -675,69 +891,7 @@ impl CampaignContent {
                 }
                 design::rule(ui);
                 if listing == Listing::Required {
-                    // Whose it is: this list covers the whole campaign, not the package above it.
-                    let owner = |id: &uuid::Uuid| {
-                        let e = &catalogue.entries[id];
-                        if e.private {
-                            "Campaign".to_owned()
-                        } else {
-                            catalogue
-                                .modules
-                                .iter()
-                                .find(|m| m.id == e.owner)
-                                .map_or_else(|| "Package".to_owned(), |m| m.name.clone())
-                        }
-                    };
-                    // By name, with the kind: two entries can share a name, and an ID order means nothing.
-                    let mut required: Vec<_> = closure.required.iter().collect();
-                    required.sort_by_key(|(id, _)| {
-                        catalogue.entries[*id].entry.name.to_lowercase()
-                    });
-                    if required.is_empty() {
-                        ui.label(
-                            Type::Body
-                                .rich(ui, "Nothing else is needed by what is chosen.")
-                                .color(c.muted),
-                        );
-                    }
-                    // Before `show_rows`, which reads the pitch from it.
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    egui::ScrollArea::vertical()
-                        .id_salt("required_entries")
-                        .auto_shrink([false, false])
-                        .show_rows(ui, 24.0, required.len(), |ui, range| {
-                            for (id, reasons) in &required[range] {
-                                let entry = &catalogue.entries[id].entry;
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(ui.available_width(), 24.0),
-                                    egui::Layout::left_to_right(egui::Align::Center),
-                                    |ui| {
-                                ui.add(egui::Label::new(
-                                        Type::Body
-                                            .rich(
-                                                ui,
-                                                format!(
-                                                    "{} · {} · {} — required by {}",
-                                                    entry.name,
-                                                    crate::design::reader::human_label(&entry.kind),
-                                                    owner(id),
-                                                    match reasons.iter().collect::<Vec<_>>().as_slice() {
-                                                        [only] => (*only).clone(),
-                                                        [first, rest @ ..] => {
-                                                            format!("{first} and {} more", rest.len())
-                                                        }
-                                                        [] => String::new(),
-                                                    }
-                                                ),
-                                            )
-                                            .color(c.text),
-                                    )
-                                    .truncate(),
-                                );
-                                    },
-                                );
-                            }
-                        });
+                    required_table(ui, catalogue, closure, module);
                     return;
                 }
                 design::search_field(
@@ -942,5 +1096,20 @@ mod tests {
         content.reload(&ctx, &campaigns, second);
         assert!(content.discarded_selections.is_none());
         assert!(content.discarded_repair.is_none());
+    }
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+
+    /// L6-46: the parser's line, counted in the whole note.
+    #[test]
+    fn a_parser_line_becomes_a_line_of_the_note() {
+        let text = "---\nsplat_schema: 1\nsplat_id: [\n---\n";
+        let problem = Entry::parse("Notes/Broken.md", text).unwrap_err();
+        let line = problem_line(&problem).expect(&problem);
+        assert_eq!(line, 4, "{problem}");
+        assert_eq!(problem_line("no number here"), None);
     }
 }

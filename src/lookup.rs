@@ -79,7 +79,7 @@ impl ContentIndex {
             if private {
                 campaign.map_or_else(
                     || "Campaign".to_owned(),
-                    |c| format!("Campaign · {}", c.name),
+                    |c| format!("Campaign entry · {}", c.name),
                 )
             } else {
                 catalogue
@@ -591,7 +591,7 @@ mod tests {
         item.private = false;
         item.from_sheet = false;
         assert_eq!(item.origin(), Origin::Book, "a package ranks with the book");
-        item.owner = "Campaign · Emberfall".into();
+        item.owner = "Campaign entry · Emberfall".into();
         item.private = true;
         assert_eq!(item.origin(), Origin::Own, "the DM's own entry ranks first");
         item.from_sheet = true;

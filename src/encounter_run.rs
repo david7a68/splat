@@ -2020,7 +2020,13 @@ pub(crate) fn write_in_progress_run(
     run.apply(Command::Damage(enemy, 9))?;
     run.apply(Command::Condition(enemy, "Prone".into()))?;
     run.apply(Command::Next)?;
-    let caster = run.state.order[run.state.cursor];
+    // A caster, as the fixture's beasts only bite. With no caster here, the current row.
+    let caster = run
+        .state
+        .participants
+        .iter()
+        .position(|p| p.name.contains("Iselle"))
+        .unwrap_or(run.state.order[run.state.cursor]);
     run.apply(Command::Concentration(caster, true))?;
     for _ in 0..run.state.order.len() {
         run.apply(Command::Next)?;

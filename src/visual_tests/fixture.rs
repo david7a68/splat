@@ -169,13 +169,16 @@ fn write_module(root: &Path) -> Result<Module, String> {
                     init: i64,
                     identity: &str,
                     prose: &str| {
+        // Dice that average to the HP the block states: an even count of d8s and a modifier.
+        let dice = hp * 2 / 11 / 2 * 2;
+        let plus = hp - dice * 9 / 2;
         let requires = if slug == "ember_cultist" {
             "splat_requires:\n- key: ashen_marches:rule/ash_exposure\n"
         } else {
             ""
         };
         format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_key: ashen_marches:creatures/{slug}\nsplat_name: {name}\n{requires}splat_creature: {{size: medium, type: {identity}}}\nsplat_stats:\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: {ac}}}\n  initiative: {{value: {init}}}\n---\n\n# {name}\n\n## Source text\n\nMedium {identity}, Unaligned\\\nAC {ac}  Initiative +{init} ({})\\\nHP {hp} (4d8 + 4)\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\\n\n### Actions\n\n{prose}\n",
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_key: ashen_marches:creatures/{slug}\nsplat_name: {name}\n{requires}splat_creature: {{size: medium, type: {identity}}}\nsplat_stats:\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: {ac}}}\n  initiative: {{value: {init}}}\n---\n\n# {name}\n\n## Source text\n\nMedium {identity}, Unaligned\\\nAC {ac}  Initiative +{init} ({})\\\nHP {hp} ({dice}d8 + {plus})\\\nSpeed 30 ft.\\\nCR 1 (XP 200; PB +2)\\\n\n### Actions\n\n{prose}\n",
             module_entry_id(slug),
             10 + init,
         )

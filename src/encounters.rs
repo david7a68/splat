@@ -208,6 +208,8 @@ struct Creature {
     /// CR, HP and AC, from fields the entry already has.
     detail: String,
     party: bool,
+    /// Whose it is, unless it is the book's: a copy and its original share a name.
+    owner: Option<String>,
 }
 const ROSTER_MAX_WIDTH: f32 = 860.0;
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
@@ -338,6 +340,19 @@ impl Snapshot {
                     lower: e.entry.name.to_lowercase(),
                     detail: creature_detail(&e.entry, party),
                     party,
+                    owner: if party {
+                        None
+                    } else if e.private {
+                        Some("Campaign entry".to_owned())
+                    } else if Some(e.owner) == catalogue.modules.first().map(|m| m.id) {
+                        None
+                    } else {
+                        catalogue
+                            .modules
+                            .iter()
+                            .find(|m| m.id == e.owner)
+                            .map(|m| m.name.clone())
+                    },
                 }
             })
             .collect();
@@ -1322,7 +1337,7 @@ impl Encounters {
                     Self::roster_pane(ui, draft, snapshot, focus_search, expanded);
                 }
                 EditorPane::Add => {
-                    Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
+                    Self::add_pane(ui, draft, snapshot, search, focus_search, peek, false);
                 }
             }
             return;
@@ -1342,7 +1357,7 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
+                Self::add_pane(ui, draft, snapshot, search, focus_search, peek, true);
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -1365,12 +1380,16 @@ impl Encounters {
         search: &mut String,
         focus_search: &mut bool,
         peek: &mut Option<Uuid>,
+        titled: bool,
     ) {
-        ui.label(
-            Type::Heading
-                .rich(ui, "Add participants")
-                .color(colors().text),
-        );
+        // Under a tab of the same name, the tab has said it.
+        if titled {
+            ui.label(
+                Type::Heading
+                    .rich(ui, "Add participants")
+                    .color(colors().text),
+            );
+        }
         ui.add(
             egui::Label::new(
                 Type::Small
@@ -1470,13 +1489,28 @@ impl Encounters {
                             // The name is what the eye looks for, so it comes first.
                             ui.vertical(|ui| {
                                 ui.spacing_mut().item_spacing.y = 0.0;
-                                ui.set_max_width((ui.available_width() - 150.0).max(80.0));
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Body.rich(ui, &c.name).color(colors().text),
-                                    )
-                                    .truncate(),
-                                );
+                                // A row with an owner is never `In roster`, so its actions are short.
+                                let actions = if c.owner.is_some() { 120.0 } else { 150.0 };
+                                ui.set_max_width((ui.available_width() - actions).max(80.0));
+                                // Whose it is, beside the name: a copy and its original share one.
+                                ui.horizontal(|ui| {
+                                    let tag = c.owner.as_deref().map_or(0.0, |owner| {
+                                        design::number_width(ui, owner, &Type::Small.font(ui))
+                                            + design::S
+                                    });
+                                    ui.scope(|ui| {
+                                        ui.set_max_width((ui.available_width() - tag).max(40.0));
+                                        ui.add(
+                                            egui::Label::new(
+                                                Type::Body.rich(ui, &c.name).color(colors().text),
+                                            )
+                                            .truncate(),
+                                        );
+                                    });
+                                    if let Some(owner) = &c.owner {
+                                        ui.label(Type::Small.rich(ui, owner).color(colors().muted));
+                                    }
+                                });
                                 detail_columns(ui, &c.detail);
                             });
                             ui.with_layout(
@@ -1587,14 +1621,14 @@ impl Encounters {
                                 lower = Some(i);
                             }
                         } else {
-                            ui.add_space(Density::Read.control());
+                            ui.allocate_space(egui::Vec2::splat(Density::Read.control()));
                         }
                         if i > 0 {
                             if design::icon_button(ui, icons::UP, "Move up").clicked() {
                                 raise = Some(i);
                             }
                         } else {
-                            ui.add_space(Density::Read.control());
+                            ui.allocate_space(egui::Vec2::splat(Density::Read.control()));
                         }
                         if design::icon_button(
                             ui,

@@ -243,25 +243,75 @@ impl DndBeyond {
                 if self.loaded && self.campaigns.is_empty() {
                     ui.label("No campaigns returned for this account.");
                 }
+                if !self.campaigns.is_empty() {
+                    ui.label(
+                        crate::design::Type::Small
+                            .rich(ui, "Add a campaign to your list, then choose its folder.")
+                            .color(crate::design::colors().muted),
+                    );
+                    crate::design::rule(ui);
+                }
+                // Rows like the list above, each with its verb. The chosen one says so.
+                let chosen = local.importing().map(str::to_owned);
+                let mut pick = None;
                 for remote in &self.campaigns {
                     let added = local.is_added(&remote.id);
-                    let label = if added {
-                        format!("{} · Added", remote.name)
-                    } else {
-                        remote.name.clone()
-                    };
-                    if ui
-                        .add_enabled(!added, egui::Button::new(label))
-                        .on_disabled_hover_text("This campaign is already in your list.")
-                        .clicked()
-                    {
-                        local.start_import(&remote.id, &remote.name);
-                    }
+                    let is_chosen = chosen.as_deref() == Some(remote.id.as_str());
+                    ui.push_id(&remote.id, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.set_min_height(crate::design::Density::Scan.row());
+                            ui.add(
+                                egui::Label::new(
+                                    crate::design::Type::Strong
+                                        .rich(ui, &remote.name)
+                                        .color(crate::design::colors().text),
+                                )
+                                .wrap(),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let density = crate::design::Density::Read;
+                                    if added {
+                                        let _ = crate::design::Action::secondary("Added")
+                                            .density(density)
+                                            .name(&format!("{} · Added", remote.name))
+                                            .blocked(Some("This campaign is already in your list."))
+                                            .show(ui);
+                                    } else if is_chosen {
+                                        let _ = crate::design::Action::quiet("Choosing a folder")
+                                            .density(density)
+                                            .selected(true)
+                                            .name(&format!("Adding {}", remote.name))
+                                            .show(ui);
+                                    } else if crate::design::Action::secondary("Add")
+                                        .density(density)
+                                        .name(&format!("Add {}", remote.name))
+                                        .show(ui)
+                                        .clicked()
+                                    {
+                                        pick = Some((remote.id.clone(), remote.name.clone()));
+                                    }
+                                },
+                            );
+                        });
+                    });
+                    crate::design::rule(ui);
+                }
+                if let Some((id, name)) = pick {
+                    local.start_import(&id, &name);
                 }
             });
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, local: &mut Campaigns) {
+    /// `blocked` says why the link cannot change now. Its state still reads at full strength.
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        session: Option<Session>,
+        local: &mut Campaigns,
+        blocked: Option<&str>,
+    ) {
         ui.horizontal(|ui| {
             ui.label(
                 crate::design::Type::Heading
@@ -284,9 +334,11 @@ impl DndBeyond {
         if session.is_none() {
             ui.weak("Connect your account in Settings to update this link.");
         }
-        if crate::design::Action::secondary("Refresh list")
+        if crate::design::Action::secondary("Refresh campaigns")
             .density(crate::design::Density::Read)
-            .blocked(if session.is_none() {
+            .blocked(if let Some(blocked) = blocked {
+                Some(blocked)
+            } else if session.is_none() {
                 Some("Connect to D&D Beyond in Settings first.")
             } else if self.pending.is_some() {
                 Some("Already refreshing.")
@@ -323,24 +375,26 @@ impl DndBeyond {
                     .unwrap_or_else(|| format!("Campaign {id}"))
             })
             .unwrap_or_else(|| "Not linked".into());
-        let dropdown = egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
-            .icon(crate::design::combo_icon)
-            .width(ui.available_width().min(520.0))
-            .selected_text(label)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut selected, None, "Not linked");
-                for remote in &self.campaigns {
-                    let used = local.linked_elsewhere(&remote.id);
-                    ui.add_enabled_ui(!used, |ui| {
-                        let name = if used {
-                            format!("{} (already linked)", remote.name)
-                        } else {
-                            remote.name.clone()
-                        };
-                        ui.selectable_value(&mut selected, Some(remote.id.clone()), name);
-                    });
-                }
-            });
+        let dropdown = crate::design::locked(ui, blocked, |ui| {
+            egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
+                .icon(crate::design::combo_icon)
+                .width(ui.available_width().min(520.0))
+                .selected_text(label)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut selected, None, "Not linked");
+                    for remote in &self.campaigns {
+                        let used = local.linked_elsewhere(&remote.id);
+                        ui.add_enabled_ui(!used, |ui| {
+                            let name = if used {
+                                format!("{} (already linked)", remote.name)
+                            } else {
+                                remote.name.clone()
+                            };
+                            ui.selectable_value(&mut selected, Some(remote.id.clone()), name);
+                        });
+                    }
+                })
+        });
         crate::design::named(ui, &dropdown.response, "D&D Beyond campaign link");
         if ui.is_rect_visible(dropdown.response.rect) {
             self.visible_last_frame = true;

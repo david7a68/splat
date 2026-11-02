@@ -8,6 +8,8 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 pub struct Campaigns {
+    /// `Add` on a remote campaign opened the form, so it scrolls into view once.
+    scroll_to_form: bool,
     store: Option<Store>,
     data: UserData,
     error: Option<String>,
@@ -29,6 +31,7 @@ const SELECTOR_HEIGHT: f32 = 44.0;
 impl Default for Campaigns {
     fn default() -> Self {
         let mut result = Self {
+            scroll_to_form: false,
             store: None,
             data: UserData::default(),
             error: None,
@@ -57,6 +60,7 @@ impl Campaigns {
         self.clear_form();
         self.name = name.into();
         self.remote = Some((id.into(), name.into()));
+        self.scroll_to_form = true;
     }
 
     pub fn cancel_import(&mut self) {
@@ -172,6 +176,7 @@ impl Campaigns {
         let mut store = Store::at(path);
         let data = store.load().unwrap();
         Self {
+            scroll_to_form: false,
             store: Some(store),
             data,
             error: None,
@@ -291,6 +296,11 @@ impl Campaigns {
         self.persist(data)
     }
 
+    /// The remote campaign the form below is adding, if any.
+    pub fn importing(&self) -> Option<&str> {
+        self.remote.as_ref().map(|(id, _)| id.as_str())
+    }
+
     /// Any campaign in the list, active or not, already links to this one.
     pub fn is_added(&self, remote_id: &str) -> bool {
         self.data.campaigns.iter().any(|c| links_to(c, remote_id))
@@ -382,6 +392,7 @@ impl Campaigns {
         ui: &mut egui::Ui,
         session: Option<crate::auth::Session>,
         dndbeyond: &mut crate::dndbeyond::DndBeyond,
+        blocked: Option<&str>,
     ) {
         let c = colors();
         let Some(campaign) = self.active_campaign() else {
@@ -399,6 +410,7 @@ impl Campaigns {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if Action::quiet("Edit details")
                     .density(Density::Read)
+                    .blocked(blocked)
                     .show(ui)
                     .clicked()
                 {
@@ -414,7 +426,7 @@ impl Campaigns {
         ui.add_space(design::S);
         design::rule(ui);
         ui.add_space(design::S);
-        dndbeyond.show(ui, session, self);
+        dndbeyond.show(ui, session, self, blocked);
         ui.add_space(design::S);
         design::quiet_section(ui, "Technical details", |ui| {
             ui.label(format!("ID: {}", campaign.id));
@@ -480,7 +492,8 @@ impl Campaigns {
                 );
                 ui.add_space(design::S);
                 ui.horizontal(|ui| {
-                    keep |= Action::secondary("Keep the campaign").show(ui).clicked();
+                    // The action that loses nothing is the filled one.
+                    keep |= Action::primary("Keep the campaign").show(ui).clicked();
                     ui.add_space(design::L);
                     remove = Action::destructive("Remove from Splat").show(ui).clicked();
                 });
@@ -530,9 +543,10 @@ impl Campaigns {
                     .color(c.muted),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if Action::quiet("Reload")
+                if Action::quiet("Refresh")
                     .density(Density::Read)
-                    .hint("Reload campaign settings from disk")
+                    .name("Refresh the campaign list")
+                    .hint("Read campaign settings from disk again")
                     .show(ui)
                     .clicked()
                 {
@@ -580,8 +594,17 @@ impl Campaigns {
                                     ui.label(Type::Small.rich(ui, "Active").color(c.accent));
                                 }
                             });
-                            // The folder is worth a word only when it is missing. The link has its own line.
-                            if !campaign.path.is_dir() {
+                            // Where it is, or, if the folder is missing, that first.
+                            if campaign.path.is_dir() {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small
+                                            .rich(ui, campaign.path.display().to_string())
+                                            .color(c.muted),
+                                    )
+                                    .wrap(),
+                                );
+                            } else {
                                 Self::folder_status(ui, &campaign)
                                     .on_hover_text(campaign.path.display().to_string());
                             }
@@ -634,6 +657,10 @@ impl Campaigns {
                         });
                     });
                 });
+                // The form opens under the row it edits, not at the page's end.
+                if self.editing == Some(campaign.id) {
+                    self.form(ui);
+                }
                 design::rule(ui);
             }
             if let Some(id) = open {
@@ -647,7 +674,9 @@ impl Campaigns {
             }
             ui.add_space(design::S);
             dndbeyond.show_import(ui, session.clone(), self);
-            self.form(ui);
+            if self.editing.is_none() {
+                self.form(ui);
+            }
         });
     }
 
@@ -661,56 +690,72 @@ impl Campaigns {
 
     fn form(&mut self, ui: &mut egui::Ui) {
         let editing = self.editing.is_some();
-        egui::CollapsingHeader::new(if editing {
-            "Edit campaign details"
-        } else {
-            "Add campaign"
-        })
-        .icon(design::section_icon)
-        .icon(design::section_icon)
-        .id_salt(("campaign_form", self.editing))
-        .open(self.remote.as_ref().map(|_| true))
-        .default_open(editing || self.data.campaigns.is_empty())
-        .show(ui, |ui| {
-            ui.add_space(design::XS);
-            if let Some((id, name)) = &self.remote {
-                ui.label(format!("{name} · D&D Beyond ID {id}"));
-            }
-            design::text_field(ui, "Campaign name", &mut self.name, None, None);
-            folder_field(ui, "Folder", &mut self.path, None);
-            ui.horizontal(|ui| {
-                let submit = if editing {
-                    "Save details"
-                } else {
-                    "Open campaign"
-                };
-                let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
-                if Action::primary(submit)
-                    .blocked_if(missing, "Enter a campaign name and a folder first.")
-                    .show(ui)
-                    .clicked()
-                    && let Err(error) = self.save_form()
-                {
-                    self.error = Some(error);
+        let original = self
+            .editing
+            .and_then(|id| self.data.campaigns.iter().find(|c| c.id == id))
+            .map(|c| (c.name.clone(), c.path.to_string_lossy().into_owned()));
+        let title = original.as_ref().map_or_else(
+            || "Add campaign".to_owned(),
+            |(name, _)| format!("Edit {name}"),
+        );
+        egui::CollapsingHeader::new(title)
+            .icon(design::section_icon)
+            .icon(design::section_icon)
+            .id_salt(("campaign_form", self.editing))
+            .open(self.remote.as_ref().map(|_| true))
+            .default_open(editing || self.data.campaigns.is_empty())
+            .show(ui, |ui| {
+                ui.add_space(design::XS);
+                if let Some((_, name)) = &self.remote {
+                    ui.label(format!("From D&D Beyond: {name}"));
                 }
-                if (editing || !missing || self.remote.is_some())
-                    && Action::quiet("Cancel").show(ui).clicked()
-                {
-                    self.clear_form();
+                design::text_field(ui, "Campaign name", &mut self.name, None, None);
+                folder_field(ui, "Folder", &mut self.path, None);
+                ui.horizontal(|ui| {
+                    let submit = if editing {
+                        "Save details"
+                    } else {
+                        "Add this campaign"
+                    };
+                    let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
+                    let unchanged = original.as_ref().is_some_and(|(name, path)| {
+                        self.name.trim() == name.as_str() && self.path.trim() == path.as_str()
+                    });
+                    let waiting = missing_words(&self.name, &self.path);
+                    let reason = waiting.or(unchanged.then_some("No changes to save."));
+                    if Action::primary(submit).blocked(reason).show(ui).clicked()
+                        && let Err(error) = self.save_form()
+                    {
+                        self.error = Some(error);
+                    }
+                    if (editing || !missing || self.remote.is_some())
+                        && Action::quiet("Cancel").show(ui).clicked()
+                    {
+                        self.clear_form();
+                    }
+                });
+                // What it is waiting for, without a hover: only what is missing.
+                if let Some(waiting) = missing_words(&self.name, &self.path) {
+                    ui.label(Type::Small.rich(ui, waiting).color(colors().muted));
+                }
+                // A row's Add opened this form, and it can be below the fold.
+                if std::mem::take(&mut self.scroll_to_form) {
+                    ui.scroll_to_cursor(Some(egui::Align::Max));
+                }
+                if let Some(error) = &self.error {
+                    design::message(ui, Tone::Error, error);
                 }
             });
-            // What it is waiting for, without a hover.
-            if self.name.trim().is_empty() || self.path.trim().is_empty() {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Enter a campaign name and a folder.")
-                        .color(colors().muted),
-                );
-            }
-            if let Some(error) = &self.error {
-                design::message(ui, Tone::Error, error);
-            }
-        });
+    }
+}
+
+/// What the campaign form still needs. It names only what is missing.
+fn missing_words(name: &str, path: &str) -> Option<&'static str> {
+    match (name.trim().is_empty(), path.trim().is_empty()) {
+        (true, true) => Some("Enter a campaign name and choose a folder."),
+        (true, false) => Some("Enter a campaign name."),
+        (false, true) => Some("Choose a folder."),
+        (false, false) => None,
     }
 }
 
@@ -763,6 +808,18 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
 mod tests {
     use super::*;
 
+    /// M7-1: the form's line names only what is missing.
+    #[test]
+    fn the_form_names_only_what_is_missing() {
+        assert_eq!(missing_words("Salt Road", ""), Some("Choose a folder."));
+        assert_eq!(missing_words("", "/tmp/x"), Some("Enter a campaign name."));
+        assert_eq!(
+            missing_words(" ", " "),
+            Some("Enter a campaign name and choose a folder.")
+        );
+        assert_eq!(missing_words("Salt Road", "/tmp/x"), None);
+    }
+
     #[test]
     fn import_and_reopen_preserve_campaign_identity_and_custom_settings() {
         let temp = tempfile::tempdir().unwrap();
@@ -810,6 +867,7 @@ mod tests {
             });
         }
         let mut campaigns = Campaigns {
+            scroll_to_form: false,
             store: Some(store),
             data,
             error: None,

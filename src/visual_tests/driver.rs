@@ -1018,6 +1018,23 @@ impl<'a> Driver<'a> {
         self.film_result("Scroll");
     }
 
+    /// Wheel-scroll up over this point, back to the start of what scrolled.
+    pub fn scroll_up_at(&mut self, pos: egui::Pos2, notches: u32) {
+        self.harness.hover_at(pos);
+        self.harness.step();
+        for _ in 0..notches {
+            self.harness.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, 100.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            self.harness.step();
+            self.interactions += 1;
+        }
+        self.harness.remove_cursor();
+        self.settle();
+    }
+
     /// Wheel-scroll over this point until a virtual list shows the text.
     pub fn scroll_until(&mut self, pos: egui::Pos2, text: &str, limit: u32) {
         for _ in 0..limit {

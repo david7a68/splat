@@ -127,7 +127,25 @@ pub fn tokens(ui: &mut egui::Ui) {
 
 pub fn components(ui: &mut egui::Ui) {
     let c = colors();
-    design_group(ui, "Buttons: enabled, blocked");
+    design_group(ui, "Buttons");
+    // Fixed columns, each under its label. A button in a measuring grid would cut its word.
+    let column = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut egui::Ui)| {
+        ui.allocate_ui_with_layout(
+            egui::vec2(150.0, Density::Scan.control()),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_width(150.0);
+                add(ui);
+            },
+        );
+    };
+    ui.horizontal(|ui| {
+        for head in ["With icon", "Plain", "Read density", "Blocked"] {
+            column(ui, &mut |ui| {
+                ui.label(Type::Label.rich(ui, head.to_uppercase()).color(c.muted));
+            });
+        }
+    });
     for (kind, label) in [
         (0, "Primary"),
         (1, "Secondary"),
@@ -141,12 +159,20 @@ pub fn components(ui: &mut egui::Ui) {
             _ => Action::destructive(label),
         };
         ui.horizontal(|ui| {
-            let _ = action(label).icon(icons::ADD).show(ui);
-            let _ = action(label).show(ui);
-            let _ = action(label).density(Density::Read).show(ui);
-            let _ = action(label)
-                .blocked(Some("Blocked for a stated reason."))
-                .show(ui);
+            column(ui, &mut |ui| {
+                let _ = action(label).icon(icons::ADD).show(ui);
+            });
+            column(ui, &mut |ui| {
+                let _ = action(label).show(ui);
+            });
+            column(ui, &mut |ui| {
+                let _ = action(label).density(Density::Read).show(ui);
+            });
+            column(ui, &mut |ui| {
+                let _ = action(label)
+                    .blocked(Some("Blocked for a stated reason."))
+                    .show(ui);
+            });
         });
     }
     ui.horizontal(|ui| {
@@ -231,8 +257,8 @@ pub fn components(ui: &mut egui::Ui) {
         }
     }
     ui.horizontal(|ui| {
-        stat_tile(ui, "Armor class", "15");
-        stat_tile(ui, "Initiative", "+2");
+        stat_tile(ui, "Armor class", "15", colors().text);
+        stat_tile(ui, "Initiative", "+2", colors().text);
     });
     design_group(ui, "Empty state");
     empty_state(
