@@ -296,7 +296,7 @@ An encounter group is added by the DM. Splat records it. It does not decide that
 to a creature is never hidden: the editor and the card show the old value, the new value, and what the DM must
 add by hand.
 
-**Done well:** T13.1 to T13.5.
+**Done well:** T13.1 to T13.6.
 
 ## 3. Information architecture
 
@@ -565,7 +565,8 @@ reading the code, not from a test run.
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |
 | T13.4 | Dragging a group onto the initiative list adds every member | encounter-groups | state | New |
-| T13.5 | A run offers its encounter's groups and those for any encounter, names the rest, and adds its own in ≤ 1 | encounter-owned-groups | cost, state | New |
+| T13.5 | A run offers its encounter's groups and those for any encounter, and adds its own in ≤ 1, in setup and in combat. The Encounters page keeps an encounter's own groups in a closed section | encounter-owned-groups | cost, state | New |
+| T13.6 | An encounter's editor shows each of its groups in a frame of its own, and builds a new one there, with no other page. It saves with the encounter | encounter-owned-groups | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

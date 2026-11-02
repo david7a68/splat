@@ -191,9 +191,8 @@ side the run has not seen uses the "other" mark. `encounter` is optional. With i
 group belongs to that encounter, a note of the same campaign named by `id` (a `link` can
 sit beside it), and only runs of that encounter offer it. Without it, a run of any
 encounter offers it. A run saves the identity of the encounter it started from. A run
-saved before this has none, so it lists every group and says who each is for. A run
-that knows its encounter names the groups it does not offer. An `encounter` that does
-not resolve, or that is not an encounter, is reported as a content issue. The group
+saved before this has none, so it lists every group and says who each is for. An
+`encounter` that does not resolve, or that is not an encounter, is reported as a content issue. The group
 stays on the Encounters page, runs of that encounter can still add it, and its editor
 asks for another owner before it saves. `members` is an ordered, non-empty list. `count` defaults to 1, up to 100. A
 reference follows the same dependency rules as a roster's, so it can reach a creature

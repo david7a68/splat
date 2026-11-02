@@ -4851,54 +4851,97 @@ pub mod encounter_owned_groups {
     const BELONGS_DROPDOWN: usize = 1;
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
+    const FOR_ENCOUNTERS: &str = "Groups for encounters";
+    const SAVE_ENCOUNTER: &str = "Save encounter";
 
     fn add_group(name: &str) -> String {
         format!("Add {name} to the initiative list")
     }
 
+    fn edit_group(name: &str) -> String {
+        format!("Edit group {name}")
+    }
+
     pub fn run(d: &mut Driver<'_>) {
-        // The page sorts them by who they are for.
-        d.expect("Encounter groups (7)");
-        d.state("groups-by-encounter", Sizes::All);
-        d.check_tab_order("encounters, with groups by encounter");
+        // The page lists what can arrive anywhere. An encounter's own stay out of the way.
+        d.expect("Encounter groups (5)");
+        d.state("groups-for-encounters-closed", Sizes::All);
+        d.check_tab_order("encounters, with groups for encounters closed");
         d.observe(
             "T13.5",
-            d.has_containing("FOR SHRINE OF CINDERS")
-                && d.has_containing("FOR ARENA FINAL")
-                && d.has_containing("ANY ENCOUNTER")
-                && d.has_containing("NO LONGER HAS"),
-            "The list says who each group is for, and which encounter is gone",
+            d.has(&edit_group(GROUP_GOBLINS))
+                && d.has(&edit_group(GROUP_ORPHAN))
+                && !d.has(&edit_group(GROUP_SHRINE))
+                && !d.has(&edit_group(GROUP_ARENA))
+                && d.has_containing(&format!("{FOR_ENCOUNTERS} (2)")),
+            "An encounter's own groups stay closed. One whose encounter is gone stays in view",
         );
+        d.click_starting(FOR_ENCOUNTERS);
+        d.expect(&edit_group(GROUP_SHRINE));
+        d.state("groups-for-encounters-open", Sizes::Default);
+        d.observe(
+            "T13.5",
+            d.has_containing("FOR SHRINE OF CINDERS") && d.has_containing("FOR ARENA FINAL"),
+            "Opened, the section says who each group is for",
+        );
+        d.click_starting(FOR_ENCOUNTERS);
 
         // A group whose encounter is gone says so in its editor.
-        d.click(&format!("Edit group {GROUP_ORPHAN}"));
+        d.click(&edit_group(GROUP_ORPHAN));
         d.expect("An encounter this campaign no longer has");
         d.state("group-whose-encounter-is-gone", Sizes::Default);
         d.click("Back to encounters");
 
-        // An encounter's editor lists its own, and starts a new one.
+        // An encounter's editor has a section for each of its own, with what is in it.
         open_saved_encounter(d, SHRINE);
         d.expect("Groups for this encounter (1)");
         d.state("encounter-with-its-groups", Sizes::All);
+        d.check_tab_order("encounter editor, with its groups");
+        d.observe(
+            "T13.6",
+            d.has(&format!("Group name: {GROUP_SHRINE}"))
+                && d.has_containing("Goblin Warrior")
+                && d.has_containing("Members: 2 creatures"),
+            "A section shows the group's name and its members",
+        );
+
+        // A new group is built right here, and saved with the encounter.
         d.begin_task();
         d.click(NEW_FOR_ENCOUNTER);
         d.type_text(NEW_NAME);
         d.observe(
-            "T13.5",
-            d.has_containing(SHRINE) && d.has_containing("Only runs of this encounter"),
-            "A group started from an encounter already belongs to it",
+            "T13.6",
+            d.has(&format!("Add to: {NEW_NAME}"))
+                && d.has(&format!("Belongs to: {SHRINE}"))
+                && d.has_containing("Members: 0 creatures"),
+            "A new group belongs to this encounter, and takes what the search adds",
         );
+        d.state("new-group-in-the-encounter", Sizes::All);
+        let roster_before = d.has_containing("Roster (7)");
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside("Wolf", ADD);
-        d.click("Save group");
-        d.expect("Group saved.");
-        d.state("group-for-an-encounter-saved", Sizes::Default);
-        d.goal("make a group for one encounter");
+        d.expect("1. Wolf");
+        d.observe(
+            "T13.6",
+            roster_before && d.has_containing("Roster (7)"),
+            "What the search adds goes to the group, and the roster stays as it was",
+        );
+        d.observe(
+            "T13.6",
+            d.in_view("1. Wolf"),
+            "The member just added comes into view, in its group",
+        );
+        d.state("creature-added-to-a-group", Sizes::Default);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Encounter saved.");
+        d.state("encounter-and-group-saved", Sizes::Default);
+        d.goal("build a group in an encounter's editor");
         d.click("Back to encounters");
-        d.expect("Encounter groups (8)");
+        d.expect("Encounter groups (5)");
+        d.expect(&format!("{FOR_ENCOUNTERS} (3)"));
 
         // A group can change hands, in its editor.
-        d.click(&format!("Edit group {GROUP_WATCH}"));
+        d.click(&edit_group(GROUP_WATCH));
         d.expect("A run of any encounter offers this group.");
         d.open_combo_at(BELONGS_DROPDOWN);
         d.state("belongs-to-open", Sizes::Default);
@@ -4908,7 +4951,7 @@ pub mod encounter_owned_groups {
         d.expect("Group saved.");
         d.click("Back to encounters");
 
-        // At the table: its own first, those for any encounter, and a word on the rest.
+        // At the table: its own first, then those for any encounter.
         run_saved_encounter(d, SHRINE);
         d.click(GROUPS_TAB);
         d.expect(&add_group(GROUP_SHRINE));
@@ -4923,17 +4966,49 @@ pub mod encounter_owned_groups {
                 && !d.has(&add_group(GROUP_WATCH)),
             "A run offers its encounter's groups and those for any encounter, and no others",
         );
-        d.observe(
-            "T13.5",
-            d.has_containing("not offered here")
-                && d.has_containing(GROUP_ARENA)
-                && d.has_containing(GROUP_ORPHAN),
-            "The panel names the groups it does not offer, and says how to add one",
-        );
         d.begin_task();
         d.click(&add_group(GROUP_SHRINE));
         d.expect("Goblin Warrior 1");
         d.goal_within("T13.5", "add this encounter's own group", 1);
+
+        // The same panel during combat, with a typed total and by dragging.
+        d.click("Roll NPC initiative");
+        for (name, total) in [
+            ("Brannoch Vale", "18"),
+            ("Iselle Marrowind", "15"),
+            ("Kestrel Dunmoor", "12"),
+            ("Oren Thistlewick", "9"),
+            ("Sable Harrowgate", "6"),
+        ] {
+            d.type_into(&format!("Initiative for {name}"), total);
+        }
+        d.click("Begin combat");
+        d.expect(NEXT_TURN);
+        d.click(GROUPS_TAB);
+        d.expect(&add_group(NEW_NAME));
+        d.state("own-groups-in-combat", Sizes::Default);
+        d.type_into(&format!("Initiative total for {NEW_NAME}"), "14");
+        d.click(&add_group(NEW_NAME));
+        d.expect("Wolf");
+        d.state("own-group-added-in-combat", Sizes::Default);
+        d.observe(
+            "T13.5",
+            d.has_containing("Initiative 14") && d.has_containing("Undo: add Ash Hounds"),
+            "An encounter's own group joins the fight on a typed total, and Undo names it",
+        );
+        let rows_before = roster_places(d).len();
+        let list = roster_places(d)
+            .first()
+            .map(|(_, rect)| *rect)
+            .expect("run rows");
+        d.drag_hold(&format!("Drag {GROUP_SHRINE} to the initiative list"), list);
+        d.drag_release(list);
+        d.observe(
+            "T13.5",
+            roster_places(d).len() == rows_before + 2,
+            "Dragging an encounter's own group in combat adds each member",
+        );
+        d.state("own-group-dragged-in-combat", Sizes::Default);
         close_run(d);
 
         // A save from before this cannot say which encounter it is, so it hides nothing.
