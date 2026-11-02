@@ -273,7 +273,7 @@ pub struct Strip {
 }
 #[derive(Clone)]
 enum Command {
-    RollNpcs,
+    RollNpcs(Grouping),
     Npc(usize, bool),
     RollMode(usize, i8),
     Begin,
@@ -437,14 +437,14 @@ impl Run {
         let follow_turn = matches!(command, Command::Begin | Command::Next);
         let mut next = self.state.clone();
         let label = match command {
-            Command::RollNpcs => {
+            Command::RollNpcs(grouping) => {
                 if next.phase != Phase::Setup {
                     return Err("Initiative is fixed during combat.".into());
                 }
                 let mut groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
                 let mut group_order = Vec::new();
                 for (i, p) in next.participants.iter().enumerate().filter(|(_, p)| p.npc) {
-                    let key = match self.initiative.grouping {
+                    let key = match grouping {
                         Grouping::Identical => format!(
                             "{}:{}:{}",
                             p.definition.id,
@@ -499,7 +499,7 @@ impl Run {
                 Self::sort_initiative(&mut next);
                 format!(
                     "NPC initiative — {}. {}",
-                    self.initiative.grouping.label(),
+                    grouping.label(),
                     results.join("; ")
                 )
             }
@@ -808,6 +808,19 @@ impl Run {
             self.last_initiative = None;
         }
     }
+    /// The rules a single NPC roll can use. Encounter groups need a group to be different
+    /// from individual rolls.
+    fn roll_choices(&self) -> Vec<Grouping> {
+        let has_group = self
+            .state
+            .participants
+            .iter()
+            .any(|p| p.npc && p.initiative_group.is_some());
+        Grouping::ALL
+            .into_iter()
+            .filter(|mode| *mode != Grouping::Explicit || has_group)
+            .collect()
+    }
     /// The words a named Undo uses for this command.
     fn describe(&self, command: &Command) -> String {
         let name = |index: &usize| {
@@ -817,7 +830,7 @@ impl Run {
                 .map_or("a participant", |p| p.name.as_str())
         };
         match command {
-            Command::RollNpcs => "NPC initiative roll".into(),
+            Command::RollNpcs(_) => "NPC initiative roll".into(),
             Command::Npc(i, _) => format!("NPC control on {}", name(i)),
             Command::RollMode(i, _) => format!("roll mode on {}", name(i)),
             Command::Begin => "begin combat".into(),
@@ -3109,25 +3122,43 @@ mod tests {
         run.state.participants[0].npc = false;
         run.apply(Command::Initiative(0, Some(19))).unwrap();
         run.state.random = Random::controlled([10, 7]);
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::Identical)).unwrap();
         assert_eq!(run.state.participants[0].initiative, Some(19));
         assert_eq!(run.state.participants[1].initiative, Some(12));
         assert_eq!(run.state.participants[2].initiative, Some(12));
         run.undo();
-        run.initiative.grouping = Grouping::Individual;
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::Individual)).unwrap();
         assert_eq!(run.state.participants[1].initiative, Some(12));
         assert_eq!(run.state.participants[2].initiative, Some(9));
         run.undo();
-        run.initiative.grouping = Grouping::BySide;
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::BySide)).unwrap();
         assert_eq!(run.state.participants[2].initiative, Some(12));
         run.undo();
-        run.initiative.grouping = Grouping::Explicit;
         run.state.participants[1].initiative_group = Some("wave".into());
         run.state.participants[2].initiative_group = Some("wave".into());
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::Explicit)).unwrap();
         assert_eq!(run.state.participants[2].initiative, Some(12));
+    }
+    #[test]
+    fn one_npc_roll_can_use_another_rule_and_the_campaign_rule_stays() {
+        let mut run = run();
+        run.state.participants[0].npc = false;
+        run.state.random = Random::controlled([10, 7]);
+        assert_eq!(run.initiative.grouping, Grouping::Identical);
+        run.apply(Command::RollNpcs(Grouping::Individual)).unwrap();
+        assert_eq!(run.state.participants[1].initiative, Some(12));
+        assert_eq!(run.state.participants[2].initiative, Some(9));
+        assert_eq!(run.initiative.grouping, Grouping::Identical);
+        assert!(run.state.log.last().unwrap().contains("Individually"));
+    }
+    #[test]
+    fn encounter_groups_are_a_roll_choice_only_when_an_npc_has_a_group() {
+        let mut run = run();
+        assert!(!run.roll_choices().contains(&Grouping::Explicit));
+        run.state.participants[1].initiative_group = Some("wave".into());
+        assert!(run.roll_choices().contains(&Grouping::Explicit));
+        run.state.participants[1].npc = false;
+        assert!(!run.roll_choices().contains(&Grouping::Explicit));
     }
     #[test]
     fn undo_names_the_last_action_and_each_step_goes_back() {
@@ -3178,11 +3209,10 @@ mod tests {
     #[test]
     fn failed_npc_roll_is_atomic_and_surprise_uses_disadvantage() {
         let mut run = run();
-        run.initiative.grouping = Grouping::Individual;
         run.state.random = Random::controlled([18, 4, 10, 12]);
         run.state.participants[0].initiative_mode = -1;
         run.state.participants[2].initiative_bonus = None;
-        assert!(run.apply(Command::RollNpcs).is_err());
+        assert!(run.apply(Command::RollNpcs(Grouping::Individual)).is_err());
         assert!(
             run.state
                 .participants
@@ -3190,7 +3220,7 @@ mod tests {
                 .all(|p| p.initiative.is_none())
         );
         run.state.participants[2].initiative_bonus = Some(2);
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::Individual)).unwrap();
         assert_eq!(run.state.participants[0].initiative, Some(6));
     }
 }

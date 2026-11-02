@@ -6,7 +6,7 @@
       "dialogs": 37,
       "empty": 18,
       "encounter-build": 36,
-      "encounter-run": 46,
+      "encounter-run": 51,
       "gallery": 16,
       "library-author": 60,
       "library-browse": 84,
@@ -37,6 +37,7 @@
     },
     "no-overlap/egui-chrome": {
       "dialogs": 4,
+      "encounter-run": 4,
       "library-author": 2,
       "library-scope": 5,
       "session-recording": 7
@@ -47,7 +48,7 @@
       "dialogs": 36,
       "empty": 18,
       "encounter-build": 36,
-      "encounter-run": 46,
+      "encounter-run": 50,
       "gallery": 16,
       "library-author": 59,
       "library-browse": 84,
@@ -100,6 +101,7 @@
       "open a saved encounter": 5
     },
     "encounter-run": {
+      "Roll once another way: roll NPC initiative another way": 2,
       "T1.1: advance the turn": 1,
       "T1.2: damage a named participant who is not current": 3,
       "T1.5: add an official condition": 3,

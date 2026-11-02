@@ -679,11 +679,7 @@ impl CampaignContent {
                         if e.private {
                             "Campaign".to_owned()
                         } else {
-                            catalogue
-                                .modules
-                                .iter()
-                                .find(|m| m.id == e.owner)
-                                .map_or_else(|| "Package".to_owned(), |m| m.name.clone())
+                            catalogue.package_name(e.owner)
                         }
                     };
                     // By name, with the kind: two entries can share a name, and an ID order means nothing.

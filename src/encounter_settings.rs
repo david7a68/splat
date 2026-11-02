@@ -24,12 +24,19 @@ pub enum Grouping {
     Explicit,
 }
 impl Grouping {
+    pub const ALL: [Self; 4] = [
+        Self::Identical,
+        Self::Individual,
+        Self::BySide,
+        Self::Explicit,
+    ];
+    /// Reads on from "Roll NPC initiative".
     pub fn label(self) -> &'static str {
         match self {
-            Self::Identical => "Identical NPCs (D&D default)",
-            Self::Individual => "Each NPC separately",
-            Self::BySide => "One roll per side",
-            Self::Explicit => "Encounter initiative groups",
+            Self::Identical => "In groups of identical NPCs (D&D default)",
+            Self::Individual => "Individually",
+            Self::BySide => "In one group per side",
+            Self::Explicit => "In the encounter's initiative groups",
         }
     }
 }

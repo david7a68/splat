@@ -232,6 +232,10 @@ individual selections do not. **Save selections** writes `splat_packages` into t
 campaign manifest while preserving unrelated fields, comments, and note text. A
 campaign without a manifest gets `Campaign.md` on first save, with its existing UUID
 and the default SRD selection. Missing packages and unresolved references remain visible.
+A package that other entries need but that is not registered shows once, as **Package not
+found**. The issue uses the package's name when its folder, with a `Package.md`, is beside a
+registered package, and its namespace otherwise. An entry missing from a loaded package also
+shows once, with the entries that need it.
 
 Use **Copy to…** on a library or campaign entry to make an independent copy in a
 registered package or campaign. Review the destination, name, retained dependencies,
@@ -334,11 +338,13 @@ edits. If the file changed, saving stops until you choose **Keep this run** or *
 run**. Other failed saves keep the current run in memory and show an error. Undo history
 is kept for the current session only. Changing the folder does not move old runs.
 
-The same settings select the campaign initiative rule. **Roll NPC initiative**
-uses that rule and leaves player totals alone. Choices are identical NPC groups
-(the D&D default), individual NPCs, one group per side, or explicit encounter
-initiative groups. Side and explicit groups use the first NPC in roster order
-for their bonus and roll mode. Normal, advantage, and disadvantage rolls are
+The same settings select how the campaign rolls NPC initiative: in groups of
+identical NPCs (the D&D default), individually, in one group per side, or in the
+encounter's initiative groups. **Roll NPC initiative** in run setup uses that
+choice and leaves player totals alone. The arrow beside it uses another choice for
+one roll, and the campaign's choice stays the default. An arrow choice for the
+encounter's groups shows only when an NPC has a group. Side and encounter groups
+use the first NPC in roster order for their bonus and roll mode. Normal, advantage, and disadvantage rolls are
 available; use disadvantage for surprise. Ties use the campaign's roster-order
 setting or the DM/player ordering controls. NPC status can be changed before
 combat begins. Run folder settings use `splat_run_storage.directory`; initiative

@@ -39,7 +39,7 @@ pub mod library_browse {
     const SEARCH_RESULTS: &str = "Search results";
     const CREATURE: &str = "Adult Black Dragon";
     const SPELL_ROW: &str = "Fireball · ";
-    const CLASS_ROW: &str = "Wizard · ";
+    const CLASS_ROW: &str = "Wizard · Class";
     const CREATURES_SECTION: &str = "Creatures   ";
     const CREATURES_COUNT: &str = "336 entries";
     const NEXT_CREATURE: &str = "Aboleth";
@@ -886,6 +886,17 @@ pub mod encounter_run {
         d.click(ROLL_NPCS);
         d.state("npc-initiative-rolled", Sizes::Default);
         d.goal("start a new run and roll initiative");
+
+        d.click("Roll NPC initiative another way");
+        d.state("npc-roll-menu", Sizes::Default);
+        d.check_tab_order("NPC roll menu");
+        d.click("Individually");
+        d.state("npc-initiative-rolled-individually", Sizes::Default);
+        d.goal_within(
+            "Roll once another way",
+            "roll NPC initiative another way",
+            2,
+        );
     }
 }
 
