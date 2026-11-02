@@ -247,16 +247,28 @@ fn containers_are_structured_and_dependency_edits_block_the_whole_refresh() {
     let entry = Entry::parse("character.md", &before).unwrap();
     assert_eq!(entry.inventory[1].container.as_deref(), Some("item_7"));
     assert_eq!(entry.inventory[1].equipment, "stored");
-    let dependency = record.content_notes().unwrap().remove(0);
-    let path = dir
-        .path()
-        .join("Characters/D&D Beyond")
-        .join(dependency.relative_path);
+    let path = walk_notes(&dir.path().join(super::campaign_package::FOLDER))
+        .into_iter()
+        .find(|path| !path.ends_with("Package.md"))
+        .unwrap();
     std::fs::write(&path, "A local edit").unwrap();
     record.definition.splat_name = "Changed".into();
     assert!(record.save_campaign_copy(dir.path()).is_err());
     assert_eq!(std::fs::read_to_string(creature_path).unwrap(), before);
     assert_eq!(std::fs::read_to_string(path).unwrap(), "A local edit");
+}
+
+fn walk_notes(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut found = Vec::new();
+    for item in std::fs::read_dir(root).unwrap().flatten() {
+        if item.path().is_dir() {
+            found.extend(walk_notes(&item.path()));
+        } else {
+            found.push(item.path());
+        }
+    }
+    found.sort();
+    found
 }
 
 #[test]

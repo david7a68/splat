@@ -81,6 +81,10 @@ remain deferred.
 Campaign-specific homebrew can be created directly in the campaign. It does not
 require a package used by only that campaign.
 
+Imported D&D Beyond definitions differ: they go to an enabled package or to the
+[campaign package](character-content.md#routes-and-the-campaign-package), not to loose
+campaign-owned notes.
+
 Sharing campaign content to a package offers two explicit operations:
 
 - Copy to package creates a shared copy with a new UUID. The campaign original

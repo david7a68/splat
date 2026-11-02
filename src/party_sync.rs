@@ -300,10 +300,18 @@ fn save_campaign_copy(
     path: &std::path::Path,
     force: bool,
 ) -> Result<Vec<PathBuf>, CampaignCopyError> {
+    // Settings that cannot be read list no packages, so new definitions go to the campaign package.
+    let modules = crate::persistence::Store::user()
+        .and_then(|mut store| store.load())
+        .map(|data| data.modules)
+        .unwrap_or_default();
+    let destinations = crate::content_workspace::destinations(path, &modules);
     if force {
-        record.overwrite_campaign_copy(path)
+        record.overwrite_campaign_copy_to(path, &destinations)
     } else {
-        record.save_campaign_copy(path).map(|_| Vec::new())
+        record
+            .save_campaign_copy_to(path, &destinations)
+            .map(|_| Vec::new())
     }
 }
 #[derive(Default)]

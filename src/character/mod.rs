@@ -2,6 +2,7 @@
 //! Source records project into shared campaign content; simulation support is separate.
 mod cache;
 mod campaign;
+pub mod campaign_package;
 mod content;
 mod presentation;
 mod rules;
