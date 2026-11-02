@@ -1356,7 +1356,7 @@ pub mod run_absent_player {
         let turn_order = d.painted_from_label(TURN_ORDER_FIRST);
         d.observe(
             "Absent player",
-            turn_order.contains("Kestrel Dunmoor"),
+            turn_order.contains(TURN_ORDER_FIRST),
             format!("The setup's turn order starts with the highest total: {turn_order}"),
         );
         d.observe(
@@ -1369,7 +1369,7 @@ pub mod run_absent_player {
         let first = current_participant(d);
         d.observe(
             "Absent player",
-            first.as_deref() == Some("Kestrel Dunmoor") && d.row_words(PLAYER).contains("Absent"),
+            first.as_deref() == Some(TURN_ORDER_FIRST) && d.row_words(PLAYER).contains("Absent"),
             format!("The first turn is {first:?}, and their row says Absent"),
         );
         d.begin_task();
@@ -1397,7 +1397,7 @@ pub mod run_absent_player {
         let order: Vec<String> = roster_places(d).into_iter().map(|row| row.0).collect();
         d.observe(
             "Absent player",
-            order.first().map(String::as_str) == Some("Kestrel Dunmoor")
+            order.first().map(String::as_str) == Some(TURN_ORDER_FIRST)
                 && order.get(1).map(String::as_str) == Some(PLAYER)
                 && current_participant(d) == turn
                 && !d.row_words(PLAYER).contains(NO_INITIATIVE),

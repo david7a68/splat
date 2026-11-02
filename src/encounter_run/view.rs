@@ -502,7 +502,6 @@ impl Run {
 
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
-    /// True if the notice has no room on the header's line, so it goes under the list.
     fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) {
         let c = colors();
         let strip = self.strip();
@@ -1682,7 +1681,6 @@ impl Run {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = design::S;
-                let c_warning = colors().result.warning;
                 let p = &self.state.participants[index];
                 let mut hp = p.hp;
                 let mut max = p.max_hp;
@@ -1720,7 +1718,7 @@ impl Run {
                                     ui,
                                     "No initiative yet: last in the order until you set it. The current turn stays.",
                                 )
-                                .color(c_warning),
+                                .color(colors().result.warning),
                         )
                         .wrap(),
                     );

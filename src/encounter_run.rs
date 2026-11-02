@@ -233,7 +233,7 @@ enum Panel {
     Keys,
 }
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
-pub(crate) const MAX_FROM_SHEET: &str =
+const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
 pub(crate) const NOBODY_PRESENT: &str =
     "No participants are present. Mark one present or end the encounter.";
