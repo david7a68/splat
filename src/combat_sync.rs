@@ -1,6 +1,7 @@
 //! Conflict-aware combat sheet synchronization with D&D Beyond.
 //! Writes use source identities and absolute values, followed by a raw read-back.
 use crate::auth::Session;
+use crate::hermetic::{self, Moment};
 use eframe::egui;
 use reqwest::{Method, blocking::Client, redirect::Policy};
 use serde_json::{Value, json};
@@ -13,7 +14,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 const BASE: &str = "https://character-service.dndbeyond.com/character/v5";
@@ -464,8 +465,8 @@ pub struct CombatSync {
     blocked: BTreeMap<String, String>,
     pending: Option<Pending>,
     gate: Option<Arc<AtomicBool>>,
-    next: Option<Instant>,
-    changed: Option<Instant>,
+    next: Option<Moment>,
+    changed: Option<Moment>,
     refresh_only: bool,
     pub error: Option<String>,
     pub updated: bool,
@@ -500,6 +501,11 @@ fn note_field(field: &mut Option<egui::Id>, response: &egui::Response) {
     if response.has_focus() || response.dragged() {
         *field = Some(response.id);
     }
+}
+/// Every timer has run out: the pause after a change, and the 15-second read.
+#[cfg(test)]
+fn run_out_timers() {
+    hermetic::closed::pass_time(Duration::from_secs(16));
 }
 impl Drop for CombatSync {
     fn drop(&mut self) {
@@ -752,21 +758,14 @@ impl CombatSync {
     pub fn set_group(&mut self, key: &str, value: Value) {
         if self.ready() && self.desired.contains_key(key) && self.desired.get(key) != Some(&value) {
             self.desired.insert(key.into(), value);
-            self.changed = Some(Instant::now());
+            self.changed = Some(hermetic::moment());
         }
-    }
-    /// Every timer has run out: the pause after a change, and the 15-second read.
-    #[cfg(test)]
-    fn run_out_timers(&mut self) {
-        let long = Duration::from_secs(16);
-        self.changed = self.changed.map(|t| t - long);
-        self.next = self.next.map(|t| t - long);
     }
     /// Every timer has run out. What an exchange would send now, if it may start, is confirmed
     /// by the sheet. For a test of what a run sends, as test builds have no route to a sheet.
     #[cfg(test)]
     pub fn hp_sent_at_once(&mut self, ctx: &egui::Context) -> Option<Value> {
-        self.run_out_timers();
+        run_out_timers();
         if !self.advance(ctx) || !self.edits_to_send() {
             return None;
         }
@@ -792,7 +791,7 @@ impl CombatSync {
             return true;
         }
         self.field = None;
-        let now = Instant::now();
+        let now = hermetic::moment();
         self.changed = Some(now);
         self.next = Some(self.next.map_or(now + DELAY, |next| next.max(now + DELAY)));
         false
@@ -840,7 +839,7 @@ impl CombatSync {
                     }
                 }
                 self.next = Some(
-                    Instant::now()
+                    hermetic::moment()
                         + if self.error.is_some() {
                             Duration::from_secs(60)
                         } else {
@@ -849,8 +848,8 @@ impl CombatSync {
                 );
             }
         }
-        let due = self.next.is_none_or(|t| t <= Instant::now())
-            || (self.edits_to_send() && self.changed.is_none_or(|t| t.elapsed() >= DELAY));
+        let due = self.next.is_none_or(|t| t <= hermetic::moment())
+            || (self.edits_to_send() && self.changed.is_none_or(|t| hermetic::since(t) >= DELAY));
         self.pending.is_none() && due
     }
     fn begin_exchange(&mut self) -> Job {
@@ -1362,7 +1361,7 @@ impl CombatSync {
             })
         });
         if self.desired != before {
-            self.changed = Some(Instant::now());
+            self.changed = Some(hermetic::moment());
         }
         ui.weak("Concentration, custom effects, inventory charges, initiative, and DM notes stay local.");
     }
@@ -1919,7 +1918,7 @@ mod tests {
         sync.enabled = true;
         sync.desired = remote.groups.clone();
         sync.remote = Some(remote.clone());
-        sync.next = Some(Instant::now() + INTERVAL);
+        sync.next = Some(hermetic::moment() + INTERVAL);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(700.0, 900.0))
             .build_ui_state(
@@ -1936,7 +1935,7 @@ mod tests {
         harness
     }
     fn pass_time(harness: &mut egui_kittest::Harness<'static, Rig>) {
-        harness.state_mut().sync.run_out_timers();
+        run_out_timers();
         harness.run_steps(3);
     }
     fn click_hp(harness: &mut egui_kittest::Harness<'static, Rig>) {
