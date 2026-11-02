@@ -1452,6 +1452,11 @@ pub mod run_absent_player {
             format!("The setup's turn order starts with the highest total: {turn_order}"),
         );
         d.observe(
+            "L8-1",
+            turn_order.contains(PLAYER) && turn_order.contains("Absent"),
+            format!("Turn order says who is absent: {turn_order}"),
+        );
+        d.observe(
             "Absent player",
             !d.is_disabled(BEGIN) && d.visible_text("Everyone here is ready. 1 absent."),
             "Combat can begin with a player absent, with no initiative for them, and the line says so",
@@ -1564,6 +1569,25 @@ pub mod prep_to_table {
             marked && d.has(&format!("Absent: {player}")),
             "Setup has a word for a player who did not arrive, and undoing it takes one press",
         );
+        d.begin_task();
+
+        // L8-1: with nobody here, Begin combat is off and the line says why, before any error.
+        let everyone: Vec<String> = d
+            .nodes()
+            .into_iter()
+            .filter_map(|node| node.name.strip_prefix("Absent: ").map(str::to_owned))
+            .collect();
+        for name in &everyone {
+            d.click(&format!("Absent: {name}"));
+        }
+        d.observe(
+            "L8-1",
+            d.is_disabled(BEGIN) && d.visible_text("Nobody is present"),
+            "With everyone absent, Begin combat is off, and the line says why",
+        );
+        for name in &everyone {
+            d.click(&format!("Mark present: {name}"));
+        }
         d.begin_task();
 
         d.click("Close run");
@@ -1757,6 +1781,22 @@ pub mod run_large_roster {
         resume_run(d, RUN_20);
         d.state("roster-of-20", Sizes::All);
         d.goal("open a run with 20 participants");
+        let slivers: Vec<String> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.name.contains(", HP ")
+                    && node.in_view()
+                    && !node.fully_in_view()
+                    && !d.painted_in(node.shown).is_empty()
+            })
+            .map(|node| node.name)
+            .collect();
+        d.observe(
+            "L6-3",
+            slivers.is_empty(),
+            format!("A row the list's edge cuts is not painted: {slivers:?}"),
+        );
 
         // A full round, working at the minimum window, then at the default size. Each
         // click must leave the whole current row in view, with no resize to help it.
@@ -1929,10 +1969,27 @@ pub mod run_sync_conflict {
         d.click(BACK_TO_RUN);
         d.begin_task();
 
+        let tabs_before = d.place_of("Record");
         d.click_containing(SYNCED);
         d.row_of(USE_REMOTE);
         d.expect(CONFLICT_TEXT);
         d.state("conflict-panel", Sizes::All);
+        let tabs_after = d.place_of("Record");
+        d.observe(
+            "L6-7",
+            tabs_before.is_some() && tabs_before == tabs_after,
+            format!("The panel's tabs hold one place with a conflict above the tab's body: {tabs_before:?} then {tabs_after:?}"),
+        );
+        d.observe(
+            "T7.2",
+            d.visible_text("HP from this run"),
+            "The sheet under a conflict keeps its line about where its values come from",
+        );
+        d.observe(
+            "L6-12",
+            d.in_view("Review"),
+            "The header's conflict has Review, as the strip does",
+        );
         d.observe(
             "Conflict panel words",
             d.visible_text("HP conflict") && d.visible_text("HP from D&D Beyond"),
@@ -2176,9 +2233,20 @@ pub mod party_from_run {
         d.begin_task();
         d.click(SHEET_PAGE);
         d.state("record-tab", Sizes::Default);
+        d.observe(
+            "L6-6",
+            d.visible_text("Connect to D&D Beyond in Settings to sync.")
+                && d.is_disabled("Sync combat stats with D&D Beyond"),
+            "With no connection, the sync box is off, and the reason is in view",
+        );
         d.click(SHEET_TAB);
         d.expect(RUN_HEADING);
         d.state("back-in-the-run", Sizes::Default);
+        d.observe(
+            "L6-5",
+            !d.visible_text("0 entries"),
+            "A page with no entries says so once",
+        );
         d.goal("read a page and return to the run");
 
         // The hardest rows: 0 HP, absent, and many conditions. Words, not only colour.
@@ -2216,6 +2284,16 @@ pub mod party_from_run {
         d.click(END_NOW);
         d.expect(ENDED);
         d.state("ended", Sizes::Default);
+        d.observe(
+            "L7-10",
+            d.rail_words().contains("Ended") && !d.rail_words().contains("Not in combat"),
+            "The rail says Ended",
+        );
+        d.observe(
+            "L6-22",
+            d.visible_text("Ended in round") && !d.visible_text("manually"),
+            "The ended view says Ended, with no word that implies an automatic ending",
+        );
         d.review("T4.5", "the ended view, to compare with live and setup");
         d.click_containing(UNDO_ENDING);
         d.expect(CURRENT_TURN);
@@ -2460,8 +2538,29 @@ pub mod run_edge_states {
         resume_run_from_cold_start(d);
         d.click_row(TARGET);
         d.click(CONDITIONS);
+        let heights = |d: &Driver<'_>| -> Vec<(String, f32)> {
+            roster_places(d)
+                .into_iter()
+                .filter(|row| row.0 != TARGET)
+                .map(|row| (row.0.clone(), row.1.height()))
+                .collect()
+        };
+        let quiet = d.at_size(DEFAULT, heights);
+        let quiet_wide = d.at_size((1920.0, 1080.0), heights);
         d.type_into(OTHER_EFFECT, LONG_EFFECT);
         d.click(ADD_EFFECT);
+        let loud = d.at_size(DEFAULT, heights);
+        let loud_wide = d.at_size((1920.0, 1080.0), heights);
+        // With free room below, no other row changes. With none, they share what the line needs.
+        let least = quiet
+            .iter()
+            .zip(&loud)
+            .all(|(a, b)| a.0 == b.0 && a.1 - b.1 < 6.0);
+        d.observe(
+            "L6-15",
+            !quiet.is_empty() && quiet_wide == loud_wide && least,
+            format!("A long effect takes spare room first. At 1920x1080: {quiet_wide:?} then {loud_wide:?}. At 1200x800, with no free room: {quiet:?} then {loud:?}"),
+        );
         d.state("long-effect-text", Sizes::All);
         d.observe(
             "Long effects",
@@ -2513,8 +2612,9 @@ pub mod run_edge_states {
             "Changed on disk",
             !d.has_containing("stays saved")
                 && d.has("Close anyway")
-                && d.visible_text("loses unsaved changes"),
-            "Close says what it will lose, in place of \"The run stays saved\"",
+                && d.visible_text("loses unsaved changes")
+                && d.visible_text("Save as a new run"),
+            "Close says what it will lose, in place of \"The run stays saved\", and names the way to keep both",
         );
         d.state("close-while-not-saved", Sizes::Default);
         d.click("Keep running");
@@ -2846,6 +2946,14 @@ pub mod run_roster_conflict {
         );
         d.click(ONE_MORE_CONDITION);
         d.click_row(LOADED_ROW);
+        let loaded = d.row_words(LOADED_ROW);
+        d.observe(
+            "L6-11",
+            !loaded
+                .lines()
+                .any(|line| line.trim_start().starts_with('·')),
+            format!("No wrapped line opens with a separator: {loaded}"),
+        );
         let errored = LOADED_CONDITIONS.len() + 1;
         d.app_mut()
             .encounters

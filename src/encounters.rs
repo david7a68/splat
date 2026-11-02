@@ -891,7 +891,7 @@ impl Encounters {
                     .show(ui)
                     .clicked();
             }
-            reload = Action::quiet("Reload")
+            reload = Action::quiet("Refresh")
                 .icon(icons::REFRESH)
                 .blocked(
                     blocked

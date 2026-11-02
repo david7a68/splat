@@ -114,15 +114,15 @@ Settings uses `$XDG_CONFIG_HOME/splat/settings.json`, or
 local campaigns. Select **Not linked** to remove a link, or choose another
 campaign to replace it.
 
-After connecting, expand **Add from D&D Beyond** and select a campaign. Its
-name and ID fill the campaign form. Then choose its data folder with **Browse…**
-or enter a path, and select **Open campaign**. No local campaign is required first.
-You can also choose an existing folder and select **Open campaign** without connecting.
+After connecting, expand **Add from D&D Beyond** and select **Add** on a campaign. Its
+name and link fill the campaign form. Then choose its data folder with **Browse…**
+or enter a path, and select **Add this campaign**. No local campaign is required first.
+You can also choose an existing folder and select **Add this campaign** without connecting.
 
 Splat creates or discovers the campaign manifest in that folder. It stores the
 name and D&D Beyond link there, alongside existing custom paths and content
 settings. Opening a folder preserves its UUID, settings, and notes. Existing
-registrations load their manifest settings on startup or **Reload**. App settings
+registrations load their manifest settings on startup or **Refresh**. App settings
 retain the folder registration and cached metadata. Credentials stay in the keyring.
 The remote link uses `splat_dndbeyond_campaign_id` and
 `splat_dndbeyond_campaign_name`; character cache storage is unchanged.
@@ -208,8 +208,8 @@ references under **Source and identifiers**. Raw definitions stay under collapse
 feature links in level order. Display changes do not alter saved content.
 
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
-manifest, or enter a name, namespace (for example `my_homebrew`), and a new absolute
-folder path to create a package. The parent folder must already exist. Package
+manifest, or choose a new folder, a name and a namespace (for example `my_homebrew`) to create
+a package. The folder that holds a new package must already exist. Package
 registrations are stored in user settings; package notes remain in their own folders.
 Unregistering a package leaves its files in place. Package and campaign folders must
 be separate. Register My Homebrew in your preferred location for shared homebrew.
@@ -280,7 +280,7 @@ block saving; discard the draft and reload to read them. Unsaved encounters
 survive page changes and content refreshes, and block campaign switching, with a warning on app close.
 
 Party entries are local character copies from the linked D&D Beyond campaign;
-refresh **Party**, then **Reload** on Encounters to see new copies. This first
+refresh **Party**, then **Refresh** on Encounters to see new copies. This first
 editor saves direct creature references in campaign-local templates. Shared
 `party_slot` bindings still need the Markdown editor. Phases, assumptions,
 completion rules, and advanced starting state also remain Markdown fields.
@@ -299,6 +299,13 @@ roll each participant using its supplied bonus. Rows hold still while you type, 
 unknown HP values under **Record**, then choose **Begin combat**. **Next turn** advances through present participants and counts
 rounds. Absent participants keep their state and initiative when they return.
 Participants at zero HP stay in turn order until you mark them absent.
+
+A player who has not arrived can be marked **Absent** in setup. They need no initiative, and combat can begin
+without them. If everyone is absent, **Begin combat** is off and says why. When they come back, **Mark present** opens
+**Record** with its field ready, and the row says `No initiative` until you set a total. Until then they are last in the
+order. The current turn stays. A total set during combat is set once, and only **Undo** takes it back. Accepted limit: after
+a sheet update has ended Undo, a wrong total stays for the rest of the fight. A saved run with such a player does not open in
+a build older than this behaviour; the file is not changed, and it opens again in this build.
 
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
 **Temp HP** are beside it. **Conditions** lists the official conditions, one click
@@ -319,8 +326,9 @@ such as `2d6 + 3`.
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
 
-The combat log records changes. **Undo** names the last action and restores up to 100
-prior actions, including turn changes, dice rolls, and manual endings in the current session.
+The combat log records changes. **Undo** names the last action, or says why there is none, and restores up to 100
+prior actions, including turn changes, dice rolls, and manual endings in the current session. It is in the header
+while combat runs. In setup it is in the footer, away from **Begin combat**, as a mis-click there costs a turn order.
 **End encounter** records a manual ending and your outcome. Runs save automatically
 after changes; **Close run** asks once, then returns to Encounters. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **Saved runs** on Encounters,
@@ -347,15 +355,16 @@ setting or the DM/player ordering controls. NPC status can be changed before
 combat begins. Run folder settings use `splat_run_storage.directory`; initiative
 is a campaign-local rule selected through `splat_rule_choices`.
 
-### D&D Beyond combat sync
+### D&D Beyond sync
 
-In a DM run, **Sync party** turns combat sync on
+In a DM run, **Sync party** turns sync on
 for every linked player, and **Record** has the panel for one. Each synced row shows its
 state, and a conflict shows on the row and the strip without stopping the table. Each connection first reads the live sheet.
 Saved runs do not automatically push old values. The session must have edit
 permission for the character.
 
-A value you recorded is not replaced without your say. If a session ends during a run, keep
+The row says `Reading…` until the first read, then `Synced`, `Sync pending`, `Conflict`, `Sync read-only` or `Sync error`.
+On **Party**, the sync section says the same words. A value you recorded is not replaced without your say. If a session ends during a run, keep
 recording: a row with a change that was not sent says `Not sent`, the others say `Sync stopped`, and
 closing the run tells you who has unsent changes. On a first read, by **Sync party** or after a
 restart, Splat compares each value with the last one D&D Beyond confirmed, or with what the participant

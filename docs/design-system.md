@@ -13,7 +13,8 @@ and a confident tool. It is not a dashboard, and it is not parchment.
   warm (hue about 35°). The page is `#1B1815`, not black. Text is paper `#E9E1D3`, not
   white. There are no large bright areas. A later light theme adds one `Colors` value.
 - **One accent: blue-black ink, inverted (`#A9BDE6`).** Most state colours are warm or
-  earthy (HP damage, warnings, conflicts). Temporary HP and concentration are cool, and they
+  earthy (HP damage, warnings). A conflict is a saturated rose, the one colour here that
+  asks to be found at a glance. Temporary HP and concentration are cool, and they
   are told apart from the accent by shape and word. The party's side mark is a warm neutral,
   so that it is not read as the accent. The accent marks the current turn, the primary
   action, focus, and links. It is not decoration.
@@ -95,11 +96,11 @@ has a word, an icon, or a shape, and `src/design/tokens.rs` tests the contrast p
 | Turn | `turn.current turn.next` | The word `Turn` and a bar; the word `Next` |
 | HP | `hp.healthy damaged bloodied zero temp unknown track` | Numbers tinted by state, a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
 | Participant | `participant.absent concentrating condition` | `Absent`, `Conc`, each condition by name |
-| Side | `side.party enemies other` | The side name, with a square, a diamond or a circle. No red and green |
-| Sync | `sync.off first_read matching pending conflict read_only error` | Icon and word in every case |
+| Side | `side.party enemies other` | A square, a diamond or a circle on a live row, where the shape alone is enough at a look, with the name on hover. The name in words in setup and on Encounters. No red and green |
+| Sync | `sync.off first_read matching pending conflict read_only error` | Icon and word in every case: `Reading…`, `Synced`, `Sync pending`, `Conflict`, `Sync read-only`, `Sync error`. A row at risk has `Not sent` in the strongest tone, and `Sync stopped` is amber, with nothing to lose |
 | Connection | `connection.connected offline busy` | Icon and word |
 | Document | `document.clean unsaved saved invalid external read_only` | Icon and word |
-| Result | `result.error warning success info` | `message` adds an icon and a bar |
+| Result | `result.error warning success info` | `message` and `compact_message` add an icon and a bar |
 
 ## Space, shape and density
 
@@ -141,13 +142,14 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows. `quiet_section` is for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and a hairline, for Markdown tables and sheets. No stripes, because a row's height follows its text |
 | Rail toggle | `nav_toggle` | Lookup and panels. Its own `Open` word, so that it never looks like the current page |
-| Segmented | `segmented` | Words with an underline, not a pill |
+| Segmented | `segmented`, `segmented_named` | Words with an underline, not a pill. `segmented_named` is for a tab that paints a mark |
 | List row | `row`, `two_line_row` | Fixed height, for `show_rows`. Paints hover at the current frame |
 | Status | `status`, `status_link`, `Status` | Icon, word, colour. `status_link` also leads to where the DM can act |
-| Stat tile | `stat_tile` | A label over a large value, with no box |
+| Stat tile | `stat_tile` | A label over a large value, with no box. HP takes its state's colour |
+| Icon button | `icon_button`, `icon_toggle` | One icon, with a name and a tooltip. `icon_toggle` stays pressed while its state is on |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
 | Empty state | `empty_state` | What this is, and the one next step |
-| Message | `message`, `Tone` | Inline. Never modal |
+| Message | `message`, `compact_message`, `Tone` | Inline. Never modal. `compact_message` is the run's small form, for the room under the roster |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
@@ -170,23 +172,27 @@ draft`, `Show disk version` and `Reload and lose my draft`. These messages canno
 the only entry reader: Library, Lookup, the run's side panel, and campaign entries all
 call it (T6.4). A stat block is a typeset reference block: a heavy rule, then identity, then
 armor class, hit points and initiative as three labelled values, then one tight attribute
-table with physical and mental abilities side by side and numbers right-aligned, then rows
-of details. It has no card. Section headings use the serif over a hairline.
+table with physical and mental abilities side by side, numbers right-aligned, and one `MOD` and
+one `SAVE` head over each side, then rows of details. It has no card. Section headings use the serif over a hairline.
 
 Imported rules text is reflowed for reading, and the stored note is never changed.
 `design::reader::run_in_title` finds a named paragraph (`Acid Breath (Recharge 5–6).`), and
 only that turns bold. A title-case line above prose is a heading. Three or more rows of
 numbers, or of a name and a number, become a table. `presentation::reading_tests` runs these
 rules over every built-in note, so a fault cannot come back unseen. A window wide enough
-moves the rarely wanted sections (source, engine support, technical details) to a margin.
+moves the rarely wanted sections (source, engine support, technical details) to a margin, which
+has one place whatever the entry holds, and the scroll bar has the pane's edge. Printed labels on an
+entry form one table, closed by a rule. A dice expression does not break across lines.
 
 ## The live run
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
 temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
 word. Conditions take a second line that wraps before the HP column and grows the row, so
-no condition is cut. When a window has no room for the state column, as at 960x640 beside
-the panel, those words open the second line instead, so that a name is never cut.
+no condition is cut. A separator stands between words, and never opens a wrapped line. When a
+window has no room for the state column, as at 960x640 beside the panel, the HP word opens the
+second line and the sync word closes it, so that a name is never cut. On a full row, the sync word
+stays near the front, as one more line would cost another row its place.
 
 - **Current row:** the `current_row` fill, a 2 px stroke, a 6 px bar, and the word `TURN`
   under the initiative, which has its own column. In a compressed list the word sits beside
@@ -194,7 +200,8 @@ the panel, those words open the second line instead, so that a name is never cut
   room left over is shared across the rows. **Next row:** the word `NEXT`. The name
   line keeps one height with or without a second line, so a new condition moves no number.
 - **Row height:** the scale sets the type, and spare room goes to the rows, up to 1.4 times
-  the scale's height. When rows cannot fit, name-only rows shrink to 25 px before anything
+  the scale's height. A row with one more line takes it from what is spare first, so the others
+  hold their height. When rows cannot fit, name-only rows shrink to 25 px before anything
   scrolls.
 - **Header:** the round and the current turn in bold sans, larger than any row's name, and
   `Next turn`. Its second line belongs to `Undo`, which names the action, or says why there is
@@ -208,11 +215,24 @@ the panel, those words open the second line instead, so that a name is never cut
   (`Earlier Undo steps ended. See the Log.`). If a sync alert holds that line, the `Log` tab has a
   mark until the DM opens it.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
-  selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage.
+  selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage. `Mark present` on
+  someone with no initiative opens `Record`, with its field in focus.
+- **Footer:** `Close run`, `End encounter…`, `Sync party` or `Stop sync`, `Keys`, and the save
+  state. While sync has work to finish, `Close run` says what it waits for: `Close after sync`
+  or `Sync first`, and with a conflict, which does not clear by waiting, `Resolve conflict to
+  close` or `Resolve first`.
+- **Side panel:** the title, then tabs that hold one place. Death saves and a conflict's two
+  choices go under the tabs. While sync is stopped, those two choices are off, with the reason.
 - **Overflow:** when rows still cannot fit, a line under the list says how many are above
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
-  counts as out of view. Each turn scrolls to show the current row and the next.
-- **Strip:** on other pages, a line with the turn, any conflict, `Back to run` and `Next turn`.
+  counts as out of view, and is not painted. Each turn scrolls to show the current row and the next.
+- **Strip:** on other pages, a line with the turn, any conflict with `Review`, `Back to run` and
+  `Next turn`.
+- **Setup:** `Everyone is ready.` is green only with nothing left to do. It says who is absent and
+  how many are tied. `Undo` is in the footer here, far from `Begin combat`, and in the header once
+  combat runs, where it is wanted every turn. A total set during combat is set once, and only Undo
+  takes it back: a limit accepted because the case is rare, and a way to set it again would add a
+  saved field and a second way to move someone in the order.
 
 ## Sessions and the timeline
 
@@ -242,10 +262,11 @@ are marked as a draft, the second pass's changes can be read, and a marker in a 
 ## The catalogue
 
 Library is one catalogue of built-in, package and campaign entries. Its scope opens on what
-this campaign can use, and a switch shows everything, one package, or the campaign's own
-entries. Changing the scope never changes the active campaign. Editing, save state and
+this campaign can use, and a switch shows everything, one package, or the campaign entries. Changing the scope never changes the active campaign. Editing, save state and
 `Copy to…` stay in the same page. Package actions are inline. The word `module` is gone
-from the interface.
+from the interface. `Campaign entry` is the one term for what a campaign owns. A list row and the
+reader use one second line. On **Campaign → Packages**, required entries are in columns, listed
+only under the package that holds them, with the campaign entries as their own group.
 
 ## Icons
 

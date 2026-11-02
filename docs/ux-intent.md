@@ -375,7 +375,7 @@ These describe need, not layout. Screens can merge or split.
 | **Timeline** | What happened, in what order? | Add an event, read | Days; events in story order; kind; duration, place, result; session | Filters, search, reference, mentions, move, remove | Scanning | Empty; no match; changed on disk; unreadable file; save failed; removed with undo |
 | **Sync panel** | Do Splat and D&D Beyond agree? | Resolve conflict | Conflict: Splat value, D&D Beyond value; pending; last match | Slots, limited uses, conditions | Glanceable when in conflict | Off; first read; matching; pending; conflict; read-only; wrong campaign; duplicate character; error; disconnected |
 | **Settings: account** | Am I connected? | `Connect`, `Disconnect` | State; error or keyring warning; steps | Trust text | Scanning | Busy; connected; not connected; refresh failed; keyring unavailable; removal failed |
-| **Campaign list** | Which campaigns exist, where? | `Open campaign` | Active campaign, folder state, link state | Details, remove | Scanning | None; invalid settings (read-only, blocked); folder unavailable; offline cached name; link conflict; blocked by draft or run |
+| **Campaign list** | Which campaigns exist, where? | `Add this campaign`, `Open` | Active campaign, folder state, link state | Details, remove | Scanning | None; invalid settings (read-only, blocked); folder unavailable; offline cached name; link conflict; blocked by draft or run |
 | **Copy review** | What exactly will this create? | `Create copy` | Destination, name, path; dependencies | Markdown preview | Scanning | Loading; no destination; plan stale; private dependency block; save error; complete with `Close` and `Copy another` |
 | **Unsaved on close** | What will I lose? | Return to the work | What is unsaved, and where | Discard and close | Glanceable | Library draft; content draft; encounter draft; run failed to save; pending sync |
 | **First launch / no campaign** | What do I do first? | Add campaign | One next step; the Library still works | Connect D&D Beyond | Glanceable | No campaigns; none active; settings invalid |
@@ -446,7 +446,7 @@ screens and is not reused for decoration.
 | HP | Healthy; damaged; Bloodied (half or less; A11); 0 HP; temp HP (separate from HP); unknown (`?`) |
 | Participant | Present; absent; concentrating; each condition as a readable label |
 | Side | Party; enemies; other named sides, without implying good or bad |
-| Sync | Off; first read; matching; pending; conflict; read-only; error |
+| Sync | Off; first read (`Reading…`); matching; pending; conflict; read-only; error; not sent; stopped |
 | Connection | Connected; offline with cached data; refreshing; live; polling |
 | Document | Clean; unsaved; saved; invalid; external change; read-only |
 | Result | Error; warning; success, each with a word as well as a colour |
@@ -532,7 +532,7 @@ reading the code, not from a test run.
 | T8.2 | Read another entry while a draft is open | library-author | state | Fail |
 | T8.3 | Failed save (invalid note, external change, name clash) keeps the draft and states the fix | library-author | state | Pass |
 | T8.4 | Find a campaign-owned entry by search | campaign-content | state | Fail |
-| T9.1 | Required dependencies and their reasons are visible with the built-in package open | campaign-content | view | Pass, verify |
+| T9.1 | Required dependencies and their reasons are visible. A row is listed only under the package that holds it, and the campaign's own have their own group | campaign-content | view, state | Pass, verify |
 | T9.2 | Save disabled by repair states the reason. The repair is reachable without leaving | campaign-content | state | Reason missing |
 | T10.1 | First launch shows one next step. Library works with no campaign | empty | state, look | Partly |
 | T10.2 | No campaign: each page says what to do, and no page is blank | empty | state | Partly |
