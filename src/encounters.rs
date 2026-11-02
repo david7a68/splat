@@ -9,9 +9,12 @@ use crate::{
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
-use splat::content::Entry;
-use std::{collections::BTreeSet, fs, sync::mpsc};
+use splat::content::{Entry, overrides::Overrides};
+use std::{collections::BTreeSet, fs, sync::Arc, sync::mpsc};
 use uuid::Uuid;
+
+mod groups;
+use groups::GroupDraft;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Slot {
@@ -24,6 +27,10 @@ struct Slot {
     controller: Value,
     #[serde(default, skip_serializing_if = "Mapping::is_empty")]
     initial: Mapping,
+    /// Changes this slot builds in to its creature. Kept as written until a check reads them,
+    /// so an error can name the slot.
+    #[serde(default, skip_serializing_if = "Mapping::is_empty")]
+    overrides: Mapping,
     #[serde(flatten)]
     extra: Mapping,
 }
@@ -118,6 +125,7 @@ impl Draft {
                 "{kind: manual, role: gm}"
             }),
             initial: Mapping::new(),
+            overrides: Mapping::new(),
             extra: Mapping::new(),
         });
         for (key, value) in Setup::default().sides {
@@ -181,6 +189,7 @@ impl Draft {
                 (Some(reference), None) => {
                     let id = snapshot.catalogue.resolve_ref(reference)?;
                     if !snapshot.creatures.iter().any(|c| c.id == id) { return Err(format!("{}: creature is unavailable in campaign content.", slot.key)); }
+                    self.validate_overrides(slot, &snapshot.catalogue.entries[&id].entry)?;
                 }
                 (None, Some(_)) => return Err("This encounter uses party bindings. Edit those slots in Campaign → Campaign entries; this editor currently adds local character copies.".into()),
                 _ => return Err("Each roster slot needs exactly one creature or party slot.".into()),
@@ -200,6 +209,31 @@ impl Draft {
         }
         Ok(())
     }
+    /// A change to a stat must leave it valid for this slot's creature and starting state.
+    fn validate_overrides(&self, slot: &Slot, entry: &Entry) -> Result<(), String> {
+        let named = |error: String| format!("{} ({}): {error}", slot.key, entry.name);
+        let overrides = Overrides::parse(&slot.overrides).map_err(&named)?;
+        let resolved = overrides.resolve_for(entry, &slot.side).map_err(&named)?;
+        if let Some(side) = &overrides.side
+            && !self.setup.sides.contains_key(side.as_str())
+        {
+            return Err(named(format!(
+                "side {side} is not a side of this encounter."
+            )));
+        }
+        if overrides.max_hp.is_some()
+            && let (Some(hp), Some(max)) = (
+                slot.initial.get("hp").and_then(Value::as_i64),
+                resolved.max_hp,
+            )
+            && hp > max
+        {
+            return Err(named(format!(
+                "starting HP {hp} is above the changed maximum of {max}."
+            )));
+        }
+        Ok(())
+    }
 }
 struct Creature {
     id: Uuid,
@@ -210,6 +244,8 @@ struct Creature {
     /// The package it came from. A party copy says so in `detail` instead.
     source: Option<String>,
     party: bool,
+    /// A character whose sheet is on D&D Beyond. A sheet cannot be two participants.
+    linked: bool,
 }
 const ROSTER_MAX_WIDTH: f32 = 860.0;
 const ADD_PANE: &str = "encounter_add";
@@ -292,7 +328,14 @@ fn creature_detail(entry: &Entry, party: bool) -> String {
     parts.join(" · ")
 }
 fn roster_summary(setup: &Setup) -> String {
-    let party = setup.roster.iter().filter(|s| s.side == "party").count();
+    let side = |slot: &&Slot| {
+        slot.overrides
+            .get("side")
+            .and_then(Value::as_str)
+            .unwrap_or(&slot.side)
+            == "party"
+    };
+    let party = setup.roster.iter().filter(side).count();
     let others = setup.roster.len() - party;
     format!("{party} party · {others} others")
 }
@@ -306,6 +349,7 @@ struct Snapshot {
     saved_options: crate::encounter_settings::Options,
     campaign_text: String,
     runs: Vec<crate::encounter_run::SavedRunInfo>,
+    groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
 }
 impl Snapshot {
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
@@ -342,6 +386,7 @@ impl Snapshot {
                         (false, false) => Some(catalogue.package_name(e.owner)),
                     },
                     party,
+                    linked: e.entry.fields.contains_key("splat_external"),
                 }
             })
             .collect();
@@ -372,7 +417,9 @@ impl Snapshot {
             .collect();
         let options = crate::encounter_settings::Options::load(campaign, &catalogue)?;
         let runs = crate::encounter_run::Run::list(&options.directory(campaign)?, campaign.id)?;
+        let groups = Arc::new(groups::load(&catalogue, &creatures, campaign.id));
         Ok(Self {
+            groups,
             options: options.clone(),
             saved_options: options,
             campaign_text: document.text,
@@ -410,6 +457,9 @@ pub struct Encounters {
     focus_search: bool,
     editor_pane: EditorPane,
     expanded: Option<String>,
+    group_draft: Option<GroupDraft>,
+    /// The group draft `Discard changes` last dropped, for one step of undo.
+    discarded_group: Option<GroupDraft>,
 }
 #[derive(Clone, Copy, Default, PartialEq)]
 enum EditorPane {
@@ -520,7 +570,7 @@ impl Encounters {
         self.run
             .as_ref()
             .is_some_and(crate::encounter_run::Run::needs_save)
-            || self.draft.as_ref().is_some_and(Draft::dirty)
+            || self.draft_dirty()
             || self
                 .snapshot
                 .as_ref()
@@ -530,16 +580,22 @@ impl Encounters {
         self.has_run() || self.unsaved()
     }
     pub fn draft_name(&self) -> Option<String> {
-        self.draft.as_ref().map(|d| d.name.clone())
+        self.draft
+            .as_ref()
+            .map(|d| d.name.clone())
+            .or_else(|| self.group_draft.as_ref().map(GroupDraft::name))
     }
     /// Add a freshly copied creature to the open draft.
     pub fn add_to_draft(&mut self, id: Uuid) {
         if let Some(draft) = &mut self.draft {
             draft.add(id, false);
+        } else if let Some(draft) = &mut self.group_draft {
+            draft.add(id);
         }
     }
     pub fn draft_dirty(&self) -> bool {
         self.draft.as_ref().is_some_and(Draft::dirty)
+            || self.group_draft.as_ref().is_some_and(GroupDraft::dirty)
     }
     pub fn pending_sync_names(&self) -> Vec<String> {
         self.run
@@ -555,10 +611,12 @@ impl Encounters {
         // A discarded draft belongs to its campaign. Undo must not save it into another.
         if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
             self.discarded = None;
+            self.discarded_group = None;
             self.discarded_options = None;
         }
         self.active = Some(campaign.clone());
         self.draft = None;
+        self.group_draft = None;
         self.snapshot = None;
         self.error = None;
         self.refreshing = false;
@@ -634,7 +692,11 @@ impl Encounters {
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
             && let Some(active) = campaigns.active_campaign()
         {
-            self.save_draft(&active, campaigns.modules());
+            if self.group_draft.is_some() {
+                self.save_group_draft(ctx, &active, campaigns.modules());
+            } else {
+                self.save_draft(&active, campaigns.modules());
+            }
         }
     }
     fn save_draft(&mut self, active: &Campaign, modules: &[Module]) {
@@ -689,11 +751,14 @@ impl Encounters {
                 Some("absent" | "removed") => false,
                 Some(_) => return Err(format!("{}: invalid starting presence.", slot.key)),
             };
-            let mut participant = crate::encounter_run::Participant::new(
+            let overrides = Overrides::parse(&slot.overrides)
+                .map_err(|error| format!("{}: {error}", slot.key))?;
+            let mut participant = crate::encounter_run::Participant::with_overrides(
                 slot.key.clone(),
                 slot.side.clone(),
                 entry,
                 &slot.initial,
+                &overrides,
                 present,
             )?;
             participant.initiative_group = slot
@@ -763,6 +828,9 @@ impl Encounters {
         let Some(run) = &mut self.run else {
             return false;
         };
+        if let Some(snapshot) = &self.snapshot {
+            run.groups = snapshot.groups.clone();
+        }
         if !run.show(ui) {
             return false;
         }
@@ -799,7 +867,12 @@ impl Encounters {
         if self.draft_dirty() {
             self.message = None;
         }
-        if self.draft.is_some() {
+        if self.group_draft.is_some() {
+            self.group_editor_view(ui, &active, campaigns);
+            if self.peek.is_some() {
+                self.editor_pane = EditorPane::Add;
+            }
+        } else if self.draft.is_some() {
             self.editor_view(ui, &active, campaigns);
             // What was just read may be what the DM adds next, so the results stay in view.
             if self.peek.is_some() {
@@ -830,6 +903,14 @@ impl Encounters {
             self.message = None;
             self.error = None;
         }
+        if self.draft_dirty() {
+            self.discarded_group = None;
+        }
+        if self.discarded_group.is_some() && design::draft_discarded(ui) {
+            self.group_draft = self.discarded_group.take();
+            self.message = None;
+            self.error = None;
+        }
     }
 
     fn results(&mut self, ui: &mut egui::Ui) {
@@ -847,14 +928,23 @@ impl Encounters {
         let blocked = self.start_blocked();
         let settings_changed = self.unsaved();
         let mut new = false;
+        let mut new_group = false;
         let mut reload = false;
         // With nothing here yet, the page's one action is in its body.
         let empty = self
             .snapshot
             .as_ref()
-            .is_some_and(|s| s.encounters.is_empty() && s.runs.is_empty());
+            .is_some_and(|s| s.encounters.is_empty() && s.runs.is_empty() && s.groups.is_empty());
+        // A group can be prepared while a run is open. It only joins the run when it is added.
+        let group_blocked = self.draft_dirty().then_some(BLOCKED_BY_DRAFT);
         design::page_header(ui, "Encounters", Some(&active.name), |ui| {
             if !empty {
+                new_group = Action::quiet("New group")
+                    .icon(icons::ADD)
+                    .blocked(group_blocked.or(loading.then_some("Still reading this campaign.")))
+                    .hint("A reusable set of creatures to add to a running encounter")
+                    .show(ui)
+                    .clicked();
                 new = Action::secondary("New encounter")
                     .icon(icons::ADD)
                     .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
@@ -876,6 +966,13 @@ impl Encounters {
         });
         if new {
             self.draft = Some(Draft::new());
+            self.focus_name = true;
+            self.error = None;
+            self.message = None;
+            return;
+        }
+        if new_group {
+            self.group_draft = Some(GroupDraft::new());
             self.focus_name = true;
             self.error = None;
             self.message = None;
@@ -917,9 +1014,10 @@ impl Encounters {
         let mut open_path = None;
         let mut run_path = None;
         let mut resume = None;
+        let open_group = std::cell::Cell::new(None);
         let back_to_run = std::cell::Cell::new(false);
         let two_columns = ui.available_width() >= 640.0;
-        if snapshot.encounters.is_empty() && snapshot.runs.is_empty() {
+        if empty {
             let mut create = false;
             design::empty_state(
                 ui,
@@ -1079,6 +1177,10 @@ impl Encounters {
                     });
                 });
             }
+            ui.add_space(design::L);
+            if let Some(path) = groups::list(ui, snapshot, group_blocked) {
+                open_group.set(Some(path));
+            }
         };
         egui::ScrollArea::vertical()
             .id_salt("encounter_list")
@@ -1096,6 +1198,16 @@ impl Encounters {
                 }
             });
         self.go_to_run |= back_to_run.get();
+        if let Some(path) = open_group.take() {
+            match GroupDraft::open(&active.path, &path) {
+                Ok(draft) => {
+                    self.group_draft = Some(draft);
+                    self.error = None;
+                    self.message = None;
+                }
+                Err(e) => self.error = Some(e),
+            }
+        }
         if let Some(path) = resume {
             match crate::encounter_run::Run::open(&path, active.id) {
                 Ok(run) => {
@@ -1266,6 +1378,7 @@ impl Encounters {
                 }
             }
             self.discarded = Some(draft);
+            self.discarded_group = None;
             return;
         }
         if save {
@@ -1402,6 +1515,29 @@ impl Encounters {
             }
             *focus_search = true;
         }
+        let chosen = Self::creature_search(
+            ui,
+            snapshot.creatures.iter(),
+            search,
+            focus_search,
+            peek,
+            &|c: &Creature| c.party && on_roster(draft, c.id),
+        );
+        if let Some((id, party)) = chosen {
+            draft.add(id, party);
+        }
+    }
+
+    /// The search and its results, for a roster and for a group. Returns what the DM added.
+    fn creature_search<'a>(
+        ui: &mut egui::Ui,
+        creatures: impl Iterator<Item = &'a Creature>,
+        search: &mut String,
+        focus_search: &mut bool,
+        peek: &mut Option<Uuid>,
+        added_already: &dyn Fn(&Creature) -> bool,
+    ) -> Option<(Uuid, bool)> {
+        let mut chosen = None;
         let response = design::search_field(
             ui,
             SEARCH_FIELD,
@@ -1413,11 +1549,7 @@ impl Encounters {
             design::focus_and_select(ui, response.id, search);
         }
         let query = search.to_lowercase();
-        let mut matches: Vec<&Creature> = snapshot
-            .creatures
-            .iter()
-            .filter(|c| c.lower.contains(&query))
-            .collect();
+        let mut matches: Vec<&Creature> = creatures.filter(|c| c.lower.contains(&query)).collect();
         // The plain name first, so "wolf" finds Wolf before Dire Wolf. The sort keeps the
         // list's order inside each rank.
         if !query.is_empty() {
@@ -1431,9 +1563,9 @@ impl Encounters {
             && ui.input(|i| i.key_pressed(egui::Key::Enter))
             && !query.is_empty()
             && let Some(first) = matches.first()
-            && !(first.party && on_roster(draft, first.id))
+            && !added_already(first)
         {
-            draft.add(first.id, first.party);
+            chosen = Some((first.id, first.party));
             *focus_search = true;
         }
         if matches.is_empty() {
@@ -1481,14 +1613,14 @@ impl Encounters {
                                     {
                                         *peek = Some(c.id);
                                     }
-                                    let added = c.party && on_roster(draft, c.id);
+                                    let added = added_already(c);
                                     if Action::secondary(if added { "In roster" } else { "Add" })
                                         .density(Density::Read)
                                         .blocked_if(added, "Already on the roster.")
                                         .show(ui)
                                         .clicked()
                                     {
-                                        draft.add(c.id, c.party);
+                                        chosen = Some((c.id, c.party));
                                         *focus_search = true;
                                     }
                                 },
@@ -1497,6 +1629,7 @@ impl Encounters {
                     });
                 }
             });
+        chosen
     }
 
     fn roster_pane(
@@ -1590,7 +1723,7 @@ impl Encounters {
                         if design::icon_button(
                             ui,
                             icons::EXPAND,
-                            "Starting HP, temporary HP and initiative group",
+                            "Changes, starting HP, temporary HP and initiative group",
                         )
                         .clicked()
                         {
@@ -1636,6 +1769,12 @@ impl Encounters {
                         });
                     });
                 });
+                let definition = resolved
+                    .and_then(|id| snapshot.catalogue.entries.get(&id))
+                    .map(|e| &e.entry);
+                if let Some(entry) = definition {
+                    groups::show_changes(ui, &slot.overrides, entry, &slot.side);
+                }
                 if is_open {
                     ui.horizontal_wrapped(|ui| {
                         let mut group = slot
@@ -1684,10 +1823,19 @@ impl Encounters {
                         Type::Small
                             .rich(
                                 ui,
-                                "With an override off, the creature's own starting state applies.",
+                                "With a value off, the creature's own starting state applies.",
                             )
                             .color(colors().muted),
                     );
+                    if let Some(entry) = definition {
+                        groups::overrides_form(
+                            ui,
+                            &mut slot.overrides,
+                            entry,
+                            &slot.side,
+                            Some(&sides),
+                        );
+                    }
                 }
                 design::rule(ui);
             });
@@ -1752,7 +1900,7 @@ impl Encounters {
             );
             ui.label(
                 Type::Small
-                    .rich(ui, "This is the default for the roll in run setup, which can change it for one roll. Side and encounter groups use the first NPC's bonus and roll mode. Players keep their entered initiative.")
+                    .rich(ui, "This is the default for the roll in run setup, which can change it for one roll. Side and initiative groups use the first NPC's bonus and roll mode. Players keep their entered initiative. An encounter group follows this rule when it arrives, and the run's Groups tab says how.")
                     .color(colors().muted),
             );
             let changed = snapshot.options != snapshot.saved_options;
@@ -2048,5 +2196,206 @@ mod tests {
         assert!(!editor.dirty());
         fs::write(&path, format!("{original}External edit\n")).unwrap();
         assert!(editor.start_run(&campaign, &[]).is_err());
+    }
+    fn slot_override(draft: &mut Draft, index: usize, text: &str) {
+        draft.setup.roster[index].overrides = serde_yaml_ng::from_str(text).unwrap();
+    }
+    fn stat_creature(root: &std::path::Path, name: &str, hp: i64) -> Uuid {
+        let id = Uuid::new_v4();
+        write_note(
+            root,
+            &format!("{name}.md"),
+            None,
+            &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{}}\nsplat_stats:\n  max_hp: {{value: {hp}}}\n  armor_class: {{value: 13}}\n  initiative: {{value: 1}}\n---\n"),
+        )
+        .unwrap();
+        id
+    }
+    #[test]
+    fn overrides_save_with_the_slot_and_reach_the_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let rival = stat_creature(dir.path(), "Rival", 20);
+        let creature_note = fs::read_to_string(dir.path().join("Rival.md")).unwrap();
+        let mut d = Draft::new();
+        d.add(rival, false);
+        d.add(rival, false);
+        slot_override(
+            &mut d,
+            0,
+            "{name: Captain, max_hp: {add: 10}, attack_bonus: {add: 1}, damage_bonus: {add: 1}}",
+        );
+        d.setup.roster[1]
+            .extra
+            .insert("initial_presence".into(), "absent".into());
+        d.save(&campaign, &[]).unwrap();
+        let reopened = Draft::open(dir.path(), &d.path).unwrap();
+        assert_eq!(reopened.setup, d.setup, "the block survives its note");
+        let editor = Encounters {
+            active: Some(campaign.clone()),
+            draft: Some(reopened),
+            ..Default::default()
+        };
+        let mut run = editor.start_run(&campaign, &[]).unwrap();
+        let path = dir.path().join(&d.path);
+        let text = fs::read_to_string(&path).unwrap();
+        // The run holds what it began with. A later edit of the file changes nothing in it.
+        let edited = text.replace("add: 10", "add: 99");
+        assert_ne!(text, edited);
+        fs::write(&path, &edited).unwrap();
+        run.autosave();
+        let campaign_run =
+            crate::encounter_run::Run::open(run.path().unwrap(), campaign.id).unwrap();
+        let strip = campaign_run.strip();
+        assert_eq!(strip.name, d.name);
+        assert_eq!(
+            run.participant_stats(0),
+            ("Captain".to_owned(), Some(30), true)
+        );
+        assert_eq!(
+            campaign_run.participant_stats(0),
+            ("Captain".to_owned(), Some(30), true)
+        );
+        assert_eq!(
+            campaign_run.participant_stats(1),
+            ("Rival".to_owned(), Some(20), false),
+            "an absent slot, with no change"
+        );
+        // Nothing is written back.
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rival.md")).unwrap(),
+            creature_note
+        );
+    }
+    #[test]
+    fn a_bad_override_names_its_slot_and_saves_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = stat_creature(dir.path(), "Rival", 20);
+        let mut d = Draft::new();
+        d.add(id, false);
+        d.save(&campaign, &[]).unwrap();
+        let saved = d.baseline.clone().unwrap();
+        let key = d.setup.roster[0].key.clone();
+        for (block, words) in [
+            ("{hit_points: 3}", "unknown override"),
+            ("{max_hp: {set: 0}}", "from 1 to"),
+            ("{max_hp: {add: -20}}", "would become 0"),
+            ("{attack_bonus: {set: 2}}", "attack_bonus"),
+            ("{side: rivals}", "not a side of this encounter"),
+        ] {
+            slot_override(&mut d, 0, block);
+            let error = d.save(&campaign, &[]).unwrap_err();
+            assert!(
+                error.contains(&key) && error.contains("Rival") && error.contains(words),
+                "{error}"
+            );
+        }
+        slot_override(&mut d, 0, "{max_hp: {set: 5}}");
+        d.setup.roster[0].initial.insert("hp".into(), 12.into());
+        let error = d.save(&campaign, &[]).unwrap_err();
+        assert!(error.contains("above the changed maximum"), "{error}");
+        assert_eq!(fs::read_to_string(dir.path().join(&d.path)).unwrap(), saved);
+    }
+    #[test]
+    fn a_file_with_a_bad_override_says_which_slot_when_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = stat_creature(dir.path(), "Rival", 20);
+        let mut d = Draft::new();
+        d.add(id, false);
+        d.setup.roster[0].key = "rival_one".into();
+        slot_override(&mut d, 0, "{note: Sealed}");
+        d.save(&campaign, &[]).unwrap();
+        let path = dir.path().join(&d.path);
+        let text = fs::read_to_string(&path)
+            .unwrap()
+            .replace("note: Sealed", "level: 3");
+        fs::write(&path, text).unwrap();
+        let error = Draft::open(dir.path(), &d.path).err().unwrap();
+        assert!(
+            error.contains("rival_one") && error.contains("unknown override"),
+            "{error}"
+        );
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        assert!(
+            snapshot
+                .issues
+                .iter()
+                .any(|issue| issue.contains("rival_one"))
+        );
+    }
+    #[test]
+    fn a_side_override_uses_the_encounters_sides_and_counts_in_its_summary() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = stat_creature(dir.path(), "Rival", 20);
+        let mut d = Draft::new();
+        d.add(id, false);
+        slot_override(&mut d, 0, "{side: party}");
+        d.save(&campaign, &[]).unwrap();
+        assert_eq!(roster_summary(&d.setup), "1 party · 0 others");
+        let editor = Encounters {
+            active: Some(campaign.clone()),
+            draft: Some(Draft::open(dir.path(), &d.path).unwrap()),
+            ..Default::default()
+        };
+        assert!(editor.start_run(&campaign, &[]).is_ok());
+    }
+    #[test]
+    fn a_linked_character_cannot_override_what_its_sheet_decides() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let hero = creature(dir.path(), "Hero", true);
+        let mut d = Draft::new();
+        d.add(hero, true);
+        for block in ["{max_hp: {set: 9}}", "{conditions: [Prone]}"] {
+            slot_override(&mut d, 0, block);
+            let error = d.save(&campaign, &[]).unwrap_err();
+            assert!(error.contains("D&D Beyond"), "{error}");
+        }
+        slot_override(&mut d, 0, "{note: Sealed}");
+        d.save(&campaign, &[]).unwrap();
+    }
+    #[test]
+    fn a_changed_override_changes_the_roster_fingerprint_and_none_leaves_it_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = stat_creature(dir.path(), "Rival", 20);
+        let mut d = Draft::new();
+        d.add(id, false);
+        d.save(&campaign, &[]).unwrap();
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let digest = |setup: &Setup| {
+            let slots: Vec<_> = setup
+                .roster
+                .iter()
+                .map(|slot| {
+                    let resolved = snapshot
+                        .catalogue
+                        .resolve_ref(slot.creature.as_ref().unwrap())
+                        .unwrap();
+                    let fields = serde_yaml_ng::to_value(slot).unwrap();
+                    (resolved, fields.as_mapping().unwrap().clone())
+                })
+                .collect();
+            let placements: Vec<_> = slots.iter().map(|(id, slot)| (*id, slot)).collect();
+            splat::content::overrides::roster_fingerprint(&placements).unwrap()
+        };
+        let plain = digest(&d.setup);
+        let written = serde_yaml_ng::to_string(&d.setup).unwrap();
+        assert!(
+            !written.contains("overrides"),
+            "a slot with none writes none: {written}"
+        );
+        slot_override(&mut d, 0, "{max_hp: {add: 10}}");
+        let first = digest(&d.setup);
+        assert_ne!(plain, first);
+        slot_override(&mut d, 0, "{max_hp: {add: 11}}");
+        assert_ne!(first, digest(&d.setup));
+        slot_override(&mut d, 0, "{name: Captain}");
+        assert_ne!(plain, digest(&d.setup));
+        d.setup.roster[0].overrides.clear();
+        assert_eq!(plain, digest(&d.setup));
     }
 }

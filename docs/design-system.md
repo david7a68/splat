@@ -94,7 +94,7 @@ has a word, an icon, or a shape, and `src/design/tokens.rs` tests the contrast p
 | Recording | `recording` | `Recording` with its time and a record icon, in the rail on every page |
 | Turn | `turn.current turn.next` | The word `Turn` and a bar; the word `Next` |
 | HP | `hp.healthy damaged bloodied zero temp unknown track` | Numbers tinted by state, a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
-| Participant | `participant.absent concentrating condition` | `Absent`, `Conc`, each condition by name |
+| Participant | `participant.absent concentrating condition changed` | `Absent`, `Conc`, each condition by name, a pencil and `Changed` |
 | Side | `side.party enemies other` | The side name, with a square, a diamond or a circle. No red and green |
 | Sync | `sync.off first_read matching pending conflict read_only error` | Icon and word in every case |
 | Connection | `connection.connected offline busy` | Icon and word |
@@ -211,6 +211,14 @@ the panel, those words open the second line instead, so that a name is never cut
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view. Each turn scrolls to show the current row and the next.
 - **Strip:** on other pages, a line with the turn, any conflict, `Back to run` and `Next turn`.
+- **Changed:** a creature with overrides has `Changed` on its second line, then any bonus the
+  run cannot apply, such as `Attack +1`, because the DM needs it for the roll. Its card lists each
+  change above the stat block, as `Maximum HP: 33 → 43 (+10)`. What the run cannot apply also says
+  `add by hand`. The stat block keeps its printed text.
+- **Groups:** a tab beside the stat block lists the campaign's encounter groups, with members,
+  count and XP. A group's name is a handle to drag onto the list, and the list takes an accent
+  outline while one is held. Each group also has a field for a total, blank to roll, and an `Add`
+  button that the keyboard reaches. No step asks for confirmation, because Undo names the addition.
 
 ## Sessions and the timeline
 

@@ -39,6 +39,22 @@ impl Grouping {
             Self::Explicit => "In the encounter's initiative groups",
         }
     }
+    /// How an encounter group takes its initiative under this rule. A typed total is the
+    /// DM's ruling, and it applies to every member under any rule.
+    pub fn arrival_rule(self) -> &'static str {
+        match self {
+            Self::Identical => {
+                "A group rolls once, with the first member's bonus, even with different creatures."
+            }
+            Self::Individual => "Each member of a group rolls alone, by the campaign's rule.",
+            Self::BySide => {
+                "A group takes the initiative its side already has. A side with none rolls once."
+            }
+            Self::Explicit => {
+                "A group rolls once, with the first member's bonus, as its own initiative group."
+            }
+        }
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Initiative {
@@ -225,7 +241,7 @@ impl Options {
 mod tests {
     use super::*;
     #[test]
-    fn overrides_roundtrip_and_external_manifest_edits_are_preserved() {
+    fn settings_roundtrip_and_external_manifest_edits_are_preserved() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = Campaign {
             id: Uuid::new_v4(),
