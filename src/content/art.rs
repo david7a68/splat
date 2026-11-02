@@ -23,6 +23,8 @@ struct ArtFile {
     entries: HashMap<String, String>,
     #[serde(default)]
     links: HashMap<String, String>,
+    #[serde(default)]
+    creature_types: HashMap<String, String>,
 }
 
 /// Where the art is. With two offers for one target, the package registered first wins.
@@ -30,6 +32,7 @@ struct ArtFile {
 pub struct ArtIndex {
     entries: HashMap<String, PathBuf>,
     links: HashMap<String, PathBuf>,
+    creature_types: HashMap<String, PathBuf>,
 }
 
 impl ArtIndex {
@@ -65,6 +68,7 @@ impl ArtIndex {
         for (targets, offers) in [
             (&mut self.entries, file.entries),
             (&mut self.links, file.links),
+            (&mut self.creature_types, file.creature_types),
         ] {
             for (target, relative) in offers {
                 if !usable(&relative) {
@@ -95,8 +99,15 @@ impl ArtIndex {
         self.links.get(url).map(PathBuf::as_path)
     }
 
+    /// The default picture for a creature type, for a creature with no art of its own.
+    pub fn creature_type(&self, creature_type: &str) -> Option<&Path> {
+        self.creature_types
+            .get(&creature_type.to_ascii_lowercase())
+            .map(PathBuf::as_path)
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty() && self.links.is_empty()
+        self.entries.is_empty() && self.links.is_empty() && self.creature_types.is_empty()
     }
 }
 
@@ -153,6 +164,18 @@ mod tests {
             Some(root.path().join("Figures/map.webp").as_path())
         );
         assert_eq!(index.entry("dnd2024:creatures/orc"), None);
+    }
+
+    #[test]
+    fn finds_a_default_picture_by_creature_type() {
+        let root = package(
+            r#"{"splat_art":1,"creature_types":{"beast":"Types/beast.webp"}}"#,
+            &["Types/beast.webp"],
+        );
+        let index = ArtIndex::load([root.path()]);
+        assert!(index.creature_type("Beast").is_some());
+        assert!(index.creature_type("beast").is_some());
+        assert!(index.creature_type("undead").is_none());
     }
 
     #[test]

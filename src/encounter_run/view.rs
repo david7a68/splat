@@ -17,7 +17,7 @@ use crate::{
 use eframe::egui::{
     self, Align, Align2, Galley, Key, Layout, Modifiers, Rect, Stroke, StrokeKind, pos2, vec2,
 };
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 const AMOUNT: &str = "Amount";
 const SHEET_PAGES: [(usize, &str); 5] = [
@@ -170,6 +170,7 @@ const KEYS: [(&str, &str); 9] = [
 impl Run {
     /// Returns true only after the DM chooses to close the run.
     pub fn show(&mut self, ui: &mut egui::Ui) -> bool {
+        self.refresh_portraits();
         let closed = match self.state.phase {
             Phase::Setup => self.setup_view(ui),
             Phase::Running => self.live_view(ui),
@@ -793,6 +794,7 @@ impl Run {
             .map(|&index| {
                 let p = &self.state.participants[index];
                 RowLayout::new(ui, width, p, self.sync_word(index), scale, fit, longest)
+                    .with_art(self.row_art(ui.ctx(), p))
             })
             .collect()
     }
@@ -1774,7 +1776,7 @@ impl Run {
                     egui::Vec2::splat(crate::party::SHEET_PORTRAIT),
                     egui::Sense::empty(),
                 );
-                crate::art::portrait(ui, rect, Some(&path), &record.definition.splat_name);
+                crate::art::portrait(ui, rect, Some(&path), &record.definition.splat_name, None);
             }
             let freshness = crate::party::freshness(record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
@@ -2692,7 +2694,8 @@ impl Run {
                                 scale,
                                 RowFit::Natural,
                                 0.0,
-                            );
+                            )
+                            .with_art(self.row_art(ui.ctx(), p));
                             design::row(ui, layout.height(scale), false, &name, |ui, rect| {
                                 paint_row(ui, rect, p, TurnMark::None, sync, scale, &layout);
                             });
@@ -2805,7 +2808,15 @@ fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
 }
 
 /// The fixed columns of a run row, and its second line, which grows rather than cuts.
+const PICTURE_GAP: f32 = 6.0;
+
 struct RowLayout {
+    /// The participant's picture. A row with none shows the first letter of the name.
+    art: Option<PathBuf>,
+    /// The width of the picture's column.
+    picture: f32,
+    /// Where the second line starts.
+    second_left: f32,
     /// The name at this row's width. A long name wraps and the row grows.
     name: Arc<Galley>,
     second_line: Option<Arc<Galley>>,
@@ -2830,6 +2841,11 @@ fn header_height(scale: RunScale) -> f32 {
 }
 
 impl RowLayout {
+    fn with_art(mut self, art: Option<PathBuf>) -> Self {
+        self.art = art;
+        self
+    }
+
     fn new(
         ui: &egui::Ui,
         width: f32,
@@ -2853,7 +2869,13 @@ impl RowLayout {
         // Its bar starts later, still under the digits, so its second line has the width that
         // the turn word took and a condition does not wrap again.
         let bar_inset = if narrow { 8.0 } else { 0.0 };
-        let name_left = initiative_right + gap + scale.name * 0.7;
+        // Compressed rows have a roster to fit, so the picture gives up what it can.
+        let picture = if narrow {
+            scale.name * 1.25
+        } else {
+            (scale.row - 10.0).min(scale.name * 1.75)
+        };
+        let name_left = initiative_right + gap + scale.name * 0.7 + picture + PICTURE_GAP;
         let hp_width = scale.hp * 1.9 + scale.hp_max * 2.0 + 4.0;
         let state_width = (scale.mark * 8.5).clamp(84.0, 118.0);
         let temp_width = scale.stat * 2.6 + 12.0;
@@ -2869,7 +2891,13 @@ impl RowLayout {
 
         let mut job = egui::text::LayoutJob::default();
         // The line wraps before the HP column, so that it never runs over the HP bar.
-        job.wrap.max_width = (temp_right + bar_inset - name_left).max(1.0);
+        // In a compressed list it starts under the picture, as the row has no height to spare.
+        let second_left = if narrow {
+            name_left - picture - PICTURE_GAP
+        } else {
+            name_left
+        };
+        job.wrap.max_width = (temp_right + bar_inset - second_left).max(1.0);
         // With HP in what a DM looks for: as strong as the state words, and stronger than AC.
         // The compact scale keeps body weight, so a wrapped line costs no row its place.
         let role = if narrow { Type::Body } else { Type::Strong };
@@ -2936,6 +2964,9 @@ impl RowLayout {
             && sync.is_none()
             && name.rows.len() == 1;
         Self {
+            art: None,
+            picture,
+            second_left,
             name,
             even: 0.0,
             bar_inset,
@@ -3077,11 +3108,32 @@ fn paint_row(
     }
     side_mark(
         painter,
-        pos2(x + layout.name_left - scale.name * 0.6, line_y),
+        pos2(
+            x + layout.name_left - layout.picture - PICTURE_GAP - scale.name * 0.6,
+            line_y,
+        ),
         &p.side,
         scale.name * 0.55,
     );
     let name_left = x + layout.name_left;
+    // A compressed row can be shorter than the picture's column is wide.
+    crate::art::portrait(
+        ui,
+        Rect::from_center_size(
+            pos2(
+                name_left - PICTURE_GAP - layout.picture / 2.0,
+                if layout.second_left < layout.name_left {
+                    line_y
+                } else {
+                    rect.center().y
+                },
+            ),
+            egui::Vec2::splat(layout.picture.min(rect.height() - 4.0)),
+        ),
+        layout.art.as_deref(),
+        &p.name,
+        (!p.present).then_some(c.participant.absent),
+    );
     painter.galley(
         pos2(name_left, line_y - name_line / 2.0),
         layout.name.clone(),
@@ -3159,7 +3211,7 @@ fn paint_row(
     // strong as Bloodied, because a conflict must be seen at a glance.
     if let Some(line) = &layout.second_line {
         painter.galley(
-            pos2(name_left, second_y),
+            pos2(x + layout.second_left, second_y),
             line.clone(),
             c.participant.condition,
         );

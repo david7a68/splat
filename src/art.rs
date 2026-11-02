@@ -7,7 +7,7 @@ use crate::{
     persistence::Module,
 };
 use eframe::egui::{self, Id, Rect, Vec2, vec2};
-use splat::content::art::ArtIndex;
+use splat::content::{Entry, art::ArtIndex};
 use std::{
     collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
@@ -17,6 +17,8 @@ use std::{
 /// Decoded images kept ready. Older ones are dropped, so browsing does not fill video memory.
 const KEEP_DECODED: usize = 32;
 const HERO: Vec2 = vec2(360.0, 320.0);
+/// Beside a run or in a narrow page, the rules come first and the picture stays small.
+const SMALL_HERO_HEIGHT: f32 = 110.0;
 const FIGURE_HEIGHT: f32 = 520.0;
 
 pub fn install(ctx: &egui::Context) {
@@ -58,9 +60,25 @@ fn index(ctx: &egui::Context) -> Option<Arc<ArtIndex>> {
     ctx.data(|data| data.get_temp(index_id()))
 }
 
-/// The art for an entry, by its key.
-pub fn entry_art(ctx: &egui::Context, key: &str) -> Option<PathBuf> {
-    index(ctx)?.entry(key).map(Path::to_path_buf)
+/// The art for an entry: its own, the art of what it was copied from, or for a creature, the
+/// default picture for its type.
+pub fn entry_art(ctx: &egui::Context, entry: &Entry) -> Option<PathBuf> {
+    let index = index(ctx)?;
+    let origin = entry
+        .fields
+        .get("splat_origin")
+        .and_then(|origin| origin.get("key")?.as_str());
+    let creature_type = entry
+        .fields
+        .get("splat_creature")
+        .and_then(|creature| creature.get("type")?.as_str());
+    entry
+        .key
+        .as_deref()
+        .and_then(|key| index.entry(key))
+        .or_else(|| index.entry(origin?))
+        .or_else(|| index.creature_type(creature_type?))
+        .map(Path::to_path_buf)
 }
 
 /// The local copy of the image at a link in a note.
@@ -143,10 +161,18 @@ fn picture(ui: &mut egui::Ui, path: &Path, name: &str, max: Vec2) {
     }
 }
 
-/// An entry's picture, at the top of the Reader.
+/// An entry's picture, in the Reader's margin.
 pub fn hero(ui: &mut egui::Ui, path: &Path, name: &str) {
+    let width = ui.available_width().min(HERO.x);
+    picture(ui, path, name, vec2(width, HERO.y));
     ui.add_space(design::S);
-    picture(ui, path, name, HERO);
+}
+
+/// An entry's picture, above its text where there is no margin.
+pub fn small_hero(ui: &mut egui::Ui, path: &Path, name: &str) {
+    ui.add_space(design::S);
+    let width = ui.available_width();
+    picture(ui, path, name, vec2(width, SMALL_HERO_HEIGHT));
     ui.add_space(design::XS);
 }
 
@@ -184,15 +210,36 @@ pub fn show_viewer(ctx: &egui::Context) {
     }
 }
 
-/// A character's portrait, or the first letter of their name if there is no portrait.
-pub fn portrait(ui: &egui::Ui, rect: Rect, path: Option<&Path>, name: &str) {
+/// The square of an image to show in a round picture. A tall image keeps its top, where a
+/// creature's head usually is.
+fn square_crop(size: Vec2) -> Rect {
+    let side = size.min_elem();
+    let width = side / size.x;
+    let height = side / size.y;
+    Rect::from_min_size(egui::pos2((1.0 - width) / 2.0, 0.0), vec2(width, height))
+}
+
+/// A round picture of a character or creature, or the first letter of the name if there is
+/// no picture. `dim` darkens it, for someone who is not present.
+pub fn portrait(
+    ui: &egui::Ui,
+    rect: Rect,
+    path: Option<&Path>,
+    name: &str,
+    dim: Option<egui::Color32>,
+) {
     let c = colors();
     if let Some(path) = path {
         let uri = uri(path);
         remember(ui.ctx(), &uri);
-        egui::Image::from_uri(uri)
-            .corner_radius(rect.width() / 2.0)
-            .paint_at(ui, rect);
+        let mut image = egui::Image::from_uri(uri).corner_radius(rect.width() / 2.0);
+        if let Some(size) = dimensions(ui.ctx(), path).filter(|size| size.min_elem() > 0.0) {
+            image = image.uv(square_crop(size));
+        }
+        if let Some(dim) = dim {
+            image = image.tint(dim);
+        }
+        image.paint_at(ui, rect);
     } else {
         ui.painter()
             .circle_filled(rect.center(), rect.width() / 2.0, c.hover);
@@ -319,6 +366,7 @@ mod tests {
         let root = PathBuf::from(std::env::var("SPLAT_ART_PACKAGE").unwrap());
         let index = Arc::new(ArtIndex::load([root.as_path()]));
         assert!(!index.is_empty());
+        let shown = index.clone();
         let goblin =
             splat::content::definitions::source_file("definitions/creatures/goblin_warrior.md")
                 .unwrap();
@@ -347,10 +395,20 @@ mod tests {
                     crate::markdown_view::show(&mut columns[1], &note);
                     let (rect, _) =
                         columns[1].allocate_exact_size(vec2(56.0, 56.0), egui::Sense::empty());
-                    portrait(&columns[1], rect, portrait_path.as_deref(), "Tiny");
+                    portrait(&columns[1], rect, portrait_path.as_deref(), "Tiny", None);
                     let (rect, _) =
                         columns[1].allocate_exact_size(vec2(38.0, 38.0), egui::Sense::empty());
-                    portrait(&columns[1], rect, None, "Morana");
+                    portrait(&columns[1], rect, None, "Morana", None);
+                    columns[1].horizontal_wrapped(|ui| {
+                        let words = std::env::var("SPLAT_ART_TYPES").unwrap_or_default();
+                        for word in words.split(',') {
+                            for side in [28.0, 56.0] {
+                                let (rect, _) =
+                                    ui.allocate_exact_size(vec2(side, side), egui::Sense::empty());
+                                portrait(ui, rect, shown.creature_type(word), word, None);
+                            }
+                        }
+                    });
                 });
             });
         install(&harness.ctx);
@@ -366,6 +424,59 @@ mod tests {
             .unwrap()
             .save(std::env::var("SPLAT_ART_OUT").unwrap())
             .unwrap();
+    }
+
+    #[test]
+    fn a_round_picture_shows_the_top_of_a_tall_image_and_the_middle_of_a_wide_one() {
+        let tall = square_crop(vec2(100.0, 400.0));
+        assert_eq!(tall.min, egui::pos2(0.0, 0.0));
+        assert_eq!(tall.max, egui::pos2(1.0, 0.25));
+        let wide = square_crop(vec2(400.0, 100.0));
+        assert_eq!(wide.min, egui::pos2(0.375, 0.0));
+        assert_eq!(wide.max, egui::pos2(0.625, 1.0));
+    }
+
+    #[test]
+    fn a_creature_falls_back_to_its_origin_and_then_to_its_type() {
+        let root = tempfile::tempdir().unwrap();
+        for name in ["own.png", "origin.png", "beast.png"] {
+            image::DynamicImage::new_rgb8(4, 4)
+                .save(root.path().join(name))
+                .unwrap();
+        }
+        fs::write(
+            root.path().join(splat::content::art::ART_FILE),
+            "```json\n{\"splat_art\":1,\"entries\":{\"pack:creatures/own\":\"own.png\",\"pack:creatures/origin\":\"origin.png\"},\"creature_types\":{\"beast\":\"beast.png\"}}\n```\n",
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let index = Arc::new(ArtIndex::load([root.path()]));
+        ctx.data_mut(|data| data.insert_temp(index_id(), index));
+        let creature = |fields: &str| {
+            let text = format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: C\n{fields}---\n",
+                uuid::Uuid::new_v4()
+            );
+            Entry::parse("c.md", &text).unwrap()
+        };
+        let art = |fields: &str| {
+            let path = entry_art(&ctx, &creature(fields))?;
+            Some(path.file_name()?.to_str()?.to_owned())
+        };
+        let beast = "splat_creature: {size: medium, type: Beast}\n";
+        assert_eq!(
+            art(&format!("splat_key: pack:creatures/own\n{beast}")).as_deref(),
+            Some("own.png")
+        );
+        assert_eq!(
+            art(&format!(
+                "splat_key: pack:creatures/copy\nsplat_origin: {{key: pack:creatures/origin}}\n{beast}"
+            ))
+            .as_deref(),
+            Some("origin.png")
+        );
+        assert_eq!(art(beast).as_deref(), Some("beast.png"));
+        assert_eq!(art("splat_creature: {size: medium, type: ooze}\n"), None);
     }
 
     #[test]

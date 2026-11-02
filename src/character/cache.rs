@@ -97,6 +97,20 @@ impl Cache {
             .directory(campaign, remote)?
             .join(format!("{character}-{name}.png")))
     }
+    /// The portrait kept for a character, for a caller that does not have the sheet at hand.
+    pub fn find_portrait(&self, campaign: Uuid, remote: &str, character: &str) -> Option<PathBuf> {
+        valid_id(character).ok()?;
+        let prefix = format!("{character}-");
+        fs::read_dir(self.directory(campaign, remote).ok()?)
+            .ok()?
+            .flatten()
+            .map(|item| item.path())
+            .find(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(&prefix) && name.ends_with(".png"))
+            })
+    }
     /// Keep a downloaded portrait as a square PNG, in place of the character's older portrait.
     pub fn save_portrait(
         &self,
@@ -257,6 +271,11 @@ mod tests {
             .save_portrait(campaign, REMOTE, CHARACTER, second, &png(64, 64))
             .unwrap();
         assert_ne!(saved, replaced);
+        assert_eq!(
+            cache.find_portrait(campaign, REMOTE, CHARACTER).as_ref(),
+            Some(&replaced)
+        );
+        assert_eq!(cache.find_portrait(campaign, REMOTE, "171105274"), None);
         assert!(!saved.exists());
         assert!(replaced.exists());
     }

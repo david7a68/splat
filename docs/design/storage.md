@@ -91,13 +91,16 @@ block. It is a note and not a `.json` file because a vault sync can leave out ot
 {
   "splat_art": 1,
   "entries": { "dnd2024:creatures/goblin_warrior": "Creatures/goblin-warrior.webp" },
-  "links": { "https://media.dndbeyond.com/map.png": "Figures/map.webp" }
+  "links": { "https://media.dndbeyond.com/map.png": "Figures/map.webp" },
+  "creature_types": { "beast": "Creatures/type-beast.webp" }
 }
 ```
 
 `entries` gives an image for an entry key. The Reader shows it above the entry
 wherever the entry appears. `links` gives a local image for a link in a note. The
-note shows the image in place of the link. Paths are relative to the package root and
+note shows the image in place of the link. `creature_types` gives a default picture for a
+creature with no art of its own, so a list of participants can still be told apart. A run's
+roster shows each participant's picture, or the first letter of the name if there is none. Paths are relative to the package root and
 cannot leave it. Images are WebP, PNG, or JPEG.
 
 Keys can name entries in any package, so one art package can serve the built-in SRD

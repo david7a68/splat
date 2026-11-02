@@ -253,11 +253,55 @@ fn write_module(root: &Path) -> Result<Module, String> {
     ] {
         write_note(root, path, &text)?;
     }
+    write_art(root)?;
     Ok(Module {
         id,
         name: MODULE.into(),
         path: root.to_path_buf(),
     })
+}
+
+/// A plain picture, drawn here, so that the scenes use no published art.
+fn picture_bytes(width: u32, height: u32, color: [u8; 3]) -> Result<Vec<u8>, String> {
+    let (cx, cy) = (width as f32 / 2.0, height as f32 * 0.4);
+    let radius = width.min(height) as f32 * 0.32;
+    let image = image::RgbImage::from_fn(width, height, |x, y| {
+        let distance = (x as f32 - cx).hypot(y as f32 - cy);
+        let shade = if distance < radius {
+            1.0
+        } else {
+            0.35 + 0.25 * (y as f32 / height as f32)
+        };
+        image::Rgb(color.map(|part| (part as f32 * shade) as u8))
+    });
+    let mut bytes = Vec::new();
+    image
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Png,
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(bytes)
+}
+
+/// Art for the module: one creature of its own, and a default picture for one creature type.
+fn write_art(root: &Path) -> Result<(), String> {
+    let art = root.join("Art");
+    fs::create_dir_all(&art).map_err(|e| e.to_string())?;
+    let wolf = picture_bytes(480, 640, [190, 96, 52])?;
+    fs::write(art.join("cinder-wolf.png"), wolf).map_err(|e| e.to_string())?;
+    let humanoid = picture_bytes(320, 320, [84, 118, 170])?;
+    fs::write(art.join("type-humanoid.png"), humanoid).map_err(|e| e.to_string())?;
+    let index = json!({
+        "splat_art": 1,
+        "entries": {"ashen_marches:creatures/cinder_wolf": "Art/cinder-wolf.png"},
+        "creature_types": {"humanoid": "Art/type-humanoid.png"},
+    });
+    fs::write(
+        root.join(splat::content::art::ART_FILE),
+        format!("# Art Index\n\n```json\n{index}\n```\n"),
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn write_campaign_notes(root: &Path) -> Result<(), String> {
@@ -412,6 +456,11 @@ fn party(
     for hero in HEROES {
         let record = hero.snapshot()?;
         cache.save(campaign, &record)?;
+        if let Some(url) = record.portrait_url() {
+            let color = hero.portrait_color();
+            let bytes = picture_bytes(320, 320, color)?;
+            cache.save_portrait(campaign, REMOTE_CAMPAIGN, hero.id, url, &bytes)?;
+        }
         record.save_campaign_copy(campaign_path)?;
         party.push(record);
     }
@@ -421,6 +470,19 @@ fn party(
         &HEROES.map(|hero| hero.id.to_string()),
     )?;
     Ok(party)
+}
+
+impl Hero {
+    fn portrait_color(&self) -> [u8; 3] {
+        let seed = self.name.bytes().fold(7_u32, |sum, b| {
+            sum.wrapping_mul(31).wrapping_add(u32::from(b))
+        });
+        [
+            70 + (seed % 150) as u8,
+            70 + (seed / 150 % 150) as u8,
+            70 + (seed / 22500 % 150) as u8,
+        ]
+    }
 }
 
 struct Hero {
@@ -805,9 +867,13 @@ impl Hero {
             .iter()
             .map(|name| json!({"name": name}))
             .collect();
+        // One hero has no portrait, as many D&D Beyond characters have none.
+        let portrait = (self.name != "Oren Thistlewick")
+            .then(|| format!("https://www.dndbeyond.com/avatars/visual/{}.png", self.id));
         let raw = json!({
             "id": self.id.parse::<u64>().map_err(|e| e.to_string())?,
             "name": self.name,
+            "decorations": {"avatarUrl": portrait},
             "campaign": {"id": REMOTE_CAMPAIGN.parse::<u64>().map_err(|e| e.to_string())?},
             "race": {"sizeId": 4, "creatureTypeId": 11, "racialTraits": [
                 {"definition": {"name": format!("{} Resilience", self.species), "description": "<p>Your ancestry grants advantage against one kind of harm.</p>"}},

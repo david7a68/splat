@@ -170,10 +170,10 @@ impl Party {
             return;
         }
         // Each row gives its portrait this much, and keeps the same room for its text.
-        let list_width =
-            (ui.available_width() * 0.42 + ROW_PORTRAIT + design::S).clamp(376.0, 566.0);
+        let portrait_room = ROW_PORTRAIT + 2.0 * design::S;
+        let list_width = (ui.available_width() * 0.42 + portrait_room).clamp(384.0, 574.0);
         let mut selected = self.reader.selected.clone();
-        design::Column::left("party_members", list_width, 376.0..=686.0)
+        design::Column::left("party_members", list_width, 384.0..=694.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
                 right: design::M as i8,
@@ -337,7 +337,7 @@ impl Party {
                         egui::Vec2::splat(SHEET_PORTRAIT),
                         egui::Sense::empty(),
                     );
-                    crate::art::portrait(ui, rect, Some(path), &record.definition.splat_name);
+                    crate::art::portrait(ui, rect, Some(path), &record.definition.splat_name, None);
                 }
                 ui.label(
                     Type::Display
@@ -593,7 +593,7 @@ fn member_row(
             ),
             egui::Vec2::splat(ROW_PORTRAIT),
         );
-        crate::art::portrait(ui, picture, portrait, &member.name);
+        crate::art::portrait(ui, picture, portrait, &member.name, None);
         let text_left = picture.right() + design::S;
         let room = hp_right - HP_WIDTH - AC_WIDTH - design::S - text_left;
         let title = design::one_line(ui, &member.name, Type::Name.font(ui), c.text, room);
