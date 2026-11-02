@@ -2,7 +2,9 @@
 //! a rare setup task, so it stays calm, with one scrolling list at 2,000+ rows.
 use crate::{
     campaigns::Campaigns,
-    content_workspace::{CampaignDocument, Catalogue, EntryRef, PackageSelection, Selection},
+    content_workspace::{
+        CampaignDocument, Catalogue, Closure, EntryRef, PackageSelection, Selection,
+    },
     design::{self, Action, Density, Tone, Type, colors, icons},
     library::{note_path, write_note},
     persistence::Campaign,
@@ -15,7 +17,12 @@ use uuid::Uuid;
 struct Snapshot {
     document: CampaignDocument,
     catalogue: Catalogue,
+    /// The closure of these selections. It is too slow to calculate on every frame.
+    closure: (Vec<PackageSelection>, Closure),
 }
+/// An invalid note: its path, its text on disk, and its draft.
+type Repair = (String, String, String);
+type Loaded = (Vec<Repair>, Result<Snapshot, String>);
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Listing {
     #[default]
@@ -25,7 +32,7 @@ enum Listing {
 #[derive(Default)]
 pub struct CampaignContent {
     active: Option<Campaign>,
-    pending: Option<mpsc::Receiver<Result<Snapshot, String>>>,
+    pending: Option<mpsc::Receiver<Loaded>>,
     snapshot: Option<Snapshot>,
     saved_selections: Vec<PackageSelection>,
     module: Option<Uuid>,
@@ -37,7 +44,7 @@ pub struct CampaignContent {
     message: Option<String>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
-    repairs: Vec<(String, String, String)>,
+    repairs: Vec<Repair>,
     /// What `Discard` last dropped, for one step of undo.
     discarded_selections: Option<Vec<PackageSelection>>,
     discarded_repair: Option<(String, String)>,
@@ -73,18 +80,7 @@ impl CampaignContent {
         self.forget_discards_of_other_campaigns(&campaign);
         self.refresh_pending = false;
         self.disabled_selections.clear();
-        self.repairs = splat::content::read_directory(&campaign.path)
-            .map(|(_, errors)| {
-                errors
-                    .into_iter()
-                    .filter_map(|e| {
-                        let text =
-                            fs::read_to_string(note_path(&campaign.path, &e.path).ok()?).ok()?;
-                        Some((e.path, text.clone(), text))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        self.repairs.clear();
         let modules = campaigns.modules().to_vec();
         self.active = Some(campaign.clone());
         self.snapshot = None;
@@ -95,13 +91,28 @@ impl CampaignContent {
         self.pending = Some(rx);
         let ctx = ctx.clone();
         std::thread::spawn(move || {
+            let repairs = splat::content::read_directory(&campaign.path)
+                .map(|(_, errors)| {
+                    errors
+                        .into_iter()
+                        .filter_map(|e| {
+                            let text = fs::read_to_string(note_path(&campaign.path, &e.path).ok()?)
+                                .ok()?;
+                            Some((e.path, text.clone(), text))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             let result = CampaignDocument::load(&campaign).and_then(|document| {
+                let catalogue = Catalogue::load(&modules, Some(&campaign))?;
+                let closure = catalogue.closure(&document.selections, document.campaign.id);
                 Ok(Snapshot {
+                    closure: (document.selections.clone(), closure),
                     document,
-                    catalogue: Catalogue::load(&modules, Some(&campaign))?,
+                    catalogue,
                 })
             });
-            let _ = tx.send(result);
+            let _ = tx.send((repairs, result));
             ctx.request_repaint();
         });
     }
@@ -137,8 +148,9 @@ impl CampaignContent {
         }
         if let Some(rx) = &self.pending {
             match rx.try_recv() {
-                Ok(result) => {
+                Ok((repairs, result)) => {
                     self.pending = None;
+                    self.repairs = repairs;
                     match result {
                         Ok(snapshot) => {
                             self.saved_selections = snapshot.document.selections.clone();
@@ -291,7 +303,13 @@ impl CampaignContent {
         let snapshot = self.snapshot.as_mut().unwrap();
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
-        let closure = catalogue.closure(&document.selections, document.campaign.id);
+        if snapshot.closure.0 != document.selections {
+            snapshot.closure = (
+                document.selections.clone(),
+                catalogue.closure(&document.selections, document.campaign.id),
+            );
+        }
+        let closure = &snapshot.closure.1;
         let mut reload = false;
         let c = colors();
         ui.horizontal(|ui| {
@@ -856,6 +874,51 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         }
+    }
+
+    #[test]
+    fn closure_follows_a_selection_change() {
+        let temp = tempfile::tempdir().unwrap();
+        let active = campaign(temp.path());
+        let campaigns = Campaigns::at(temp.path().join("settings.json"));
+        let catalogue = Catalogue::load(&[], None).unwrap();
+        let document = CampaignDocument::load(&active).unwrap();
+        let closure = catalogue.closure(&document.selections, active.id);
+        let mut content = CampaignContent {
+            active: Some(active.clone()),
+            snapshot: Some(Snapshot {
+                closure: (document.selections.clone(), closure),
+                document,
+                catalogue,
+            }),
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        let frame = |content: &mut CampaignContent| {
+            let _ = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default()
+                    .show(ctx, |ui| content.packages(ui, &campaigns, &active));
+            });
+        };
+        let kept =
+            |content: &CampaignContent| content.snapshot.as_ref().unwrap().closure.0.as_ptr();
+        let before = kept(&content);
+        frame(&mut content);
+        assert_eq!(
+            kept(&content),
+            before,
+            "the same selections keep the closure"
+        );
+        let direct =
+            |content: &CampaignContent| content.snapshot.as_ref().unwrap().closure.1.direct.len();
+        assert!(
+            direct(&content) > 0,
+            "a new campaign uses the built-in package"
+        );
+        let snapshot = content.snapshot.as_mut().unwrap();
+        snapshot.document.selections.clear();
+        frame(&mut content);
+        assert_eq!(direct(&content), 0);
     }
 
     #[test]

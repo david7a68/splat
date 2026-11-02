@@ -464,7 +464,7 @@ fn every_embedded_profile_compiles_and_every_creature_action_runs() {
 fn supplied_unsigned_save_is_used_instead_of_ability_calculation() {
     let dragon = crate::content::definitions::entries()
         .unwrap()
-        .into_iter()
+        .iter()
         .find(|entry| entry.key.as_deref() == Some("dnd2024:creatures/young_white_dragon"))
         .unwrap();
     let stats: Map<Stat> =

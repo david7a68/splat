@@ -1,20 +1,11 @@
 //! Resolve authored/imported notes against the same built-in catalogue as the app.
 use super::*;
-use std::sync::OnceLock;
 
 pub fn validate_with_builtin(entries: &[Entry]) -> Result<Report, String> {
-    static BUILTIN: OnceLock<Result<Vec<Entry>, String>> = OnceLock::new();
-    let builtin = BUILTIN
-        .get_or_init(|| {
-            let mut entries = super::builtin::entries();
-            entries.extend(definitions::entries()?);
-            Ok(entries)
-        })
-        .as_ref()
-        .map_err(Clone::clone)?;
-    let ids: BTreeMap<_, _> = builtin.iter().map(|e| (e.id, e)).collect();
-    let keys: BTreeMap<_, _> = builtin
-        .iter()
+    let definitions = definitions::entries()?;
+    let builtin = || super::builtin::entries().iter().chain(definitions);
+    let ids: BTreeMap<_, _> = builtin().map(|e| (e.id, e)).collect();
+    let keys: BTreeMap<_, _> = builtin()
         .filter_map(|e| e.key.as_ref().map(|k| (k, e)))
         .collect();
     let mut combined = entries.to_vec();

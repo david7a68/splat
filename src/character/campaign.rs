@@ -55,6 +55,14 @@ impl EntitySnapshot {
         // Dependencies precede the creature. A filesystem failure may leave updated dependencies,
         // but never a new creature whose dependency files have not yet been published.
         for (path, previous, text) in staged {
+            // Rewriting the same words costs an fsync per note, and changes the file's time.
+            // A file that moved since it was read is still a conflict.
+            if previous.as_ref() == Some(&text) {
+                if fs::read_to_string(&path).ok() != previous {
+                    return Err(conflict(&path));
+                }
+                continue;
+            }
             let parent = path.parent().ok_or("Invalid campaign copy path")?;
             fs::create_dir_all(parent)
                 .map_err(|_| "Could not create campaign character folder.")?;
@@ -226,6 +234,17 @@ mod tests {
             fs::read_to_string(retire.with_extension("md.splat-archive")).unwrap(),
             old
         );
+    }
+    #[cfg(unix)]
+    #[test]
+    fn unchanged_copy_keeps_its_file() {
+        use std::os::unix::fs::MetadataExt;
+        let root = tempfile::tempdir().unwrap();
+        let record = super::super::tests::sample();
+        let creature = record.save_campaign_copy(root.path()).unwrap();
+        let inode = fs::metadata(&creature).unwrap().ino();
+        record.save_campaign_copy(root.path()).unwrap();
+        assert_eq!(fs::metadata(&creature).unwrap().ino(), inode);
     }
     #[test]
     fn edited_retired_copy_blocks_publication_before_any_file_changes() {
