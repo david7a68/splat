@@ -27,6 +27,8 @@ pub struct Party {
     sync_turned_off: bool,
     /// Sync was on when the connection ended, so it stopped. The rail says so.
     pub sync_stopped: bool,
+    /// Whose unsent change was dropped when the DM opened another character.
+    dropped_unsent: Option<String>,
     /// The DM asked to go where this campaign's D&D Beyond link is set.
     pub wants_link_page: bool,
     pub wants_settings: bool,
@@ -52,6 +54,18 @@ impl Party {
     pub fn sync_hp(&self) -> Option<i64> {
         let removed = self.combat.values().get("hp")?["removedHitPoints"].as_i64()?;
         Some(self.combat.max_hp()? - removed)
+    }
+
+    /// The DM is in a number field of the open sheet's sync.
+    #[cfg(test)]
+    pub fn sync_in_field(&self) -> bool {
+        self.combat.in_field()
+    }
+
+    /// The member open now.
+    #[cfg(test)]
+    pub fn selected_member(&self) -> Option<String> {
+        self.reader.selected.clone()
     }
 
     /// Keeps every sheet current, whichever page is showing. The shell calls this every frame.
@@ -254,6 +268,14 @@ impl Party {
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
         }
+        if let Some(name) = &self.dropped_unsent {
+            let words = format!(
+                "A change to {name} had not reached D&D Beyond. It was dropped when you opened another character. Open {name} and enter it again if you still want it."
+            );
+            if design::message_with_action(ui, Tone::Warning, &words, "Dismiss") {
+                self.dropped_unsent = None;
+            }
+        }
         self.storage_notices(ui, session.is_some());
         ui.ctx().request_repaint_after(Duration::from_secs(1));
         if self.reader.members.is_empty() {
@@ -308,6 +330,12 @@ impl Party {
         if selected != self.reader.selected
             && let Some(id) = selected
         {
+            // This page has one sync, for the open sheet. What it has not sent goes with it.
+            if self.combat.unconfirmed()
+                && let Some(open) = &self.reader.selected
+            {
+                self.dropped_unsent = Some(self.reader.member_name(open).to_owned());
+            }
             self.reader.select(id);
         }
         egui::CentralPanel::default()

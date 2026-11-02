@@ -457,6 +457,24 @@ that is a conflict, settled from the panel: use the sheet's value, or keep yours
 conflict is found again after a close, an app close or a crash. A value you did not change takes
 the sheet's.
 
+While you are in a sync number field, or drag one, that character's sync starts no exchange, neither a
+read nor a write. This covers the panel's fields, and **Correct HP** and the manual death saves on
+**Record**. A number counts at each key, and on a run's row it reaches the row at each key, so **Damage**
+acts on it. A pause between two digits sends nothing. When you leave the field, by any way, the usual short
+pause runs and then the number goes. A read that was on its way waits for you too. If the sheet changed
+in that time and you typed a number, you choose, as with any conflict. If you typed nothing, the sheet's
+value stands.
+
+Some limits. Escape leaves the field and keeps what you typed. A field cleared by hand keeps the last digit
+that counted, and the field shows it. Up and Down do nothing in a number field. A number over the sheet's
+maximum becomes the maximum, and the row and the log show it. A number in **Correct HP** is one Undo step
+and one log line. A number in the panel is one log line, when you leave the field, and Undo ends at its
+first digit, as Undo stops wherever a value reached the run from **Record**.
+
+On **Party**, only the open character has a sync. If a change has not reached D&D Beyond when you open
+another character, it is dropped, and the page names whose it was until you dismiss the words. Closing the
+app says that D&D Beyond has not confirmed a change.
+
 While sync reads a sheet, that sheet decides Maximum HP, and the field says so. Stop sync to change it
 in the run. A maximum set while sync was off stays until the next first read, where the notice and the
 log say what it became. A message from sync stays until you dismiss it.

@@ -231,6 +231,12 @@ a line.
   close` or `Resolve first`.
 - **Side panel:** the title, then tabs that hold one place. Death saves and a conflict's two
   choices go under the tabs. While sync is stopped, those two choices are off, with the reason.
+- **Sync number fields:** while the DM is in a field, or drags it, that character's sync starts
+  no exchange, and takes in none that is on its way. The panel's line says `waits while you are
+  in a number field`. A number counts at each key and reaches the row at each key. egui ends a
+  focus when the field is not drawn or is off, so every way of leaving is covered, and the usual
+  delay then runs. The fields have a stable id, so a block above them can come and go. Each number
+  is one line in the Log, and one named Undo step in `Correct HP`.
 - **Overflow:** when rows still cannot fit, a line under the list says how many are above
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view, and is not painted. Each turn scrolls to show the current row and the next.

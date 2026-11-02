@@ -18,6 +18,8 @@ use std::{
 
 const BASE: &str = "https://character-service.dndbeyond.com/character/v5";
 const INTERVAL: Duration = Duration::from_secs(15);
+/// A change waits this long after the last key, or after the DM leaves its field.
+const DELAY: Duration = Duration::from_millis(500);
 pub const CONDITIONS: [(u64, &str); 15] = [
     (1, "Blinded"),
     (2, "Charmed"),
@@ -479,9 +481,25 @@ pub struct CombatSync {
     /// Unsent HP, death saves and conditions also last until the next first read. A run holds
     /// those itself. The Party page does not, so without this they would be lost there.
     keeps_all_unsent: bool,
+    /// The number field of this character that the DM is in, or is dragging. See `advance`.
+    field: Option<egui::Id>,
     /// Never talks to D&D Beyond. It only shows the state it was given.
     #[cfg(test)]
     simulated: bool,
+}
+/// What one exchange starts from. `tick` gives it to a worker, which answers on `reply`.
+struct Job {
+    baseline: Option<Remote>,
+    desired: Groups,
+    blocked: BTreeSet<String>,
+    read_only: bool,
+    reply: mpsc::Sender<Result<Outcome, String>>,
+}
+/// Note the number field the DM is in or is dragging.
+fn note_field(field: &mut Option<egui::Id>, response: &egui::Response) {
+    if response.has_focus() || response.dragged() {
+        *field = Some(response.id);
+    }
 }
 impl Drop for CombatSync {
     fn drop(&mut self) {
@@ -747,32 +765,64 @@ impl CombatSync {
             self.changed = Some(Instant::now());
         }
     }
-    pub fn tick(
-        &mut self,
-        ctx: &egui::Context,
-        session: Option<Session>,
-        epoch: u64,
-        campaign: &str,
-        id: &str,
-    ) {
-        // Test builds have no route to D&D Beyond. A signed-in test stays on its first read.
-        if cfg!(test) {
-            let _ = (ctx, &session, epoch, campaign, id);
-            return;
+    /// Every timer has run out: the pause after a change, and the 15-second read.
+    #[cfg(test)]
+    fn run_out_timers(&mut self) {
+        let long = Duration::from_secs(16);
+        self.changed = self.changed.map(|t| t - long);
+        self.next = self.next.map(|t| t - long);
+    }
+    /// Every timer has run out. What an exchange would send now, if it may start, is confirmed
+    /// by the sheet. For a test of what a run sends, as test builds have no route to a sheet.
+    #[cfg(test)]
+    pub fn hp_sent_at_once(&mut self, ctx: &egui::Context) -> Option<Value> {
+        self.run_out_timers();
+        if !self.advance(ctx) || !self.edits_to_send() {
+            return None;
         }
-        // Its words and unsent changes stay until the DM starts it again.
-        if self.session_lost {
-            return;
+        let sent = self.desired["hp"].clone();
+        self.remote.as_mut()?.groups = self.desired.clone();
+        Some(sent)
+    }
+    /// The DM is in a number field of this character, or is dragging one.
+    pub fn in_field(&self) -> bool {
+        self.field.is_some()
+    }
+    /// A field outside this panel that reaches this sync, as `Correct HP` does.
+    pub fn hold_for(&mut self, response: &egui::Response) {
+        note_field(&mut self.field, response);
+    }
+    /// True while the DM stays in the field. egui ends a focus when the field is not drawn or
+    /// is off, so any way of leaving ends this. The usual delay then runs.
+    fn in_number_field(&mut self, ctx: &egui::Context) -> bool {
+        let Some(id) = self.field else {
+            return false;
+        };
+        if ctx.memory(|m| m.has_focus(id)) || ctx.is_being_dragged(id) {
+            return true;
         }
-        let scope = (epoch, campaign.to_owned(), id.to_owned());
-        if self.scope.as_ref() != Some(&scope) {
-            self.enter_scope(scope);
-        }
-        if !self.enabled || session.is_none() {
-            if self.pending.is_some() || session.is_none() {
-                self.stop();
-            }
-            return;
+        self.field = None;
+        let now = Instant::now();
+        self.changed = Some(now);
+        self.next = Some(self.next.map_or(now + DELAY, |next| next.max(now + DELAY)));
+        false
+    }
+    fn edits_to_send(&self) -> bool {
+        self.dirty()
+            && !self.read_only()
+            && self.desired.iter().any(|(k, v)| {
+                !self.blocked.contains_key(k)
+                    && self.remote.as_ref().and_then(|r| r.groups.get(k)) != Some(v)
+            })
+    }
+    /// This frame's sync work, apart from talking to D&D Beyond. True if an exchange is due.
+    ///
+    /// While the DM is in a number field, no exchange starts for this character, and none is
+    /// taken in. So a part of a number cannot reach the sheet, and a read on its way cannot
+    /// come in under the field's old text, which egui would then set as the DM's number.
+    fn advance(&mut self, ctx: &egui::Context) -> bool {
+        if self.in_number_field(ctx) {
+            return false;
         }
         if let Some(pending) = &self.pending {
             let result = match pending.receiver.try_recv() {
@@ -809,32 +859,59 @@ impl CombatSync {
                 );
             }
         }
-        let pending_edits = self.dirty()
-            && !self.read_only()
-            && self.desired.iter().any(|(k, v)| {
-                !self.blocked.contains_key(k)
-                    && self.remote.as_ref().and_then(|r| r.groups.get(k)) != Some(v)
-            });
         let due = self.next.is_none_or(|t| t <= Instant::now())
-            || (pending_edits
-                && self
-                    .changed
-                    .is_none_or(|t| t.elapsed() >= Duration::from_millis(500)));
-        if self.pending.is_none() && due {
-            let baseline = self.remote.clone();
-            let desired = self.desired.clone();
-            let blocked = self.blocked.keys().cloned().collect();
-            let read_only = std::mem::take(&mut self.refresh_only);
+            || (self.edits_to_send() && self.changed.is_none_or(|t| t.elapsed() >= DELAY));
+        self.pending.is_none() && due
+    }
+    fn begin_exchange(&mut self) -> Job {
+        let (reply, receiver) = mpsc::channel();
+        self.pending = Some(Pending {
+            receiver,
+            sent: self.desired.clone(),
+        });
+        Job {
+            baseline: self.remote.clone(),
+            desired: self.desired.clone(),
+            blocked: self.blocked.keys().cloned().collect(),
+            read_only: std::mem::take(&mut self.refresh_only),
+            reply,
+        }
+    }
+    pub fn tick(
+        &mut self,
+        ctx: &egui::Context,
+        session: Option<Session>,
+        epoch: u64,
+        campaign: &str,
+        id: &str,
+    ) {
+        // Test builds have no route to D&D Beyond. A signed-in test stays on its first read.
+        if cfg!(test) {
+            let _ = (&session, epoch, campaign, id);
+            self.in_number_field(ctx);
+            return;
+        }
+        // Its words and unsent changes stay until the DM starts it again.
+        if self.session_lost {
+            return;
+        }
+        let scope = (epoch, campaign.to_owned(), id.to_owned());
+        if self.scope.as_ref() != Some(&scope) {
+            self.enter_scope(scope);
+        }
+        if !self.enabled || session.is_none() {
+            if self.pending.is_some() || session.is_none() {
+                self.stop();
+            }
+            return;
+        }
+        if self.advance(ctx) {
+            let job = self.begin_exchange();
             let id = id.to_owned();
             let campaign = campaign.to_owned();
             let session = session.unwrap();
             let gate = Arc::new(AtomicBool::new(true));
             self.gate = Some(gate.clone());
-            let (tx, rx) = mpsc::channel();
-            self.pending = Some(Pending {
-                receiver: rx,
-                sent: desired.clone(),
-            });
             let ctx = ctx.clone();
             std::thread::spawn(move || {
                 static LOCKS: OnceLock<Mutex<BTreeMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
@@ -862,17 +939,17 @@ impl CombatSync {
                             campaign,
                             active: gate,
                         },
-                        baseline.as_ref(),
-                        &desired,
-                        &blocked,
-                        read_only,
+                        job.baseline.as_ref(),
+                        &job.desired,
+                        &job.blocked,
+                        job.read_only,
                     )
                 })();
-                let _ = tx.send(result);
+                let _ = job.reply.send(result);
                 ctx.request_repaint();
             });
         }
-        ctx.request_repaint_after(Duration::from_millis(500));
+        ctx.request_repaint_after(DELAY);
     }
     /// A new session or character starts clean, apart from what was last matched: that is
     /// how the next read can tell the DM's changes from the sheet's.
@@ -1127,7 +1204,11 @@ impl CombatSync {
             ui.weak("Enable to read the live sheet. Edits made here will then update D&D Beyond.");
             return;
         }
-        ui.weak("HP, death saves, conditions, spell slots, and supported limited uses · checks every 15 seconds");
+        ui.weak(if self.in_field() {
+            "HP, death saves, conditions, spell slots, and supported limited uses · waits while you are in a number field"
+        } else {
+            "HP, death saves, conditions, spell slots, and supported limited uses · checks every 15 seconds"
+        });
         if self.busy() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
@@ -1178,6 +1259,7 @@ impl CombatSync {
                         ui.label(format!("HP / {max_hp}"));
                         let response = ui.add(egui::DragValue::new(&mut current).range(0..=max_hp));
                         crate::design::named(ui, &response, "Current HP on the sheet");
+                        note_field(&mut self.field, &response);
                         if response.changed() {
                             hp["removedHitPoints"] = (max_hp - current).into();
                         }
@@ -1185,6 +1267,7 @@ impl CombatSync {
                         ui.label("Temporary HP");
                         let response = ui.add(egui::DragValue::new(&mut temp).range(0..=1_000_000));
                         crate::design::named(ui, &response, "Temporary HP on the sheet");
+                        note_field(&mut self.field, &response);
                         if response.changed() {
                             hp["temporaryHitPoints"] = temp.into();
                         }
@@ -1204,6 +1287,7 @@ impl CombatSync {
                                 &response,
                                 &format!("Death save {} on the sheet", label.to_lowercase()),
                             );
+                            note_field(&mut self.field, &response);
                             if response.changed() {
                                 death[field] = n.into();
                             }
@@ -1231,6 +1315,7 @@ impl CombatSync {
                                     let response =
                                         ui.add(egui::DragValue::new(&mut level).range(1..=6));
                                     crate::design::named(ui, &response, "Exhaustion level");
+                                    note_field(&mut self.field, &response);
                                     if response.changed() {
                                         conditions.insert(key, level.into());
                                     }
@@ -1257,6 +1342,7 @@ impl CombatSync {
                                         &response,
                                         &format!("{label} spent at level {level}"),
                                     );
+                                    note_field(&mut self.field, &response);
                                     if response.changed() {
                                         slots[&field] = used.into();
                                     }
@@ -1275,6 +1361,7 @@ impl CombatSync {
                                     let response = ui
                                         .add(egui::DragValue::new(&mut used).range(0..=1_000_000));
                                     crate::design::named(ui, &response, "Uses spent");
+                                    note_field(&mut self.field, &response);
                                     if response.changed() {
                                         resource["uses"] = used.into();
                                     }
@@ -1797,6 +1884,327 @@ mod tests {
             9,
             "HP is 21"
         );
+    }
+    /// A sync driven as `tick` drives it, frame by frame, with a fake sheet for D&D Beyond. An
+    /// exchange runs at once, and its answer lands on the next frame, as a worker's would.
+    /// `tick` itself has no route in a test build, so this calls the two parts it is made of.
+    struct Rig {
+        sync: CombatSync,
+        sheet: Fake,
+        exchanges: usize,
+        /// False: a click on `Log` or on the rail, or another member. The panel is not drawn.
+        panel: bool,
+        /// A close prompt or a dialog in front.
+        off: bool,
+    }
+    const HP_FIELD: &str = "Current HP on the sheet";
+    const LOG: &str = "Log";
+    const RAIL: &str = "Library";
+    fn frame(ui: &mut egui::Ui, rig: &mut Rig) {
+        if rig.sync.advance(ui.ctx()) {
+            let job = rig.sync.begin_exchange();
+            rig.exchanges += 1;
+            let result = exchange(
+                &mut rig.sheet,
+                job.baseline.as_ref(),
+                &job.desired,
+                &job.blocked,
+                job.read_only,
+            );
+            job.reply.send(result).unwrap();
+        }
+        // As a tab and the rail do: the click's action runs before the field would be drawn.
+        if ui.button(LOG).clicked() || ui.button(RAIL).clicked() {
+            rig.panel = false;
+        }
+        if rig.panel {
+            if rig.off {
+                ui.disable();
+            }
+            rig.sync.show(ui, None);
+        }
+    }
+    fn rig() -> egui_kittest::Harness<'static, Rig> {
+        let remote = remote();
+        let mut sync = CombatSync::default();
+        sync.enabled = true;
+        sync.desired = remote.groups.clone();
+        sync.remote = Some(remote.clone());
+        sync.next = Some(Instant::now() + INTERVAL);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(700.0, 900.0))
+            .build_ui_state(
+                frame,
+                Rig {
+                    sync,
+                    sheet: Fake::new(remote),
+                    exchanges: 0,
+                    panel: true,
+                    off: false,
+                },
+            );
+        harness.run_steps(2);
+        harness
+    }
+    fn pass_time(harness: &mut egui_kittest::Harness<'static, Rig>) {
+        harness.state_mut().sync.run_out_timers();
+        harness.run_steps(3);
+    }
+    fn click_hp(harness: &mut egui_kittest::Harness<'static, Rig>) {
+        use egui_kittest::kittest::Queryable;
+        harness.get_by_label(HP_FIELD).click();
+        harness.run_steps(3);
+    }
+    fn type_text(harness: &mut egui_kittest::Harness<'static, Rig>, text: &str) {
+        harness.event(egui::Event::Text(text.to_owned()));
+        harness.run_steps(3);
+    }
+    fn type_21(harness: &mut egui_kittest::Harness<'static, Rig>) {
+        click_hp(harness);
+        type_text(harness, "2");
+        type_text(harness, "1");
+    }
+    fn removed(harness: &egui_kittest::Harness<'static, Rig>) -> Value {
+        harness.state().sync.desired["hp"]["removedHitPoints"].clone()
+    }
+    fn sheet_damage(harness: &mut egui_kittest::Harness<'static, Rig>, damage: i64) {
+        harness
+            .state_mut()
+            .sheet
+            .remote
+            .groups
+            .get_mut("hp")
+            .unwrap()["removedHitPoints"] = damage.into();
+    }
+    /// After the DM leaves: the number is whole, the usual delay applies, and then one write
+    /// goes, with the whole number.
+    #[track_caller]
+    fn number_goes_out_after_the_delay(harness: &mut egui_kittest::Harness<'static, Rig>) {
+        harness.run_steps(3);
+        let state = harness.state();
+        assert!(!state.sync.in_field(), "the DM has left");
+        assert_eq!(removed(harness), 9, "HP is 21");
+        assert_eq!(state.sync.state(), SyncState::Pending, "the row says so");
+        assert_eq!(state.exchanges, 0, "the delay starts when the DM leaves");
+        pass_time(harness);
+        let state = harness.state();
+        assert_eq!(state.exchanges, 1);
+        assert_eq!(state.sheet.writes.len(), 1);
+        assert_eq!(state.sheet.writes[0].body["removedHitPoints"], 9);
+        assert_eq!(state.sync.state(), SyncState::Matching);
+    }
+    /// A pause between two digits, far longer than the delay, with the 15-second read due too.
+    #[test]
+    fn no_exchange_starts_while_the_dm_is_in_the_field() {
+        let mut harness = rig();
+        click_hp(&mut harness);
+        pass_time(&mut harness);
+        assert_eq!(
+            harness.state().exchanges,
+            0,
+            "not on focus, with nothing typed"
+        );
+        type_text(&mut harness, "2");
+        assert_eq!(removed(&harness), 28, "the value counts from the first key");
+        assert_eq!(harness.state().sync.state(), SyncState::Pending);
+        pass_time(&mut harness);
+        assert_eq!(harness.state().exchanges, 0, "no exchange after one digit");
+        assert!(harness.state().sync.in_field());
+        type_text(&mut harness, "1");
+        pass_time(&mut harness);
+        assert_eq!(harness.state().exchanges, 0, "no exchange after two digits");
+        assert!(harness.state().sheet.writes.is_empty());
+        assert_eq!(removed(&harness), 9, "HP is 21");
+    }
+    #[test]
+    fn enter_keeps_the_number_and_starts_the_exchange_afterward() {
+        let mut harness = rig();
+        type_21(&mut harness);
+        pass_time(&mut harness);
+        harness.key_press(egui::Key::Enter);
+        number_goes_out_after_the_delay(&mut harness);
+    }
+    /// Tab goes to the next field, where the DM is still in a number. The exchange starts when
+    /// the keyboard reaches something else.
+    #[test]
+    fn tab_keeps_the_number_and_the_exchange_starts_past_the_last_number_field() {
+        let mut harness = rig();
+        type_21(&mut harness);
+        harness.key_press(egui::Key::Tab);
+        harness.run_steps(3);
+        assert_eq!(removed(&harness), 9, "HP is 21");
+        assert!(harness.state().sync.in_field(), "now in Temporary HP");
+        pass_time(&mut harness);
+        assert_eq!(harness.state().exchanges, 0);
+        for _ in 0..3 {
+            harness.key_press(egui::Key::Tab);
+            harness.run_steps(3);
+        }
+        number_goes_out_after_the_delay(&mut harness);
+    }
+    /// The order of a click on a tab or on the rail: the action runs first, and the field is
+    /// not drawn in that frame. egui then ends its focus by itself.
+    #[test]
+    fn a_click_on_the_log_tab_or_the_rail_keeps_the_number_and_starts_the_exchange_afterward() {
+        use egui_kittest::kittest::Queryable;
+        for target in [LOG, RAIL] {
+            let mut harness = rig();
+            type_21(&mut harness);
+            harness.get_by_label(target).click();
+            number_goes_out_after_the_delay(&mut harness);
+            assert!(!harness.state().panel, "the field was not drawn");
+        }
+    }
+    /// Escape leaves the field and keeps what was typed. README says so.
+    #[test]
+    fn escape_keeps_the_typed_number() {
+        let mut harness = rig();
+        type_21(&mut harness);
+        harness.key_press(egui::Key::Escape);
+        number_goes_out_after_the_delay(&mut harness);
+    }
+    /// After the DM leaves, a read finds a changed sheet and a typed number: main's conflict.
+    #[test]
+    fn a_changed_sheet_after_leaving_with_a_typed_number_raises_the_conflict() {
+        let mut harness = rig();
+        type_21(&mut harness);
+        sheet_damage(&mut harness, 12);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        pass_time(&mut harness);
+        let state = harness.state();
+        assert_eq!(state.sync.conflict_keys(), vec!["hp"]);
+        assert_eq!(state.sync.state(), SyncState::Conflict);
+        assert_eq!(state.sync.desired["hp"]["removedHitPoints"], 9, "the DM's");
+        assert_eq!(
+            state.sync.remote.as_ref().unwrap().groups["hp"]["removedHitPoints"],
+            12
+        );
+        assert!(state.sheet.writes.is_empty());
+    }
+    /// Nothing typed: the sheet's value is taken, and no write goes out.
+    #[test]
+    fn a_changed_sheet_with_nothing_typed_is_taken_and_no_write_goes() {
+        let mut harness = rig();
+        click_hp(&mut harness);
+        sheet_damage(&mut harness, 12);
+        pass_time(&mut harness);
+        assert_eq!(harness.state().exchanges, 0, "the read waits");
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(removed(&harness), 5, "leaving sets nothing");
+        pass_time(&mut harness);
+        let state = harness.state();
+        assert_eq!(state.exchanges, 1);
+        assert_eq!(
+            state.sync.desired["hp"]["removedHitPoints"], 12,
+            "the sheet's"
+        );
+        assert!(state.sync.conflict_keys().is_empty());
+        assert!(state.sheet.writes.is_empty());
+        assert!(!state.sync.dirty());
+    }
+    /// A worker's answer: a read that found this damage on the sheet.
+    fn answer_read(job: Job, damage: i64) {
+        let mut changed = remote();
+        changed.groups.get_mut("hp").unwrap()["removedHitPoints"] = damage.into();
+        job.reply
+            .send(Ok(Outcome {
+                remote: changed,
+                blocked: BTreeMap::new(),
+            }))
+            .unwrap();
+    }
+    /// A read on its way as the DM comes in. It is taken in after they leave. Under the field,
+    /// egui would set the field's old text on leaving, in place of what the sheet now has.
+    fn read_on_its_way(harness: &mut egui_kittest::Harness<'static, Rig>, damage: i64) {
+        let job = harness.state_mut().sync.begin_exchange();
+        sheet_damage(harness, damage);
+        // Its words add a row, so wait for the field's new place.
+        harness.run_steps(3);
+        click_hp(harness);
+        answer_read(job, damage);
+        harness.run_steps(3);
+        assert!(harness.state().sync.in_field());
+        let remote = harness.state().sync.remote.as_ref().unwrap();
+        assert_eq!(
+            remote.groups["hp"]["removedHitPoints"], 5,
+            "not taken in yet"
+        );
+    }
+    #[test]
+    fn a_read_on_its_way_with_nothing_typed_is_taken_after_leaving() {
+        let mut harness = rig();
+        read_on_its_way(&mut harness, 12);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(removed(&harness), 12, "the sheet's");
+        pass_time(&mut harness);
+        let state = harness.state();
+        assert!(state.sheet.writes.is_empty());
+        assert!(state.sync.conflict_keys().is_empty());
+    }
+    #[test]
+    fn a_read_on_its_way_with_a_typed_number_asks() {
+        let mut harness = rig();
+        read_on_its_way(&mut harness, 12);
+        type_text(&mut harness, "2");
+        type_text(&mut harness, "1");
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        let state = harness.state();
+        assert_eq!(state.sync.conflict_keys(), vec!["hp"]);
+        assert_eq!(state.sync.desired["hp"]["removedHitPoints"], 9, "the DM's");
+        assert!(state.sheet.writes.is_empty());
+    }
+    /// A drag sends at its end, and a pause within it sends nothing.
+    #[test]
+    fn no_exchange_starts_while_a_field_is_dragged() {
+        use egui_kittest::kittest::Queryable;
+        let mut harness = rig();
+        let start = harness.get_by_label(HP_FIELD).rect().center();
+        harness.hover_at(start);
+        harness.run_steps(2);
+        harness.drag_at(start);
+        harness.run_steps(2);
+        for step in 1..=3 {
+            harness.hover_at(start - egui::vec2(10.0 * step as f32, 0.0));
+            harness.run_steps(2);
+            assert!(harness.state().sync.in_field(), "step {step}");
+            assert_ne!(removed(&harness), 5, "the drag moves the value");
+            pass_time(&mut harness);
+            assert_eq!(harness.state().exchanges, 0, "step {step}");
+        }
+        let dragged = removed(&harness);
+        harness.drop_at(start - egui::vec2(30.0, 0.0));
+        harness.run_steps(3);
+        let state = harness.state();
+        assert!(!state.sync.in_field(), "the drag ended");
+        assert_eq!(state.exchanges, 0, "the delay starts when the drag ends");
+        pass_time(&mut harness);
+        let state = harness.state();
+        assert_eq!(state.sheet.writes.len(), 1);
+        assert_eq!(state.sheet.writes[0].body["removedHitPoints"], dragged);
+    }
+    /// A close prompt or a dialog turns the field off. egui ends the focus of a field that is
+    /// off, so the number can go while the prompt waits for it.
+    #[test]
+    fn a_prompt_in_front_of_the_field_lets_the_number_go() {
+        let mut harness = rig();
+        type_21(&mut harness);
+        harness.state_mut().off = true;
+        number_goes_out_after_the_delay(&mut harness);
+    }
+    /// A stop does not wait for the DM to leave the field, and the row says what is unsent.
+    #[test]
+    fn stop_does_not_wait_for_the_field() {
+        let mut harness = rig();
+        type_21(&mut harness);
+        harness.state_mut().sync.stop();
+        assert_eq!(harness.state().sync.state(), SyncState::NotSent);
+        harness.run_steps(3);
+        assert_eq!(removed(&harness), 9, "HP is 21");
+        assert_eq!(harness.state().exchanges, 0);
     }
     /// While sync is stopped, neither choice can do what it says, so each is off with a reason.
     #[test]

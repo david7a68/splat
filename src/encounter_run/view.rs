@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, MAX_FROM_SHEET, NOBODY_PRESENT, NOTICE_IN_HEADER, NOTICE_IN_HEADER_SHORT,
-    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, display, mode_label,
+    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, TypedHealth, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -1104,7 +1104,7 @@ impl Run {
 
     /// The entry controls have one fixed home, labelled with the row they act on, so
     /// no row moves when the selection changes. Typing needs no pointer travel at all.
-    fn dock(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn dock(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         let index = self.selected;
         let mut command = None;
@@ -1817,7 +1817,7 @@ impl Run {
     }
 
     /// Death saves at 0 HP, and a conflict's two choices, above the open tab.
-    fn needs_the_dm(&mut self, ui: &mut egui::Ui, index: usize) {
+    pub(super) fn needs_the_dm(&mut self, ui: &mut egui::Ui, index: usize) {
         let p = &self.state.participants[index];
         let (hp, successes, failures) = (p.hp, p.successes, p.failures);
         if hp == Some(0) {
@@ -2387,8 +2387,9 @@ impl Run {
         }
     }
 
-    fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
+    pub(super) fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
+        let mut in_health_field = None;
         egui::ScrollArea::vertical()
             .id_salt("run_record")
             .auto_shrink([false, false])
@@ -2398,13 +2399,36 @@ impl Run {
                 let mut hp = p.hp;
                 let mut max = p.max_hp;
                 design::group_label(ui, "Correct HP");
-                let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
-                ui.horizontal_wrapped(|ui| {
-                    optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
-                    design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
-                        optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                let ready_sync = self.syncs.get(&index).filter(|sync| sync.ready());
+                let sheet_decides = ready_sync.is_some();
+                // With the sheet's maximum in force, a number over it is the maximum, as in the
+                // sync panel. It must not leave an earlier digit in the run, to go to the sheet.
+                let highest = ready_sync
+                    .and_then(|sync| sync.max_hp())
+                    .unwrap_or(1_000_000);
+                let mut fields = [None, None];
+                // A row at 0 HP has a block above this tab, and egui counts it into a field's id.
+                // The field must not change when the first digit takes that block away.
+                let stable = egui::UiBuilder::new()
+                    .id_salt(("correct_hp", index))
+                    .global_scope(true);
+                ui.scope_builder(stable, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        fields[0] = optional_number(ui, "Current HP", &mut hp, 0..=highest);
+                        design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
+                            fields[1] =
+                                optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                        });
                     });
                 });
+                for field in fields.iter().flatten() {
+                    if field.has_focus() || field.dragged() {
+                        in_health_field = Some(field.id);
+                    }
+                    if let Some(sync) = self.syncs.get_mut(&index) {
+                        sync.hold_for(field);
+                    }
+                }
                 if sheet_decides {
                     ui.add(
                         egui::Label::new(
@@ -2480,6 +2504,10 @@ impl Run {
                     ui.label("Failures");
                     let b = ui.add(egui::DragValue::new(&mut failures).range(0..=3));
                     design::named(ui, &b, "Death save failures");
+                    if let Some(sync) = self.syncs.get_mut(&index) {
+                        sync.hold_for(&a);
+                        sync.hold_for(&b);
+                    }
                     if successes != p.successes || failures != p.failures {
                         command = Some(Command::DeathSaves(index, successes, failures));
                     }
@@ -2529,6 +2557,16 @@ impl Run {
                     self.dirty |= was != sync.enabled;
                 }
             });
+        let typed = self.typed_health.take();
+        self.typed_health = in_health_field.map(|field| {
+            typed
+                .filter(|typed| typed.field == field)
+                .unwrap_or(TypedHealth {
+                    field,
+                    before: None,
+                    steps: 0,
+                })
+        });
         if let Some(command) = command {
             self.run_command(command);
         }
@@ -3947,7 +3985,7 @@ fn optional_number(
     label: &str,
     value: &mut Option<i64>,
     range: std::ops::RangeInclusive<i64>,
-) {
+) -> Option<egui::Response> {
     let mut known = value.is_some();
     if ui.checkbox(&mut known, label).changed() {
         *value = known.then(|| *range.start().max(&0));
@@ -3955,7 +3993,9 @@ fn optional_number(
     if let Some(n) = value {
         let response = ui.add(egui::DragValue::new(n).range(range));
         design::named(ui, &response, label);
+        Some(response)
     } else {
         ui.label(Type::Small.rich(ui, "Unknown").color(colors().muted));
+        None
     }
 }

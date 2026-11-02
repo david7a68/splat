@@ -3625,14 +3625,279 @@ pub mod library_scope {
     }
 }
 
-/// F3-08: a form scrolled down and saved. The word that says so is in view. Runs at 960x640.
+/// The sync rule: while the DM is in a sync number field, that character's sync starts no
+/// exchange. Each way out keeps the number. Real clicks and keys on the whole app. Test builds
+/// have no worker, so each read is simulated, and no exchange can start: unit tests in
+/// `combat_sync.rs` and `encounter_run.rs` cover what goes out. Also F3-08. Runs at 960x640,
+/// where Lookup and Notes hide the panel.
 pub mod typed_sync_number {
     use super::*;
+    use crate::combat_sync::SyncState;
     use crate::settings::Account;
+    const MEMBER: &str = "Brannoch Vale";
+    const OTHER: &str = "Iselle Marrowind";
+    const MAX_HP: i64 = 62;
+    const SHEET_HP: i64 = 58;
+    const PANEL_HP: &str = "Current HP on the sheet";
+    const RECORD: &str = "Record";
+    const LOG: &str = "Log";
+    const LOG_MARKED: &str = "Log, new message";
+    const SYNC_SECTION: &str = "Combat sync";
+    const RAIL_STOPPED: &str = "Party sync stopped";
+    const DROPPED: &str = "A change to Brannoch Vale had not reached D&D Beyond";
+    const CLOSE_NAMES: &str = "D&D Beyond has not confirmed a change made on the Party page.";
     const REMOTE: &str = "Add from D&D Beyond";
     const ADD_REMOTE: &str = "Add Salt Road";
     const ADDED: &str = "Added Salt Road.";
     const CONNECTED_PAGE: &str = "Connected to D&D Beyond";
+
+    fn type_in_field(d: &mut Driver<'_>, number: i64) {
+        d.click(PANEL_HP);
+        for digit in number.to_string().chars() {
+            d.type_text(&digit.to_string());
+        }
+    }
+
+    /// A matched sheet, and a number typed in this participant's panel.
+    fn typed_in_run(d: &mut Driver<'_>, number: i64) {
+        d.app_mut()
+            .encounters
+            .simulate_sync_state(MEMBER, SyncState::Matching);
+        d.settle();
+        type_in_field(d, number);
+    }
+
+    fn run_values(d: &mut Driver<'_>) -> (bool, Option<i64>) {
+        let sync = d.app_mut().encounters.sync_of(MEMBER);
+        let removed = sync.values()["hp"]["removedHitPoints"].as_i64();
+        (sync.in_field(), removed.map(|removed| MAX_HP - removed))
+    }
+
+    /// The DM has left, the sync has the number, and so does the row.
+    #[track_caller]
+    fn run_exit(d: &mut Driver<'_>, how: &str, number: i64) {
+        let (held, value) = run_values(d);
+        let row = d.row_hp(MEMBER);
+        d.observe(
+            "F3-01",
+            !held && value == Some(number) && row == Some(number),
+            format!(
+                "{how}: the number stays, {number}: the sync has {value:?}, the row has {row:?}. The DM has left the field: {}",
+                !held
+            ),
+        );
+    }
+
+    fn party_values(d: &mut Driver<'_>) -> (bool, Option<i64>) {
+        let party = &d.app_mut().party;
+        (party.sync_in_field(), party.sync_hp())
+    }
+
+    fn party_read(d: &mut Driver<'_>, hp: i64) {
+        d.app_mut().party.simulate_sync_read(MAX_HP - hp);
+        d.settle();
+    }
+
+    fn in_a_run(d: &mut Driver<'_>) {
+        resume_run_from_cold_start(d);
+        d.click_row(MEMBER);
+        d.click(RECORD);
+
+        // The sheet's own HP, with nothing typed: leaving changes nothing.
+        d.app_mut()
+            .encounters
+            .simulate_sync_state(MEMBER, SyncState::Matching);
+        d.settle();
+        d.click(PANEL_HP);
+        d.press(Key::Enter);
+        let (held, value) = run_values(d);
+        d.observe(
+            "F3-03",
+            !held && value == Some(SHEET_HP) && d.row_hp(MEMBER) == Some(SHEET_HP),
+            format!("In the field and out, with nothing typed: the value stays {value:?}"),
+        );
+
+        typed_in_run(d, 45);
+        let (held, value) = run_values(d);
+        let row = d.row_hp(MEMBER);
+        let word = d.row_words(MEMBER);
+        d.observe(
+            "F3-01",
+            held && value == Some(45) && row == Some(45) && word.contains("Sync pending"),
+            format!(
+                "In the field after two digits: in the field {held}, the sync has {value:?}, the row has {row:?}, and says {word}"
+            ),
+        );
+        d.state("run-in-a-number-field", Sizes::Default);
+        d.press(Key::Enter);
+        run_exit(d, "Enter", 45);
+
+        typed_in_run(d, 44);
+        d.press(Key::Tab);
+        let (held, value) = run_values(d);
+        d.observe(
+            "F3-01",
+            held && value == Some(44),
+            format!(
+                "Tab: the number stays, {value:?}, and the DM is in the next number field: {held}"
+            ),
+        );
+        d.harness_focus_nothing();
+        d.settle();
+        run_exit(d, "Tab, then out of the fields", 44);
+
+        typed_in_run(d, 43);
+        let log = if d.has(LOG) { LOG } else { LOG_MARKED };
+        d.click(log);
+        run_exit(d, "A click on Log", 43);
+        d.click(RECORD);
+
+        typed_in_run(d, 42);
+        d.click_row(OTHER);
+        run_exit(d, "A click on another row", 42);
+        d.click_row(MEMBER);
+
+        typed_in_run(d, 41);
+        go_library(d);
+        let (held, value) = run_values(d);
+        d.observe(
+            "F3-01",
+            !held && value == Some(41),
+            format!("A click on the rail, away from the run: the sync has {value:?}, and the DM has left the field: {}", !held),
+        );
+        d.click(BACK_TO_RUN);
+        run_exit(d, "A click on the rail, then back", 41);
+
+        typed_in_run(d, 40);
+        d.press_ctrl(Key::K);
+        let hidden = !d.has(PANEL_HP);
+        d.observe(
+            "F3-01",
+            hidden,
+            format!("Ctrl+K at 960x640: Lookup hides the panel: {hidden}"),
+        );
+        run_exit(d, "Lookup, where it hides the panel", 40);
+        d.press_ctrl(Key::K);
+
+        typed_in_run(d, 39);
+        d.press_ctrl(Key::J);
+        let hidden = !d.has(PANEL_HP);
+        d.observe(
+            "F3-01",
+            hidden,
+            format!("Ctrl+J at 960x640: Notes hide the panel: {hidden}"),
+        );
+        run_exit(d, "Notes, where they hide the panel", 39);
+        d.press_ctrl(Key::J);
+        d.harness_focus_nothing();
+        d.settle();
+
+        typed_in_run(d, 38);
+        d.press(Key::Escape);
+        run_exit(d, "Escape, which keeps what was typed", 38);
+
+        // The dock's own button, on the number the DM has just typed. Temporary HP takes 5 first.
+        d.type_into("Amount", "10");
+        typed_in_run(d, 30);
+        d.click("Damage");
+        let row = d.row_hp(MEMBER);
+        d.observe(
+            "F3-01",
+            row == Some(25),
+            format!("Damage, clicked in the field, acts on the typed number: {row:?}"),
+        );
+        d.app_mut()
+            .encounters
+            .simulate_sync_state(MEMBER, SyncState::Matching);
+        d.settle();
+    }
+
+    fn on_party(d: &mut Driver<'_>) {
+        d.click(CLOSE_RUN);
+        d.click("Close now");
+        go_party(d);
+        d.click_containing(MEMBER);
+        d.click_containing(SYNC_SECTION);
+        party_read(d, SHEET_HP);
+
+        type_in_field(d, 45);
+        let (held, value) = party_values(d);
+        d.observe(
+            "F3-01",
+            held && value == Some(45),
+            format!("Party, in the field: the DM is in it: {held}, and the sync has {value:?}"),
+        );
+        d.press(Key::Enter);
+        let (held, value) = party_values(d);
+        d.observe(
+            "F3-01",
+            !held && value == Some(45),
+            format!(
+                "Party, Enter: the number stays, {value:?}, and the DM has left: {}",
+                !held
+            ),
+        );
+        party_read(d, 45);
+
+        // Sync runs on when the DM leaves this page, so the number can still go.
+        type_in_field(d, 44);
+        go_library(d);
+        let (held, value) = party_values(d);
+        let rail = d.rail_words();
+        d.observe(
+            "F3-01",
+            !held && value == Some(44) && !rail.contains(RAIL_STOPPED),
+            format!("Party, a click on the rail: the number stays, {value:?}, the DM has left: {}, and sync runs on: {rail}", !held),
+        );
+        party_read(d, 44);
+        go_party(d);
+
+        // Main's stated limit: another member opens at once, and what had not gone is dropped.
+        // The page says so.
+        type_in_field(d, 43);
+        let first = d.app_mut().party.selected_member();
+        d.click_containing(OTHER);
+        let moved = d.app_mut().party.selected_member() != first;
+        let says = d.has_containing(DROPPED);
+        d.observe(
+            "F4-03",
+            moved && says,
+            format!("Party, another member with a number unsent: they open: {moved}, and the page says what was dropped: {says}"),
+        );
+        d.click_containing(SYNC_SECTION);
+        d.state("party-unsent-change-dropped", Sizes::Default);
+        d.click("Dismiss");
+        d.click_containing(SYNC_SECTION);
+        d.click_containing(MEMBER);
+        party_read(d, 44);
+        let says = d.has_containing(DROPPED);
+        d.observe(
+            "F4-03",
+            !says,
+            format!("Dismissed, the words go: {}", !says),
+        );
+
+        // App close: the prompt names the number, and the page behind it is off.
+        type_in_field(d, 37);
+        d.request_close();
+        let (held, value) = party_values(d);
+        let names = d.has_containing(CLOSE_NAMES);
+        d.observe(
+            "F4-03",
+            !held && value == Some(37) && names,
+            format!(
+                "App close from the field: the prompt names the number: {names}. The DM has left the field: {}. The number stays: {value:?}",
+                !held
+            ),
+        );
+        party_read(d, 37);
+        let gone = !d.has_containing(CLOSE_NAMES);
+        d.observe(
+            "F4-03",
+            gone,
+            format!("The number gone, the prompt has nothing to ask, and goes: {gone}"),
+        );
+    }
 
     /// F3-08: a scrolled form, saved. The message that says so is in view.
     fn added_from_a_scrolled_form(d: &mut Driver<'_>) {
@@ -3658,6 +3923,8 @@ pub mod typed_sync_number {
         d.set_base((960.0, 640.0));
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
+        in_a_run(d);
+        on_party(d);
         added_from_a_scrolled_form(d);
     }
 }
