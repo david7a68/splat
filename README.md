@@ -257,7 +257,7 @@ are in Settings and in **Campaign → Link and folder**.
 ## Character sheets
 
 Open **Party** to read the linked D&D Beyond party. Select a character
-and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
+and browse Overview, Actions, Spells, Gear, and Features. **Refresh party**
 gets the latest sheets. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
@@ -304,7 +304,8 @@ A player who has not arrived can be marked **Absent** in setup. They need no ini
 without them. If everyone is absent, **Begin combat** is off and says why. When they come back, **Mark present** opens
 **Record** with its field ready, and the row says `No initiative` until you set a total. Until then they are last in the
 order. The current turn stays. A total set during combat is set once, and only **Undo** takes it back. Accepted limit: after
-a sheet update has ended Undo, a wrong total stays for the rest of the fight. A saved run with such a player does not open in
+a sheet update has ended Undo, a wrong total stays for the rest of the fight. **Mark present** puts the keyboard in that field,
+so `N`, `U` and `C` wait for Escape, and digits and Enter set a total there. A saved run with such a player does not open in
 a build older than this behaviour; the file is not changed, and it opens again in this build.
 
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
@@ -395,7 +396,9 @@ so another client can still change values between a read and a write.
 
 Health or condition values taken from the sheet end the run's earlier Undo steps, and a message says so: under the
 list, on one line when the list needs the room, or on the header's second line when there is no room at all. Behind a
-sync alert, that line is taken, so the `Log` tab has a mark until you open it. Wait for sync
+sync alert, or with the next row scrolled out of view, that line is kept, so the `Log` tab has a mark until you open it.
+The `Log` has the whole message. Accepted limit: while Lookup or Notes takes the panel's place, that tab is away. Behind an
+alert, `See the Log` shows beside it if it fits. If not, the mark waits until Lookup or Notes closes. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
 queued work but cannot recall a request already sent. Party sync stops when you leave its
 page, and the sidebar says so; run sync remains active while that run is open.

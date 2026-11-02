@@ -199,6 +199,8 @@ pub(crate) struct Run {
     notice: Option<Notice>,
     /// The list leaves no room for the notice, so the header or the Log tab says it instead.
     notice_hidden: bool,
+    /// The row marked NEXT is scrolled out of the roster's view.
+    next_out_of_view: bool,
     /// `Mark present` opened Record for a total, and its field takes the keyboard.
     focus_initiative: bool,
     /// A value reached the run with no step of its own, so Undo stops there.
@@ -290,6 +292,8 @@ const NOTICE_LEAST: &str = "Sheet update. Earlier Undo steps ended. See the Log.
 /// Said on the header's line when the list has no room for the notice at all.
 const NOTICE_IN_HEADER: &str = "Earlier Undo steps ended. See the Log.";
 const NOTICE_IN_HEADER_SHORT: &str = "Undo ended. See the Log.";
+/// Said beside a sync alert when Lookup or Notes has the Log tab's place.
+const SEE_THE_LOG: &str = "See the Log";
 #[derive(Clone)]
 enum Command {
     RollNpcs,
@@ -381,6 +385,7 @@ impl Run {
             scroll_to_selected: false,
             notice: None,
             notice_hidden: false,
+            next_out_of_view: false,
             focus_initiative: false,
             recording_notice: None,
             undo_stopped: false,
@@ -986,6 +991,10 @@ impl Run {
     /// Show the first participant with a conflict, so it can be resolved.
     pub fn review_conflict(&mut self) {
         if let Some(index) = self.first_sync_in(crate::combat_sync::SyncState::Conflict) {
+            // The digits of an amount meant for another row must not apply to this one.
+            if self.selected != index {
+                self.amount.clear();
+            }
             self.selected = index;
             self.scroll_to_selected = true;
             // Its controls are in the side panel, which Lookup covers.
@@ -1650,6 +1659,16 @@ impl Run {
             .any(|sync| sync.unconfirmed() && !sync.stranded())
             .then_some(CLOSE_BLOCKED)
     }
+    /// Why a stopped row's conflict cannot be settled, and what to do, in the words on screen.
+    fn why_choices_stopped(&self) -> &'static str {
+        if !self.connected && !self.simulate_connection {
+            crate::combat_sync::STOPPED_CONNECT_FIRST
+        } else if matches!(self.party_sync_plan(), PartySync::Stop(_)) {
+            crate::combat_sync::STOPPED_STOP_THEN_SYNC
+        } else {
+            crate::combat_sync::STOPPED_SYNC_AGAIN
+        }
+    }
     /// What `Sync party` does now. A running sync is never restarted: starting one drops
     /// its pending writes and any open conflict.
     fn party_sync_plan(&self) -> PartySync {
@@ -1745,6 +1764,7 @@ impl Run {
             scroll_to_selected: true,
             notice: None,
             notice_hidden: false,
+            next_out_of_view: false,
             focus_initiative: false,
             recording_notice: None,
             undo_stopped: false,
@@ -3206,6 +3226,47 @@ mod tests {
         read_sheet(&mut run, max, 8);
         assert_eq!(run.state.participants[0].hp, Some(max - 8));
         assert!(run.syncs[&0].conflict_keys().is_empty());
+    }
+    /// `Review` moves the selection, so a typed amount must not land on the new row.
+    #[test]
+    fn review_clears_an_amount_typed_for_another_row() {
+        let mut run = run();
+        begin(&mut run);
+        run.selected = 1;
+        run.amount = "12".to_owned();
+        run.syncs.insert(
+            0,
+            crate::combat_sync::CombatSync::simulated_conflict(1, 10, 1),
+        );
+        run.review_conflict();
+        assert_eq!(run.selected, 0);
+        assert!(run.amount.is_empty());
+        // On the row already selected, the number was meant for this row.
+        run.amount = "7".to_owned();
+        run.review_conflict();
+        assert_eq!(run.amount, "7");
+    }
+    /// A stopped row's conflict says what starts its sync again, from the case.
+    #[test]
+    fn a_stopped_conflict_says_what_to_do_in_each_case() {
+        use crate::combat_sync::{
+            CombatSync, STOPPED_CONNECT_FIRST, STOPPED_STOP_THEN_SYNC, STOPPED_SYNC_AGAIN,
+        };
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        linked(&mut run, 1, "11");
+        assert_eq!(run.why_choices_stopped(), STOPPED_CONNECT_FIRST);
+        run.connected = true;
+        assert_eq!(run.why_choices_stopped(), STOPPED_SYNC_AGAIN);
+        // One row runs, and the other stopped with an error: the button says Stop sync.
+        let mut on = CombatSync::default();
+        on.start();
+        run.syncs.insert(0, on);
+        let mut stopped = CombatSync::default();
+        stopped.error = Some("Another participant is already syncing this character.".into());
+        run.syncs.insert(1, stopped);
+        assert_eq!(run.why_choices_stopped(), STOPPED_STOP_THEN_SYNC);
     }
     #[test]
     fn a_sync_stopped_as_a_duplicate_does_not_hide_stop_sync() {

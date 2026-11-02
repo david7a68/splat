@@ -1356,6 +1356,7 @@ pub mod run_long_names {
     const RENAMED: &str = "Iselle Marrowind";
     const BACK_TO_RUN: &str = "Back to run";
     const LONG_NAME: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+    const RECORD_TAB: &str = "Record";
     const FIRST_NAME: &str = "Seraphina";
     const ENEMY: &str = "Cinder Wolf 1";
 
@@ -1367,8 +1368,16 @@ pub mod run_long_names {
         d.press(Key::Enter);
         d.app_mut().encounters.simulate_rename(RENAMED, LONG_NAME);
         d.settle();
+        let tabs_short_name = d.place_of(RECORD_TAB);
         d.click_row(LONG_NAME);
         d.state("long-name", Sizes::All);
+        let tabs_long_name = d.place_of(RECORD_TAB);
+        d.observe(
+            "L6-7",
+            tabs_short_name.is_some()
+                && tabs_short_name.map(|tab| tab.top()) == tabs_long_name.map(|tab| tab.top()),
+            format!("A long name moves no tab: {tabs_short_name:?}, then {tabs_long_name:?}"),
+        );
         let row = d.row_words(LONG_NAME);
         d.observe(
             "Long names",
@@ -2889,7 +2898,6 @@ pub mod run_roster_conflict {
     const AMOUNT: &str = "Amount";
     const LOADED_ROW: &str = "Kestrel Dunmoor";
     const BELOW: &str = "Sable Harrowgate";
-    const ONE_MORE_LINE: &str = "Cinder Wolf 3";
     const ONE_MORE_CONDITION: &str = "Prone";
     const LONG_MESSAGE: [(&str, &str); 3] = [
         ("Brannoch Vale", "HP 58 → 54"),
@@ -2902,8 +2910,7 @@ pub mod run_roster_conflict {
     const DISMISS: &str = "Dismiss this message";
     const IN_HEADER: &str = "See the Log";
     const LOG_MARKED: &str = "Log, new message";
-    const FIRST_MARK: &str = "Cinder Wolf 1";
-    const MORE_MARKS: [&str; 3] = ["Cinder Wolf 2", "Cinder Wolf 4", "Cinder Wolf 5"];
+    const MORE_MARKS: [&str; 2] = ["Cinder Wolf 2", "Cinder Wolf 4"];
     const LOADED_CONDITIONS: [&str; 5] =
         ["Blinded", "Charmed", "Grappled", "Paralyzed", "Restrained"];
 
@@ -2956,16 +2963,11 @@ pub mod run_roster_conflict {
         for condition in LOADED_CONDITIONS {
             d.click(condition);
         }
-        // One monster's mark, so that the list is near its limit before the message comes.
-        d.click_row(FIRST_MARK);
-        d.click(CONDITIONS);
-        d.click(ONE_MORE_CONDITION);
+        // The sync word on the loaded row costs a line, which brings the list near its limit
+        // before the message comes.
         // A message the DM has not dismissed takes one line here, so no row has to scroll.
         d.app_mut().encounters.simulate_sheet_update(&LONG_MESSAGE);
         d.settle();
-        d.click_row(ONE_MORE_LINE);
-        d.click(CONDITIONS);
-        d.click(ONE_MORE_CONDITION);
         d.state("message-on-one-line", Sizes::Default);
         let cut = rows_cut(d);
         d.observe(
@@ -2975,7 +2977,6 @@ pub mod run_roster_conflict {
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
         );
-        d.click(ONE_MORE_CONDITION);
         d.click_row(LOADED_ROW);
         let loaded = d.row_words(LOADED_ROW);
         d.observe(
@@ -2984,6 +2985,12 @@ pub mod run_roster_conflict {
                 .lines()
                 .any(|line| line.trim_start().starts_with('·')),
             format!("No wrapped line opens with a separator: {loaded}"),
+        );
+        let (last_condition, sync_word) = (loaded.find("Restrained"), loaded.find("Reading…"));
+        d.observe(
+            "L6-11",
+            matches!((last_condition, sync_word), (Some(a), Some(b)) if a < b),
+            format!("The sync word comes after the conditions, on a full row: {loaded}"),
         );
         let errored = LOADED_CONDITIONS.len() + 1;
         d.app_mut()
@@ -3029,6 +3036,23 @@ pub mod run_roster_conflict {
             cut.is_empty() && !d.visible_text(ONE_LINE_MESSAGE) && d.visible_text("Log") && d.has(LOG_MARKED),
             format!("With a tall list and no error, behind a conflict, the Log tab is marked. Rows not in full view: {cut:?}"),
         );
+        let tone = d
+            .place_of(LOG_MARKED)
+            .and_then(|tab| d.painted_glyph_color(tab, crate::design::icons::WARN));
+        d.observe(
+            "F1-8",
+            tone == Some(crate::design::colors().result.warning),
+            format!("The Log tab's mark is painted in the warning tone: {tone:?}"),
+        );
+        // Lookup takes the panel's place, and its mark with it. The header says it instead.
+        d.press_ctrl(Key::K);
+        d.state("message-no-room-beside-lookup", Sizes::Default);
+        d.observe(
+            "F1-2",
+            !d.has(LOG_MARKED) && d.visible_text(IN_HEADER),
+            "With Lookup open behind a conflict, See the Log is beside the alert",
+        );
+        d.press_ctrl(Key::K);
         d.click(LOG_MARKED);
         d.observe(
             "T3.4",
@@ -3080,7 +3104,30 @@ pub mod run_roster_conflict {
         resume_run(d, RUN_20);
         d.check_tab_order("run, roster of 20");
         d.goal("tab through a roster of 20");
-        for _ in 0..20 {
+        // F1-3: on the last row's turn, the row marked NEXT is scrolled out of view. A message
+        // with no room leaves the next name on the header's line, and marks the Log tab.
+        let mut turns = 0;
+        while turns < 20
+            && d.nodes()
+                .iter()
+                .any(|node| node.name.contains(", Next up") && node.fully_in_view())
+        {
+            d.click(NEXT_TURN);
+            turns += 1;
+        }
+        d.app_mut()
+            .encounters
+            .simulate_sheet_update(&[("Cinder Wolf 2", "HP 22 → 18")]);
+        d.settle();
+        d.state("message-no-room-next-out-of-view", Sizes::Default);
+        d.observe(
+            "F1-3",
+            d.visible_text("Next:") && !d.visible_text(IN_HEADER) && d.has(LOG_MARKED),
+            "With the next row out of view, its name keeps the header's line, and the Log tab has the mark",
+        );
+        d.click(LOG_MARKED);
+        d.click("Stat block");
+        for _ in turns..20 {
             d.click(NEXT_TURN);
         }
         d.state("after-full-round", Sizes::All);
@@ -3395,6 +3442,23 @@ pub mod signed_in {
             d.is_disabled(USE_REMOTE) && reason && d.is_disabled(KEEP_LOCAL),
             "While sync is stopped, a conflict's two choices are off, with the reason",
         );
+        d.state("conflict-with-sync-stopped", Sizes::Default);
+        d.observe(
+            "F1-5",
+            d.visible_text(crate::combat_sync::STOPPED_SYNC_AGAIN)
+                && !d.visible_text("Choose which to keep"),
+            "While sync is stopped, the reason is in view, in place of the words that say to choose",
+        );
+        d.app_mut().settings.simulate_session_expiry();
+        d.settle();
+        d.state("conflict-with-sync-stopped-no-session", Sizes::Default);
+        d.observe(
+            "F1-5",
+            d.visible_text(crate::combat_sync::STOPPED_CONNECT_FIRST),
+            "With the session gone too, the reason says to connect first",
+        );
+        d.app_mut().settings.simulate(Account::Connected);
+        d.settle();
         go_campaign(d);
         d.click(LINK_TAB);
         d.observe(

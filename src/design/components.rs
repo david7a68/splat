@@ -728,7 +728,7 @@ pub fn search_field(
 /// One choice from a few, as words with an underline. Returns true when it changed.
 pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T, &str)]) -> bool {
     let named: Vec<(T, &str, &str)> = options.iter().map(|(o, l)| (*o, *l, *l)).collect();
-    segmented_named(ui, value, &named)
+    segmented_named(ui, value, &named, None)
 }
 
 /// The same, for a tab that paints a mark: `(value, painted, accessible name)`.
@@ -736,6 +736,7 @@ pub fn segmented_named<T: PartialEq + Copy>(
     ui: &mut Ui,
     value: &mut T,
     options: &[(T, &str, &str)],
+    marked: Option<T>,
 ) -> bool {
     let mut changed = false;
     let c = colors();
@@ -745,7 +746,16 @@ pub fn segmented_named<T: PartialEq + Copy>(
             let selected = *value == *option;
             let font = if selected { Type::Strong } else { Type::Body };
             let color = if selected { c.text } else { c.muted };
-            let galley = one_line(ui, label, font.font(ui), color, ui.available_width());
+            // A tab that needs the DM has a mark in the warning tone, beside its usual word.
+            let galley = if marked == Some(*option) {
+                let format = |color| egui::TextFormat::simple(font.font(ui), color);
+                let mut job = LayoutJob::default();
+                job.append(icons::WARN, 0.0, format(c.result.warning));
+                job.append(&format!(" {label}"), 0.0, format(color));
+                ui.fonts_mut(|fonts| fonts.layout_job(job))
+            } else {
+                one_line(ui, label, font.font(ui), color, ui.available_width())
+            };
             let (rect, response) = ui.allocate_exact_size(
                 vec2(galley.size().x + 2.0 * S, Density::Read.control()),
                 Sense::click(),

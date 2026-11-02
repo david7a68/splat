@@ -437,6 +437,11 @@ pub enum SyncState {
 const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings, then select Sync party. Splat reads the sheet first, and asks before it replaces a value you changed.";
 /// Groups the run holds as its own values, so a saved run keeps them.
 const KEPT_BY_THE_RUN: [&str; 3] = ["hp", "death", "conditions"];
+/// In place of a conflict's message while its sync is stopped: neither choice can run, and
+/// what starts this row's sync again depends on the case.
+pub const STOPPED_CONNECT_FIRST: &str = "Sync is stopped, so neither choice can run. Connect in Settings, then select Sync party. It reads the sheet and asks again.";
+pub const STOPPED_STOP_THEN_SYNC: &str = "Sync is stopped for this row, so neither choice can run. Select Stop sync, then Sync party. It reads the sheet and asks again.";
+pub const STOPPED_SYNC_AGAIN: &str = "Sync is stopped, so neither choice can run. Select Sync party. It reads the sheet and asks again.";
 const DIFFER_AFTER_READ: &str =
     "Splat and D&D Beyond differ, and you changed this while sync was off. Choose which to keep.";
 
@@ -637,11 +642,11 @@ impl CombatSync {
     }
     /// Why a conflict's choices are off. Neither can do what it says with sync stopped: the
     /// run would not change, and nothing would be sent.
-    fn choice_blocked(&self) -> Option<&'static str> {
+    fn choice_blocked<'a>(&self, stopped: &'a str) -> Option<&'a str> {
         if self.busy() {
             Some("Wait for the current sheet read.")
         } else if !self.enabled {
-            Some("Sync is stopped. Select Sync party, and it reads the sheet and asks again.")
+            Some(stopped)
         } else {
             None
         }
@@ -984,8 +989,10 @@ impl CombatSync {
         self.updated = true;
     }
     /// Each conflict with both values and its two ways out. The run shows this beside
-    /// the roster, so it does not stop the table.
-    pub fn conflicts(&mut self, ui: &mut egui::Ui) {
+    /// the roster, so it does not stop the table. `stopped` is why the choices are off and what
+    /// to do if this sync is stopped. It takes the message's place, in view, as nobody at the
+    /// table hovers, and a message that says to choose would be false.
+    pub fn conflicts(&mut self, ui: &mut egui::Ui, stopped: &str) {
         use crate::design::{self, Action, Density, Type, colors};
         for (key, message) in self.blocked.clone() {
             let c = colors();
@@ -997,7 +1004,12 @@ impl CombatSync {
                     )
                     .color(c.sync.conflict),
             );
-            ui.add(egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap());
+            let line = if self.enabled {
+                message.as_str()
+            } else {
+                stopped
+            };
+            ui.add(egui::Label::new(Type::Small.rich(ui, line).color(c.text)).wrap());
             // The two values side by side, so the difference is what the eye finds.
             egui::Grid::new(("conflict_values", &key))
                 .num_columns(2)
@@ -1021,7 +1033,7 @@ impl CombatSync {
                 });
             ui.push_id(&key, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    let blocked = self.choice_blocked();
+                    let blocked = self.choice_blocked(stopped);
                     let max = self.max_hp().unwrap_or(0);
                     let sheet = self.remote.as_ref().and_then(|r| r.groups.get(&key));
                     let (use_label, keep_label) = (
@@ -1108,7 +1120,8 @@ impl CombatSync {
         } else if self.remote.is_some() {
             ui.add(egui::Label::new("Combat values match the last read").wrap());
         }
-        self.conflicts(ui);
+        // Sync is on here, so `stopped` is not used. This panel returns early when it is off.
+        self.conflicts(ui, STOPPED_SYNC_AGAIN);
         let Some(remote) = &self.remote else {
             ui.label("Waiting for the first sheet read. If it does not come, check the connection in Settings.");
             return;
@@ -1666,12 +1679,12 @@ mod tests {
     fn a_conflict_cannot_be_settled_while_sync_is_stopped() {
         let mut sync = CombatSync::simulated_conflict(11, 10, 1);
         assert_eq!(sync.state(), SyncState::Conflict);
-        assert_eq!(sync.choice_blocked(), None);
+        assert_eq!(sync.choice_blocked(STOPPED_SYNC_AGAIN), None);
         sync.stop();
         assert_eq!(sync.state(), SyncState::Conflict, "the conflict stays");
-        assert!(
-            sync.choice_blocked()
-                .is_some_and(|why| why.contains("Sync is stopped"))
+        assert_eq!(
+            sync.choice_blocked(STOPPED_CONNECT_FIRST),
+            Some(STOPPED_CONNECT_FIRST)
         );
     }
     /// Spell slots are in no saved run. With sync on or off, closing the app loses an unsent one,

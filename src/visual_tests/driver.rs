@@ -289,6 +289,22 @@ impl<'a> Driver<'a> {
         found
     }
 
+    /// The colour this glyph is painted in, inside this rect.
+    pub fn painted_glyph_color(&self, rect: egui::Rect, glyph: &str) -> Option<egui::Color32> {
+        let mut found = None;
+        self.each_painted_text(|text, _| {
+            let job = &text.galley.job;
+            if rect.contains(text.visual_bounding_rect().center()) {
+                for section in &job.sections {
+                    if job.text[section.byte_range.clone()].contains(glyph) {
+                        found = Some(section.format.color);
+                    }
+                }
+            }
+        });
+        found
+    }
+
     /// Each text painted now, with the clip of the pane it is in.
     fn each_painted_text(&self, mut visit: impl FnMut(&egui::epaint::TextShape, egui::Rect)) {
         fn walk(

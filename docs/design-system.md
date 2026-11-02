@@ -212,8 +212,11 @@ stays near the front, as one more line would cost another row its place.
   words and a dismiss on the right. It is smaller than `message`, because it shares the row's
   room. A full list keeps it to one line (`Sheet update: Brannoch Vale and 2 more.`), with the
   whole on hover and in the log. With no room for that line, it goes to the header's line
-  (`Earlier Undo steps ended. See the Log.`). If a sync alert holds that line, the `Log` tab has a
-  mark until the DM opens it.
+  (`Earlier Undo steps ended. See the Log.`). If a sync alert holds that line, or the row marked
+  next is out of view and its name keeps it, the `Log` tab has a mark in the warning tone until the
+  DM opens it. The `Log` has the whole message. While Lookup or Notes takes the panel's place, that
+  tab is away: behind an alert, `See the Log` shows beside it if it fits, and otherwise the mark
+  waits until Lookup or Notes closes. An accepted limit, as the message is delayed and not lost.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
   selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage. `Mark present` on
   someone with no initiative opens `Record`, with its field in focus.
@@ -232,7 +235,9 @@ stays near the front, as one more line would cost another row its place.
   how many are tied. `Undo` is in the footer here, far from `Begin combat`, and in the header once
   combat runs, where it is wanted every turn. A total set during combat is set once, and only Undo
   takes it back: a limit accepted because the case is rare, and a way to set it again would add a
-  saved field and a second way to move someone in the order.
+  saved field and a second way to move someone in the order. `Mark present` puts the keyboard in
+  that field, so letter keys wait for Escape, and digits and Enter set a total there. The same limit
+  covers that case.
 
 ## Sessions and the timeline
 

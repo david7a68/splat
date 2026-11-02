@@ -509,7 +509,7 @@ reading the code, not from a test run.
 | T3.1 | Each synced row shows sync state with nothing expanded | run-sync-conflict **new** | state | Fail |
 | T3.2 | A conflict shows on the row and the run strip, does not block `Next turn`, and resolves in ≤ 2 | run-sync-conflict **new** | cost, state | Hidden; 3+ |
 | T3.3 | Enable sync for the whole party in ≤ 2 | run-sync-conflict **new** | cost | 2 or 3 per player |
-| T3.4 | A message appears when earlier Undo steps end: under the list, or on the header's second line when the list has no room, or as a mark on the `Log` tab behind a sync alert | run-sync-conflict, run-roster-conflict | state | Fail |
+| T3.4 | A message appears when earlier Undo steps end: under the list, or on the header's second line when the list has no room, or as a mark on the `Log` tab behind a sync alert or with the next row out of view. The `Log` has the whole message. Accepted limit: while Lookup or Notes takes the panel's place, the tab is away, so `See the Log` shows beside the alert if it fits, and otherwise the mark waits until Lookup or Notes closes | run-sync-conflict, run-roster-conflict | state | Fail |
 | T3.5 | App close with pending sync warns. A disabled close states its reason | dialogs | state | Fail |
 | T4.1 | Cold start with a saved encounter to run setup in ≤ 3 | prep-to-table **new** | cost | 5 |
 | T4.2 | Cold start to the interrupted turn in ≤ 2, current participant selected | run-resume **new** | cost, state | 4; first row |

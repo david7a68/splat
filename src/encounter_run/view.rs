@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, MAX_FROM_SHEET, NOBODY_PRESENT, NOTICE_IN_HEADER, NOTICE_IN_HEADER_SHORT,
-    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, display, mode_label,
+    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, SEE_THE_LOG, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -411,16 +411,35 @@ impl Run {
             return;
         }
         if let Some(error) = self.error.clone() {
-            ui.horizontal_top(|ui| {
-                let width = ui.available_width() - 36.0;
-                ui.scope(|ui| {
-                    ui.set_max_width(width);
-                    design::message(ui, Tone::Error, &error);
-                });
-                if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
-                    self.error = None;
-                }
+            // Laid out as the notice is, so that the two dismisses sit alike.
+            let width = ui.available_width();
+            let font = Type::Body.font(ui);
+            let words = ui.fonts_mut(|fonts| {
+                fonts.layout(
+                    error.clone(),
+                    font,
+                    egui::Color32::PLACEHOLDER,
+                    width - MESSAGE_FRAME,
+                )
             });
+            let words = words.size().y;
+            let height = words.max(Density::Read.control());
+            ui.allocate_ui_with_layout(
+                vec2(width, height),
+                Layout::right_to_left(Align::Center),
+                |ui| {
+                    ui.set_min_height(height);
+                    if design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked() {
+                        self.error = None;
+                    }
+                    let room = ui.available_width();
+                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                        ui.allocate_ui(vec2(room, words), |ui| {
+                            design::message(ui, Tone::Error, &error);
+                        });
+                    });
+                },
+            );
         }
     }
 
@@ -709,7 +728,7 @@ impl Run {
         // The words beside Undo: a sync alert, or a message with no other place.
         let beside = match &sync_alert {
             Some(alert) => Some((alert.text.as_str(), Type::Strong, link)),
-            None if self.notice_hidden => Some((
+            None if self.message_in_header() => Some((
                 NOTICE_IN_HEADER,
                 Type::Small,
                 Density::Read.control() + design::XS,
@@ -745,20 +764,31 @@ impl Run {
                     .clicked();
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     if let Some(SyncAlert { text, short, color }) = &sync_alert {
-                        // Next to a long Undo it gives up size, then the word Sync, never the name.
+                        // Next to a long Undo it gives up the word Sync, then size, never the name.
                         let room = ui.available_width() - link - design::S;
-                        let (role, text) =
-                            if design::number_width(ui, text, &Type::Strong.font(ui)) < room {
-                                (Type::Strong, text)
-                            } else if design::number_width(ui, text, &Type::Small.font(ui)) < room {
-                                (Type::Small, text)
-                            } else {
-                                (Type::Small, short)
-                            };
+                        let fits = |text: &str, role: Type| {
+                            design::number_width(ui, text, &role.font(ui)) < room
+                        };
+                        let (role, text) = if fits(text, Type::Strong) {
+                            (Type::Strong, text)
+                        } else if fits(short, Type::Strong) {
+                            (Type::Strong, short)
+                        } else if fits(text, Type::Small) {
+                            (Type::Small, text)
+                        } else {
+                            (Type::Small, short)
+                        };
                         ui.label(role.rich(ui, text.as_str()).color(*color));
                         review_conflict = review && design::link(ui, "Review").clicked();
-                    } else if self.notice_hidden {
-                        // The row already says NEXT, so this name can wait for it.
+                        // With Lookup or Notes in the panel's place, its mark cannot say this.
+                        if self.hide_panel && self.log_marked() {
+                            let font = Type::Small.font(ui);
+                            if design::number_width(ui, SEE_THE_LOG, &font) < ui.available_width() {
+                                ui.label(Type::Small.rich(ui, SEE_THE_LOG).color(c.result.warning));
+                            }
+                        }
+                    } else if self.message_in_header() {
+                        // The row in view says NEXT, so this name can wait for it.
                         let room = ui.available_width() - Density::Read.control() - design::XS;
                         let font = Type::Small.font(ui);
                         let words = if design::number_width(ui, NOTICE_IN_HEADER, &font) < room {
@@ -960,6 +990,19 @@ impl Run {
                 }
             });
         self.overflow_note(ui, &output, &spans);
+        let (top, bottom) = (
+            output.state.offset.y,
+            output.state.offset.y + output.inner_rect.height(),
+        );
+        let next_out_of_view = next_up.is_some_and(|next| {
+            spans.iter().any(|(start, end, index)| {
+                *index == next && (*start < top - 1.0 || *end > bottom + 1.0)
+            })
+        });
+        if next_out_of_view != self.next_out_of_view {
+            self.next_out_of_view = next_out_of_view;
+            ui.ctx().request_repaint();
+        }
         if let Some(index) = clicked {
             self.select(index);
         }
@@ -1632,6 +1675,7 @@ impl Run {
         }
         design::group_label(ui, "D&D Beyond sync");
         for (index, name) in names {
+            let stopped = self.why_choices_stopped();
             let Some(sync) = self.syncs.get_mut(&index) else {
                 continue;
             };
@@ -1665,7 +1709,7 @@ impl Run {
                     );
                 }
                 if conflict {
-                    sync.conflicts(ui);
+                    sync.conflicts(ui, stopped);
                 }
             });
         }
@@ -1679,18 +1723,20 @@ impl Run {
         let index = self.selected;
         let p = &self.state.participants[index];
         let is_sheet = p.definition.fields.contains_key("splat_external");
-        ui.add(egui::Label::new(Type::Title.rich(ui, &p.name).color(colors().text)).wrap());
+        // One line, so the tabs hold their place. It gives up later words, and the row and the
+        // hover have the whole name.
+        let title =
+            design::words_that_fit(ui, &p.name, &Type::Title.font(ui), ui.available_width());
+        ui.add(egui::Label::new(Type::Title.rich(ui, title).color(colors().text)).truncate())
+            .on_hover_text(&p.name);
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
-        let (log, log_name) = if self.log_marked() {
-            (format!("{} Log", icons::WARN), LOG_MARKED)
-        } else {
-            ("Log".to_owned(), "Log")
-        };
+        let marked = self.log_marked().then_some(Panel::Log);
+        let log_name = if marked.is_some() { LOG_MARKED } else { "Log" };
         let tabs = [
             (Panel::Reference, reference, reference),
             (Panel::Conditions, "Conditions", "Conditions"),
             (Panel::Record, "Record", "Record"),
-            (Panel::Log, log.as_str(), log_name),
+            (Panel::Log, "Log", log_name),
             (Panel::Encounter, "Prep", "Prep"),
         ];
         if ui.available_width() >= PANEL_TWO_COLUMNS {
@@ -1725,7 +1771,7 @@ impl Run {
                         ui.spacing_mut().item_spacing.x = spacing;
                         ui.set_min_height(height);
                         ui.set_max_width(column);
-                        design::segmented_named(ui, &mut picked, &tabs[1..]);
+                        design::segmented_named(ui, &mut picked, &tabs[1..], marked);
                         design::rule(ui);
                         self.needs_the_dm(ui, index);
                         self.panel_body(ui, index, picked);
@@ -1736,7 +1782,7 @@ impl Run {
                 self.panel = picked;
             }
         } else {
-            design::segmented_named(ui, &mut self.panel, &tabs);
+            design::segmented_named(ui, &mut self.panel, &tabs, marked);
             design::rule(ui);
             self.needs_the_dm(ui, index);
             self.panel_body(ui, index, self.panel);
@@ -1750,24 +1796,36 @@ impl Run {
         if hp == Some(0) {
             self.death_saves(ui, index, successes, failures);
         }
+        let stopped = self.why_choices_stopped();
         if let Some(sync) = self
             .syncs
             .get_mut(&index)
             .filter(|s| s.state() == SyncState::Conflict)
         {
-            sync.conflicts(ui);
+            sync.conflicts(ui, stopped);
             design::rule(ui);
         }
     }
 
-    /// The screen has no room for the message, and a sync alert holds the header's line.
+    /// The screen has no room for the message, and the header's line has something it must
+    /// say instead: a sync alert, or the next name when that row is out of view.
     fn log_marked(&self) -> bool {
+        self.notice_hidden && (self.has_sync_alert() || self.next_out_of_view)
+    }
+
+    fn has_sync_alert(&self) -> bool {
         let strip = self.strip();
-        self.notice_hidden
-            && (strip.sync_stopped
-                || strip.conflict.is_some()
-                || !strip.unsent.is_empty()
-                || strip.sync_error.is_some())
+        strip.sync_stopped
+            || strip.conflict.is_some()
+            || !strip.unsent.is_empty()
+            || strip.sync_error.is_some()
+    }
+
+    /// The header's line says a hidden message, unless the row marked NEXT is out of view: then
+    /// the next name keeps the line, and the Log tab's mark says it. With the panel away there
+    /// is no mark, so the words stay.
+    fn message_in_header(&self) -> bool {
+        self.notice_hidden && (!self.next_out_of_view || self.hide_panel)
     }
 
     fn panel_body(&mut self, ui: &mut egui::Ui, index: usize, panel: Panel) {
@@ -2994,7 +3052,6 @@ impl RowLayout {
         if inline_state && let Some((icon, word, color)) = hp_word(p) {
             words.push((format!("{icon} {word}"), color));
         }
-        let sync_at = words.len();
         if !p.present {
             words.push((format!("{} Absent", icons::ABSENT), c.muted));
         }
@@ -3015,10 +3072,9 @@ impl RowLayout {
         // to the next line only if it fits whole there. A longer one starts here and wraps, so
         // that a long effect costs no line it does not need.
         let max_width = job.wrap.max_width;
-        let flow = |words: &[(String, egui::Color32)]| -> (Vec<bool>, usize) {
+        let flow = |words: &[(String, egui::Color32)]| -> Vec<bool> {
             let mut used = 0.0;
             let mut breaks = Vec::with_capacity(words.len());
-            let mut lines = usize::from(!words.is_empty());
             for (at, (text, _)) in words.iter().enumerate() {
                 let width = design::number_width(ui, text, &font);
                 let start = used + if at > 0 { separator } else { 0.0 };
@@ -3026,7 +3082,6 @@ impl RowLayout {
                 let wrap = at > 0 && !fits_here && width <= max_width;
                 breaks.push(wrap);
                 if wrap {
-                    lines += 1;
                     used = width;
                 } else if fits_here {
                     used = start + width;
@@ -3039,30 +3094,22 @@ impl RowLayout {
                         egui::TextFormat::simple(font.clone(), egui::Color32::PLACEHOLDER),
                     );
                     let galley = ui.fonts_mut(|fonts| fonts.layout_job(long));
-                    lines += galley.rows.len().saturating_sub(1);
                     used = galley.rows.last().map_or(0.0, |row| row.rect().right());
                 }
             }
-            (breaks, lines)
+            breaks
         };
-        // The sync word goes last, so that it does not read as a condition. A full row keeps
-        // it at the front, as a line more would cost another row its place.
+        // The sync word goes last, so that it does not read as a condition.
         if inline_state && let Some(sync) = sync {
             let status = sync_status(sync);
-            let word = (format!("{} {}", status.icon, status.word), status.color);
-            let mut first = words.clone();
-            first.insert(sync_at, word.clone());
-            words.push(word);
-            if flow(&words).1 > flow(&first).1 {
-                words = first;
-            }
+            words.push((format!("{} {}", status.icon, status.word), status.color));
         }
         let format = |color: egui::Color32| egui::TextFormat {
             font_id: font.clone(),
             color,
             ..Default::default()
         };
-        let (breaks, _) = flow(&words);
+        let breaks = flow(&words);
         for (at, (text, color)) in words.iter().enumerate() {
             if at > 0 {
                 let between = if breaks[at] { "\n" } else { " · " };
