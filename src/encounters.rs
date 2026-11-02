@@ -1771,7 +1771,7 @@ impl Encounters {
                         } else {
                             ui.add_space(Density::Read.control());
                         }
-                        if Action::quiet("Options")
+                        if Action::quiet("Edit")
                             .density(Density::Read)
                             .name(groups::SLOT_OPTIONS)
                             .selected(is_open)
