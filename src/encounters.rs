@@ -18,7 +18,9 @@ use std::{collections::BTreeSet, fs, sync::Arc, sync::mpsc};
 use uuid::Uuid;
 
 mod groups;
+mod history;
 use groups::GroupDraft;
+use history::Template;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Slot {
@@ -49,6 +51,9 @@ struct Setup {
     /// encounter says so only when it turns this off, so older notes do not change.
     #[serde(default = "sync_by_default", skip_serializing_if = "is_true")]
     combat_sync: bool,
+    /// It stays in Ready to run after a run ends, for a fight that can happen again.
+    #[serde(default, skip_serializing_if = "is_false")]
+    repeatable: bool,
     #[serde(flatten)]
     extra: Mapping,
 }
@@ -57,6 +62,9 @@ fn sync_by_default() -> bool {
 }
 fn is_true(value: &bool) -> bool {
     *value
+}
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 fn yaml(text: &str) -> Value {
     serde_yaml_ng::from_str(text).expect("static YAML")
@@ -552,8 +560,7 @@ fn roster_summary(setup: &Setup) -> String {
 struct Snapshot {
     catalogue: Catalogue,
     creatures: Vec<Creature>,
-    encounters: Vec<(String, String)>,
-    encounter_summaries: std::collections::BTreeMap<String, String>,
+    templates: Vec<Template>,
     issues: Vec<String>,
     options: crate::encounter_settings::Options,
     saved_options: crate::encounter_settings::Options,
@@ -563,6 +570,14 @@ struct Snapshot {
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
 }
 impl Snapshot {
+    /// A refresh keeps settings the DM is editing. Otherwise the file decides, or the next
+    /// save would write an old value over a change made outside Splat.
+    fn keep_edited_settings(&mut self, old: &Self) {
+        if old.options != old.saved_options {
+            self.options = old.options.clone();
+            self.saved_options = old.saved_options.clone();
+        }
+    }
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
         let document = CampaignDocument::load(campaign)?;
         let catalogue = Catalogue::load(modules, Some(campaign))?;
@@ -610,24 +625,26 @@ impl Snapshot {
             })
             .collect();
         creatures.sort_by_key(|c| (!c.party, c.name.to_lowercase(), c.id));
-        let mut encounters: Vec<_> = catalogue
+        let mut templates: Vec<_> = catalogue
             .entries
             .values()
             .filter(|e| e.private && e.owner == campaign.id && e.entry.kind == "encounter")
-            .map(|e| (e.entry.path.clone(), e.entry.name.clone()))
-            .collect();
-        encounters.sort_by_key(|e| e.1.to_lowercase());
-        let encounter_summaries = catalogue
-            .entries
-            .values()
-            .filter(|e| e.private && e.owner == campaign.id && e.entry.kind == "encounter")
-            .filter_map(|e| {
-                let setup: Setup =
-                    serde_yaml_ng::from_value(e.entry.fields.get("splat_encounter")?.clone())
-                        .ok()?;
-                Some((e.entry.path.clone(), roster_summary(&setup)))
+            .map(|e| {
+                let setup = e
+                    .entry
+                    .fields
+                    .get("splat_encounter")
+                    .and_then(|setup| serde_yaml_ng::from_value::<Setup>(setup.clone()).ok());
+                Template {
+                    path: e.entry.path.clone(),
+                    id: e.entry.id,
+                    name: e.entry.name.clone(),
+                    summary: setup.as_ref().map(roster_summary),
+                    repeatable: setup.is_some_and(|setup| setup.repeatable),
+                }
             })
             .collect();
+        templates.sort_by_key(|template| template.name.to_lowercase());
         let issues = catalogue
             .errors
             .iter()
@@ -659,8 +676,7 @@ impl Snapshot {
             runs,
             catalogue,
             creatures,
-            encounters,
-            encounter_summaries,
+            templates,
             issues,
         })
     }
@@ -695,8 +711,6 @@ pub struct Encounters {
     discarded_group: Option<GroupDraft>,
     /// A creature made the campaign's own, with its text open beside the roster.
     creature: Option<CreatureEditor>,
-    /// A saved run the DM removed, for one step of undo.
-    removed_run: Option<(std::path::PathBuf, Vec<u8>)>,
     /// The open encounter came from the Session page, and goes back there.
     pub from_session: bool,
     /// A new encounter joins the session's plan when it is first saved.
@@ -713,12 +727,28 @@ pub struct Encounters {
     pub run_from_session: bool,
     /// Where the party stands after the last fight of the session being played.
     pub carry: Option<crate::encounter_run::Carry>,
+    /// The saved run `Delete` last removed, for one step of undo.
+    deleted_run: Option<crate::encounter_run::DeletedRun>,
 }
 /// One encounter, as a session's plan offers it.
 pub struct PlanFight {
     pub name: String,
     pub path: String,
     pub summary: String,
+}
+/// What the page needs from the story: where each run's event is, and which sessions exist.
+pub struct Story<'a> {
+    pub events: &'a [crate::timeline::Event],
+    pub sessions: &'a [crate::timeline::page::SessionLink],
+}
+/// What the DM asked for from a row of the list. One press in a frame, so one of these.
+enum ListAction {
+    Resume(std::path::PathBuf),
+    BackToRun,
+    Delete(std::path::PathBuf),
+    Edit(String),
+    Run(String),
+    OpenGroup(String),
 }
 #[derive(Clone, Copy, Default, PartialEq)]
 enum EditorPane {
@@ -730,6 +760,7 @@ const START_FIGHT: &str = "Start fight";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
+const REPEATABLE_OPTION: &str = "Keep in Ready to run after a run ends";
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -851,16 +882,12 @@ impl Encounters {
     pub fn plan_fights(&self) -> Vec<PlanFight> {
         self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
             snapshot
-                .encounters
+                .templates
                 .iter()
-                .map(|(path, name)| PlanFight {
-                    name: name.clone(),
-                    path: path.clone(),
-                    summary: snapshot
-                        .encounter_summaries
-                        .get(path)
-                        .cloned()
-                        .unwrap_or_default(),
+                .map(|template| PlanFight {
+                    name: template.name.clone(),
+                    path: template.path.clone(),
+                    summary: template.summary.clone().unwrap_or_default(),
                 })
                 .collect()
         })
@@ -899,6 +926,7 @@ impl Encounters {
         self.group_in_plan = true;
         self.focus_name = true;
         self.editor_pane = EditorPane::Add;
+        self.expanded = None;
         self.error = None;
         self.message = None;
     }
@@ -909,6 +937,7 @@ impl Encounters {
                 self.group_draft = Some(draft);
                 self.group_in_plan = true;
                 self.editor_pane = EditorPane::Roster;
+                self.expanded = None;
                 self.error = None;
                 self.message = None;
                 true
@@ -1031,6 +1060,8 @@ impl Encounters {
             self.discarded_group = None;
             self.discarded_options = None;
         }
+        // Its path can be out of date after this, so undo could put it where nothing lists it.
+        self.deleted_run = None;
         self.active = Some(campaign.clone());
         self.draft = None;
         self.group_draft = None;
@@ -1088,8 +1119,7 @@ impl Encounters {
                             if std::mem::take(&mut self.refreshing)
                                 && let Some(old) = &self.snapshot
                             {
-                                s.options = old.options.clone();
-                                s.saved_options = old.saved_options.clone();
+                                s.keep_edited_settings(old);
                             }
                             self.snapshot = Some(s);
                         }
@@ -1133,16 +1163,22 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Encounter saved.".into());
-                let (path, name) = (draft.path.clone(), draft.name.clone());
                 if std::mem::take(&mut self.plan_on_save) {
-                    self.saved_for_plan = Some(name.clone());
+                    self.saved_for_plan = Some(draft.name.clone());
                 }
-                let summary = roster_summary(&draft.setup);
-                if let Some(s) = &mut self.snapshot {
-                    s.encounters.retain(|(p, _)| p != &path);
-                    s.encounter_summaries.insert(path.clone(), summary);
-                    s.encounters.push((path, name));
-                    s.encounters.sort_by_key(|e| e.1.to_lowercase());
+                if let (Some(s), Ok(entry)) =
+                    (&mut self.snapshot, Entry::parse(&draft.path, &draft.source))
+                {
+                    s.templates.retain(|template| template.path != draft.path);
+                    s.templates.push(Template {
+                        path: draft.path.clone(),
+                        id: entry.id,
+                        name: draft.name.clone(),
+                        summary: Some(roster_summary(&draft.setup)),
+                        repeatable: draft.setup.repeatable,
+                    });
+                    s.templates
+                        .sort_by_key(|template| template.name.to_lowercase());
                 }
             }
             Err(e) => self.error = Some(e),
@@ -1438,6 +1474,7 @@ impl Encounters {
                 crate::encounter_run::SETUP_HEADING,
             ),
         )?;
+        run.came_from(entry.id);
         run.configure_storage(
             campaign.id,
             &snapshot.options.directory(campaign)?,
@@ -1510,10 +1547,28 @@ impl Encounters {
             let _ = fs::remove_file(path);
         }
         self.run = None;
-        self.refresh_runs(active);
+        self.read_runs_again(active);
         true
     }
-    pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, party: &Party) {
+    fn read_runs_again(&mut self, active: &Campaign) {
+        if let Some(s) = &mut self.snapshot {
+            match s
+                .options
+                .directory(active)
+                .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id))
+            {
+                Ok(runs) => s.runs = runs,
+                Err(e) => self.error = Some(e),
+            }
+        }
+    }
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        campaigns: &Campaigns,
+        party: &Party,
+        story: &Story<'_>,
+    ) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
             return;
@@ -1545,7 +1600,7 @@ impl Encounters {
                 self.editor_pane = EditorPane::Add;
             }
         } else {
-            self.list_view(ui, &active, campaigns);
+            self.list_view(ui, &active, campaigns, story);
         }
     }
 
@@ -1563,22 +1618,58 @@ impl Encounters {
 
     /// One step back from `Discard changes`. Undo is the guard, so no dialog is needed.
     fn discard_undo(&mut self, ui: &mut egui::Ui) {
-        // A creature's changes are not this encounter's, and leave its undo alone.
-        if self.encounter_dirty() {
+        // A creature's changes and a group's are not this encounter's, and leave its undo alone.
+        if self.draft.as_ref().is_some_and(Draft::dirty) {
             self.discarded = None;
         }
-        if self.discarded.is_some() && design::draft_discarded(ui) {
+        // Each undo waits while the other kind of draft is open. Restored behind that editor,
+        // a draft could be neither reached nor closed.
+        if self.encounter_undo_ready() && design::draft_discarded(ui) {
             self.draft = self.discarded.take();
             self.message = None;
             self.error = None;
         }
-        if self.draft_dirty() {
+        if self.group_draft.as_ref().is_some_and(GroupDraft::dirty) {
             self.discarded_group = None;
         }
-        if self.discarded_group.is_some() && design::draft_discarded(ui) {
+        if self.group_undo_ready() && design::draft_discarded(ui) {
             self.group_draft = self.discarded_group.take();
             self.message = None;
             self.error = None;
+        }
+    }
+
+    fn encounter_undo_ready(&self) -> bool {
+        self.discarded.is_some() && self.group_draft.is_none()
+    }
+
+    fn group_undo_ready(&self) -> bool {
+        self.discarded_group.is_some() && self.draft.is_none()
+    }
+
+    /// One step back from `Delete` on a saved run. Undo is the guard, so no dialog is needed.
+    fn delete_undo(&mut self, ui: &mut egui::Ui, active: &Campaign) {
+        let Some(deleted) = &self.deleted_run else {
+            return;
+        };
+        let name = &deleted.encounter;
+        let words = if deleted.unsent.is_empty() {
+            format!("Deleted the saved run of {name}.")
+        } else {
+            format!(
+                "Deleted the saved run of {name}. It held changes for {} that D&D Beyond does not have. Undo to keep them.",
+                deleted.unsent.join(", "),
+            )
+        };
+        if design::message_with_action(ui, Tone::Info, &words, "Undo delete") {
+            match deleted.restore() {
+                Ok(()) => {
+                    self.deleted_run = None;
+                    self.error = None;
+                    self.read_runs_again(active);
+                }
+                Err(error) => self.error = Some(format!("The run did not come back: {error}")),
+            }
         }
     }
 
@@ -1592,45 +1683,24 @@ impl Encounters {
         }
     }
 
-    /// One step back from removing a run. Undo is the guard, so no dialog is needed.
-    /// One step back from removing a run. It lives in the page's header, so the rows below do
-    /// not move under the pointer that just removed one.
-    fn undo_removed_run(&mut self, active: &Campaign) {
-        if let Some((path, bytes)) = self.removed_run.take() {
-            if let Err(e) = fs::write(&path, bytes) {
-                self.error = Some(format!("The run could not be put back: {e}"));
-            }
-            self.refresh_runs(active);
-        }
-    }
-
-    fn refresh_runs(&mut self, active: &Campaign) {
-        if let Some(s) = &mut self.snapshot {
-            match s
-                .options
-                .directory(active)
-                .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id))
-            {
-                Ok(runs) => s.runs = runs,
-                Err(e) => self.error = Some(e),
-            }
-        }
-    }
-
-    fn list_view(&mut self, ui: &mut egui::Ui, active: &Campaign, campaigns: &Campaigns) {
+    fn list_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        campaigns: &Campaigns,
+        story: &Story<'_>,
+    ) {
         let loading = self.pending.is_some();
         let blocked = self.start_blocked();
         let settings_changed = self.unsaved();
         let mut new = false;
         let mut new_group = false;
         let mut reload = false;
-        let mut undo_remove = false;
-        let removed = self.removed_run.is_some();
         // With nothing here yet, the page's one action is in its body.
         let empty = self
             .snapshot
             .as_ref()
-            .is_some_and(|s| s.encounters.is_empty() && s.runs.is_empty() && s.groups.is_empty());
+            .is_some_and(|s| s.templates.is_empty() && s.runs.is_empty() && s.groups.is_empty());
         // A group can be prepared while a run is open. It only joins the run when it is added.
         let group_blocked = self.draft_dirty().then_some(BLOCKED_BY_DRAFT);
         design::page_header(ui, "Encounters", Some(&active.name), |ui| {
@@ -1647,10 +1717,11 @@ impl Encounters {
                     .show(ui)
                     .clicked();
             }
+            // A run stays open through this, so a note fixed outside Splat reaches its Groups tab.
             reload = Action::quiet("Reload")
                 .icon(icons::REFRESH)
                 .blocked(
-                    blocked
+                    group_blocked
                         .or(loading.then_some("Still reading this campaign."))
                         .or(settings_changed.then_some(
                             "Save or discard the changes in Campaign, Rules and runs first.",
@@ -1659,18 +1730,7 @@ impl Encounters {
                 .hint("Read encounters and runs from disk again")
                 .show(ui)
                 .clicked();
-            if removed {
-                undo_remove = Action::quiet("Undo remove")
-                    .icon(icons::UNDO)
-                    .hint("Put back the run you just removed.")
-                    .show(ui)
-                    .clicked();
-                ui.label(Type::Small.rich(ui, "Run removed.").color(colors().muted));
-            }
         });
-        if undo_remove {
-            self.undo_removed_run(active);
-        }
         if new {
             self.start_new_draft();
             return;
@@ -1678,17 +1738,24 @@ impl Encounters {
         if new_group {
             self.group_in_plan = false;
             self.group_draft = Some(GroupDraft::new());
+            self.expanded = None;
             self.focus_name = true;
             self.error = None;
             self.message = None;
             return;
         }
         if reload {
-            self.reload(ui.ctx(), active.clone(), campaigns.modules().to_vec());
-            return;
+            if self.has_run() {
+                self.error = None;
+                self.refresh_content(ui.ctx(), campaigns, &active.path);
+            } else {
+                self.reload(ui.ctx(), active.clone(), campaigns.modules().to_vec());
+                return;
+            }
         }
         self.results(ui);
-        if self.pending.is_some() {
+        self.delete_undo(ui, active);
+        if self.pending.is_some() && self.snapshot.is_none() {
             ui.horizontal(|ui| {
                 crate::design::spinner(ui);
                 ui.label(
@@ -1716,12 +1783,6 @@ impl Encounters {
                 },
             );
         }
-        let mut open_path = None;
-        let mut run_path = None;
-        let mut resume = None;
-        let open_group = std::cell::Cell::new(None);
-        let back_to_run = std::cell::Cell::new(false);
-        let remove_run = std::cell::RefCell::new(None);
         let two_columns = ui.available_width() >= 640.0;
         if empty {
             let mut create = false;
@@ -1752,225 +1813,89 @@ impl Encounters {
             if create_group {
                 self.group_in_plan = false;
                 self.group_draft = Some(GroupDraft::new());
+                self.expanded = None;
                 self.focus_name = true;
             }
             return;
         }
-        let run_list = |ui: &mut egui::Ui, resume: &mut Option<std::path::PathBuf>| {
-            let heading = format!("Saved runs ({})", snapshot.runs.len());
-            ui.label(Type::Heading.rich(ui, heading).color(colors().text));
-            design::rule(ui);
-            let open_run = self
-                .run
-                .as_ref()
-                .and_then(|run| run.path().map(std::path::Path::to_path_buf));
-            if open_run.is_some() {
-                design::message(
-                    ui,
-                    Tone::Info,
-                    "A run is open. Close it to start or edit another.",
-                );
-            }
-            if snapshot.runs.is_empty() {
-                ui.label(
-                    Type::Body
-                        .rich(ui, "No saved runs yet. Start an encounter to create one.")
-                        .color(colors().muted),
-                );
-            }
-            // Group by encounter. Runs still in progress come before finished ones.
-            let mut groups: Vec<&str> = Vec::new();
-            for run in &snapshot.runs {
-                if !groups.contains(&run.encounter.as_str()) {
-                    groups.push(&run.encounter);
-                }
-            }
-            for group in groups {
-                if !group.is_empty() {
-                    ui.add_space(design::XS);
-                    design::group_label(ui, group);
-                }
-                let mut rows: Vec<_> = snapshot
-                    .runs
-                    .iter()
-                    .filter(|run| run.encounter == group)
-                    .collect();
-                rows.sort_by_key(|run| run.finished);
-                for info in rows {
-                    ui.push_id(&info.path, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.set_min_height(Density::Scan.row());
-                            // At the table, picking up the interrupted run comes first.
-                            let open = open_run.as_deref() == Some(info.path.as_path());
-                            // An ended fight is there to read. A setup nobody began waits quietly.
-                            let action = if open {
-                                Action::primary("Back to this run")
-                            } else if info.finished {
-                                Action::secondary("View").density(Density::Read)
-                            } else if info.begun {
-                                Action::primary("Resume")
-                            } else {
-                                Action::secondary("Resume").density(Density::Read)
-                            };
-                            let blocked = (!open).then(|| self.start_blocked()).flatten();
-                            if info.readable && action.blocked(blocked).show(ui).clicked() {
-                                if open {
-                                    back_to_run.set(true);
-                                } else {
-                                    *resume = Some(info.path.clone());
-                                }
-                            }
-                            // The words take what is left. Remove keeps one column, at the end.
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if !open
-                                        && design::icon_button(
-                                            ui,
-                                            icons::REMOVE,
-                                            &format!(
-                                                "Remove run: {} · {}",
-                                                info.encounter, info.label
-                                            ),
-                                        )
-                                        .clicked()
-                                    {
-                                        *remove_run.borrow_mut() = Some(info.path.clone());
-                                    }
-                                    ui.with_layout(
-                                        egui::Layout::left_to_right(egui::Align::Center),
-                                        |ui| {
-                                            let color = if info.finished {
-                                                colors().muted
-                                            } else {
-                                                colors().text
-                                            };
-                                            let response = ui.add(
-                                                egui::Label::new(
-                                                    Type::Body.rich(ui, &info.label).color(color),
-                                                )
-                                                .wrap(),
-                                            );
-                                            // The group heading shows the encounter. The tree needs it too.
-                                            design::named(
-                                                ui,
-                                                &response,
-                                                &format!("{} · {}", info.encounter, info.label),
-                                            );
-                                            response.on_hover_text(info.path.display().to_string());
-                                        },
-                                    );
-                                },
-                            );
-                        });
-                    });
-                }
-            }
-        };
-        let template_list = |ui: &mut egui::Ui,
-                             open_path: &mut Option<String>,
-                             run_path: &mut Option<String>| {
-            // The actions stay near the name they belong to.
-            ui.set_max_width(ui.available_width().min(640.0));
-            ui.label(Type::Heading.rich(ui, "Encounters").color(colors().text));
-            design::rule(ui);
-            if snapshot.encounters.is_empty() {
-                ui.label(
-                    Type::Body
-                        .rich(ui, "No encounters yet. Create one with New encounter.")
-                        .color(colors().muted),
-                );
-            }
-            for (path, name) in &snapshot.encounters {
-                ui.push_id(path, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.set_min_height(Density::Scan.row() + design::S);
-                        ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            ui.set_max_width((ui.available_width() - 180.0).max(100.0));
-                            ui.add(
-                                egui::Label::new(Type::Strong.rich(ui, name).color(colors().text))
-                                    .truncate(),
-                            );
-                            if let Some(summary) = snapshot.encounter_summaries.get(path) {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, summary).color(colors().muted),
-                                    )
-                                    .truncate(),
-                                );
-                            }
-                        });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if Action::secondary(START_FIGHT)
-                                .icon(icons::RUN)
-                                .density(Density::Read)
-                                .blocked(self.start_blocked())
-                                .show(ui)
-                                .clicked()
-                            {
-                                *run_path = Some(path.clone());
-                            }
-                            if Action::quiet("Edit")
-                                .density(Density::Read)
-                                .blocked(self.start_blocked())
-                                .show(ui)
-                                .clicked()
-                            {
-                                *open_path = Some(path.clone());
-                            }
-                        });
-                    });
-                });
-            }
-            ui.add_space(design::L);
-            if let Some(path) = groups::list(ui, snapshot, group_blocked) {
-                open_group.set(Some(path));
-            }
-        };
+        let live = self
+            .run
+            .as_ref()
+            .and_then(crate::encounter_run::Run::live_info);
+        let page = history::arrange(
+            &snapshot.templates,
+            &snapshot.runs,
+            live.as_ref(),
+            story.events,
+            story.sessions,
+        );
+        let start_blocked = self.start_blocked();
+        let mut action = None;
         egui::ScrollArea::vertical()
             .id_salt("encounter_list")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                in_progress_list(
+                    ui,
+                    &page,
+                    live.as_ref(),
+                    start_blocked,
+                    loading,
+                    &mut action,
+                );
                 if two_columns {
                     ui.columns(2, |columns| {
-                        template_list(&mut columns[0], &mut open_path, &mut run_path);
-                        run_list(&mut columns[1], &mut resume);
+                        within_row_width(&mut columns[0], |ui| {
+                            ready_list(ui, &page, &snapshot.templates, start_blocked, &mut action);
+                        });
+                        within_row_width(&mut columns[1], |ui| {
+                            group_list(ui, snapshot, group_blocked, &mut action);
+                        });
                     });
                 } else {
-                    template_list(ui, &mut open_path, &mut run_path);
+                    within_row_width(ui, |ui| {
+                        ready_list(ui, &page, &snapshot.templates, start_blocked, &mut action);
+                    });
                     ui.add_space(design::L);
-                    run_list(ui, &mut resume);
+                    within_row_width(ui, |ui| {
+                        group_list(ui, snapshot, group_blocked, &mut action);
+                    });
                 }
+                history_list(ui, &page, start_blocked, &mut action);
             });
-        self.go_to_run |= back_to_run.get();
-        if let Some(path) = open_group.take() {
-            match GroupDraft::open(&active.path, &path) {
+        let Some(action) = action else {
+            return;
+        };
+        match action {
+            ListAction::BackToRun => self.go_to_run = true,
+            ListAction::OpenGroup(path) => match GroupDraft::open(&active.path, &path) {
                 Ok(draft) => {
                     self.group_in_plan = false;
                     self.group_draft = Some(draft);
+                    self.expanded = None;
                     self.error = None;
                     self.message = None;
                 }
                 Err(e) => self.error = Some(e),
+            },
+            ListAction::Resume(path) => self.open_saved_run(&path, active),
+            ListAction::Delete(path) => {
+                let deleted = self
+                    .snapshot
+                    .as_ref()
+                    .and_then(|s| s.runs.iter().find(|run| run.path == path))
+                    .map(crate::encounter_run::DeletedRun::delete);
+                match deleted {
+                    Some(Ok(deleted)) => {
+                        self.deleted_run = Some(deleted);
+                        self.error = None;
+                        self.read_runs_again(active);
+                    }
+                    Some(Err(e)) => self.error = Some(e),
+                    None => {}
+                }
             }
-        }
-        if let Some(path) = remove_run.into_inner() {
-            let removed = fs::read(&path).and_then(|bytes| {
-                fs::remove_file(&path)?;
-                Ok(bytes)
-            });
-            match removed {
-                Ok(bytes) => self.removed_run = Some((path, bytes)),
-                Err(e) => self.error = Some(format!("The run could not be removed: {e}")),
-            }
-            self.refresh_runs(active);
-        }
-        if let Some(path) = resume {
-            self.open_saved_run(&path, active);
-        }
-        if let Some(path) = open_path {
-            match Draft::open(&active.path, &path) {
+            ListAction::Edit(path) => match Draft::open(&active.path, &path) {
                 Ok(d) => {
                     self.draft = Some(d);
                     self.from_session = false;
@@ -1979,10 +1904,8 @@ impl Encounters {
                     self.message = None;
                 }
                 Err(e) => self.error = Some(e),
-            }
-        }
-        if let Some(path) = run_path {
-            self.run_path(&path, active, campaigns.modules());
+            },
+            ListAction::Run(path) => self.run_path(&path, active, campaigns.modules()),
         }
     }
 
@@ -2483,6 +2406,7 @@ impl Encounters {
         if let Some(party) = linked_party {
             Self::sync_option(ui, draft, snapshot, party);
         }
+        ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
         // Without a link there is no sheet to sync with, whatever the note says.
         let live = linked_party.filter(|_| draft.setup.combat_sync);
         if draft.setup.roster.is_empty() {
@@ -2898,6 +2822,256 @@ impl Encounters {
     }
 }
 
+/// The widest a list row grows, so that its actions stay near the name they belong to.
+const ROW_WIDTH: f32 = 640.0;
+
+/// A column's width is fixed, so only a scope inside it can be narrower.
+fn within_row_width(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(ROW_WIDTH));
+        add(ui);
+    });
+}
+
+/// A row of the list: a name, what is known about it, and its actions at the right. `actions`
+/// adds them from the right, and needs `room`.
+fn list_row(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash,
+    name: &str,
+    detail: Option<&str>,
+    room: f32,
+    actions: impl FnOnce(&mut egui::Ui),
+) {
+    ui.push_id(id, |ui| {
+        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Scan.row() + design::S);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.set_max_width((ui.available_width() - room).max(100.0));
+                ui.add(
+                    egui::Label::new(Type::Strong.rich(ui, name).color(colors().text)).truncate(),
+                );
+                if let Some(detail) = detail {
+                    let response = ui.add(
+                        egui::Label::new(Type::Small.rich(ui, detail).color(colors().muted))
+                            .truncate(),
+                    );
+                    design::named(ui, &response, &format!("{name} · {detail}"));
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), actions);
+        });
+    });
+}
+
+/// What is in play. With nothing in play, this takes no room at all.
+fn in_progress_list(
+    ui: &mut egui::Ui,
+    page: &history::Arranged<'_>,
+    live: Option<&crate::encounter_run::SavedRunInfo>,
+    start_blocked: Option<&'static str>,
+    loading: bool,
+    action: &mut Option<ListAction>,
+) {
+    if page.in_progress.is_empty() {
+        return;
+    }
+    ui.label(Type::Heading.rich(ui, "In progress").color(colors().text));
+    design::rule(ui);
+    if live.is_some() {
+        design::message(
+            ui,
+            Tone::Info,
+            "A run is open. Close it to start or edit another.",
+        );
+    }
+    within_row_width(ui, |ui| {
+        for run in &page.in_progress {
+            // At the table, picking up the interrupted run comes first. The open run has no
+            // Delete: its next save would find its file gone.
+            let open = live.is_some_and(|live| live.id == run.id);
+            list_row(
+                ui,
+                &run.path,
+                &run.encounter,
+                Some(&run.label),
+                200.0,
+                |ui| {
+                    if open {
+                        if Action::primary("Back to this run").show(ui).clicked() {
+                            *action = Some(ListAction::BackToRun);
+                        }
+                        return;
+                    }
+                    if Action::primary("Resume")
+                        .blocked(start_blocked)
+                        .show(ui)
+                        .clicked()
+                    {
+                        *action = Some(ListAction::Resume(run.path.clone()));
+                    }
+                    if Action::quiet("Delete")
+                        .density(Density::Read)
+                        .name(&format!(
+                            "Delete the saved run of {}, {}",
+                            run.encounter, run.label
+                        ))
+                        // A load under way has read the list, and would bring the row back.
+                        .blocked(loading.then_some("Still reading this campaign."))
+                        .show(ui)
+                        .clicked()
+                    {
+                        *action = Some(ListAction::Delete(run.path.clone()));
+                    }
+                },
+            );
+        }
+    });
+    ui.add_space(design::L);
+}
+
+/// The encounters that have not happened yet, and those that can happen again.
+fn ready_list(
+    ui: &mut egui::Ui,
+    page: &history::Arranged<'_>,
+    templates: &[Template],
+    start_blocked: Option<&'static str>,
+    action: &mut Option<ListAction>,
+) {
+    let heading = format!("Ready to run ({})", page.ready.len());
+    ui.label(Type::Heading.rich(ui, heading).color(colors().text));
+    design::rule(ui);
+    if page.ready.is_empty() {
+        let words = if templates.is_empty() {
+            "No encounters yet. Create one with New encounter."
+        } else {
+            "Each encounter has been run. Run one again from History, or create one with New encounter."
+        };
+        ui.add(egui::Label::new(Type::Body.rich(ui, words).color(colors().muted)).wrap());
+    }
+    for row in &page.ready {
+        let template = row.template;
+        list_row(
+            ui,
+            &template.path,
+            &template.name,
+            template.summary.as_deref(),
+            200.0,
+            |ui| {
+                let mut start = Action::secondary(START_FIGHT)
+                    .icon(icons::RUN)
+                    .density(Density::Read)
+                    .blocked(start_blocked);
+                if row.unfinished_run {
+                    start =
+                        start.hint("A run of this encounter is in progress. This starts another.");
+                }
+                if start.show(ui).clicked() {
+                    *action = Some(ListAction::Run(template.path.clone()));
+                }
+                if Action::quiet("Edit")
+                    .density(Density::Read)
+                    .blocked(start_blocked)
+                    .show(ui)
+                    .clicked()
+                {
+                    *action = Some(ListAction::Edit(template.path.clone()));
+                }
+            },
+        );
+    }
+}
+
+fn group_list(
+    ui: &mut egui::Ui,
+    snapshot: &Snapshot,
+    group_blocked: Option<&'static str>,
+    action: &mut Option<ListAction>,
+) {
+    if let Some(path) = groups::list(ui, snapshot, group_blocked) {
+        *action = Some(ListAction::OpenGroup(path));
+    }
+}
+
+/// What has happened, out of the way until the DM asks. The count in its title changes, so its
+/// open state has an ID of its own.
+fn history_list(
+    ui: &mut egui::Ui,
+    page: &history::Arranged<'_>,
+    start_blocked: Option<&'static str>,
+    action: &mut Option<ListAction>,
+) {
+    if page.ended_count() == 0 && page.unreadable.is_empty() {
+        return;
+    }
+    ui.add_space(design::L);
+    let title = format!("History ({})", page.ended_count());
+    design::section_with_id(ui, "encounter_history", title, |ui| {
+        ui.set_max_width(ui.available_width().min(ROW_WIDTH));
+        for session in &page.history {
+            ui.add_space(design::XS);
+            design::group_label(ui, session.label);
+            for past in &session.runs {
+                let run = past.run;
+                let template = past.template;
+                list_row(
+                    ui,
+                    &run.path,
+                    &run.encounter,
+                    Some(&run.label),
+                    260.0,
+                    |ui| {
+                        // The ending's undo lasted until the run closed, so this only reads it.
+                        if Action::secondary("Open")
+                            .density(Density::Read)
+                            .name(&format!("Open the run of {}, {}", run.encounter, run.label))
+                            .blocked(start_blocked)
+                            .show(ui)
+                            .clicked()
+                        {
+                            *action = Some(ListAction::Resume(run.path.clone()));
+                        }
+                        let Some(template) = template else {
+                            return;
+                        };
+                        if Action::quiet("Run again")
+                            .density(Density::Read)
+                            .name(&format!("Run {} again", run.encounter))
+                            .blocked(start_blocked)
+                            .show(ui)
+                            .clicked()
+                        {
+                            *action = Some(ListAction::Run(template.path.clone()));
+                        }
+                        if Action::quiet("Edit")
+                            .density(Density::Read)
+                            .name(&format!("Edit {}", run.encounter))
+                            .blocked(start_blocked)
+                            .show(ui)
+                            .clicked()
+                        {
+                            *action = Some(ListAction::Edit(template.path.clone()));
+                        }
+                    },
+                );
+            }
+        }
+        // It can be another campaign's file in a shared folder, so nothing here can change it.
+        if !page.unreadable.is_empty() {
+            ui.add_space(design::XS);
+            design::group_label(ui, &format!("Unreadable ({})", page.unreadable.len()));
+            for run in &page.unreadable {
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, &run.label).color(colors().muted))
+                        .truncate(),
+                )
+                .on_hover_text(run.path.display().to_string());
+            }
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2915,6 +3089,74 @@ mod tests {
         assert!(encounters.discarded.is_some(), "a refresh keeps the undo");
         encounters.reload(&ctx, second, Vec::new());
         assert!(encounters.discarded.is_none(), "another campaign drops it");
+    }
+    /// Older notes do not change, and a note says so only when the DM turned this on.
+    #[test]
+    fn repeatable_is_written_only_when_it_is_on() {
+        let mut setup = Setup::default();
+        let written = serde_yaml_ng::to_string(&setup).unwrap();
+        assert!(!written.contains("repeatable"));
+        setup.repeatable = true;
+        let written = serde_yaml_ng::to_string(&setup).unwrap();
+        let read: Setup = serde_yaml_ng::from_str(&written).unwrap();
+        assert!(read.repeatable);
+    }
+    /// Typing in a new group must not cost the DM the undo of an encounter they discarded.
+    #[test]
+    fn a_dirty_draft_of_the_other_kind_does_not_end_an_undo() {
+        let mut encounters = Encounters {
+            discarded: Some(Draft::new()),
+            group_draft: Some(GroupDraft::new()),
+            ..Default::default()
+        };
+        assert!(encounters.draft_dirty());
+        let _ = egui::Context::default().run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| encounters.discard_undo(ui));
+        });
+        assert!(encounters.discarded.is_some());
+    }
+
+    /// Reload is how the DM takes a change made outside Splat. Keeping the old value would
+    /// write it back over that change at the next save.
+    #[test]
+    fn a_refresh_keeps_settings_only_while_they_are_being_edited() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let mut old = Snapshot::load(&active, &[]).unwrap();
+        let mut changed = old.options.clone();
+        changed.folder = "Elsewhere".into();
+
+        let mut new = Snapshot::load(&active, &[]).unwrap();
+        new.options = changed.clone();
+        new.saved_options = changed.clone();
+        new.keep_edited_settings(&old);
+        assert_eq!(new.saved_options, changed, "the file decides");
+
+        old.options.folder = "Being typed".into();
+        new.keep_edited_settings(&old);
+        assert_eq!(new.options.folder, "Being typed", "the edit stays");
+    }
+
+    /// Restored behind the group editor, the encounter draft could be neither reached nor closed.
+    #[test]
+    fn undo_discard_waits_while_the_other_kind_of_draft_is_open() {
+        let mut encounters = Encounters {
+            discarded: Some(Draft::new()),
+            group_draft: Some(GroupDraft::new()),
+            ..Default::default()
+        };
+        assert!(!encounters.encounter_undo_ready());
+        encounters.group_draft = None;
+        assert!(encounters.encounter_undo_ready(), "back at the list");
+
+        let mut encounters = Encounters {
+            discarded_group: Some(GroupDraft::new()),
+            draft: Some(Draft::new()),
+            ..Default::default()
+        };
+        assert!(!encounters.group_undo_ready());
+        encounters.draft = None;
+        assert!(encounters.group_undo_ready(), "back at the list");
     }
     fn campaign(root: &std::path::Path) -> Campaign {
         Campaign {
@@ -2967,7 +3209,7 @@ mod tests {
         assert_ne!(reopened.setup.roster[1].key, reopened.setup.roster[2].key);
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         assert!(snapshot.creatures.iter().any(|c| c.id == pc && c.party));
-        assert!(snapshot.encounters.iter().any(|(p, _)| p == &d.path));
+        assert!(snapshot.templates.iter().any(|t| t.path == d.path));
         assert!(dir.path().join("Campaign.md").exists());
     }
     #[test]
@@ -3110,8 +3352,17 @@ mod tests {
                     ..Default::default()
                 },
                 |ctx| {
-                    egui::CentralPanel::default()
-                        .show(ctx, |ui| editor.show(ui, &campaigns, &Party::default()));
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        editor.show(
+                            ui,
+                            &campaigns,
+                            &Party::default(),
+                            &Story {
+                                events: &[],
+                                sessions: &[],
+                            },
+                        );
+                    });
                 },
             );
             assert!(!output.shapes.is_empty());

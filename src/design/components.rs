@@ -1226,6 +1226,19 @@ pub fn section<R>(
         .show(ui, add)
 }
 
+/// A collapsing section that stays open when its title changes, such as a count.
+pub fn section_with_id<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash,
+    title: impl Into<egui::WidgetText>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::CollapsingResponse<R> {
+    egui::CollapsingHeader::new(title)
+        .id_salt(id)
+        .icon(section_icon)
+        .show(ui, add)
+}
+
 /// A collapsing section for what matters least: technical details at the end of a page.
 pub fn quiet_section<R>(
     ui: &mut Ui,

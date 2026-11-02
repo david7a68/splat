@@ -4,7 +4,7 @@ use crate::{
     Splat,
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, EntryRef, PackageSelection, Selection},
-    encounter_run::{Participant, write_in_progress_run},
+    encounter_run::{Participant, write_ended_run, write_in_progress_run},
     hermetic,
     persistence::{Campaign, Module, Store, UserData},
 };
@@ -30,6 +30,9 @@ pub const RUN: &str = "Bridge Ambush";
 pub const RUN_12: &str = "Border Skirmish";
 pub const RUN_20: &str = "Siege of Emberfall";
 pub const RUN_ARENA: &str = "Arena Final";
+pub const RUN_PAST: &str = "Goblin Crossing";
+pub const RUN_OLD: &str = "Old Mill Raid";
+pub const PAST_SESSION: &str = "The Road North";
 pub const GROUP_RIVALS: &str = "Rival Team";
 pub const GROUP_GOBLINS: &str = "Goblin Wave";
 pub const GROUP_LOST: &str = "Lost Patrol";
@@ -47,6 +50,8 @@ pub enum Seed {
     LargeRosters,
     /// `Campaign`, plus two encounter groups, and an encounter and a run with overrides.
     Groups,
+    /// `Campaign`, plus ended runs: one on the timeline under a session, one with no event.
+    History,
 }
 
 #[derive(Clone)]
@@ -119,6 +124,9 @@ fn seed_campaigns(
     }
     if seed == Seed::Groups {
         write_groups(&active, &module.path, &party)?;
+    }
+    if seed == Seed::History {
+        write_history(&active, &module.path)?;
     }
 
     let data = UserData {
@@ -560,6 +568,64 @@ fn write_run(
         name,
         participants,
     )
+}
+
+/// An encounter a run has ended, its event on the timeline under a session, and an ended run
+/// from before the timeline, whose encounter is gone.
+fn write_history(campaign: &Campaign, module: &Path) -> Result<(), String> {
+    let id = stable_id(&format!("visual:encounter:{RUN_PAST}"));
+    let root = &campaign.path;
+    write_note(
+        root,
+        &format!("Encounters/{RUN_PAST}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {RUN_PAST}\nsplat_encounter:\n  roster: []\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n---\n\nThey held the ford.\n"
+        ),
+    )?;
+    let file = "Creatures/Cinder Wolf.md";
+    let text = fs::read_to_string(module.join(file)).map_err(|e| e.to_string())?;
+    let wolf = |key: &str| {
+        Participant::new(
+            key.into(),
+            "enemies".into(),
+            Entry::parse(file, &text)?,
+            &Mapping::new(),
+            true,
+        )
+    };
+    let directory = root.join("Encounter Runs");
+    let past = write_ended_run(
+        campaign.id,
+        &directory,
+        RUN_PAST,
+        Some(id),
+        "Party won",
+        wolf("actor_past")?,
+    )?;
+    write_ended_run(
+        campaign.id,
+        &directory,
+        RUN_OLD,
+        None,
+        "Party fled",
+        wolf("actor_old")?,
+    )?;
+    let session = stable_id("visual:session:past");
+    // A session note is not a content entry, so `write_note` would refuse it.
+    let sessions = crate::sessions::folder(campaign)?;
+    fs::create_dir_all(&sessions).map_err(|e| e.to_string())?;
+    fs::write(
+        sessions.join("Session 7.md"),
+        format!(
+            "---\nsession_id: {session}\nsession_number: 7\nsession_title: {PAST_SESSION}\nsession_date: 2026-01-01\n---\n\nNotes.\n"
+        ),
+    )
+    .map_err(|e| e.to_string())?;
+    let mut book = crate::timeline::Book::default();
+    book.open(Some(&sessions));
+    book.record_run(&past, Some(session), false);
+    book.save();
+    Ok(())
 }
 
 /// The cached sheets a player sees without a connection, and their campaign copies.

@@ -1,8 +1,10 @@
 //! Imported creature records. Provider totals are supplied stats, never recalculated.
 //! Source records project into shared campaign content; simulation support is separate.
+pub mod build;
 mod cache;
 mod campaign;
 pub mod campaign_package;
+pub mod check;
 mod content;
 mod presentation;
 mod rules;

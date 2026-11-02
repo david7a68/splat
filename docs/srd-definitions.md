@@ -2,8 +2,9 @@
 
 The whole catalogue is converted: **1,970 typed rule specifications**, plus
 **95 informational entries**. All **2,065** inventoried entries are accounted
-for, and no `source_rules` conversion gaps remain. Engine implementation remains
-outside this pass. The existing 32 bounded execution profiles still run.
+for, and no `source_rules` conversion gaps remain. The engine implements 35 of the
+required contracts, all for character building, so 1,935 engine gaps remain open. The
+existing 32 bounded execution profiles still run.
 
 | Content | Definitions |
 | --- | ---: |
@@ -71,10 +72,32 @@ are none in this generated catalogue. An **engine gap** means the required
 registered adapter does not exist. The verifier lists these separately and
 also groups missing adapters by capability.
 
+The `engine_gaps` field in generated coverage names every contract a definition
+requires. [`content::adapters`](../src/content/adapters.rs) lists the implemented
+contracts in Rust code. An open gap is a required contract that is not on that list.
+This keeps generated notes and saved character copies unchanged when a gap closes.
+
+The 35 implemented contracts are the 12 progression tables, 12 subclasses and 11 subclass
+selection features. [`character::build`](../src/character/build.rs) handles what they
+specify and rejects unknown fields. It returns results and never changes an actor's state,
+so rules such as "gaining a level does not refill Pact Magic slots" are returned for the
+caller. A test compares registered inputs, outputs and events with names the module handles,
+so a contract that asks for anything else cannot be listed.
+
+Related contracts stay open because they ask for more:
+
+- Class notes also specify inventory changes and tool choices.
+- Ability Score Improvement and Epic Boon also specify feat grants and their effects.
+- Wizard Subclass also specifies spellbook copying.
+- A feature's own behavior: the table grants Rage, but Rage's contract is still a gap.
+
+"Implemented" does not make a definition executable: the action interpreter still rejects
+these definitions. See the [character check](design/character-rule-conversion.md#character-check).
+
 The 1,970 source-specific contracts are interface and behavior specifications;
 they are not 1,970 executable plugins. Their parameters are data, never scripts.
-Some operations can later share engine adapters. This pass does not claim that
-those adapters, or a full encounter simulator, have been implemented.
+Some operations can later share engine adapters. A full encounter simulator has not
+been implemented.
 
 There are **zero executable full catalogue definitions**. The existing
 [32 execution profiles](execution-proof.md) are alternate bounded views of the

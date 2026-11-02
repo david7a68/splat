@@ -769,6 +769,23 @@ impl Book {
             + 1
     }
 
+    /// The open run's facts changed, from `before`. A run that was already over when it opened
+    /// is being read. It adds nothing to the story, whichever session is now current.
+    pub fn record_change(
+        &mut self,
+        before: Option<&RunFact>,
+        fact: &RunFact,
+        session: Option<Uuid>,
+    ) {
+        // A new ID with a run already open is that run's copy, which keeps its place in the story.
+        let known = self.events.iter().any(|event| event.run == Some(fact.id));
+        if before.is_none() && !known && matches!(fact.state, RunState::Ended(_)) {
+            return;
+        }
+        let played = before.is_some_and(|old| fact.played_since(old));
+        self.record_run(fact, session, played);
+    }
+
     fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         if self.unreadable.is_some() {
             return;
@@ -884,6 +901,33 @@ mod tests {
             state,
             steps: 1,
         }
+    }
+
+    #[test]
+    fn reading_an_ended_run_adds_nothing_to_the_story() {
+        let mut book = Book::default();
+        let ended = fact(RunState::Ended("Party won".into()));
+        book.record_change(None, &ended, Some(Uuid::new_v4()));
+        assert!(book.events.is_empty(), "it was over when it opened");
+
+        // A run that ends while open is the story.
+        let running = fact(RunState::Running);
+        book.record_change(None, &running, None);
+        assert_eq!(book.events.len(), 1);
+        book.record_change(Some(&running), &ended, None);
+        assert!(book.events[0].result.starts_with("Party won"));
+
+        // Keep both, on a run that ended: the copy has a new ID, and it is the story too.
+        let copy = RunFact {
+            id: Uuid::new_v4(),
+            ..ended.clone()
+        };
+        book.record_change(Some(&ended), &copy, None);
+        assert_eq!(book.events.len(), 2);
+
+        // Opened again, it keeps its event up to date.
+        book.record_change(None, &ended, None);
+        assert_eq!(book.events.len(), 2);
     }
 
     #[test]

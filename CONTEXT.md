@@ -214,6 +214,11 @@ participants retain their HP, resources, inventory, and ongoing effects.
 One playthrough or simulation of an encounter, with its own participants,
 current HP, spent resources, and active effects.
 
+**Retired encounter**:
+An encounter template with an ended run, unless it is marked repeatable. It is not a state in its
+note. It leaves the ready list and stays reachable from its ended runs in History.
+_Avoid_: Archived
+
 **Completion condition**:
 An objective or state that ends an encounter automatically when satisfied.
 An encounter can also be ended manually.
@@ -429,7 +434,17 @@ A source rule that still needs a complete typed definition or an explicit
 interpretation. Extracting its numbers or keeping its prose does not close it.
 
 **Engine gap**:
-A specified rule contract for which the engine has no implementation.
+A specified rule contract for which the engine has no implementation. The list of
+implemented contracts is in Rust code, so content cannot close a gap by itself.
+
+**Character check**:
+A comparison of a D&D Beyond character with what the SRD rules give for its classes,
+levels and choices. It reports differences and changes nothing: D&D Beyond stays the
+source of truth.
+
+**Class link**:
+A reviewed, source-pinned match between a D&D Beyond class and an SRD class. A class
+with no link is not compared, because a name alone does not prove the edition.
 
 **Execution profile**:
 A bounded, executable view of a definition, with explicit limits on the rules

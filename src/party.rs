@@ -18,6 +18,8 @@ pub struct Party {
     combat: crate::combat_sync::CombatSync,
     epoch: u64,
     content_entry: Option<(String, Result<splat::content::Entry, String>)>,
+    /// Compared once for each content version, because this page redraws every frame.
+    character_review: Option<Result<splat::character::check::Review, String>>,
     connected: bool,
     /// The campaign that `sync_turned_off` is about.
     campaign: Option<uuid::Uuid>,
@@ -511,7 +513,12 @@ impl Party {
                 .as_ref()
                 .is_none_or(|(hash, _)| hash != &record.source.content_hash)
         {
-            self.content_entry = Some((record.source.content_hash.clone(), record.entry()));
+            let entry = record.entry();
+            self.character_review = entry
+                .as_ref()
+                .ok()
+                .map(|entry| splat::character::check::review(record, entry));
+            self.content_entry = Some((record.source.content_hash.clone(), entry));
         }
         egui::ScrollArea::vertical()
             .id_salt((id, self.page))
@@ -539,6 +546,7 @@ impl Party {
                             ui,
                             record,
                             self.content_entry.as_ref().map(|(_, entry)| entry),
+                            self.character_review.as_ref(),
                             self.reader.campaign_path(),
                             self.reader.local_scope(),
                         );
@@ -975,6 +983,7 @@ fn source_and_parity(
     ui: &mut egui::Ui,
     record: &EntitySnapshot,
     content_entry: Option<&Result<splat::content::Entry, String>>,
+    character_review: Option<&Result<splat::character::check::Review, String>>,
     campaign_path: Option<&std::path::Path>,
     local_scope: Option<uuid::Uuid>,
 ) {
@@ -990,6 +999,9 @@ fn source_and_parity(
     }
     if let Some(Ok(entry)) = content_entry {
         campaign_option_status(ui, entry);
+        if let Some(review) = character_review {
+            character_check(ui, review);
+        }
         small(
             ui,
             format!(
@@ -1015,7 +1027,11 @@ fn source_and_parity(
                 format!(
                     "{} conversion gaps; {} engine adapters still needed.",
                     list("gaps").len(),
-                    list("engine_gaps").len()
+                    list("engine_gaps")
+                        .iter()
+                        .filter_map(serde_yaml_ng::Value::as_str)
+                        .filter(|gap| !splat::content::adapters::is_implemented(gap))
+                        .count()
                 ),
             );
             for (title, key) in [
@@ -1102,6 +1118,40 @@ pub fn sheet_page(
         details(ui, record, page, search);
     }
 }
+
+/// Compare the sheet with the SRD rules. D&D Beyond stays the source of truth.
+fn character_check(ui: &mut egui::Ui, review: &Result<splat::character::check::Review, String>) {
+    use splat::character::check::FindingKind;
+    design::section(ui, "Character check", |ui| match review {
+        Ok(review) => {
+            ui.add(
+                egui::Label::new(if review.matched.is_empty() {
+                    "Nothing could be compared with the SRD rules.".to_owned()
+                } else {
+                    format!("Matches the SRD rules: {}.", review.matched.join(", "))
+                })
+                .wrap(),
+            );
+            for (kind, title) in [
+                (FindingKind::Differs, "Differs from the SRD rules"),
+                (FindingKind::MissingChoice, "Missing choices"),
+                (FindingKind::InvalidChoice, "Choices the rules do not allow"),
+                (FindingKind::NotChecked, "Not compared"),
+            ] {
+                if review.count(kind) > 0 {
+                    ui.label(egui::RichText::new(title).strong());
+                    for finding in review.findings.iter().filter(|f| f.kind == kind) {
+                        ui.add(egui::Label::new(&finding.message).wrap());
+                    }
+                }
+            }
+        }
+        Err(message) => {
+            ui.add(egui::Label::new(format!("The check could not run: {message}")).wrap());
+        }
+    });
+}
+
 fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
     use splat::content::character::{CampaignOptionState, Sheet};
     let Some(value) = entry.fields.get("splat_character") else {

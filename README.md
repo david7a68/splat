@@ -393,8 +393,8 @@ The combat log records changes. **Undo** names the last action and restores up t
 prior actions, including turn changes, dice rolls, and manual endings in the current session.
 **End encounter** records a manual ending and your outcome. Runs save automatically
 after changes; **Close run** asks once, then returns to the page the run began on. A setup closed with nothing done leaves no saved run. The app reopens an open
-run after a restart, on the current turn, and turns its sync back on. **Saved runs** on Encounters,
-grouped by encounter and with dates, has **Resume** for an interrupted run, **View** for an ended one, and a button to remove one, with one step of undo. Run changes never
+run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
+and **Delete**, with one step of undo. **History** holds the ended ones, under their session. Run changes never
 write to templates or character copies.
 
 ### Run storage and campaign initiative
