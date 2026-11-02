@@ -82,11 +82,7 @@ impl ContentIndex {
                     |c| format!("Campaign · {}", c.name),
                 )
             } else {
-                catalogue
-                    .modules
-                    .iter()
-                    .find(|module| module.id == owner)
-                    .map_or_else(|| "Package".to_owned(), |module| module.name.clone())
+                catalogue.package_name(owner)
             }
         };
         let builtin = catalogue.modules.first().map(|module| module.id);

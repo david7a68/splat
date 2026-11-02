@@ -207,14 +207,17 @@ struct Creature {
     lower: String,
     /// CR, HP and AC, from fields the entry already has.
     detail: String,
+    /// The package it came from. A party copy says so in `detail` instead.
+    source: Option<String>,
     party: bool,
 }
 const ROSTER_MAX_WIDTH: f32 = 860.0;
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
 const RESULT_ROW: f32 = 40.0;
 /// A result's stats, each in its own place, so that they can be compared down the list. The
-/// first place holds a party copy's word, which has no challenge rating.
-fn detail_columns(ui: &mut egui::Ui, detail: &str) {
+/// first place holds a party copy's word, which has no challenge rating. The package follows
+/// if the row has room for it.
+fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
     const COLUMNS: [(&str, f32); 3] = [("CR ", 66.0), ("HP ", 46.0), ("AC ", 38.0)];
     let parts: Vec<&str> = detail.split(" · ").collect();
     let other = parts
@@ -239,6 +242,12 @@ fn detail_columns(ui: &mut egui::Ui, detail: &str) {
                     }
                 },
             );
+        }
+        // Only whole: a cut name says nothing, and Read always shows it.
+        if let Some(source) = source
+            && design::number_width(ui, source, &Type::Small.font(ui)) <= ui.available_width()
+        {
+            ui.label(Type::Small.rich(ui, source).color(colors().muted));
         }
     });
 }
@@ -326,6 +335,11 @@ impl Snapshot {
                     name: e.entry.name.clone(),
                     lower: e.entry.name.to_lowercase(),
                     detail: creature_detail(&e.entry, party),
+                    source: match (party, e.private) {
+                        (true, _) => None,
+                        (false, true) => Some("Campaign".to_owned()),
+                        (false, false) => Some(catalogue.package_name(e.owner)),
+                    },
                     party,
                 }
             })
@@ -1447,7 +1461,7 @@ impl Encounters {
                                     )
                                     .truncate(),
                                 );
-                                detail_columns(ui, &c.detail);
+                                detail_columns(ui, &c.detail, c.source.as_deref());
                             });
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
@@ -1932,6 +1946,32 @@ mod tests {
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         assert_eq!(snapshot.creatures.len(), 1);
         assert_eq!(snapshot.creatures[0].id, local);
+    }
+    #[test]
+    fn creatures_name_the_package_they_came_from() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let hero = creature(dir.path(), "Hero", true);
+        let local = creature(dir.path(), "Local", false);
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let source = |id: Uuid| {
+            snapshot
+                .creatures
+                .iter()
+                .find(|c| c.id == id)
+                .unwrap()
+                .source
+                .as_deref()
+        };
+        assert_eq!(source(hero), None);
+        assert_eq!(source(local), Some("Campaign"));
+        // A new campaign uses the built-in package.
+        assert!(
+            snapshot
+                .creatures
+                .iter()
+                .any(|c| c.source.as_deref() == Some("D&D 2024 · SRD 5.2.1"))
+        );
     }
     #[test]
     fn editor_renders_at_supported_sizes_without_changing_the_draft() {

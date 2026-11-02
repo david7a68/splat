@@ -58,6 +58,24 @@ impl Owner {
             Self::Campaign(campaign) => format!("Campaign · {}", campaign.name),
         }
     }
+    /// Where an entry came from.
+    fn source(&self) -> &str {
+        match self {
+            Self::Builtin => BUILTIN_NAME,
+            Self::Package(module) => &module.name,
+            Self::Campaign(_) => "Campaign",
+        }
+    }
+}
+
+/// The line under the reader's title. It wraps, so unlike a list row it always has room to
+/// name the package, the built-in one too.
+fn reader_subtitle(owner: &Owner, listed: &str, class_level: Option<String>) -> String {
+    match class_level {
+        Some(level) => format!("{level} · {}", owner.source()),
+        None if *owner == Owner::Builtin => format!("{listed} · {BUILTIN_NAME}"),
+        None => listed.to_owned(),
+    }
 }
 
 /// What the catalogue shows. The default is what the active campaign can use.
@@ -248,8 +266,26 @@ const ENTRY_ROW_HEIGHT: f32 = 44.0;
 const SEARCH_NAME: &str = "Search the Library";
 
 // Fixed height keeps the virtual scroll position independent of label length.
-fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
-    design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, name, subtitle)
+fn entry_row(
+    ui: &mut egui::Ui,
+    name: &str,
+    subtitle: &str,
+    owner: &Owner,
+    selected: bool,
+) -> egui::Response {
+    // Only when the whole line fits: a cut name says nothing, and the reader always shows it.
+    // The line of an entry from any other package names it already.
+    let room = ui.available_width() - 2.0 * design::S;
+    let with_package = (*owner == Owner::Builtin)
+        .then(|| format!("{subtitle} · {BUILTIN_NAME}"))
+        .filter(|line| design::number_width(ui, line, &Type::Small.font(ui)) <= room);
+    design::two_line_row(
+        ui,
+        ENTRY_ROW_HEIGHT,
+        selected,
+        name,
+        with_package.as_deref().unwrap_or(subtitle),
+    )
 }
 
 fn local_module(path: &Path) -> Result<Module, String> {
@@ -1187,7 +1223,13 @@ impl Library {
                             let subtitle = &subtitles[i];
                             let response = ui
                                 .push_id(i, |ui| {
-                                    entry_row(ui, note.name(), subtitle, selected == Some(i))
+                                    entry_row(
+                                        ui,
+                                        note.name(),
+                                        subtitle,
+                                        &note.owner,
+                                        selected == Some(i),
+                                    )
                                 })
                                 .inner;
                             if response
@@ -1667,9 +1709,13 @@ impl Library {
         let title = reading
             .as_ref()
             .map_or(note.name(), |reading| reading.title.as_str());
-        let reading_subtitle = reading
-            .as_ref()
-            .and_then(|_| presentation::class_level(parsed.as_ref().ok()?));
+        let reading_subtitle = reader_subtitle(
+            &note.owner,
+            subtitle,
+            reading
+                .as_ref()
+                .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
+        );
         let dirty = self.draft != note.text;
         if dirty {
             self.message = None;
@@ -1903,10 +1949,7 @@ impl Library {
                             );
                             reader_style::title(ui, title);
                             if note.entry.is_some() {
-                                reader_style::subtitle(
-                                    ui,
-                                    reading_subtitle.as_deref().unwrap_or(subtitle),
-                                );
+                                reader_style::subtitle(ui, &reading_subtitle);
                             }
                         });
                         open_link = view::show(
@@ -2101,6 +2144,7 @@ mod tests {
                         ui,
                         &"Long entry name ".repeat(30),
                         &"Long subtitle ".repeat(30),
+                        &Owner::Builtin,
                         false,
                     );
                     assert_eq!(response.rect.height(), 44.0);
@@ -2146,6 +2190,62 @@ mod tests {
         loaded.invalidate();
         assert_eq!(loaded.count(Section::All), 2);
         assert_eq!(loaded.subtitles().len(), 2);
+    }
+
+    #[test]
+    fn built_in_row_names_its_package_only_when_the_whole_line_fits() {
+        let line_at = |width: f32| {
+            let ctx = egui::Context::default();
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, 200.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        entry_row(ui, "Fireball", "Spell · Level 3", &Owner::Builtin, false);
+                    });
+                },
+            );
+            output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.starts_with("Spell") => {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .unwrap()
+        };
+        assert_eq!(line_at(600.0), format!("Spell · Level 3 · {BUILTIN_NAME}"));
+        assert_eq!(line_at(150.0), "Spell · Level 3");
+    }
+
+    #[test]
+    fn reader_names_the_package_once() {
+        let package = Owner::Package(Module {
+            id: Uuid::new_v4(),
+            name: "Ashen Marches".into(),
+            path: "ashen".into(),
+        });
+        // The list leaves the built-in package unsaid, and already names any other.
+        assert_eq!(
+            reader_subtitle(&Owner::Builtin, "Spell · Level 3", None),
+            format!("Spell · Level 3 · {BUILTIN_NAME}")
+        );
+        assert_eq!(
+            reader_subtitle(&package, "Spell · Level 3 · Ashen Marches", None),
+            "Spell · Level 3 · Ashen Marches"
+        );
+        // A class page's own line replaces the list's, so it needs the name too.
+        assert_eq!(
+            reader_subtitle(&package, "Rule", Some("Bard · Level 3".into())),
+            "Bard · Level 3 · Ashen Marches"
+        );
     }
 
     /// Run explicitly to measure the complete library UI while scrolling the built-in package.
@@ -2570,7 +2670,7 @@ mod tests {
                 .join("\n");
             for expected in [
                 "Bard Subclass",
-                "Bard · Level 3",
+                "Bard · Level 3 · D&D 2024 · SRD 5.2.1",
                 "Choose a Bard subclass.",
                 "Available in this package",
                 "Source text",

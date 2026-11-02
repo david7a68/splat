@@ -133,6 +133,13 @@ impl Catalogue {
         );
         Ok(())
     }
+    /// The name of the package with this ID.
+    pub fn package_name(&self, id: Uuid) -> String {
+        self.modules
+            .iter()
+            .find(|module| module.id == id)
+            .map_or_else(|| "Package".to_owned(), |module| module.name.clone())
+    }
     pub fn resolve(&self, reference: &Reference) -> Result<Uuid, String> {
         let id = match reference {
             Reference::Id(id) => Some(*id),

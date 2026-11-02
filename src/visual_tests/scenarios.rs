@@ -39,7 +39,7 @@ pub mod library_browse {
     const SEARCH_RESULTS: &str = "Search results";
     const CREATURE: &str = "Adult Black Dragon";
     const SPELL_ROW: &str = "Fireball · ";
-    const CLASS_ROW: &str = "Wizard · ";
+    const CLASS_ROW: &str = "Wizard · Class";
     const CREATURES_SECTION: &str = "Creatures   ";
     const CREATURES_COUNT: &str = "336 entries";
     const NEXT_CREATURE: &str = "Aboleth";
