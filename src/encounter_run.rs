@@ -908,7 +908,6 @@ impl Run {
             .values()
             .any(crate::combat_sync::CombatSync::unconfirmed)
     }
-    /// Who has changes a lost session left unsent.
     /// How many participants have a conflict to settle.
     pub(crate) fn conflict_count(&self) -> usize {
         self.syncs
@@ -918,13 +917,9 @@ impl Run {
     }
     /// Whose unsent values a close would lose: those the run does not hold itself.
     pub(crate) fn unsent_only_here_names(&self) -> Vec<String> {
-        self.syncs
-            .iter()
-            .filter(|(_, sync)| sync.unsent_only_here())
-            .filter_map(|(index, _)| self.state.participants.get(*index))
-            .map(|p| p.name.clone())
-            .collect()
+        self.sync_names(crate::combat_sync::CombatSync::unsent_only_here)
     }
+    /// Who has changes a lost session left unsent.
     pub(crate) fn stranded_names(&self) -> Vec<String> {
         self.sync_names(crate::combat_sync::CombatSync::stranded)
     }
@@ -1151,14 +1146,15 @@ fn local_group(
 /// the sheet's values stand.
 fn hold_local_changes(p: &mut Participant, sync: &mut crate::combat_sync::CombatSync) {
     let matched = sync.take_matched().filter(|matched| !matched.is_empty());
-    let saved = (!p.combat_values.is_empty()).then(|| p.combat_values.clone());
-    let changed = match (matched, saved, &p.started) {
-        (Some(matched), ..) => groups_that_differ(p, &matched, p.max_hp),
-        (None, Some(saved), Some(_)) => groups_that_differ(p, &saved, p.max_hp),
-        (None, None, Some(started)) => shadow_differences(&SheetShadow::of(p), started),
+    let changed = match (matched, &p.started) {
+        (Some(matched), _) => groups_that_differ(p, &matched, p.max_hp),
+        (None, Some(started)) if p.combat_values.is_empty() => {
+            shadow_differences(&SheetShadow::of(p), started)
+        }
+        (None, Some(_)) => groups_that_differ(p, &p.combat_values, p.max_hp),
         // A save from before starting values were kept. Its match can hold unsent values, so
         // nothing there shows what the DM changed. Every difference asks, this once.
-        (None, _, None) => vec![SheetGroup::Hp, SheetGroup::Death, SheetGroup::Conditions],
+        (None, None) => vec![SheetGroup::Hp, SheetGroup::Death, SheetGroup::Conditions],
     };
     if p.started.is_none() {
         p.started = Some(SheetShadow::of(p));
@@ -1712,8 +1708,8 @@ impl Run {
             .expect("participant in this run");
         participant.name = to.to_owned();
     }
-    /// A read of this sheet with the damage it had at the last match. Test builds have no
-    /// live sheet, so this goes through the same comparison that a live read does.
+    /// A read of this sheet with the damage it had at the last match, plus `more_damage`. Test
+    /// builds have no live sheet, so this goes through the same comparison that a live read does.
     pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
         let (index, participant) = self
             .state
@@ -2496,9 +2492,9 @@ mod tests {
             "it asks only once"
         );
     }
-    /// A conflict the DM has settled by taking the sheet's value.
-    fn settled_with_the_sheet(max: i64) -> Run {
-        let (mut run, _, _) = matched_with_sheet(5);
+    #[test]
+    fn undo_cannot_bring_back_a_value_after_a_conflict_is_settled() {
+        let (mut run, _, max) = matched_with_sheet(5);
         offline_tick(&mut run);
         run.apply(Command::Damage(0, 4)).unwrap();
         run.apply(Command::Next).unwrap();
@@ -2512,12 +2508,6 @@ mod tests {
         );
         run.syncs.get_mut(&0).unwrap().use_remote("hp");
         connected_tick(&mut run);
-        run
-    }
-    #[test]
-    fn undo_cannot_bring_back_a_value_after_a_conflict_is_settled() {
-        let max = matched_with_sheet(5).2;
-        let mut run = settled_with_the_sheet(max);
         assert_eq!(run.state.participants[0].hp, Some(max - 2));
         // Nothing to take back under another name, and the notice says what happened.
         assert!(run.history.is_empty());

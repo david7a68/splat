@@ -1531,11 +1531,7 @@ pub mod run_large_roster {
         );
         // At the minimum, 12 rows hold their places, use the room, and share a pitch.
         let places = roster_places(d);
-        let dock = d
-            .nodes()
-            .iter()
-            .find(|node| node.name == "Amount")
-            .map_or(0.0, |node| node.rect.min.y);
+        let dock = d.place_of("Amount").map_or(0.0, |rect| rect.min.y);
         let bottom = places
             .iter()
             .fold(0.0_f32, |low, place| low.max(place.1.max.y));
@@ -2405,12 +2401,10 @@ pub mod run_sync_states {
         // At the default size, 8 rows have the room, and a two-line message takes none
         // of it from them. Each row's height, then the same places with the message up.
         d.click(DISMISS);
-        let quiet = d.at_size(DEFAULT, |d| (roster_places(d), d.place_of("Amount")));
+        let (quiet, quiet_dock) = d.at_size(DEFAULT, |d| (roster_places(d), d.place_of("Amount")));
         d.app_mut().encounters.simulate_sheet_update(TWO_LINES);
         d.settle();
-        let loud = d.at_size(DEFAULT, |d| (roster_places(d), d.place_of("Amount")));
-        let same_dock = quiet.1 == loud.1;
-        let (quiet, loud) = (quiet.0, loud.0);
+        let (loud, loud_dock) = d.at_size(DEFAULT, |d| (roster_places(d), d.place_of("Amount")));
         let shortest = quiet
             .iter()
             .chain(&loud)
@@ -2422,7 +2416,7 @@ pub mod run_sync_states {
         );
         d.observe(
             "Stable rows",
-            quiet.len() == 8 && quiet == loud && same_dock,
+            quiet.len() == 8 && quiet == loud && quiet_dock == loud_dock,
             format!("At 1200x800, a two-line message moves no row and not the dock: {quiet:?} then {loud:?}"),
         );
         d.begin_task();
@@ -2445,12 +2439,10 @@ pub mod run_sync_states {
         d.state("ended-with-conflict", Sizes::Default);
         // A pair of choices is never cut: both are in view, at the minimum window too.
         let both = |d: &Driver<'_>| {
-            d.nodes()
+            let nodes = d.nodes();
+            [USE_REMOTE, KEEP_LOCAL]
                 .iter()
-                .any(|n| n.name == USE_REMOTE && n.fully_in_view())
-                && d.nodes()
-                    .iter()
-                    .any(|n| n.name == KEEP_LOCAL && n.fully_in_view())
+                .all(|name| nodes.iter().any(|n| n.name == *name && n.fully_in_view()))
         };
         d.observe_both(
             "Ended run close",

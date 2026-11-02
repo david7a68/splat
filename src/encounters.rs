@@ -445,7 +445,7 @@ impl Encounters {
             .simulate_rename(name, to);
     }
 
-    /// A read of this participant's sheet, holding its last matched values.
+    /// A read of this participant's sheet, holding its last matched damage plus `more_damage`.
     #[cfg(test)]
     pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
         self.run

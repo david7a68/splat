@@ -2223,8 +2223,7 @@ impl Run {
                                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                     // Two fixed places, so that a second click on an arrow
                                     // cannot land on the other one and take back the first.
-                                    let slot =
-                                        vec2(Density::Read.control(), Density::Read.control());
+                                    let slot = egui::Vec2::splat(Density::Read.control());
                                     if down {
                                         if design::icon_button(
                                             ui,

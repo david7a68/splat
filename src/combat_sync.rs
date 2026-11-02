@@ -521,16 +521,9 @@ impl CombatSync {
         sync.remote = Some(read.clone());
         sync.desired = read.groups.clone();
         sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 4).into();
-        let sent = sync.desired.clone();
         let mut changed = read;
         changed.groups.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 9).into();
-        sync.accept(
-            Outcome {
-                remote: changed,
-                blocked: BTreeMap::new(),
-            },
-            &sent,
-        );
+        sync.accept_read(changed);
         sync
     }
 
@@ -584,8 +577,7 @@ impl CombatSync {
             .collect()
     }
     fn keep_unsent(&mut self) {
-        let unsent = self.only_here();
-        self.unsent.extend(unsent);
+        self.unsent.extend(self.only_here());
     }
     /// What D&D Beyond last confirmed.
     pub fn confirmed(&self) -> Option<&Groups> {
@@ -843,20 +835,15 @@ impl CombatSync {
     /// A read from D&D Beyond, with the sheet's HP. Test builds have no route to a live one.
     #[cfg(test)]
     pub fn simulate_read(&mut self, character: u64, max_hp: i64, damage: i64) {
-        let remote = simulated_sheet(character, max_hp, damage, true);
-        let sent = self.desired.clone();
-        self.accept(
-            Outcome {
-                remote,
-                blocked: BTreeMap::new(),
-            },
-            &sent,
-        );
+        self.accept_read(simulated_sheet(character, max_hp, damage, true));
     }
     /// A read of a sheet given in full, in D&D Beyond's own fields.
     #[cfg(test)]
     pub fn simulate_sheet(&mut self, character: u64, max_hp: i64, sheet: &Value) {
-        let remote = Remote::from_raw(character, max_hp, sheet).expect("simulated sheet");
+        self.accept_read(Remote::from_raw(character, max_hp, sheet).expect("simulated sheet"));
+    }
+    #[cfg(test)]
+    fn accept_read(&mut self, remote: Remote) {
         let sent = self.desired.clone();
         self.accept(
             Outcome {
@@ -918,9 +905,7 @@ impl CombatSync {
         self.blocked.extend(outcome.blocked);
         // Back from a stop: an unsent value the sheet does not have is the DM's to settle.
         for (key, value) in std::mem::take(&mut self.unsent) {
-            if outcome.remote.groups.contains_key(&key)
-                && outcome.remote.groups.get(&key) != Some(&value)
-            {
+            if outcome.remote.groups.get(&key).is_some_and(|v| v != &value) {
                 self.hold_conflict(&key, value);
             }
         }
