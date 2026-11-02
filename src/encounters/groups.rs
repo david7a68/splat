@@ -1297,8 +1297,10 @@ mod tests {
         let campaign = campaign(dir.path());
         let scout = creature(dir.path(), "Scout");
         let ctx = egui::Context::default();
-        let mut encounters = Encounters::default();
-        encounters.group_draft = Some(GroupDraft::new());
+        let mut encounters = Encounters {
+            group_draft: Some(GroupDraft::new()),
+            ..Encounters::default()
+        };
         let draft = encounters.group_draft.as_mut().unwrap();
         draft.name = "Ash Pack".into();
         draft.add(scout);
