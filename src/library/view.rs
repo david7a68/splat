@@ -184,7 +184,7 @@ fn content(
         }
         reader::show(ui, entry, sections, builtin, reading.is_some());
     }
-    if let Some(entry) = entry.filter(|entry| class::supports(entry)) {
+    if let Some(entry) = entry.filter(|entry| class::lists_features(entry)) {
         open_link = open_link.or(class::show_features(ui, entry, links));
     }
     open_link
