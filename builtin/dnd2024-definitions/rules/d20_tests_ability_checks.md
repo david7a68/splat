@@ -18,15 +18,7 @@ splat_sources:
 
 <!-- SRD page 6 -->
 
-An ability check represents a creature using talent\
-and training to try to overcome a challenge, such as\
-forcing open a stuck door, picking a lock, entertain-\
-ing a crowd, or deciphering a cipher. The GM and the\
-rules often call for an ability check when a creature\
-attempts something other than an attack that has a\
-chance of meaningful failure. When the outcome is\
-uncertain and narratively interesting, the dice de-\
-termine the result.\
+An ability check represents a creature using talent and training to try to overcome a challenge, such as forcing open a stuck door, picking a lock, entertaining a crowd, or deciphering a cipher. The GM and the rules often call for an ability check when a creature attempts something other than an attack that has a chance of meaningful failure. When the outcome is uncertain and narratively interesting, the dice determine the result.
 
 ## Rule
 

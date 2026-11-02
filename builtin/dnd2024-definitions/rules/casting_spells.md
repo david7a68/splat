@@ -18,14 +18,11 @@ splat_sources:
 
 <!-- SRD page 104 -->
 
-Each spell description has a series of entries that\
-provide the details needed to cast the spell. The fol-\
-lowing sections explain each of those entries, which\
-follow a spell’s name.\
-castinG in arMor\
-You must have training with any armor you are wear-\
-ing to cast spells while wearing it. You are otherwise\
-too hampered by the armor for spellcasting.\
+Each spell description has a series of entries that provide the details needed to cast the spell. The following sections explain each of those entries, which follow a spell’s name.
+
+### Casting In Armor
+
+You must have training with any armor you are wearing to cast spells while wearing it. You are otherwise too hampered by the armor for spellcasting.
 
 ## Rule
 

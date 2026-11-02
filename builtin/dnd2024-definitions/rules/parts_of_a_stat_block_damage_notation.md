@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 257 -->
 
-A stat block usually provides both a number and a\
-die expression for each instance of damage. For ex-\
-ample, an attack might deal 4 (1d4 + 2) damage on a\
-hit. You decide whether to use the number or the die\
-expression in parentheses; don’t use both.\
+A stat block usually provides both a number and a die expression for each instance of damage. For example, an attack might deal 4 (1d4 + 2) damage on a hit. You decide whether to use the number or the die expression in parentheses; don’t use both.
 
 ## Rule
 

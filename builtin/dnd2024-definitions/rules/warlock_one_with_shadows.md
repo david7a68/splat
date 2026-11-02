@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 74 -->
 
-Prerequisite: Level 5+ Warlock\
-While you’re in an area of Dim Light or Darkness,\
-you can cast Invisibility on yourself without expend-\
-ing a spell slot.\
+Prerequisite: Level 5+ Warlock
+
+While you’re in an area of Dim Light or Darkness, you can cast Invisibility on yourself without expending a spell slot.
 
 ## Rule
 

@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 103 -->
 
-You can’t wear more than one of certain magic\
-items. You can’t normally wear more than one pair\
-of footwear, one pair of gloves or gauntlets, one pair\
-of bracers, one suit of armor, one item of headwear,\
-or one cloak. The GM might make exceptions.\
+You can’t wear more than one of certain magic items. You can’t normally wear more than one pair of footwear, one pair of gloves or gauntlets, one pair of bracers, one suit of armor, one item of headwear, or one cloak. The GM might make exceptions.
 
 ## Rule
 

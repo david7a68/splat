@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 25 -->
 
-Your Proficiency Bonus is based on your total char-\
-acter level, not your level in a particular class, as\
-shown in the Character Advancement table. For\
-example, if you are a level 3 Fighter / level 2 Rogue,\
-you have the Proficiency Bonus of a level 5 charac-\
-ter, which is +3.\
+Your Proficiency Bonus is based on your total character level, not your level in a particular class, as shown in the Character Advancement table. For example, if you are a level 3 Fighter / level 2 Rogue, you have the Proficiency Bonus of a level 5 character, which is +3.
 
 ## Rule
 

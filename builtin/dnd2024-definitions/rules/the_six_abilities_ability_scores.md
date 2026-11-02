@@ -18,22 +18,19 @@ splat_sources:
 
 <!-- SRD page 5 -->
 
-Each ability has a score from 1 to 20, although some\
-monsters have a score as high as 30. The score\
-represents the magnitude of an ability. The Ability\
-Scores table summarizes what the scores mean.\
-Ability Scores\
-Score Meaning\
-1 This is the lowest a score can normally go.\
-If an effect reduces a score to 0, that effect\
-explains what happens.\
-2–9 This represents a weak capability.\
-10–11 This represents the human average.\
-12–19 This represents a strong capability.\
-20 This is the highest an adventurer’s score can\
-go unless a feature says otherwise.\
-21–29 This represents an extraordinary capability.\
-30 This is the highest a score can go.\
+Each ability has a score from 1 to 20, although some monsters have a score as high as 30. The score represents the magnitude of an ability. The Ability Scores table summarizes what the scores mean.
+
+**Ability Scores**
+
+| Score | Meaning |
+| --- | --- |
+| 1 | This is the lowest a score can normally go. If an effect reduces a score to 0, that effect explains what happens. |
+| 2–9 | This represents a weak capability. |
+| 10–11 | This represents the human average. |
+| 12–19 | This represents a strong capability. |
+| 20 | This is the highest an adventurer’s score can go unless a feature says otherwise. |
+| 21–29 | This represents an extraordinary capability. |
+| 30 | This is the highest a score can go. |
 
 ## Rule
 

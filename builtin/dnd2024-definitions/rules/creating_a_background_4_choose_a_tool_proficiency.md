@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-Choose one tool used in the practice of the back-\
-ground or often associated with it.\
+Choose one tool used in the practice of the background or often associated with it.
 
 ## Rule
 

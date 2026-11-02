@@ -18,14 +18,13 @@ splat_sources:
 
 <!-- SRD page 236 -->
 
-Potion, Uncommon\
-You can breathe underwater for 24 hours after\
-drinking this potion.\
+Potion, Uncommon
+
+You can breathe underwater for 24 hours after drinking this potion.
 
 <!-- SRD page 237 -->
 
-This potion’s cloudy green fluid smells of the sea\
-and has a jellyfish-like bubble floating in it.\
+This potion’s cloudy green fluid smells of the sea and has a jellyfish-like bubble floating in it.
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]], [[../../srd-5.2.1/pages/237|page 237]].
 

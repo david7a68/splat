@@ -11,10 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [179],
 
 <!-- SRD page 179 -->
 
-Some game effects curse a creature or an object.\
-The effect that confers a curse defines what the\
-curse does. Curses can be removed by the Remove\
-Curse and Greater Restoration spells or other magic\
-that explicitly ends curses.\
+Some game effects curse a creature or an object. The effect that confers a curse defines what the curse does. Curses can be removed by the Remove Curse and Greater Restoration spells or other magic that explicitly ends curses.
 
 Original layout: [[../pages/179|page 179]].

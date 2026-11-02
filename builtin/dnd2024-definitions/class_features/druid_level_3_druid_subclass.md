@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 43 -->
 
-You gain a Druid subclass of your choice. The Circle\
-of the Land subclass is detailed after this class’s de-\
-scription. A subclass is a specialization that grants\
-you features at certain Druid levels. For the rest of\
-your career, you gain each of your subclass’s fea-\
-tures that are of your Druid level or lower.\
+You gain a Druid subclass of your choice. The Circle of the Land subclass is detailed after this class’s description. A subclass is a specialization that grants you features at certain Druid levels. For the rest of your career, you gain each of your subclass’s features that are of your Druid level or lower.
 
 ## Rule
 

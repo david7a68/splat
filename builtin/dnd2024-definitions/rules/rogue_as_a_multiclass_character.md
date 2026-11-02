@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 61 -->
 
-•  Gain the following traits from the Core Rogue\
-Traits table: Hit Point Die, proficiency in one skill\
-of your choice from the Rogue’s skill list, pro-\
-ficiency with Thieves’ Tools, and training with\
-Light armor.\
-•  Gain the Rogue’s level 1 features, which are listed\
-in the Rogue Features table.\
+•  Gain the following traits from the Core Rogue Traits table: Hit Point Die, proficiency in one skill of your choice from the Rogue’s skill list, proficiency with Thieves’ Tools, and training with Light armor.
+
+•  Gain the Rogue’s level 1 features, which are listed in the Rogue Features table.
 
 ## Rule
 

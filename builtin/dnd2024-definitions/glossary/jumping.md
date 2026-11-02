@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 184 -->
 
-When you jump, you make either a Long Jump (hor-\
-izontal) or a High Jump (vertical). See also “Long\
-Jump” and “High Jump.”\
+When you jump, you make either a Long Jump (horizontal) or a High Jump (vertical). See also “Long Jump” and “High Jump.”
 
 Original layout: [[../../srd-5.2.1/pages/184|page 184]].
 

@@ -18,17 +18,11 @@ splat_sources:
 
 <!-- SRD page 186 -->
 
-While you have the Prone condition, you experience\
-the following effects.\
-Restricted Movement. Your only movement op-\
-tions are to crawl or to spend an amount of move-\
-ment equal to half your Speed (round down) to\
-right yourself and thereby end the condition. If your\
-Speed is 0, you can’t right yourself.\
-Attacks Affected. You have Disadvantage on at-\
-tack rolls. An attack roll against you has Advantage\
-if the attacker is within 5 feet of you. Otherwise,\
-that attack roll has Disadvantage.\
+While you have the Prone condition, you experience the following effects.
+
+Restricted Movement. Your only movement options are to crawl or to spend an amount of movement equal to half your Speed (round down) to right yourself and thereby end the condition. If your Speed is 0, you can’t right yourself.
+
+Attacks Affected. You have Disadvantage on attack rolls. An attack roll against you has Advantage if the attacker is within 5 feet of you. Otherwise, that attack roll has Disadvantage.
 
 Original layout: [[../../srd-5.2.1/pages/186|page 186]].
 

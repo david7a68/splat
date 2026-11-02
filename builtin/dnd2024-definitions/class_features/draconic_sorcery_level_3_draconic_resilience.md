@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 69 -->
 
-The magic in your body manifests physical traits\
-of your draconic gift. Your Hit Point maximum in-\
-creases by 3, and it increases by 1 whenever you\
-gain another Sorcerer level.\
-Parts of you are also covered by dragon-like\
-scales. While you aren’t wearing armor, your base\
-Armor Class equals 10 plus your Dexterity and Cha-\
-risma modifiers.\
+The magic in your body manifests physical traits of your draconic gift. Your Hit Point maximum increases by 3, and it increases by 1 whenever you gain another Sorcerer level.
+
+Parts of you are also covered by dragon-like scales. While you aren’t wearing armor, your base Armor Class equals 10 plus your Dexterity and Charisma modifiers.
 
 ## Rule
 

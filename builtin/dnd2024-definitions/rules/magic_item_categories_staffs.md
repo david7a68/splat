@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 205 -->
 
-Items in the Staff category vary widely in appear-\
-ance: some are of nearly equal diameter throughout\
-and smooth, others are gnarled and twisted, some\
-are made of wood, and others are composed of pol-\
-ished metal or crystal. A staff weighs between 2 and\
-7 pounds and serves well as a walking stick or cane.\
-Unless its description notes otherwise, a staff can\
-be used as a nonmagical Quarterstaff and an Arcane\
-Focus.\
+Items in the Staff category vary widely in appearance: some are of nearly equal diameter throughout and smooth, others are gnarled and twisted, some are made of wood, and others are composed of polished metal or crystal. A staff weighs between 2 and 7 pounds and serves well as a walking stick or cane.
+
+Unless its description notes otherwise, a staff can be used as a nonmagical Quarterstaff and an Arcane Focus.
 
 ## Rule
 

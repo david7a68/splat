@@ -18,38 +18,34 @@ splat_sources:
 
 <!-- SRD page 23 -->
 
-While going on adventures, your character gains ex-\
-perience, represented by Experience Points (XP). A\
-character who reaches a specified Experience Point\
-total advances in capability. This advancement is\
-called gaining a level.\
-The Character Advancement table lists the XP\
-you need to advance to a level and the Proficiency\
-Bonus for a character of that level. When your XP\
-total equals or exceeds a number in the Experience\
-Points column, you reach the corresponding level.\
-Character Advancement\
-Level Experience Points Proficiency Bonus\
-1 0 +2\
-2 300 +2\
-3 900 +2\
-4 2,700 +2\
-5 6,500 +3\
-6 14,000 +3\
-7 23,000 +3\
-8 34,000 +3\
-9 48,000 +4\
-10 64,000 +4\
-11 85,000 +4\
-12 100,000 +4\
-13 120,000 +5\
-14 140,000 +5\
-15 165,000 +5\
-16 195,000 +5\
-17 225,000 +6\
-18 265,000 +6\
-19 305,000 +6\
-20 355,000 +6\
+While going on adventures, your character gains experience, represented by Experience Points (XP). A character who reaches a specified Experience Point total advances in capability. This advancement is called gaining a level.
+
+The Character Advancement table lists the XP you need to advance to a level and the Proficiency Bonus for a character of that level. When your XP total equals or exceeds a number in the Experience Points column, you reach the corresponding level.
+
+**Character Advancement**
+
+| Level | Experience Points | Proficiency Bonus |
+| --- | --- | --- |
+| 1 | 0 | +2 |
+| 2 | 300 | +2 |
+| 3 | 900 | +2 |
+| 4 | 2,700 | +2 |
+| 5 | 6,500 | +3 |
+| 6 | 14,000 | +3 |
+| 7 | 23,000 | +3 |
+| 8 | 34,000 | +3 |
+| 9 | 48,000 | +4 |
+| 10 | 64,000 | +4 |
+| 11 | 85,000 | +4 |
+| 12 | 100,000 | +4 |
+| 13 | 120,000 | +5 |
+| 14 | 140,000 | +5 |
+| 15 | 165,000 | +5 |
+| 16 | 195,000 | +5 |
+| 17 | 225,000 | +6 |
+| 18 | 265,000 | +6 |
+| 19 | 305,000 | +6 |
+| 20 | 355,000 | +6 |
 
 ## Rule
 

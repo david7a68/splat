@@ -219,6 +219,7 @@ impl<'a> Driver<'a> {
         };
         builder.build_eframe(move |cc| {
             crate::design::theme::install(&cc.egui_ctx);
+            crate::art::install(&cc.egui_ctx);
             app
         })
     }

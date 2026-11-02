@@ -76,6 +76,12 @@ introduces a second authoritative inventory table.
 A `roster-index` records the most recently fetched membership; removed members
 remain on disk but no longer appear when that roster is loaded offline.
 
+The portrait a player chose on D&D Beyond is kept next to the record, as a square
+PNG named `<character-id>-<hash of its address>.png`. A sheet update downloads it once,
+without the session, and only from D&D Beyond's own hosts. A new portrait replaces the old
+one. If there is no portrait, Party shows the first letter of the character's name. A
+failed download shows a warning, and the sheet still updates.
+
 Writes use a private temporary file, flush, and atomic replacement. Invalid or
 unsupported existing records are retained and reported. Credentials remain in
 the keyring and memory, never in these records. Cached characters can be viewed

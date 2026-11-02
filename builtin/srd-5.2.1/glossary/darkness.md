@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [180],
 
 <!-- SRD page 180 -->
 
-An area of Darkness is Heavily Obscured. See\
-also “Heavily Obscured” and “Playing the Game”\
-(“Exploration”).\
+An area of Darkness is Heavily Obscured. See also “Heavily Obscured” and “Playing the Game” (“Exploration”).
 
 Original layout: [[../pages/180|page 180]].

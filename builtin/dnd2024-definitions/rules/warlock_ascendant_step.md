@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 72 -->
 
-Prerequisite: Level 5+ Warlock\
-You can cast Levitate on yourself without expending\
-a spell slot.\
+Prerequisite: Level 5+ Warlock
+
+You can cast Levitate on yourself without expending a spell slot.
 
 ## Rule
 

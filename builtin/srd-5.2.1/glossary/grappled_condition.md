@@ -11,14 +11,12 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [182],
 
 <!-- SRD page 182 -->
 
-While you have the Grappled condition, you experi-\
-ence the following effects.\
-Speed 0. Your Speed is 0 and can’t increase.\
-Attacks Affected. You have Disadvantage on at-\
-tack rolls against any target other than the grappler.\
-Movable. The grappler can drag or carry you\
-when it moves, but every foot of movement costs it 1\
-extra foot unless you are Tiny or two or more sizes\
-smaller than it.\
+While you have the Grappled condition, you experience the following effects.
+
+Speed 0. Your Speed is 0 and can’t increase.
+
+Attacks Affected. You have Disadvantage on attack rolls against any target other than the grappler.
+
+Movable. The grappler can drag or carry you when it moves, but every foot of movement costs it 1 extra foot unless you are Tiny or two or more sizes smaller than it.
 
 Original layout: [[../pages/182|page 182]].

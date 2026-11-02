@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 90 -->
 
-A Reach weapon adds 5 feet to your reach when you\
-attack with it, as well as when determining your\
-reach for Opportunity Attacks with it.\
+A Reach weapon adds 5 feet to your reach when you attack with it, as well as when determining your reach for Opportunity Attacks with it.
 
 ## Rule
 

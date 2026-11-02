@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 176 -->
 
-An adventure is a series of encounters. A\
-story emerges through playing them. See also\
-“Encounter.”\
+An adventure is a series of encounters. A story emerges through playing them. See also “Encounter.”
 
 Original layout: [[../../srd-5.2.1/pages/176|page 176]].
 

@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 79 -->
 
-Choose two level 3 spells in your spellbook as your\
-signature spells. You always have these spells pre-\
-pared, and you can cast each of them once at level 3\
-without expending a spell slot. When you do so, you\
-can’t cast them in this way again until you finish a\
-Short or Long Rest. To cast either spell at a higher\
-level, you must expend a spell slot.\
+Choose two level 3 spells in your spellbook as your signature spells. You always have these spells prepared, and you can cast each of them once at level 3 without expending a spell slot. When you do so, you can’t cast them in this way again until you finish a Short or Long Rest. To cast either spell at a higher level, you must expend a spell slot.
 
 ## Rule
 

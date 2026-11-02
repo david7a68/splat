@@ -22,10 +22,9 @@ Level 1 Transmutation (Cleric, Druid, Paladin)\
 Casting Time: Action or Ritual\
 Range: 10 feet\
 Components: V, S\
-Duration: Instantaneous\
-You remove poison and rot from nonmagical food\
-and drink in a 5-foot-radius Sphere centered on a\
-point within range.\
+Duration: Instantaneous
+
+You remove poison and rot from nonmagical food and drink in a 5-foot-radius Sphere centered on a point within range.
 
 Original layout: [[../../srd-5.2.1/pages/157|page 157]].
 

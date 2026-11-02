@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-Your character’s background is a collection of char-\
-acteristics that represent the place and occupation\
-that were most formative before your character em-\
-barked on a life of adventure.\
+Your character’s background is a collection of characteristics that represent the place and occupation that were most formative before your character embarked on a life of adventure.
 
 ## Rule
 

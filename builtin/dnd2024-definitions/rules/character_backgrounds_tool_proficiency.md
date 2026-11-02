@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-Each background gives a character proficiency with\
-one tool—either a specific tool or one chosen from\
-the Artisan’s Tools category. Tools are detailed in\
-“Equipment.”\
+Each background gives a character proficiency with one tool—either a specific tool or one chosen from the Artisan’s Tools category. Tools are detailed in “Equipment.”
 
 ## Rule
 

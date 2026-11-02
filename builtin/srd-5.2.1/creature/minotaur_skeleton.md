@@ -22,17 +22,12 @@ Vulnerabilities Bludgeoning\
 Immunities Poison; Exhaustion, Poisoned\
 Senses Darkvision 60 ft.; Passive Perception 9\
 Languages Understands Abyssal but can’t speak\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Actions
 
-Gore. Melee Attack Roll: +6, reach 5 ft. Hit: 11 (2d6\
-+ 4) Piercing damage. If the target is a Large or smaller\
-creature and the skeleton moved 20+ feet straight\
-toward it immediately before the hit, the target takes\
-an extra 9 (2d8) Piercing damage and has the Prone\
-condition.\
-Slam. Melee Attack Roll: +6, reach 5 ft. Hit: 15 (2d10\
-+ 4) Bludgeoning damage.\
+Gore. Melee Attack Roll: +6, reach 5 ft. Hit: 11 (2d6 + 4) Piercing damage. If the target is a Large or smaller creature and the skeleton moved 20+ feet straight toward it immediately before the hit, the target takes an extra 9 (2d8) Piercing damage and has the Prone condition.
+
+Slam. Melee Attack Roll: +6, reach 5 ft. Hit: 15 (2d10 + 4) Bludgeoning damage.
 
 Original layout: [[../pages/326|page 326]].

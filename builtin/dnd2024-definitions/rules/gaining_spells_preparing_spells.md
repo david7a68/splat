@@ -18,23 +18,22 @@ splat_sources:
 
 <!-- SRD page 104 -->
 
-If you have a list of level 1+ spells you prepare, your\
-spellcasting feature specifies when you can change\
-the list and the number of spells you can change, as\
-summarized in the Spell Preparation by Class table.\
-Spell Preparation by Class\
-Class Change When You Number of Spells\
-…\
-Bard Gain a level One\
-Cleric Finish a Long Rest Any\
-Druid Finish a Long Rest Any\
-Paladin Finish a Long Rest One\
-Ranger Finish a Long Rest One\
-Sorcerer Gain a level One\
-Warlock Gain a level One\
-Wizard Finish a Long Rest Any\
-Most spellcasting monsters don’t change their lists\
-of prepared spells, but the GM is free to alter them.\
+If you have a list of level 1+ spells you prepare, your spellcasting feature specifies when you can change the list and the number of spells you can change, as summarized in the Spell Preparation by Class table.
+
+**Spell Preparation by Class**
+
+| Class | Change When You … | Number of Spells |
+| --- | --- | --- |
+| Bard | Gain a level | One |
+| Cleric | Finish a Long Rest | Any |
+| Druid | Finish a Long Rest | Any |
+| Paladin | Finish a Long Rest | One |
+| Ranger | Finish a Long Rest | One |
+| Sorcerer | Gain a level | One |
+| Warlock | Gain a level | One |
+| Wizard | Finish a Long Rest | Any |
+
+Most spellcasting monsters don’t change their lists of prepared spells, but the GM is free to alter them.
 
 ## Rule
 

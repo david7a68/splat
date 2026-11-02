@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-An Iron Pot holds up to 1 gallon.\
+An Iron Pot holds up to 1 gallon.
 
 ## Item
 

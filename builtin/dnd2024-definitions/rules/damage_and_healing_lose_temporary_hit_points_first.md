@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 18 -->
 
-If you have Temporary Hit Points and take damage,\
-those points are lost first, and any leftover damage\
-carries over to your Hit Points. For example, if you\
-have 5 Temporary Hit Points and take 7 damage,\
-you lose those points and then lose 2 Hit Points.\
+If you have Temporary Hit Points and take damage, those points are lost first, and any leftover damage carries over to your Hit Points. For example, if you have 5 Temporary Hit Points and take 7 damage, you lose those points and then lose 2 Hit Points.
 
 ## Rule
 

@@ -18,37 +18,19 @@ splat_sources:
 
 <!-- SRD page 205 -->
 
-Wondrous Items include wearable items such\
-as boots, belts, capes, amulets, brooches, and\
-circlets. Bags, carpets, figurines, horns, musical\
-instruments, and more also fall into this category.\
-Magic iteM Rules\
-Rules for identifying, attuning to, and using magic\
-items appear in “Equipment.” Additional rules are\
-presented below.\
-Attunement Prerequisites. If a magic item has\
-a class prerequisite, a creature must be a member of\
-that class to attune to the item. If a creature must be\
-a spellcaster to attune to an item, the creature qual-\
-ifies if it can cast at least one spell using its traits or\
-features, not by using a magic item or the like.\
-Items Made for Specific Creatures. Magic\
-items that are meant to be worn tend to magically\
-adjust themselves to the wearer. However, you can\
-decide that a magic item doesn’t adjust its size to fit\
-any wearer. For example, a particular armorer might\
-make items usable only by folk who are sized and\
-shaped like dwarves.\
-Unusual Anatomy. Use your discretion to decide\
-whether a creature can wear an item not made for\
-its anatomy. A ring placed on a tentacle might work,\
-but a yuan-ti with a snakelike tail instead of legs can’t\
-wear magic boots.\
-Paired Items. You can allow exceptions to the\
-rule that paired items must both be worn. For ex-\
-ample, a character with only one arm might be able\
-to use a single Glove of Missile Snaring so long as the\
-matching glove is on their person.\
+Wondrous Items include wearable items such as boots, belts, capes, amulets, brooches, and circlets. Bags, carpets, figurines, horns, musical instruments, and more also fall into this category.
+
+### Magic Item Rules
+
+Rules for identifying, attuning to, and using magic items appear in “Equipment.” Additional rules are presented below.
+
+Attunement Prerequisites. If a magic item has a class prerequisite, a creature must be a member of that class to attune to the item. If a creature must be a spellcaster to attune to an item, the creature qualifies if it can cast at least one spell using its traits or features, not by using a magic item or the like.
+
+Items Made for Specific Creatures. Magic items that are meant to be worn tend to magically adjust themselves to the wearer. However, you can decide that a magic item doesn’t adjust its size to fit any wearer. For example, a particular armorer might make items usable only by folk who are sized and shaped like dwarves.
+
+Unusual Anatomy. Use your discretion to decide whether a creature can wear an item not made for its anatomy. A ring placed on a tentacle might work, but a yuan-ti with a snakelike tail instead of legs can’t wear magic boots.
+
+Paired Items. You can allow exceptions to the rule that paired items must both be worn. For example, a character with only one arm might be able to use a single Glove of Missile Snaring so long as the matching glove is on their person.
 
 ## Rule
 

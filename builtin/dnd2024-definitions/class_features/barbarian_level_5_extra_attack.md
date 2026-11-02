@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 29 -->
 
-You can attack twice instead of once whenever you\
-take the Attack action on your turn.\
+You can attack twice instead of once whenever you take the Attack action on your turn.
 
 ## Rule
 

@@ -11,7 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [185],
 
 <!-- SRD page 185 -->
 
-An effect is magical if it is created by a spell, a magic\
-item, or a phenomenon that a rule labels as magical.\
+An effect is magical if it is created by a spell, a magic item, or a phenomenon that a rule labels as magical.
 
 Original layout: [[../pages/185|page 185]].

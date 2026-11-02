@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 192 -->
 
-The group must move at a Slow pace if any group\
-member’s Speed is reduced to half or less of normal.\
+The group must move at a Slow pace if any group member’s Speed is reduced to half or less of normal.
 
 ## Rule
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-A monster can take the actions in this section or\
-take one of the actions available to all creatures, as\
-described in “Playing the Game.”\
+A monster can take the actions in this section or take one of the actions available to all creatures, as described in “Playing the Game.”
 
 ## Rule
 

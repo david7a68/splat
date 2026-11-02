@@ -11,7 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [186],
 
 <!-- SRD page 186 -->
 
-A player character is a character controlled by a\
-player. See also “Character Creation.”\
+A player character is a character controlled by a player. See also “Character Creation.”
 
 Original layout: [[../pages/186|page 186]].

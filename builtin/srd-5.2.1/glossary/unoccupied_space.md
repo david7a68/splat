@@ -11,7 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [191],
 
 <!-- SRD page 191 -->
 
-A space is unoccupied if no creatures are in it and it\
-isn’t completely filled by objects.\
+A space is unoccupied if no creatures are in it and it isn’t completely filled by objects.
 
 Original layout: [[../pages/191|page 191]].

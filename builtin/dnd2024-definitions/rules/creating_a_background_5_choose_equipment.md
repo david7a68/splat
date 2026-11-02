@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-Assemble a package of equipment worth 50 GP (in-\
-cluding unspent gold). Don’t include Martial weap-\
-ons or armor, as characters get them from their\
-class choices.\
+Assemble a package of equipment worth 50 GP (including unspent gold). Don’t include Martial weapons or armor, as characters get them from their class choices.
 
 ## Rule
 

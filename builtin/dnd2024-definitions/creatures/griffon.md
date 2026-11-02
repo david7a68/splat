@@ -28,15 +28,13 @@ Int 2 −4 −4 Wis 13 +1 +1 Cha 8 −1 −1\
 Skills Perception +5\
 Senses Darkvision 60 ft.; Passive Perception 15\
 Languages None\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Actions
 
-Multiattack. The griffon makes two Rend attacks.\
-Rend. Melee Attack Roll: +6, reach 5 ft. Hit: 8 (1d8 + 4)\
-Piercing damage. If the target is a Medium or smaller\
-creature, it has the Grappled condition (escape DC 14)\
-from both of the griffon’s front claws.\
+Multiattack. The griffon makes two Rend attacks.
+
+Rend. Melee Attack Roll: +6, reach 5 ft. Hit: 8 (1d8 + 4) Piercing damage. If the target is a Medium or smaller creature, it has the Grappled condition (escape DC 14) from both of the griffon’s front claws.
 
 Original layout: [[../../srd-5.2.1/pages/295|page 295]].
 

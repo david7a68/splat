@@ -11,10 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [238
 
 <!-- SRD page 238 -->
 
-Ring, Rare (Requires Attunement)\
-While you wear this ring, Difficult Terrain doesn’t\
-cost you extra movement. In addition, magic can\
-neither reduce any of your Speeds nor cause you to\
-have the Paralyzed or Restrained condition.\
+Ring, Rare (Requires Attunement)
+
+While you wear this ring, Difficult Terrain doesn’t cost you extra movement. In addition, magic can neither reduce any of your Speeds nor cause you to have the Paralyzed or Restrained condition.
 
 Original layout: [[../pages/238|page 238]].

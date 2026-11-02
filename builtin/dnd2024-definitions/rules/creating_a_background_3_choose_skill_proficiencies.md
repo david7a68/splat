@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-Choose two skills appropriate for the background.\
-There needn’t be a relationship between the skill\
-proficiencies a background grants and the ability\
-scores it increases.\
+Choose two skills appropriate for the background. There needn’t be a relationship between the skill proficiencies a background grants and the ability scores it increases.
 
 ## Rule
 

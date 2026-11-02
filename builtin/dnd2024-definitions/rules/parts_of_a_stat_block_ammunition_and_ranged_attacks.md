@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-A monster that requires ammunition to make\
-ranged attacks carries the necessary ammunition.\
+A monster that requires ammunition to make ranged attacks carries the necessary ammunition.
 
 ## Rule
 

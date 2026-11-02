@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 12 -->
 
-You can usually carry your gear and treasure with-\
-out worrying about the weight of those objects. If\
-you try to haul an unusually heavy object or a mas-\
-sive number of lighter objects, the GM might require\
-you to abide by the rules for carrying capacity in\
-“Rules Glossary.”\
+You can usually carry your gear and treasure without worrying about the weight of those objects. If you try to haul an unusually heavy object or a massive number of lighter objects, the GM might require you to abide by the rules for carrying capacity in “Rules Glossary.”
 
 ## Rule
 

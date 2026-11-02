@@ -29,12 +29,11 @@ Skills Deception +2, Religion +2\
 Gear Leather Armor, Sickle\
 Senses Passive Perception 10\
 Languages Common\
-CR 1/8 (XP 25; PB +2)\
+CR 1/8 (XP 25; PB +2)
 
 ### Actions
 
-Ritual Sickle. Melee Attack Roll: +3, reach 5 ft. Hit: 3\
-(1d4 + 1) Slashing damage plus 1 Necrotic damage.\
+Ritual Sickle. Melee Attack Roll: +3, reach 5 ft. Hit: 3 (1d4 + 1) Slashing damage plus 1 Necrotic damage.
 
 Original layout: [[../../srd-5.2.1/pages/278|page 278]].
 

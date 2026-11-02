@@ -91,12 +91,11 @@ Changing a content declaration cannot register engine code or grant execution.
 
 ## Source rulings and required inputs
 
-The Young White Dragon's unsigned Intelligence SAVE `2` is now a supplied
-base total of **+2**, under the user's ruling. Its Intelligence score remains
-6. Roll `d20 + 2`, then apply additional modifiers; do not add the ability
-modifier or proficiency again. [Online research](research/young-white-dragon-save.md)
-found another project explicitly using +2, while Open5e and Foundry use −2.
-The raw publisher value remains in the source record.
+The Young White Dragon's Intelligence SAVE is **−2**. The PDF prints an unsigned
+`2`, and the user ruled on 2026-11-01 that this is a printing error. This replaces
+the earlier +2 ruling in [the research note](research/young-white-dragon-save.md).
+`source.txt` keeps the printed value, and `scripts/srd_inputs/transcription_patches.json`
+holds the correction.
 
 Narrow source ambiguities are explicit case inputs or rule selections, not
 invented defaults or generic manual-resolution fallbacks:

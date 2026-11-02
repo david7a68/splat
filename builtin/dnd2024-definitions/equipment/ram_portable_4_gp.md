@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-You can use a Portable Ram to break down doors.\
-When doing so, you gain a +4 bonus to the Strength\
-check. One other character can help you use the\
-ram, giving you Advantage on this check.\
+You can use a Portable Ram to break down doors. When doing so, you gain a +4 bonus to the Strength check. One other character can help you use the ram, giving you Advantage on this check.
 
 ## Item
 

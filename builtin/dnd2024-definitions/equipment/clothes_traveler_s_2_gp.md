@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 97 -->
 
-Traveler’s Clothes are resilient garments designed\
-for travel in various environments.\
+Traveler’s Clothes are resilient garments designed for travel in various environments.
 
 ## Item
 

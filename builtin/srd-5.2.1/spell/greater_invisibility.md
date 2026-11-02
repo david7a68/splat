@@ -15,8 +15,8 @@ Level 4 Illusion (Bard, Sorcerer, Wizard)\
 Casting Time: Action\
 Range: Touch\
 Components: V, S\
-Duration: Concentration, up to 1 minute\
-A creature you touch has the Invisible condition un-\
-til the spell ends.\
+Duration: Concentration, up to 1 minute
+
+A creature you touch has the Invisible condition until the spell ends.
 
 Original layout: [[../pages/137|page 137]].

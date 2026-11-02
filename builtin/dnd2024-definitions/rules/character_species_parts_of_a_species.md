@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-A species includes the following parts.\
+A species includes the following parts.
 
 ## Rule
 

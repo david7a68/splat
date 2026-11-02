@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 35 -->
 
-You gain proficiency with three skills of your choice.\
+You gain proficiency with three skills of your choice.
 
 ## Rule
 

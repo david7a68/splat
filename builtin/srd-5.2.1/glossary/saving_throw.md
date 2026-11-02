@@ -11,14 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [187],
 
 <!-- SRD page 187 -->
 
-A saving throw—also called a save—represents an\
-attempt to avoid or resist a threat. You normally\
-make a saving throw only when a rule requires you\
-to do so, but you can decide to fail the save without\
-rolling. The result of a save is detailed in the effect\
-that allowed it. If a target is forced to make a save\
-and lacks the ability score used by it, the target au-\
-tomatically fails. See also “Playing the Game” (“D20\
-Tests”).\
+A saving throw—also called a save—represents an attempt to avoid or resist a threat. You normally make a saving throw only when a rule requires you to do so, but you can decide to fail the save without rolling. The result of a save is detailed in the effect that allowed it. If a target is forced to make a save and lacks the ability score used by it, the target automatically fails. See also “Playing the Game” (“D20 Tests”).
 
 Original layout: [[../pages/187|page 187]].

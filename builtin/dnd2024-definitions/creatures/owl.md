@@ -28,17 +28,15 @@ Int 2 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
 Skills Perception +5, Stealth +5\
 Senses Darkvision 120 ft.; Passive Perception 15\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Traits
 
-Flyby. The owl doesn’t provoke an Opportunity Attack\
-when it flies out of an enemy’s reach.\
+Flyby. The owl doesn’t provoke an Opportunity Attack when it flies out of an enemy’s reach.
 
 ### Actions
 
-Talons. Melee Attack Roll: +3, reach 5 ft. Hit: 1 Slash-\
-ing damage.\
+Talons. Melee Attack Roll: +3, reach 5 ft. Hit: 1 Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/358|page 358]].
 

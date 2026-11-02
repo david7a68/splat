@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 15 -->
 
-When you make a ranged attack, you fire a bow,\
-hurl an axe, or otherwise send projectiles to strike a\
-foe at a distance. Many spells also involve making a\
-ranged attack.\
+When you make a ranged attack, you fire a bow, hurl an axe, or otherwise send projectiles to strike a foe at a distance. Many spells also involve making a ranged attack.
 
 ## Rule
 

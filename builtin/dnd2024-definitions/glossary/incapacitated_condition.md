@@ -18,14 +18,15 @@ splat_sources:
 
 <!-- SRD page 184 -->
 
-While you have the Incapacitated condition, you ex-\
-perience the following effects.\
-Inactive. You can’t take any action, Bonus Action,\
-or Reaction.\
-No Concentration. Your Concentration is broken.\
-Speechless. You can’t speak.\
-Surprised. If you’re Incapacitated when you roll\
-Initiative, you have Disadvantage on the roll.\
+While you have the Incapacitated condition, you experience the following effects.
+
+Inactive. You can’t take any action, Bonus Action, or Reaction.
+
+No Concentration. Your Concentration is broken.
+
+Speechless. You can’t speak.
+
+Surprised. If you’re Incapacitated when you roll Initiative, you have Disadvantage on the roll.
 
 Original layout: [[../../srd-5.2.1/pages/184|page 184]].
 

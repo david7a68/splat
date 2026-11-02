@@ -11,25 +11,14 @@ splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [153], "e
 
 <!-- SRD page 153 -->
 
-Level 7 Conjuration (Cleric, Druid, Sorcerer, Warlock,\
-Wizard)\
+Level 7 Conjuration (Cleric, Druid, Sorcerer, Warlock, Wizard)\
 Casting Time: Action\
 Range: Touch\
-Components: V, S, M (a forked, metal rod worth 250+\
-GP and attuned to a plane of existence)\
-Duration: Instantaneous\
-You and up to eight willing creatures who link\
-hands in a circle are transported to a different plane\
-of existence. You can specify a target destination in\
-general terms, such as a specific city on the Elemen-\
-tal Plane of Fire or palace on the second level of the\
-Nine Hells, and you appear in or near that destina-\
-tion, as determined by the GM.\
-Alternatively, if you know the sigil sequence of a\
-teleportation circle on another plane of existence,\
-this spell can take you to that circle. If the teleporta-\
-tion circle is too small to hold all the creatures you\
-transported, they appear in the closest unoccupied\
-spaces next to the circle.\
+Components: V, S, M (a forked, metal rod worth 250+ GP and attuned to a plane of existence)\
+Duration: Instantaneous
+
+You and up to eight willing creatures who link hands in a circle are transported to a different plane of existence. You can specify a target destination in general terms, such as a specific city on the Elemental Plane of Fire or palace on the second level of the Nine Hells, and you appear in or near that destination, as determined by the GM.
+
+Alternatively, if you know the sigil sequence of a teleportation circle on another plane of existence, this spell can take you to that circle. If the teleportation circle is too small to hold all the creatures you transported, they appear in the closest unoccupied spaces next to the circle.
 
 Original layout: [[../pages/153|page 153]].

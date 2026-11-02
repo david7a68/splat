@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 17 -->
 
-Multiple instances of Resistance or Vulnerability\
-that affect the same damage type count as only one\
-instance. For example, if you have Resistance to Ne-\
-crotic damage as well as Resistance to all damage,\
-Necrotic damage is reduced by half against you.\
+Multiple instances of Resistance or Vulnerability that affect the same damage type count as only one instance. For example, if you have Resistance to Necrotic damage as well as Resistance to all damage, Necrotic damage is reduced by half against you.
 
 ## Rule
 

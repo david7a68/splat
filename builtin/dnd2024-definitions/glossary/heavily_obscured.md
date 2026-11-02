@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 182 -->
 
-You have the Blinded condition while trying to see\
-something in a Heavily Obscured space. See also\
-“Blinded,” “Darkness,” and “Playing the Game”\
-(“Exploration”).\
+You have the Blinded condition while trying to see something in a Heavily Obscured space. See also “Blinded,” “Darkness,” and “Playing the Game” (“Exploration”).
 
 Original layout: [[../../srd-5.2.1/pages/182|page 182]].
 

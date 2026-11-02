@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 55 -->
 
-You and your allies have Immunity to the Fright-\
-ened condition while in your Aura of Protection. If\
-a Frightened ally enters the aura, that condition has\
-no effect on that ally while there.\
+You and your allies have Immunity to the Frightened condition while in your Aura of Protection. If a Frightened ally enters the aura, that condition has no effect on that ally while there.
 
 ## Rule
 

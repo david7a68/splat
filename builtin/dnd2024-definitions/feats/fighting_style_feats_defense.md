@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 88 -->
 
-Fighting Style Feat (Prerequisite: Fighting Style\
-Feature)\
-While you’re wearing Light, Medium, or Heavy ar-\
-mor, you gain a +1 bonus to Armor Class.\
+Fighting Style Feat (Prerequisite: Fighting Style Feature)
+
+While you’re wearing Light, Medium, or Heavy armor, you gain a +1 bonus to Armor Class.
 
 ## Rule
 

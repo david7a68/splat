@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 244 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While you wear these light shoes, you can move\
-up, down, and across vertical surfaces and along\
-ceilings, while leaving your hands free. You have a\
-Climb Speed equal to your Speed. However, the slip-\
-pers don’t allow you to move this way on a slippery\
-surface, such as one covered by ice or oil.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While you wear these light shoes, you can move up, down, and across vertical surfaces and along ceilings, while leaving your hands free. You have a Climb Speed equal to your Speed. However, the slippers don’t allow you to move this way on a slippery surface, such as one covered by ice or oil.
 
 Original layout: [[../../srd-5.2.1/pages/244|page 244]].
 

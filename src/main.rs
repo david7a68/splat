@@ -1,3 +1,4 @@
+mod art;
 pub mod auth;
 mod campaign_content;
 mod campaigns;
@@ -42,6 +43,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| {
             design::theme::install(&cc.egui_ctx);
+            art::install(&cc.egui_ctx);
             Ok(Box::<Splat>::default())
         }),
     )
@@ -74,6 +76,7 @@ struct Splat {
     run_fact: Option<timeline::RunFact>,
     /// New events and runs go to a session dated before today.
     old_session: bool,
+    art: art::Loader,
     ui_store: ui_state::Store,
     tab_direction: Option<egui::FocusDirection>,
     step_past: Option<(egui::Id, egui::FocusDirection)>,
@@ -107,6 +110,7 @@ impl Default for Splat {
             processing: Default::default(),
             run_fact: None,
             old_session: false,
+            art: Default::default(),
             ui_store: ui_state::Store::user(),
             tab_direction: None,
             step_past: None,
@@ -1220,6 +1224,8 @@ impl eframe::App for Splat {
         self.dndbeyond.begin_frame();
         self.dndbeyond
             .poll(ctx, epoch, session.is_some(), &mut self.campaigns);
+        self.art.poll(ctx, self.campaigns.modules());
+        art::show_viewer(ctx);
         self.lookup.poll(ctx, &self.campaigns);
         self.encounters.poll(ctx, &self.campaigns);
         self.lookup.library_draft = self.library.dirty();
@@ -1245,6 +1251,7 @@ impl eframe::App for Splat {
         });
         let modal = self.copy_dialog.is_some()
             || self.confirm_close
+            || art::viewer_open(ctx)
             || ctx.memory(|memory| memory.top_modal_layer()).is_some();
         if !modal {
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {

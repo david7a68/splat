@@ -11,7 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [188],
 
 <!-- SRD page 188 -->
 
-A spell is a magical effect that has the characteris-\
-tics described in “Spells.”\
+A spell is a magical effect that has the characteristics described in “Spells.”
 
 Original layout: [[../pages/188|page 188]].

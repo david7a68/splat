@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 206 -->
 
-A command word is a word or short phrase that\
-must be spoken or signed for an item to work. Spo-\
-ken command words must be audible and fail to\
-work in areas where all sound is suppressed, as in\
-the area of the Silence spell.\
+A command word is a word or short phrase that must be spoken or signed for an item to work. Spoken command words must be audible and fail to work in areas where all sound is suppressed, as in the area of the Silence spell.
 
 ## Rule
 

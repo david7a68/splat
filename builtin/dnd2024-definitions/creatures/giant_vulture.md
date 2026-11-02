@@ -29,20 +29,15 @@ Skills Perception +3\
 Resistances Necrotic\
 Senses Darkvision 60 ft.; Passive Perception 13\
 Languages Understands Common but can’t speak\
-CR 1 (XP 200; PB +2)\
+CR 1 (XP 200; PB +2)
 
 ### Traits
 
-Pack Tactics. The vulture has Advantage on an attack\
-roll against a creature if at least one of the vulture’s al-\
-lies is within 5 feet of the creature and the ally doesn’t\
-have the Incapacitated condition.\
+Pack Tactics. The vulture has Advantage on an attack roll against a creature if at least one of the vulture’s allies is within 5 feet of the creature and the ally doesn’t have the Incapacitated condition.
 
 ### Actions
 
-Gouge. Melee Attack Roll: +4, reach 5 ft. Hit: 9 (2d6\
-+ 2) Piercing damage, and the target has the Poisoned\
-condition until the end of its next turn.\
+Gouge. Melee Attack Roll: +4, reach 5 ft. Hit: 9 (2d6 + 2) Piercing damage, and the target has the Poisoned condition until the end of its next turn.
 
 Original layout: [[../../srd-5.2.1/pages/354|page 354]].
 

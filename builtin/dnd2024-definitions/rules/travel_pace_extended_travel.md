@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 192 -->
 
-Characters can push themselves to travel for more\
-than 8 hours per day, at the risk of tiring. At the end\
-of each additional hour of travel beyond 8 hours,\
-each character must succeed on a Constitution sav-\
-ing throw or gain 1 Exhaustion level. The DC is 10\
-plus 1 for each hour past 8 hours.\
+Characters can push themselves to travel for more than 8 hours per day, at the risk of tiring. At the end of each additional hour of travel beyond 8 hours, each character must succeed on a Constitution saving throw or gain 1 Exhaustion level. The DC is 10 plus 1 for each hour past 8 hours.
 
 ## Rule
 

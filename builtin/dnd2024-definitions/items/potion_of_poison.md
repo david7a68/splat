@@ -18,14 +18,11 @@ splat_sources:
 
 <!-- SRD page 236 -->
 
-Potion, Uncommon\
-This concoction looks, smells, and tastes like a\
-Potion of Healing or another beneficial potion. How-\
-ever, it is actually poison masked by illusion magic.\
-Identify reveals its true nature.\
-If you drink this potion, you take 4d6 Poison dam-\
-age and must succeed on a DC 13 Constitution sav-\
-ing throw or have the Poisoned condition for 1 hour.\
+Potion, Uncommon
+
+This concoction looks, smells, and tastes like a Potion of Healing or another beneficial potion. However, it is actually poison masked by illusion magic. Identify reveals its true nature.
+
+If you drink this potion, you take 4d6 Poison damage and must succeed on a DC 13 Constitution saving throw or have the Poisoned condition for 1 hour.
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 

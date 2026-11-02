@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 52 -->
 
-Master Unarmed Combat Techniques\
-Warriors of the Open Hand are masters of unarmed\
-combat. They learn techniques to push and trip\
-their opponents and manipulate their own energy\
-to protect themselves from harm.\
+### Master Unarmed Combat Techniques
+
+Warriors of the Open Hand are masters of unarmed combat. They learn techniques to push and trip their opponents and manipulate their own energy to protect themselves from harm.
 
 ## Rule group
 

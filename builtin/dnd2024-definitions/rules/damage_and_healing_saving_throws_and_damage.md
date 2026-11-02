@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 16 -->
 
-Damage dealt via saving throws uses these rules.\
+Damage dealt via saving throws uses these rules.
 
 ## Rule
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 61 -->
 
-As a Rogue, you gain the following class features\
-when you reach the specified Rogue levels. These\
-features are listed in the Rogue Features table.\
+As a Rogue, you gain the following class features when you reach the specified Rogue levels. These features are listed in the Rogue Features table.
 
 ## Rule
 

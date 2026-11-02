@@ -29,43 +29,31 @@ Skills Arcana +5, Deception +8, Perception +4\
 Resistances Cold\
 Senses Darkvision 60 ft.; Passive Perception 14\
 Languages Common, Giant\
-CR 7 (XP 2,900; PB +3)\
+CR 7 (XP 2,900; PB +3)
 
 ### Traits
 
-Regeneration. The oni regains 10 Hit Points at the start\
-of each of its turns if it has at least 1 Hit Point.\
+Regeneration. The oni regains 10 Hit Points at the start of each of its turns if it has at least 1 Hit Point.
 
 ### Actions
 
-Multiattack. The oni makes two Claw or Nightmare\
-Ray attacks. It can replace one attack with a use of\
-Spellcasting.\
+Multiattack. The oni makes two Claw or Nightmare Ray attacks. It can replace one attack with a use of Spellcasting.
 
 <!-- SRD page 313 -->
 
-Claw. Melee Attack Roll: +7, reach 10 ft. Hit: 10 (1d12\
-+ 4) Slashing damage plus 9 (2d8) Necrotic damage.\
-Nightmare Ray. Ranged Attack Roll: +5, range 60 ft.\
-Hit: 9 (2d6 + 2) Psychic damage, and the target has\
-the Frightened condition until the start of the oni’s\
-next turn.\
-Shape-Shift. The oni shape-shifts into a Small or Me-\
-dium Humanoid or a Large Giant, or it returns to its\
-true form. Other than its size, its game statistics are the\
-same in each form. Any equipment it is wearing or car-\
-rying isn’t transformed.\
-Spellcasting. The oni casts one of the following spells,\
-requiring no Material components and using Charisma\
-as the spellcasting ability (spell save DC 13):\
-1/Day Each: Charm Person (level 2 version), Darkness,\
-Gaseous Form, Sleep\
+Claw. Melee Attack Roll: +7, reach 10 ft. Hit: 10 (1d12 + 4) Slashing damage plus 9 (2d8) Necrotic damage.
+
+Nightmare Ray. Ranged Attack Roll: +5, range 60 ft. Hit: 9 (2d6 + 2) Psychic damage, and the target has the Frightened condition until the start of the oni’s next turn.
+
+Shape-Shift. The oni shape-shifts into a Small or Medium Humanoid or a Large Giant, or it returns to its true form. Other than its size, its game statistics are the same in each form. Any equipment it is wearing or carrying isn’t transformed.
+
+Spellcasting. The oni casts one of the following spells, requiring no Material components and using Charisma as the spellcasting ability (spell save DC 13):
+
+1/Day Each: Charm Person (level 2 version), Darkness, Gaseous Form, Sleep
 
 ### Bonus Actions
 
-Invisibility. The oni casts Invisibility on itself, requiring\
-no spell components and using the same spellcasting\
-ability as Spellcasting.\
+Invisibility. The oni casts Invisibility on itself, requiring no spell components and using the same spellcasting ability as Spellcasting.
 
 Original layout: [[../../srd-5.2.1/pages/312|page 312]], [[../../srd-5.2.1/pages/313|page 313]].
 

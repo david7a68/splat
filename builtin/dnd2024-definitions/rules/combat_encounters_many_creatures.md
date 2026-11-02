@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 203 -->
 
-The more creatures in an encounter, the higher\
-the risk that a lucky streak on their part could deal\
-more damage to the characters than you expect. If\
-your encounter includes more than two creatures\
-per character, include fragile creatures that can be\
-defeated quickly. This guideline is especially im-\
-portant for characters of level 1 or 2.\
+The more creatures in an encounter, the higher the risk that a lucky streak on their part could deal more damage to the characters than you expect. If your encounter includes more than two creatures per character, include fragile creatures that can be defeated quickly. This guideline is especially important for characters of level 1 or 2.
 
 ## Rule
 

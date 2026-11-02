@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 24 -->
 
-Your GM might start your group’s characters at a\
-level higher than 1. It is particularly recommended\
-to start at level 3 if your group is composed of sea-\
-soned D&D players.\
+Your GM might start your group’s characters at a level higher than 1. It is particularly recommended to start at level 3 if your group is composed of seasoned D&D players.
 
 ## Rule
 

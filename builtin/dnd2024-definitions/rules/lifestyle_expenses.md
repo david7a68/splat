@@ -18,16 +18,11 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-Lifestyle expenses summarize the cost of living in a\
-fantasy world. They cover lodging, food, equipment\
-maintenance, and other necessities.\
-At the start of each week or month (GM’s choice),\
-choose a lifestyle below—Wretched, Squalid, Poor,\
-Modest, Comfortable, Wealthy, or Aristocratic—and\
-pay the price to sustain that lifestyle.\
-Lifestyles have no inherent consequences, but the\
-GM might take them into account when determining\
-risks or how others perceive your character.\
+Lifestyle expenses summarize the cost of living in a fantasy world. They cover lodging, food, equipment maintenance, and other necessities.
+
+At the start of each week or month (GM’s choice), choose a lifestyle below—Wretched, Squalid, Poor, Modest, Comfortable, Wealthy, or Aristocratic—and pay the price to sustain that lifestyle.
+
+Lifestyles have no inherent consequences, but the GM might take them into account when determining risks or how others perceive your character.
 
 ## Rule
 

@@ -18,35 +18,23 @@ splat_sources:
 
 <!-- SRD page 206 -->
 
-The Magic Item Tools table lists which tool is re-\
-quired to make a magic item of each category. You\
-must use the required tool to make an item and\
-have proficiency with that tool. Any assistants must\
-also have proficiency with it. For more information\
-on the tools, see “Equipment.”\
+The Magic Item Tools table lists which tool is required to make a magic item of each category. You must use the required tool to make an item and have proficiency with that tool. Any assistants must also have proficiency with it. For more information on the tools, see “Equipment.”
 
 <!-- SRD page 207 -->
 
-Magic Item Tools\
-Item Category Required Tool\
-Armor Leatherworker’s Tools, Smith’s\
-Tools, or Weaver’s Tools depend-\
-ing on the kind of armor as noted\
-in the tools’ descriptions\
-Potion Alchemist’s Supplies or Herbalism\
-Kit\
-Ring Jeweler’s Tools\
-Rod Woodcarver’s Tools\
-Scroll Calligrapher’s Supplies\
-Staff Woodcarver’s Tools\
-Wand Woodcarver’s Tools\
-Weapon Leatherworker’s Tools, Smith’s\
-Tools, or Woodcarver’s Tools de-\
-pending on the kind of weapon as\
-noted in the tools’ descriptions\
-Wondrous Item Tinker’s Tools or the tool required\
-to make the nonmagical item on\
-which the magic item is based\
+**Magic Item Tools**
+
+| Item Category | Required Tool |
+| --- | --- |
+| Armor | Leatherworker’s Tools, Smith’s Tools, or Weaver’s Tools depending on the kind of armor as noted in the tools’ descriptions |
+| Potion | Alchemist’s Supplies or Herbalism Kit |
+| Ring | Jeweler’s Tools |
+| Rod | Woodcarver’s Tools |
+| Scroll | Calligrapher’s Supplies |
+| Staff | Woodcarver’s Tools |
+| Wand | Woodcarver’s Tools |
+| Weapon | Leatherworker’s Tools, Smith’s Tools, or Woodcarver’s Tools depending on the kind of weapon as noted in the tools’ descriptions |
+| Wondrous Item | Tinker’s Tools or the tool required to make the nonmagical item on which the magic item is based |
 
 ## Rule
 

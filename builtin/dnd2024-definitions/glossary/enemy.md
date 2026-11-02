@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 181 -->
 
-A creature is your enemy if it fights against you in\
-combat, actively works to harm you, or is desig-\
-nated as your enemy by the rules or GM.\
+A creature is your enemy if it fights against you in combat, actively works to harm you, or is designated as your enemy by the rules or GM.
 
 Original layout: [[../../srd-5.2.1/pages/181|page 181]].
 

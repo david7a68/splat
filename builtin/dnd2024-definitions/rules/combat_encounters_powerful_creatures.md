@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 203 -->
 
-If your combat encounter includes a creature whose\
-CR is higher than the party’s level, be aware that\
-such a creature might deal enough damage with a\
-single action to take out one or more characters. For\
-example, an Ogre (CR 2) can kill a level 1 Wizard\
-with a single blow.\
+If your combat encounter includes a creature whose CR is higher than the party’s level, be aware that such a creature might deal enough damage with a single action to take out one or more characters. For example, an Ogre (CR 2) can kill a level 1 Wizard with a single blow.
 
 ## Rule
 

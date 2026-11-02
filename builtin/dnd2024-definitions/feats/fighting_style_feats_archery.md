@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 87 -->
 
-Fighting Style Feat (Prerequisite: Fighting Style\
-Feature)\
-You gain a +2 bonus to attack rolls you make with\
-Ranged weapons.\
+Fighting Style Feat (Prerequisite: Fighting Style Feature)
+
+You gain a +2 bonus to attack rolls you make with Ranged weapons.
 
 ## Rule
 

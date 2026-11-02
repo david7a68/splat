@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 253 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-These boots have 4 charges and regain 1d4 ex-\
-pended charges daily at dawn. While wearing the\
-boots, you can take a Magic action to expend 1\
-charge, gaining a Fly Speed of 30 feet for 1 hour. If\
-you are flying when the duration expires, you de-\
-scend at a rate of 30 feet per round until you land.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+These boots have 4 charges and regain 1d4 expended charges daily at dawn. While wearing the boots, you can take a Magic action to expend 1 charge, gaining a Fly Speed of 30 feet for 1 hour. If you are flying when the duration expires, you descend at a rate of 30 feet per round until you land.
 
 Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 

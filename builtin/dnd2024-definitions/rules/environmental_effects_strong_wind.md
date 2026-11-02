@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 195 -->
 
-Strong wind imposes Disadvantage on ranged at-\
-tack rolls with weapons. It also extinguishes open\
-flames and disperses fog. A flying creature in a\
-strong wind must land at the end of its turn or fall.\
-A strong wind in a desert can create a sandstorm\
-that imposes Disadvantage on Wisdom (Perception)\
-checks.\
+Strong wind imposes Disadvantage on ranged attack rolls with weapons. It also extinguishes open flames and disperses fog. A flying creature in a strong wind must land at the end of its turn or fall.
+
+A strong wind in a desert can create a sandstorm that imposes Disadvantage on Wisdom (Perception) checks.
 
 ## Rule
 

@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [214
 
 <!-- SRD page 214 -->
 
-Wondrous Item, Rare (Requires Attunement)\
-While wearing these bracers, you gain a +2 bonus to\
-Armor Class if you are wearing no armor and using\
-no Shield.\
+Wondrous Item, Rare (Requires Attunement)
+
+While wearing these bracers, you gain a +2 bonus to Armor Class if you are wearing no armor and using no Shield.
 
 Original layout: [[../pages/214|page 214]].

@@ -18,14 +18,15 @@ splat_sources:
 
 <!-- SRD page 237 -->
 
-Ring, Rare\
-This ring has 3 charges, and it regains 1d3 ex-\
-pended charges daily at dawn. While wearing the\
-ring, you can expend 1 charge to cast one of the fol-\
-lowing spells (save DC 13) from it:\
-•  Animal Friendship\
-•  Fear (affects Beasts only)\
-•  Speak with Animals\
+Ring, Rare
+
+This ring has 3 charges, and it regains 1d3 expended charges daily at dawn. While wearing the ring, you can expend 1 charge to cast one of the following spells (save DC 13) from it:
+
+•  Animal Friendship
+
+•  Fear (affects Beasts only)
+
+•  Speak with Animals
 
 Original layout: [[../../srd-5.2.1/pages/237|page 237]].
 

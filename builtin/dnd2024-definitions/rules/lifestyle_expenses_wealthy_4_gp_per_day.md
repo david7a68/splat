@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-You’re accustomed to the finer things in life and\
-might have servants.\
+You’re accustomed to the finer things in life and might have servants.
 
 ## Rule
 

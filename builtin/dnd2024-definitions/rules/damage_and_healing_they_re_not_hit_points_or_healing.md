@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 18 -->
 
-Temporary Hit Points can’t be added to your Hit\
-Points, healing can’t restore them, and receiving\
-Temporary Hit Points doesn’t count as healing. Be-\
-cause Temporary Hit Points aren’t Hit Points, a crea-\
-ture can be at full Hit Points and receive Temporary\
-Hit Points.\
-If you have 0 Hit Points, receiving Temporary Hit\
-Points doesn’t restore you to consciousness. Only\
-true healing can save you.\
+Temporary Hit Points can’t be added to your Hit Points, healing can’t restore them, and receiving Temporary Hit Points doesn’t count as healing. Because Temporary Hit Points aren’t Hit Points, a creature can be at full Hit Points and receive Temporary Hit Points.
+
+If you have 0 Hit Points, receiving Temporary Hit Points doesn’t restore you to consciousness. Only true healing can save you.
 
 ## Rule
 

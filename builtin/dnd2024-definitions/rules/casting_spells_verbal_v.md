@@ -18,15 +18,7 @@ splat_sources:
 
 <!-- SRD page 105 -->
 
-A Verbal component is the chanting of esoteric\
-words that sound like nonsense to the uninitiated.\
-The words must be uttered in a normal speaking\
-voice. The words themselves aren’t the source of the\
-spell’s power; rather, the particular combination of\
-sounds, with specific pitch and resonance, sets the\
-threads of magic in motion. Thus, a creature who is\
-gagged or in an area of magical silence can’t cast a\
-spell with a Verbal component.\
+A Verbal component is the chanting of esoteric words that sound like nonsense to the uninitiated. The words must be uttered in a normal speaking voice. The words themselves aren’t the source of the spell’s power; rather, the particular combination of sounds, with specific pitch and resonance, sets the threads of magic in motion. Thus, a creature who is gagged or in an area of magical silence can’t cast a spell with a Verbal component.
 
 ## Rule
 

@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 243 -->
 
-Armor (Shield), Uncommon\
-While holding this Shield, you have Advantage on\
-Initiative rolls and Wisdom (Perception) checks.\
-The Shield is emblazoned with a symbol of an eye.\
+Armor (Shield), Uncommon
+
+While holding this Shield, you have Advantage on Initiative rolls and Wisdom (Perception) checks. The Shield is emblazoned with a symbol of an eye.
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 

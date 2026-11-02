@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-A Pouch holds up to 6 pounds within one-fifth of a\
-cubic foot.\
+A Pouch holds up to 6 pounds within one-fifth of a cubic foot.
 
 ## Item
 

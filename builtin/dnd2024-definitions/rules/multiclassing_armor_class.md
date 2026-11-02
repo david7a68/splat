@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 25 -->
 
-If you have multiple ways to calculate your Armor\
-Class, you can benefit from only one at a time.\
-For example, a Monk/Sorcerer with a Monk’s\
-Unarmored Defense feature and a Sorcerer’s Dra-\
-conic Resilience feature must choose only one of\
-those features as a way to calculate Armor Class.\
+If you have multiple ways to calculate your Armor Class, you can benefit from only one at a time. For example, a Monk/Sorcerer with a Monk’s Unarmored Defense feature and a Sorcerer’s Draconic Resilience feature must choose only one of those features as a way to calculate Armor Class.
 
 ## Rule
 

@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-A Backpack holds up to 30 pounds within 1 cubic\
-foot. It can also serve as a saddlebag.\
+A Backpack holds up to 30 pounds within 1 cubic foot. It can also serve as a saddlebag.
 
 ## Item
 

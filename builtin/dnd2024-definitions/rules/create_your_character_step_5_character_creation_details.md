@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 22 -->
 
-Now fill in the rest of your character sheet.\
+Now fill in the rest of your character sheet.
 
 ## Rule
 

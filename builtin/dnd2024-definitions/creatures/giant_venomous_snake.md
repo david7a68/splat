@@ -28,12 +28,11 @@ Int 2 −4 −4 Wis 10 +0 +0 Cha 3 −4 −4\
 Skills Perception +2\
 Senses Blindsight 10 ft.; Passive Perception 12\
 Languages None\
-CR 1/4 (XP 50; PB +2)\
+CR 1/4 (XP 50; PB +2)
 
 ### Actions
 
-Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 6 (1d4 + 4)\
-Piercing damage plus 4 (1d8) Poison damage.\
+Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 6 (1d4 + 4) Piercing damage plus 4 (1d8) Poison damage.
 
 Original layout: [[../../srd-5.2.1/pages/354|page 354]].
 

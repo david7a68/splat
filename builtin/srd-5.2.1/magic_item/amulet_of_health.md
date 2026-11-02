@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [209
 
 <!-- SRD page 209 -->
 
-Wondrous Item, Rare (Requires Attunement)\
-Your Constitution is 19 while you wear this amulet.\
-It has no effect on you if your Constitution is 19 or\
-higher without it.\
+Wondrous Item, Rare (Requires Attunement)
+
+Your Constitution is 19 while you wear this amulet. It has no effect on you if your Constitution is 19 or higher without it.
 
 Original layout: [[../pages/209|page 209]].

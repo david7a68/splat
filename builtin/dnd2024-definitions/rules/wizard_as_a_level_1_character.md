@@ -18,33 +18,9 @@ splat_sources:
 
 <!-- SRD page 77 -->
 
-•  Gain all the traits in the Core Wizard Traits table.\
-•  Gain the Wizard’s level 1 features, which are\
-listed in the Wizard Features table.\
-Wizard Features\
-Proficiency\
-Level Bonus Class Features Cantrips\
-1 +2 Spellcasting, Ritual Adept,\
-Arcane Recovery\
-2 +2 Scholar\
-3 +2 Wizard Subclass\
-4 +2 Ability Score Improvement\
-5 +3 Memorize Spell\
-6 +3 Subclass feature\
-7 +3 —\
-8 +3 Ability Score Improvement\
-9 +4 —\
-10 +4 Subclass feature\
-11 +4 —\
-12 +4 Ability Score Improvement\
-13 +5 —\
-14 +5 Subclass feature\
-15 +5 —\
-16 +5 Ability Score Improvement\
-17 +6 —\
-18 +6 Spell Mastery\
-19 +6 Epic Boon\
-20 +6 Signature Spells\
+•  Gain all the traits in the Core Wizard Traits table.
+
+•  Gain the Wizard’s level 1 features, which are listed in the Wizard Features table.
 
 ## Rule
 

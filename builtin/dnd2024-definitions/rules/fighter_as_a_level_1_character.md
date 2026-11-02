@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 47 -->
 
-•  Gain all the traits in the Core Fighter Traits table.\
-•  Gain the Fighter’s level 1 features, which are\
-listed in the Fighter Features table.\
+•  Gain all the traits in the Core Fighter Traits table.
+
+•  Gain the Fighter’s level 1 features, which are listed in the Fighter Features table.
 
 ## Rule
 

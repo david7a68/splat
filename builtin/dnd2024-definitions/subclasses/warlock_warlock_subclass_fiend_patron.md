@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 76 -->
 
-Make a Deal with the Lower Planes\
-Your pact draws on the Lower Planes, the realms of\
-perdition. You might forge a bargain with a demon\
-lord, an archdevil, or another fiend that is especially\
-mighty. That patron’s aims are evil—the corruption\
-or destruction of all things, ultimately including\
-you—and your path is defined by the extent to\
-which you strive against those aims.\
+### Make a Deal with the Lower Planes
+
+Your pact draws on the Lower Planes, the realms of perdition. You might forge a bargain with a demon lord, an archdevil, or another fiend that is especially mighty. That patron’s aims are evil—the corruption or destruction of all things, ultimately including you—and your path is defined by the extent to which you strive against those aims.
 
 ## Rule group
 

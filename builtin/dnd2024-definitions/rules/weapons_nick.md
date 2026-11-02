@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 90 -->
 
-When you make the extra attack of the Light prop-\
-erty, you can make it as part of the Attack action in-\
-stead of as a Bonus Action. You can make this extra\
-attack only once per turn.\
+When you make the extra attack of the Light property, you can make it as part of the Attack action instead of as a Bonus Action. You can make this extra attack only once per turn.
 
 ## Rule
 

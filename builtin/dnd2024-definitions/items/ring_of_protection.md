@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 238 -->
 
-Ring, Rare (Requires Attunement)\
-You gain a +1 bonus to Armor Class and saving\
-throws while wearing this ring.\
+Ring, Rare (Requires Attunement)
+
+You gain a +1 bonus to Armor Class and saving throws while wearing this ring.
 
 Original layout: [[../../srd-5.2.1/pages/238|page 238]].
 

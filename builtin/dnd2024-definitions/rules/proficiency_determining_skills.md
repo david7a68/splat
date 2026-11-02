@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 9 -->
 
-A character’s starting skill proficiencies are deter-\
-mined at character creation, and a monster’s skill\
-proficiencies appear in its stat block.\
+A character’s starting skill proficiencies are determined at character creation, and a monster’s skill proficiencies appear in its stat block.
 
 ## Rule
 

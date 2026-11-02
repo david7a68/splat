@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 70 -->
 
-•  Gain all the traits in the Core Warlock Traits table.\
-•  Gain the Warlock’s level 1 features, which are\
-listed in the Warlock Features table.\
+•  Gain all the traits in the Core Warlock Traits table.
+
+•  Gain the Warlock’s level 1 features, which are listed in the Warlock Features table.
 
 ## Rule
 

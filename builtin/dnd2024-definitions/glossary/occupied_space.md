@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 185 -->
 
-A space is occupied if a creature is in it or if it is\
-completely filled by objects.\
+A space is occupied if a creature is in it or if it is completely filled by objects.
 
 Original layout: [[../../srd-5.2.1/pages/185|page 185]].
 

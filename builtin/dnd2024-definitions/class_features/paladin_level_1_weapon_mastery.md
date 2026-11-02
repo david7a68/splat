@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 54 -->
 
-Your training with weapons allows you to use the\
-mastery properties of two kinds of weapons of your\
-choice with which you have proficiency, such as\
-Longswords and Javelins.\
-Whenever you finish a Long Rest, you can change\
-the kinds of weapons you chose. For example, you\
-could switch to using the mastery properties of Hal-\
-berds and Flails.\
+Your training with weapons allows you to use the mastery properties of two kinds of weapons of your choice with which you have proficiency, such as Longswords and Javelins.
+
+Whenever you finish a Long Rest, you can change the kinds of weapons you chose. For example, you could switch to using the mastery properties of Halberds and Flails.
 
 ## Rule
 

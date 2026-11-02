@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 205 -->
 
-Every magic item has a rarity, which provides a\
-rough measure of an item’s power relative to other\
-magic items. The rarities are shown in the Magic\
-Item Rarities and Values table.\
-Common magic items, such as a Potion of Healing,\
-are the most plentiful. Artifacts, such as the Dragon\
-Orb, are priceless, unique, and difficult to acquire.\
+Every magic item has a rarity, which provides a rough measure of an item’s power relative to other magic items. The rarities are shown in the Magic Item Rarities and Values table.
+
+Common magic items, such as a Potion of Healing, are the most plentiful. Artifacts, such as the Dragon Orb, are priceless, unique, and difficult to acquire.
 
 ## Rule
 

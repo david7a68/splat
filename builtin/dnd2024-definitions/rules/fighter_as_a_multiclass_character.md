@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 47 -->
 
-•  Gain the following traits from the Core Fighter\
-Traits table: Hit Point Die, proficiency with Mar-\
-tial weapons, and training with Light and Medium\
-armor and Shields.\
-•  Gain the Fighter’s level 1 features, which are\
-listed in the Fighter Features table.\
+•  Gain the following traits from the Core Fighter Traits table: Hit Point Die, proficiency with Martial weapons, and training with Light and Medium armor and Shields.
+
+•  Gain the Fighter’s level 1 features, which are listed in the Fighter Features table.
 
 ## Rule
 

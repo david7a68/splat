@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 12 -->
 
-When your character searches for hidden things,\
-such as a secret door or a trap, the GM typically asks\
-you to make a Wisdom (Perception) check, provided\
-you describe the character searching in the hidden\
-object’s vicinity. On a success, you find the object,\
-other important details, or both.\
-If you describe your character searching nowhere\
-near a hidden object, a Wisdom (Perception) check\
-won’t reveal the object, no matter the check’s total.\
+When your character searches for hidden things, such as a secret door or a trap, the GM typically asks you to make a Wisdom (Perception) check, provided you describe the character searching in the hidden object’s vicinity. On a success, you find the object, other important details, or both.
+
+If you describe your character searching nowhere near a hidden object, a Wisdom (Perception) check won’t reveal the object, no matter the check’s total.
 
 ## Rule
 

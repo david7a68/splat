@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 17 -->
 
-If your character dies, others might find a magical\
-way to revive your character, such as with the Raise\
-Dead spell. Or talk with the GM about making a new\
-character to join the group. “Rules Glossary” has\
-more information on being dead.\
+If your character dies, others might find a magical way to revive your character, such as with the Raise Dead spell. Or talk with the GM about making a new character to join the group. “Rules Glossary” has more information on being dead.
 
 ## Rule
 

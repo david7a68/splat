@@ -18,20 +18,11 @@ splat_sources:
 
 <!-- SRD page 207 -->
 
-Some magic items have sentience and personality.\
-Such an item might be possessed, haunted by the\
-spirit of a previous owner, or self-aware thanks to\
-the magic used to create it. A sentient item might be\
-a cherished ally to its wielder or a continual thorn in\
-the side.\
-Most sentient items are weapons, but other kinds\
-of items can manifest sentience. Single-use items\
-such as potions and scrolls are never sentient.\
-The GM controls sentient magic items and their\
-activated properties. A bearer who maintains a\
-good relationship with the item can access those\
-properties. If the relationship is strained, a conflict\
-can ensue (see “Conflict” below).\
+Some magic items have sentience and personality. Such an item might be possessed, haunted by the spirit of a previous owner, or self-aware thanks to the magic used to create it. A sentient item might be a cherished ally to its wielder or a continual thorn in the side.
+
+Most sentient items are weapons, but other kinds of items can manifest sentience. Single-use items such as potions and scrolls are never sentient.
+
+The GM controls sentient magic items and their activated properties. A bearer who maintains a good relationship with the item can access those properties. If the relationship is strained, a conflict can ensue (see “Conflict” below).
 
 ## Rule
 

@@ -18,18 +18,11 @@ splat_sources:
 
 <!-- SRD page 14 -->
 
-During your move, you can pass through the space\
-of an ally, a creature that has the Incapacitated\
-condition (see “Rules Glossary”), a Tiny creature, or\
-a creature that is two sizes larger or smaller than\
-you.\
-Another creature’s space is Difficult Terrain for\
-you unless that creature is Tiny or your ally.\
-You can’t willingly end a move in a space occupied\
-by another creature. If you somehow end a turn in\
-a space with another creature, you have the Prone\
-condition (see “Rules Glossary”) unless you are Tiny\
-or are of a larger size than the other creature.\
+During your move, you can pass through the space of an ally, a creature that has the Incapacitated condition (see “Rules Glossary”), a Tiny creature, or a creature that is two sizes larger or smaller than you.
+
+Another creature’s space is Difficult Terrain for you unless that creature is Tiny or your ally.
+
+You can’t willingly end a move in a space occupied by another creature. If you somehow end a turn in a space with another creature, you have the Prone condition (see “Rules Glossary”) unless you are Tiny or are of a larger size than the other creature.
 
 ## Rule
 

@@ -18,13 +18,12 @@ splat_sources:
 
 <!-- SRD page 11 -->
 
-Some creatures have special senses that help them\
-perceive things in certain situations. “Rules Glos-\
-sary” defines the following special senses:\
-Blindsight\
-Darkvision\
-Tremorsense\
-Truesight\
+Some creatures have special senses that help them perceive things in certain situations. “Rules Glossary” defines the following special senses:
+
+Blindsight
+Darkvision
+Tremorsense
+Truesight
 
 ## Rule
 

@@ -11,12 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [221
 
 <!-- SRD page 221 -->
 
-Wondrous Item, Uncommon\
-These crystal lenses fit over the eyes. While wear-\
-ing them, your vision improves significantly out to a\
-range of 1 foot, granting you Darkvision within that\
-range and Advantage on Intelligence (Investigation)\
-checks made to examine something within that\
-range.\
+Wondrous Item, Uncommon
+
+These crystal lenses fit over the eyes. While wearing them, your vision improves significantly out to a range of 1 foot, granting you Darkvision within that range and Advantage on Intelligence (Investigation) checks made to examine something within that range.
 
 Original layout: [[../pages/221|page 221]].

@@ -18,27 +18,19 @@ splat_sources:
 
 <!-- SRD page 223 -->
 
-Wondrous Item, Rare\
-This object appears as a wooden box that measures\
-12 inches long, 6 inches wide, and 6 inches deep.\
-It weighs 4 pounds and floats. It can be opened to\
-store items inside. This item also has three com-\
-mand words, each requiring a Magic action to use:\
-First Command Word. The box unfolds into a\
-Rowboat.\
-Second Command Word. The box unfolds into a\
-Keelboat.\
-Third Command Word. The Folding Boat folds back\
-into a box if no creatures are aboard. Any objects\
-in the vessel that can’t fit inside the box remain\
-outside the box as it folds. Any objects in the ves-\
-sel that can fit inside the box do so.\
-When the box becomes a vessel, its weight becomes\
-that of a normal vessel its size, and anything that\
-was stored in the box remains in the boat.\
-Statistics for the Rowboat and Keelboat appear\
-in “Equipment.” If either vessel is reduced to 0 Hit\
-Points, the Folding Boat is destroyed.\
+Wondrous Item, Rare
+
+This object appears as a wooden box that measures 12 inches long, 6 inches wide, and 6 inches deep. It weighs 4 pounds and floats. It can be opened to store items inside. This item also has three command words, each requiring a Magic action to use:
+
+First Command Word. The box unfolds into a Rowboat.
+
+Second Command Word. The box unfolds into a Keelboat.
+
+Third Command Word. The Folding Boat folds back into a box if no creatures are aboard. Any objects in the vessel that can’t fit inside the box remain outside the box as it folds. Any objects in the vessel that can fit inside the box do so.
+
+When the box becomes a vessel, its weight becomes that of a normal vessel its size, and anything that was stored in the box remains in the boat.
+
+Statistics for the Rowboat and Keelboat appear in “Equipment.” If either vessel is reduced to 0 Hit Points, the Folding Boat is destroyed.
 
 Original layout: [[../../srd-5.2.1/pages/223|page 223]].
 

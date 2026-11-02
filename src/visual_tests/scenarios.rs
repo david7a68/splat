@@ -410,8 +410,8 @@ pub mod campaign_content {
         );
         d.click(CLEAR_SEARCH);
         d.begin_task();
-        d.click_containing(CAMPAIGN_ENTRY);
-        d.state("entry-read", Sizes::Default);
+        d.click_containing(&format!("{CAMPAIGN_ENTRY} · Creature"));
+        d.state("entry-read", Sizes::All);
         d.review("T6.4", "the campaign entry reader");
         // Read from the reader's own place: the list beside it has numbers of its own.
         let reader = d.painted_from_label(CAMPAIGN_ENTRY);
@@ -433,6 +433,14 @@ pub mod campaign_content {
         d.expect(SAVED);
         d.state("entry-saved", Sizes::Default);
         d.goal("save the campaign entry");
+
+        // A picture opens at full size, over the page, and Escape closes it.
+        d.click("Read");
+        d.click(CAMPAIGN_ENTRY);
+        d.state("picture-full-size", Sizes::Default);
+        d.press(Key::Escape);
+        d.settle();
+        d.expect(EDIT_MARKDOWN);
 
         std::fs::write(
             d.root.join(BROKEN_NOTE),

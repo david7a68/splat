@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 64 -->
 
-•  Gain the Hit Point Die from the Core Sorcerer\
-Traits table.\
-•  Gain the Sorcerer’s level 1 features, which are\
-listed in the Sorcerer Features table. See the mul-\
-ticlassing rules in “Character Creation” to deter-\
-mine your available spell slots.\
+•  Gain the Hit Point Die from the Core Sorcerer Traits table.
+
+•  Gain the Sorcerer’s level 1 features, which are listed in the Sorcerer Features table. See the multiclassing rules in “Character Creation” to determine your available spell slots.
 
 ## Rule
 

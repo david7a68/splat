@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 180 -->
 
-A Cylinder is an area of effect that extends in\
-straight lines from a point of origin located at the\
-center of the circular top or bottom of the Cylinder.\
-The effect that creates a Cylinder specifies the ra-\
-dius of the Cylinder’s base and the Cylinder’s height.\
-A Cylinder’s point of origin is included in the area\
-of effect.\
+A Cylinder is an area of effect that extends in straight lines from a point of origin located at the center of the circular top or bottom of the Cylinder. The effect that creates a Cylinder specifies the radius of the Cylinder’s base and the Cylinder’s height.
+
+A Cylinder’s point of origin is included in the area of effect.
 
 Original layout: [[../../srd-5.2.1/pages/180|page 180]].
 

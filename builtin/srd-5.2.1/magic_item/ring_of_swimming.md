@@ -11,8 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [239
 
 <!-- SRD page 239 -->
 
-Ring, Uncommon\
-You have a Swim Speed of 40 feet while wearing this\
-ring.\
+Ring, Uncommon
+
+You have a Swim Speed of 40 feet while wearing this ring.
 
 Original layout: [[../pages/239|page 239]].

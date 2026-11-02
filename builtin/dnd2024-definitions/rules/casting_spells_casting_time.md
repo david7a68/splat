@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 105 -->
 
-Most spells require the Magic action to cast, but\
-some spells require a Bonus Action, a Reaction, or 1\
-minute or more. A spell’s Casting Time entry speci-\
-fies which of those is required.\
+Most spells require the Magic action to cast, but some spells require a Bonus Action, a Reaction, or 1 minute or more. A spell’s Casting Time entry specifies which of those is required.
 
 ## Rule
 

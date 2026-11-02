@@ -28,17 +28,15 @@ Int 2 −4 −4 Wis 13 +1 +1 Cha 7 −2 −2\
 Skills Perception +3\
 Senses Darkvision 60 ft.; Passive Perception 13\
 Languages None\
-CR 1 (XP 200; PB +2)\
+CR 1 (XP 200; PB +2)
 
 ### Actions
 
-Multiattack. The bear makes one Bite attack and one\
-Claw attack.\
-Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3)\
-Piercing damage.\
-Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3)\
-Slashing damage. If the target is a Large or smaller crea-\
-ture, it has the Prone condition.\
+Multiattack. The bear makes one Bite attack and one Claw attack.
+
+Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage.
+
+Claw. Melee Attack Roll: +5, reach 5 ft. Hit: 5 (1d4 + 3) Slashing damage. If the target is a Large or smaller creature, it has the Prone condition.
 
 Original layout: [[../../srd-5.2.1/pages/346|page 346]].
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 11 -->
 
-Some adventuring tasks—such as noticing danger,\
-hitting an enemy, and targeting certain spells—are\
-affected by sight, so effects that obscure vision can\
-hinder you, as explained below.\
+Some adventuring tasks—such as noticing danger, hitting an enemy, and targeting certain spells—are affected by sight, so effects that obscure vision can hinder you, as explained below.
 
 ## Rule
 

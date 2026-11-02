@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-Choose one feat from the Origin category. See “Ori-\
-gin Feats” for examples of Origin feats.\
+Choose one feat from the Origin category. See “Origin Feats” for examples of Origin feats.
 
 ## Rule
 

@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 103 -->
 
-The “Tools” section of “Equipment” lists which tools\
-are required to make certain items. The GM assigns\
-required tools for items not listed there.\
-You must use the required tool to make an item\
-and have proficiency with that tool. Anyone who\
-helps you must also have proficiency with it.\
+The “Tools” section of “Equipment” lists which tools are required to make certain items. The GM assigns required tools for items not listed there.
+
+You must use the required tool to make an item and have proficiency with that tool. Anyone who helps you must also have proficiency with it.
 
 ## Rule
 

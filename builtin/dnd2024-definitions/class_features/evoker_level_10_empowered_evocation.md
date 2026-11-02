@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 82 -->
 
-Whenever you cast a Wizard spell from the Evoca-\
-tion school, you can add your Intelligence modifier\
-to one damage roll of that spell.\
+Whenever you cast a Wizard spell from the Evocation school, you can add your Intelligence modifier to one damage roll of that spell.
 
 ## Rule
 

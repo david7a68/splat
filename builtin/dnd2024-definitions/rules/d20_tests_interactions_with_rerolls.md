@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 8 -->
 
-When you have Advantage or Disadvantage and\
-something in the game lets you reroll or replace the\
-d20, you can reroll or replace only one die, not both.\
-You choose which one.\
-For example, if you have Heroic Inspiration (see\
-the sidebar below) and roll a 3 and an 18 on an abil-\
-ity check that has Advantage or Disadvantage, you\
-could expend your Heroic Inspiration to reroll one\
-of those dice, not both of them.\
+When you have Advantage or Disadvantage and something in the game lets you reroll or replace the d20, you can reroll or replace only one die, not both. You choose which one.
+
+For example, if you have Heroic Inspiration (see the sidebar below) and roll a 3 and an 18 on an ability check that has Advantage or Disadvantage, you could expend your Heroic Inspiration to reroll one of those dice, not both of them.
 
 ## Rule
 

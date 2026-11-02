@@ -18,16 +18,9 @@ splat_sources:
 
 <!-- SRD page 8 -->
 
-If multiple situations affect a roll and they all grant\
-Advantage on it, you still roll only two d20s. Simi-\
-larly, if multiple situations impose Disadvantage on\
-a roll, you roll only two d20s.\
-If circumstances cause a roll to have both Advan-\
-tage and Disadvantage, the roll has neither of them,\
-and you roll one d20. This is true even if multiple\
-circumstances impose Disadvantage and only one\
-grants Advantage or vice versa. In such a situation,\
-you have neither Advantage nor Disadvantage.\
+If multiple situations affect a roll and they all grant Advantage on it, you still roll only two d20s. Similarly, if multiple situations impose Disadvantage on a roll, you roll only two d20s.
+
+If circumstances cause a roll to have both Advantage and Disadvantage, the roll has neither of them, and you roll one d20. This is true even if multiple circumstances impose Disadvantage and only one grants Advantage or vice versa. In such a situation, you have neither Advantage nor Disadvantage.
 
 ## Rule
 

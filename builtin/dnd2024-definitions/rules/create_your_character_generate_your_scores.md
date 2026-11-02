@@ -18,24 +18,22 @@ splat_sources:
 
 <!-- SRD page 21 -->
 
-Determine your ability scores by using one of the\
-following three methods. Your GM might prefer you\
-to use a particular one.\
-Standard Array. Use the following six scores for\
-your abilities: 15, 14, 13, 12, 10, 8.\
-Random Generation. Roll four d6s and record\
-the total of the highest three dice. Do this five more\
-times, so you have six numbers.\
-Point Cost. You have 27 points to spend on your\
-ability scores. The cost of each score is shown on\
-the Ability Score Point Costs table. For example, a\
-score of 14 costs 7 of your 27 points.\
-Ability Score Point Costs\
-Score Cost Score Cost\
-8 0 12 4\
-9 1 13 5\
-10 2 14 7\
-11 3 15 9\
+Determine your ability scores by using one of the following three methods. Your GM might prefer you to use a particular one.
+
+Standard Array. Use the following six scores for your abilities: 15, 14, 13, 12, 10, 8.
+
+Random Generation. Roll four d6s and record the total of the highest three dice. Do this five more times, so you have six numbers.
+
+Point Cost. You have 27 points to spend on your ability scores. The cost of each score is shown on the Ability Score Point Costs table. For example, a score of 14 costs 7 of your 27 points.
+
+**Ability Score Point Costs**
+
+| Score | Cost | Score | Cost |
+| --- | --- | --- | --- |
+| 8 | 0 | 12 | 4 |
+| 9 | 1 | 13 | 5 |
+| 10 | 2 | 14 | 7 |
+| 11 | 3 | 15 | 9 |
 
 ## Rule
 

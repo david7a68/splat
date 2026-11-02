@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 187 -->
 
-If two or more things happen at the same time on a\
-turn, the person at the game table—player or GM—\
-whose turn it is decides the order in which those\
-things happen. For example, if two effects occur at\
-the start of a player character’s turn, the player de-\
-cides which of the effects happens first.\
+If two or more things happen at the same time on a turn, the person at the game table—player or GM— whose turn it is decides the order in which those things happen. For example, if two effects occur at the start of a player character’s turn, the player decides which of the effects happens first.
 
 Original layout: [[../../srd-5.2.1/pages/187|page 187]].
 

@@ -20,19 +20,16 @@ Str 17 +3 +3 Dex 10 +0 +2 Con 15 +2 +2\
 Int 12 +1 +1 Wis 11 +0 +2 Cha 15 +2 +2\
 Skills Perception +4, Stealth +2\
 Immunities Lightning\
-Senses Blindsight 10 ft., Darkvision 60 ft.;\
-Passive Perception 14\
+Senses Blindsight 10 ft., Darkvision 60 ft.; Passive Perception 14\
 Languages Draconic\
-CR 3 (XP 700; PB +2)\
+CR 3 (XP 700; PB +2)
 
 ### Actions
 
-Multiattack. The dragon makes two Rend attacks.\
-Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10\
-+ 3) Slashing damage plus 3 (1d6) Lightning damage.\
-Lightning Breath (Recharge 5–6). Dexterity Saving\
-Throw: DC 12, each creature in a 30-foot-long, 5-foot-\
-wide Line. Failure: 21 (6d6) Lightning damage. Success:\
-Half damage.\
+Multiattack. The dragon makes two Rend attacks.
+
+Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 8 (1d10 + 3) Slashing damage plus 3 (1d6) Lightning damage.
+
+Lightning Breath (Recharge 5–6). Dexterity Saving Throw: DC 12, each creature in a 30-foot-long, 5-foot-wide Line. Failure: 21 (6d6) Lightning damage. Success: Half damage.
 
 Original layout: [[../pages/266|page 266]].

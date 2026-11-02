@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 214 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While wearing this brooch, you have Resistance to\
-Force damage, and you have Immunity to damage\
-from the Magic Missile spell.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While wearing this brooch, you have Resistance to Force damage, and you have Immunity to damage from the Magic Missile spell.
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]].
 

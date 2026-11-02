@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 192 -->
 
-Characters traveling in a vehicle use the vehicle’s\
-speed in miles per hour (as shown in “Equipment”)\
-to determine their rate of travel, and they don’t\
-choose a travel pace.\
+Characters traveling in a vehicle use the vehicle’s speed in miles per hour (as shown in “Equipment”) to determine their rate of travel, and they don’t choose a travel pace.
 
 ## Rule
 

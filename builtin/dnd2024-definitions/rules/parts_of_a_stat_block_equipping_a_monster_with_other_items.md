@@ -18,21 +18,9 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-You may equip monsters with additional gear how-\
-ever you like, using the items in “Equipment” for\
-inspiration. You decide how much of a monster’s\
-equipment is recoverable after the creature is slain\
-and whether any of that equipment is still usable.\
-Beware of giving a monster combat-oriented\
-magic items, since those might alter the monster’s\
-Challenge Rating. If you do give a monster a magic\
-item, the monster can have Attunement with magic\
-items as noted in “Equipment.” A monster with\
+You may equip monsters with additional gear however you like, using the items in “Equipment” for inspiration. You decide how much of a monster’s equipment is recoverable after the creature is slain and whether any of that equipment is still usable.
 
-<!-- SRD page 256 -->
-
-a class tag after its creature type is considered a\
-member of that class for Attunement purposes.\
+Beware of giving a monster combat-oriented magic items, since those might alter the monster’s Challenge Rating. If you do give a monster a magic item, the monster can have Attunement with magic items as noted in “Equipment.” A monster with a class tag after its creature type is considered a member of that class for Attunement purposes.
 
 ## Rule
 

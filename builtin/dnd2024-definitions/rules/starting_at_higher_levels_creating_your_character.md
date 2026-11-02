@@ -18,32 +18,11 @@ splat_sources:
 
 <!-- SRD page 24 -->
 
-Creating a higher-level character uses the same\
-character-creation steps outlined in this chapter\
-and the rules for advancing beyond level 1 provided\
-Starting Equipment at Higher Levels\
-Starting Level Equipment and Money\
-2–4 Normal starting equipment\
-5–10 500 GP plus 1d10 × 25 GP plus\
-normal starting equipment\
-11–16 5,000 gp plus 1d10 × 250 GP plus\
-normal starting equipment\
-17–20 20,000 GP plus 1d10 × 250 GP plus\
-normal starting equipment\
-Bonus FEats at lEvEl 20\
-A GM can use feats as a form of advancement after\
-characters reach level 20 to provide greater power\
-to characters who have no more levels to gain. With\
-this approach, each character gains one feat of their\
-choice for every 30,000 XP the character earns\
-above 355,000 XP. Epic Boon feats are especially\
-appropriate for these bonus feats, but a player can\
-choose any feat for which their level 20 character\
-qualifies.\
-in the “Level Advancement” section. You begin with\
-the minimum amount of XP required to reach your\
-starting level. For example, if the GM starts you at\
-level 10, you have 64,000 XP.\
+Creating a higher-level character uses the same character-creation steps outlined in this chapter and the rules for advancing beyond level 1 provided in the “Level Advancement” section. You begin with the minimum amount of XP required to reach your starting level. For example, if the GM starts you at level 10, you have 64,000 XP.
+
+### Bonus Feats At Level 20
+
+A GM can use feats as a form of advancement after characters reach level 20 to provide greater power to characters who have no more levels to gain. With this approach, each character gains one feat of their choice for every 30,000 XP the character earns above 355,000 XP. Epic Boon feats are especially appropriate for these bonus feats, but a player can choose any feat for which their level 20 character qualifies.
 
 ## Rule
 

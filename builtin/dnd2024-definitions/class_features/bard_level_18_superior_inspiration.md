@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 33 -->
 
-When you roll Initiative, you regain expended uses\
-of Bardic Inspiration until you have two if you have\
-fewer than that.\
+When you roll Initiative, you regain expended uses of Bardic Inspiration until you have two if you have fewer than that.
 
 ## Rule
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 61 -->
 
-Once per turn when you deal damage to a creature\
-marked by your Hunter’s Mark, you can also deal\
-that spell’s extra damage to a different creature that\
-you can see within 30 feet of the first creature.\
+Once per turn when you deal damage to a creature marked by your Hunter’s Mark, you can also deal that spell’s extra damage to a different creature that you can see within 30 feet of the first creature.
 
 ## Rule
 

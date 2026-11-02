@@ -2,6 +2,7 @@
 use crate::design::{self, Type, colors};
 use eframe::egui::{self, text::LayoutJob};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use std::borrow::Cow;
 
 #[cfg(test)]
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
@@ -37,15 +38,26 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let mut italic = false;
     let mut lists: Vec<Option<u64>> = Vec::new();
     let mut table: Option<Vec<Vec<String>>> = None;
+    let mut figures: Vec<std::path::PathBuf> = Vec::new();
+    let mut in_figure = false;
+    let ctx = ui.ctx().clone();
+    let source = local_figure_links(markdown, |url| crate::art::link_art(&ctx, url).is_some());
     for event in Parser::new_ext(
-        markdown,
+        &source,
         Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
     ) {
         match event {
             Event::Html(ref text) if text.trim().starts_with("<!-- splat:inventory") => {
                 inventory_table = true;
             }
+            Event::Text(ref text) if in_figure && &**text == "image" => {}
             Event::Start(Tag::Link { dest_url, .. }) if table.is_none() => {
+                // A link to an image with a local copy shows the image instead of opening a page.
+                if let Some(path) = crate::art::link_art(&ctx, &dest_url) {
+                    figures.push(path);
+                    in_figure = true;
+                    continue;
+                }
                 if target.is_some() {
                     flush(ui, &mut job, &mut target);
                 }
@@ -54,7 +66,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     in_link = true;
                 }
             }
-            Event::End(TagEnd::Link) => in_link = false,
+            Event::End(TagEnd::Link) => {
+                in_link = false;
+                in_figure = false;
+            }
             Event::Start(Tag::Table(_)) => {
                 flush(ui, &mut job, &mut target);
                 table = Some(Vec::new());
@@ -154,6 +169,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 heading = Some(level);
             }
             Event::End(TagEnd::Heading(level)) => {
+                draw_figures(ui, &mut figures, &job);
                 flush(ui, &mut job, &mut target);
                 if level == pulldown_cmark::HeadingLevel::H2
                     || (!dense && level == pulldown_cmark::HeadingLevel::H3)
@@ -201,7 +217,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     },
                 );
             }
-            Event::End(TagEnd::Paragraph | TagEnd::Item) => flush(ui, &mut job, &mut target),
+            Event::End(TagEnd::Paragraph | TagEnd::Item) => {
+                draw_figures(ui, &mut figures, &job);
+                flush(ui, &mut job, &mut target);
+            }
             Event::HardBreak if table.is_none() => job.append(
                 "\n",
                 0.0,
@@ -274,7 +293,43 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             _ => {}
         }
     }
+    draw_figures(ui, &mut figures, &job);
     flush(ui, &mut job, &mut target);
+}
+
+/// Images come before the words of their block, which are their caption.
+fn draw_figures(ui: &mut egui::Ui, figures: &mut Vec<std::path::PathBuf>, caption: &LayoutJob) {
+    for figure in figures.drain(..) {
+        crate::art::figure(ui, &figure, &caption.text);
+    }
+}
+
+/// Notes write a captioned image as `*caption* ([image](url))`. Where the image will show in
+/// place, the brackets around the link have nothing left to enclose.
+fn local_figure_links(markdown: &str, local: impl Fn(&str) -> bool) -> Cow<'_, str> {
+    const OPEN: &str = "([image](";
+    if !markdown.contains(OPEN) {
+        return Cow::Borrowed(markdown);
+    }
+    let mut output = String::with_capacity(markdown.len());
+    let mut rest = markdown;
+    while let Some(start) = rest.find(OPEN) {
+        let after = &rest[start + OPEN.len()..];
+        match after.find("))") {
+            Some(end) if local(&after[..end]) => {
+                output.push_str(&rest[..start]);
+                output.push_str("[image](");
+                output.push_str(&after[..=end]);
+                rest = &after[end + 2..];
+            }
+            _ => {
+                output.push_str(&rest[..start + OPEN.len()]);
+                rest = after;
+            }
+        }
+    }
+    output.push_str(rest);
+    Cow::Owned(output)
 }
 
 const TABLE_GAP: f32 = design::M;
@@ -406,6 +461,18 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn brackets_go_only_from_links_with_a_local_image() {
+        let text =
+            "*A map* ([image](https://a/map.png)) and *a lost one* ([image](https://a/lost.png)).";
+        let result = local_figure_links(text, |url| url.ends_with("map.png"));
+        assert_eq!(
+            result,
+            "*A map* [image](https://a/map.png) and *a lost one* ([image](https://a/lost.png))."
+        );
+        assert_eq!(local_figure_links(text, |_| false), text);
+    }
     #[test]
     fn inventory_reader_shows_names_without_exposing_storage_ids() {
         let context = egui::Context::default();

@@ -18,13 +18,11 @@ splat_sources:
 
 <!-- SRD page 73 -->
 
-Prerequisite: Level 2+ Warlock\
-You have received knowledge from an elder entity\
-of the multiverse, allowing you to gain one Origin\
-feat of your choice (see “Feats”).\
-Repeatable. You can gain this invocation more\
-than once. Each time you do so, choose a different\
-Origin feat.\
+Prerequisite: Level 2+ Warlock
+
+You have received knowledge from an elder entity of the multiverse, allowing you to gain one Origin feat of your choice (see “Feats”).
+
+Repeatable. You can gain this invocation more than once. Each time you do so, choose a different Origin feat.
 
 ## Rule
 

@@ -18,19 +18,11 @@ splat_sources:
 
 <!-- SRD page 205 -->
 
-An item in the Scroll category is a roll of paper or\
-parchment, sometimes attached to wooden rods\
-and typically kept safe in a tube of ivory, jade,\
-leather, metal, or wood. The most prevalent scroll is\
-the Spell Scroll, a spell stored in written form.\
-Using a Scroll. Scrolls are consumable items. Un-\
-leashing the magic in a scroll requires the user to\
-read the scroll. When its magic has been invoked,\
-the scroll can’t be used again. Its words fade, or it\
-crumbles into dust.\
-Any creature that can understand a written lan-\
-guage can read a scroll and attempt to activate it\
-unless its description notes otherwise.\
+An item in the Scroll category is a roll of paper or parchment, sometimes attached to wooden rods and typically kept safe in a tube of ivory, jade, leather, metal, or wood. The most prevalent scroll is the Spell Scroll, a spell stored in written form.
+
+Using a Scroll. Scrolls are consumable items. Unleashing the magic in a scroll requires the user to read the scroll. When its magic has been invoked, the scroll can’t be used again. Its words fade, or it crumbles into dust.
+
+Any creature that can understand a written language can read a scroll and attempt to activate it unless its description notes otherwise.
 
 ## Rule
 

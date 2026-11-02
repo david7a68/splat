@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 82 -->
 
-Choose two Wizard spells from the Evocation\
-school, each of which must be no higher than level 2,\
-and add them to your spellbook for free.\
-In addition, whenever you gain access to a new\
-level of spell slots in this class, you can add one Wiz-\
-ard spell from the Evocation school to your spell-\
-book for free. The chosen spell must be of a level for\
-which you have spell slots.\
+Choose two Wizard spells from the Evocation school, each of which must be no higher than level 2, and add them to your spellbook for free.
+
+In addition, whenever you gain access to a new level of spell slots in this class, you can add one Wizard spell from the Evocation school to your spellbook for free. The chosen spell must be of a level for which you have spell slots.
 
 ## Rule
 

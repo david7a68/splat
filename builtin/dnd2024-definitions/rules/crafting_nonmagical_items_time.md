@@ -18,18 +18,11 @@ splat_sources:
 
 <!-- SRD page 103 -->
 
-To determine how many days (working 8 hours a\
-day) it takes to make an item, divide its purchase\
-cost in GP by 10 (round a fraction up to a day). For\
-example, you need 5 days to make a Heavy Cross-\
-bow, which sells for 50 GP.\
-If an item requires multiple days, the days needn’t\
-be consecutive.\
-Characters can combine their efforts to shorten\
-the crafting time. Divide the time needed to create\
-an item by the number of characters working on it.\
-Normally, only one other character can assist you,\
-but the GM might allow more assistants.\
+To determine how many days (working 8 hours a day) it takes to make an item, divide its purchase cost in GP by 10 (round a fraction up to a day). For example, you need 5 days to make a Heavy Crossbow, which sells for 50 GP.
+
+If an item requires multiple days, the days needn’t be consecutive.
+
+Characters can combine their efforts to shorten the crafting time. Divide the time needed to create an item by the number of characters working on it. Normally, only one other character can assist you, but the GM might allow more assistants.
 
 ## Rule
 

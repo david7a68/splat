@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 59 -->
 
-Choose two of your skill proficiencies with which\
-you lack Expertise. You gain Expertise in those\
-skills.\
+Choose two of your skill proficiencies with which you lack Expertise. You gain Expertise in those skills.
 
 ## Rule
 

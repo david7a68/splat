@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 92 -->
 
-If you wear Light, Medium, or Heavy armor and lack\
-training with it, you have Disadvantage on any D20\
-Test that involves Strength or Dexterity, and you\
-can’t cast spells.\
+If you wear Light, Medium, or Heavy armor and lack training with it, you have Disadvantage on any D20 Test that involves Strength or Dexterity, and you can’t cast spells.
 
 ## Rule
 

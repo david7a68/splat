@@ -18,16 +18,9 @@ splat_sources:
 
 <!-- SRD page 20 -->
 
-Choose a species for your character. The following\
-species options are detailed in “Character Origins”:\
-Dragonborn, Dwarf, Elf, Gnome, Goliath, Halfling,\
-Human, Orc, and Tiefling. Once you’ve chosen a spe-\
-cies, write it on your character sheet. Then record\
-your species’ traits.\
-Your character’s size and Speed are determined\
-by the character’s species; record these in the ap-\
-propriate places on your character sheet as well\
-(you may write just the first letter of your size).\
+Choose a species for your character. The following species options are detailed in “Character Origins”: Dragonborn, Dwarf, Elf, Gnome, Goliath, Halfling, Human, Orc, and Tiefling. Once you’ve chosen a species, write it on your character sheet. Then record your species’ traits.
+
+Your character’s size and Speed are determined by the character’s species; record these in the appropriate places on your character sheet as well (you may write just the first letter of your size).
 
 ## Rule
 

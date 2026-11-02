@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 224 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While wearing this hat, you can cast the Disguise\
-Self spell. The spell ends if the hat is removed.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While wearing this hat, you can cast the Disguise Self spell. The spell ends if the hat is removed.
 
 Original layout: [[../../srd-5.2.1/pages/224|page 224]].
 

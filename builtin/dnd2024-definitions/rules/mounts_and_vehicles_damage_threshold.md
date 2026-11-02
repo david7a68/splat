@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-If a vehicle has a damage threshold (see “Rules Glos-\
-sary”), it’s noted in the table.\
+If a vehicle has a damage threshold (see “Rules Glossary”), it’s noted in the table.
 
 ## Rule
 

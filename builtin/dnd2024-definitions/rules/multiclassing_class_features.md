@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 25 -->
 
-When you gain a new level in a class, you get its fea-\
-tures for that level. A few features have additional\
-rules when you’re multiclassing. Check the infor-\
-mation about multiclassing included in each of your\
-classes’ descriptions.\
-Special rules apply to Extra Attack, Spellcasting,\
-and features (such as Unarmored Defense) that give\
-you alternative ways to calculate your Armor Class.\
+When you gain a new level in a class, you get its features for that level. A few features have additional rules when you’re multiclassing. Check the information about multiclassing included in each of your classes’ descriptions.
+
+Special rules apply to Extra Attack, Spellcasting, and features (such as Unarmored Defense) that give you alternative ways to calculate your Armor Class.
 
 ## Rule
 

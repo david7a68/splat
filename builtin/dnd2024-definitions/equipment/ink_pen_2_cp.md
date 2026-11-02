@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 98 -->
 
-Using Ink, an Ink Pen is used to write or draw.\
+Using Ink, an Ink Pen is used to write or draw.
 
 ## Item
 

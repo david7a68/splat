@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 16 -->
 
-A fight underwater follows these rules.\
+A fight underwater follows these rules.
 
 ## Rule
 

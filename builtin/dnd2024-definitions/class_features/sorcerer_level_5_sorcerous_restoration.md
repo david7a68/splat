@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 66 -->
 
-When you finish a Short Rest, you can regain ex-\
-pended Sorcery Points, but no more than a number\
-equal to half your Sorcerer level (round down). Once\
-you use this feature, you can’t do so again until you\
-finish a Long Rest.\
+When you finish a Short Rest, you can regain expended Sorcery Points, but no more than a number equal to half your Sorcerer level (round down). Once you use this feature, you can’t do so again until you finish a Long Rest.
 
 ## Rule
 

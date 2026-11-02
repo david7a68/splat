@@ -130,6 +130,15 @@ pub struct EntitySnapshot {
     pub coverage: Vec<String>,
 }
 
+impl EntitySnapshot {
+    /// The portrait the player chose on D&D Beyond, if any.
+    pub fn portrait_url(&self) -> Option<&str> {
+        self.source.raw["decorations"]["avatarUrl"]
+            .as_str()
+            .filter(|url| !url.is_empty())
+    }
+}
+
 pub fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

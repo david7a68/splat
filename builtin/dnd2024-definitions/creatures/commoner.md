@@ -28,18 +28,15 @@ Int 10 +0 +0 Wis 10 +0 +0 Cha 10 +0 +0\
 Gear Club\
 Senses Passive Perception 10\
 Languages Common\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Traits
 
-Training. The commoner has proficiency in one skill of\
-the GM’s choice and has Advantage whenever it makes\
-an ability check using that skill.\
+Training. The commoner has proficiency in one skill of the GM’s choice and has Advantage whenever it makes an ability check using that skill.
 
 ### Actions
 
-Club. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4)\
-Bludgeoning damage.\
+Club. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/275|page 275]].
 

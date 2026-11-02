@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 17 -->
 
-When a creature drops to 0 Hit Points, it either dies\
-outright or falls unconscious, as explained below.\
+When a creature drops to 0 Hit Points, it either dies outright or falls unconscious, as explained below.
 
 ## Rule
 

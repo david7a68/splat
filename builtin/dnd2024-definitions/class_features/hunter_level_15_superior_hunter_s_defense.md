@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 61 -->
 
-When you take damage, you can take a Reaction to\
-give yourself Resistance to that damage and any\
-other damage of the same type until the end of the\
-current turn.\
+When you take damage, you can take a Reaction to give yourself Resistance to that damage and any other damage of the same type until the end of the current turn.
 
 ## Rule
 

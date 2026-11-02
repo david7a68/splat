@@ -461,7 +461,7 @@ fn every_embedded_profile_compiles_and_every_creature_action_runs() {
 }
 
 #[test]
-fn supplied_unsigned_save_is_used_instead_of_ability_calculation() {
+fn supplied_save_is_used_instead_of_ability_calculation() {
     let dragon = crate::content::definitions::entries()
         .unwrap()
         .iter()
@@ -470,11 +470,12 @@ fn supplied_unsigned_save_is_used_instead_of_ability_calculation() {
     let stats: Map<Stat> =
         serde_yaml_ng::from_value(dragon.fields[Value::String("splat_stats".into())].clone())
             .unwrap();
-    assert_eq!(stats["intelligence"].value, 6);
-    assert_eq!(stats["save_intelligence"].value, 2);
+    assert_eq!(stats["save_intelligence"].value, -2);
+    assert_eq!(stats["wisdom"].value, 11);
+    assert_eq!(stats["save_wisdom"].value, 3);
 
     // Exercise only the existing save operation, not the unimplemented dragon
-    // actions. The test grant changes Inflict Wounds to an Intelligence save.
+    // actions. The test grant changes Inflict Wounds to a Wisdom save.
     let mut e = engine(vec![10, 2, 2, 2]);
     caster(&mut e);
     e.definitions
@@ -489,7 +490,7 @@ fn supplied_unsigned_save_is_used_instead_of_ability_calculation() {
         .get_mut("cast")
         .unwrap()
         .steps[0]
-        .ability = Some("intelligence".into());
+        .ability = Some("wisdom".into());
     e.add_actor("target", "dnd2024:creatures/black_bear")
         .unwrap();
     let mut r = request(
@@ -512,5 +513,5 @@ fn supplied_unsigned_save_is_used_instead_of_ability_calculation() {
         .unwrap()
         .detail;
     assert_eq!(save["natural"], 10);
-    assert_eq!(save["total"], 12);
+    assert_eq!(save["total"], 13);
 }

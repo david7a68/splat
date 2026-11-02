@@ -28,19 +28,15 @@ Int 2 −4 −4 Wis 10 +0 +0 Cha 4 −3 −3\
 Skills Perception +2\
 Senses Darkvision 60 ft.; Passive Perception 12\
 Languages None\
-CR 1/8 (XP 25; PB +2)\
+CR 1/8 (XP 25; PB +2)
 
 ### Traits
 
-Pack Tactics. The rat has Advantage on an attack roll\
-against a creature if at least one of the rat’s allies is\
-within 5 feet of the creature and the ally doesn’t have\
-the Incapacitated condition.\
+Pack Tactics. The rat has Advantage on an attack roll against a creature if at least one of the rat’s allies is within 5 feet of the creature and the ally doesn’t have the Incapacitated condition.
 
 ### Actions
 
-Bite. Melee Attack Roll: +5, reach 5 feet. Hit: 5 (1d4\
-+ 3) Piercing damage.\
+Bite. Melee Attack Roll: +5, reach 5 feet. Hit: 5 (1d4 + 3) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/353|page 353]].
 

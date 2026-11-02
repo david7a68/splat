@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "patches": [
+    {
+      "page": 168,
+      "entry": "Telekinesis",
+      "find": "telekinetic grip, such as manipulating a simple tool,",
+      "replace": "telekinetic grip, such as manipulating a simple tool, opening a door or a container, stowing or retrieving an item from an open container, or pouring the contents from a vial.",
+      "reason": "The PDF stops mid-sentence at a comma. The end of the sentence is from the Telekinesis spell in SRD 5.1 (CC-BY-4.0)."
+    },
+    {
+      "page": 340,
+      "entry": "Young White Dragon",
+      "find": "Int 6 −2 2 ",
+      "replace": "Int 6 −2 −2 ",
+      "reason": "The PDF has no minus sign on this save. The creature has no Intelligence proficiency, so the save equals its modifier."
+    }
+  ]
+}

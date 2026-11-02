@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [182],
 
 <!-- SRD page 182 -->
 
-A Friendly creature views you favorably. You\
-have Advantage on an ability check to influence a\
-Friendly creature. See also “Influence.”\
+A Friendly creature views you favorably. You have Advantage on an ability check to influence a Friendly creature. See also “Influence.”
 
 Original layout: [[../pages/182|page 182]].

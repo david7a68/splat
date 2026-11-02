@@ -11,8 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [229
 
 <!-- SRD page 229 -->
 
-Wondrous Item, Rare (Requires Attunement)\
-You have Advantage on saving throws against spells\
-while you wear this cloak.\
+Wondrous Item, Rare (Requires Attunement)
+
+You have Advantage on saving throws against spells while you wear this cloak.
 
 Original layout: [[../pages/229|page 229]].

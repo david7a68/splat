@@ -28,15 +28,11 @@ Int 3 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
 Skills Perception +3\
 Senses Darkvision 60 ft.; Passive Perception 13\
 Languages None\
-CR 1/2 (XP 100; PB +2)\
+CR 1/2 (XP 100; PB +2)
 
 ### Actions
 
-Ram. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3)\
-Bludgeoning damage. If the target is a Large or smaller\
-creature and the goat moved 20+ feet straight toward it\
-immediately before the hit, the target takes an extra 5\
-(2d4) Bludgeoning damage and has the Prone condition.\
+Ram. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage. If the target is a Large or smaller creature and the goat moved 20+ feet straight toward it immediately before the hit, the target takes an extra 5 (2d4) Bludgeoning damage and has the Prone condition.
 
 Original layout: [[../../srd-5.2.1/pages/351|page 351]].
 

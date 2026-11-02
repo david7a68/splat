@@ -18,45 +18,38 @@ splat_sources:
 
 <!-- SRD page 61 -->
 
-You know how to strike subtly and exploit a foe’s\
-distraction. Once per turn, you can deal an extra\
-1d6 damage to one creature you hit with an attack\
+You know how to strike subtly and exploit a foe’s distraction. Once per turn, you can deal an extra 1d6 damage to one creature you hit with an attack roll if you have Advantage on the roll and the attack uses a Finesse or a Ranged weapon. The extra damage’s type is the same as the weapon’s type.
+
+**Rogue Features**
+
+| Level | Proficiency Bonus | Class Features | Sneak Attack |
+| --- | --- | --- | --- |
+| 1 | +2 | Expertise, Sneak Attack, Thieves’ Cant, Weapon Mastery | 1d6 |
+| 2 | +2 | Cunning Action | 1d6 |
+| 3 | +2 | Rogue Subclass, Steady Aim | 2d6 |
+| 4 | +2 | Ability Score Improvement | 2d6 |
+| 5 | +3 | Cunning Strike, Uncanny Dodge | 3d6 |
+| 6 | +3 | Expertise | 3d6 |
+| 7 | +3 | Evasion, Reliable Talent | 4d6 |
+| 8 | +3 | Ability Score Improvement | 4d6 |
+| 9 | +4 | Subclass feature | 5d6 |
+| 10 | +4 | Ability Score Improvement | 5d6 |
+| 11 | +4 | Improved Cunning Strike | 6d6 |
+| 12 | +4 | Ability Score Improvement | 6d6 |
+| 13 | +5 | Subclass feature | 7d6 |
+| 14 | +5 | Devious Strikes | 7d6 |
+| 15 | +5 | Slippery Mind | 8d6 |
+| 16 | +5 | Ability Score Improvement | 8d6 |
+| 17 | +6 | Subclass feature | 9d6 |
+| 18 | +6 | Elusive | 9d6 |
+| 19 | +6 | Epic Boon | 10d6 |
+| 20 | +6 | Stroke of Luck | 10d6 |
 
 <!-- SRD page 62 -->
 
-Rogue Features\
-Proficiency\
-Level Bonus Class Features\
-1 +2 Expertise, Sneak Attack, Thieves’ Cant, Weapon Mastery\
-2 +2 Cunning Action\
-3 +2 Rogue Subclass, Steady Aim\
-4 +2 Ability Score Improvement\
-5 +3 Cunning Strike, Uncanny Dodge\
-6 +3 Expertise\
-7 +3 Evasion, Reliable Talent\
-8 +3 Ability Score Improvement\
-9 +4 Subclass feature\
-10 +4 Ability Score Improvement\
-11 +4 Improved Cunning Strike\
-12 +4 Ability Score Improvement\
-13 +5 Subclass feature\
-14 +5 Devious Strikes\
-15 +5 Slippery Mind\
-16 +5 Ability Score Improvement\
-17 +6 Subclass feature\
-18 +6 Elusive\
-19 +6 Epic Boon\
-20 +6 Stroke of Luck\
-roll if you have Advantage on the roll and the attack\
-uses a Finesse or a Ranged weapon. The extra dam-\
-age’s type is the same as the weapon’s type.\
-You don’t need Advantage on the attack roll if at\
-least one of your allies is within 5 feet of the target,\
-the ally doesn’t have the Incapacitated condition,\
-and you don’t have Disadvantage on the attack roll.\
-The extra damage increases as you gain Rogue\
-levels, as shown in the Sneak Attack column of the\
-Rogue Features table.\
+You don’t need Advantage on the attack roll if at least one of your allies is within 5 feet of the target, the ally doesn’t have the Incapacitated condition, and you don’t have Disadvantage on the attack roll.
+
+The extra damage increases as you gain Rogue levels, as shown in the Sneak Attack column of the Rogue Features table.
 
 ## Rule
 

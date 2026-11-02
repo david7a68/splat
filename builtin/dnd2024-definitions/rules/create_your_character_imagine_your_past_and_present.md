@@ -18,18 +18,19 @@ splat_sources:
 
 <!-- SRD page 20 -->
 
-Let your character’s background and species inspire\
-how you imagine their past. That past fed into the\
-character’s present. With that in mind, consider an-\
-swers to the following questions as your character:\
-•  Who raised you?\
-•  Who was your dearest childhood friend?\
-•  Did you grow up with a pet?\
-•  Have you fallen in love? If so, with whom?\
-•  Did you join an organization, such as a guild or re-\
-ligion? If so, are you still a member of it?\
-•  What elements of your past inspire you to go on\
-adventures now?\
+Let your character’s background and species inspire how you imagine their past. That past fed into the character’s present. With that in mind, consider answers to the following questions as your character:
+
+•  Who raised you?
+
+•  Who was your dearest childhood friend?
+
+•  Did you grow up with a pet?
+
+•  Have you fallen in love? If so, with whom?
+
+•  Did you join an organization, such as a guild or religion? If so, are you still a member of it?
+
+•  What elements of your past inspire you to go on adventures now?
 
 ## Rule
 

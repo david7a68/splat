@@ -22,12 +22,12 @@ Skills Perception +5, Stealth +4\
 Resistances Cold\
 Senses Darkvision 60 ft.; Passive Perception 15\
 Languages None\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Actions
 
-Multiattack. The bear makes two Rend attacks.\
-Rend. Melee Attack Roll: +7, reach 5 ft. Hit: 9 (1d8 + 5)\
-Slashing damage.\
+Multiattack. The bear makes two Rend attacks.
+
+Rend. Melee Attack Roll: +7, reach 5 ft. Hit: 9 (1d8 + 5) Slashing damage.
 
 Original layout: [[../pages/359|page 359]].

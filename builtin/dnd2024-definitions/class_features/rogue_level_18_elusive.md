@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 63 -->
 
-You’re so evasive that attackers rarely gain the\
-upper hand against you. No attack roll can have\
-Advantage against you unless you have the Incapac-\
-itated condition.\
+You’re so evasive that attackers rarely gain the upper hand against you. No attack roll can have Advantage against you unless you have the Incapacitated condition.
 
 ## Rule
 

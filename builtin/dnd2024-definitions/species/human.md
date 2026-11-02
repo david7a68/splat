@@ -19,24 +19,16 @@ splat_sources:
 <!-- SRD page 86 -->
 
 Creature Type: Humanoid\
-Size: Medium (about 4–7 feet tall) or Small (about 2–4\
-feet tall), chosen when you select this species\
-Speed: 30 feet\
-As a Human, you have these special traits.\
-Resourceful. You gain Heroic Inspiration when-\
-ever you finish a Long Rest.\
-Skillful. You gain proficiency in one skill of your\
-choice.\
-Versatile. You gain an Origin feat of your choice\
-(see “Feats”). Skilled is recommended.\
-Fiendish Legacies\
-Legacy Level 1\
-Abyssal You have Resistance to Poison damage.\
-You also know the Poison Spray cantrip.\
-Chthonic You have Resistance to Necrotic damage.\
-You also know the Chill Touch cantrip.\
-Infernal You have Resistance to Fire damage.\
-You also know the Fire Bolt cantrip.\
+Size: Medium (about 4–7 feet tall) or Small (about 2–4 feet tall), chosen when you select this species\
+Speed: 30 feet
+
+As a Human, you have these special traits.
+
+Resourceful. You gain Heroic Inspiration whenever you finish a Long Rest.
+
+Skillful. You gain proficiency in one skill of your choice.
+
+Versatile. You gain an Origin feat of your choice (see “Feats”). Skilled is recommended.
 
 ## Rule group
 

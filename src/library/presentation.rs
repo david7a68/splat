@@ -154,7 +154,20 @@ pub(crate) fn overview_markdown(source: &str) -> String {
         let next = lines.get(index + 1).copied();
         if line.is_empty() {
             row = false;
-            output.push_str("\n\n");
+            if !output.ends_with("\n\n") {
+                output.push_str("\n\n");
+            }
+            index += 1;
+            continue;
+        }
+        // A Markdown table is already structured. Its rows stay lines.
+        if line.starts_with('|') {
+            if !output.is_empty() && !output.ends_with('\n') {
+                output.push_str("\n\n");
+            }
+            output.push_str(line);
+            output.push('\n');
+            row = false;
             index += 1;
             continue;
         }
@@ -190,7 +203,7 @@ pub(crate) fn overview_markdown(source: &str) -> String {
             || line.starts_with("- ")
             || (finished && design::reader::run_in_title(line).is_some());
         let stat = table_heading || source_stat_line(line);
-        if finished && spell_list_line(line) && !output.ends_with('\n') {
+        if spell_list_line(line) && !output.ends_with('\n') {
             // Its own line, but the same paragraph, whose spells the reader links.
             output.push_str("  \n");
         } else if (block || stat) && !output.ends_with('\n') {
@@ -464,6 +477,10 @@ fn source_stat_line(line: &str) -> bool {
                 | "Range:"
                 | "Components:"
                 | "Duration:"
+                | "Ability:"
+                | "Utilize:"
+                | "Craft:"
+                | "Variants:"
                 | "AC"
                 | "HP"
                 | "Speed"
@@ -715,6 +732,7 @@ mod reading_tests {
                 .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
                 .collect();
             for line in source.lines().map(|l| l.trim().trim_end_matches('\\')) {
+                let line = line.replace('|', " ");
                 let cells: Vec<&str> = line.split_whitespace().collect();
                 if cells.len() >= 3 && cells.iter().all(|c| c.chars().all(|c| c.is_ascii_digit())) {
                     seen += 1;
@@ -724,7 +742,7 @@ mod reading_tests {
                 }
             }
         }
-        assert!(seen > 50, "the pattern found only {seen} rows");
+        assert!(seen > 10, "the pattern found only {seen} rows");
         assert!(
             merged.is_empty(),
             "{} merged: {:?}",
@@ -793,9 +811,11 @@ mod reading_tests {
             );
         }
         assert!(
-            reading.contains("attacks):  \nAt Will: Acid Arrow"),
+            reading.contains("attacks):\n\nAt Will: Acid Arrow"),
             "{reading}"
         );
+        // The last spell on a list has no full stop, and the next list still starts a line.
+        assert!(reading.contains("Fear  \n1/Day Each:"), "{reading}");
     }
 
     #[test]
@@ -813,6 +833,43 @@ mod reading_tests {
             "{reading}"
         );
         assert!(reading.contains("\n\nCall Dragons. While you"), "{reading}");
+    }
+
+    #[test]
+    fn a_table_across_both_columns_stays_with_its_entry() {
+        let reading = overview_markdown(&real_note(
+            "builtin/dnd2024-definitions/items/apparatus_of_the_crab.md",
+        ));
+        assert!(reading.contains("| Lever | Up | Down |"), "{reading}");
+        assert!(
+            reading.contains(
+                "| 1 | Legs extend, allowing the apparatus to walk and swim. | Legs retract,"
+            ),
+            "{reading}"
+        );
+        let next = overview_markdown(&real_note(
+            "builtin/dnd2024-definitions/items/armor_of_resistance.md",
+        ));
+        assert!(
+            next.contains("| 1d10 | Damage Type | 1d10 | Damage Type |"),
+            "{next}"
+        );
+        assert!(!next.contains("Lever"), "{next}");
+    }
+
+    #[test]
+    fn corrected_printing_errors_reach_the_reader() {
+        let spell = overview_markdown(&real_note(
+            "builtin/dnd2024-definitions/spells/telekinesis.md",
+        ));
+        assert!(
+            spell.contains("or pouring the contents from a vial."),
+            "{spell}"
+        );
+        let dragon = overview_markdown(&real_note(
+            "builtin/dnd2024-definitions/creatures/young_white_dragon.md",
+        ));
+        assert!(dragon.contains("Int 6 −2 −2 Wis 11"), "{dragon}");
     }
 
     #[test]

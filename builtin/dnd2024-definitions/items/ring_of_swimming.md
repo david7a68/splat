@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 239 -->
 
-Ring, Uncommon\
-You have a Swim Speed of 40 feet while wearing this\
-ring.\
+Ring, Uncommon
+
+You have a Swim Speed of 40 feet while wearing this ring.
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]].
 

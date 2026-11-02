@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 104 -->
 
-Every spell has a level from 0 to 9, which is indi-\
-cated in a spell’s description. A spell’s level is an\
-indicator of how powerful it is. Cantrips—simple\
-spells that can be cast almost by rote—are level 0.\
-The rules for each spellcasting class say when its\
-members gain access to spells of certain levels.\
+Every spell has a level from 0 to 9, which is indicated in a spell’s description. A spell’s level is an indicator of how powerful it is. Cantrips—simple spells that can be cast almost by rote—are level 0. The rules for each spellcasting class say when its members gain access to spells of certain levels.
 
 ## Rule
 

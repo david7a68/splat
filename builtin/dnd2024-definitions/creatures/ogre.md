@@ -28,14 +28,13 @@ Int 5 −3 −3 Wis 7 −2 −2 Cha 7 −2 −2\
 Gear Greatclub, Javelins (3)\
 Senses Darkvision 60 ft.; Passive Perception 8\
 Languages Common, Giant\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Actions
 
-Greatclub. Melee Attack Roll: +6, reach 5 ft. Hit: 13\
-(2d8 + 4) Bludgeoning damage.\
-Javelin. Melee or Ranged Attack Roll: +6, reach 5 ft. or\
-range 30/120 ft. Hit: 11 (2d6 + 4) Piercing damage.\
+Greatclub. Melee Attack Roll: +6, reach 5 ft. Hit: 13 (2d8 + 4) Bludgeoning damage.
+
+Javelin. Melee or Ranged Attack Roll: +6, reach 5 ft. or range 30/120 ft. Hit: 11 (2d6 + 4) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/312|page 312]].
 

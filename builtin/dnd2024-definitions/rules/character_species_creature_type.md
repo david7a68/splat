@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-A character’s species determines the character’s\
-creature type, which is described in “Rules Glos-\
-sary.” Every species in “Character Origins” is Hu-\
-manoid; playable non-Humanoid species appear in\
-other books.\
+A character’s species determines the character’s creature type, which is described in “Rules Glossary.” Every species in “Character Origins” is Humanoid; playable non-Humanoid species appear in other books.
 
 ## Rule
 

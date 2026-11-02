@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 7 -->
 
-The Difficulty Class for a saving throw is deter-\
-mined by the effect that causes it or by the GM. For\
-example, if a spell forces you to make a save, the DC\
-is determined by the caster’s spellcasting ability\
-and Proficiency Bonus. Monster abilities that call\
-for saves specify the DC.\
+The Difficulty Class for a saving throw is determined by the effect that causes it or by the GM. For example, if a spell forces you to make a save, the DC is determined by the caster’s spellcasting ability and Proficiency Bonus. Monster abilities that call for saves specify the DC.
 
 ## Rule
 

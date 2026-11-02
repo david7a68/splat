@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 15 -->
 
-A creature has a 5-foot reach and can thus attack\
-targets within 5 feet when making a melee attack.\
-Certain creatures have melee attacks with a reach\
-greater than 5 feet, as noted in their descriptions.\
+A creature has a 5-foot reach and can thus attack targets within 5 feet when making a melee attack. Certain creatures have melee attacks with a reach greater than 5 feet, as noted in their descriptions.
 
 ## Rule
 

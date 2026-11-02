@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 183 -->
 
-If you (a player character) have Heroic Inspiration,\
-you can expend it to reroll any die immediately af-\
-ter rolling it, and you must use the new roll.\
-If you gain Heroic Inspiration but already have it,\
-it’s lost unless you give it to a player character who\
-lacks it.\
+If you (a player character) have Heroic Inspiration, you can expend it to reroll any die immediately after rolling it, and you must use the new roll.
+
+If you gain Heroic Inspiration but already have it, it’s lost unless you give it to a player character who lacks it.
 
 Original layout: [[../../srd-5.2.1/pages/183|page 183]].
 

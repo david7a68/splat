@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [209
 
 <!-- SRD page 209 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While wearing this amulet, you can’t be targeted\
-by Divination spells or perceived through magical\
-scrying sensors unless you allow it.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While wearing this amulet, you can’t be targeted by Divination spells or perceived through magical scrying sensors unless you allow it.
 
 Original layout: [[../pages/209|page 209]].

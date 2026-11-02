@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 186 -->
 
-If a rule says you can use something a certain num-\
-ber of times per day, that means you must finish a\
-Long Rest to use it again after you run out of uses.\
+If a rule says you can use something a certain number of times per day, that means you must finish a Long Rest to use it again after you run out of uses.
 
 Original layout: [[../../srd-5.2.1/pages/186|page 186]].
 

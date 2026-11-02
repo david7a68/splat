@@ -16,63 +16,30 @@ splat_sources:
 
 ## Source text
 
-From SRD 5.2.1 page 65.
+**Sorcerer Features**
 
-     Sorcerer Features
-            Proficiency                          Sorcery                 Prepared     ——Spell Slots per Spell Level——
-      Level Bonus       Class Features            Points      Cantrips    Spells     1    2   3   4   5    6   7   8   9
-        1        +2       Spellcasting,             —            4           2       2   — — — — — — — —
-                          Innate Sorcery
-        2        +2       Font of Magic,            2            4           4       3   — — — — — — — —
-                          Metamagic
-        3        +2       Sorcerer Subclass         3            4           6       4    2   — — — — — — —
-        4        +2       Ability Score             4            5           7       4    3   — — — — — — —
-                          Improvement
-        5        +3       Sorcerous                 5            5           9       4    3   2   — — — — — —
-                          Restoration
-        6        +3       Subclass feature          6            5           10      4    3   3   — — — — — —
-        7        +3       Sorcery Incarnate         7            5           11      4    3   3   1   — — — — —
-        8        +3       Ability Score             8            5           12      4    3   3   2   — — — — —
-                          Improvement
-        9        +4       —                         9            5           14      4    3   3   3   1   — — — —
-       10        +4       Metamagic                 10           6           15      4    3   3   3   2   — — — —
-       11        +4       —                         11           6           16      4    3   3   3   2    1   — — —
-       12        +4       Ability Score             12           6           16      4    3   3   3   2    1   — — —
-                          Improvement
-       13        +5       —                         13           6           17      4    3   3   3   2    1   1   — —
-       14        +5       Subclass feature          14           6           17      4    3   3   3   2    1   1   — —
-       15        +5       —                         15           6           18      4    3   3   3   2    1   1   1   —
-       16        +5       Ability Score             16           6           18      4    3   3   3   2    1   1   1   —
-                          Improvement
-       17        +6       Metamagic                 17           6           19      4    3   3   3   2    1   1   1   1
-       18        +6       Subclass feature          18           6           20      4    3   3   3   3    1   1   1   1
-       19        +6       Epic Boon                 19           6           21      4    3   3   3   3    2   1   1   1
-       20        +6       Arcane Apotheosis         20           6           22      4    3   3   3   3    2   2   1   1
-
-
-
-     spells. You regain all expended slots when you fin-             against the number of spells you can prepare with
-     ish a Long Rest.                                                this feature, but those spells otherwise count as
-       Prepared Spells of Level 1+. You prepare the list             Sorcerer spells for you.
-     of level 1+ spells that are available for you to cast             Changing Your Prepared Spells. Whenever you
-     with this feature. To start, choose two level 1 Sor-            gain a Sorcerer level, you can replace one spell on
-     cerer spells. Burning Hands and Detect Magic are                your list with another Sorcerer spell for which you
-     recommended.                                                    have spell slots.
-       The number of spells on your list increases as                  Spellcasting Ability. Charisma is your spellcast-
-     you gain Sorcerer levels, as shown in the Prepared              ing ability for your Sorcerer spells.
-     Spells column of the Sorcerer Features table. When-               Spellcasting Focus. You can use an Arcane Focus
-     ever that number increases, choose additional                   as a Spellcasting Focus for your Sorcerer spells.
-     Sorcerer spells until the number of spells on your
-     list matches the number in the Sorcerer Features                Level 1: Innate Sorcery
-     table. The chosen spells must be of a level for which           An event in your past left an indelible mark on you,
-     you have spell slots. For example, if you’re a level 3          infusing you with simmering magic. As a Bonus
-     Sorcerer, your list of prepared spells can include six          Action, you can unleash that magic for 1 minute,
-     Sorcerer spells of level 1 or 2 in any combination.             during which you gain the following benefits:
-       If another Sorcerer feature gives you spells that
-     you always have prepared, those spells don’t count
-
-
-65   System Reference Document 5.2.1
+| Level | Proficiency Bonus | Class Features | Sorcery Points | Cantrips | Prepared Spells | Level 1 Slots | Level 2 Slots | Level 3 Slots | Level 4 Slots | Level 5 Slots | Level 6 Slots | Level 7 Slots | Level 8 Slots | Level 9 Slots |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | +2 | Spellcasting, Innate Sorcery | — | 4 | 2 | 2 | — | — | — | — | — | — | — | — |
+| 2 | +2 | Font of Magic, Metamagic | 2 | 4 | 4 | 3 | — | — | — | — | — | — | — | — |
+| 3 | +2 | Sorcerer Subclass | 3 | 4 | 6 | 4 | 2 | — | — | — | — | — | — | — |
+| 4 | +2 | Ability Score Improvement | 4 | 5 | 7 | 4 | 3 | — | — | — | — | — | — | — |
+| 5 | +3 | Sorcerous Restoration | 5 | 5 | 9 | 4 | 3 | 2 | — | — | — | — | — | — |
+| 6 | +3 | Subclass feature | 6 | 5 | 10 | 4 | 3 | 3 | — | — | — | — | — | — |
+| 7 | +3 | Sorcery Incarnate | 7 | 5 | 11 | 4 | 3 | 3 | 1 | — | — | — | — | — |
+| 8 | +3 | Ability Score Improvement | 8 | 5 | 12 | 4 | 3 | 3 | 2 | — | — | — | — | — |
+| 9 | +4 | — | 9 | 5 | 14 | 4 | 3 | 3 | 3 | 1 | — | — | — | — |
+| 10 | +4 | Metamagic | 10 | 6 | 15 | 4 | 3 | 3 | 3 | 2 | — | — | — | — |
+| 11 | +4 | — | 11 | 6 | 16 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
+| 12 | +4 | Ability Score Improvement | 12 | 6 | 16 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
+| 13 | +5 | — | 13 | 6 | 17 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
+| 14 | +5 | Subclass feature | 14 | 6 | 17 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
+| 15 | +5 | — | 15 | 6 | 18 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
+| 16 | +5 | Ability Score Improvement | 16 | 6 | 18 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
+| 17 | +6 | Metamagic | 17 | 6 | 19 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | 1 |
+| 18 | +6 | Subclass feature | 18 | 6 | 20 | 4 | 3 | 3 | 3 | 3 | 1 | 1 | 1 | 1 |
+| 19 | +6 | Epic Boon | 19 | 6 | 21 | 4 | 3 | 3 | 3 | 3 | 2 | 1 | 1 | 1 |
+| 20 | +6 | Arcane Apotheosis | 20 | 6 | 22 | 4 | 3 | 3 | 3 | 3 | 2 | 2 | 1 | 1 |
 
 ## Rule
 

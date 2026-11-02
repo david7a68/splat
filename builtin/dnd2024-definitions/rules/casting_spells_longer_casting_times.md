@@ -18,15 +18,7 @@ splat_sources:
 
 <!-- SRD page 105 -->
 
-Certain spells—including a spell cast as a Rit-\
-ual—require more time to cast: minutes or even\
-hours. While you cast a spell with a casting time of\
-1 minute or more, you must take the Magic action\
-on each of your turns, and you must maintain Con-\
-centration (see “Rules Glossary”) while you do so. If\
-your Concentration is broken, the spell fails, but you\
-don’t expend a spell slot. To cast the spell again, you\
-must start over.\
+Certain spells—including a spell cast as a Ritual—require more time to cast: minutes or even hours. While you cast a spell with a casting time of 1 minute or more, you must take the Magic action on each of your turns, and you must maintain Concentration (see “Rules Glossary”) while you do so. If your Concentration is broken, the spell fails, but you don’t expend a spell slot. To cast the spell again, you must start over.
 
 ## Rule
 

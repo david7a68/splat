@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [191],
 
 <!-- SRD page 191 -->
 
-A weapon is an object that is in the Simple or\
-Martial weapon category. See also “Equipment”\
-(“Weapons”).\
+A weapon is an object that is in the Simple or Martial weapon category. See also “Equipment” (“Weapons”).
 
 Original layout: [[../pages/191|page 191]].

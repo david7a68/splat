@@ -18,19 +18,9 @@ splat_sources:
 
 <!-- SRD page 8 -->
 
-Your Proficiency Bonus can’t be added to a die roll\
-or another number more than once. For example, if\
-a rule allows you to make a Charisma (Deception or\
-Persuasion) check, you add your Proficiency Bonus\
-if you’re proficient in either skill, but you don’t add\
-it twice if you’re proficient in both skills.\
-Occasionally, a Proficiency Bonus might be mul-\
-tiplied or divided (doubled or halved, for example)\
-before being added. For example, the Expertise\
-feature (see “Rules Glossary”) doubles the Profi-\
-ciency Bonus for certain ability checks. Whenever\
-the bonus is used, it can be multiplied only once and\
-divided only once.\
+Your Proficiency Bonus can’t be added to a die roll or another number more than once. For example, if a rule allows you to make a Charisma (Deception or Persuasion) check, you add your Proficiency Bonus if you’re proficient in either skill, but you don’t add it twice if you’re proficient in both skills.
+
+Occasionally, a Proficiency Bonus might be multiplied or divided (doubled or halved, for example) before being added. For example, the Expertise feature (see “Rules Glossary”) doubles the Proficiency Bonus for certain ability checks. Whenever the bonus is used, it can be multiplied only once and divided only once.
 
 ## Rule
 

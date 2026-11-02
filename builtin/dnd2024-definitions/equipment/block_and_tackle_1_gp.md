@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-A Block and Tackle allows you to hoist up to four\
-times the weight you can normally lift.\
+A Block and Tackle allows you to hoist up to four times the weight you can normally lift.
 
 ## Item
 

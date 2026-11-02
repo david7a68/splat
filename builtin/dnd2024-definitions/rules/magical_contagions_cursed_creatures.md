@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-Some monsters are associated with curses, whether\
-as part of their origins or due to their ability to\
-spread curses—werewolves being a prime example.\
-You decide how a spell like Remove Curse affects\
-a creature with accursed origins. For example, you\
-might decide that a mummy was created through a\
-curse and it can be destroyed permanently only by\
-casting Remove Curse on its corpse.\
+Some monsters are associated with curses, whether as part of their origins or due to their ability to spread curses—werewolves being a prime example.
+
+You decide how a spell like Remove Curse affects a creature with accursed origins. For example, you might decide that a mummy was created through a curse and it can be destroyed permanently only by casting Remove Curse on its corpse.
 
 ## Rule
 

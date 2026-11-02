@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 234 -->
 
-Wondrous Item, Rare (Requires Attunement)\
-This delicate silver chain has a brilliant-cut black\
-gem pendant. While you wear it, you have Immunity\
-to the Poisoned condition and Poison damage.\
+Wondrous Item, Rare (Requires Attunement)
+
+This delicate silver chain has a brilliant-cut black gem pendant. While you wear it, you have Immunity to the Poisoned condition and Poison damage.
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 

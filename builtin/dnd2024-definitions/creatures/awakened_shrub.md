@@ -29,12 +29,11 @@ Vulnerabilities Fire\
 Resistances Piercing\
 Senses Passive Perception 10\
 Languages Common plus one other language\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Actions
 
-Rake. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Slash-\
-ing damage.\
+Rake. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/260|page 260]].
 

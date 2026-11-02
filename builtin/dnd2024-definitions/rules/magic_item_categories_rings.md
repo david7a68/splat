@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 204 -->
 
-For its magic to function, an item in the Ring cate-\
-gory must be worn on a finger or a similar digit un-\
-less its description notes otherwise.\
+For its magic to function, an item in the Ring category must be worn on a finger or a similar digit unless its description notes otherwise.
 
 ## Rule
 

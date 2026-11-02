@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 203 -->
 
-If a monster has a feature that lower-level charac-\
-ters can’t easily overcome, consider not adding that\
-monster to an encounter for characters whose level\
-is lower than the monster’s Challenge Rating.\
+If a monster has a feature that lower-level characters can’t easily overcome, consider not adding that monster to an encounter for characters whose level is lower than the monster’s Challenge Rating.
 
 ## Rule
 

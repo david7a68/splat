@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 194 -->
 
-The following examples show how magical conta-\
-gions can work. Feel free to alter the saving throw\
-DCs, effects, and other characteristics of these con-\
-tagions to suit your campaign.\
+The following examples show how magical contagions can work. Feel free to alter the saving throw DCs, effects, and other characteristics of these contagions to suit your campaign.
 
 ## Rule
 

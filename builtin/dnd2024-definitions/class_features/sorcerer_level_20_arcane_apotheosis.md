@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 66 -->
 
-While your Innate Sorcery feature is active, you can\
-use one Metamagic option on each of your turns\
-without spending Sorcery Points on it.\
+While your Innate Sorcery feature is active, you can use one Metamagic option on each of your turns without spending Sorcery Points on it.
 
 ## Rule
 

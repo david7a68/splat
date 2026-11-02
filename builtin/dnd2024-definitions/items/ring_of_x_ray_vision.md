@@ -18,21 +18,13 @@ splat_sources:
 
 <!-- SRD page 239 -->
 
-Ring, Rare (Requires Attunement)\
-While wearing this ring, you can take a Magic ac-\
-tion to gain X-ray vision with a range of 30 feet for\
-1 minute. To you, solid objects within that radius\
-appear transparent and don’t prevent light from\
-passing through them. The vision can penetrate 1\
+Ring, Rare (Requires Attunement)
+
+While wearing this ring, you can take a Magic action to gain X-ray vision with a range of 30 feet for 1 minute. To you, solid objects within that radius appear transparent and don’t prevent light from passing through them. The vision can penetrate 1 foot of stone, 1 inch of common metal, or up to 3 feet of wood or dirt. Thicker substances or a thin sheet of lead block the vision.
 
 <!-- SRD page 240 -->
 
-foot of stone, 1 inch of common metal, or up to 3 feet\
-of wood or dirt. Thicker substances or a thin sheet\
-of lead block the vision.\
-Whenever you use the ring again before taking a\
-Long Rest, you must succeed on a DC 15 Constitu-\
-tion saving throw or gain 1 Exhaustion level.\
+Whenever you use the ring again before taking a Long Rest, you must succeed on a DC 15 Constitution saving throw or gain 1 Exhaustion level.
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]], [[../../srd-5.2.1/pages/240|page 240]].
 

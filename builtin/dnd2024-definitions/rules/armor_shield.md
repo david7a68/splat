@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 92 -->
 
-You gain the Armor Class benefit of a Shield only if\
-you have training with it.\
+You gain the Armor Class benefit of a Shield only if you have training with it.
 
 ## Rule
 

@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 48 -->
 
-You study your opponents and learn from each at-\
-tack you make. If you make an attack roll against a\
-creature and miss, you have Advantage on your next\
-attack roll against that creature before the end of\
-your next turn.\
+You study your opponents and learn from each attack you make. If you make an attack roll against a creature and miss, you have Advantage on your next attack roll against that creature before the end of your next turn.
 
 ## Rule
 

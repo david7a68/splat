@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 30 -->
 
-You gain an Epic Boon feat (see “Feats”) or another\
-feat of your choice for which you qualify. Boon of\
-Irresistible Offense is recommended.\
+You gain an Epic Boon feat (see “Feats”) or another feat of your choice for which you qualify. Boon of Irresistible Offense is recommended.
 
 ## Rule
 

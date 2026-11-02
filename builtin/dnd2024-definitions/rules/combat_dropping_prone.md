@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 14 -->
 
-On your turn, you can give yourself the Prone condi-\
-tion (see “Rules Glossary”) without using an action\
-or any of your Speed, but you can’t do so if your\
-Speed is 0.\
+On your turn, you can give yourself the Prone condition (see “Rules Glossary”) without using an action or any of your Speed, but you can’t do so if your Speed is 0.
 
 ## Rule
 

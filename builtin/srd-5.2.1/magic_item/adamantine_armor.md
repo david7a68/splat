@@ -11,11 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [209
 
 <!-- SRD page 209 -->
 
-Armor (Any Medium or Heavy, Except Hide Armor),\
-Uncommon\
-This suit of armor is reinforced with adamantine,\
-one of the hardest substances in existence. While\
-you’re wearing it, any Critical Hit against you be-\
-comes a normal hit.\
+Armor (Any Medium or Heavy, Except Hide Armor), Uncommon
+
+This suit of armor is reinforced with adamantine, one of the hardest substances in existence. While you’re wearing it, any Critical Hit against you becomes a normal hit.
 
 Original layout: [[../pages/209|page 209]].

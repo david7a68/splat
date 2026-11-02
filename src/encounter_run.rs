@@ -8,7 +8,11 @@ use splat::{
     content::Entry,
     execution::dice::{Dice, Random},
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use std::{
     fs,
     io::Write,
@@ -167,6 +171,9 @@ pub(crate) struct Run {
     id: Uuid,
     initiative: Initiative,
     storage: Option<Storage>,
+    /// Each character's cached portrait, by D&D Beyond ID.
+    portraits: BTreeMap<String, Option<PathBuf>>,
+    portraits_read: Option<Instant>,
     dirty: bool,
     state: State,
     history: Vec<State>,
@@ -326,6 +333,8 @@ impl Run {
             id: Uuid::new_v4(),
             initiative: Initiative::default(),
             storage: None,
+            portraits: BTreeMap::new(),
+            portraits_read: None,
             dirty: true,
             state: State {
                 order: (0..participants.len()).collect(),
@@ -1062,6 +1071,9 @@ impl SheetShadow {
         }
     }
 }
+/// How often an open run looks for portraits that have arrived.
+const PORTRAIT_REREAD: Duration = Duration::from_secs(30);
+
 fn remote_identity(p: &Participant) -> Option<(String, String)> {
     let external = p.definition.fields.get("splat_external")?;
     if external.get("provider").and_then(Value::as_str) != Some("dndbeyond") {
@@ -1461,6 +1473,38 @@ struct Storage {
     baseline: Option<Vec<u8>>,
 }
 impl Run {
+    fn refresh_portraits(&mut self) {
+        if self
+            .portraits_read
+            .is_some_and(|read| read.elapsed() < PORTRAIT_REREAD)
+        {
+            return;
+        }
+        self.portraits_read = Some(Instant::now());
+        let Some(campaign) = self.storage.as_ref().map(|storage| storage.campaign) else {
+            return;
+        };
+        let Ok(cache) = crate::hermetic::character_cache() else {
+            return;
+        };
+        self.portraits = self
+            .state
+            .participants
+            .iter()
+            .filter_map(remote_identity)
+            .map(|(remote, id)| {
+                let portrait = cache.find_portrait(campaign, &remote, &id);
+                (id, portrait)
+            })
+            .collect();
+    }
+    /// The picture for a participant's row: a character's portrait, or a creature's art.
+    fn row_art(&self, ctx: &egui::Context, p: &Participant) -> Option<PathBuf> {
+        match remote_identity(p) {
+            Some((_, id)) => self.portraits.get(&id).cloned().flatten(),
+            None => crate::art::entry_art(ctx, &p.definition),
+        }
+    }
     pub fn needs_save(&self) -> bool {
         self.dirty
     }
@@ -1662,6 +1706,8 @@ impl Run {
                 campaign,
                 baseline: Some(bytes),
             }),
+            portraits: BTreeMap::new(),
+            portraits_read: None,
             dirty: false,
             history: Vec::new(),
             history_labels: Vec::new(),

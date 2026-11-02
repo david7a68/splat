@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 70 -->
 
-As a Warlock, you gain the following class features\
-when you reach the specified Warlock levels. These\
-features are listed in the Warlock Features table.\
+As a Warlock, you gain the following class features when you reach the specified Warlock levels. These features are listed in the Warlock Features table.
 
 ## Rule
 

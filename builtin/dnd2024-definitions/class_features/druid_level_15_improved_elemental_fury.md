@@ -18,13 +18,11 @@ splat_sources:
 
 <!-- SRD page 43 -->
 
-The option you chose for Elemental Fury grows\
-more powerful, as detailed below.\
-Potent Spellcasting. When you cast a Druid can-\
-trip with a range of 10 feet or greater, the spell’s\
-range increases by 300 feet.\
-Primal Strike. The extra damage of your Primal\
-Strike increases to 2d8.\
+The option you chose for Elemental Fury grows more powerful, as detailed below.
+
+Potent Spellcasting. When you cast a Druid cantrip with a range of 10 feet or greater, the spell’s range increases by 300 feet.
+
+Primal Strike. The extra damage of your Primal Strike increases to 2d8.
 
 ## Rule
 

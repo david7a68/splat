@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 8 -->
 
-When a roll has either Advantage or Disadvantage,\
-roll a second d20 when you make the roll. Use the\
-higher of the two rolls if you have Advantage, and\
-use the lower roll if you have Disadvantage. For ex-\
-ample, if you have Disadvantage and roll an 18 and a\
-3, use the 3. If you instead have Advantage and roll\
-those numbers, use the 18.\
+When a roll has either Advantage or Disadvantage, roll a second d20 when you make the roll. Use the higher of the two rolls if you have Advantage, and use the lower roll if you have Disadvantage. For example, if you have Disadvantage and roll an 18 and a 3, use the 3. If you instead have Advantage and roll those numbers, use the 18.
 
 ## Rule
 

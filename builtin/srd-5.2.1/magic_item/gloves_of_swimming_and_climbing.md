@@ -11,10 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [224
 
 <!-- SRD page 224 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While wearing these gloves, you have a Climb Speed\
-and a Swim Speed equal to your Speed, and you gain\
-a +5 bonus to Strength (Athletics) checks made to\
-climb or swim.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While wearing these gloves, you have a Climb Speed and a Swim Speed equal to your Speed, and you gain a +5 bonus to Strength (Athletics) checks made to climb or swim.
 
 Original layout: [[../pages/224|page 224]].

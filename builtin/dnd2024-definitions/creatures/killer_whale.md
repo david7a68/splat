@@ -28,17 +28,15 @@ Int 3 −4 −4 Wis 12 +1 +1 Cha 7 −2 −2\
 Skills Perception +3, Stealth +4\
 Senses Blindsight 120 ft.; Passive Perception 13\
 Languages None\
-CR 3 (XP 700; PB +2)\
+CR 3 (XP 700; PB +2)
 
 ### Traits
 
-Hold Breath. The whale can hold its breath for\
-30 minutes.\
+Hold Breath. The whale can hold its breath for 30 minutes.
 
 ### Actions
 
-Bite. Melee Attack Roll: +6, reach 5 ft. Hit: 21 (5d6\
-+ 4) Piercing damage.\
+Bite. Melee Attack Roll: +6, reach 5 ft. Hit: 21 (5d6 + 4) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/356|page 356]].
 

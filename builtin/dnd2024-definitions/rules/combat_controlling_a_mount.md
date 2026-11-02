@@ -18,18 +18,11 @@ splat_sources:
 
 <!-- SRD page 16 -->
 
-You can control a mount only if it has been trained\
-to accept a rider. Domesticated horses, mules, and\
-similar creatures have such training.\
-The Initiative of a controlled mount changes to\
-match yours when you mount it. It moves on your\
-turn as you direct it, and it has only three action op-\
-tions during that turn: Dash, Disengage, and Dodge.\
-A controlled mount can move and act even on the\
-turn that you mount it.\
-In contrast, an independent mount—one that lets\
-you ride but ignores your control—retains its place\
-in the Initiative order and moves and acts as it likes.\
+You can control a mount only if it has been trained to accept a rider. Domesticated horses, mules, and similar creatures have such training.
+
+The Initiative of a controlled mount changes to match yours when you mount it. It moves on your turn as you direct it, and it has only three action options during that turn: Dash, Disengage, and Dodge. A controlled mount can move and act even on the turn that you mount it.
+
+In contrast, an independent mount—one that lets you ride but ignores your control—retains its place in the Initiative order and moves and acts as it likes.
 
 ## Rule
 

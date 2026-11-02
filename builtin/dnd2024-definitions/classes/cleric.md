@@ -18,21 +18,43 @@ splat_sources:
 
 <!-- SRD page 36 -->
 
-Core Cleric Traits\
-Primary Ability Wisdom\
-Hit Point Die D8 per Cleric level\
-Saving Throw Wisdom and Charisma\
-Proficiencies\
-Skill Proficiencies Choose 2: History, Insight,\
-Medicine, Persuasion, or\
-Religion\
-Weapon Proficiencies Simple weapons\
-Armor Training Light and Medium armor and\
-Shields\
-Starting Equipment Choose A or B: (A) Chain Shirt,\
-Shield, Mace, Holy Symbol,\
-Priest’s Pack, and 7 GP; or (B)\
-110 GP\
+**Core Cleric Traits**
+
+|  |  |
+| --- | --- |
+| Primary Ability | Wisdom |
+| Hit Point Die | D8 per Cleric level |
+| Saving Throw | Wisdom and Charisma |
+| Proficiencies |  |
+| Skill Proficiencies | Choose 2: History, Insight, Medicine, Persuasion, or Religion |
+| Weapon Proficiencies | Simple weapons |
+| Armor Training | Light and Medium armor and Shields |
+| Starting Equipment | Choose A or B: (A) Chain Shirt, Shield, Mace, Holy Symbol, Priest’s Pack, and 7 GP; or (B) 110 GP |
+
+**Cleric Features**
+
+| Level | Proficiency Bonus | Class Features | Channel Divinity | Cantrips | Prepared Spells | Level 1 Slots | Level 2 Slots | Level 3 Slots | Level 4 Slots | Level 5 Slots | Level 6 Slots | Level 7 Slots | Level 8 Slots | Level 9 Slots |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | +2 | Spellcasting, Divine Order | — | 3 | 4 | 2 | — | — | — | — | — | — | — | — |
+| 2 | +2 | Channel Divinity | 2 | 3 | 5 | 3 | — | — | — | — | — | — | — | — |
+| 3 | +2 | Cleric Subclass | 2 | 3 | 6 | 4 | 2 | — | — | — | — | — | — | — |
+| 4 | +2 | Ability Score Improvement | 2 | 4 | 7 | 4 | 3 | — | — | — | — | — | — | — |
+| 5 | +3 | Sear Undead | 2 | 4 | 9 | 4 | 3 | 2 | — | — | — | — | — | — |
+| 6 | +3 | Subclass feature | 3 | 4 | 10 | 4 | 3 | 3 | — | — | — | — | — | — |
+| 7 | +3 | Blessed Strikes | 3 | 4 | 11 | 4 | 3 | 3 | 1 | — | — | — | — | — |
+| 8 | +3 | Ability Score Improvement | 3 | 4 | 12 | 4 | 3 | 3 | 2 | — | — | — | — | — |
+| 9 | +4 | — | 3 | 4 | 14 | 4 | 3 | 3 | 3 | 1 | — | — | — | — |
+| 10 | +4 | Divine Intervention | 3 | 5 | 15 | 4 | 3 | 3 | 3 | 2 | — | — | — | — |
+| 11 | +4 | — | 3 | 5 | 16 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
+| 12 | +4 | Ability Score Improvement | 3 | 5 | 16 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
+| 13 | +5 | — | 3 | 5 | 17 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
+| 14 | +5 | Improved Blessed Strikes | 3 | 5 | 17 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
+| 15 | +5 | — | 3 | 5 | 18 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
+| 16 | +5 | Ability Score Improvement | 3 | 5 | 18 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
+| 17 | +6 | Subclass feature | 3 | 5 | 19 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | 1 |
+| 18 | +6 | — | 4 | 5 | 20 | 4 | 3 | 3 | 3 | 3 | 1 | 1 | 1 | 1 |
+| 19 | +6 | Epic Boon | 4 | 5 | 21 | 4 | 3 | 3 | 3 | 3 | 2 | 1 | 1 | 1 |
+| 20 | +6 | Greater Divine Intervention | 4 | 5 | 22 | 4 | 3 | 3 | 3 | 3 | 2 | 2 | 1 | 1 |
 
 ## Rule group
 

@@ -28,16 +28,11 @@ Int 2 −4 −4 Wis 10 +0 +0 Cha 6 −2 −2\
 Skills Perception +2\
 Senses Darkvision 60 ft.; Passive Perception 12\
 Languages None\
-CR 1/4 (XP 50; PB +2)\
+CR 1/4 (XP 50; PB +2)
 
 ### Actions
 
-Ram. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6\
-+ 3) Bludgeoning damage. If the target is a Large or\
-smaller creature and the elk moved 20+ feet straight\
-toward it immediately before the hit, the target takes an\
-extra 3 (1d6) Bludgeoning damage and has the Prone\
-condition.\
+Ram. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Bludgeoning damage. If the target is a Large or smaller creature and the elk moved 20+ feet straight toward it immediately before the hit, the target takes an extra 3 (1d6) Bludgeoning damage and has the Prone condition.
 
 Original layout: [[../../srd-5.2.1/pages/348|page 348]].
 

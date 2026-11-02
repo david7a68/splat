@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 89 -->
 
-Anyone can wield a weapon, but you must have\
-proficiency with it to add your Proficiency Bonus to\
-an attack roll you make with it. A player character’s\
-features can provide weapon proficiencies. A mon-\
-ster is proficient with any weapon in its stat block.\
+Anyone can wield a weapon, but you must have proficiency with it to add your Proficiency Bonus to an attack roll you make with it. A player character’s features can provide weapon proficiencies. A monster is proficient with any weapon in its stat block.
 
 ## Rule
 

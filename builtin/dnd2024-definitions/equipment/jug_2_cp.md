@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 98 -->
 
-A Jug holds up to 1 gallon.\
+A Jug holds up to 1 gallon.
 
 ## Item
 

@@ -18,15 +18,11 @@ splat_sources:
 
 <!-- SRD page 38 -->
 
-The option you chose for Blessed Strikes grows\
-more powerful.\
-Divine Strike. The extra damage of your Divine\
-Strike increases to 2d8.\
-Potent Spellcasting. When you cast a Cleric can-\
-trip and deal damage to a creature with it, you can\
-give vitality to yourself or another creature within\
-60 feet of yourself, granting a number of Temporary\
-Hit Points equal to twice your Wisdom modifier.\
+The option you chose for Blessed Strikes grows more powerful.
+
+Divine Strike. The extra damage of your Divine Strike increases to 2d8.
+
+Potent Spellcasting. When you cast a Cleric cantrip and deal damage to a creature with it, you can give vitality to yourself or another creature within 60 feet of yourself, granting a number of Temporary Hit Points equal to twice your Wisdom modifier.
 
 ## Rule
 

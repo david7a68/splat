@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 178 -->
 
-A campaign is a series of adventures. See also\
-“Adventure.”\
+A campaign is a series of adventures. See also “Adventure.”
 
 Original layout: [[../../srd-5.2.1/pages/178|page 178]].
 

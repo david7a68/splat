@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 98 -->
 
-Ink comes in a 1-ounce bottle, which provides\
-enough ink to write about 500 pages.\
+Ink comes in a 1-ounce bottle, which provides enough ink to write about 500 pages.
 
 ## Item
 

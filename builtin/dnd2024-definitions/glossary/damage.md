@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 180 -->
 
-Damage represents harm that causes a creature or\
-an object to lose Hit Points.\
+Damage represents harm that causes a creature or an object to lose Hit Points.
 
 Original layout: [[../../srd-5.2.1/pages/180|page 180]].
 

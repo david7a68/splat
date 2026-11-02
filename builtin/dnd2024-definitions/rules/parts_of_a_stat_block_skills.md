@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-The Skills entry specifies a monster’s skill profi-\
-ciencies, if any. For example, a monster that is very\
-perceptive and stealthy might have bonuses to Wis-\
-dom (Perception) and Dexterity (Stealth) checks. A\
-skill bonus is the sum of a monster’s relevant ability\
-modifier and its Proficiency Bonus. Other modifiers\
-might apply.\
+The Skills entry specifies a monster’s skill proficiencies, if any. For example, a monster that is very perceptive and stealthy might have bonuses to Wisdom (Perception) and Dexterity (Stealth) checks. A skill bonus is the sum of a monster’s relevant ability modifier and its Proficiency Bonus. Other modifiers might apply.
 
 ## Rule
 

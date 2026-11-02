@@ -18,30 +18,13 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-Some locations are so suffused with evil that any-\
-one who lingers there is burdened with a curse.\
-Demonic Possession is one example of an environ-\
-mental curse.\
-Demonic Possession. Demonic Possession arises\
-from the chaos and evil of the Abyss and commonly\
-besets creatures that interact with demonic objects\
-or linger in desecrated locations, where demonic\
-spirits await victims.\
-A creature that becomes the target of Demonic\
-Possession must succeed on a DC 15 Charisma sav-\
-ing throw or be possessed by a bodiless demonic\
-entity. Whenever the possessed creature rolls a 1\
-on a D20 Test, the demonic entity takes control of\
-the creature and determines the creature’s behav-\
-ior thereafter. At the end of each of the possessed\
-creature’s later turns, the creature makes a DC 15\
-Charisma saving throw, regaining control of itself\
-on a success.\
-After finishing a Long Rest, a creature with De-\
-monic Possession makes a DC 15 Charisma saving\
-throw. On a successful save, the effect ends on the\
-creature. A Dispel Evil and Good spell or any magic\
-that removes a curse also ends the effect on it.\
+Some locations are so suffused with evil that anyone who lingers there is burdened with a curse. Demonic Possession is one example of an environmental curse.
+
+Demonic Possession. Demonic Possession arises from the chaos and evil of the Abyss and commonly besets creatures that interact with demonic objects or linger in desecrated locations, where demonic spirits await victims.
+
+A creature that becomes the target of Demonic Possession must succeed on a DC 15 Charisma saving throw or be possessed by a bodiless demonic entity. Whenever the possessed creature rolls a 1 on a D20 Test, the demonic entity takes control of the creature and determines the creature’s behavior thereafter. At the end of each of the possessed creature’s later turns, the creature makes a DC 15 Charisma saving throw, regaining control of itself on a success.
+
+After finishing a Long Rest, a creature with Demonic Possession makes a DC 15 Charisma saving throw. On a successful save, the effect ends on the creature. A Dispel Evil and Good spell or any magic that removes a curse also ends the effect on it.
 
 ## Rule
 

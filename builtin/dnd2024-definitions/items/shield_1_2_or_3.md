@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 243 -->
 
-Armor (Shield), Uncommon (+1), Rare (+2), or Very\
-Rare (+3)\
-While holding this Shield, you have a bonus to Ar-\
-mor Class determined by the Shield’s rarity, in addi-\
-tion to the Shield’s normal bonus to AC.\
+Armor (Shield), Uncommon (+1), Rare (+2), or Very Rare (+3)
+
+While holding this Shield, you have a bonus to Armor Class determined by the Shield’s rarity, in addition to the Shield’s normal bonus to AC.
 
 Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 
@@ -33,7 +31,7 @@ Original layout: [[../../srd-5.2.1/pages/243|page 243]].
 | Field | Value |
 | --- | --- |
 | ` category ` | ` armor ` |
-| ` rarity ` | ` uncommon ` |
+| ` rarity ` | ` varies ` |
 
 ### Equipment
 

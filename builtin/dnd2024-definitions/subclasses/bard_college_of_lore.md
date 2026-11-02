@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 35 -->
 
-Plumb the Depths of Magical Knowledge\
-Bards of the College of Lore collect spells and se-\
-crets from diverse sources, such as scholarly tomes,\
-mystical rites, and peasant tales. The college’s mem-\
-bers gather in libraries and universities to share\
-their lore with one another. They also meet at festi-\
-vals or affairs of state, where they can expose cor-\
-ruption, unravel lies, and poke fun at self-important\
-figures of authority.\
+### Plumb the Depths of Magical Knowledge
+
+Bards of the College of Lore collect spells and secrets from diverse sources, such as scholarly tomes, mystical rites, and peasant tales. The college’s members gather in libraries and universities to share their lore with one another. They also meet at festivals or affairs of state, where they can expose corruption, unravel lies, and poke fun at self-important figures of authority.
 
 ## Rule group
 

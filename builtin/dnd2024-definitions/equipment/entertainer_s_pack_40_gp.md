@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 97 -->
 
-An Entertainer’s Pack contains the following items:\
-Backpack, Bedroll, Bell, Bullseye Lantern, 3 Cos-\
-tumes, Mirror, 8 flasks of Oil, 9 days of Rations, Tin-\
-derbox, and Waterskin.\
+An Entertainer’s Pack contains the following items: Backpack, Bedroll, Bell, Bullseye Lantern, 3 Costumes, Mirror, 8 flasks of Oil, 9 days of Rations, Tinderbox, and Waterskin.
 
 ## Item
 

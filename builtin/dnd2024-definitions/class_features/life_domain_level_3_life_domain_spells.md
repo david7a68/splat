@@ -18,19 +18,16 @@ splat_sources:
 
 <!-- SRD page 40 -->
 
-Your connection to this divine domain ensures you\
-always have certain spells ready. When you reach\
-a Cleric level specified in the Life Domain Spells\
-table, you thereafter always have the listed spells\
-prepared.\
-Life Domain Spells\
-Cleric Prepared Spells\
-Level\
-3 Aid, Bless, Cure Wounds,\
-Lesser Restoration\
-5 Mass Healing Word, Revivify\
-7 Aura of Life, Death Ward\
-9 Greater Restoration, Mass Cure Wounds\
+Your connection to this divine domain ensures you always have certain spells ready. When you reach a Cleric level specified in the Life Domain Spells table, you thereafter always have the listed spells prepared.
+
+**Life Domain Spells**
+
+| Cleric Level | Prepared Spells |
+| --- | --- |
+| 3 | Aid, Bless, Cure Wounds, Lesser Restoration |
+| 5 | Mass Healing Word, Revivify |
+| 7 | Aura of Life, Death Ward |
+| 9 | Greater Restoration, Mass Cure Wounds |
 
 ## Rule
 

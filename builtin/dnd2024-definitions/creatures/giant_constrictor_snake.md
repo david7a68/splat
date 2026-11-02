@@ -28,18 +28,15 @@ Int 1 −5 −5 Wis 10 +0 +0 Cha 3 −4 −4\
 Skills Perception +2\
 Senses Blindsight 10 ft.; Passive Perception 12\
 Languages None\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Actions
 
-Multiattack. The snake makes one Bite attack and uses\
-Constrict.\
-Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 +\
-4) Piercing damage.\
-Constrict. Strength Saving Throw: DC 14, one Large or\
-smaller creature the snake can see within 10 feet. Fail-\
-ure: 13 (2d8 + 4) Bludgeoning damage, and the target\
-has the Grappled condition (escape DC 14).\
+Multiattack. The snake makes one Bite attack and uses Constrict.
+
+Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage.
+
+Constrict. Strength Saving Throw: DC 14, one Large or smaller creature the snake can see within 10 feet. Failure: 13 (2d8 + 4) Bludgeoning damage, and the target has the Grappled condition (escape DC 14).
 
 Original layout: [[../../srd-5.2.1/pages/350|page 350]].
 

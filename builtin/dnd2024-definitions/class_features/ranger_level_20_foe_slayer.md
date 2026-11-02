@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 59 -->
 
-The damage die of your Hunter’s Mark is a d10\
-rather than a d6.\
+The damage die of your Hunter’s Mark is a d10 rather than a d6.
 
 ## Rule
 

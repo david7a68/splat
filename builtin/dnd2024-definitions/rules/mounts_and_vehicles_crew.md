@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-A ship larger than a Keelboat or Rowboat needs a\
-crew of skilled hirelings (see “Hirelings” later in\
-“Equipment”) to function. The minimum number of\
-skilled hirelings needed to crew a ship depends on\
-the type of ship, as shown in the table.\
+A ship larger than a Keelboat or Rowboat needs a crew of skilled hirelings (see “Hirelings” later in “Equipment”) to function. The minimum number of skilled hirelings needed to crew a ship depends on the type of ship, as shown in the table.
 
 ## Rule
 

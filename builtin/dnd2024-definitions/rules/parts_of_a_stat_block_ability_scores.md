@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-Every monster has six ability scores along with\
-corresponding ability score modifiers and saving\
-throw modifiers. For more information on ability\
-scores and saving throws, see “Playing the Game.”\
+Every monster has six ability scores along with corresponding ability score modifiers and saving throw modifiers. For more information on ability scores and saving throws, see “Playing the Game.”
 
 ## Rule
 

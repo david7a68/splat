@@ -21,13 +21,10 @@ Int 2 −4 −4 Wis 10 +0 +0 Cha 5 −3 −3\
 Skills Perception +2\
 Senses Darkvision 60 ft.; Passive Perception 12\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Actions
 
-Ram. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Blud-\
-geoning damage, or 2 (1d4) Bludgeoning damage if the\
-goat moved 20+ feet straight toward the target immedi-\
-ately before the hit.\
+Ram. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Bludgeoning damage, or 2 (1d4) Bludgeoning damage if the goat moved 20+ feet straight toward the target immediately before the hit.
 
 Original layout: [[../pages/355|page 355]].

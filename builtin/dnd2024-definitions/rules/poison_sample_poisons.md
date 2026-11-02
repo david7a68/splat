@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 197 -->
 
-Example poisons are detailed here in alphabetical\
-order. Each poison’s description includes the sug-\
-gested price for a single dose of the poison, its type\
-(contact, ingested, inhaled, or injury), and a descrip-\
-tion of the poison’s debilitating effects.\
+Example poisons are detailed here in alphabetical order. Each poison’s description includes the suggested price for a single dose of the poison, its type (contact, ingested, inhaled, or injury), and a description of the poison’s debilitating effects.
 
 ## Rule
 

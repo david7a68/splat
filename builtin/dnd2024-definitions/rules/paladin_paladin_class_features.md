@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 53 -->
 
-As a Paladin, you gain the following class features\
-when you reach the specified Paladin levels. These\
-features are listed in the Paladin Features table.\
+As a Paladin, you gain the following class features when you reach the specified Paladin levels. These features are listed in the Paladin Features table.
 
 ## Rule
 

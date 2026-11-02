@@ -11,17 +11,16 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [186],
 
 <!-- SRD page 186 -->
 
-While you have the Paralyzed condition, you experi-\
-ence the following effects.\
-Incapacitated. You have the Incapacitated\
-condition.\
-Speed 0. Your Speed is 0 and can’t increase.\
-Saving Throws Affected. You automatically fail\
-Strength and Dexterity saving throws.\
-Attacks Affected. Attack rolls against you have\
-Advantage.\
-Automatic Critical Hits. Any attack roll that hits\
-you is a Critical Hit if the attacker is within 5 feet of\
-you.\
+While you have the Paralyzed condition, you experience the following effects.
+
+Incapacitated. You have the Incapacitated condition.
+
+Speed 0. Your Speed is 0 and can’t increase.
+
+Saving Throws Affected. You automatically fail Strength and Dexterity saving throws.
+
+Attacks Affected. Attack rolls against you have Advantage.
+
+Automatic Critical Hits. Any attack roll that hits you is a Critical Hit if the attacker is within 5 feet of you.
 
 Original layout: [[../pages/186|page 186]].

@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 206 -->
 
-Some items are consumed—used up, in other\
-words—when they are activated. A Potion of Healing\
-must be swallowed, for example, while the writing\
-vanishes from a scroll when it is read. Once used, a\
-consumable item loses its magic.\
+Some items are consumed—used up, in other words—when they are activated. A Potion of Healing must be swallowed, for example, while the writing vanishes from a scroll when it is read. Once used, a consumable item loses its magic.
 
 ## Rule
 

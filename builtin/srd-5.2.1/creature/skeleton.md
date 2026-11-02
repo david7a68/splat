@@ -22,18 +22,15 @@ Vulnerabilities Bludgeoning\
 Immunities Poison; Exhaustion, Poisoned\
 Gear Shortbow, Shortsword\
 Senses Darkvision 60 ft.; Passive Perception 9\
-Languages Understands Common plus one other language\
-but can’t speak\
-CR 1/4 (XP 50; PB +2)\
+Languages Understands Common plus one other language but can’t speak\
+CR 1/4 (XP 50; PB +2)
 
 <!-- SRD page 326 -->
 
-
 ### Actions
 
-Shortsword. Melee Attack Roll: +5, reach 5 ft. Hit: 6\
-(1d6 + 3) Piercing damage.\
-Shortbow. Ranged Attack Roll: +5, range 80/320 ft. Hit:\
-6 (1d6 + 3) Piercing damage.\
+Shortsword. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Piercing damage.
+
+Shortbow. Ranged Attack Roll: +5, range 80/320 ft. Hit: 6 (1d6 + 3) Piercing damage.
 
 Original layout: [[../pages/325|page 325]], [[../pages/326|page 326]].

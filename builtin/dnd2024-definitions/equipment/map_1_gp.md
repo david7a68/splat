@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 98 -->
 
-If you consult an accurate Map, you gain a +5 bonus\
-to Wisdom (Survival) checks you make to find your\
-way in the place represented on it.\
+If you consult an accurate Map, you gain a +5 bonus to Wisdom (Survival) checks you make to find your way in the place represented on it.
 
 ## Item
 

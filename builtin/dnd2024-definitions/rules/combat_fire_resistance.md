@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 16 -->
 
-Anything underwater has Resistance to Fire dam-\
-age (explained in “Damage and Healing”).\
+Anything underwater has Resistance to Fire damage (explained in “Damage and Healing”).
 
 ## Rule
 

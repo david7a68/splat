@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 215 -->
 
-Wondrous Item, Uncommon\
-While wearing this circlet, you can cast Scorching\
-Ray with it (+5 to hit). The circlet can’t cast this spell\
-again until the next dawn.\
+Wondrous Item, Uncommon
+
+While wearing this circlet, you can cast Scorching Ray with it (+5 to hit). The circlet can’t cast this spell again until the next dawn.
 
 Original layout: [[../../srd-5.2.1/pages/215|page 215]].
 

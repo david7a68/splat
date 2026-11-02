@@ -11,7 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [186],
 
 <!-- SRD page 186 -->
 
-A creature has a reach of 5 feet unless a rule says\
-otherwise.\
+A creature has a reach of 5 feet unless a rule says otherwise.
 
 Original layout: [[../pages/186|page 186]].

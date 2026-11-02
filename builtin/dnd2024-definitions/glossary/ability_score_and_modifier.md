@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 176 -->
 
-A creature has six ability scores—Strength, Dex-\
-terity, Constitution, Intelligence, Wisdom, and\
-Charisma—each of which has a corresponding mod-\
-ifier. Add the modifier when you make a D20 Test\
-with the corresponding ability or when a rule asks\
-you to do so. See also “Playing the Game” (“The Six\
-Abilities”).\
+A creature has six ability scores—Strength, Dexterity, Constitution, Intelligence, Wisdom, and Charisma—each of which has a corresponding modifier. Add the modifier when you make a D20 Test with the corresponding ability or when a rule asks you to do so. See also “Playing the Game” (“The Six Abilities”).
 
 Original layout: [[../../srd-5.2.1/pages/176|page 176]].
 

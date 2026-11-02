@@ -18,14 +18,7 @@ splat_sources:
 
 <!-- SRD page 203 -->
 
-A player’s absence might warrant removing crea-\
-tures from an encounter to keep it at the intended\
-difficulty. Also, die rolls and other factors can result\
-in an encounter being easier or harder than in-\
-tended. You can adjust an encounter on the fly, such\
-as by having creatures flee (making the encounter\
-easier) or adding reinforcements (making the en-\
-counter harder).\
+A player’s absence might warrant removing creatures from an encounter to keep it at the intended difficulty. Also, die rolls and other factors can result in an encounter being easier or harder than intended. You can adjust an encounter on the fly, such as by having creatures flee (making the encounter easier) or adding reinforcements (making the encounter harder).
 
 ## Rule
 

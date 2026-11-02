@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [251
 
 <!-- SRD page 251 -->
 
-Wand, Uncommon\
-This wand has 3 charges. While holding it, you can\
-expend 1 charge to cast Detect Magic from it. The\
-wand regains 1d3 expended charges daily at dawn.\
+Wand, Uncommon
+
+This wand has 3 charges. While holding it, you can expend 1 charge to cast Detect Magic from it. The wand regains 1d3 expended charges daily at dawn.
 
 Original layout: [[../pages/251|page 251]].

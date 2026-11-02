@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 195 -->
 
-Swimming through deep water (more than 100 feet\
-deep) presents additional challenges because of the\
-water’s pressure and cold temperature. After each\
-hour of swimming in deep water, a creature that\
-lacks a Swim Speed must succeed on a DC 10 Consti-\
-tution saving throw or gain 1 Exhaustion level.\
+Swimming through deep water (more than 100 feet deep) presents additional challenges because of the water’s pressure and cold temperature. After each hour of swimming in deep water, a creature that lacks a Swim Speed must succeed on a DC 10 Constitution saving throw or gain 1 Exhaustion level.
 
 ## Rule
 

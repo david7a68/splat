@@ -18,14 +18,7 @@ splat_sources:
 
 <!-- SRD page 194 -->
 
-If a creature infected with a magical contagion\
-spends 3 days recuperating—engaging in no\
-activities that would interrupt a Long Rest—the\
-creature makes a DC 15 Constitution saving throw\
-at the end of the recuperation period. On a suc-\
-cessful save, the creature has Advantage on saving\
-throws to fight off the magical contagion for the\
-next 24 hours.\
+If a creature infected with a magical contagion spends 3 days recuperating—engaging in no activities that would interrupt a Long Rest—the creature makes a DC 15 Constitution saving throw at the end of the recuperation period. On a successful save, the creature has Advantage on saving throws to fight off the magical contagion for the next 24 hours.
 
 ## Rule
 

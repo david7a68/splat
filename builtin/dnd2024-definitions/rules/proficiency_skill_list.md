@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 9 -->
 
-The skills are shown on the Skills table, which notes\
-example uses for each skill proficiency as well as\
-the ability check the skill most often applies to.\
+The skills are shown on the Skills table, which notes example uses for each skill proficiency as well as the ability check the skill most often applies to.
 
 ## Rule
 

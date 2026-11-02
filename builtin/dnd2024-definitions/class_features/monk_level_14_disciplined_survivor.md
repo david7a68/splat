@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 52 -->
 
-Your physical and mental discipline grant you profi-\
-ciency in all saving throws.\
-Additionally, whenever you make a saving throw\
-and fail, you can expend 1 Focus Point to reroll it,\
-and you must use the new roll.\
+Your physical and mental discipline grant you proficiency in all saving throws.
+
+Additionally, whenever you make a saving throw and fail, you can expend 1 Focus Point to reroll it, and you must use the new roll.
 
 ## Rule
 

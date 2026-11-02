@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 17 -->
 
-If you reach 0 Hit Points and don’t die instantly, you\
-have the Unconscious condition (see “Rules Glos-\
-sary”) until you regain any Hit Points, and you now\
-face making Death Saving Throws (see below).\
+If you reach 0 Hit Points and don’t die instantly, you have the Unconscious condition (see “Rules Glossary”) until you regain any Hit Points, and you now face making Death Saving Throws (see below).
 
 ## Rule
 

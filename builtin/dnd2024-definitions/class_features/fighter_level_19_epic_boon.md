@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 48 -->
 
-You gain an Epic Boon feat (see “Feats”) or another\
-feat of your choice for which you qualify. Boon of\
-Combat Prowess is recommended.\
+You gain an Epic Boon feat (see “Feats”) or another feat of your choice for which you qualify. Boon of Combat Prowess is recommended.
 
 ## Rule
 

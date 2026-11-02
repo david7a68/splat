@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 73 -->
 
-Prerequisite: Level 5+ Warlock\
-You can cast Alter Self without expending a spell\
-slot.\
+Prerequisite: Level 5+ Warlock
+
+You can cast Alter Self without expending a spell slot.
 
 ## Rule
 

@@ -11,8 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [216
 
 <!-- SRD page 216 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While wearing this cloak, you can breathe underwa-\
-ter, and you have a Swim Speed of 60 feet.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While wearing this cloak, you can breathe underwater, and you have a Swim Speed of 60 feet.
 
 Original layout: [[../pages/216|page 216]].

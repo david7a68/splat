@@ -16,35 +16,30 @@ splat_sources:
 
 ## Source text
 
-From SRD 5.2.1 page 47.
+**Fighter Features**
 
-     Fighter Features
-                  Proficiency                                                                     Second        Weapon
-       Level        Bonus          Class Features                                                  Wind         Mastery
-         1             +2         Fighting Style, Second Wind, Weapon Mastery                        2              3
-         2             +2         Action Surge (one use), Tactical Mind                              2              3
-         3             +2         Fighter Subclass                                                   2              3
-         4             +2         Ability Score Improvement                                          3              4
-         5             +3         Extra Attack, Tactical Shift                                       3              4
-         6             +3         Ability Score Improvement                                          3              4
-         7             +3         Subclass feature                                                   3              4
-         8             +3         Ability Score Improvement                                          3              4
-         9             +4         Indomitable (one use), Tactical Master                             3              4
-         10            +4         Subclass feature                                                   4              5
-         11            +4         Two Extra Attacks                                                  4              5
-         12            +4         Ability Score Improvement                                          4              5
-         13            +5         Indomitable (two uses), Studied Attacks                            4              5
-         14            +5         Ability Score Improvement                                          4              5
-         15            +5         Subclass feature                                                   4              5
-         16            +5         Ability Score Improvement                                          4              6
-         17            +6         Action Surge (two uses), Indomitable (three uses)                  4              6
-         18            +6         Subclass feature                                                   4              6
-         19            +6         Epic Boon                                                          4              6
-         20            +6         Three Extra Attacks                                                4              6
-
-
-
-47   System Reference Document 5.2.1
+| Level | Proficiency Bonus | Class Features | Second Wind | Weapon Mastery |
+| --- | --- | --- | --- | --- |
+| 1 | +2 | Fighting Style, Second Wind, Weapon Mastery | 2 | 3 |
+| 2 | +2 | Action Surge (one use), Tactical Mind | 2 | 3 |
+| 3 | +2 | Fighter Subclass | 2 | 3 |
+| 4 | +2 | Ability Score Improvement | 3 | 4 |
+| 5 | +3 | Extra Attack, Tactical Shift | 3 | 4 |
+| 6 | +3 | Ability Score Improvement | 3 | 4 |
+| 7 | +3 | Subclass feature | 3 | 4 |
+| 8 | +3 | Ability Score Improvement | 3 | 4 |
+| 9 | +4 | Indomitable (one use), Tactical Master | 3 | 4 |
+| 10 | +4 | Subclass feature | 4 | 5 |
+| 11 | +4 | Two Extra Attacks | 4 | 5 |
+| 12 | +4 | Ability Score Improvement | 4 | 5 |
+| 13 | +5 | Indomitable (two uses), Studied Attacks | 4 | 5 |
+| 14 | +5 | Ability Score Improvement | 4 | 5 |
+| 15 | +5 | Subclass feature | 4 | 5 |
+| 16 | +5 | Ability Score Improvement | 4 | 6 |
+| 17 | +6 | Action Surge (two uses), Indomitable (three uses) | 4 | 6 |
+| 18 | +6 | Subclass feature | 4 | 6 |
+| 19 | +6 | Epic Boon | 4 | 6 |
+| 20 | +6 | Three Extra Attacks | 4 | 6 |
 
 ## Rule
 

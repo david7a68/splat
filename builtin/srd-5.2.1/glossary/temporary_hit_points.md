@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [190],
 
 <!-- SRD page 190 -->
 
-Temporary Hit Points are granted by certain effects\
-and act as a buffer against losing real Hit Points. See\
-also “Playing the Game” (“Damage and Healing”).\
+Temporary Hit Points are granted by certain effects and act as a buffer against losing real Hit Points. See also “Playing the Game” (“Damage and Healing”).
 
 Original layout: [[../pages/190|page 190]].

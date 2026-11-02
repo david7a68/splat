@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-The simplest curses are created by the Bestow Curse\
-spell. The effects of such curses are limited and can\
-be ended by the Remove Curse spell.\
-Bestow Curse provides useful benchmarks for\
-gauging the potency of other curses. A curse that\
-lasts for 1 minute equates to a level 3 spell, while\
-one that lasts until dispelled equates to a level 9\
-spell.\
+The simplest curses are created by the Bestow Curse spell. The effects of such curses are limited and can be ended by the Remove Curse spell.
+
+Bestow Curse provides useful benchmarks for gauging the potency of other curses. A curse that lasts for 1 minute equates to a level 3 spell, while one that lasts until dispelled equates to a level 9 spell.
 
 ## Rule
 

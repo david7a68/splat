@@ -18,30 +18,24 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-A monster’s Hit Points are presented as a number\
-followed by parentheses, where the monster’s Hit\
-Point Dice are provided, along with any contribu-\
-tion from its Constitution. Either use the number for\
-the monster’s Hit Points or roll the die expression in\
-parentheses to determine the monster’s Hit Points\
-randomly; don’t use both.\
-A monster’s size typically determines the die used\
-to calculate its Hit Points, as shown in the Hit Dice\
-by Size table.\
-Hit Dice by Size\
-Monster Size Hit Die Average HP per Die\
-Tiny d4 2½\
-Small d6 3½\
-Medium d8 4½\
-Large d10 5½\
-Huge d12 6½\
-Gargantuan d20 10½\
-A monster’s Constitution modifier is multiplied by\
-the number of Hit Dice it possesses, and the result\
-is added to its Hit Points. For example, if a monster\
-has a Constitution of 12 (+1 modifier) and 2d8 Hit\
-Dice, it has 2d8 + 2 Hit Points (average 11).\
-For more on Hit Points, see “Playing the Game.”\
+A monster’s Hit Points are presented as a number followed by parentheses, where the monster’s Hit Point Dice are provided, along with any contribution from its Constitution. Either use the number for the monster’s Hit Points or roll the die expression in parentheses to determine the monster’s Hit Points randomly; don’t use both.
+
+A monster’s size typically determines the die used to calculate its Hit Points, as shown in the Hit Dice by Size table.
+
+**Hit Dice by Size**
+
+| Monster Size | Hit Die | Average HP per Die |
+| --- | --- | --- |
+| Tiny | d4 | 2½ |
+| Small | d6 | 3½ |
+| Medium | d8 | 4½ |
+| Large | d10 | 5½ |
+| Huge | d12 | 6½ |
+| Gargantuan | d20 | 10½ |
+
+A monster’s Constitution modifier is multiplied by the number of Hit Dice it possesses, and the result is added to its Hit Points. For example, if a monster has a Constitution of 12 (+1 modifier) and 2d8 Hit Dice, it has 2d8 + 2 Hit Points (average 11).
+
+For more on Hit Points, see “Playing the Game.”
 
 ## Rule
 

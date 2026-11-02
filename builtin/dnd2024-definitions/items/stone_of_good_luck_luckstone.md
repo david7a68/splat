@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 248 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While this polished agate is on your person, you\
-gain a +1 bonus to ability checks and saving throws.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While this polished agate is on your person, you gain a +1 bonus to ability checks and saving throws.
 
 Original layout: [[../../srd-5.2.1/pages/248|page 248]].
 

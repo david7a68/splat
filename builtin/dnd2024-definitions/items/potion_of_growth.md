@@ -18,14 +18,11 @@ splat_sources:
 
 <!-- SRD page 235 -->
 
-Potion, Uncommon\
-When you drink this potion, you gain the “enlarge”\
-effect of the Enlarge/Reduce spell for 10 minutes (no\
-Concentration required).\
-The red in the potion’s liquid continuously ex-\
-pands from a tiny bead to color the clear liquid\
-around it and then contracts. Shaking the bottle\
-fails to interrupt this process.\
+Potion, Uncommon
+
+When you drink this potion, you gain the “enlarge” effect of the Enlarge/Reduce spell for 10 minutes (no Concentration required).
+
+The red in the potion’s liquid continuously expands from a tiny bead to color the clear liquid around it and then contracts. Shaking the bottle fails to interrupt this process.
 
 Original layout: [[../../srd-5.2.1/pages/235|page 235]].
 

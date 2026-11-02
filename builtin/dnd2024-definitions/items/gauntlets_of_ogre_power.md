@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 223 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-Your Strength is 19 while you wear these gauntlets.\
-They have no effect on you if your Strength is 19 or\
-higher without them.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+Your Strength is 19 while you wear these gauntlets. They have no effect on you if your Strength is 19 or higher without them.
 
 Original layout: [[../../srd-5.2.1/pages/223|page 223]].
 

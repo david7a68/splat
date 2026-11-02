@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 7 -->
 
-You add your Proficiency Bonus to your attack roll\
-when you attack using a weapon you have profi-\
-ciency with, as well as when you attack with a spell.\
-See “Proficiency” later in “Playing the Game” for\
-more information about weapon proficiencies.\
+You add your Proficiency Bonus to your attack roll when you attack using a weapon you have proficiency with, as well as when you attack with a spell. See “Proficiency” later in “Playing the Game” for more information about weapon proficiencies.
 
 ## Rule
 
