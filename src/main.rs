@@ -1401,7 +1401,10 @@ impl eframe::App for Splat {
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
             if let Some(fact) = &fact {
-                self.timeline.record_run(fact, self.sessions.current());
+                // The same run, changed. A run just opened has only been opened.
+                let played = self.run_fact.as_ref().is_some_and(|old| old.id == fact.id);
+                self.timeline
+                    .record_run(fact, self.sessions.current(), played);
             }
             self.run_fact = fact;
         }

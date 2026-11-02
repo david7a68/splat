@@ -2318,6 +2318,7 @@ impl Sessions {
                 let width = ui.available_width() - design::M;
                 let widths = [width - PLAN_ACTION - design::S, PLAN_ACTION];
                 let mut any = false;
+                let next_order = book.next_order();
                 for at in 0..book.events.len() {
                     if !book.events[at].is_in(session) {
                         continue;
@@ -2372,6 +2373,7 @@ impl Sessions {
                                         .clicked()
                                     {
                                         event.restores = true;
+                                        event.played_order = next_order;
                                         changed = true;
                                     }
                                 }

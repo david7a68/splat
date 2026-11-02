@@ -76,6 +76,10 @@ impl Kind {
     }
 }
 
+fn is_zero(number: &u64) -> bool {
+    *number == 0
+}
+
 fn is_empty(text: &str) -> bool {
     text.is_empty()
 }
@@ -108,6 +112,9 @@ pub struct Event {
     /// A fight that went on in a later session belongs to that one too.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub continued_in: Option<Uuid>,
+    /// When this was last played or ruled on, among the others. Zero is before any of them.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub played_order: u64,
 }
 
 impl Event {
@@ -161,10 +168,16 @@ pub fn party_state(events: &[Event], session: Option<Uuid>) -> PartyState {
     if session.is_none() {
         return state;
     }
-    for (event, day) in events.iter().zip(day_numbers(events)) {
-        if !event.is_in(session) {
-            continue;
-        }
+    let days = day_numbers(events);
+    // In the order they were played. A fight resumed late is the latest word on the party,
+    // wherever the story puts it. The sort keeps list order among events that have no order.
+    let mut played: Vec<(&Event, u32)> = events
+        .iter()
+        .zip(days)
+        .filter(|(event, _)| event.is_in(session))
+        .collect();
+    played.sort_by_key(|(event, _)| event.played_order);
+    for (event, day) in played {
         if let Some(run) = event.run {
             state.fights.push((run, event.label(day)));
         } else if event.kind == Kind::LongRest && event.restores {
@@ -184,6 +197,8 @@ pub struct RunFact {
     pub name: String,
     pub round: u64,
     pub state: RunState,
+    /// How many things the log holds. A new one means someone played this run.
+    pub steps: usize,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -667,6 +682,7 @@ impl Book {
                 marker: String::new(),
                 restores: false,
                 continued_in: None,
+                played_order: 0,
             },
         );
         self.touch();
@@ -726,13 +742,24 @@ impl Book {
 
     /// Every run sits on the timeline without a step from the DM. The DM's words stay, and
     /// so does the DM's undo, because a new round is not an edit.
-    pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>) {
+    /// What a run says now. `played` means it changed while open, and it was not only opened.
+    pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         let removed = self.removed.take();
-        self.apply_run(fact, session);
+        self.apply_run(fact, session, played);
         self.removed = removed;
     }
 
-    fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>) {
+    /// The order for what is played or ruled on next.
+    pub fn next_order(&self) -> u64 {
+        self.events
+            .iter()
+            .map(|event| event.played_order)
+            .max()
+            .unwrap_or(0)
+            + 1
+    }
+
+    fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
         if self.unreadable.is_some() {
             return;
         }
@@ -770,17 +797,26 @@ impl Book {
                     self.events[index].result = result;
                     self.touch();
                 }
-                // Played on under a later session. Reading an ended fight is not playing it.
-                if matches!(fact.state, RunState::Running)
-                    && session.is_some()
-                    && self.events[index].session != session
-                    && self.events[index].continued_in != session
-                {
-                    self.events[index].continued_in = session;
-                    self.touch();
+                // Opening a fight to read it is not playing it.
+                if played {
+                    let next = self.next_order();
+                    let event = &mut self.events[index];
+                    let moved = session.is_some()
+                        && event.session != session
+                        && event.continued_in != session;
+                    if moved {
+                        event.continued_in = session;
+                    }
+                    if event.played_order + 1 != next {
+                        event.played_order = next;
+                        self.touch();
+                    } else if moved {
+                        self.touch();
+                    }
                 }
             }
             None => {
+                let order = self.next_order();
                 let id = self.add(Kind::Encounter, session);
                 let event = self
                     .events
@@ -790,6 +826,7 @@ impl Book {
                 event.title = fact.name.clone();
                 event.run = Some(fact.id);
                 event.result = result;
+                event.played_order = order;
             }
         }
     }
@@ -834,6 +871,7 @@ mod tests {
             name: "Bridge Ambush".into(),
             round: 3,
             state,
+            steps: 1,
         }
     }
 
@@ -962,7 +1000,7 @@ mod tests {
         fs::write(&path, "written by hand").unwrap();
         let mut book = book(dir.path());
         assert!(book.unreadable.is_some());
-        book.record_run(&fact(RunState::Running), None);
+        book.record_run(&fact(RunState::Running), None, true);
         assert!(book.events.is_empty());
         book.add(Kind::Day, None);
         book.save();
@@ -979,27 +1017,31 @@ mod tests {
     fn a_run_adds_one_event_keeps_the_dms_words_and_undo_takes_it_back() {
         let session = Uuid::from_u128(1);
         let mut book = Book::default();
-        book.record_run(&fact(RunState::Setup), Some(session));
+        book.record_run(&fact(RunState::Setup), Some(session), true);
         assert!(book.events.is_empty());
 
-        book.record_run(&fact(RunState::Running), Some(session));
+        book.record_run(&fact(RunState::Running), Some(session), true);
         assert_eq!(book.events.len(), 1);
         assert_eq!(book.events[0].kind, Kind::Encounter);
         assert_eq!(book.events[0].session, Some(session));
         assert_eq!(book.events[0].result, "Round 3");
 
         book.events[0].title = "The bridge at dusk".into();
-        book.record_run(&fact(RunState::Ended("Party won".into())), Some(session));
+        book.record_run(
+            &fact(RunState::Ended("Party won".into())),
+            Some(session),
+            true,
+        );
         assert_eq!(book.events.len(), 1);
         assert_eq!(book.events[0].title, "The bridge at dusk");
         assert_eq!(book.events[0].result, "Party won, round 3");
 
-        book.record_run(&fact(RunState::Setup), Some(session));
+        book.record_run(&fact(RunState::Setup), Some(session), true);
         assert!(book.events.is_empty());
 
-        book.record_run(&fact(RunState::Running), Some(session));
+        book.record_run(&fact(RunState::Running), Some(session), true);
         book.events[0].notes = "The ogre fled.".into();
-        book.record_run(&fact(RunState::Setup), Some(session));
+        book.record_run(&fact(RunState::Setup), Some(session), true);
         assert_eq!(book.events.len(), 1);
         assert_eq!(book.events[0].result, "");
     }
@@ -1009,30 +1051,66 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let mut book = book(temp.path());
         let (first, later) = (Some(Uuid::new_v4()), Some(Uuid::new_v4()));
-        let mut run = fact(RunState::Running);
-        book.record_run(&run, first);
-        book.record_run(&run, first);
+        let run = fact(RunState::Running);
+        book.record_run(&run, first, true);
         assert_eq!(book.events[0].continued_in, None);
-        run.state = RunState::Ended("Won".into());
-        book.record_run(&run, later);
-        assert_eq!(book.events[0].continued_in, None, "only read, not played");
-        run.state = RunState::Running;
-        book.record_run(&run, later);
+        // Opened under the later session, and closed again: nothing was played.
+        book.record_run(&run, later, false);
+        assert_eq!(book.events[0].continued_in, None);
+        assert_eq!(party_state(&book.events, later), PartyState::default());
+        book.record_run(&run, later, true);
         assert_eq!(book.events[0].continued_in, later);
         assert_eq!(book.events[0].session, first);
+    }
+
+    #[test]
+    fn a_fight_resumed_late_is_the_latest_word_on_the_party() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut book = book(temp.path());
+        let session = Some(Uuid::new_v4());
+        let mut bridge = fact(RunState::Running);
+        book.record_run(&bridge, session, true);
+        let shrine = RunFact {
+            id: Uuid::from_u128(8),
+            name: "Shrine".into(),
+            ..fact(RunState::Running)
+        };
+        book.record_run(&shrine, session, true);
+        let order = |book: &Book| -> Vec<Uuid> {
+            party_state(&book.events, session)
+                .fights
+                .iter()
+                .map(|fight| fight.0)
+                .collect()
+        };
+        assert_eq!(order(&book), vec![bridge.id, shrine.id]);
+        // Opened and not played: the order stays.
+        book.record_run(&bridge, session, false);
+        assert_eq!(order(&book), vec![bridge.id, shrine.id]);
+        bridge.steps += 1;
+        book.record_run(&bridge, session, true);
+        assert_eq!(order(&book), vec![shrine.id, bridge.id]);
+        // A rest marked after that wipes both, wherever it sits in the list.
+        let rest = book.add(Kind::LongRest, session);
+        let next = book.next_order();
+        let event = book.event_mut(&rest).unwrap();
+        event.restores = true;
+        event.played_order = next;
+        let state = party_state(&book.events, session);
+        assert!(state.rested && state.fights.is_empty());
     }
 
     #[test]
     fn a_new_round_is_not_an_edit_so_undo_stays() {
         let mut book = Book::default();
         let rest = book.add(Kind::LongRest, None);
-        book.record_run(&fact(RunState::Running), None);
+        book.record_run(&fact(RunState::Running), None, true);
         book.remove(&rest);
         let next = RunFact {
             round: 4,
             ..fact(RunState::Running)
         };
-        book.record_run(&next, None);
+        book.record_run(&next, None, true);
         assert_eq!(book.events[0].result, "Round 4");
         assert_eq!(book.undo_remove(), Some(rest));
     }
@@ -1048,7 +1126,7 @@ mod tests {
         book.reload();
         assert!(book.gone && book.unreadable.is_some());
         assert_eq!(book.events[0].id, rest);
-        book.record_run(&fact(RunState::Running), None);
+        book.record_run(&fact(RunState::Running), None, true);
         assert_eq!(book.events.len(), 1);
         assert!(!path.exists());
         book.save_again();
@@ -1143,6 +1221,7 @@ mod tests {
             marker: String::new(),
             restores,
             continued_in: None,
+            played_order: 0,
         };
         let first = Uuid::new_v4();
         let mut events = vec![event(Kind::ShortRest, None, false)];

@@ -1448,6 +1448,7 @@ impl Run {
                 Phase::Running => crate::timeline::RunState::Running,
                 Phase::Ended { outcome } => crate::timeline::RunState::Ended(outcome.clone()),
             },
+            steps: self.state.log.len(),
         }
     }
     /// The strip's Next turn, usable from any page.
