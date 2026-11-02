@@ -121,7 +121,7 @@ impl Catalogue {
         let mut result = Self::default();
         let builtin = builtin_manifest();
         let builtin_id = builtin.id;
-        let mut entries = content::builtin::load().entries;
+        let mut entries = content::builtin::entries();
         entries.extend(content::definitions::entries()?);
         let ids = entries.iter().map(|e| e.id).collect();
         for entry in entries {

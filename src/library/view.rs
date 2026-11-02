@@ -150,6 +150,8 @@ pub(crate) fn show(
 
 const REFERENCE_MIN: f32 = 280.0;
 const REFERENCE_MAX: f32 = 360.0;
+/// The reader's measure, its gap and the margin at their widest.
+pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;
 
 /// What the entry says.
 fn content(
@@ -173,6 +175,10 @@ fn content(
             open_link = open_link.or(spell_links(ui, &references, paragraph, links));
         });
     } else {
+        // A creature the DM wrote has no source text to style. Its numbers still lead.
+        if let Some(entry) = entry.filter(|entry| reading.is_none() && creature::has_stats(entry)) {
+            creature::stat_head(ui, entry);
+        }
         reader::show(ui, entry, &sections, builtin, reading.is_some());
     }
     if let Some(entry) = entry.filter(|entry| class::supports(entry)) {

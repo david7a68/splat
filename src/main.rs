@@ -96,6 +96,8 @@ impl Default for Splat {
 enum Connection {
     Connecting,
     Connected,
+    /// The session still works, but renewing it fails. It ends soon.
+    Failing,
     Offline,
 }
 
@@ -457,6 +459,11 @@ impl Splat {
                 word: "Connected",
                 color: c.connection.connected,
             },
+            Connection::Failing => Status {
+                icon: icons::WARN,
+                word: "Session failing",
+                color: c.result.warning,
+            },
             Connection::Offline => Status {
                 icon: icons::OFFLINE,
                 word: "Not connected",
@@ -567,6 +574,30 @@ impl Splat {
                                 },
                             );
                         }
+                        if strip.sync_stopped {
+                            design::status(
+                                ui,
+                                Status {
+                                    icon: icons::OFFLINE,
+                                    word: "Sync stopped",
+                                    color: c.result.error,
+                                },
+                            );
+                        }
+                        if let Some(name) = strip
+                            .sync_error
+                            .as_ref()
+                            .filter(|_| !strip.sync_stopped && strip.conflict.is_none())
+                        {
+                            design::status(
+                                ui,
+                                Status {
+                                    icon: icons::ERROR,
+                                    word: &format!("Sync error: {name}"),
+                                    color: c.result.error,
+                                },
+                            );
+                        }
                         if let Some(name) = &strip.conflict {
                             if Action::quiet("Review")
                                 .name("Review sync conflict")
@@ -593,9 +624,15 @@ impl Splat {
 
     fn no_campaign(&mut self, ui: &mut egui::Ui, title: &str) {
         let mut settings = false;
+        design::page_header(ui, self.page.name(), None, |_| {});
+        let icon = match self.page {
+            Page::Encounters => icons::ENCOUNTERS,
+            Page::Party => icons::PARTY,
+            _ => icons::CAMPAIGN,
+        };
         design::empty_state(
             ui,
-            icons::CAMPAIGN,
+            icon,
             title,
             "Add a campaign in Settings. The Library works without one.",
             |ui| {
@@ -634,7 +671,7 @@ impl Splat {
                                 if let Some(reason) = blocked {
                                     design::message(ui, Tone::Info, reason);
                                 }
-                                ui.add_enabled_ui(blocked.is_none(), |ui| {
+                                design::locked(ui, blocked, |ui| {
                                     campaigns.show(ui, session.clone(), dndbeyond);
                                 });
                             };
@@ -759,7 +796,7 @@ impl Splat {
                                     ui.add_space(design::S);
                                     design::message(ui, Tone::Info, reason);
                                 }
-                                ui.add_enabled_ui(blocked.is_none(), |ui| {
+                                design::locked(ui, blocked, |ui| {
                                     self.campaigns.show_active(ui, session, &mut self.dndbeyond);
                                     self.campaigns.show_form_if_editing(ui);
                                 });
@@ -817,6 +854,9 @@ impl Splat {
             self.lookup.open_position(position);
         }
         if std::mem::take(&mut self.encounters.go_to_run) {
+            self.page = Page::Run;
+        }
+        if std::mem::take(&mut self.encounters.wants_run) {
             self.page = Page::Run;
         }
         if std::mem::take(&mut self.party.wants_settings) {
@@ -883,6 +923,8 @@ impl eframe::App for Splat {
         }
         let connection = if self.settings.connecting() {
             Connection::Connecting
+        } else if self.settings.refresh_failing() {
+            Connection::Failing
         } else if session.is_some() {
             Connection::Connected
         } else {

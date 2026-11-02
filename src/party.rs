@@ -570,7 +570,7 @@ fn member_row(
             painter.text(
                 egui::pos2(left - design::XS, line),
                 egui::Align2::RIGHT_CENTER,
-                format!("+{temp}"),
+                format!("{} +{temp}", icons::TEMP_HP),
                 Type::Numeral.font(ui),
                 c.hp.temp,
             );
@@ -760,7 +760,7 @@ fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
         ui.weak("Selections follow the D&D Beyond sheet. Active choices can need further details. Simulation support is separate.");
     });
 }
-fn fetch_age(seconds: u64) -> String {
+pub(crate) fn fetch_age(seconds: u64) -> String {
     match seconds {
         0..60 => "just now".into(),
         60..3600 => format!("{} min ago", seconds / 60),

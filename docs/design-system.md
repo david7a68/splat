@@ -188,7 +188,9 @@ no condition is cut. When a window has no room for the state column, as at 960x6
 the panel, those words open the second line instead, so that a name is never cut.
 
 - **Current row:** the `current_row` fill, a 2 px stroke, a 6 px bar, and the word `TURN`
-  under the initiative, which has its own column. **Next row:** the word `NEXT`. The name
+  under the initiative, which has its own column. In a compressed list the word sits beside
+  the number on its line, so that a row's height never depends on whose turn it is, and the
+  room left over is shared across the rows. **Next row:** the word `NEXT`. The name
   line keeps one height with or without a second line, so a new condition moves no number.
 - **Row height:** the scale sets the type, and spare room goes to the rows, up to 1.4 times
   the scale's height. When rows cannot fit, name-only rows shrink to 25 px before anything

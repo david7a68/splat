@@ -214,6 +214,8 @@ enum Panel {
     Keys,
 }
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
+pub(crate) const NOBODY_PRESENT: &str =
+    "No participants are present. Mark one present or end the encounter.";
 const CLOSE_BLOCKED: &str =
     "Wait for pending sync changes, resolve conflicts, or turn off combat sync before closing.";
 /// What the one party action does when pressed.
@@ -227,6 +229,12 @@ pub struct Strip {
     pub current: Option<String>,
     pub next: Option<String>,
     pub conflict: Option<String>,
+    /// Everyone is marked absent, so there is no next turn to take.
+    pub nobody_present: bool,
+    /// A sync stopped when the session ended.
+    pub sync_stopped: bool,
+    /// A sync reports an error.
+    pub sync_error: Option<String>,
     /// The last save failed, so the run is only in memory.
     pub not_saved: bool,
     pub running: bool,
@@ -459,10 +467,7 @@ impl Run {
                     return Err("Begin combat first.".into());
                 }
                 if !next.participants.iter().any(|p| p.present) {
-                    return Err(
-                        "No participants are present. Mark one present or end the encounter."
-                            .into(),
-                    );
+                    return Err(NOBODY_PRESENT.into());
                 }
                 loop {
                     next.cursor += 1;
@@ -810,11 +815,22 @@ impl Run {
             .iter()
             .find(|(_, sync)| sync.state() == crate::combat_sync::SyncState::Conflict)
             .map(|(index, _)| name(*index));
+        let sync_error = self
+            .syncs
+            .iter()
+            .find(|(_, sync)| sync.state() == crate::combat_sync::SyncState::Error)
+            .map(|(index, _)| name(*index));
         Strip {
             round: self.state.round,
             current: self.current().map(name),
             next: self.next_up().map(name),
             conflict,
+            nobody_present: !self.state.participants.iter().any(|p| p.present),
+            sync_stopped: self
+                .syncs
+                .values()
+                .any(crate::combat_sync::CombatSync::session_lost),
+            sync_error,
             not_saved: self.disk_conflict || (self.dirty && self.error.is_some()),
             running: self.state.phase == Phase::Running,
             name: self.name.clone(),
@@ -863,7 +879,7 @@ impl Run {
     pub fn pending_sync_names(&self) -> Vec<String> {
         self.syncs
             .iter()
-            .filter(|(_, sync)| sync.enabled && (sync.busy() || sync.dirty()))
+            .filter(|(_, sync)| sync.unconfirmed())
             .filter_map(|(index, _)| self.state.participants.get(*index))
             .map(|p| p.name.clone())
             .collect()
@@ -871,7 +887,16 @@ impl Run {
     pub fn pending_sync(&self) -> bool {
         self.syncs
             .values()
-            .any(|sync| sync.enabled && (sync.busy() || sync.dirty()))
+            .any(crate::combat_sync::CombatSync::unconfirmed)
+    }
+    /// Who has changes a lost session left unsent.
+    pub(crate) fn stranded_names(&self) -> Vec<String> {
+        self.syncs
+            .iter()
+            .filter(|(_, sync)| sync.stranded())
+            .filter_map(|(index, _)| self.state.participants.get(*index))
+            .map(|p| p.name.clone())
+            .collect()
     }
     pub fn path(&self) -> Option<&Path> {
         self.storage.as_ref().map(|storage| storage.path.as_path())
@@ -970,6 +995,11 @@ impl Run {
         linked: Option<&str>,
     ) {
         self.connected = session.is_some();
+        if !self.connected {
+            self.syncs
+                .values_mut()
+                .for_each(crate::combat_sync::CombatSync::session_ended);
+        }
         if self.connected && !self.sync_to_restore.is_empty() {
             self.resume_restored_sync();
         }
@@ -1235,7 +1265,12 @@ impl Run {
     /// Why the run must stay open. Closing drops the worker, so anything it has not
     /// confirmed would be lost with no message.
     fn close_block(&self) -> Option<&'static str> {
-        self.pending_sync().then_some(CLOSE_BLOCKED)
+        // Stranded changes warn instead. They cannot leave without a session, and that must
+        // not trap the run.
+        self.syncs
+            .values()
+            .any(|sync| sync.unconfirmed() && !sync.stranded())
+            .then_some(CLOSE_BLOCKED)
     }
     /// What `Sync party` does now. A running sync is never restarted: starting one drops
     /// its pending writes and any open conflict.
@@ -1248,7 +1283,11 @@ impl Run {
         let startable: Vec<usize> = off
             .iter()
             .copied()
-            .filter(|i| self.syncs.get(i).is_none_or(|s| s.error.is_none()))
+            .filter(|i| {
+                self.syncs
+                    .get(i)
+                    .is_none_or(|s| s.error.is_none() || s.session_lost())
+            })
             .collect();
         if !startable.is_empty() {
             PartySync::Start(startable)
@@ -1373,8 +1412,10 @@ impl Run {
                                 "Round {} · {status}{turn}{}",
                                 run.state.round,
                                 modified.map_or_else(String::new, |at| format!(
-                                    " · Saved {} UTC",
-                                    calendar_time(at)
+                                    " · Saved {}",
+                                    crate::party::fetch_age(
+                                        crate::hermetic::now().saturating_sub(at)
+                                    )
                                 )),
                             ),
                             finished,
@@ -1441,6 +1482,20 @@ pub fn calendar_date(seconds: u64) -> String {
 impl Run {
     pub fn simulate_connection(&mut self) {
         self.simulate_connection = true;
+    }
+    pub fn simulate_rename(&mut self, name: &str, to: &str) {
+        let participant = self
+            .state
+            .participants
+            .iter_mut()
+            .find(|p| p.name == name)
+            .expect("participant in this run");
+        participant.name = to.to_owned();
+    }
+    pub fn stop_simulating_sync(&mut self) {
+        self.syncs
+            .values_mut()
+            .for_each(crate::combat_sync::CombatSync::stop_simulating);
     }
     pub fn simulate_error(&mut self, message: &str) {
         self.error = (!message.is_empty()).then(|| message.to_owned());
@@ -1874,6 +1929,49 @@ mod tests {
             crate::combat_sync::SyncState::Conflict,
             "the running sync keeps its conflict"
         );
+    }
+    #[test]
+    fn a_session_that_ends_stops_each_sync_says_so_and_keeps_unsent_changes_counted() {
+        use crate::combat_sync::{CombatSync, SyncState};
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        linked(&mut run, 1, "12");
+        let name = run.state.participants[0].name.clone();
+        let (campaign, _) = remote_identity(&run.state.participants[0]).unwrap();
+        run.syncs.insert(
+            0,
+            CombatSync::simulated_state(SyncState::Pending, 11, 10, 0),
+        );
+        run.stop_simulating_sync();
+        assert!(run.close_block().is_some(), "on their way: wait for them");
+
+        run.tick_sync(&egui::Context::default(), None, 1, Some(&campaign));
+
+        let sync = &run.syncs[&0];
+        assert!(!sync.enabled);
+        assert_eq!(sync.state(), SyncState::Stopped);
+        assert_eq!(
+            run.sync_word(0),
+            Some(SyncState::Stopped),
+            "the row says so"
+        );
+        assert!(run.strip().sync_stopped, "the header and strip say so");
+        assert!(run.pending_sync(), "the changes still count");
+        assert_eq!(run.stranded_names(), vec![name.clone()]);
+        assert_eq!(run.pending_sync_names(), vec![name]);
+        assert!(
+            run.close_block().is_none(),
+            "no session must not trap the run"
+        );
+        // Sync party starts it again, with the row that was never on.
+        assert!(matches!(
+            run.party_sync_plan(),
+            PartySync::Start(ref start) if start == &vec![0, 1]
+        ));
+        run.syncs.get_mut(&0).unwrap().start();
+        assert!(!run.syncs[&0].session_lost());
+        assert!(!run.strip().sync_stopped);
     }
     #[test]
     fn a_sync_stopped_as_a_duplicate_does_not_hide_stop_sync() {

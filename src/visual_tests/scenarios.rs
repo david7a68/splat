@@ -362,14 +362,16 @@ pub mod campaign_content {
         d.expect(PAGE_TITLE);
         d.state("packages-tab", Sizes::Default);
         d.check_tab_order("campaign, packages");
-        d.click_containing(REQUIRED);
-        let reasons = d.in_view_containing(REQUIRED_BY);
+        // No click: the brief asks for these on screen, with the built-in package open.
+        let reasons = d.visible_text(REQUIRED_BY);
+        let counted = d.has_containing(REQUIRED);
+        // Row pitch: M-26. The list fills its pane, rather than stopping short of the end.
         d.state("required-dependencies", Sizes::All);
         d.click(ENTRIES_LISTING);
         d.observe(
             "T9.1",
-            reasons,
-            "Required dependencies and their reasons are one click away, with the built-in package open",
+            reasons && counted,
+            "Required dependencies and their reasons are on screen, with the built-in package open",
         );
         d.begin_task();
         d.click_containing(MODULE_ROW);
@@ -406,6 +408,14 @@ pub mod campaign_content {
         d.click_containing(CAMPAIGN_ENTRY);
         d.state("entry-read", Sizes::Default);
         d.review("T6.4", "the campaign entry reader");
+        let stats = ["ARMOR CLASS", "16", "HIT POINTS", "52", "INITIATIVE", "+2"]
+            .iter()
+            .all(|word| d.visible_text(word));
+        d.observe(
+            "T6.4",
+            stats && d.visible_text("Medium") && !d.visible_text("—"),
+            "A creature the DM wrote reads with its armor class, hit points and initiative, and no empty cells",
+        );
         d.click(EDIT_MARKDOWN);
         d.state("entry-edit", Sizes::Default);
         d.goal("open a campaign entry for editing");
@@ -650,7 +660,7 @@ pub mod encounter_build {
         let dated = nodes.iter().any(|node| {
             node.name.contains(RUN)
                 && node.name.contains("In progress")
-                && node.name.chars().filter(char::is_ascii_digit).count() >= 8
+                && node.name.contains("Saved ")
         });
         let grouped = nodes
             .iter()
@@ -664,7 +674,7 @@ pub mod encounter_build {
         d.observe(
             "T4.4",
             dated && grouped,
-            format!("Saved runs show a date and status: {dated}. Grouped under their encounter: {grouped}"),
+            format!("Saved runs show when they were saved, and their status: {dated}. Grouped under their encounter: {grouped}"),
         );
         d.state("saved-runs", Sizes::Default);
 
@@ -1209,6 +1219,49 @@ pub mod run_lookup {
     }
 }
 
+/// No fixture has a long name. A long name is never cut: the `clipped` check reads every
+/// painted word in these states.
+pub mod run_long_names {
+    use super::*;
+    const RENAMED: &str = "Iselle Marrowind";
+    const BACK_TO_RUN: &str = "Back to run";
+    const LONG_NAME: &str = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run_from_cold_start(d);
+        d.app_mut().encounters.simulate_rename(RENAMED, LONG_NAME);
+        d.settle();
+        d.click_row(LONG_NAME);
+        d.state("long-name", Sizes::All);
+        let row = d.row_words(LONG_NAME);
+        d.observe(
+            "Long names",
+            row.contains(LONG_NAME),
+            format!("A long name is whole on its row at 960x640: {row}"),
+        );
+        // The strip names whose turn it is, from any page.
+        go_library(d);
+        d.state("long-name-on-the-strip", Sizes::Default);
+        d.click(BACK_TO_RUN);
+        d.begin_task();
+        // The header names the current participant first. Two turns on, that is this name.
+        d.click(NEXT_TURN);
+        d.state("long-name-has-the-turn", Sizes::All);
+        let turn = current_participant(d);
+        d.observe(
+            "Long names",
+            turn.as_deref() == Some(LONG_NAME) && d.visible_text(LONG_NAME),
+            format!("The header says whose turn it is with the whole name: {turn:?}"),
+        );
+        go_library(d);
+        d.state("long-name-has-the-turn-on-the-strip", Sizes::Default);
+        d.not_measured(
+            "Long names",
+            "outside a run: only the run's rows, header, dock, panel and strip have long-name data",
+        );
+    }
+}
+
 /// W4: cold start to the first turn of a new run.
 pub mod prep_to_table {
     use super::*;
@@ -1378,8 +1431,39 @@ pub mod run_large_roster {
             "All 12 rows are fully in view, with the damage entry",
             whole_roster,
         );
+        // H-3: at the minimum, 12 rows hold their places, use the room, and share a pitch.
+        let places = roster_places(d);
+        let dock = d
+            .nodes()
+            .iter()
+            .find(|node| node.name == "Amount")
+            .map_or(0.0, |node| node.rect.min.y);
+        let bottom = places
+            .iter()
+            .fold(0.0_f32, |low, place| low.max(place.1.max.y));
+        let (short, tall) = places
+            .iter()
+            .fold((f32::MAX, 0.0_f32), |(short, tall), place| {
+                (short.min(place.1.height()), tall.max(place.1.height()))
+            });
+        d.observe(
+            "H-3",
+            places.len() == 12 && dock - bottom < 12.0 && tall - short <= 3.0,
+            format!(
+                "12 rows at 960x640 leave {:.0} px above the dock, and are {short:.1} to {tall:.1} px tall",
+                dock - bottom
+            ),
+        );
         d.click(NEXT_TURN);
         d.goal_within("T1.1", "advance the turn with 12 participants", 1);
+        let after = roster_places(d);
+        d.observe(
+            "Stable rows",
+            places.len() == 12 && places == after,
+            format!(
+                "With 12 rows at 960x640, no row moves on Next turn: {places:?} then {after:?}"
+            ),
+        );
 
         close_run(d);
         d.begin_task();
@@ -1397,10 +1481,22 @@ pub mod run_large_roster {
         let mut missed_small = 0;
         let mut seen = std::collections::BTreeSet::new();
         let mut stuck = 0;
+        let mut resized = Vec::new();
         for turn in 0..ROUND_LENGTH {
             let before = current_participant(d);
+            let rows_before = roster_places(d);
             d.click(NEXT_TURN);
             let after = current_participant(d);
+            // The list scrolls, so rows may move together. None may change its height.
+            let rows_after = roster_places(d);
+            let same_height = rows_before.len() == 20
+                && rows_before
+                    .iter()
+                    .zip(&rows_after)
+                    .all(|(a, b)| a.0 == b.0 && (a.1.height() - b.1.height()).abs() < 0.5);
+            if !same_height {
+                resized.push(turn);
+            }
             stuck += usize::from(before == after);
             seen.extend(after);
             if !current_row_in_view(d) {
@@ -1411,6 +1507,11 @@ pub mod run_large_roster {
             }
         }
         d.goal("advance through a full round of 20");
+        d.observe(
+            "Stable rows",
+            resized.is_empty(),
+            format!("With 20 rows at 960x640, no row changes height on Next turn: {resized:?}"),
+        );
         d.begin_task();
         d.set_base(DEFAULT);
         let mut missed_default = 0;
@@ -1568,13 +1669,13 @@ pub mod run_sync_conflict {
         d.state("undo-cleared-by-sheet-update", Sizes::Default);
         d.observe(
             "T3.4",
-            clear_before && d.visible_text(UNDO_CLEARED) && d.visible_text(SYNCED),
-            "Simulated sheet update: a message appears, and names the character, only after the update",
+            clear_before && d.visible_text(&format!("{SYNCED} changed on D&D Beyond. {UNDO_CLEARED}")),
+            "Simulated sheet update: a message appears, and its own words name the character, only after the update",
         );
         d.click(STOP_SYNC);
         d.begin_task();
         d.unreached(
-            "wrong campaign, duplicate character and a disconnect during sync",
+            "wrong campaign and a duplicate character",
             "the error state on the row, because these need a live session to arise",
         );
     }
@@ -2001,11 +2102,14 @@ pub mod run_edge_states {
             d.click_row(name);
             d.click(ABSENT);
         }
-        d.click(NEXT_TURN);
         d.expect("No participants are present");
+        d.observe(
+            "M-3",
+            d.is_disabled(NEXT_TURN),
+            "With nobody present, Next turn is off, and a steady line says why",
+        );
         d.state("all-absent", Sizes::Default);
         d.goal("see everyone absent");
-        d.click(CLOSE_ERROR);
         for name in ALL {
             d.click_row(name);
             d.click(MARK_PRESENT);
@@ -2325,6 +2429,12 @@ pub mod signed_in {
     const BLOCKED_REASON: &str = "Close the run to change campaigns.";
     const EDIT_DETAILS: &str = "Edit details";
     const RETRYING: &str = "renewing the session failed";
+    const RAIL_FAILING: &str = "Session failing";
+    const RAIL_OFFLINE: &str = "Not connected";
+    const STOPPED_HEADER: &str = "Sync stopped: connect in Settings";
+    const STOPPED_ROW: &str = "Sync stopped";
+    const CLOSE_RUN: &str = "Close run";
+    const STRANDED: &str = "Not sent:";
 
     pub fn run(d: &mut Driver<'_>) {
         d.app_mut().settings.simulate(Account::Connected);
@@ -2395,10 +2505,13 @@ pub mod signed_in {
         d.app_mut().settings.simulate(Account::RefreshFailing);
         d.settle();
         go_settings(d);
+        let rail = d.rail_words();
         d.observe(
             "T10.3",
-            d.visible_text(RETRYING) && d.visible_text(RAIL_CONNECTED),
-            "A failed refresh has its own words, and the rail stays Connected",
+            d.visible_text(RETRYING)
+                && rail.contains(RAIL_FAILING)
+                && !rail.contains(RAIL_CONNECTED),
+            format!("A failed refresh has its own words, on the page and in the rail: {rail}"),
         );
         d.state("refresh-failing", Sizes::Default);
         d.app_mut().settings.simulate(Account::Connected);
@@ -2415,6 +2528,45 @@ pub mod signed_in {
             d.row_words(MEMBER).contains(FIRST_READ) && d.has(STOP_SYNC),
             "Signed in: a real click on Sync party puts its first read on the row",
         );
+
+        // The session ends at the table, with a change on its way. The DM must know, and
+        // the change must still count until they decide.
+        d.begin_task();
+        d.app_mut()
+            .encounters
+            .simulate_sync_state(MEMBER, crate::combat_sync::SyncState::Pending);
+        d.settle();
+        d.app_mut().encounters.simulate_session_end();
+        d.app_mut().settings.simulate_session_expiry();
+        d.settle();
+        let row = d.row_words(MEMBER);
+        let rail = d.rail_words();
+        d.observe(
+            "T10.3",
+            row.contains(STOPPED_ROW) && d.visible_text(STOPPED_HEADER) && rail.contains(RAIL_OFFLINE),
+            format!(
+                "A session that ends during a run: the row says {row}, the header says so, and the rail says {rail}"
+            ),
+        );
+        d.state("session-ended-during-run", Sizes::All);
+        d.click(CLOSE_RUN);
+        d.observe(
+            "T10.3",
+            d.visible_text(STRANDED) && d.visible_text(MEMBER),
+            "Closing after that names the changes that were never sent",
+        );
+        d.state("close-with-unsent-changes", Sizes::Default);
+        d.press(Key::Escape);
+        d.app_mut().settings.simulate(Account::Connected);
+        d.settle();
+        d.click(SYNC_PARTY);
+        let row = d.row_words(MEMBER);
+        d.observe(
+            "T3.3",
+            row.contains(FIRST_READ) && !d.visible_text(STOPPED_HEADER),
+            format!("After a reconnect, Sync party starts the stopped rows again: {row}"),
+        );
+        d.begin_task();
 
         // The link cannot change under a run.
         d.click(STOP_SYNC);
@@ -2649,10 +2801,26 @@ pub mod nav_table {
         silent.extend(d.disabled_without_reason());
         go_campaign(d);
         silent.extend(d.disabled_without_reason());
+        go_party(d);
+        silent.extend(d.disabled_without_reason());
+        go_library(d);
+        search_library(d, &NOTE_ROW.replace(" · ", "").to_lowercase());
+        d.click_containing(NOTE_ROW);
+        silent.extend(d.disabled_without_reason());
+        // The run and everything it locks: the footer, the Encounters list, the selector.
+        go_encounters(d);
+        resume_run(d, RUN);
+        silent.extend(d.disabled_without_reason());
+        go_encounters(d);
+        silent.extend(d.disabled_without_reason());
+        go_settings(d);
+        silent.extend(d.disabled_without_reason());
         d.observe(
             "G1",
             silent.is_empty(),
-            format!("Disabled controls with no reason on hover: {silent:?}"),
+            format!(
+                "Disabled controls with no reason, in words, on hover, across 8 views: {silent:?}"
+            ),
         );
     }
 }

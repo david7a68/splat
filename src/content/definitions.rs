@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::OnceLock;
 
 static DEFINITIONS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/dnd2024-definitions");
 
@@ -202,7 +203,14 @@ pub fn source_file(path: &str) -> Option<&'static str> {
         .contents_utf8()
 }
 
+/// The checked definitions, parsed once per process. The bytes are embedded, so they cannot
+/// change while the app runs. Callers get their own copy.
 pub fn entries() -> Result<Vec<Entry>, String> {
+    static ENTRIES: OnceLock<Result<Vec<Entry>, String>> = OnceLock::new();
+    ENTRIES.get_or_init(parse_entries).clone()
+}
+
+fn parse_entries() -> Result<Vec<Entry>, String> {
     fn walk<'a>(dir: &Dir<'a>, files: &mut Vec<&'a File<'a>>) {
         files.extend(
             dir.files()

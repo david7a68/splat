@@ -532,7 +532,8 @@ impl Campaigns {
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
-        ui.add_enabled_ui(self.writable, |ui| {
+        let unwritable = (!self.writable).then_some("Reload valid campaign settings first.");
+        design::locked(ui, unwritable, |ui| {
             design::rule(ui);
             if self.data.campaigns.is_empty() {
                 ui.add_space(design::XS);

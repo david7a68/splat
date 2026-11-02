@@ -247,6 +247,15 @@ impl<'a> Driver<'a> {
             .contains(text)
     }
 
+    /// What the rail paints. It has its own words, whatever the page says.
+    pub fn rail_words(&self) -> String {
+        let window = self.harness.ctx.content_rect();
+        self.painted_in(egui::Rect::from_min_max(
+            window.min,
+            egui::pos2(window.left() + 136.0, window.bottom()),
+        ))
+    }
+
     /// The node of a run row, by its participant's name.
     pub fn row_node(&self, name: &str) -> Option<Found> {
         let prefix = format!("{name},");
@@ -629,10 +638,18 @@ impl<'a> Driver<'a> {
             .collect();
         let mut silent = Vec::new();
         for (name, rect) in names {
-            let before = self.nodes().len();
+            let window = self.harness.ctx.content_rect();
+            let before = self.painted_in(window);
             self.harness.hover_at(rect.center());
             self.harness.run_steps(6);
-            if self.nodes().len() <= before {
+            // A reason is words, not any new thing on screen. Three is the shortest.
+            let after = self.painted_in(window);
+            let added = after.split_whitespace().count()
+                - before
+                    .split_whitespace()
+                    .count()
+                    .min(after.split_whitespace().count());
+            if added < 3 {
                 silent.push(name);
             }
             self.harness.remove_cursor();

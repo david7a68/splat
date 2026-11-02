@@ -31,7 +31,8 @@ pub struct CampaignContent {
     module: Option<Uuid>,
     search: String,
     entry_matches: Option<(Uuid, String, Vec<Uuid>)>,
-    listing: Listing,
+    /// The DM's choice of list. Until they choose, a package opens on the list it needs.
+    listing: Option<Listing>,
     error: Option<String>,
     message: Option<String>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
@@ -585,16 +586,30 @@ impl CampaignContent {
                     );
                 });
                 let required_label = format!("Required dependencies ({})", closure.required.len());
+                // The built-in package opens on what the chosen entries pull in, with the reasons.
+                let mut listing = self.listing.unwrap_or(
+                    if module.id == crate::content_workspace::builtin_manifest().id
+                        && !closure.required.is_empty()
+                    {
+                        Listing::Required
+                    } else {
+                        Listing::Entries
+                    },
+                );
+                let chosen = listing;
                 design::segmented(
                     ui,
-                    &mut self.listing,
+                    &mut listing,
                     &[
                         (Listing::Entries, "Entries"),
                         (Listing::Required, required_label.as_str()),
                     ],
                 );
+                if listing != chosen {
+                    self.listing = Some(listing);
+                }
                 design::rule(ui);
-                if self.listing == Listing::Required {
+                if listing == Listing::Required {
                     // By name, with the kind: two entries can share a name, and an ID order means nothing.
                     let mut required: Vec<_> = closure.required.iter().collect();
                     required.sort_by_key(|(id, _)| {
@@ -607,11 +622,12 @@ impl CampaignContent {
                                 .color(c.muted),
                         );
                     }
+                    // Before `show_rows`, which reads the pitch from it.
+                    ui.spacing_mut().item_spacing.y = 0.0;
                     egui::ScrollArea::vertical()
                         .id_salt("required_entries")
                         .auto_shrink([false, false])
                         .show_rows(ui, 24.0, required.len(), |ui, range| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
                             for (id, reasons) in &required[range] {
                                 let entry = &catalogue.entries[id].entry;
                                 ui.allocate_ui_with_layout(

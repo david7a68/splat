@@ -6,7 +6,7 @@ pub fn validate_with_builtin(entries: &[Entry]) -> Result<Report, String> {
     static BUILTIN: OnceLock<Result<Vec<Entry>, String>> = OnceLock::new();
     let builtin = BUILTIN
         .get_or_init(|| {
-            let mut entries = super::builtin::load().entries;
+            let mut entries = super::builtin::entries();
             entries.extend(definitions::entries()?);
             Ok(entries)
         })

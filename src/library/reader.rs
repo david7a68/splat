@@ -324,7 +324,12 @@ pub(super) fn show(
                 if section.title != "Overview" {
                     style::section_heading(ui, &section.title);
                 }
-                style::markdown(ui, section.body);
+                // A hand-written stat block's actions read as the book's do.
+                if entry.is_some_and(super::creature::has_stats) {
+                    style::source_prose(ui, section.body);
+                } else {
+                    style::markdown(ui, section.body);
+                }
             }
         }
     }

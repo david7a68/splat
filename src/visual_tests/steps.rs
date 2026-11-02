@@ -116,6 +116,18 @@ pub fn switch_campaign(d: &mut Driver<'_>, name: &str) {
 }
 
 /// The participant on the row marked as the current turn.
+/// Every run row's participant and place, in list order. A row names its HP and AC.
+pub fn roster_places(d: &Driver<'_>) -> Vec<(String, eframe::egui::Rect)> {
+    d.nodes()
+        .into_iter()
+        .filter(|node| node.name.contains(", HP ") && node.name.contains(", AC "))
+        .map(|node| {
+            let name = node.name.split(", ").next().unwrap_or_default().to_owned();
+            (name, node.rect)
+        })
+        .collect()
+}
+
 pub fn current_participant(d: &Driver<'_>) -> Option<String> {
     d.nodes()
         .iter()

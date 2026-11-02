@@ -25,6 +25,33 @@ pub fn one_line(
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
 
+/// As many whole words of `text` as fit. For a place that repeats a name shown whole nearby:
+/// no letter is cut, and the first word always stays.
+pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String {
+    let mut fitted = String::new();
+    for word in text.split_whitespace() {
+        let longer = if fitted.is_empty() {
+            word.to_owned()
+        } else {
+            format!("{fitted} {word}")
+        };
+        if !fitted.is_empty() && number_width(ui, &longer, font) > width {
+            break;
+        }
+        fitted = longer;
+    }
+    fitted
+}
+
+/// Controls that cannot be used for one reason, which each of them says on hover.
+pub fn locked<R>(ui: &mut Ui, reason: Option<&str>, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let group = ui.add_enabled_ui(reason.is_none(), add);
+    if let Some(reason) = reason {
+        group.response.on_disabled_hover_text(reason);
+    }
+    group.inner
+}
+
 /// The width of a number. IBM Plex Sans has tabular digits, so these do not jitter.
 pub fn number_width(ui: &Ui, text: &str, font: &FontId) -> f32 {
     ui.fonts_mut(|fonts| {
@@ -243,6 +270,7 @@ pub struct Action<'a> {
     height: f32,
     selected: bool,
     key: Option<&'a str>,
+    plain: bool,
 }
 
 impl<'a> Action<'a> {
@@ -257,6 +285,7 @@ impl<'a> Action<'a> {
             height: Density::Scan.control(),
             selected: false,
             key: None,
+            plain: false,
         }
     }
     pub fn primary(label: &'a str) -> Self {
@@ -265,6 +294,12 @@ impl<'a> Action<'a> {
     pub fn secondary(label: &'a str) -> Self {
         Self::new(Kind::Secondary, label)
     }
+    /// In body weight, for an action repeated on every row of a list.
+    pub fn plain(mut self) -> Self {
+        self.plain = true;
+        self
+    }
+
     pub fn quiet(label: &'a str) -> Self {
         Self::new(Kind::Quiet, label)
     }
@@ -326,6 +361,8 @@ impl<'a> Action<'a> {
         let c = colors();
         let font = if self.kind == Kind::Primary {
             Type::Heading
+        } else if self.plain {
+            Type::Body
         } else {
             Type::Strong
         };
