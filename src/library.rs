@@ -257,6 +257,19 @@ const ENTRY_ROW_HEIGHT: f32 = 44.0;
 const SEARCH_NAME: &str = "Search the Library";
 
 // Fixed height keeps the virtual scroll position independent of label length.
+/// An action with what it waits for beside it: at a desk, a greyed button is a question.
+/// Returns true when it was clicked.
+fn action_with_reason<'a>(ui: &mut egui::Ui, action: Action<'a>, reason: Option<&'a str>) -> bool {
+    ui.horizontal(|ui| {
+        let clicked = action.blocked(reason).show(ui).clicked();
+        if let Some(reason) = reason {
+            ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap());
+        }
+        clicked
+    })
+    .inner
+}
+
 fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
     design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, name, subtitle)
 }
@@ -1421,14 +1434,6 @@ impl Library {
                         }
                     });
                 });
-                // What each action waits for, beside it: at a desk, a greyed button is a question.
-                let why = |ui: &mut egui::Ui, reason: Option<&str>| {
-                    if let Some(reason) = reason {
-                        ui.add(
-                            egui::Label::new(Type::Small.rich(ui, reason).color(c.muted)).wrap(),
-                        );
-                    }
-                };
                 // A group's head is stronger than the field labels under it.
                 let group = |ui: &mut egui::Ui, words: &str| {
                     ui.label(Type::Heading.rich(ui, words).color(c.text));
@@ -1447,16 +1452,7 @@ impl Library {
                     .trim()
                     .is_empty()
                     .then_some("Enter the folder's path first."));
-                let register = ui
-                    .horizontal(|ui| {
-                        let register = Action::secondary("Register folder")
-                            .blocked(reason)
-                            .show(ui)
-                            .clicked();
-                        why(ui, reason);
-                        register
-                    })
-                    .inner;
+                let register = action_with_reason(ui, Action::secondary("Register folder"), reason);
                 ui.add_space(design::S);
                 design::rule(ui);
                 ui.add_space(design::S);
@@ -1491,16 +1487,7 @@ impl Library {
                     _ => Some("Enter a folder, a name and a namespace first.".to_owned()),
                 };
                 let reason = locked.or(waiting.as_deref());
-                let create = ui
-                    .horizontal(|ui| {
-                        let create = Action::primary("Create package")
-                            .blocked(reason)
-                            .show(ui)
-                            .clicked();
-                        why(ui, reason);
-                        create
-                    })
-                    .inner;
+                let create = action_with_reason(ui, Action::primary("Create package"), reason);
                 if register || create {
                     let result = if create {
                         create_module(

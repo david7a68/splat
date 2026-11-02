@@ -757,7 +757,8 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T,
     segmented_named(ui, value, &named, None)
 }
 
-/// The same, for a tab that paints a mark: `(value, painted, accessible name)`.
+/// The same, for a tab with its own accessible name: `(value, painted, accessible name)`.
+/// `marked` is the tab that paints the warning mark before its word.
 pub fn segmented_named<T: PartialEq + Copy>(
     ui: &mut Ui,
     value: &mut T,

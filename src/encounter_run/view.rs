@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, MAX_FROM_SHEET, NOBODY_PRESENT, NOTICE_IN_HEADER, NOTICE_IN_HEADER_SHORT,
-    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, SEE_THE_LOG, display, mode_label,
+    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -41,6 +41,8 @@ const MESSAGE_LINE: f32 = 28.0;
 const MESSAGE_FRAME: f32 = 54.0;
 /// The Log tab's name while it holds a message the screen had no room for.
 const LOG_MARKED: &str = "Log, new message";
+/// Said beside a sync alert when Lookup or Notes has the Log tab's place.
+const SEE_THE_LOG: &str = "See the Log";
 const SCROLL_BAR: f32 = 12.0;
 /// A name-only row when the list has no other way to fit. Still a 24 px target and more.
 const TIGHT_ROW: f32 = 25.0;
@@ -414,15 +416,17 @@ impl Run {
             // Laid out as the notice is, so that the two dismisses sit alike.
             let width = ui.available_width();
             let font = Type::Body.font(ui);
-            let words = ui.fonts_mut(|fonts| {
-                fonts.layout(
-                    error.clone(),
-                    font,
-                    egui::Color32::PLACEHOLDER,
-                    width - MESSAGE_FRAME,
-                )
-            });
-            let words = words.size().y;
+            let words = ui
+                .fonts_mut(|fonts| {
+                    fonts.layout(
+                        error.clone(),
+                        font,
+                        egui::Color32::PLACEHOLDER,
+                        width - MESSAGE_FRAME,
+                    )
+                })
+                .size()
+                .y;
             let height = words.max(Density::Read.control());
             ui.allocate_ui_with_layout(
                 vec2(width, height),
@@ -1810,15 +1814,13 @@ impl Run {
     /// The screen has no room for the message, and the header's line has something it must
     /// say instead: a sync alert, or the next name when that row is out of view.
     fn log_marked(&self) -> bool {
-        self.notice_hidden && (self.has_sync_alert() || self.next_out_of_view)
-    }
-
-    fn has_sync_alert(&self) -> bool {
         let strip = self.strip();
-        strip.sync_stopped
-            || strip.conflict.is_some()
-            || !strip.unsent.is_empty()
-            || strip.sync_error.is_some()
+        self.notice_hidden
+            && (strip.sync_stopped
+                || strip.conflict.is_some()
+                || !strip.unsent.is_empty()
+                || strip.sync_error.is_some()
+                || self.next_out_of_view)
     }
 
     /// The header's line says a hidden message, unless the row marked NEXT is out of view: then

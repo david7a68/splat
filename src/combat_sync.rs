@@ -642,7 +642,7 @@ impl CombatSync {
     }
     /// Why a conflict's choices are off. Neither can do what it says with sync stopped: the
     /// run would not change, and nothing would be sent.
-    fn choice_blocked<'a>(&self, stopped: &'a str) -> Option<&'a str> {
+    fn choice_blocked(&self, stopped: &'static str) -> Option<&'static str> {
         if self.busy() {
             Some("Wait for the current sheet read.")
         } else if !self.enabled {
@@ -992,7 +992,7 @@ impl CombatSync {
     /// the roster, so it does not stop the table. `stopped` is why the choices are off and what
     /// to do if this sync is stopped. It takes the message's place, in view, as nobody at the
     /// table hovers, and a message that says to choose would be false.
-    pub fn conflicts(&mut self, ui: &mut egui::Ui, stopped: &str) {
+    pub fn conflicts(&mut self, ui: &mut egui::Ui, stopped: &'static str) {
         use crate::design::{self, Action, Density, Type, colors};
         for (key, message) in self.blocked.clone() {
             let c = colors();

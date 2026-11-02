@@ -292,8 +292,6 @@ const NOTICE_LEAST: &str = "Sheet update. Earlier Undo steps ended. See the Log.
 /// Said on the header's line when the list has no room for the notice at all.
 const NOTICE_IN_HEADER: &str = "Earlier Undo steps ended. See the Log.";
 const NOTICE_IN_HEADER_SHORT: &str = "Undo ended. See the Log.";
-/// Said beside a sync alert when Lookup or Notes has the Log tab's place.
-const SEE_THE_LOG: &str = "See the Log";
 #[derive(Clone)]
 enum Command {
     RollNpcs,

@@ -896,8 +896,8 @@ fn grid_column(ui: &mut egui::Ui, width: f32, add: impl FnOnce(&mut egui::Ui)) {
     );
 }
 pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
-    // Columns only where they can sit on the tiles' own grid. These two widths are `tiles`'s
-    // own test for six across, and `each` is the pitch the tiles land on.
+    // Columns only where they can sit on the tiles' own grid. `wide` is `tiles`'s own test for
+    // six across, and `each` is the pitch the tiles land on.
     let slot = TILE_WIDTH + ui.spacing().item_spacing.x;
     let wide = ui.available_width() >= 6.0 * slot;
     let medium = ui.available_width() >= 4.0 * slot;
