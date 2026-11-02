@@ -121,11 +121,11 @@ impl Catalogue {
         let mut result = Self::default();
         let builtin = builtin_manifest();
         let builtin_id = builtin.id;
-        let mut entries = content::builtin::entries();
-        entries.extend(content::definitions::entries()?);
-        let ids = entries.iter().map(|e| e.id).collect();
-        for entry in entries {
-            result.insert(entry, builtin_id, false)?;
+        let definitions = content::definitions::entries()?;
+        let entries = || content::builtin::entries().iter().chain(definitions);
+        let ids = entries().map(|e| e.id).collect();
+        for entry in entries() {
+            result.insert(entry.clone(), builtin_id, false)?;
         }
         result.modules.push(ModuleIndex {
             id: builtin_id,

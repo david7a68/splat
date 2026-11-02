@@ -435,7 +435,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
             });
         }
     } else {
-        for entry in content::definitions::entries()? {
+        for entry in content::definitions::entries()?.iter().cloned() {
             let text = content::definitions::source_file(&entry.path)
                 .ok_or("Missing built-in note")?
                 .to_owned();

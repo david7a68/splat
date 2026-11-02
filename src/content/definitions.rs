@@ -4,7 +4,7 @@ use include_dir::{Dir, File, include_dir};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -192,36 +192,39 @@ pub fn conversion(entry: &Entry) -> Result<Option<Conversion>, String> {
 
 /// Original Markdown for read-only library display.
 pub fn source_file(path: &str) -> Option<&'static str> {
-    let path = Path::new(path.strip_prefix("definitions/")?);
-    let mut dir = &DEFINITIONS;
-    // Follow the containing directory instead of searching unrelated subtrees.
-    while let Some(child) = dir.dirs().find(|child| path.starts_with(child.path())) {
-        dir = child;
-    }
-    dir.files()
-        .find(|file| file.path() == path)?
+    static FILES: OnceLock<HashMap<&'static Path, &'static File<'static>>> = OnceLock::new();
+    FILES
+        .get_or_init(|| {
+            let mut files = Vec::new();
+            markdown_files(&DEFINITIONS, &mut files);
+            files.into_iter().map(|file| (file.path(), file)).collect()
+        })
+        .get(Path::new(path.strip_prefix("definitions/")?))?
         .contents_utf8()
 }
 
-/// The checked definitions, parsed once per process. The bytes are embedded, so they cannot
-/// change while the app runs. Callers get their own copy.
-pub fn entries() -> Result<Vec<Entry>, String> {
+fn markdown_files<'a>(dir: &Dir<'a>, files: &mut Vec<&'a File<'a>>) {
+    files.extend(
+        dir.files()
+            .filter(|file| file.path().extension().is_some_and(|e| e == "md")),
+    );
+    for child in dir.dirs() {
+        markdown_files(child, files);
+    }
+}
+
+/// Every definition, parsed once. They are embedded, so they cannot change while the app runs.
+pub fn entries() -> Result<&'static [Entry], String> {
     static ENTRIES: OnceLock<Result<Vec<Entry>, String>> = OnceLock::new();
-    ENTRIES.get_or_init(parse_entries).clone()
+    ENTRIES
+        .get_or_init(parse_entries)
+        .as_deref()
+        .map_err(Clone::clone)
 }
 
 fn parse_entries() -> Result<Vec<Entry>, String> {
-    fn walk<'a>(dir: &Dir<'a>, files: &mut Vec<&'a File<'a>>) {
-        files.extend(
-            dir.files()
-                .filter(|file| file.path().extension().is_some_and(|e| e == "md")),
-        );
-        for child in dir.dirs() {
-            walk(child, files);
-        }
-    }
     let mut files = Vec::new();
-    walk(&DEFINITIONS, &mut files);
+    markdown_files(&DEFINITIONS, &mut files);
     let mut result: Vec<_> = files
         .par_iter()
         .map(|file| {
@@ -387,7 +390,7 @@ pub fn verify() -> CatalogueReport {
         }
         let mut seen = BTreeSet::new();
         let mut source_hashes = BTreeMap::new();
-        for entry in &definitions {
+        for entry in definitions {
             let key = entry
                 .key
                 .as_deref()
@@ -505,7 +508,7 @@ pub fn verify() -> CatalogueReport {
             }
         }
         let mut all = source.entries;
-        all.extend(definitions);
+        all.extend_from_slice(definitions);
         let checked = validate(&all);
         report.structure.entries = checked.entries;
         report.structure.errors.extend(checked.errors);
@@ -558,9 +561,10 @@ mod tests {
     fn cannot_hide_unconverted_clauses_or_invent_execution_status() {
         let mut entry = entries()
             .unwrap()
-            .into_iter()
+            .iter()
             .find(|e| e.key.as_deref() == Some("dnd2024:spells/fireball"))
-            .unwrap();
+            .unwrap()
+            .clone();
         let original = entry.clone();
         entry.fields.insert(
             Value::String("splat_clauses".into()),
@@ -606,9 +610,10 @@ mod tests {
     fn editing_body_mechanics_requires_a_new_fingerprint() {
         let mut entry = entries()
             .unwrap()
-            .into_iter()
+            .iter()
             .find(|e| e.name == "Fireball")
-            .unwrap();
+            .unwrap()
+            .clone();
         entry
             .fields
             .get_mut(Value::String("splat_spell".into()))
@@ -622,9 +627,9 @@ mod tests {
     #[test]
     fn specified_contracts_cannot_be_treated_as_no_ops() {
         for entry in entries().unwrap() {
-            let metadata = conversion(&entry).unwrap().unwrap();
+            let metadata = conversion(entry).unwrap().unwrap();
             if metadata.status == Status::Specified {
-                let error = crate::execution::model::compile(&entry).unwrap_err();
+                let error = crate::execution::model::compile(entry).unwrap_err();
                 assert!(error.contains("not executable"));
                 assert!(error.contains(&metadata.engine_gaps[0]));
             }

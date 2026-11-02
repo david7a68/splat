@@ -52,13 +52,6 @@ pub fn source_file(path: &str) -> Option<&'static [u8]> {
     SRD.get_file(path).map(|file| file.contents())
 }
 
-/// The checked entries, parsed and hashed once per process. The bytes are embedded, so they
-/// cannot change while the app runs. Callers get their own copy.
-pub fn entries() -> Vec<Entry> {
-    static ENTRIES: OnceLock<Vec<Entry>> = OnceLock::new();
-    ENTRIES.get_or_init(|| load().entries).clone()
-}
-
 pub fn load() -> Package {
     fn files<'a>(dir: &'a Dir<'a>, out: &mut BTreeMap<String, &'a [u8]>) {
         for file in dir.files() {
@@ -71,6 +64,12 @@ pub fn load() -> Package {
     let mut contents = BTreeMap::new();
     files(&SRD, &mut contents);
     verify(&contents)
+}
+
+/// The SRD entries, verified once. They are embedded, so they cannot change while the app runs.
+pub fn entries() -> &'static [Entry] {
+    static ENTRIES: OnceLock<Vec<Entry>> = OnceLock::new();
+    ENTRIES.get_or_init(|| load().entries)
 }
 
 fn hash(bytes: &[u8]) -> String {
