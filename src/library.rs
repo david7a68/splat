@@ -318,6 +318,8 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
     )
 }
 
+const FOLDER_NOT_EMPTY: &str = "This folder has files in it, so Splat wrote nothing. Choose an empty folder, or add a new folder name to the end of the path. If it is a package already, use Register folder.";
+
 fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, String> {
     if !path.is_absolute()
         || name.trim().is_empty()
@@ -325,16 +327,37 @@ fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, Str
         || !content::resource_key(&format!("{namespace}:library"))
     {
         return Err(
-            "Enter a name, a new absolute folder path, and a namespace such as my_homebrew.".into(),
+            "Enter a name, an absolute path to a new or empty folder, and a namespace such as my_homebrew."
+                .into(),
         );
     }
-    fs::create_dir(path).map_err(|e| format!("Could not create a new package folder: {e}"))?;
+    let created = prepare_package_folder(path)?;
     let text = note_text(name.trim(), "package", Some(namespace));
     if let Err(error) = write_note(path, "Module.md", None, &text) {
-        let _ = fs::remove_dir(path);
+        if created {
+            let _ = fs::remove_dir(path);
+        }
         return Err(error);
     }
     local_module(path)
+}
+
+/// Make the folder a new package goes in, and say if it was made here. A folder dialog returns
+/// only a folder that exists, so an empty one is fine. A folder with anything in it may be the
+/// DM's own files or another package, so nothing is written to it.
+fn prepare_package_folder(path: &Path) -> Result<bool, String> {
+    match fs::read_dir(path) {
+        Ok(mut entries) => {
+            if entries.next().is_some() {
+                return Err(FOLDER_NOT_EMPTY.into());
+            }
+            Ok(false)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir(path)
+            .map(|()| true)
+            .map_err(|e| format!("Could not create a new package folder: {e}")),
+        Err(error) => Err(format!("Could not use this package folder: {error}")),
+    }
 }
 
 // Refuse traversal and symlinks, and preserve external edits before atomic replacement.
@@ -1428,7 +1451,7 @@ impl Library {
                     ui,
                     "New package folder",
                     &mut self.new_package_path,
-                    Some("Splat creates this folder. The folder it sits in must already exist."),
+                    Some("An empty folder, or a new one that Splat creates inside a folder that exists."),
                 );
                 design::text_field(ui, "Name", &mut self.name, None, None);
                 design::text_field(
@@ -2168,6 +2191,31 @@ mod tests {
         }
     }
 
+    /// A folder dialog returns a folder that exists, so an empty one must be good to use.
+    #[test]
+    fn a_new_package_can_use_an_empty_folder() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("empty");
+        fs::create_dir(&root).unwrap();
+        let module = create_module(&root, "From a dialog", "from_a_dialog").unwrap();
+        assert_eq!(module.path, root);
+        assert!(root.join("Module.md").is_file());
+    }
+    #[test]
+    fn a_new_package_refuses_a_folder_with_anything_in_it_and_writes_nothing() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("full");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("notes.txt"), "the DM's own").unwrap();
+        let error = create_module(&root, "Not here", "not_here").unwrap_err();
+        assert_eq!(error, FOLDER_NOT_EMPTY);
+        assert!(error.contains("Choose an empty folder"), "says what to do");
+        let names: Vec<_> = fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["notes.txt"]);
+    }
     #[test]
     fn entry_rows_keep_both_lines_at_a_fixed_height() {
         let ctx = egui::Context::default();
