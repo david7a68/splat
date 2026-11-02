@@ -263,6 +263,11 @@ gets the latest sheets. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
+If you edit a generated campaign note, Splat keeps your edit and stops updating that character's notes. To
+get updates again, move the note aside or use **Force read** on the warning. Force read reads the sheet again and
+replaces each note that has edits. Your version stays beside the note in a `.splat-archive` file, and the page lists
+those files. Personal notes carry over when Splat can still find them.
+
 ## Encounter builder
 
 Open **Encounters**, select **New encounter**, and type a name.
