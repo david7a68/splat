@@ -476,7 +476,7 @@ pub mod party {
     const PAGES: [(&str, &str); 4] = [
         ("Actions", "page-actions"),
         ("Spells", "page-spells"),
-        ("Equipment", "page-equipment"),
+        ("Gear", "page-equipment"),
         ("Features", "page-features"),
     ];
     const OVERVIEW: &str = "Overview";
@@ -1387,8 +1387,8 @@ pub mod run_absent_player {
         );
         d.observe(
             "Absent player",
-            !d.is_disabled(BEGIN) && d.visible_text("Everyone is ready"),
-            "Combat can begin with a player absent, and with no initiative for them",
+            !d.is_disabled(BEGIN) && d.visible_text("Everyone here is ready. 1 absent."),
+            "Combat can begin with a player absent, with no initiative for them, and the line says so",
         );
         d.click(BEGIN);
         d.state("began-without-them", Sizes::All);
@@ -1405,7 +1405,18 @@ pub mod run_absent_player {
         let turn = current_participant(d);
         d.click_row(PLAYER);
         d.click("Mark present");
-        d.state("back-with-no-initiative", Sizes::All);
+        // Record opens by itself, with the field ready.
+        let form = format!("Initiative for {PLAYER}");
+        let focused = d.focused_name();
+        d.observe(
+            "Absent player",
+            focused.as_deref() == Some(form.as_str()) && d.visible_text("Set initiative"),
+            format!(
+                "Mark present with no total opens Record, and its field has focus: {focused:?}"
+            ),
+        );
+        d.state("set-initiative-form", Sizes::All);
+        d.goal("bring a player back with no initiative");
         let last = roster_places(d).last().map(|row| row.0.clone());
         d.observe(
             "Absent player",
@@ -1416,10 +1427,11 @@ pub mod run_absent_player {
                 "Back with none: the row says so, they are last ({last:?}), and the turn stays"
             ),
         );
-        d.click("Record");
-        d.type_into(&format!("Initiative for {PLAYER}"), "20");
-        d.click("Set initiative");
+        // The keyboard path: the field already has focus, and Enter sets the total.
+        d.type_text("20");
+        d.press(Key::Enter);
         d.state("initiative-set-in-combat", Sizes::Default);
+        d.goal("set their initiative by keyboard");
         let order: Vec<String> = roster_places(d).into_iter().map(|row| row.0).collect();
         d.observe(
             "Absent player",
@@ -1547,6 +1559,11 @@ pub mod prep_to_table {
             "Rows do not move during initiative entry",
         );
         d.state("all-initiative-entered", Sizes::Default);
+        d.observe(
+            "L6-17",
+            d.visible_text("Everyone is ready.") && d.visible_text("tied."),
+            "With tied totals to order, the ready line says how many",
+        );
         // Tied rows keep their arrows in two fixed places, so that a second click on one lands
         // on the same arrow.
         let arrows = |d: &Driver<'_>, word: &str| -> Vec<f32> {
@@ -1763,7 +1780,7 @@ pub mod run_sync_conflict {
     use super::*;
     const AMOUNT_FIELD: &str = "Amount";
     const CLOSE_RUN: &str = "Close run";
-    const CLOSE_WHY: &str = "Sync first";
+    const CLOSE_WHY: &str = "Resolve first";
     const SYNCED: &str = "Brannoch Vale";
     const USE_REMOTE: &str = "Use D&D Beyond values";
     const CONFLICT_TEXT: &str = "changed";
@@ -1774,11 +1791,11 @@ pub mod run_sync_conflict {
         "Oren Thistlewick",
         "Sable Harrowgate",
     ];
-    const ROW_SYNC_WORDS: [&str; 2] = ["First read", "Synced"];
+    const ROW_SYNC_WORDS: [&str; 2] = ["Reading…", "Synced"];
     const DISMISS_NOTICE: &str = "Dismiss this message";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
-    const UNDO_CLEARED: &str = "Undo history was cleared";
+    const UNDO_CLEARED: &str = "Earlier Undo steps ended";
     const CLOSE_PROMPT: &str = "has not confirmed changes";
     const DISABLED_REASON: &str = "Wait for pending sync";
 
@@ -2292,6 +2309,11 @@ pub mod run_restart {
                 && participant_is_selected(d, &current),
             format!("The run reopens by itself on the same turn, {current} selected"),
         );
+        d.observe(
+            "L6-1",
+            d.visible_text("No Undo since reopening"),
+            "After a restart, the Undo button itself says why it is off",
+        );
         // The other pages load too, with the run still open behind them.
         go_encounters(d);
         d.observe(
@@ -2466,11 +2488,16 @@ pub mod run_sync_states {
     ];
     /// The first read shows after `Sync party`, and "off" is a row with no word at all.
     const FIRST_READ: (&str, SyncState, &str) =
-        ("Sable Harrowgate", SyncState::FirstRead, "First read");
+        ("Sable Harrowgate", SyncState::FirstRead, "Reading…");
     const UNSYNCED_ROW: &str = "Cinder Wolf 1";
     const DISMISS: &str = "Dismiss this message";
-    const TWO_LINES: &str =
-        "Brannoch Vale, Iselle Marrowind, Kestrel Dunmoor, Oren Thistlewick, Sable Harrowgate";
+    const TWO_LINES: [(&str, &str); 5] = [
+        ("Brannoch Vale", "HP 58 → 54"),
+        ("Iselle Marrowind", "HP 27 → 18"),
+        ("Kestrel Dunmoor", "HP 11 → 8"),
+        ("Oren Thistlewick", "HP 45 → 44"),
+        ("Sable Harrowgate", "HP 32 → 30"),
+    ];
     const USE_REMOTE: &str = "Use D&D Beyond values";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2521,11 +2548,16 @@ pub mod run_sync_states {
         d.state("every-sync-state", Sizes::All);
         d.goal("show every sync state");
 
+        // A DM's value made through a real step leaves no message behind it.
+        d.observe(
+            "T7-1",
+            !d.has(DISMISS) && !d.visible_text("In Record"),
+            "The simulated states come with no message: nothing changed from the sheet",
+        );
         // At the default size, 8 rows have the room, and a two-line message takes none
         // of it from them. Each row's height, then the same places with the message up.
-        d.click(DISMISS);
         let (quiet, quiet_dock) = d.at_size(DEFAULT, |d| (roster_places(d), d.place_of("Amount")));
-        d.app_mut().encounters.simulate_sheet_update(TWO_LINES);
+        d.app_mut().encounters.simulate_sheet_update(&TWO_LINES);
         d.settle();
         let (loud, loud_dock) = d.at_size(DEFAULT, |d| (roster_places(d), d.place_of("Amount")));
         let shortest = quiet
@@ -2572,6 +2604,26 @@ pub mod run_sync_states {
             "Both choices of a conflict are in view",
             both,
         );
+        // Stop sync sits beside the name it stops, and an error row says why here too.
+        d.observe_both(
+            "Ended run close",
+            "Stop sync for each row with a conflict is in view",
+            |d| {
+                d.in_view("Stop sync for Brannoch Vale")
+                    && d.in_view("Stop sync for Iselle Marrowind")
+            },
+        );
+        d.observe(
+            "Ended run close",
+            d.has_containing("select Stop sync") || d.visible_text("select Stop sync"),
+            "The top line and the button say the same verb",
+        );
+        d.scroll_until(pos2(780.0, 300.0), "Could not read this character", 8);
+        d.observe(
+            "Ended run close",
+            d.visible_text("Could not read this character"),
+            "A row with a sync error has its reason in the ended view's panel",
+        );
         // Keeping the DM's value changes nothing in the run, so the steps before it stay.
         d.click(KEEP_LOCAL);
         for (name, ..) in STATES {
@@ -2603,8 +2655,6 @@ pub mod run_sync_states {
 /// the Tab order on a scrolling roster of 20, where scroll handles appear.
 pub mod run_roster_conflict {
     use super::*;
-    const CLOSE_RUN: &str = "Close run";
-    const CLOSE_ANYWAY: &str = "Close anyway";
     use crate::combat_sync::SyncState;
     const SYNCED: &str = "Brannoch Vale";
     const USE_REMOTE: &str = "Use D&D Beyond values";
@@ -2612,10 +2662,26 @@ pub mod run_roster_conflict {
     const STOP_SYNC: &str = "Stop party sync";
     const AMOUNT: &str = "Amount";
     const LOADED_ROW: &str = "Kestrel Dunmoor";
+    const BELOW: &str = "Sable Harrowgate";
     const ONE_MORE_LINE: &str = "Cinder Wolf 3";
     const ONE_MORE_CONDITION: &str = "Prone";
-    const LONG_MESSAGE: &str =
-        "Brannoch Vale HP 58 → 54, Iselle Marrowind HP 27 → 18, Kestrel Dunmoor HP 11 → 8";
+    const LONG_MESSAGE: [(&str, &str); 3] = [
+        ("Brannoch Vale", "HP 58 → 54"),
+        ("Iselle Marrowind", "HP 27 → 18"),
+        ("Kestrel Dunmoor", "HP 11 → 8"),
+    ];
+    const ONE_LINE_MESSAGE: &str =
+        "Sheet update: Brannoch Vale and 2 more. Earlier Undo steps ended";
+    const WORDS_OF_MESSAGE: &str = "Earlier Undo steps ended";
+    const DISMISS: &str = "Dismiss this message";
+    const IN_HEADER: &str = "See the Log";
+    const LOG_MARKED: &str = "Log, new message";
+    const MORE_MARKS: [&str; 4] = [
+        "Cinder Wolf 1",
+        "Cinder Wolf 2",
+        "Cinder Wolf 4",
+        "Cinder Wolf 5",
+    ];
     const LOADED_CONDITIONS: [&str; 5] =
         ["Blinded", "Charmed", "Grappled", "Paralyzed", "Restrained"];
 
@@ -2669,7 +2735,7 @@ pub mod run_roster_conflict {
             d.click(condition);
         }
         // A message the DM has not dismissed takes one line here, so no row has to scroll.
-        d.app_mut().encounters.simulate_sheet_update(LONG_MESSAGE);
+        d.app_mut().encounters.simulate_sheet_update(&LONG_MESSAGE);
         d.settle();
         d.click_row(ONE_MORE_LINE);
         d.click(CONDITIONS);
@@ -2678,7 +2744,7 @@ pub mod run_roster_conflict {
         let cut = rows_cut(d);
         d.observe(
             "T1.3",
-            cut.is_empty() && d.visible_text("Undo history was cleared. Hover here"),
+            cut.is_empty() && d.visible_text(ONE_LINE_MESSAGE),
             format!(
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
@@ -2695,16 +2761,72 @@ pub mod run_roster_conflict {
         d.observe(
             "T1.3",
             cut.is_empty() && d.in_view(AMOUNT) && d.in_view(APPLY_DAMAGE),
-            format!("At 960x640 with {errored} extra lines and a message not dismissed, rows not in full view: {cut:?}"),
+            format!("At 960x640 with {errored} extra lines, and the message hidden by the error line, rows not in full view: {cut:?}"),
+        );
+        // The hidden state has its own words: the Log tab, as a conflict holds the header.
+        d.observe(
+            "T9-1",
+            !d.visible_text(WORDS_OF_MESSAGE) && d.has(LOG_MARKED),
+            "With the error line up there is no room under the list, and the Log tab is marked",
         );
         d.app_mut().encounters.simulate_run_error("");
         d.settle();
-        d.click(STOP_SYNC);
+        d.observe(
+            "T9-1",
+            d.visible_text(WORDS_OF_MESSAGE) && !d.has(LOG_MARKED),
+            "The message returns when the error is dismissed, and the Log tab's mark goes",
+        );
+        d.click(DISMISS);
+        d.begin_task();
+
+        // M9-1: a tall list, no error, and a sheet update. Something on screen must say so.
+        for name in MORE_MARKS {
+            d.click_row(name);
+            d.click(CONDITIONS);
+            d.click(ONE_MORE_CONDITION);
+        }
+        d.click_row(LOADED_ROW);
+        d.app_mut().encounters.simulate_sheet_update(&LONG_MESSAGE);
+        d.settle();
+        d.state("message-no-room-behind-conflict", Sizes::Default);
+        let cut = rows_cut(d);
+        d.observe(
+            "T3.4",
+            cut.is_empty() && !d.visible_text(ONE_LINE_MESSAGE) && d.visible_text("Log") && d.has(LOG_MARKED),
+            format!("With a tall list and no error, behind a conflict, the Log tab is marked. Rows not in full view: {cut:?}"),
+        );
+        d.click(LOG_MARKED);
+        d.observe(
+            "T3.4",
+            !d.has(LOG_MARKED) && d.visible_text("From D&D Beyond: Brannoch Vale HP 58 → 54"),
+            "Opening the Log shows what changed, and the mark goes",
+        );
+        d.click("Sheet");
+        d.begin_task();
+        // The conflict resolved, the header's line is free for the next message.
         d.click_containing(SYNCED);
         d.click(USE_REMOTE);
-        // Other rows still hold simulated changes, so closing says so first.
-        d.click(CLOSE_RUN);
-        d.click(CLOSE_ANYWAY);
+        if d.has(DISMISS) {
+            d.click(DISMISS);
+        }
+        d.app_mut().encounters.simulate_sheet_update(&LONG_MESSAGE);
+        d.settle();
+        d.state("message-no-room-in-header", Sizes::Default);
+        let cut = rows_cut(d);
+        d.observe(
+            "T3.4",
+            cut.is_empty() && !d.visible_text(ONE_LINE_MESSAGE) && d.visible_text(IN_HEADER),
+            format!("With a tall list and no error, the header's line says it. Rows not in full view: {cut:?}"),
+        );
+        d.click(DISMISS);
+        d.observe(
+            "T3.4",
+            !d.visible_text(IN_HEADER) && d.visible_text("Next:"),
+            "Dismissing gives the line back to the next name",
+        );
+        d.begin_task();
+        d.click(STOP_SYNC);
+        close_run(d);
         d.begin_task();
         resume_run(d, RUN_20);
         d.check_tab_order("run, roster of 20");
@@ -2713,6 +2835,15 @@ pub mod run_roster_conflict {
             d.click(NEXT_TURN);
         }
         d.state("after-full-round", Sizes::All);
+        // L6-55: a conflict out of view is named on the line under the list.
+        d.app_mut().encounters.simulate_sync_conflict(BELOW);
+        d.settle();
+        d.state("overflow-names-conflict", Sizes::Default);
+        d.observe(
+            "L6-55",
+            d.visible_text("below, 1 Conflict"),
+            "A conflict on a row out of view is named on the overflow line",
+        );
     }
 }
 
@@ -2753,13 +2884,13 @@ pub mod signed_in {
     const REMOTE: &str = "Add from D&D Beyond";
     const REMOTE_NAME: &str = "Salt Road";
     const FRESHNESS: &str = "Connected · Cached sheet · Fetched";
-    const PAGES: [&str; 4] = ["Actions", "Spells", "Equipment", "Features"];
+    const PAGES: [&str; 4] = ["Actions", "Spells", "Gear", "Features"];
     const OVERVIEW: &str = "Overview";
     const MEMBER: &str = "Brannoch Vale";
-    const SYNC_SECTION: &str = "Combat sync";
+    const SYNC_SECTION: &str = "Sync off";
     const SYNC_TOGGLE: &str = "Sync combat stats with D&D Beyond";
-    const STOPPED: &str = "Combat sync stopped";
-    const FIRST_READ: &str = "First read";
+    const STOPPED: &str = "Sync stopped when";
+    const FIRST_READ: &str = "Reading…";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const LINK_TAB: &str = "Link and folder";
@@ -2773,7 +2904,11 @@ pub mod signed_in {
     const NOT_SENT: &str = "Not sent";
     const NOTHING_TO_SEND: &str = "Iselle Marrowind";
     const CLOSE_RUN: &str = "Close run";
+    const CLOSE_ANYWAY: &str = "Close anyway";
     const STRANDED: &str = "were not sent to D&D Beyond";
+    const USE_REMOTE: &str = "Use D&D Beyond values";
+    const KEEP_LOCAL: &str = "Keep Splat values and retry";
+    const SLOTS_LOST: &str = "Spell slots and limited uses not sent for";
 
     pub fn run(d: &mut Driver<'_>) {
         d.app_mut().settings.simulate(Account::Connected);
@@ -2829,6 +2964,11 @@ pub mod signed_in {
         d.click_containing(SYNC_SECTION);
         d.click(SYNC_TOGGLE);
         d.state("party-sync-on", Sizes::Default);
+        d.observe(
+            "L6-47",
+            d.visible_text(FIRST_READ),
+            "The Party page's sync says what the run's row says",
+        );
         go_library(d);
         let rail = d.visible_text("Party sync stopped");
         go_party(d);
@@ -2881,6 +3021,7 @@ pub mod signed_in {
         d.app_mut()
             .encounters
             .simulate_sync_state(MEMBER, crate::combat_sync::SyncState::Pending);
+        d.app_mut().encounters.simulate_slot_edit(MEMBER);
         d.settle();
         d.app_mut().encounters.simulate_session_end();
         d.app_mut().settings.simulate_session_expiry();
@@ -2907,6 +3048,19 @@ pub mod signed_in {
             "Closing after that names the changes that were never sent, and promises only what it keeps",
         );
         d.state("close-with-unsent-changes", Sizes::Default);
+        d.observe(
+            "T7-3",
+            d.visible_text(&format!("{SLOTS_LOST} {MEMBER} are lost")) && d.has(CLOSE_ANYWAY),
+            "A spell slot not sent has its own words: who, and that it is lost",
+        );
+        d.press(Key::Escape);
+        d.request_close();
+        d.observe(
+            "T7-3",
+            d.has_containing(&format!("{SLOTS_LOST} {MEMBER} are lost")),
+            "Closing the app names whose slots are lost",
+        );
+        d.state("app-close-with-unsent-slot", Sizes::Default);
         d.press(Key::Escape);
         // Damage recorded after the session ended. Reconnecting must not take it away.
         d.click_row(MEMBER);
@@ -2938,6 +3092,15 @@ pub mod signed_in {
 
         // The link cannot change under a run.
         d.click(STOP_SYNC);
+        d.settle();
+        // A stopped sync cannot do what a conflict's choice says, so the choices say why not.
+        d.click_row(MEMBER);
+        let reason = d.tooltip_contains(USE_REMOTE, "Sync is stopped");
+        d.observe(
+            "L6-25",
+            d.is_disabled(USE_REMOTE) && reason && d.is_disabled(KEEP_LOCAL),
+            "While sync is stopped, a conflict's two choices are off, with the reason",
+        );
         go_campaign(d);
         d.click(LINK_TAB);
         d.observe(
@@ -2977,7 +3140,7 @@ pub mod nav_table {
     const BACK: &str = "Back";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
-    const FIRST_READ: &str = "First read";
+    const FIRST_READ: &str = "Reading…";
     const ACTIVE: &str = "Active campaign: The Emberfall Marches";
     const BACK_TO_RUN: &str = "Back to run";
     const ENCOUNTER: &str = "Shrine of Cinders";

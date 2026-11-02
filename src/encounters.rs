@@ -283,8 +283,19 @@ fn creature_detail(entry: &Entry, party: bool) -> String {
 }
 fn roster_summary(setup: &Setup) -> String {
     let party = setup.roster.iter().filter(|s| s.side == "party").count();
-    let others = setup.roster.len() - party;
-    format!("{party} party · {others} others")
+    // The same word as the run's rows, for each side the roster has.
+    let mut sides: Vec<(&str, usize)> = vec![("party", party)];
+    for slot in setup.roster.iter().filter(|slot| slot.side != "party") {
+        match sides.iter_mut().find(|(side, _)| *side == slot.side) {
+            Some((_, count)) => *count += 1,
+            None => sides.push((&slot.side, 1)),
+        }
+    }
+    sides
+        .iter()
+        .map(|(side, count)| format!("{count} {side}"))
+        .collect::<Vec<_>>()
+        .join(" · ")
 }
 struct Snapshot {
     catalogue: Catalogue,
@@ -436,6 +447,15 @@ impl Encounters {
             .simulate_sync_state(name, state);
     }
 
+    /// A spell slot spent on this sheet and not sent.
+    #[cfg(test)]
+    pub fn simulate_slot_edit(&mut self, name: &str) {
+        self.run
+            .as_mut()
+            .expect("an open run")
+            .simulate_slot_edit(name);
+    }
+
     /// A participant under another name. No fixture has a name this long.
     #[cfg(test)]
     pub fn simulate_rename(&mut self, name: &str, to: &str) {
@@ -473,11 +493,15 @@ impl Encounters {
     }
 
     #[cfg(test)]
-    pub fn simulate_sheet_update(&mut self, name: &str) {
+    pub fn simulate_sheet_update(&mut self, changes: &[(&str, &str)]) {
+        let changes: Vec<(String, String)> = changes
+            .iter()
+            .map(|(name, words)| ((*name).to_owned(), format!("{name} {words}")))
+            .collect();
         self.run
             .as_mut()
             .expect("an open run")
-            .note_sheet_update(&[name.to_owned()]);
+            .note_sheet_update(&changes);
     }
 
     pub fn has_run(&self) -> bool {
@@ -525,6 +549,12 @@ impl Encounters {
     }
     pub fn draft_dirty(&self) -> bool {
         self.draft.as_ref().is_some_and(Draft::dirty)
+    }
+    /// Whose unsent spell slots and limited uses closing the app would lose.
+    pub fn lost_on_app_close_names(&self) -> Vec<String> {
+        self.run
+            .as_ref()
+            .map_or_else(Vec::new, crate::encounter_run::Run::lost_on_app_close_names)
     }
     pub fn pending_sync_names(&self) -> Vec<String> {
         self.run

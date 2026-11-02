@@ -248,8 +248,13 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 if matches!(role, Type::ProseStrong | Type::ProseItalic) && heading.is_none() {
                     font_id.size = prose.size();
                 }
+                let shown = if code {
+                    text.to_string()
+                } else {
+                    crate::design::reader::keep_dice_together(&text)
+                };
                 job.append(
-                    &text,
+                    &shown,
                     0.0,
                     egui::TextFormat {
                         font_id,

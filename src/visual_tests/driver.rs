@@ -152,7 +152,7 @@ fn found(node: &Node<'_>, clip: Option<egui::Rect>, viewport: egui::Rect) -> Fou
         .intersect(viewport);
     Found {
         id: access.id(),
-        name: node_name(node),
+        name: node_name(node).replace('\u{a0}', " "),
         role: access.role(),
         rect,
         shown,
@@ -593,7 +593,8 @@ impl<'a> Driver<'a> {
                 && !text.galley.elided
                 && clip.expand(1.0).contains_rect(bounds)
             {
-                out.push(text.galley.job.text.clone());
+                // A non-breaking space is still a space to whoever reads it.
+                out.push(text.galley.job.text.replace('\u{a0}', " "));
             }
         });
         out.join(" ")

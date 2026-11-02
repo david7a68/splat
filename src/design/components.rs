@@ -468,6 +468,22 @@ impl<'a> Action<'a> {
     }
 }
 
+/// How wide a secondary action with this label is, to share a line with something that must
+/// keep its words.
+pub fn action_width(ui: &Ui, label: &str, icon: bool, key: bool) -> f32 {
+    let icon_width = if icon {
+        Type::Body.size() + XS + 2.0
+    } else {
+        0.0
+    };
+    let key_width = if key {
+        number_width(ui, "U", &Type::Small.font(ui)) + S
+    } else {
+        0.0
+    };
+    number_width(ui, label, &Type::Strong.font(ui)) + 2.0 * M + icon_width + key_width
+}
+
 /// A square button with one icon. The word is the accessible name and the tooltip.
 pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
     let (rect, response) =
@@ -485,6 +501,44 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
             icon,
             Type::Heading.font(ui),
             if response.hovered() { c.text } else { c.muted },
+        );
+        if response.has_focus() {
+            focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_text(name)
+}
+
+/// An icon button that stays pressed while its state is on: one mark for two states would
+/// say nothing. On, it has the same fill and edge as a quiet action that is on.
+pub fn icon_toggle(ui: &mut Ui, icon: &str, name: &str, on: bool) -> Response {
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::splat(Density::Read.control()), Sense::click());
+    response.widget_info(|| WidgetInfo::selected(WidgetType::Button, ui.is_enabled(), on, name));
+    if ui.is_rect_visible(rect) {
+        let c = colors();
+        if on {
+            ui.painter().rect(
+                rect,
+                corner(RADIUS_CONTROL),
+                c.current_row,
+                Stroke::new(HAIRLINE_WIDTH, c.accent),
+                StrokeKind::Inside,
+            );
+        } else if response.hovered() {
+            ui.painter()
+                .rect_filled(rect, corner(RADIUS_CONTROL), c.hover);
+        }
+        ui.painter().text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            icon,
+            Type::Heading.font(ui),
+            if on || response.hovered() {
+                c.text
+            } else {
+                c.muted
+            },
         );
         if response.has_focus() {
             focus_ring(ui, rect);
@@ -629,7 +683,12 @@ pub fn number_field(
                 (height - Type::Numeral.size() - 6.0).max(4.0) / 2.0,
             ))
             .font(Type::Numeral.font(ui))
-            .hint_text(Type::Small.rich(ui, hint).color(colors().faint)),
+            // Its first letter stands clear of the caret, which sits at the field's start.
+            .hint_text(
+                Type::Small
+                    .rich(ui, format!("  {hint}"))
+                    .color(colors().faint),
+            ),
     );
     text.retain(|c| c.is_ascii_digit() || c == '-');
     named(ui, &response, name);
@@ -672,11 +731,21 @@ pub fn search_field(
 
 /// One choice from a few, as words with an underline. Returns true when it changed.
 pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T, &str)]) -> bool {
+    let named: Vec<(T, &str, &str)> = options.iter().map(|(o, l)| (*o, *l, *l)).collect();
+    segmented_named(ui, value, &named)
+}
+
+/// The same, for a tab that paints a mark: `(value, painted, accessible name)`.
+pub fn segmented_named<T: PartialEq + Copy>(
+    ui: &mut Ui,
+    value: &mut T,
+    options: &[(T, &str, &str)],
+) -> bool {
     let mut changed = false;
     let c = colors();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        for (option, label) in options {
+        for (option, label, name) in options {
             let selected = *value == *option;
             let font = if selected { Type::Strong } else { Type::Body };
             let color = if selected { c.text } else { c.muted };
@@ -690,7 +759,7 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T,
                     WidgetType::SelectableLabel,
                     ui.is_enabled(),
                     selected,
-                    *label,
+                    *name,
                 )
             });
             if ui.is_rect_visible(rect) {
@@ -1031,6 +1100,27 @@ pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
         response
     });
     inner.inner
+}
+
+/// A message in the run's small form: a bar, an icon and small words. It shares the room
+/// under the roster, where the normal form would cost a row its place.
+pub fn compact_message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
+    let (icon, color) = tone.parts();
+    let c = colors();
+    ui.horizontal(|ui| {
+        let start = ui.cursor().min;
+        ui.add_space(S + 1.0);
+        ui.label(Type::Small.rich(ui, icon).color(color));
+        ui.add_space(-XS);
+        let response = ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.text)).wrap());
+        let bar = Rect::from_min_max(
+            pos2(start.x, response.rect.top()),
+            pos2(start.x + 3.0, response.rect.bottom()),
+        );
+        ui.painter().rect_filled(bar, 0.0, color);
+        response
+    })
+    .inner
 }
 
 /// Work in progress. Test builds draw a still mark: the moving one is drawn from the clock,

@@ -197,9 +197,16 @@ the panel, those words open the second line instead, so that a name is never cut
   the scale's height. When rows cannot fit, name-only rows shrink to 25 px before anything
   scrolls.
 - **Header:** the round and the current turn in bold sans, larger than any row's name, and
-  `Next turn`. Its second line belongs to `Undo`, which always names the action, then to a
-  sync conflict, a notice, or the next name, in that order. A notice too long for the line,
-  or one behind a conflict, takes its own line below.
+  `Next turn`. Its second line belongs to `Undo`, which names the action, or says why there is
+  none (`No Undo since reopening`). A long `Undo` gives up its name first, on the button, when a
+  sync alert needs the room. The rest of the line goes to a sync alert with `Review`, then to a
+  notice with no other place, then to the recording's state, then to the next name.
+- **Notice:** what sync changed takes the run's small message under the list: a bar, an icon, small
+  words and a dismiss on the right. It is smaller than `message`, because it shares the row's
+  room. A full list keeps it to one line (`Sheet update: Brannoch Vale and 2 more.`), with the
+  whole on hover and in the log. With no room for that line, it goes to the header's line
+  (`Earlier Undo steps ended. See the Log.`). If a sync alert holds that line, the `Log` tab has a
+  mark until the DM opens it.
 - **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
   selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage.
 - **Overflow:** when rows still cannot fit, a line under the list says how many are above

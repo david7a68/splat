@@ -21,7 +21,7 @@
       "run-long-names": 8,
       "run-lookup": 1,
       "run-restart": 6,
-      "run-roster-conflict": 3,
+      "run-roster-conflict": 6,
       "run-sync-conflict": 6,
       "run-sync-states": 4,
       "session-notes": 21,
@@ -53,7 +53,7 @@
       "run-long-names": 8,
       "run-lookup": 1,
       "run-restart": 6,
-      "run-roster-conflict": 3,
+      "run-roster-conflict": 6,
       "run-sync-conflict": 6,
       "run-sync-states": 4,
       "session-notes": 21,
@@ -145,6 +145,10 @@
       "begin combat": 1,
       "enter the other players' initiative": 8,
       "roll NPC initiative": 1
+    },
+    "run-absent-player": {
+      "bring a player back with no initiative": 3,
+      "set their initiative by keyboard": 2
     },
     "run-edge-states": {
       "record a long effect": 6,

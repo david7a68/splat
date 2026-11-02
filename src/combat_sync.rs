@@ -527,6 +527,61 @@ impl CombatSync {
         sync
     }
 
+    /// A sync that has read this sheet, in a state a live read would bring it to. `local` is
+    /// the run's own HP after any change of the DM's, which the sheet has not seen.
+    #[cfg(test)]
+    pub fn simulated_from(
+        state: SyncState,
+        character: u64,
+        max_hp: i64,
+        sheet: &Value,
+        local: Value,
+    ) -> Self {
+        let mut sync = Self::default();
+        sync.simulated = true;
+        sync.enabled = state != SyncState::Off;
+        if matches!(state, SyncState::FirstRead | SyncState::Off) {
+            return sync;
+        }
+        let read = Remote::from_raw(character, max_hp, sheet).expect("simulated sheet");
+        sync.desired = read.groups.clone();
+        sync.remote = Some(read.clone());
+        match state {
+            SyncState::Pending => {
+                sync.desired.insert("hp".into(), local);
+            }
+            SyncState::Error => {
+                sync.error = Some("Could not read this character from D&D Beyond.".into());
+            }
+            SyncState::Conflict => {
+                sync.desired.insert("hp".into(), local);
+                let mut changed = read;
+                let hp = changed.groups.get_mut("hp").expect("HP group");
+                let damage = hp["removedHitPoints"].as_i64().unwrap_or(0);
+                hp["removedHitPoints"] = (damage + 9).into();
+                sync.accept_read(changed);
+            }
+            _ => {}
+        }
+        sync
+    }
+
+    /// A spell slot spent here and not yet sent.
+    #[cfg(test)]
+    pub fn simulate_slot_edit(&mut self) {
+        let mut slots = serde_json::Map::new();
+        for level in 1..=9 {
+            slots.insert(format!("level{level}"), 0.into());
+        }
+        self.remote
+            .as_mut()
+            .expect("a sheet read")
+            .groups
+            .insert("slots".into(), slots.clone().into());
+        slots.insert("level1".into(), 1.into());
+        self.desired.insert("slots".into(), slots.into());
+    }
+
     pub fn stop(&mut self) {
         if let Some(gate) = &self.gate {
             gate.store(false, Ordering::SeqCst);
@@ -575,6 +630,21 @@ impl CombatSync {
             })
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect()
+    }
+    /// Closing the app drops the worker and everything only it holds, with sync on or off.
+    pub fn loses_on_close(&self) -> bool {
+        !self.only_here().is_empty() || !self.unsent.is_empty()
+    }
+    /// Why a conflict's choices are off. Neither can do what it says with sync stopped: the
+    /// run would not change, and nothing would be sent.
+    fn choice_blocked(&self) -> Option<&'static str> {
+        if self.busy() {
+            Some("Wait for the current sheet read.")
+        } else if !self.enabled {
+            Some("Sync is stopped. Select Sync party, and it reads the sheet and asks again.")
+        } else {
+            None
+        }
     }
     fn keep_unsent(&mut self) {
         self.unsent.extend(self.only_here());
@@ -951,7 +1021,7 @@ impl CombatSync {
                 });
             ui.push_id(&key, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    let busy = self.busy().then_some("Wait for the current sheet read.");
+                    let busy = self.choice_blocked();
                     let max = self.max_hp().unwrap_or(0);
                     let sheet = self.remote.as_ref().and_then(|r| r.groups.get(&key));
                     let (use_label, keep_label) = (
@@ -991,9 +1061,12 @@ impl CombatSync {
             });
         }
     }
-    pub fn show(&mut self, ui: &mut egui::Ui) {
+    /// `offline` is why sync cannot start now. A sync that is on can always be stopped.
+    pub fn show(&mut self, ui: &mut egui::Ui, offline: Option<&str>) {
         let was = self.enabled;
-        ui.checkbox(&mut self.enabled, "Sync combat stats with D&D Beyond");
+        crate::design::locked(ui, offline.filter(|_| !was), |ui| {
+            ui.checkbox(&mut self.enabled, "Sync combat stats with D&D Beyond");
+        });
         if was && !self.enabled {
             self.stop();
         }
@@ -1003,6 +1076,10 @@ impl CombatSync {
         if !self.enabled {
             if let Some(error) = &self.error {
                 ui.colored_label(crate::design::colors().result.error, error);
+            }
+            if let Some(offline) = offline {
+                ui.weak(offline);
+                return;
             }
             ui.weak("Enable to read the live sheet. Edits made here will then update D&D Beyond.");
             return;
@@ -1534,10 +1611,34 @@ mod tests {
                 ..Default::default()
             },
             |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| sync.show(ui));
+                egui::CentralPanel::default().show(ctx, |ui| sync.show(ui, None));
             },
         );
         assert!(!out.shapes.is_empty());
         assert_eq!(sync.desired, before);
+    }
+    /// While sync is stopped, neither choice can do what it says, so each is off with a reason.
+    #[test]
+    fn a_conflict_cannot_be_settled_while_sync_is_stopped() {
+        let mut sync = CombatSync::simulated_conflict(11, 10, 1);
+        assert_eq!(sync.state(), SyncState::Conflict);
+        assert_eq!(sync.choice_blocked(), None);
+        sync.stop();
+        assert_eq!(sync.state(), SyncState::Conflict, "the conflict stays");
+        assert!(
+            sync.choice_blocked()
+                .is_some_and(|why| why.contains("Sync is stopped"))
+        );
+    }
+    /// Spell slots are in no saved run. With sync on or off, closing the app loses an unsent one,
+    /// and only then does the close say so.
+    #[test]
+    fn only_values_the_run_does_not_hold_are_lost_on_close() {
+        let mut sync = CombatSync::simulated_state(SyncState::Pending, 11, 10, 0);
+        assert!(!sync.loses_on_close(), "HP is kept by the run");
+        sync.simulate_slot_edit();
+        assert!(sync.loses_on_close());
+        sync.stop();
+        assert!(sync.loses_on_close());
     }
 }

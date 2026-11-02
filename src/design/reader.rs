@@ -169,6 +169,36 @@ pub fn run_in_markdown(paragraph: &str) -> String {
     }
 }
 
+/// A dice expression stays whole on one line: `2d4 + 2` does not break at its plus.
+pub fn keep_dice_together(text: &str) -> String {
+    let is_dice = |word: &str| {
+        let word = word.trim_start_matches(['(', '[']);
+        word.split_once('d').is_some_and(|(count, sides)| {
+            count.chars().all(|c| c.is_ascii_digit())
+                && !sides.is_empty()
+                && sides.chars().all(|c| c.is_ascii_digit())
+        })
+    };
+    let words: Vec<&str> = text.split(' ').collect();
+    let mut kept = String::with_capacity(text.len());
+    for (at, word) in words.iter().enumerate() {
+        if at > 0 {
+            let sign = |word: &&str| matches!(*word, "+" | "-" | "\u{2212}");
+            let after_dice = sign(word) && is_dice(words[at - 1]);
+            let number = |word: &str| word.starts_with(|c: char| c.is_ascii_digit());
+            let after_sign =
+                at >= 2 && sign(&words[at - 1]) && is_dice(words[at - 2]) && number(word);
+            kept.push(if after_dice || after_sign {
+                '\u{a0}'
+            } else {
+                ' '
+            });
+        }
+        kept.push_str(word);
+    }
+    kept
+}
+
 /// Imported rules use short named paragraphs for actions and benefits.
 pub fn source_prose(ui: &mut Ui, text: &str) {
     let text = text
@@ -185,4 +215,23 @@ pub fn human_label(value: &str) -> String {
     chars.next().map_or_else(String::new, |first| {
         first.to_uppercase().collect::<String>() + chars.as_str()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dice_stay_together_and_other_sums_do_not() {
+        assert_eq!(
+            keep_dice_together("Hit: 7 (2d4 + 2) Piercing"),
+            "Hit: 7 (2d4\u{a0}+\u{a0}2) Piercing"
+        );
+        assert_eq!(
+            keep_dice_together("1d6 - 1 or d8 + 3."),
+            "1d6\u{a0}-\u{a0}1 or d8\u{a0}+\u{a0}3."
+        );
+        assert_eq!(keep_dice_together("a + b and 3 + 4"), "a + b and 3 + 4");
+        assert_eq!(keep_dice_together("the dead + 2"), "the dead + 2");
+    }
 }

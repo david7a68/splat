@@ -336,8 +336,18 @@ impl Splat {
         if !names.is_empty() {
             items.push((
                 format!(
-                    "D&D Beyond has not confirmed changes to {}. The saved run keeps HP, death saves and conditions, and asks you to choose when you next sync. Unsent spell slots and limited uses are lost.",
+                    "D&D Beyond has not confirmed changes to {}. The saved run keeps HP, death saves and conditions, and asks you to choose when you next sync.",
                     names.join(", ")
+                ),
+                Page::Run,
+            ));
+        }
+        let lost = self.encounters.lost_on_app_close_names();
+        if !lost.is_empty() {
+            items.push((
+                format!(
+                    "Spell slots and limited uses not sent for {} are lost.",
+                    lost.join(", ")
                 ),
                 Page::Run,
             ));
@@ -380,7 +390,10 @@ impl Splat {
             self.confirm_close = false;
             return;
         }
-        let only_sync = items.len() == 1 && !self.encounters.pending_sync_names().is_empty();
+        let lost_sync = usize::from(!self.encounters.lost_on_app_close_names().is_empty());
+        let nothing_lost = lost_sync == 0;
+        let only_sync =
+            items.len() == 1 + lost_sync && !self.encounters.pending_sync_names().is_empty();
         let background =
             usize::from(self.sessions.recording()) + usize::from(self.sessions.processing());
         let (title, keep_label, discard_label, advice) = if items.len() == background {
@@ -395,7 +408,11 @@ impl Splat {
                 "Sync has not finished",
                 "Return to run",
                 "Close anyway",
-                "Return, and wait for sync or resolve the conflict. Or close, and lose what is named above.",
+                if nothing_lost {
+                    "Return, and wait for sync or resolve the conflict. Or close: the saved run asks you next time."
+                } else {
+                    "Return, and wait for sync or resolve the conflict. Or close, and lose what is named above."
+                },
             )
         } else {
             (
@@ -416,7 +433,13 @@ impl Splat {
             ui.horizontal(|ui| {
                 keep |= Action::primary(keep_label).show(ui).clicked();
                 ui.add_space(design::L);
-                discard = Action::destructive(discard_label).show(ui).clicked();
+                // Red only when something is lost, as closing the run does.
+                let action = if only_sync && nothing_lost {
+                    Action::secondary(discard_label)
+                } else {
+                    Action::destructive(discard_label)
+                };
+                discard = action.show(ui).clicked();
             });
         });
         if keep {
@@ -466,8 +489,10 @@ impl Splat {
                     let detail = strip.as_ref().map(|strip| {
                         if strip.running {
                             format!("Round {}", strip.round)
+                        } else if strip.ended {
+                            "Ended".to_owned()
                         } else {
-                            "Not in combat".to_owned()
+                            "Setup".to_owned()
                         }
                     });
                     if design::nav_item(

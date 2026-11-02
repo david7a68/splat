@@ -366,13 +366,14 @@ the sheet's.
 
 While sync reads a sheet, that sheet decides Maximum HP, and the field says so. Stop sync to change it
 in the run. A maximum set while sync was off stays until the next first read, where the notice and the
-log say what it became. A message from sync stays under the list until you dismiss it.
+log say what it became. A message from sync stays until you dismiss it.
 
 A save from an earlier version can hold unsent values as its last match, so on its first read every
 difference asks, once. Its new `started` field is optional, and earlier saves load. Spell slots and
 limited uses are not in the saved run: an unsent one asks at the next first read in the same session,
-and closing says it will be lost. Undo stops wherever a value reached the run from the sheet or the
-sync panel, and the notice and the log say what changed, from what to what.
+and closing says it will be lost. Undo stops wherever a value reached the run from the sheet or from
+**Record**, the button then says so, and the notice and the log say what changed, from what to what. While sync is stopped, a
+conflict's two choices are off, with the reason: select **Sync party**, and it reads the sheet and asks again.
 
 Sync covers current and temporary HP, death saves, official conditions,
 ordinary and pact spell slots spent, and supported action/spell limited uses.
@@ -383,8 +384,9 @@ visible and offer a choice of local or remote values. Unconfirmed changes are no
 retried without review. The service has no verified atomic compare-and-set API,
 so another client can still change values between a read and a write.
 
-Health or condition values taken from the sheet clear the run's undo history, and a message says so. In a small
-window with a full roster, the list can leave no room for that message, so only the Log records the change. Wait for sync
+Health or condition values taken from the sheet end the run's earlier Undo steps, and a message says so: under the
+list, on one line when the list needs the room, or on the header's second line when there is no room at all. Behind a
+sync alert, that line is taken, so the `Log` tab has a mark until you open it. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
 queued work but cannot recall a request already sent. Party sync stops when you leave its
 page, and the sidebar says so; run sync remains active while that run is open.

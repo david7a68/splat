@@ -259,15 +259,19 @@ impl Party {
                 self.sync_stopped = false;
             } else {
                 let mut dismiss = false;
-                ui.horizontal(|ui| {
-                    dismiss =
-                        design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+                ui.horizontal_top(|ui| {
+                    let width = ui.available_width() - 36.0;
                     let why = if session.is_some() {
                         SYNC_STOPPED_LEFT
                     } else {
                         SYNC_STOPPED_SESSION
                     };
-                    design::message(ui, Tone::Warning, why);
+                    ui.scope(|ui| {
+                        ui.set_max_width(width);
+                        design::message(ui, Tone::Warning, why);
+                    });
+                    dismiss =
+                        design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
                 });
                 if dismiss {
                     self.sync_stopped = false;
@@ -292,13 +296,12 @@ impl Party {
             ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
         }
         if session.is_some() {
-            // Under the name, and it says its state while closed.
-            let state = if self.combat.enabled {
-                format!("{} Combat sync · On", icons::ONLINE)
-            } else {
-                format!("{} Combat sync · Off", icons::SYNC_OFF)
-            };
-            design::section(ui, state, |ui| self.combat.show(ui));
+            // Under the name, and it says its state while closed, in the run's own words.
+            let state = crate::encounter_run::sync_status(self.combat.state());
+            let title = Type::Strong
+                .rich(ui, format!("{} {}", state.icon, state.word))
+                .color(state.color);
+            design::section(ui, title, |ui| self.combat.show(ui, None));
         }
         let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) else {
             if !self.reader.loading() {
@@ -318,7 +321,7 @@ impl Party {
                 (0, "Overview"),
                 (1, "Actions"),
                 (2, "Spells"),
-                (3, "Equipment"),
+                (3, "Gear"),
                 (4, "Features"),
             ],
         );
@@ -386,8 +389,8 @@ pub struct LiveValues {
 const ENTRY_ROW: f32 = 40.0;
 /// Sync on this page stops when the DM leaves it or the connection ends. The word stays
 /// until they have seen it.
-const SYNC_STOPPED_LEFT: &str = "Combat sync stopped when you left this page. Changes made since then did not reach D&D Beyond. Turn it on again below.";
-const SYNC_STOPPED_SESSION: &str = "Combat sync stopped when the session ended. Changes made since then did not reach D&D Beyond. Connect in Settings, then turn it on again below.";
+const SYNC_STOPPED_LEFT: &str = "Sync stopped when you left this page. Changes made since then did not reach D&D Beyond. Turn it on again below.";
+const SYNC_STOPPED_SESSION: &str = "Sync stopped when the session ended. Changes made since then did not reach D&D Beyond. Connect in Settings, then turn it on again below.";
 
 /// How old a sheet is, as a status with words.
 pub struct Freshness {

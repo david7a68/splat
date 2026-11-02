@@ -15,6 +15,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use uuid::Uuid;
+pub(crate) use view::sync_status;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Participant {
@@ -195,7 +196,11 @@ pub(crate) struct Run {
     simulate_connection: bool,
     scroll_to_selected: bool,
     /// What sync changed. It stays until the DM dismisses it, whatever they do next.
-    notice: Option<String>,
+    notice: Option<Notice>,
+    /// The list leaves no room for the notice, so the header or the Log tab says it instead.
+    notice_hidden: bool,
+    /// `Mark present` opened Record for a total, and its field takes the keyboard.
+    focus_initiative: bool,
     /// A value reached the run with no step of its own, so Undo stops there.
     undo_stopped: bool,
     setup_inputs: BTreeMap<usize, String>,
@@ -248,7 +253,7 @@ const MAX_FROM_SHEET: &str =
 pub(crate) const NOBODY_PRESENT: &str =
     "No participants are present. Mark one present or end the encounter.";
 const CLOSE_BLOCKED: &str =
-    "Wait for pending sync changes, resolve conflicts, or turn off combat sync before closing.";
+    "Wait for pending sync changes, resolve conflicts, or select Stop sync before closing.";
 /// What the one party action does when pressed.
 enum PartySync {
     Start(Vec<usize>),
@@ -269,8 +274,22 @@ pub struct Strip {
     /// The last save failed, so the run is only in memory.
     pub not_saved: bool,
     pub running: bool,
+    pub ended: bool,
     pub name: String,
 }
+/// What sync changed, in the forms that have room to say it.
+#[derive(Clone)]
+struct Notice {
+    /// From what to what. It goes under the list when the list has the room.
+    full: String,
+    /// Who changed, for one line under a full list.
+    short: String,
+}
+/// Said in place of a short notice that does not fit its one line.
+const NOTICE_LEAST: &str = "Sheet update. Earlier Undo steps ended. See the Log.";
+/// Said on the header's line when the list has no room for the notice at all.
+const NOTICE_IN_HEADER: &str = "Earlier Undo steps ended. See the Log.";
+const NOTICE_IN_HEADER_SHORT: &str = "Undo ended. See the Log.";
 #[derive(Clone)]
 enum Command {
     RollNpcs,
@@ -361,6 +380,8 @@ impl Run {
             simulate_connection: false,
             scroll_to_selected: false,
             notice: None,
+            notice_hidden: false,
+            focus_initiative: false,
             recording_notice: None,
             undo_stopped: false,
             setup_inputs: BTreeMap::new(),
@@ -573,10 +594,7 @@ impl Run {
                 next.phase = Phase::Ended {
                     outcome: outcome.clone(),
                 };
-                format!(
-                    "Ended manually in round {}. Outcome: {outcome}.",
-                    next.round
-                )
+                format!("Ended in round {}. Outcome: {outcome}.", next.round)
             }
             Command::Roll(expression) => {
                 let roll = Dice::parse(&expression)?.roll(&mut next.random, false)?;
@@ -728,12 +746,14 @@ impl Run {
             }
             Command::Presence(_, present) => {
                 p.present = present;
-                if present && p.initiative.is_none() && state.phase != Phase::Setup {
-                    "Marked present with no initiative: last in the order until you set it.".into()
-                } else if present {
-                    "Marked present; retains initiative and state.".into()
-                } else {
-                    "Marked absent; retains initiative and state.".into()
+                match (present, p.initiative.is_some()) {
+                    (true, false) if state.phase != Phase::Setup => {
+                        "Marked present with no initiative: last in the order until you set it in Record.".into()
+                    }
+                    (true, false) => "Marked present; keeps state. No initiative yet.".into(),
+                    (true, true) => "Marked present; keeps initiative and state.".into(),
+                    (false, true) => "Marked absent; keeps initiative and state.".into(),
+                    (false, false) => "Marked absent; keeps state. No initiative yet.".into(),
                 }
             }
             Command::Condition(_, condition) => {
@@ -858,10 +878,32 @@ impl Run {
             Command::Roll(expression) => format!("{expression} roll"),
         }
     }
+    /// What Undo would do, or, with no step to take back, why there is none. The words are
+    /// on the button because at the table nobody hovers.
     fn undo_label(&self) -> String {
-        self.history_labels
-            .last()
-            .map_or_else(|| "Undo".to_owned(), |label| format!("Undo: {label}"))
+        self.history_labels.last().map_or_else(
+            || {
+                if self.undo_stopped {
+                    "No Undo since sync update".to_owned()
+                } else if self.reopened {
+                    "No Undo since reopening".to_owned()
+                } else {
+                    "Undo".to_owned()
+                }
+            },
+            |label| format!("Undo: {label}"),
+        )
+    }
+    /// The same action with no name on it, for a line that has no room for both.
+    fn undo_label_short(&self) -> Option<String> {
+        let Some(label) = self.history_labels.last() else {
+            return (self.undo_stopped || self.reopened).then(|| "No Undo".to_owned());
+        };
+        [" to ", " on ", " off ", " for "]
+            .iter()
+            .filter_map(|word| label.find(word))
+            .min()
+            .map(|end| format!("Undo: {}", &label[..end]))
     }
     fn next_up(&self) -> Option<usize> {
         if self.state.phase != Phase::Running {
@@ -914,6 +956,7 @@ impl Run {
             sync_error: self.first_sync_in(SyncState::Error).map(name),
             not_saved: self.disk_conflict || (self.dirty && self.error.is_some()),
             running: self.state.phase == Phase::Running,
+            ended: matches!(self.state.phase, Phase::Ended { .. }),
             name: self.name.clone(),
         }
     }
@@ -990,6 +1033,10 @@ impl Run {
     /// Whose unsent values a close would lose: those the run does not hold itself.
     pub(crate) fn unsent_only_here_names(&self) -> Vec<String> {
         self.sync_names(crate::combat_sync::CombatSync::unsent_only_here)
+    }
+    /// Whose unsent values closing the app would lose, with sync on or off.
+    pub(crate) fn lost_on_app_close_names(&self) -> Vec<String> {
+        self.sync_names(crate::combat_sync::CombatSync::loses_on_close)
     }
     /// Who has changes a lost session left unsent.
     pub(crate) fn stranded_names(&self) -> Vec<String> {
@@ -1377,9 +1424,9 @@ impl Run {
                 if changed {
                     let line = change_line(&p.name, &before, &after, (maximum_before, p.max_hp));
                     if sync.updated || first_read {
-                        from_sheet.push(line);
+                        from_sheet.push((p.name.clone(), line));
                     } else {
-                        from_panel.push(line);
+                        from_panel.push((p.name.clone(), line));
                     }
                 }
                 // Only what D&D Beyond has confirmed. Saving unsent values here would make
@@ -1411,25 +1458,50 @@ impl Run {
 impl Run {
     /// Values reached the run with no step of their own: earlier steps can no longer be undone
     /// safely. The log and the notice say what changed, from what to what.
-    fn note_sync_changes(&mut self, from_sheet: &[String], from_panel: &[String]) {
+    fn note_sync_changes(
+        &mut self,
+        from_sheet: &[(String, String)],
+        from_panel: &[(String, String)],
+    ) {
         self.history.clear();
         self.history_labels.clear();
+        let lines = |changes: &[(String, String)]| {
+            changes
+                .iter()
+                .map(|(_, line)| line.as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
         let mut what = Vec::new();
         if !from_sheet.is_empty() {
-            what.push(format!("From D&D Beyond: {}.", from_sheet.join("; ")));
+            what.push(format!("From D&D Beyond: {}.", lines(from_sheet)));
         }
         if !from_panel.is_empty() {
-            what.push(format!("In the sync panel: {}.", from_panel.join("; ")));
+            what.push(format!("In Record: {}.", lines(from_panel)));
         }
         let what = what.join(" ");
         self.state.log.push(what.clone());
-        self.notice = Some(format!("{what} Undo history was cleared."));
+        let source = if from_sheet.is_empty() {
+            "In Record"
+        } else {
+            "Sheet update"
+        };
+        let mut names = from_sheet.iter().chain(from_panel).map(|(name, _)| name);
+        let first = names.next().map_or("", String::as_str);
+        let who = match names.count() {
+            0 => first.to_owned(),
+            more => format!("{first} and {more} more"),
+        };
+        self.notice = Some(Notice {
+            full: format!("{what} Earlier Undo steps ended."),
+            short: format!("{source}: {who}. Earlier Undo steps ended."),
+        });
         self.undo_stopped = true;
     }
-    /// A sheet changed outside Splat, with these words for what changed.
+    /// A sheet changed outside Splat: who, and the words for what changed.
     #[cfg(test)]
-    pub(crate) fn note_sheet_update(&mut self, lines: &[String]) {
-        self.note_sync_changes(lines, &[]);
+    pub(crate) fn note_sheet_update(&mut self, changes: &[(String, String)]) {
+        self.note_sync_changes(changes, &[]);
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -1671,6 +1743,8 @@ impl Run {
             simulate_connection: false,
             scroll_to_selected: true,
             notice: None,
+            notice_hidden: false,
+            focus_initiative: false,
             recording_notice: None,
             undo_stopped: false,
             setup_inputs: BTreeMap::new(),
@@ -1723,10 +1797,12 @@ impl Run {
                                 "Round {} · {status}{turn}{}",
                                 run.state.round,
                                 modified.map_or_else(String::new, |at| format!(
-                                    " · Saved {}",
+                                    " · Saved\u{a0}{}",
+                                    // The phrase stays on one line when the label wraps.
                                     crate::party::fetch_age(
                                         crate::hermetic::now().saturating_sub(at)
                                     )
+                                    .replace(' ', "\u{a0}")
                                 )),
                             ),
                             finished,
@@ -1803,9 +1879,8 @@ impl Run {
             .expect("participant in this run");
         participant.name = to.to_owned();
     }
-    /// A read of this sheet with the damage it had at the last match, plus `more_damage`. Test
-    /// builds have no live sheet, so this goes through the same comparison that a live read does.
-    pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
+    /// The index and D&D Beyond identity of a linked participant.
+    fn simulated_member(&self, name: &str) -> (usize, u64, i64) {
         let (index, participant) = self
             .state
             .participants
@@ -1814,19 +1889,49 @@ impl Run {
             .find(|(_, p)| p.name == name)
             .expect("participant in this run");
         let (_, character) = remote_identity(participant).expect("D&D Beyond participant");
-        let max_hp = participant.max_hp.unwrap_or(1);
+        (
+            index,
+            character.parse().expect("numeric ID"),
+            participant.max_hp.unwrap_or(1),
+        )
+    }
+    /// A sheet that holds what this participant holds now, with this much damage. Temporary HP,
+    /// death saves and conditions stay as they are, as the simulated change is only to HP.
+    fn simulated_sheet(
+        p: &Participant,
+        character: u64,
+        removed: i64,
+        can_edit: bool,
+    ) -> serde_json::Value {
+        let conditions: Vec<_> = p
+            .conditions
+            .iter()
+            .filter_map(|condition| recognized_condition(condition))
+            .map(|(id, level)| serde_json::json!({"id": id, "level": level}))
+            .collect();
+        serde_json::json!({
+            "id": character,
+            "canEdit": can_edit,
+            "removedHitPoints": removed,
+            "temporaryHitPoints": p.temporary_hp,
+            "deathSaves": {"successCount": p.successes, "failCount": p.failures},
+            "conditions": conditions,
+        })
+    }
+    /// A read of this sheet with the damage it had at the last match, plus `more_damage`. Test
+    /// builds have no live sheet, so this goes through the same comparison that a live read does.
+    pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
+        let (index, character, max_hp) = self.simulated_member(name);
+        let participant = &self.state.participants[index];
         let damage = participant
             .combat_values
             .get("hp")
             .and_then(|hp| hp["removedHitPoints"].as_i64())
             .unwrap_or(0);
+        let sheet = Self::simulated_sheet(participant, character, damage + more_damage, true);
         let sync = self.syncs.get_mut(&index).expect("a running sync");
         sync.stop_simulating();
-        sync.simulate_read(
-            character.parse().expect("numeric ID"),
-            max_hp,
-            damage + more_damage,
-        );
+        sync.simulate_sheet(character, max_hp, &sheet);
     }
     pub fn stop_simulating_sync(&mut self) {
         self.syncs
@@ -1836,48 +1941,56 @@ impl Run {
     pub fn simulate_error(&mut self, message: &str) {
         self.error = (!message.is_empty()).then(|| message.to_owned());
     }
-    /// Show one participant in a sync state test builds cannot reach by themselves.
+    /// Show one participant in a sync state test builds cannot reach by themselves. A state
+    /// with a change of the DM's first makes that change as a real step, so that what the run
+    /// holds and what it tells the DM are what they would be in play.
     pub fn simulate_sync_state(&mut self, name: &str, state: crate::combat_sync::SyncState) {
-        let (index, participant) = self
-            .state
-            .participants
-            .iter()
-            .enumerate()
-            .find(|(_, p)| p.name == name)
-            .expect("participant in this run");
-        let (_, character) = remote_identity(participant).expect("D&D Beyond participant");
-        let max_hp = participant.max_hp.unwrap_or(1);
-        let damage = max_hp - participant.hp.unwrap_or(max_hp);
+        use crate::combat_sync::{CombatSync, SyncState};
+        let (index, character, max_hp) = self.simulated_member(name);
+        let participant = &self.state.participants[index];
+        let hp = participant.hp.unwrap_or(max_hp);
+        let sheet = Self::simulated_sheet(
+            participant,
+            character,
+            max_hp - hp,
+            state != SyncState::ReadOnly,
+        );
+        let change = match state {
+            SyncState::Conflict => 4,
+            SyncState::Pending => 1,
+            _ => 0,
+        };
+        if change > 0 {
+            self.apply(Command::Health(
+                index,
+                Some((hp - change).max(0)),
+                Some(max_hp),
+            ))
+            .expect("the DM's change");
+        }
+        let participant = &self.state.participants[index];
+        let local = serde_json::json!({
+            "removedHitPoints": max_hp - participant.hp.unwrap_or(max_hp),
+            "temporaryHitPoints": participant.temporary_hp,
+        });
+        let shadow = SheetShadow::of(participant);
         self.syncs.insert(
             index,
-            crate::combat_sync::CombatSync::simulated_state(
-                state,
-                character.parse().expect("numeric ID"),
-                max_hp,
-                damage,
-            ),
+            CombatSync::simulated_from(state, character, max_hp, &sheet, local),
         );
+        self.sync_shadows.insert(index, shadow);
     }
     /// Give one participant a D&D Beyond conflict, as the sync panel would show it.
     pub fn simulate_sync_conflict(&mut self, name: &str) {
-        let (index, participant) = self
-            .state
-            .participants
-            .iter()
-            .enumerate()
-            .find(|(_, p)| p.name == name)
-            .expect("participant in this run");
-        let (_, character) = remote_identity(participant).expect("D&D Beyond participant");
-        let max_hp = participant.max_hp.unwrap_or(1);
-        let damage = max_hp - participant.hp.unwrap_or(max_hp);
-        self.syncs.insert(
-            index,
-            crate::combat_sync::CombatSync::simulated_conflict(
-                character.parse().expect("numeric ID"),
-                max_hp,
-                damage,
-            ),
-        );
+        self.simulate_sync_state(name, crate::combat_sync::SyncState::Conflict);
+    }
+    /// A spell slot spent on this sheet and not sent.
+    pub fn simulate_slot_edit(&mut self, name: &str) {
+        let (index, ..) = self.simulated_member(name);
+        self.syncs
+            .get_mut(&index)
+            .expect("a running sync")
+            .simulate_slot_edit();
     }
 }
 
@@ -2081,7 +2194,7 @@ mod tests {
         assert_eq!(run.state.participants[0].conditions, vec!["Poisoned"]);
         run.apply(Command::End("Enemies fled".into())).unwrap();
         assert!(matches!(run.state.phase, Phase::Ended { .. }));
-        assert!(run.state.log.last().unwrap().contains("Ended manually"));
+        assert!(run.state.log.last().unwrap().contains("Ended in round"));
         assert!(run.apply(Command::Damage(0, 2)).is_err());
         run.undo();
         assert_eq!(run.state.phase, Phase::Running);
@@ -2446,7 +2559,7 @@ mod tests {
         first_sync(&mut run, max, 5);
         assert_eq!(run.state.participants[0].hp, Some(max - 5));
         assert!(run.syncs[&0].conflict_keys().is_empty());
-        let notice = run.notice.clone().unwrap();
+        let notice = run.notice.clone().unwrap().full;
         let change = format!("HP {hp} → {}", max - 5);
         assert!(notice.contains(&change), "{notice}");
         assert!(run.state.log.iter().any(|line| line.contains(&change)));
@@ -2606,8 +2719,8 @@ mod tests {
         assert_eq!(run.state.participants[0].hp, Some(max - 2));
         // Nothing to take back under another name, and the notice says what happened.
         assert!(run.history.is_empty());
-        assert_eq!(run.undo_label(), "Undo");
-        let notice = run.notice.clone().unwrap();
+        assert_eq!(run.undo_label(), "No Undo since sync update");
+        let notice = run.notice.clone().unwrap().full;
         let change = format!("HP {} → {}", max - 9, max - 2);
         assert!(notice.contains(&change), "{notice}");
         assert!(notice.contains("From D&D Beyond"), "{notice}");
@@ -2630,8 +2743,8 @@ mod tests {
         connected_tick(&mut run);
         assert_eq!(run.state.participants[0].hp, Some(max - 8));
         assert!(run.history.is_empty());
-        let notice = run.notice.clone().unwrap();
-        assert!(notice.contains("In the sync panel"), "{notice}");
+        let notice = run.notice.clone().unwrap().full;
+        assert!(notice.contains("In Record"), "{notice}");
         assert!(
             notice.contains(&format!("HP {} → {}", max - 5, max - 8)),
             "{notice}"
@@ -2799,7 +2912,7 @@ mod tests {
         let mut update = sheet(5, &[12]);
         update["temporaryHitPoints"] = 4.into();
         read_full_sheet(&mut run, max, &update);
-        let notice = run.notice.clone().unwrap();
+        let notice = run.notice.clone().unwrap().full;
         assert!(notice.contains("Poisoned removed"), "{notice}");
         assert!(notice.contains("Prone added"), "{notice}");
         assert!(notice.contains("temp HP 0 → 4"), "{notice}");
@@ -2921,7 +3034,7 @@ mod tests {
         assert_eq!(run.state.participants[0].max_hp, Some(max));
         assert!(run.syncs[&0].conflict_keys().is_empty());
         assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 0);
-        let notice = run.notice.clone().unwrap();
+        let notice = run.notice.clone().unwrap().full;
         assert!(
             notice.contains(&format!("maximum HP {} → {max}", max + 8)),
             "{notice}"
@@ -2943,7 +3056,7 @@ mod tests {
         reconnect(&mut run);
         read_sheet(&mut run, max, 0);
         assert_eq!(run.state.participants[0].hp, Some(max));
-        let notice = run.notice.clone().unwrap();
+        let notice = run.notice.clone().unwrap().full;
         assert!(
             notice.contains(&format!("maximum HP {} → {max}", max + 8)),
             "{notice}"
@@ -2984,7 +3097,8 @@ mod tests {
             run.notice
                 .as_ref()
                 .unwrap()
-                .contains("Undo history was cleared")
+                .full
+                .contains("Earlier Undo steps ended")
         );
         assert!(run.undo_stopped, "plain Undo gives this reason on hover");
         run.next_turn();
@@ -3029,7 +3143,7 @@ mod tests {
         assert_eq!(run.state.participants[0].hp, Some(max - 8));
         assert_ne!(run.sync_word(0), Some(SyncState::Conflict));
         assert!(run.syncs[&0].conflict_keys().is_empty());
-        let notice = run.notice.clone().unwrap();
+        let notice = run.notice.clone().unwrap().full;
         assert!(
             notice.contains("From D&D Beyond")
                 && notice.contains(&format!("HP {} → {}", max - 5, max - 8)),
@@ -3155,14 +3269,15 @@ mod tests {
         let mut run = run();
         begin(&mut run);
         run.apply(Command::Next).unwrap();
-        run.note_sheet_update(&["Guard 1".to_owned()]);
+        run.note_sheet_update(&[("Guard 1".to_owned(), "Guard 1 HP 20 → 17".to_owned())]);
         assert!(run.history.is_empty());
-        assert_eq!(run.undo_label(), "Undo");
+        assert_eq!(run.undo_label(), "No Undo since sync update");
         assert!(
             run.notice
                 .as_ref()
                 .unwrap()
-                .contains("Undo history was cleared")
+                .full
+                .contains("Earlier Undo steps ended")
         );
     }
     #[test]
@@ -3192,5 +3307,67 @@ mod tests {
         run.state.participants[2].initiative_bonus = Some(2);
         run.apply(Command::RollNpcs).unwrap();
         assert_eq!(run.state.participants[0].initiative, Some(6));
+    }
+    /// M9-1, L9-2: who changed fits the one line, and the whole stays for the log and hover.
+    #[test]
+    fn a_notice_says_who_changed_in_each_form() {
+        let mut run = run();
+        begin(&mut run);
+        let change = |name: &str, line: &str| (name.to_owned(), line.to_owned());
+        run.note_sync_changes(
+            &[
+                change("Guard 1", "Guard 1 HP 20 → 17"),
+                change("Guard 2", "Guard 2 HP 9 → 8"),
+            ],
+            &[change("Guard 3", "Guard 3 HP 5 → 4")],
+        );
+        let notice = run.notice.clone().unwrap();
+        assert!(
+            notice
+                .full
+                .contains("From D&D Beyond: Guard 1 HP 20 → 17; Guard 2 HP 9 → 8.")
+        );
+        assert!(notice.full.contains("In Record: Guard 3 HP 5 → 4."));
+        assert!(notice.full.ends_with("Earlier Undo steps ended."));
+        assert_eq!(
+            notice.short,
+            "Sheet update: Guard 1 and 2 more. Earlier Undo steps ended."
+        );
+        run.note_sync_changes(&[], &[change("Guard 3", "Guard 3 HP 4 → 3")]);
+        assert_eq!(
+            run.notice.unwrap().short,
+            "In Record: Guard 3. Earlier Undo steps ended."
+        );
+    }
+    /// L6-1: with no step to take back, the button itself says why, in each case.
+    #[test]
+    fn undo_with_no_step_says_why() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        begin(&mut run);
+        let campaign = stored(&mut run, dir.path());
+        let path = run.path().unwrap().to_path_buf();
+        let mut reopened = Run::open(&path, campaign).unwrap();
+        assert_eq!(reopened.undo_label(), "No Undo since reopening");
+        assert_eq!(reopened.undo_label_short().as_deref(), Some("No Undo"));
+        reopened.apply(Command::Damage(0, 1)).unwrap();
+        assert!(reopened.undo_label().starts_with("Undo: 1 damage to"));
+        assert_eq!(
+            reopened.undo_label_short().as_deref(),
+            Some("Undo: 1 damage")
+        );
+        reopened.note_sheet_update(&[("Guard 1".to_owned(), "Guard 1 HP 20 → 17".to_owned())]);
+        assert_eq!(reopened.undo_label(), "No Undo since sync update");
+    }
+    /// L8-5: the log says what is true of a participant with no initiative.
+    #[test]
+    fn presence_words_follow_the_initiative() {
+        let mut run = run();
+        run.apply(Command::Presence(0, false)).unwrap();
+        assert!(run.state.log.last().unwrap().contains("No initiative yet"));
+        run.apply(Command::Presence(0, true)).unwrap();
+        run.apply(Command::Initiative(0, Some(3))).unwrap();
+        run.apply(Command::Presence(0, false)).unwrap();
+        assert!(run.state.log.last().unwrap().contains("keeps initiative"));
     }
 }
