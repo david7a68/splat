@@ -258,7 +258,7 @@ pub mod library_author {
         );
         d.click(UNDO_DISCARD);
         d.observe(
-            "C-4",
+            "Discard undo",
             draft_here(d, SECOND_WORDS),
             "Undo brings the dropped draft back",
         );
@@ -294,13 +294,13 @@ pub mod library_author {
         );
         d.click(DISCARD);
         d.observe(
-            "C-4",
+            "Discard undo",
             d.has(UNDO_DISCARD) && !draft_here(d, "no front matter at all"),
             "Discard takes one press, and offers undo in place of a dialog",
         );
         d.click(UNDO_DISCARD);
         d.observe(
-            "C-4",
+            "Discard undo",
             draft_here(d, "no front matter at all"),
             "Undo brings back the discarded draft",
         );
@@ -1002,7 +1002,7 @@ pub mod dialogs {
         d.expect(UNSAVED_NOTE);
         d.request_close();
         d.observe(
-            "H-13",
+            "Close prompt",
             d.has_containing(&format!("\u{201c}{NOTE}\u{201d}"))
                 && d.has_containing(MODULE)
                 && d.has_containing(CLOSE_PROMPT),
@@ -1116,7 +1116,7 @@ pub mod run_lookup {
         d.expect(SPELL);
         d.state("reading-spell-beside-run", Sizes::All);
         d.goal_within("T2.1", "read a spell from a run", 3);
-        // M-13: in a short panel the text gets the height, and the list is one click away.
+        // In a short panel the text gets the height, and the list is one click away.
         d.observe(
             "T2.1",
             d.has("Show the results") && !d.has_containing(SECOND_RESULT),
@@ -1315,7 +1315,7 @@ pub mod prep_to_table {
         let marked = d.has(&format!("Mark present: {player}"));
         d.click(&format!("Mark present: {player}"));
         d.observe(
-            "H-5",
+            "Absent player",
             marked && d.has(&format!("Absent: {player}")),
             "Setup has a word for a player who did not arrive, and undoing it takes one press",
         );
@@ -1325,7 +1325,7 @@ pub mod prep_to_table {
         let asked = d.has("Keep running");
         d.press(Key::Escape);
         d.observe(
-            "M-25",
+            "Setup close",
             asked && !d.has("Keep running") && d.has("Close run"),
             "Escape backs out of the close prompt in Setup",
         );
@@ -1471,7 +1471,7 @@ pub mod run_large_roster {
                 (short.min(place.1.height()), tall.max(place.1.height()))
             });
         d.observe(
-            "H-3",
+            "Large roster",
             places.len() == 12 && dock - bottom < 12.0 && tall - short <= 3.0,
             format!(
                 "12 rows at 960x640 leave {:.0} px above the dock, and are {short:.1} to {tall:.1} px tall",
@@ -1614,7 +1614,7 @@ pub mod run_sync_conflict {
         d.app_mut().encounters.simulate_sync_conflict(SYNCED);
         d.settle();
         d.state("conflict-with-nothing-expanded", Sizes::All);
-        // M-11: the footer's main way out says why it is off, with no hover.
+        // The footer's main way out says why it is off, with no hover.
         d.observe(
             "G1",
             d.is_disabled(CLOSE_RUN) && d.visible_text(CLOSE_WHY),
@@ -1700,7 +1700,7 @@ pub mod run_sync_conflict {
         d.app_mut().encounters.simulate_sheet_update(SYNCED);
         d.settle();
         d.state("undo-cleared-by-sheet-update", Sizes::Default);
-        // M-9: a notice goes under the list, and no row moves from where it was.
+        // A notice goes under the list, and no row moves from where it was.
         let rows_after = roster_places(d);
         d.observe(
             "Stable rows",
@@ -1863,7 +1863,7 @@ pub mod party_from_run {
         d.click(SHEET_SUBPAGE);
         d.state("sheet-spells-beside-run", Sizes::Default);
         d.observe(
-            "M-15",
+            "Spells beside run",
             d.visible_text("Fire Bolt"),
             "The spells page beside the run lists a caster's spells",
         );
@@ -2054,7 +2054,7 @@ pub mod gallery {
             d.scroll_at(pos2(600.0, 300.0), 1);
         }
         d.observe(
-            "M-34",
+            "Temporary HP",
             d.visible_text(&temp),
             "Temporary HP shows with its mark, as it does in the run and on Party",
         );
@@ -2166,7 +2166,7 @@ pub mod run_edge_states {
         }
         d.expect("No participants are present");
         d.observe(
-            "M-3",
+            "Nobody present",
             d.is_disabled(NEXT_TURN),
             "With nobody present, Next turn is off, and a steady line says why",
         );
@@ -2194,13 +2194,13 @@ pub mod run_edge_states {
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
         d.observe(
-            "C-1",
+            "Changed on disk",
             !d.has(CLOSE_ERROR) && d.has(KEEP_RUN) && d.has(SAVE_AS_NEW),
             "The message stays, with both ways out",
         );
         d.click(CLOSE_RUN);
         d.observe(
-            "C-1",
+            "Changed on disk",
             !d.has_containing("stays saved")
                 && d.has("Close anyway")
                 && d.visible_text("loses unsaved changes"),
@@ -2212,7 +2212,7 @@ pub mod run_edge_states {
         d.click(KEEP_RUN);
         let saved = std::fs::read_to_string(&path).expect("read the run");
         d.observe(
-            "C-1",
+            "Changed on disk",
             d.visible_text("Saved")
                 && !d.has_containing("changed on disk")
                 && saved.contains(LONG_EFFECT),
@@ -2232,7 +2232,7 @@ pub mod run_edge_states {
             .and_then(|run| run.path().map(std::path::Path::to_path_buf))
             .expect("a saved run");
         d.observe(
-            "C-1",
+            "Changed on disk",
             new_path != path
                 && new_path.exists()
                 && std::fs::read_to_string(&path).is_ok_and(|text| text == saved.clone() + "\n")
@@ -2321,7 +2321,7 @@ pub mod run_sync_states {
         d.click("End encounter…");
         d.click("End encounter");
         d.observe(
-            "C-3",
+            "Ended run close",
             d.is_disabled(CLOSE_RUN)
                 && d.row_words("Iselle Marrowind").contains("Conflict")
                 && d.has(USE_REMOTE),
@@ -2336,7 +2336,7 @@ pub mod run_sync_states {
             }
         }
         d.observe(
-            "C-3",
+            "Ended run close",
             !d.is_disabled(CLOSE_RUN),
             "With the sync resolved or stopped, the ended run can close",
         );
@@ -2514,7 +2514,7 @@ pub mod signed_in {
         d.state("remote-campaign-list", Sizes::Default);
         d.goal("see the remote campaign list");
         d.observe(
-            "M-14",
+            "Added campaigns",
             d.is_disabled("The Emberfall Marches · Added")
                 && d.is_disabled("Quiet Harbor · Added")
                 && !d.is_disabled(REMOTE_NAME),
@@ -2660,7 +2660,7 @@ pub mod signed_in {
         go_campaign(d);
         d.click(LINK_TAB);
         d.observe(
-            "H-8",
+            "Locked link",
             d.visible_text(BLOCKED_REASON) && d.is_disabled(EDIT_DETAILS),
             "With a run open, the link tab states why it is locked, and its controls are",
         );

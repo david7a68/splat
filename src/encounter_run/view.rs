@@ -421,12 +421,12 @@ impl Run {
                         ui.available_width(),
                         self.state.order.len(),
                     );
-                    self.live_header(ui, scale);
+                    let notice_below = self.live_header(ui, scale);
                     self.error_line(ui);
                     let room = ui.available_height() - DOCK_HEIGHT - FOOTER_HEIGHT;
                     // A message goes in the room under the list, so it moves no row while
                     // the DM's eye is on them. A long one wraps there.
-                    let notice = self.notice.clone().filter(|_| self.notice_below);
+                    let notice = self.notice.clone().filter(|_| notice_below);
                     let notice_height = notice.as_ref().map_or(0.0, |notice| {
                         let width = ui.available_width() - 32.0;
                         let font = Type::Small.font(ui);
@@ -471,7 +471,8 @@ impl Run {
 
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
-    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) {
+    /// True if the notice has no room on the header's line, so it goes under the list.
+    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
         let c = colors();
         let strip = self.strip();
         let name = strip.current.as_deref().unwrap_or_default();
@@ -509,19 +510,18 @@ impl Run {
                     // up a little size, then the later words of a long name. The row, the panel
                     // and the dock's hover have the whole name.
                     let room = ui.available_width() - 1.0;
-                    let full = format!("{name}’s turn");
+                    let suffix = "’s turn";
+                    let full = format!("{name}{suffix}");
                     let least = (scale.name + 1.0).min(turn_size);
+                    let font = Type::Name.sized(ui, turn_size);
                     let fit = |text: &str| {
-                        let width =
-                            design::number_width(ui, text, &Type::Name.sized(ui, turn_size));
+                        let width = design::number_width(ui, text, &font);
                         (turn_size * room / width).min(turn_size)
                     };
                     let full_size = fit(&full);
                     let (text, size) = if full_size >= least {
                         (full, full_size)
                     } else {
-                        let font = Type::Name.sized(ui, turn_size);
-                        let suffix = "’s turn";
                         let words = design::words_that_fit(
                             ui,
                             name,
@@ -578,7 +578,7 @@ impl Run {
         let notice_fits = self.notice.as_ref().is_none_or(|notice| {
             design::number_width(ui, notice, &notice_font) + undo_room + 32.0 < ui.available_width()
         });
-        self.notice_below = self.notice.is_some() && (sync_alert.is_some() || !notice_fits);
+        let notice_below = self.notice.is_some() && (sync_alert.is_some() || !notice_fits);
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), 28.0),
             Layout::right_to_left(Align::Center),
@@ -642,6 +642,7 @@ impl Run {
         if next_turn {
             self.run_command(Command::Next);
         }
+        notice_below
     }
 
     /// The sync state a row shows, if this participant has one.
@@ -2402,14 +2403,6 @@ struct RowLayout {
     hp_right: f32,
 }
 
-/// The current-row bar, the gap after it, and room for the word `TURN` at this size.
-fn initiative_width(scale: RunScale, narrow: bool) -> f32 {
-    let word = scale.mark * 3.2;
-    // The word can sit on the number's line, so that a row's height never depends on whose
-    // turn it is.
-    6.0 + design::XS + if narrow { word + scale.stat } else { word }
-}
-
 fn header_height(scale: RunScale) -> f32 {
     (scale.hp * 1.6).max(36.0)
 }
@@ -2429,7 +2422,11 @@ impl RowLayout {
         // The smallest scale has one set of columns, compressed or not, so that a list that
         // starts to compress does not move its names sideways.
         let narrow = fit == RowFit::Compressed || scale.row <= design::RUN_COMPACT.row;
-        let initiative_right = initiative_width(scale, narrow);
+        // The current-row bar, the gap after it, and room for the word `TURN` at this size. In
+        // narrow columns the word can sit on the number's line, so that a row's height never
+        // depends on whose turn it is.
+        let word = scale.mark * 3.2;
+        let initiative_right = 6.0 + design::XS + if narrow { word + scale.stat } else { word };
         let gap = if narrow { 6.0 } else { 12.0 };
         // Its bar starts later, still under the digits, so its second line has the width that
         // the turn word took and a condition does not wrap again.

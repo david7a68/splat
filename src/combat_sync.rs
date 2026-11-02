@@ -788,7 +788,7 @@ impl CombatSync {
             self.desired.insert(key.into(), local);
         }
     }
-    fn use_remote(&mut self, key: &str) {
+    pub fn use_remote(&mut self, key: &str) {
         if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(key)) {
             self.desired.insert(key.to_owned(), value.clone());
         } else {
@@ -796,7 +796,7 @@ impl CombatSync {
         }
         self.blocked.remove(key);
     }
-    fn keep_local(&mut self, key: &str) {
+    pub fn keep_local(&mut self, key: &str) {
         self.blocked.remove(key);
         self.changed = None;
         self.next = None;
@@ -818,14 +818,6 @@ impl CombatSync {
             },
             &sent,
         );
-    }
-    #[cfg(test)]
-    pub fn simulate_choice(&mut self, key: &str, keep_local: bool) {
-        if keep_local {
-            self.keep_local(key);
-        } else {
-            self.use_remote(key);
-        }
     }
     #[cfg(test)]
     pub fn conflict_keys(&self) -> Vec<String> {

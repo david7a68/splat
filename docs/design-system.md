@@ -37,7 +37,7 @@ Fonts are in `assets/fonts/` with their licences. All are OFL. egui 0.33 rasteri
 | egui's monospace | Markdown editor | Source text only. `Type::Mono` |
 
 Atkinson Hyperlegible was the first choice. Its digits are proportional and its zero is
-slashed, and painting each digit in a fixed cell left wide gaps (review H-4). So the font
+slashed, and painting each digit in a fixed cell left wide gaps. So the font
 changed, and no fixed cells are left. `design::number` right-aligns ordinary text, and
 HP and initiative hold their place because the font's digits have one width.
 

@@ -186,8 +186,6 @@ pub(crate) struct Run {
     pub hide_panel: bool,
     /// Lookup is open. Letters are then the next word of a search, never a command.
     pub lookup_open: bool,
-    /// The notice has no room on the header's line, so it goes under the list.
-    notice_below: bool,
     /// Opened from a save, so there is no undo history to go back through.
     reopened: bool,
     pub content: Option<Arc<crate::lookup::ContentIndex>>,
@@ -334,7 +332,6 @@ impl Run {
             last_initiative: None,
             hide_panel: false,
             lookup_open: false,
-            notice_below: false,
             reopened: false,
             content: None,
             lookup_request: None,
@@ -1485,7 +1482,6 @@ impl Run {
             last_initiative: None,
             hide_panel: false,
             lookup_open: false,
-            notice_below: false,
             reopened: true,
             content: None,
             lookup_request: None,
@@ -2208,7 +2204,7 @@ mod tests {
         offline_tick(&mut run);
         reconnect(&mut run);
         read_sheet(&mut run, max, 5);
-        run.syncs.get_mut(&0).unwrap().simulate_choice("hp", true);
+        run.syncs.get_mut(&0).unwrap().keep_local("hp");
         connected_tick(&mut run);
         assert_eq!(run.state.participants[0].hp, Some(max - 9));
         assert!(run.syncs[&0].conflict_keys().is_empty());
@@ -2222,7 +2218,7 @@ mod tests {
         offline_tick(&mut run);
         reconnect(&mut run);
         read_sheet(&mut run, max, 2);
-        run.syncs.get_mut(&0).unwrap().simulate_choice("hp", false);
+        run.syncs.get_mut(&0).unwrap().use_remote("hp");
         connected_tick(&mut run);
         assert_eq!(run.state.participants[0].hp, Some(max - 2));
         assert!(!run.syncs[&0].dirty());

@@ -258,14 +258,13 @@ impl Party {
                 }
             }
         }
-        let title = self
-            .combat
-            .record()
-            .or_else(|| self.reader.sheets.get(id))
-            .map(|record| (record.definition.splat_name.clone(), class_line(record)));
-        if let Some((name, class)) = &title {
+        if let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) {
             ui.horizontal(|ui| {
-                ui.label(Type::Display.rich(ui, name).color(c.text));
+                ui.label(
+                    Type::Display
+                        .rich(ui, &record.definition.splat_name)
+                        .color(c.text),
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if design::link(ui, "D&D Beyond ↗").clicked() {
                         ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
@@ -274,7 +273,7 @@ impl Party {
                     }
                 });
             });
-            ui.label(Type::Small.rich(ui, class).color(c.muted));
+            ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
         }
         if session.is_some() {
             // Under the name, and it says its state while closed.

@@ -253,21 +253,20 @@ impl CampaignContent {
                     }
                     if let Some((_, text)) =
                         self.discarded_repair.as_ref().filter(|(p, _)| p == path)
-                        && {
-                            ui.label(
-                                Type::Small
-                                    .rich(ui, "Draft discarded.")
-                                    .color(colors().muted),
-                            );
-                            true
-                        }
-                        && Action::secondary("Undo discard")
+                    {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, "Draft discarded.")
+                                .color(colors().muted),
+                        );
+                        if Action::secondary("Undo discard")
                             .density(Density::Read)
                             .show(ui)
                             .clicked()
-                    {
-                        *draft = text.clone();
-                        self.discarded_repair = None;
+                        {
+                            *draft = text.clone();
+                            self.discarded_repair = None;
+                        }
                     }
                 });
             });
@@ -321,19 +320,17 @@ impl CampaignContent {
                         self.saved_selections.clone(),
                     ));
                 }
-            } else if self.discarded_selections.is_some()
-                && {
-                    ui.label(Type::Small.rich(ui, "Selections discarded.").color(c.muted));
-                    true
-                }
-                && Action::secondary("Undo discard")
+            } else if self.discarded_selections.is_some() {
+                ui.label(Type::Small.rich(ui, "Selections discarded.").color(c.muted));
+                if Action::secondary("Undo discard")
                     .density(Density::Read)
                     .hint("Bring back the selection changes you discarded")
                     .show(ui)
                     .clicked()
-                && let Some(selections) = self.discarded_selections.take()
-            {
-                document.selections = selections;
+                    && let Some(selections) = self.discarded_selections.take()
+                {
+                    document.selections = selections;
+                }
             }
             if !self.repairs.is_empty() {
                 ui.label(

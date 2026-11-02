@@ -273,32 +273,40 @@ impl<'a> Driver<'a> {
 
     /// The size of the painted text in this rect that holds these words.
     pub fn painted_size(&self, rect: egui::Rect, words: &str) -> Option<f32> {
-        fn search(shape: &egui::Shape, rect: egui::Rect, words: &str, found: &mut Option<f32>) {
+        let mut found = None;
+        self.each_painted_text(|text, _| {
+            if rect.contains(text.visual_bounding_rect().center())
+                && text.galley.job.text.contains(words)
+            {
+                found = text
+                    .galley
+                    .job
+                    .sections
+                    .first()
+                    .map(|s| s.format.font_id.size);
+            }
+        });
+        found
+    }
+
+    /// Each text painted now, with the clip of the pane it is in.
+    fn each_painted_text(&self, mut visit: impl FnMut(&egui::epaint::TextShape, egui::Rect)) {
+        fn walk(
+            shape: &egui::Shape,
+            clip: egui::Rect,
+            visit: &mut impl FnMut(&egui::epaint::TextShape, egui::Rect),
+        ) {
             match shape {
                 egui::Shape::Vec(shapes) => {
-                    shapes
-                        .iter()
-                        .for_each(|shape| search(shape, rect, words, found));
+                    shapes.iter().for_each(|shape| walk(shape, clip, visit));
                 }
-                egui::Shape::Text(text)
-                    if rect.contains(text.visual_bounding_rect().center())
-                        && text.galley.job.text.contains(words) =>
-                {
-                    *found = text
-                        .galley
-                        .job
-                        .sections
-                        .first()
-                        .map(|s| s.format.font_id.size);
-                }
+                egui::Shape::Text(text) => visit(text, clip),
                 _ => {}
             }
         }
-        let mut found = None;
         for clipped in &self.harness.output().shapes {
-            search(&clipped.shape, rect, words, &mut found);
+            walk(&clipped.shape, clipped.clip_rect, &mut visit);
         }
-        found
     }
 
     /// What the rail paints. It has its own words, whatever the page says.
@@ -570,29 +578,16 @@ impl<'a> Driver<'a> {
     /// Every text painted inside this rect and whole: not cut to an ellipsis, and not
     /// outside the clip of the pane it is in. This is what a person can read there.
     pub fn painted_in(&self, rect: egui::Rect) -> String {
-        fn search(shape: &egui::Shape, clip: egui::Rect, rect: egui::Rect, out: &mut Vec<String>) {
-            match shape {
-                egui::Shape::Vec(shapes) => {
-                    shapes
-                        .iter()
-                        .for_each(|shape| search(shape, clip, rect, out));
-                }
-                egui::Shape::Text(text) => {
-                    let bounds = text.visual_bounding_rect();
-                    if rect.contains(bounds.center())
-                        && !text.galley.elided
-                        && clip.expand(1.0).contains_rect(bounds)
-                    {
-                        out.push(text.galley.job.text.clone());
-                    }
-                }
-                _ => {}
-            }
-        }
         let mut out = Vec::new();
-        for clipped in &self.harness.output().shapes {
-            search(&clipped.shape, clipped.clip_rect, rect, &mut out);
-        }
+        self.each_painted_text(|text, clip| {
+            let bounds = text.visual_bounding_rect();
+            if rect.contains(bounds.center())
+                && !text.galley.elided
+                && clip.expand(1.0).contains_rect(bounds)
+            {
+                out.push(text.galley.job.text.clone());
+            }
+        });
         out.join(" ")
     }
 
