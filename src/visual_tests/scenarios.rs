@@ -3016,8 +3016,23 @@ pub mod run_roster_conflict {
         d.click(LOG_MARKED);
         d.observe(
             "T3.4",
-            !d.has(LOG_MARKED) && d.visible_text("From D&D Beyond: Brannoch Vale HP 58 → 54"),
-            "Opening the Log shows what changed, and the mark goes",
+            !d.has(LOG_MARKED)
+                && d.visible_text("From D&D Beyond: Brannoch Vale HP 58 → 54")
+                && d.visible_text(WORDS_OF_MESSAGE),
+            "Opening the Log shows what changed and that earlier Undo steps ended, and the mark goes",
+        );
+        // With the Log already open, the message never reaches the header. The Log has it all.
+        d.app_mut()
+            .encounters
+            .simulate_sheet_update(&[("Oren Thistlewick", "HP 45 → 40")]);
+        d.settle();
+        d.state("message-with-log-open", Sizes::Default);
+        d.observe(
+            "T3.4",
+            d.visible_text(
+                "From D&D Beyond: Oren Thistlewick HP 45 → 40. Earlier Undo steps ended.",
+            ) && !d.has(LOG_MARKED),
+            "With the Log open when an update comes, the Log says what changed and that Undo ended",
         );
         d.click("Sheet");
         d.begin_task();

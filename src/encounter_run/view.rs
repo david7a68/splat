@@ -517,7 +517,8 @@ impl Run {
                     let compact = notice.is_some() && tightest > room - notice_height;
                     let notice_height = if compact { MESSAGE_LINE } else { notice_height };
                     // With no room even for that line, as with a tall list or an error up too,
-                    // the header's line or the Log tab says it. It comes back here if room does.
+                    // the header's line or the Log tab says it. It comes back here if room does,
+                    // unless the DM has read it in the Log, which answers it.
                     let hidden = notice.is_some() && tightest > room - notice_height;
                     if hidden != self.notice_hidden {
                         self.notice_hidden = hidden;

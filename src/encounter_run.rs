@@ -1457,7 +1457,8 @@ impl Run {
 }
 impl Run {
     /// Values reached the run with no step of their own: earlier steps can no longer be undone
-    /// safely. The log and the notice say what changed, from what to what.
+    /// safely. The log and the notice each say what changed, from what to what, and that
+    /// Undo ended: the log may be the only place the DM reads it.
     fn note_sync_changes(
         &mut self,
         from_sheet: &[(String, String)],
@@ -1479,8 +1480,8 @@ impl Run {
         if !from_panel.is_empty() {
             what.push(format!("In Record: {}.", lines(from_panel)));
         }
-        let what = what.join(" ");
-        self.state.log.push(what.clone());
+        let full = format!("{} Earlier Undo steps ended.", what.join(" "));
+        self.state.log.push(full.clone());
         let source = if from_sheet.is_empty() {
             "In Record"
         } else {
@@ -1493,7 +1494,7 @@ impl Run {
             more => format!("{first} and {more} more"),
         };
         self.notice = Some(Notice {
-            full: format!("{what} Earlier Undo steps ended."),
+            full,
             short: format!("{source}: {who}. Earlier Undo steps ended."),
         });
         self.undo_stopped = true;
