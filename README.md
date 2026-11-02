@@ -231,6 +231,10 @@ individual selections do not. **Save selections** writes `splat_packages` into t
 campaign manifest while preserving unrelated fields, comments, and note text. A
 campaign without a manifest gets `Campaign.md` on first save, with its existing UUID
 and the default SRD selection. Missing packages and unresolved references remain visible.
+A package that other entries need but that is not registered shows once, as **Package not
+found**. The issue uses the package's name when its folder, with a `Package.md`, is beside a
+registered package, and its namespace otherwise. An entry missing from a loaded package also
+shows once, with the entries that need it.
 
 Use **Copy to…** on a library or campaign entry to make an independent copy in a
 registered package or campaign. Review the destination, name, retained dependencies,
