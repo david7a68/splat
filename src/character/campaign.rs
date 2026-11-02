@@ -152,7 +152,12 @@ impl EntitySnapshot {
         // but never a new creature whose dependency files have not yet been published.
         for note in staged {
             // Rewriting the same words costs an fsync per note, and changes the file's time.
-            if note.previous.as_ref() == Some(&note.text) {
+            // A later read of the same sheet differs only in when it was read.
+            if note
+                .previous
+                .as_deref()
+                .is_some_and(|previous| same_but_read_time(previous, &note.text))
+            {
                 if fs::read_to_string(&note.path).ok() != note.previous {
                     return Ok(false);
                 }
@@ -357,6 +362,23 @@ fn parts(text: &str) -> Parts<'_> {
         intact: false,
     }
 }
+/// Whether two copies hold the same sheet and notes, whenever each was read.
+fn same_but_read_time(previous: &str, next: &str) -> bool {
+    let facts = |text: &'_ str| {
+        let copy = parts(text);
+        let lines: Vec<String> = copy
+            .generated
+            .lines()
+            .filter(|line| {
+                let line = line.trim_start();
+                !line.starts_with("fetched_at:") && !line.starts_with("raw_fetched_at:")
+            })
+            .map(str::to_owned)
+            .collect();
+        (copy.intact, lines, copy.notes.to_owned())
+    };
+    previous == next || facts(previous) == facts(next)
+}
 fn checksum(generated: &str) -> String {
     format!("{:x}", Sha256::digest(generated.as_bytes()))
 }
@@ -476,6 +498,21 @@ mod tests {
         let inode = fs::metadata(&creature).unwrap().ino();
         record.save_campaign_copy(root.path()).unwrap();
         assert_eq!(fs::metadata(&creature).unwrap().ino(), inode);
+    }
+    #[test]
+    fn a_later_read_of_the_same_sheet_keeps_its_file_and_a_change_replaces_it() {
+        use std::os::unix::fs::MetadataExt;
+        let root = tempfile::tempdir().unwrap();
+        let mut record = super::super::tests::sample();
+        let creature = record.save_campaign_copy(root.path()).unwrap();
+        let inode = fs::metadata(&creature).unwrap().ino();
+        record.source.fetched_at += 100;
+        record.source.raw_fetched_at += 100;
+        record.save_campaign_copy(root.path()).unwrap();
+        assert_eq!(fs::metadata(&creature).unwrap().ino(), inode);
+        record.initial.hp -= 1;
+        record.save_campaign_copy(root.path()).unwrap();
+        assert_ne!(fs::metadata(&creature).unwrap().ino(), inode);
     }
     #[test]
     fn overwrite_replaces_edits_archives_them_and_leaves_other_notes() {

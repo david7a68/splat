@@ -5,7 +5,7 @@
       "column-resize": 95,
       "dialogs": 37,
       "empty": 18,
-      "encounter-build": 37,
+      "encounter-build": 40,
       "encounter-groups": 68,
       "encounter-run": 53,
       "gallery": 20,
@@ -33,7 +33,7 @@
       "session-notes": 138,
       "session-recording": 106,
       "settings": 17,
-      "signed-in": 41
+      "signed-in": 38
     },
     "clipped": {
       "column-resize": 9
@@ -50,7 +50,7 @@
       "column-resize": 95,
       "dialogs": 36,
       "empty": 18,
-      "encounter-build": 37,
+      "encounter-build": 40,
       "encounter-groups": 68,
       "encounter-run": 52,
       "gallery": 20,
@@ -78,7 +78,7 @@
       "session-notes": 138,
       "session-recording": 105,
       "settings": 17,
-      "signed-in": 41
+      "signed-in": 38
     }
   },
   "task_cost": {

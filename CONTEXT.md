@@ -241,6 +241,10 @@ fallback when initiative does not decide their order.
 The policy that selects a participant's combat choices during simulation.
 The applicable rules determine which choices are allowed and their outcomes.
 
+**Combat sync**:
+The background exchange of a linked character's HP, death saves, conditions, spell slots and limited
+uses with D&D Beyond. It runs from the time Splat connects. An encounter can turn it off for its run.
+
 **Controller**:
 The person or strategy that makes a participant's permitted choices. A control
 effect can change the controller without changing which creature it controls.

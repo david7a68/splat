@@ -74,7 +74,7 @@ search and related views but is not a complete indexing or filesystem exclusion.
 Build artifacts stay in the code repository's ignored `target/` directory.
 
 Keep D&D Beyond session cookies and tokens outside Git. Authentication is available
-in Settings; character sheets with optional combat sync are available in **Party**. Characters now have persistent local copies in the shared creature schema.
+in Settings; character sheets with combat sync are available in **Party**. Characters now have persistent local copies in the shared creature schema.
 The encounter builder uses these local character copies. Manual DM runs are available. Automatic combat resolution and simulation integration remain later work.
 
 ## D&D Beyond connection
@@ -390,15 +390,39 @@ is a campaign-local rule selected through `splat_rule_choices`.
 
 ### D&D Beyond combat sync
 
-In a DM run, **Sync party** turns combat sync on
-for every linked player, and **Record** has the panel for one. Each synced row shows its
-state, and a conflict shows on the row and the strip without stopping the table. Each connection first reads the live sheet.
-Saved runs do not automatically push old values. The session must have edit
-permission for the character.
+Combat sync starts when Splat connects to D&D Beyond and the active campaign is linked. It then
+runs in the background on every page. Splat reads the party's sheets when the campaign's event stream
+reports a change, and reads each sheet about once a minute. Party's panel can turn off its own sync of
+the selected character. The background reads continue.
+
+An encounter has the option **Sync party with D&D Beyond**, on by default. It shows only in a linked
+campaign, in the roster of the encounter editor. With the option on:
+
+- The roster shows what the party has now: HP, temporary HP, AC, conditions and spell slots for each
+  row, and the party's total, so that you can plan the encounter around them.
+- The party starts the run with the values on their sheets. Starting HP overrides for those rows wait,
+  unused, in case you turn the option off.
+- The run starts sync by itself, and **your changes to HP, death saves and conditions go to the
+  player's sheet on D&D Beyond** with no other step.
+
+With the option off, the party starts from their saved copies and the starting values you set, and
+nothing in that encounter reaches D&D Beyond unless you select **Sync party** in the run. Use it for a flashback, a training fight, or a test of an
+idea. The note records `combat_sync: false`, and a note without it has sync on.
+
+**Sync party** in a run starts or stops sync for every linked player, and **Record** has the panel for
+one. A stop lasts for that run, and the run saves it. A run saved before this option does not start by
+itself. A finished run does not sync, so a resumed one keeps its results.
+
+If D&D Beyond reports that this session cannot edit a character, the row says `Sync read-only`. Your
+changes for that character stay in the run and nothing is sent. Changes on the sheet still come in, and
+if you both changed a value, you choose which to keep. Each synced row shows its state, and a conflict shows on the row and the strip without stopping
+the table. Each connection first reads the live sheet. Saved runs do not automatically push old values.
+The session must have edit permission for the character.
 
 A value you recorded is not replaced without your say. If a session ends during a run, keep
 recording: a row with a change that was not sent says `Not sent`, the others say `Sync stopped`, and
-closing the run tells you who has unsent changes. On a first read, by **Sync party** or after a
+closing the run tells you who has unsent changes. When you connect again, sync starts again by itself
+if **Sync party** was on. On a first read, by **Sync party**, after a reconnect or after a
 restart, Splat compares each value with the last one D&D Beyond confirmed, or with what the participant
 began the run with if there is none. A value you changed stays in the run, and if the sheet differs
 that is a conflict, settled from the panel: use the sheet's value, or keep yours and send it. An open
@@ -427,8 +451,9 @@ so another client can still change values between a read and a write.
 Health or condition values taken from the sheet clear the run's undo history, and a message says so. In a small
 window with a full roster, the list can leave no room for that message, so only the Log records the change. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
-queued work but cannot recall a request already sent. Party sync stops when you leave its
-page, and the sidebar says so; run sync remains active while that run is open.
+queued work but cannot recall a request already sent. A change made on Party is still sent after you
+leave its page. Party sync stops only when the connection ends, and the sidebar says so until it starts
+again. Run sync remains active while that run is open, until the encounter ends.
 
 Transport and conflict handling are tested with simulated responses. Live writes
 have not been verified with an authenticated D&D Beyond character. Endpoint
