@@ -200,6 +200,14 @@ pub mod library_author {
         d.expect(UNSAVED_NOTE);
         d.state("dirty", Sizes::All);
         d.goal("change the note");
+        let held = d.at_size(DEFAULT, |d| {
+            d.visible_text("Save first to copy or change packages")
+        });
+        d.observe(
+            "L6-27",
+            held && d.is_disabled("Copy to…"),
+            "At 1200x800 the status slot says why Copy to and Packages are off",
+        );
 
         let other_row_locked = d.is_disabled(OTHER_NOTE);
         d.click_containing(OTHER_NOTE);
@@ -997,6 +1005,13 @@ pub mod settings {
 
         d.row_of(CAMPAIGNS_SECTION);
         d.state("campaign-list", Sizes::All);
+        let level = |name: &str| d.place_of(name).map(|rect| rect.center().y);
+        let (account, list) = (level("D&D Beyond account"), level(CAMPAIGNS_SECTION));
+        d.observe(
+            "L6-35",
+            account.zip(list).is_some_and(|(a, b)| (a - b).abs() <= 1.0),
+            format!("The two Settings headings sit on one line, within a pixel: {account:?} and {list:?}"),
+        );
         d.goal("find campaign management");
 
         d.click(EDIT_DETAILS);

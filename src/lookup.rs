@@ -557,7 +557,12 @@ impl Lookup {
                     |reading| reading.title,
                 );
                 style::title(ui, &title);
-                style::subtitle(ui, &format!("{} · {}", current.subtitle, current.owner));
+                let line = if current.entry.reading().ok().flatten().is_some() {
+                    presentation::reading_subtitle(&current.entry, &current.subtitle)
+                } else {
+                    current.subtitle.clone()
+                };
+                style::subtitle(ui, &format!("{line} · {}", current.owner));
                 link = view::show(
                     ui,
                     &current.entry.name,

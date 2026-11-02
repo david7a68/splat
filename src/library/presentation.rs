@@ -95,10 +95,15 @@ pub(crate) fn subtitle(entry: &Entry) -> String {
         category.push_str(" · ");
         category.push_str(parent);
     }
-    if let Some(level) = class_level(entry) {
-        category.push_str(&format!(" · Level {level}"));
-    }
     category
+}
+
+/// The same line above a reader whose title has lost the level the list's name still has.
+pub(crate) fn reading_subtitle(entry: &Entry, subtitle: &str) -> String {
+    match class_level(entry) {
+        Some(level) => format!("{subtitle} · Level {level}"),
+        None => subtitle.to_owned(),
+    }
 }
 
 /// A name as a reader wants it. Imported headings can end with a colon or with dots.
@@ -625,10 +630,10 @@ mod reading_tests {
         let path = "definitions/class_features/bard_level_3_bard_subclass.md";
         let text = splat::content::definitions::source_file(path).unwrap();
         let entry = Entry::parse(path, text).unwrap();
-        assert!(
-            subtitle(&entry).ends_with("· Level 3"),
-            "{}",
-            subtitle(&entry)
+        assert!(!subtitle(&entry).contains("Level"), "{}", subtitle(&entry));
+        assert_eq!(
+            reading_subtitle(&entry, "Class feature · Bard"),
+            "Class feature · Bard · Level 3"
         );
     }
 

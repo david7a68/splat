@@ -281,7 +281,11 @@ impl Settings {
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        ui.label(Type::Heading.rich(ui, "D&D Beyond account").color(c.text));
+        // The height of the Campaigns heading's row beside it, so the two sit on one line.
+        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Read.control());
+            ui.label(Type::Heading.rich(ui, "D&D Beyond account").color(c.text));
+        });
         let small = |ui: &mut egui::Ui, text: &str| {
             ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
         };

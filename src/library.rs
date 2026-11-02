@@ -1858,7 +1858,7 @@ impl Library {
                     .show(ui)
                     .clicked();
                 // A draft holds Copy to… and Packages back. The slot says so where it has the room.
-                let held = "Unsaved · Save or discard to copy or change packages";
+                let held = "Unsaved · Save first to copy or change packages";
                 let room = ui.available_width() - 150.0;
                 let fits = design::number_width(ui, held, &Type::Small.font(ui)) < room;
                 let held_back = dirty && !conflict && note.error.is_none() && fits;
@@ -1981,7 +1981,16 @@ impl Library {
                             );
                             reader_style::title(ui, title);
                             if note.entry.is_some() {
-                                reader_style::subtitle(ui, subtitle);
+                                // A reviewed title drops the level, so the line keeps it.
+                                let line = parsed
+                                    .as_ref()
+                                    .ok()
+                                    .filter(|_| reading.is_some())
+                                    .map_or_else(
+                                        || subtitle.to_owned(),
+                                        |entry| presentation::reading_subtitle(entry, subtitle),
+                                    );
+                                reader_style::subtitle(ui, &line);
                             }
                         });
                         open_link = view::show(
@@ -2645,7 +2654,7 @@ mod tests {
                 .join("\n");
             for expected in [
                 "Bard Subclass",
-                "Definition · class feature · Bard",
+                "Definition · class feature · Bard · Level 3",
                 "Choose a Bard subclass.",
                 "Available",
                 "Source text",
