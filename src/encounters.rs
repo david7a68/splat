@@ -257,7 +257,15 @@ fn creature_detail(entry: &Entry, party: bool) -> String {
         .get("splat_creature")
         .and_then(|creature| creature.get("cr_text"))
         .and_then(Value::as_str)
-        .and_then(|text| text.split_whitespace().next());
+        .and_then(|text| text.split_whitespace().next())
+        // A creature with no field has it on the line the stat block shows.
+        .or_else(|| {
+            entry
+                .body
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("CR "))
+                .and_then(|text| text.split_whitespace().next())
+        });
     let mut parts = Vec::new();
     if party {
         parts.push("Party copy".to_owned());

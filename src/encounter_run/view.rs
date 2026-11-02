@@ -32,8 +32,8 @@ const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 const GUTTER: f32 = design::M;
 /// Room for the note under a long roster, past the scroll area's clip margin.
 const OVERFLOW_LINE: f32 = 22.0;
-/// Kept free under a list that fits, for one line of message.
-const MESSAGE_ROOM: f32 = 28.0;
+/// Kept free under a list that fits, for a message of up to two lines.
+const MESSAGE_ROOM: f32 = 44.0;
 const SCROLL_BAR: f32 = 12.0;
 /// A name-only row when the list has no other way to fit. Still a 24 px target and more.
 const TIGHT_ROW: f32 = 25.0;
@@ -74,6 +74,11 @@ pub(super) fn sync_status(state: SyncState) -> Status<'static> {
             icon: icons::READ_ONLY,
             word: "Sync read-only",
             color: s.read_only,
+        },
+        SyncState::NotSent => Status {
+            icon: icons::WARN,
+            word: "Not sent",
+            color: colors().result.warning,
         },
         SyncState::Stopped => Status {
             icon: icons::OFFLINE,
@@ -364,21 +369,22 @@ impl Run {
         ui.add_space(design::XS);
         let mut outcome = None;
         ui.horizontal(|ui| {
-            if Action::primary("Keep this run")
-                .density(Density::Read)
-                .hint("Replace the file on disk with this run")
-                .show(ui)
-                .clicked()
-            {
-                outcome = Some(self.keep_this_run());
-            }
-            if Action::secondary("Save as a new run")
+            // The action that loses nothing is the filled one.
+            if Action::primary("Save as a new run")
                 .density(Density::Read)
                 .hint("Keep the changed file as it is, and save this run beside it")
                 .show(ui)
                 .clicked()
             {
                 outcome = Some(self.save_as_new_run());
+            }
+            if Action::destructive("Replace the file with this run")
+                .density(Density::Read)
+                .hint("The changes in the file on disk are lost")
+                .show(ui)
+                .clicked()
+            {
+                outcome = Some(self.keep_this_run());
             }
         });
         if let Some(Err(error)) = outcome {
@@ -551,12 +557,27 @@ impl Run {
         let mut dismiss = false;
         // What sync needs from the DM. These stay until the cause is gone. A stopped sync
         // comes first, because nothing else can be resolved without a connection.
+        let kept = |names: &[String]| match names {
+            [name] => format!("{name}: kept in Splat, not sent"),
+            names => format!(
+                "{} kept in Splat, not sent",
+                design::count(names.len(), "change", "changes")
+            ),
+        };
         let sync_alert = if strip.sync_stopped {
-            Some((
-                format!("{} Sync stopped: connect in Settings", icons::OFFLINE),
-                format!("{} Sync stopped", icons::OFFLINE),
-                c.result.error,
-            ))
+            Some(if strip.unsent.is_empty() {
+                (
+                    format!("{} Sync stopped: connect in Settings", icons::OFFLINE),
+                    format!("{} Sync stopped", icons::OFFLINE),
+                    c.result.error,
+                )
+            } else {
+                (
+                    format!("{} Session ended. {}", icons::OFFLINE, kept(&strip.unsent)),
+                    format!("{} {}", icons::OFFLINE, kept(&strip.unsent)),
+                    c.result.error,
+                )
+            })
         } else if let Some(name) = &strip.conflict {
             Some((
                 format!("{} Sync conflict: {name}", icons::WARN),
@@ -564,13 +585,21 @@ impl Run {
                 c.sync.conflict,
             ))
         } else {
-            strip.sync_error.as_ref().map(|name| {
-                (
-                    format!("{} Sync error: {name}", icons::ERROR),
-                    format!("{} Error: {name}", icons::ERROR),
-                    c.result.error,
-                )
-            })
+            if strip.unsent.is_empty() {
+                strip.sync_error.as_ref().map(|name| {
+                    (
+                        format!("{} Sync error: {name}", icons::ERROR),
+                        format!("{} Error: {name}", icons::ERROR),
+                        c.result.error,
+                    )
+                })
+            } else {
+                Some((
+                    format!("{} {}", icons::WARN, kept(&strip.unsent)),
+                    format!("{} {}", icons::WARN, kept(&strip.unsent)),
+                    c.result.warning,
+                ))
+            }
         };
         // A notice too long for this line takes its own, below, in full.
         let notice_font = Type::Small.font(ui);
@@ -649,7 +678,7 @@ impl Run {
     pub(super) fn sync_word(&self, index: usize) -> Option<SyncState> {
         self.syncs
             .get(&index)
-            .filter(|sync| sync.enabled || sync.error.is_some())
+            .filter(|sync| sync.enabled || sync.error.is_some() || sync.stranded())
             .map(crate::combat_sync::CombatSync::state)
     }
 
@@ -691,7 +720,9 @@ impl Run {
         let natural = total(&layouts, scale);
         if natural <= room {
             // Spare room goes to the rows, so a short list leaves no gap under it.
-            let share = (room + lent - MESSAGE_ROOM - natural - 2.0).max(0.0) / count.max(1) as f32;
+            // Never more than the list has now, or the rows overflow it and compress.
+            let spare = (room + lent - MESSAGE_ROOM).min(room) - natural - 2.0;
+            let share = spare.max(0.0) / count.max(1) as f32;
             scale.row += share.min(scale.row * 0.4);
         } else {
             layouts = self.roster_layouts(ui, width, scale, RowFit::Compressed);
@@ -812,6 +843,7 @@ impl Run {
             for (n, label) in [
                 (syncs_in(SyncState::Conflict), "Conflict"),
                 (syncs_in(SyncState::Stopped), "Sync stopped"),
+                (syncs_in(SyncState::NotSent), "Not sent"),
                 (syncs_in(SyncState::Error), "Sync error"),
                 (count(&|i| state(i) == design::HpState::Zero), "0 HP"),
                 (
@@ -1232,7 +1264,7 @@ impl Run {
             if !stranded.is_empty() {
                 ui.add(
                     egui::Label::new(format!(
-                        "Changes for {} were not sent to D&D Beyond. The saved run keeps them, and asks you to choose when you next sync.",
+                        "Changes for {} were not sent to D&D Beyond. Nothing is lost: the saved run keeps them, and asks you to choose when you next sync.",
                         stranded.join(", "),
                     ))
                     .wrap(),
@@ -1242,10 +1274,13 @@ impl Run {
             ui.horizontal(|ui| {
                 keep |= Action::primary("Keep running").show(ui).clicked();
                 ui.add_space(design::L);
-                close = Action::destructive("Close anyway")
-                    .blocked(block)
-                    .show(ui)
-                    .clicked();
+                // Red only when something is lost.
+                let action = if cannot_save {
+                    Action::destructive("Close anyway")
+                } else {
+                    Action::secondary("Close anyway")
+                };
+                close = action.blocked(block).show(ui).clicked();
             });
         });
         if keep {
@@ -1290,7 +1325,7 @@ impl Run {
             } else {
                 "Sync party"
             })
-            .hint("Read and update every linked character on D&D Beyond")
+            .hint("Read every linked character's sheet. A value you changed stays, and you choose.")
             .blocked_if(
                 !self.connected && !self.simulate_connection,
                 "Connect to D&D Beyond in Settings to sync.",
@@ -1558,14 +1593,21 @@ impl Run {
             } else {
                 format!("{} · HP from this run", freshness.word)
             };
-            design::status(
-                ui,
-                Status {
-                    icon: freshness.icon,
-                    word: &word,
-                    color: freshness.color,
-                },
-            );
+            // Beside an open conflict, green words would say the opposite of what matters.
+            if !self
+                .syncs
+                .get(&index)
+                .is_some_and(|sync| sync.state() == SyncState::Conflict)
+            {
+                design::status(
+                    ui,
+                    Status {
+                        icon: freshness.icon,
+                        word: &word,
+                        color: freshness.color,
+                    },
+                );
+            }
             design::segmented(ui, &mut self.sheet_page, &SHEET_PAGES);
             let page = self.sheet_page;
             egui::ScrollArea::vertical()
@@ -2433,7 +2475,7 @@ impl RowLayout {
         let bar_inset = if narrow { 8.0 } else { 0.0 };
         let name_left = initiative_right + gap + scale.name * 0.7;
         let hp_width = scale.hp * 1.9 + scale.hp_max * 2.0 + 4.0;
-        let state_width = (scale.mark * 7.0).clamp(84.0, 110.0);
+        let state_width = (scale.mark * 8.5).clamp(84.0, 118.0);
         let temp_width = scale.stat * 2.6 + 12.0;
         let ac_width = scale.stat * 1.5 + 22.0;
         let numbers = name_left + ac_width + temp_width + hp_width + design::S;
@@ -2448,7 +2490,10 @@ impl RowLayout {
         let mut job = egui::text::LayoutJob::default();
         // The line wraps before the HP column, so that it never runs over the HP bar.
         job.wrap.max_width = (temp_right + bar_inset - name_left).max(1.0);
-        let font = Type::Body.sized(ui, scale.condition);
+        // With HP in what a DM looks for: as strong as the state words, and stronger than AC.
+        // The compact scale keeps body weight, so a wrapped line costs no row its place.
+        let role = if narrow { Type::Body } else { Type::Strong };
+        let font = role.sized(ui, scale.condition);
         let mut first = true;
         let mut add = |text: &str, color: egui::Color32| {
             if !first {
@@ -2666,7 +2711,7 @@ fn paint_row(
         line_y,
         &display(p.armor_class),
         &numeral,
-        text,
+        if p.present { c.muted } else { text },
     );
     painter.text(
         pos2(left - 4.0, line_y + 1.0),

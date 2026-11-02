@@ -292,7 +292,7 @@ impl Splat {
         if !names.is_empty() {
             items.push((
                 format!(
-                    "D&D Beyond has not confirmed changes to {}. They can be lost.",
+                    "D&D Beyond has not confirmed changes to {}. The saved run keeps them, and asks you to choose when you next sync.",
                     names.join(", ")
                 ),
                 Page::Run,
@@ -320,7 +320,7 @@ impl Splat {
                 "Sync has not finished",
                 "Return to run",
                 "Close anyway",
-                "Return, and wait for sync or resolve the conflict. Or close and lose these changes.",
+                "Return, and wait for sync or resolve the conflict. Or close: nothing is lost.",
             )
         } else {
             (
@@ -852,6 +852,9 @@ impl Splat {
             .and_then(|run| run.lookup_request.take())
         {
             self.lookup.open_position(position);
+        }
+        if std::mem::take(&mut self.campaigns.wants_encounters) {
+            self.page = Page::Encounters;
         }
         if std::mem::take(&mut self.encounters.go_to_run) {
             self.page = Page::Run;

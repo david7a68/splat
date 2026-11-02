@@ -189,6 +189,11 @@ pub mod library_author {
         );
         d.click(EDIT_MARKDOWN);
         d.state("edit-markdown", Sizes::All);
+        d.observe(
+            "M5-7",
+            d.visible_text("No changes"),
+            "A clean document says so, in one word, as Encounters and Campaign do",
+        );
         d.goal("open a note for editing");
 
         d.type_into_editor(DRAFT_WORDS);
@@ -448,6 +453,11 @@ pub mod campaign_content {
         d.click_containing(REPAIR);
         d.state("repair-open", Sizes::Default);
         d.observe(
+            "M5-1",
+            d.visible_text("Invalid YAML"),
+            "The repair says what is wrong before the DM edits anything",
+        );
+        d.observe(
             "T9.2",
             d.editor_text()
                 .is_some_and(|text| text.contains("splat_id")),
@@ -542,6 +552,7 @@ pub mod encounter_build {
     const VIRTUALISED_LIMIT: usize = 100;
     const READ: &str = "Read";
     const RESULT_NAME: &str = "Wolf";
+    const OWN_CREATURE: &str = "Cinder Wolf";
     const EDITOR_NAME: &str = "Encounter name";
     const BACK_TO_LIST: &str = "Back to encounters";
     const NO_SUCH_CREATURE: &str = "zzz";
@@ -590,6 +601,22 @@ pub mod encounter_build {
                 .iter()
                 .all(|word| detail.contains(word)),
             format!("The Wolf result shows CR, HP and AC: {detail}"),
+        );
+        // A campaign's own creature has its challenge rating in its text, not in a field.
+        let own = d
+            .nodes()
+            .iter()
+            .find(|node| node.name == OWN_CREATURE && node.in_view())
+            .map_or_else(String::new, |name| {
+                d.painted_in(eframe::egui::Rect::from_min_max(
+                    pos2(name.rect.min.x - 1.0, name.rect.max.y),
+                    pos2(name.rect.min.x + 400.0, name.rect.max.y + 18.0),
+                ))
+            });
+        d.observe(
+            "T5.1",
+            own.contains("CR "),
+            format!("A campaign creature's result shows its CR too: {own}"),
         );
         d.click_first(ADD);
         d.expect("6. ");
@@ -989,6 +1016,11 @@ pub mod dialogs {
         d.click(REVIEW_COPY);
         d.expect("Ready to copy");
         d.state("copy-review", Sizes::All);
+        d.observe(
+            "M5-17",
+            d.in_view("Create copy") && d.in_view("Cancel") && !d.has("Review copy"),
+            "The review ends in one row of actions",
+        );
         d.click(CREATE_COPY);
         d.expect("Saved: ");
         d.state("copy-complete", Sizes::Default);
@@ -1075,6 +1107,11 @@ pub mod empty {
         d.expect(NEW_CAMPAIGN);
         d.state("campaign-added", Sizes::Default);
         d.goal("add a first campaign");
+        d.observe(
+            "M5-16",
+            d.has("Build an encounter"),
+            "After adding a campaign, the next step is a button",
+        );
 
         go_campaign(d);
         d.expect(CONTENT_TITLE);
@@ -1086,6 +1123,11 @@ pub mod empty {
         go_party(d);
         d.expect(NOT_LINKED);
         d.state("party-without-link", Sizes::Default);
+        d.observe(
+            "M5-13",
+            d.has("Connect D&D Beyond") && !d.has("Link this campaign"),
+            "With no session, the next step is to connect, because linking needs one",
+        );
         d.goal("see the other empty tabs");
     }
 }
@@ -1662,6 +1704,11 @@ pub mod run_sync_conflict {
         d.row_of(USE_REMOTE);
         d.expect(CONFLICT_TEXT);
         d.state("conflict-panel", Sizes::All);
+        d.observe(
+            "M5-R3",
+            d.visible_text("HP conflict") && d.visible_text("HP from D&D Beyond"),
+            "The conflict panel names the conflict, and its buttons name the values",
+        );
         d.click(USE_REMOTE);
         d.state("conflict-resolved", Sizes::Default);
         d.goal_within("T3.2", "resolve a conflict", 2);
@@ -2133,7 +2180,7 @@ pub mod run_edge_states {
     const ABSENT: &str = "Absent";
     const CLOSE_ERROR: &str = "Dismiss this message";
     const MARK_PRESENT: &str = "Mark present";
-    const KEEP_RUN: &str = "Keep this run";
+    const KEEP_RUN: &str = "Replace the file with this run";
     const SAVE_AS_NEW: &str = "Save as a new run";
     const ALL: [&str; 8] = [
         "Brannoch Vale",
@@ -2262,6 +2309,9 @@ pub mod run_sync_states {
     const FIRST_READ: (&str, SyncState, &str) =
         ("Sable Harrowgate", SyncState::FirstRead, "First read");
     const UNSYNCED_ROW: &str = "Cinder Wolf 1";
+    const DISMISS: &str = "Dismiss this message";
+    const TWO_LINES: &str =
+        "Brannoch Vale, Iselle Marrowind, Kestrel Dunmoor, Oren Thistlewick, Sable Harrowgate";
     const USE_REMOTE: &str = "Use D&D Beyond values";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2312,6 +2362,29 @@ pub mod run_sync_states {
         d.state("every-sync-state", Sizes::All);
         d.goal("show every sync state");
 
+        // H5-3: at the default size, 8 rows have the room, and a two-line message takes none
+        // of it from them. Each row's height, then the same places with the message up.
+        d.click(DISMISS);
+        let quiet = d.at_size(DEFAULT, |d| roster_places(d));
+        d.app_mut().encounters.simulate_sheet_update(TWO_LINES);
+        d.settle();
+        let loud = d.at_size(DEFAULT, |d| roster_places(d));
+        let shortest = quiet
+            .iter()
+            .chain(&loud)
+            .fold(f32::MAX, |short, row| short.min(row.1.height()));
+        d.observe(
+            "H5-3",
+            quiet.len() == 8 && shortest >= 52.0,
+            format!("At 1200x800, with and without a two-line message, 8 rows are not compressed: the shortest is {shortest} px"),
+        );
+        d.observe(
+            "Stable rows",
+            quiet.len() == 8 && quiet == loud,
+            format!("At 1200x800, a two-line message moves no row: {quiet:?} then {loud:?}"),
+        );
+        d.begin_task();
+
         // Ending the encounter does not end the sync. Close waits, and the conflict can be
         // resolved in the ended view.
         d.app_mut()
@@ -2358,6 +2431,8 @@ pub mod run_sync_states {
 /// the Tab order on a scrolling roster of 20, where scroll handles appear.
 pub mod run_roster_conflict {
     use super::*;
+    const CLOSE_RUN: &str = "Close run";
+    const CLOSE_ANYWAY: &str = "Close anyway";
     use crate::combat_sync::SyncState;
     const SYNCED: &str = "Brannoch Vale";
     const USE_REMOTE: &str = "Use D&D Beyond values";
@@ -2429,7 +2504,9 @@ pub mod run_roster_conflict {
         d.click(STOP_SYNC);
         d.click_containing(SYNCED);
         d.click(USE_REMOTE);
-        close_run(d);
+        // Other rows still hold simulated changes, so closing says so first.
+        d.click(CLOSE_RUN);
+        d.click(CLOSE_ANYWAY);
         d.begin_task();
         resume_run(d, RUN_20);
         d.check_tab_order("run, roster of 20");
@@ -2494,8 +2571,9 @@ pub mod signed_in {
     const CONFLICT: &str = "Conflict";
     const RAIL_FAILING: &str = "Session failing";
     const RAIL_OFFLINE: &str = "Not connected";
-    const STOPPED_HEADER: &str = "Sync stopped: connect in Settings";
     const STOPPED_ROW: &str = "Sync stopped";
+    const NOT_SENT: &str = "Not sent";
+    const NOTHING_TO_SEND: &str = "Iselle Marrowind";
     const CLOSE_RUN: &str = "Close run";
     const STRANDED: &str = "were not sent to D&D Beyond";
 
@@ -2613,7 +2691,10 @@ pub mod signed_in {
         let rail = d.rail_words();
         d.observe(
             "T10.3",
-            row.contains(STOPPED_ROW) && d.visible_text(STOPPED_HEADER) && rail.contains(RAIL_OFFLINE),
+            row.contains(NOT_SENT)
+                && d.row_words(NOTHING_TO_SEND).contains(STOPPED_ROW)
+                && d.visible_text(&format!("{MEMBER}: kept in Splat, not sent"))
+                && rail.contains(RAIL_OFFLINE),
             format!(
                 "A session that ends during a run: the row says {row}, the header says so, and the rail says {rail}"
             ),
@@ -2638,7 +2719,7 @@ pub mod signed_in {
         let row = d.row_words(MEMBER);
         d.observe(
             "T3.3",
-            row.contains(FIRST_READ) && !d.visible_text(STOPPED_HEADER),
+            row.contains(FIRST_READ) && !d.visible_text(STOPPED_ROW),
             format!("After a reconnect, Sync party starts the stopped rows again: {row}"),
         );
         // The sheet still holds what it held before the outage.

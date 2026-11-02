@@ -1698,6 +1698,12 @@ impl Library {
                 word: "Unsaved",
                 color: d.unsaved,
             }
+        } else if self.source && !matches!(note.owner, Owner::Builtin) {
+            Status {
+                icon: icons::OK,
+                word: "No changes",
+                color: d.clean,
+            }
         } else {
             match &note.owner {
                 Owner::Builtin => Status {
@@ -1809,7 +1815,7 @@ impl Library {
         if let Some(change) = &mut self.disk_change {
             design::message(
                 ui,
-                Tone::Error,
+                Tone::Warning,
                 if change.text.is_some() {
                     "This note changed on disk. Your draft is safe here until you choose."
                 } else {

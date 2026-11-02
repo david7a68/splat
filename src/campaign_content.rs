@@ -192,84 +192,95 @@ impl CampaignContent {
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let mut repaired = false;
         for (path, baseline, draft) in &mut self.repairs {
-            design::section(ui, format!("Repair invalid note: {path}"), |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(220.0)
-                    .id_salt(("repair", path.as_str()))
-                    .show(ui, |ui| {
-                        let response = ui.add(
-                            egui::TextEdit::multiline(draft)
-                                .font(egui::TextStyle::Monospace)
-                                .desired_width(f32::INFINITY),
-                        );
-                        design::named(ui, &response, "Note text");
-                    });
-                ui.horizontal(|ui| {
-                    if Action::secondary("Save repaired note")
-                        .density(Density::Read)
-                        .blocked_if(draft == baseline, "No changes to save.")
-                        .show(ui)
-                        .clicked()
-                        || (draft != baseline
-                            && ui.input_mut(|i| {
-                                i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
-                            }))
-                    {
-                        let result = Entry::parse(path, draft).and_then(|entry| {
-                            if entry.kind == "package"
-                                || (entry.kind == "campaign" && entry.id != active.id)
-                            {
-                                return Err(
-                                    "Keep campaign ownership consistent with settings.".into()
-                                );
-                            }
-                            write_note(&active.path, path, Some(baseline), draft)
+            design::section(
+                ui,
+                format!("{} Repair invalid note: {path}", icons::ERROR),
+                |ui| {
+                    // What is wrong comes first, and stays true as the DM edits.
+                    if let Err(problem) = Entry::parse(path, draft) {
+                        design::message(ui, Tone::Error, &problem);
+                    }
+                    egui::ScrollArea::vertical()
+                        .max_height(220.0)
+                        .id_salt(("repair", path.as_str()))
+                        .show(ui, |ui| {
+                            let response = ui.add(
+                                egui::TextEdit::multiline(draft)
+                                    .font(egui::TextStyle::Monospace)
+                                    .desired_width(f32::INFINITY),
+                            );
+                            design::named(ui, &response, "Note text");
                         });
-                        match result {
-                            Ok(_) => {
-                                *baseline = draft.clone();
-                                repaired = true;
-                            }
-                            Err(e) => self.error = Some(e),
-                        }
-                    }
-                    ui.add_space(design::XL);
-                    if draft != baseline
-                        && Action::destructive("Discard repair draft")
+                    ui.horizontal(|ui| {
+                        if Action::secondary("Save repaired note")
                             .density(Density::Read)
+                            .blocked_if(
+                                draft == baseline,
+                                "Edit the note to fix the problem above first.",
+                            )
                             .show(ui)
                             .clicked()
-                    {
-                        self.discarded_repair = Some((path.clone(), draft.clone()));
-                        *draft = baseline.clone();
-                    }
-                    if draft != baseline
-                        && self
-                            .discarded_repair
-                            .as_ref()
-                            .is_some_and(|(p, _)| p == path)
-                    {
-                        self.discarded_repair = None;
-                    }
-                    if let Some((_, text)) =
-                        self.discarded_repair.as_ref().filter(|(p, _)| p == path)
-                    {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, "Draft discarded.")
-                                .color(colors().muted),
-                        );
-                        if Action::secondary("Undo discard")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
+                            || (draft != baseline
+                                && ui.input_mut(|i| {
+                                    i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
+                                }))
                         {
-                            *draft = text.clone();
+                            let result = Entry::parse(path, draft).and_then(|entry| {
+                                if entry.kind == "package"
+                                    || (entry.kind == "campaign" && entry.id != active.id)
+                                {
+                                    return Err(
+                                        "Keep campaign ownership consistent with settings.".into(),
+                                    );
+                                }
+                                write_note(&active.path, path, Some(baseline), draft)
+                            });
+                            match result {
+                                Ok(_) => {
+                                    *baseline = draft.clone();
+                                    repaired = true;
+                                }
+                                Err(e) => self.error = Some(e),
+                            }
+                        }
+                        ui.add_space(design::XL);
+                        if draft != baseline
+                            && Action::destructive("Discard repair draft")
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                        {
+                            self.discarded_repair = Some((path.clone(), draft.clone()));
+                            *draft = baseline.clone();
+                        }
+                        if draft != baseline
+                            && self
+                                .discarded_repair
+                                .as_ref()
+                                .is_some_and(|(p, _)| p == path)
+                        {
                             self.discarded_repair = None;
                         }
-                    }
-                });
-            });
+                        if let Some((_, text)) =
+                            self.discarded_repair.as_ref().filter(|(p, _)| p == path)
+                        {
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, "Draft discarded.")
+                                    .color(colors().muted),
+                            );
+                            if Action::secondary("Undo discard")
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                            {
+                                *draft = text.clone();
+                                self.discarded_repair = None;
+                            }
+                        }
+                    });
+                },
+            );
         }
         if repaired && !self.dirty() {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -296,6 +307,9 @@ impl CampaignContent {
                 .blocked(repair.or((!dirty).then_some("No changes to save.")))
                 .show(ui)
                 .clicked();
+            if !dirty && repair.is_none() {
+                ui.label(Type::Small.rich(ui, "No changes").color(c.document.clean));
+            }
             if pressed || save_key {
                 match document.save() {
                     Ok(()) => {

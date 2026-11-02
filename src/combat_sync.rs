@@ -430,9 +430,11 @@ pub enum SyncState {
     Error,
     /// The session ended under a running sync. It needs a connection and `Sync party`.
     Stopped,
+    /// Sync is off, and this row has a change it has not sent.
+    NotSent,
 }
 
-const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then have not been sent. Connect in Settings, then select Sync party. Splat reads the sheet first, and asks before it replaces a value you changed.";
+const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings, then select Sync party. Splat reads the sheet first, and asks before it replaces a value you changed.";
 const DIFFER_AFTER_READ: &str =
     "Splat and D&D Beyond differ, and you changed this while sync was off. Choose which to keep.";
 
@@ -553,9 +555,17 @@ impl CombatSync {
     pub fn unconfirmed(&self) -> bool {
         (self.enabled && (self.busy() || self.dirty())) || self.stranded()
     }
-    /// A lost session left these changes unsent. Nothing here can send them.
+    /// Sync is off, by the session or by the DM, and these changes have not gone.
     pub fn stranded(&self) -> bool {
-        self.session_lost && self.dirty()
+        !self.enabled && self.dirty()
+    }
+    /// Off, with a read to compare the run's values with.
+    pub fn stopped_after_read(&self) -> bool {
+        !self.enabled && self.remote.is_some()
+    }
+    /// What D&D Beyond last confirmed.
+    pub fn confirmed(&self) -> Option<&Groups> {
+        self.remote.as_ref().map(|remote| &remote.groups)
     }
     /// Let this sync react to the session, as a real one does.
     #[cfg(test)]
@@ -568,6 +578,8 @@ impl CombatSync {
     pub fn state(&self) -> SyncState {
         if !self.blocked.is_empty() {
             SyncState::Conflict
+        } else if self.stranded() {
+            SyncState::NotSent
         } else if self.session_lost {
             SyncState::Stopped
         } else if self.error.is_some() {
@@ -782,9 +794,9 @@ impl CombatSync {
         self.desired.insert(key.into(), local);
         self.blocked.insert(key.into(), DIFFER_AFTER_READ.into());
     }
-    /// A change the DM recorded after the session ended. It cannot be sent yet, and it counts.
+    /// A change the DM recorded while sync was off. It cannot be sent yet, and it counts.
     pub fn note_while_stopped(&mut self, key: &str, local: Value) {
-        if self.session_lost {
+        if !self.enabled {
             self.desired.insert(key.into(), local);
         }
     }
@@ -850,7 +862,7 @@ impl CombatSync {
             {
                 self.blocked.insert(
                     key.clone(),
-                    "The live sheet and local values both changed. Choose which to keep.".into(),
+                    "Splat and D&D Beyond both changed this. Choose which to keep.".into(),
                 );
             }
         }
@@ -876,13 +888,18 @@ impl CombatSync {
     /// Each conflict with both values and its two ways out. The run shows this beside
     /// the roster, so it does not stop the table.
     pub fn conflicts(&mut self, ui: &mut egui::Ui) {
-        use crate::design::{self, Action, Density, Tone, Type, colors};
+        use crate::design::{self, Action, Density, Type, colors};
         for (key, message) in self.blocked.clone() {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!("{}: {message}", group_label(&key)),
+            let c = colors();
+            ui.label(
+                Type::Heading
+                    .rich(
+                        ui,
+                        format!("{} {} conflict", design::icons::WARN, group_label(&key)),
+                    )
+                    .color(c.sync.conflict),
             );
+            ui.add(egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap());
             // The two values side by side, so the difference is what the eye finds.
             egui::Grid::new(("conflict_values", &key))
                 .num_columns(2)
@@ -907,7 +924,17 @@ impl CombatSync {
             ui.push_id(&key, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let busy = self.busy().then_some("Wait for the current sheet read.");
-                    if Action::secondary("Use D&D Beyond values")
+                    let max = self.max_hp().unwrap_or(0);
+                    let sheet = self.remote.as_ref().and_then(|r| r.groups.get(&key));
+                    let (use_label, keep_label) = (
+                        format!("Use {} from D&D Beyond", short_value(&key, sheet, max)),
+                        format!(
+                            "Keep {}, send to D&D Beyond",
+                            short_value(&key, self.desired.get(&key), max)
+                        ),
+                    );
+                    if Action::secondary(&use_label)
+                        .name("Use D&D Beyond values")
                         .density(Density::Read)
                         .blocked(busy)
                         .show(ui)
@@ -919,7 +946,8 @@ impl CombatSync {
                         .remote
                         .as_ref()
                         .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
-                    if Action::secondary("Keep Splat values and retry")
+                    if Action::secondary(&keep_label)
+                        .name("Keep Splat values and retry")
                         .density(Density::Read)
                         .blocked(busy.or(
                             (!writable).then_some(
@@ -1148,9 +1176,20 @@ fn describe(key: &str, value: Option<&Value>, max_hp: i64) -> String {
         _ => format!("{} uses spent", value["uses"]),
     }
 }
+/// A value on a button: the number, for HP, and otherwise which side's values.
+fn short_value(key: &str, value: Option<&Value>, max_hp: i64) -> String {
+    match (key, value) {
+        ("hp", Some(hp)) => format!(
+            "{}/{max_hp} HP",
+            (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0)
+        ),
+        _ => "these values".to_owned(),
+    }
+}
+
 fn group_label(key: &str) -> &str {
     match key {
-        "hp" => "HP / temporary HP",
+        "hp" => "HP",
         "death" => "Death saves",
         "conditions" => "Conditions",
         "slots" => "Spell slots",

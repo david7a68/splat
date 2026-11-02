@@ -19,6 +19,8 @@ pub struct Campaigns {
     confirm_remove: Option<Uuid>,
     /// The campaign just added, and where to go next.
     added: Option<String>,
+    /// The DM asked to go on to Encounters, from that message.
+    pub wants_encounters: bool,
 }
 
 /// The rail's campaign selector, with a name on two lines.
@@ -37,6 +39,7 @@ impl Default for Campaigns {
             remote: None,
             confirm_remove: None,
             added: None,
+            wants_encounters: false,
         };
         match Store::user() {
             Ok(store) => {
@@ -112,12 +115,7 @@ impl Campaigns {
         let adding = self.editing.is_none();
         self.persist(data)?;
         self.clear_form();
-        self.added = adding.then(|| {
-            format!(
-                "Added {}. Next: build an encounter in Encounters.",
-                campaign.name
-            )
-        });
+        self.added = adding.then(|| format!("Added {}.", campaign.name));
         Ok(())
     }
 
@@ -184,6 +182,7 @@ impl Campaigns {
             remote: None,
             confirm_remove: None,
             added: None,
+            wants_encounters: false,
         }
     }
 
@@ -294,25 +293,14 @@ impl Campaigns {
 
     /// Any campaign in the list, active or not, already links to this one.
     pub fn is_added(&self, remote_id: &str) -> bool {
-        let Ok(remote) = remote_id.parse::<u64>() else {
-            return false;
-        };
-        self.data.campaigns.iter().any(|c| {
-            c.dndbeyond_campaign_id
-                .as_deref()
-                .and_then(|id| id.parse().ok())
-                == Some(remote)
-        })
+        self.data.campaigns.iter().any(|c| links_to(c, remote_id))
     }
 
     pub fn linked_elsewhere(&self, remote_id: &str) -> bool {
-        self.data.campaigns.iter().any(|c| {
-            Some(c.id) != self.data.active_campaign_id
-                && c.dndbeyond_campaign_id
-                    .as_deref()
-                    .and_then(|id| id.parse::<u64>().ok())
-                    == remote_id.parse::<u64>().ok()
-        })
+        self.data
+            .campaigns
+            .iter()
+            .any(|c| Some(c.id) != self.data.active_campaign_id && links_to(c, remote_id))
     }
 
     fn clear_form(&mut self) {
@@ -521,8 +509,18 @@ impl Campaigns {
     ) {
         let c = colors();
         self.remove_dialog(ui.ctx());
-        if let Some(added) = &self.added {
-            design::message(ui, Tone::Success, added);
+        if let Some(added) = self.added.clone() {
+            ui.horizontal(|ui| {
+                design::message(ui, Tone::Success, &added);
+                if Action::primary("Build an encounter")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.wants_encounters = true;
+                    self.added = None;
+                }
+            });
         }
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Campaigns").color(c.text));
@@ -721,6 +719,19 @@ impl Campaigns {
     }
 }
 
+/// By number, because a link can be stored with other formatting. An ID that is not a number
+/// links to nothing, and neither does a campaign with no link.
+fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
+    let Ok(remote) = remote_id.parse::<u64>() else {
+        return false;
+    };
+    campaign
+        .dndbeyond_campaign_id
+        .as_deref()
+        .and_then(|id| id.parse::<u64>().ok())
+        == Some(remote)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -782,11 +793,15 @@ mod tests {
             remote: None,
             confirm_remove: None,
             added: None,
+            wants_encounters: false,
         };
         campaigns.select(Some(first));
         campaigns.link(Some("12".into())).unwrap();
         campaigns.select(Some(second));
         assert!(campaigns.linked_elsewhere("12"));
+        // Not a number: it links to nothing, even with a campaign that has no link.
+        assert!(!campaigns.linked_elsewhere("not-a-number"));
+        assert!(!campaigns.is_added("not-a-number"));
         assert!(campaigns.link(Some("12".into())).is_err());
         assert!(
             campaigns

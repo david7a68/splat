@@ -172,7 +172,7 @@ pub const DARK: Colors = Colors {
         unsaved: SAND,
         saved: GREEN,
         invalid: RED,
-        external: ROSE,
+        external: SAND,
         read_only: MUTED,
     },
     result: ResultTones {
@@ -265,7 +265,7 @@ pub const RUN_REGULAR: RunScale = RunScale {
     hp: 24.0,
     hp_max: 15.0,
     stat: 16.0,
-    condition: 14.0,
+    condition: 15.0,
     mark: 13.0,
     max_width: 640.0,
 };

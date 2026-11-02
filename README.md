@@ -308,14 +308,18 @@ state, and a conflict shows on the row and the strip without stopping the table.
 Saved runs do not automatically push old values. The session must have edit
 permission for the character.
 
-If a session ends during a run, each synced row says `Sync stopped`, and keep recording: nothing
-is lost. Closing warns about changes that were not sent. After you reconnect, **Sync party** reads
-the sheet first. A value you changed since the last match, when sync was stopped by the session or
-by you, or while a saved run waited for a connection, stays in the run. If the sheet differs, that
-is a conflict you settle with **Use D&D Beyond values** or **Keep Splat values and retry**. A value
-you did not change takes the sheet's. Two things cannot be told apart, so the sheet's value stands:
-damage recorded before a participant's first read in this run, and a change that had not been sent
-when Splat closed.
+A value you recorded is not replaced without your say. If a session ends during a run, keep
+recording: a row with a change that was not sent says `Not sent`, the others say `Sync stopped`, and
+closing the run tells you who has unsent changes. On a first read, by **Sync party** or after a
+restart, Splat compares each value with the last one D&D Beyond confirmed, or with what the participant
+began the run with if there is none. A value you changed stays in the run, and if the sheet differs
+that is a conflict, settled from the panel: use the sheet's value, or keep yours and send it. An open
+conflict is found again after a close, an app close or a crash. A value you did not change takes
+the sheet's, and the notice and the log name the old and new HP.
+
+Saved runs from earlier versions can hold unsent values as their last match. These look unchanged, so
+the sheet's value stands on the first read, with the notice and the log naming what was replaced. A
+run saved by this version does not do this. Its new `started` field is optional, and earlier saves load.
 
 Sync covers current and temporary HP, death saves, official conditions,
 ordinary and pact spell slots spent, and supported action/spell limited uses.

@@ -184,16 +184,19 @@ impl CopyDialog {
             } else {
                 None
             };
+            // One row of actions, at the end: the review's own once there is one.
             let mut review = false;
-            ui.horizontal(|ui| {
-                review = Action::secondary("Review copy")
-                    .blocked(blocked)
-                    .show(ui)
-                    .clicked();
-                if Action::quiet("Cancel").show(ui).clicked() {
-                    close = true;
-                }
-            });
+            if self.plan.is_none() {
+                ui.horizontal(|ui| {
+                    review = Action::secondary("Review copy")
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked();
+                    if Action::quiet("Cancel").show(ui).clicked() {
+                        close = true;
+                    }
+                });
+            }
             if review
                 && let Some(destination) = destinations
                     .iter()
@@ -245,7 +248,14 @@ impl CopyDialog {
                         ui.monospace(&plan.text);
                     });
                 });
-                if Action::primary("Create copy").show(ui).clicked() {
+                let mut create = false;
+                ui.horizontal(|ui| {
+                    create = Action::primary("Create copy").show(ui).clicked();
+                    if Action::quiet("Cancel").show(ui).clicked() {
+                        close = true;
+                    }
+                });
+                if create {
                     let result = destinations
                         .iter()
                         .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
