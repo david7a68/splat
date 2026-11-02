@@ -91,6 +91,14 @@ impl Default for Splat {
     }
 }
 
+/// What the rail says about the D&D Beyond account.
+#[derive(Clone, Copy)]
+enum Connection {
+    Connecting,
+    Connected,
+    Offline,
+}
+
 /// One flat level. A run is a place, not a mode of a tab.
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
 enum Page {
@@ -211,7 +219,7 @@ impl Splat {
 
     /// Egui drops a focus move at the start of each frame, so a move made at the end of
     /// `update` is lost. The move is made here, before any widget asks for focus.
-    fn apply_focus_step(&mut self, ctx: &egui::Context) {
+    fn apply_focus_step(&self, ctx: &egui::Context) {
         if let Some((id, direction)) = self.step_past
             && ctx.memory(|memory| memory.focused()) == Some(id)
         {
@@ -345,7 +353,7 @@ impl Splat {
         }
     }
 
-    fn rail(&mut self, ctx: &egui::Context, session_connected: bool, busy: bool) {
+    fn rail(&mut self, ctx: &egui::Context, connection: Connection) {
         let c = colors();
         let rail = if ctx.content_rect().width() >= design::RAIL_WIDE_FROM {
             design::RAIL_WIDE_WIDTH
@@ -407,7 +415,7 @@ impl Splat {
                     }
                 }
                 // Push the rest down in tree order, so Tab still follows reading order.
-                let statuses = self.statuses(session_connected, busy);
+                let statuses = self.statuses(connection);
                 let status_height = statuses.len() as f32 * (Type::Small.line() + 2.0);
                 let bottom = 2.0 * (Density::Scan.control() + 2.0) + status_height + design::S;
                 ui.add_space((ui.available_height() - bottom).max(0.0));
@@ -436,28 +444,25 @@ impl Splat {
     }
 
     /// What is unsure, always where the DM looks (principle 6).
-    fn statuses(&self, connected: bool, busy: bool) -> Vec<Status<'static>> {
+    fn statuses(&self, connection: Connection) -> Vec<Status<'static>> {
         let c = colors();
-        let mut statuses = Vec::new();
-        statuses.push(if busy {
-            Status {
+        let mut statuses = vec![match connection {
+            Connection::Connecting => Status {
                 icon: icons::BUSY,
                 word: "Connecting",
                 color: c.connection.busy,
-            }
-        } else if connected {
-            Status {
+            },
+            Connection::Connected => Status {
                 icon: icons::ONLINE,
                 word: "Connected",
                 color: c.connection.connected,
-            }
-        } else {
-            Status {
+            },
+            Connection::Offline => Status {
                 icon: icons::OFFLINE,
                 word: "Not connected",
                 color: c.connection.offline,
-            }
-        });
+            },
+        }];
         for (dirty, word) in [
             (self.library.dirty(), "Library draft"),
             (self.encounters.draft_dirty(), "Encounter draft"),
@@ -876,9 +881,14 @@ impl eframe::App for Splat {
                 self.lookup.close();
             }
         }
-        let connected = session.is_some();
-        let connecting = self.settings.connecting();
-        self.rail(ctx, connected, connecting);
+        let connection = if self.settings.connecting() {
+            Connection::Connecting
+        } else if session.is_some() {
+            Connection::Connected
+        } else {
+            Connection::Offline
+        };
+        self.rail(ctx, connection);
         let active = self.campaigns.active_campaign();
         self.party.sync(
             ctx,
@@ -892,7 +902,7 @@ impl eframe::App for Splat {
             self.page == Page::Party,
         );
         self.encounters
-            .tick_sync(ctx, session.clone(), epoch, active.as_ref());
+            .tick_sync(ctx, session, epoch, active.as_ref());
         self.run_strip(ctx);
         if self.lookup.open {
             self.lookup.show(ctx);

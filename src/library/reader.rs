@@ -278,9 +278,7 @@ pub(super) fn show(
     }
     for section in sections {
         if section.title == "Source text" && has_summary {
-            crate::design::quiet_section(ui, "Source text", |ui| {
-                style::markdown(ui, section.body, false)
-            });
+            crate::design::quiet_section(ui, "Source text", |ui| style::markdown(ui, section.body));
             continue;
         }
         if section.body.contains("<!-- splat:") {
@@ -326,7 +324,7 @@ pub(super) fn show(
                 if section.title != "Overview" {
                     style::section_heading(ui, &section.title);
                 }
-                style::markdown(ui, section.body, false);
+                style::markdown(ui, section.body);
             }
         }
     }

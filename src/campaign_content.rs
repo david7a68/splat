@@ -711,7 +711,7 @@ impl CampaignContent {
                                     }
                                     ui.label(
                                         Type::Small
-                                            .rich(ui, crate::library::entry_subtitle(entry))
+                                            .rich(ui, crate::library::presentation::subtitle(entry))
                                             .color(c.muted),
                                     );
                                     if let Some(why) = &why {

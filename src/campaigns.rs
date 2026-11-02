@@ -353,7 +353,7 @@ impl Campaigns {
                         ui.selectable_value(&mut selected, Some(campaign.id), &campaign.name);
                     }
                 });
-            design::named_combo(ui, &combo, &format!("Active campaign: {label}"));
+            design::named(ui, &combo.response, &format!("Active campaign: {label}"));
             let response = combo.response;
             match reason {
                 Some(reason) => response.on_disabled_hover_text(reason),

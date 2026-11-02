@@ -609,11 +609,6 @@ fn natural_key(name: &str) -> Vec<(String, u64)> {
     parts
 }
 
-/// A list's second line for an entry, for lists outside the Library.
-pub(crate) fn entry_subtitle(entry: &Entry) -> String {
-    presentation::subtitle(entry)
-}
-
 const EDITOR_MAX_WIDTH: f32 = 720.0;
 const NOTE_CHANGED: &str = "This note changed on disk.";
 /// What is on disk now, in place of what the draft started from.
@@ -1132,7 +1127,7 @@ impl Library {
                                 }
                             }
                         });
-                    design::named_combo(ui, &combo, "Section");
+                    design::named(ui, &combo.response, "Section");
                 }
                 ui.add_space(design::XS);
                 ui.horizontal(|ui| {
@@ -1290,7 +1285,7 @@ impl Library {
                     ui.selectable_value(&mut scope, Scope::Campaign, label(Scope::Campaign));
                 }
             });
-        design::named_combo(ui, &combo, "What the Library shows");
+        design::named(ui, &combo.response, "What the Library shows");
         self.scope = scope;
         if scope != before {
             // The selected entry can stay if it is in this scope. A draft always stays.
@@ -1520,7 +1515,7 @@ impl Library {
                             ui.selectable_value(&mut self.new_kind, kind.into(), kind);
                         }
                     });
-                design::named_combo(ui, &combo, "Kind of entry");
+                design::named(ui, &combo.response, "Kind of entry");
                 let combo = egui::ComboBox::from_id_salt("new_place")
                     .icon(design::combo_icon)
                     .width(150.0)
@@ -1531,7 +1526,7 @@ impl Library {
                             ui.selectable_value(&mut place, i, owner.label());
                         }
                     });
-                design::named_combo(ui, &combo, "Where the entry goes");
+                design::named(ui, &combo.response, "Where the entry goes");
                 let blocked = if dirty {
                     Some("Save or discard this entry first.")
                 } else if self.new_name.trim().is_empty() {
@@ -1787,7 +1782,7 @@ impl Library {
             self.discarded = None;
         }
         if discard_is_for(self.discarded.as_ref(), note)
-            && design::message_with_action(ui, Tone::Info, "Draft discarded.", "Undo discard")
+            && design::draft_discarded(ui)
             && let Some((_, _, text)) = self.discarded.take()
         {
             self.draft = text;
@@ -1887,8 +1882,8 @@ impl Library {
                             &view::Origin {
                                 path: &note.path,
                                 owner: &note.owner.label(),
+                                builtin: note.owner == Owner::Builtin,
                             },
-                            note.owner == Owner::Builtin,
                             self.loaded.as_ref().unwrap(),
                         );
                     });

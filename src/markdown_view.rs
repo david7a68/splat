@@ -8,13 +8,16 @@ pub fn show(ui: &mut egui::Ui, markdown: &str) {
     show_with_density(ui, markdown, false);
 }
 
-/// The Reader's Markdown. Compact field rows when requested.
-pub fn show_reader(ui: &mut egui::Ui, markdown: &str, dense: bool) {
+/// The Reader's Markdown.
+pub fn show_reader(ui: &mut egui::Ui, markdown: &str) {
+    ui.scope(|ui| show_with_density(ui, markdown, false));
+}
+
+/// The Reader's Markdown, as compact field rows.
+pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
     ui.scope(|ui| {
-        if dense {
-            ui.spacing_mut().item_spacing.y = 3.0;
-        }
-        show_with_density(ui, markdown, dense);
+        ui.spacing_mut().item_spacing.y = 3.0;
+        show_with_density(ui, markdown, true);
     });
 }
 

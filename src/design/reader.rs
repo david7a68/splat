@@ -11,8 +11,6 @@ pub fn prose_type(ui: &Ui) -> Type {
     }
 }
 
-pub const READER_MEASURE_WIDTH: f32 = READER_MEASURE;
-
 /// Keep rules text at a comfortable measure, however wide the window is.
 pub fn measure<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.scope(|ui| {
@@ -51,9 +49,7 @@ pub fn detail(ui: &mut Ui, label: &str, value: &str) {
     let c = colors();
     let label = human_label(label);
     let font = Type::StatLabel.font(ui);
-    let galley = ui
-        .painter()
-        .layout_no_wrap(label.clone(), font.clone(), c.text);
+    let galley = ui.painter().layout_no_wrap(label.clone(), font, c.text);
     // A long label takes its own line. A label is never cut.
     if galley.size().x > LABEL_WIDTH - XS {
         ui.label(Type::StatLabel.rich(ui, label).color(c.text));
@@ -87,8 +83,13 @@ pub fn identity(ui: &mut Ui, text: &str) {
 }
 
 /// Scoped to readers: editors and other workspaces keep their own colours.
-pub fn markdown(ui: &mut Ui, text: &str, compact: bool) {
-    crate::markdown_view::show_reader(ui, text, compact);
+pub fn markdown(ui: &mut Ui, text: &str) {
+    crate::markdown_view::show_reader(ui, text);
+}
+
+/// The same, as compact field rows.
+pub fn compact_markdown(ui: &mut Ui, text: &str) {
+    crate::markdown_view::show_compact(ui, text);
 }
 
 /// A named run-in paragraph's title: `Rend.`, `Acid Breath (Recharge 5–6).` Title case,
@@ -168,7 +169,7 @@ pub fn source_prose(ui: &mut Ui, text: &str) {
         .map(run_in_markdown)
         .collect::<Vec<_>>()
         .join("\n\n");
-    markdown(ui, &text, false);
+    markdown(ui, &text);
 }
 
 pub fn human_label(value: &str) -> String {

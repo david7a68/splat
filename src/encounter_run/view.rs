@@ -79,6 +79,12 @@ pub(super) fn sync_status(state: SyncState) -> Status<'static> {
     }
 }
 
+/// The roster keeps its capped width. The panel uses the rest deliberately.
+fn panel_width(ui: &egui::Ui) -> f32 {
+    design::side_panel_width(ui.ctx().content_rect().width())
+        .max(ui.available_width() - design::RUN_LARGE.max_width - GUTTER)
+}
+
 /// A panel beside the run keeps only a gutter from what it sits beside.
 fn side_frame() -> egui::Frame {
     egui::Frame::new().inner_margin(egui::Margin {
@@ -87,22 +93,14 @@ fn side_frame() -> egui::Frame {
     })
 }
 
-fn side_color(side: &str) -> egui::Color32 {
-    let c = colors().side;
-    match side {
-        "party" => c.party,
-        "enemies" => c.enemies,
-        _ => c.other,
-    }
-}
-
 /// The side's shape carries the meaning on a row. The dock and tooltip give the word.
 fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32) {
-    let color = side_color(side);
+    let c = colors().side;
     let half = size / 2.0;
     match side {
         "party" => {
-            painter.rect_filled(Rect::from_center_size(center, vec2(size, size)), 0.0, color);
+            let square = Rect::from_center_size(center, vec2(size, size));
+            painter.rect_filled(square, 0.0, c.party);
         }
         "enemies" => {
             let reach = half * 1.25;
@@ -112,10 +110,10 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
                 center + vec2(0.0, reach),
                 center + vec2(-reach, 0.0),
             ];
-            painter.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
+            painter.add(egui::Shape::convex_polygon(points, c.enemies, Stroke::NONE));
         }
         _ => {
-            painter.circle_filled(center, half, color);
+            painter.circle_filled(center, half, c.other);
         }
     }
 }
@@ -382,16 +380,10 @@ impl Run {
 
     // ---- Live -------------------------------------------------------------------
 
-    fn panel_width(&self, ui: &egui::Ui) -> f32 {
-        // The roster keeps its capped width. The panel uses the rest deliberately.
-        design::side_panel_width(ui.ctx().content_rect().width())
-            .max(ui.available_width() - design::RUN_LARGE.max_width - GUTTER)
-    }
-
     fn live_view(&mut self, ui: &mut egui::Ui) -> bool {
         self.live_keys(ui);
         let mut closed = false;
-        let width = self.panel_width(ui);
+        let width = panel_width(ui);
         if !self.hide_panel {
             egui::SidePanel::right("run_panel")
                 .resizable(false)
@@ -585,7 +577,7 @@ impl Run {
         ui: &egui::Ui,
         width: f32,
         scale: RunScale,
-        tight: bool,
+        fit: RowFit,
     ) -> Vec<RowLayout> {
         let (current, next_up) = (self.current(), self.next_up());
         self.state
@@ -593,8 +585,8 @@ impl Run {
             .iter()
             .map(|&index| {
                 let p = &self.state.participants[index];
-                let turn = current == Some(index) || next_up == Some(index);
-                RowLayout::new(ui, width, p, self.sync_word(index), scale, tight, turn)
+                let turn = TurnMark::of(index, current, next_up);
+                RowLayout::new(ui, width, p, self.sync_word(index), scale, fit, turn)
             })
             .collect()
     }
@@ -608,19 +600,19 @@ impl Run {
         let total = |layouts: &[RowLayout], scale: RunScale| -> f32 {
             layouts.iter().map(|l| l.height(scale)).sum()
         };
-        let mut layouts = self.roster_layouts(ui, width, scale, false);
+        let mut layouts = self.roster_layouts(ui, width, scale, RowFit::Natural);
         let natural = total(&layouts, scale);
         if natural <= room {
             // Spare room goes to the rows, so a short list leaves no gap under it.
             let share = (room - natural - 2.0).max(0.0) / count.max(1) as f32;
             scale.row += share.min(scale.row * 0.4);
         } else {
-            layouts = self.roster_layouts(ui, width, scale, true);
+            layouts = self.roster_layouts(ui, width, scale, RowFit::Compressed);
         }
         // A list longer than its room keeps a line under it, to say what is out of view.
         let overflow = total(&layouts, scale) > room;
         if overflow {
-            layouts = self.roster_layouts(ui, width - SCROLL_BAR, scale, true);
+            layouts = self.roster_layouts(ui, width - SCROLL_BAR, scale, RowFit::Compressed);
         }
         let list_height = if overflow { room - OVERFLOW_LINE } else { room };
         let mut clicked = None;
@@ -643,12 +635,11 @@ impl Run {
                     let selected = self.selected == index;
                     let p = &self.state.participants[index];
                     let sync = self.sync_word(index);
-                    let is_current = current == Some(index);
-                    let is_next = next_up == Some(index);
-                    let name = row_name(p, is_current, is_next, sync);
+                    let turn = TurnMark::of(index, current, next_up);
+                    let name = row_name(p, turn, sync);
                     let response = ui.push_id(&p.key, |ui| {
                         design::row(ui, layout.height(scale), selected, &name, |ui, rect| {
-                            paint_row(ui, rect, p, is_current, is_next, sync, scale, layout);
+                            paint_row(ui, rect, p, turn, sync, scale, layout);
                         })
                     });
                     let response = response.inner.on_hover_text(&p.side);
@@ -660,7 +651,7 @@ impl Run {
                     if selected {
                         selected_rect = Some(rect);
                     }
-                    if is_next {
+                    if turn == TurnMark::Next {
                         next_rect = Some(rect);
                     }
                 }
@@ -1331,7 +1322,7 @@ impl Run {
         egui::ScrollArea::vertical()
             .id_salt("run_encounter_notes")
             .auto_shrink([false, false])
-            .show(ui, |ui| style::markdown(ui, &self.setup_details, false));
+            .show(ui, |ui| style::markdown(ui, &self.setup_details));
     }
 
     fn keys_tab(ui: &mut egui::Ui) {
@@ -1468,8 +1459,8 @@ impl Run {
                     &view::Origin {
                         path: &definition.path,
                         owner: "Starting snapshot, saved with this run",
+                        builtin: false,
                     },
-                    false,
                     links,
                 );
             });
@@ -1601,7 +1592,7 @@ impl Run {
     fn setup_view(&mut self, ui: &mut egui::Ui) -> bool {
         self.back_out_on_escape(ui);
         let mut closed = false;
-        let width = self.panel_width(ui);
+        let width = panel_width(ui);
         if !self.hide_panel {
             egui::SidePanel::right("run_setup_panel")
                 .resizable(false)
@@ -1867,7 +1858,7 @@ impl Run {
                             ui.selectable_value(&mut picked, m, mode_label(m));
                         }
                     });
-                design::named_combo(ui, &combo, &format!("Initiative roll for {name}"));
+                design::named(ui, &combo.response, &format!("Initiative roll for {name}"));
                 if picked != mode {
                     command = Some(Command::RollMode(index, picked));
                 }
@@ -2117,18 +2108,18 @@ impl Run {
                         for index in &self.state.order {
                             let p = &self.state.participants[*index];
                             let sync = self.sync_word(*index);
-                            let name = row_name(p, false, false, sync);
+                            let name = row_name(p, TurnMark::None, sync);
                             let layout = RowLayout::new(
                                 ui,
                                 ui.available_width(),
                                 p,
                                 sync,
                                 scale,
-                                false,
-                                false,
+                                RowFit::Natural,
+                                TurnMark::None,
                             );
                             design::row(ui, layout.height(scale), false, &name, |ui, rect| {
-                                paint_row(ui, rect, p, false, false, sync, scale, &layout);
+                                paint_row(ui, rect, p, TurnMark::None, sync, scale, &layout);
                             });
                         }
                     });
@@ -2159,8 +2150,28 @@ fn hp_word(p: &Participant) -> Option<(&'static str, &'static str, egui::Color32
     }
 }
 
+/// A row's place in the turn order. The next participant is never the current one.
+#[derive(Clone, Copy, PartialEq)]
+enum TurnMark {
+    Current,
+    Next,
+    None,
+}
+
+impl TurnMark {
+    fn of(index: usize, current: Option<usize>, next_up: Option<usize>) -> Self {
+        if current == Some(index) {
+            Self::Current
+        } else if next_up == Some(index) {
+            Self::Next
+        } else {
+            Self::None
+        }
+    }
+}
+
 /// Everything on a row, for assistive technology and for the tests.
-fn row_name(p: &Participant, current: bool, next: bool, sync: Option<SyncState>) -> String {
+fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String {
     let mut parts = vec![
         p.name.clone(),
         p.side.clone(),
@@ -2169,11 +2180,10 @@ fn row_name(p: &Participant, current: bool, next: bool, sync: Option<SyncState>)
         format!("AC {}", display(p.armor_class)),
         format!("Initiative {}", display(p.initiative)),
     ];
-    if current {
-        parts.push("Current turn".into());
-    }
-    if next {
-        parts.push("Next up".into());
+    match turn {
+        TurnMark::Current => parts.push("Current turn".into()),
+        TurnMark::Next => parts.push("Next up".into()),
+        TurnMark::None => {}
     }
     if !p.present {
         parts.push("Absent".into());
@@ -2191,6 +2201,14 @@ fn row_name(p: &Participant, current: bool, next: bool, sync: Option<SyncState>)
     parts.join(", ")
 }
 
+/// How much height a row may use.
+#[derive(Clone, Copy, PartialEq)]
+enum RowFit {
+    Natural,
+    /// The list needs the height, so a row gives up its padding too.
+    Compressed,
+}
+
 /// The fixed columns of a run row, and its second line, which grows rather than cuts.
 struct RowLayout {
     second_line: Option<Arc<Galley>>,
@@ -2199,8 +2217,7 @@ struct RowLayout {
     inline_state: bool,
     /// A name-only row in a list that needs the height.
     tight: bool,
-    /// The list needs the height, so a row gives up its padding too.
-    compressed: bool,
+    fit: RowFit,
     initiative_right: f32,
     name_left: f32,
     name_right: f32,
@@ -2225,8 +2242,8 @@ impl RowLayout {
         p: &Participant,
         sync: Option<SyncState>,
         scale: RunScale,
-        compressed: bool,
-        turn: bool,
+        fit: RowFit,
+        turn: TurnMark,
     ) -> Self {
         let c = colors();
         // Fixed columns from the left of the numbers. A name stays near its HP.
@@ -2295,12 +2312,15 @@ impl RowLayout {
             add(condition, c.participant.condition);
         }
         let second_line = (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job)));
-        let tight = compressed && !turn && second_line.is_none() && sync.is_none();
+        let tight = fit == RowFit::Compressed
+            && turn == TurnMark::None
+            && second_line.is_none()
+            && sync.is_none();
         Self {
             second_line,
             inline_state,
             tight,
-            compressed,
+            fit,
             initiative_right,
             name_left,
             name_right,
@@ -2311,7 +2331,11 @@ impl RowLayout {
     }
 
     fn name_line(&self, scale: RunScale) -> f32 {
-        scale.name + if self.compressed { 2.0 } else { 4.0 }
+        scale.name
+            + match self.fit {
+                RowFit::Compressed => 2.0,
+                RowFit::Natural => 4.0,
+            }
     }
 
     /// Rows in a list get taller, never shorter, when conditions need another line.
@@ -2325,7 +2349,7 @@ impl RowLayout {
             .second_line
             .as_ref()
             .map_or(second_height, |line| line.size().y);
-        if self.compressed {
+        if self.fit == RowFit::Compressed {
             return 1.0 + self.name_line(scale) + second + 1.0;
         }
         let name_line = self.name_line(scale);
@@ -2334,19 +2358,18 @@ impl RowLayout {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn paint_row(
     ui: &egui::Ui,
     rect: Rect,
     p: &Participant,
-    current: bool,
-    next: bool,
+    turn: TurnMark,
     sync: Option<SyncState>,
     scale: RunScale,
     layout: &RowLayout,
 ) {
     let c = colors();
     let painter = ui.painter();
+    let current = turn == TurnMark::Current;
     let x = rect.left();
     let name_line = layout.name_line(scale);
     let second_height = scale.condition + 2.0;
@@ -2389,12 +2412,12 @@ fn paint_row(
         &numeral,
         if current { c.turn.current } else { c.muted },
     );
-    if current || next {
-        let (word, color) = if current {
-            ("TURN", c.turn.current)
-        } else {
-            ("NEXT", c.turn.next)
-        };
+    let mark = match turn {
+        TurnMark::Current => Some(("TURN", c.turn.current)),
+        TurnMark::Next => Some(("NEXT", c.turn.next)),
+        TurnMark::None => None,
+    };
+    if let Some((word, color)) = mark {
         painter.text(
             pos2(initiative_right, second_y + second_height / 2.0),
             Align2::RIGHT_CENTER,

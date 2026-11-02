@@ -368,7 +368,7 @@ impl<'a> Driver<'a> {
         self.interactions += 1;
         self.harness.step();
         self.settle();
-        self.film_result("Scroll into view", false);
+        self.film_result("Scroll into view");
     }
 
     /// Does any node carry exactly this name? Text in a label counts.
@@ -436,7 +436,12 @@ impl<'a> Driver<'a> {
         self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();
-        self.film_result(caption, true);
+        let pressed = Overlay {
+            pressed: true,
+            ..Overlay::caption(caption)
+        };
+        self.film_frames(pressed, super::video::PRESS_FRAMES);
+        self.film_result(caption);
     }
 
     fn is_control(node: &Found) -> bool {
@@ -636,16 +641,15 @@ impl<'a> Driver<'a> {
         silent
     }
 
-    /// Click the `index`th visible control with this name, top to bottom.
-    pub fn click_nth(&mut self, name: &str, index: usize) {
-        let matches: Vec<_> = self
+    /// Click the first visible control with this name, top to bottom.
+    pub fn click_first(&mut self, name: &str) {
+        let first = self
             .nodes()
             .into_iter()
-            .filter(|node| node.name == name && Self::is_control(node) && node.in_view())
-            .collect();
-        let Some(node) = matches.get(index) else {
+            .find(|node| node.name == name && Self::is_control(node) && node.in_view());
+        let Some(node) = first else {
             panic!(
-                "{}: no control {index} named {name:?}.\n{}",
+                "{}: no control named {name:?}.\n{}",
                 self.scenario,
                 self.describe()
             );
@@ -794,7 +798,7 @@ impl<'a> Driver<'a> {
         self.harness.event(egui::Event::Text(text.to_owned()));
         self.interactions += 1;
         self.settle();
-        self.film_result(&caption, false);
+        self.film_result(&caption);
     }
 
     pub fn press(&mut self, key: egui::Key) {
@@ -803,7 +807,7 @@ impl<'a> Driver<'a> {
         self.harness.key_press(key);
         self.interactions += 1;
         self.settle();
-        self.film_result(&caption, false);
+        self.film_result(&caption);
     }
 
     /// Shift+key.
@@ -819,7 +823,7 @@ impl<'a> Driver<'a> {
         );
         self.interactions += 1;
         self.settle();
-        self.film_result(&caption, false);
+        self.film_result(&caption);
     }
 
     /// Ctrl+key, with the modifiers a Linux desktop reports.
@@ -836,7 +840,7 @@ impl<'a> Driver<'a> {
         );
         self.interactions += 1;
         self.settle();
-        self.film_result(&caption, false);
+        self.film_result(&caption);
     }
 
     /// Press Tab until a control has focus. A person working by keyboard alone does
@@ -855,7 +859,7 @@ impl<'a> Driver<'a> {
                 .find(|node| node.accesskit_node().is_focused())
                 .map(|node| node_name(&node));
             if focused.as_deref() == Some(name) {
-                self.film_result(&caption, false);
+                self.film_result(&caption);
                 return true;
             }
         }
@@ -900,7 +904,7 @@ impl<'a> Driver<'a> {
         self.harness.hover_at(rect.center());
         // A tooltip waits half a second, and one frame here is a quarter second.
         self.harness.run_steps(6);
-        self.film_result(&format!("Hover: {name}"), false);
+        self.film_result(&format!("Hover: {name}"));
         let shown = self.has_containing(text);
         self.harness.remove_cursor();
         self.settle();
@@ -927,7 +931,7 @@ impl<'a> Driver<'a> {
         }
         self.harness.remove_cursor();
         self.settle();
-        self.film_result("Scroll", false);
+        self.film_result("Scroll");
     }
 
     /// Wheel-scroll over this point until a virtual list shows the text.
@@ -1105,14 +1109,7 @@ impl<'a> Driver<'a> {
     }
 
     /// Show the settled result of a step for long enough to read.
-    fn film_result(&mut self, caption: &str, pressed: bool) {
-        if pressed {
-            let overlay = Overlay {
-                pressed: true,
-                ..Overlay::caption(caption)
-            };
-            self.film_frames(overlay, super::video::PRESS_FRAMES);
-        }
+    fn film_result(&mut self, caption: &str) {
         self.film_frames(Overlay::caption(caption), super::video::HOLD_FRAMES);
         self.held = true;
     }

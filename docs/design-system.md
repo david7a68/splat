@@ -135,7 +135,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Nav item | `nav_item` | Icon and word. Accent bar when selected |
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and shows why (G1). `.key("N")` shows the key beside the word |
 | Field | `field` | Label, control, help, error; names the control for accessibility |
-| Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named`, `named_combo` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
+| Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
 | Dialog | `dialog` | An `egui::Modal`, for the brief's modal tasks only: discard on close, removing a campaign or a package, copy review |
 | Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows. `quiet_section` is for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and a hairline, for Markdown tables and sheets. No stripes, because a row's height follows its text |

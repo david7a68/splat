@@ -743,9 +743,7 @@ impl Encounters {
         if self.draft_dirty() {
             self.discarded = None;
         }
-        if self.discarded.is_some()
-            && design::message_with_action(ui, Tone::Info, "Draft discarded.", "Undo discard")
-        {
+        if self.discarded.is_some() && design::draft_discarded(ui) {
             self.draft = self.discarded.take();
             self.message = None;
             self.error = None;
@@ -1505,7 +1503,7 @@ impl Encounters {
                                     );
                                 }
                             });
-                        design::named_combo(ui, &combo, "Side");
+                        design::named(ui, &combo.response, "Side");
                         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             ui.add(
@@ -1640,7 +1638,7 @@ impl Encounters {
                             );
                         }
                     });
-                design::named_combo(ui, &combo, "Initiative rule");
+                design::named(ui, &combo.response, "Initiative rule");
             });
             ui.checkbox(
                 &mut snapshot.options.initiative.roster_ties,

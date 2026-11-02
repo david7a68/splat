@@ -73,25 +73,21 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
                 .replace("; or (B)", "\n\n- **B:**")
                 .replace("; (B)", "\n\n- **B:**")
                 .replace("; or (C)", "\n\n- **C:**");
-            style::markdown(ui, &value, false);
+            style::markdown(ui, &value);
         } else {
             let label = if label == "Saving Throw" {
                 "Saving throw proficiencies"
             } else {
                 label
             };
-            style::markdown(ui, &format!("**{label}:** {value}"), false);
+            style::markdown(ui, &format!("**{label}:** {value}"));
         }
     }
     if !remainder.is_empty() {
         design::section(ui, "Additional source text", |ui| {
             // Keep printed progression rows separate instead of joining a table
             // into prose; the named feature list is shown below.
-            style::markdown(
-                ui,
-                &remainder.lines().collect::<Vec<_>>().join("  \n"),
-                false,
-            );
+            style::markdown(ui, &remainder.lines().collect::<Vec<_>>().join("  \n"));
         });
     }
     true

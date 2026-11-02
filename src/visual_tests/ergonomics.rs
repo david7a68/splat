@@ -786,12 +786,12 @@ mod tests {
         assert!(!control.chrome, "{control:?}");
     }
 
-    fn control(name: &str, role: Role, rect: egui::Rect) -> Control {
+    fn control(name: &str, rect: egui::Rect) -> Control {
         Control {
             id: rect.left() as u64 + 1,
             name: name.to_owned(),
             placeholder: None,
-            role,
+            role: Role::Button,
             rect,
             disabled: false,
             scope: 1,
@@ -815,7 +815,7 @@ mod tests {
     /// Every check can fail. A check that is 0 everywhere looks the same as a broken one.
     #[test]
     fn a_clean_control_breaks_no_check() {
-        let clean = control("Save", Role::Button, at(10.0, 10.0, 80.0, 30.0));
+        let clean = control("Save", at(10.0, 10.0, 80.0, 30.0));
         assert_eq!(checks_for(&[clean]), Vec::<String>::new());
     }
 
@@ -834,32 +834,32 @@ mod tests {
 
     #[test]
     fn target_size_fails_on_a_small_control() {
-        let small = control("Save", Role::Button, at(10.0, 10.0, 16.0, 16.0));
+        let small = control("Save", at(10.0, 10.0, 16.0, 16.0));
         assert!(checks_for(&[small]).contains(&"target-size".to_owned()));
     }
 
     #[test]
     fn accessible_name_fails_on_an_unnamed_control() {
-        let unnamed = control("", Role::Button, at(10.0, 10.0, 80.0, 30.0));
+        let unnamed = control("", at(10.0, 10.0, 80.0, 30.0));
         assert!(checks_for(&[unnamed]).contains(&"accessible-name".to_owned()));
     }
 
     #[test]
     fn in_viewport_fails_outside_the_window() {
-        let outside = control("Save", Role::Button, at(500.0, 10.0, 80.0, 30.0));
+        let outside = control("Save", at(500.0, 10.0, 80.0, 30.0));
         assert!(checks_for(&[outside]).contains(&"in-viewport".to_owned()));
     }
 
     #[test]
     fn no_overlap_fails_on_two_controls_in_one_place() {
-        let a = control("Save", Role::Button, at(10.0, 10.0, 80.0, 30.0));
-        let b = control("Send", Role::Button, at(20.0, 10.0, 80.0, 30.0));
+        let a = control("Save", at(10.0, 10.0, 80.0, 30.0));
+        let b = control("Send", at(20.0, 10.0, 80.0, 30.0));
         assert!(checks_for(&[a, b]).contains(&"no-overlap".to_owned()));
     }
 
     #[test]
     fn clipped_fails_on_a_control_cut_at_the_side_of_its_pane() {
-        let mut cut = control("Save", Role::Button, at(10.0, 10.0, 80.0, 30.0));
+        let mut cut = control("Save", at(10.0, 10.0, 80.0, 30.0));
         cut.clip = Some(at(0.0, 0.0, 50.0, 300.0));
         assert!(checks_for(&[cut]).contains(&"clipped".to_owned()));
     }

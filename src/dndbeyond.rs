@@ -328,7 +328,7 @@ impl DndBeyond {
                     });
                 }
             });
-        crate::design::named_combo(ui, &dropdown, "D&D Beyond campaign link");
+        crate::design::named(ui, &dropdown.response, "D&D Beyond campaign link");
         if ui.is_rect_visible(dropdown.response.rect) {
             self.visible_last_frame = true;
             let key = current.clone().map(|id| (campaign.id, id));

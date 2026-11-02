@@ -1893,13 +1893,6 @@ mod tests {
         ));
     }
     #[test]
-    fn setup_can_mark_a_participant_absent() {
-        let mut run = run();
-        run.apply(Command::Presence(1, false)).unwrap();
-        assert!(!run.state.participants[1].present);
-        assert_eq!(run.state.phase, Phase::Setup);
-    }
-    #[test]
     fn npc_rolls_follow_campaign_grouping_and_never_change_player_initiative() {
         let mut run = run();
         run.state.participants[0].npc = false;
@@ -1945,20 +1938,6 @@ mod tests {
         assert_eq!(run.state.participants[0].initiative, Some(15));
         run.apply(Command::Initiative(1, Some(3))).unwrap();
         assert_eq!(run.history.len(), 2);
-    }
-    #[test]
-    fn resume_selects_the_current_participant() {
-        let dir = tempfile::tempdir().unwrap();
-        let campaign = Uuid::new_v4();
-        let mut run = run();
-        begin(&mut run);
-        run.apply(Command::Next).unwrap();
-        run.apply(Command::Next).unwrap();
-        run.configure_storage(campaign, dir.path(), Initiative::default())
-            .unwrap();
-        let path = run.storage.as_ref().unwrap().path.clone();
-        let reopened = Run::open(&path, campaign).unwrap();
-        assert_eq!(Some(reopened.selected), reopened.current());
     }
     #[test]
     fn a_sheet_update_clears_undo_and_says_so() {

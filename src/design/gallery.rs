@@ -267,12 +267,10 @@ pub fn messages(ui: &mut egui::Ui) {
         style::markdown(
             ui,
             "| Ability | Score | Modifier |\n| --- | --- | --- |\n| Strength | 18 | +4 |\n| Dexterity | 10 | +0 |\n",
-            false,
         );
         style::markdown(
             ui,
             "Rules prose in the serif, at a comfortable measure. **A named action.** It reads as a page, with _emphasis_ and 2d6 + 3 damage × ½ → done.",
-            false,
         );
     });
 }

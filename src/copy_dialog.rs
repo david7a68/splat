@@ -161,7 +161,7 @@ impl CopyDialog {
                             );
                         }
                     });
-                design::named_combo(ui, &combo, "Destination");
+                design::named(ui, &combo.response, "Destination");
             });
             let name_changed =
                 design::text_field(ui, "Copy name", &mut self.name, None, None).changed();

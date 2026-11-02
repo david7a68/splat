@@ -32,7 +32,7 @@ impl Links for NoLinks {
 
 fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Option<usize> {
     ui.add_space(design::M);
-    style::markdown(ui, &reading.summary, false);
+    style::markdown(ui, &reading.summary);
     let mut selected = None;
     if !reading.related.is_empty() {
         ui.add_space(design::S);
@@ -101,10 +101,11 @@ fn spell_links(
     selected
 }
 
-/// What the footer of an entry says about where it comes from.
+/// Where an entry comes from.
 pub(crate) struct Origin<'a> {
     pub path: &'a str,
     pub owner: &'a str,
+    pub builtin: bool,
 }
 
 /// Draw an entry's content. Returns the index of a link the DM followed.
@@ -114,20 +115,19 @@ pub(crate) fn show(
     entry: Option<&Entry>,
     body: &str,
     origin: &Origin<'_>,
-    builtin: bool,
     links: &dyn Links,
 ) -> Option<usize> {
     let room = ui.available_width();
     // A wide window's margin holds what is rarely wanted, so the prose keeps its measure and
     // the page has no dead space.
-    if room >= style::READER_MEASURE_WIDTH + design::XXL + REFERENCE_MIN {
+    if room >= design::READER_MEASURE + design::XXL + REFERENCE_MIN {
         let mut open_link = None;
         ui.horizontal_top(|ui| {
             let layout = Layout::top_down(Align::Min);
-            let measure = style::READER_MEASURE_WIDTH;
+            let measure = design::READER_MEASURE;
             ui.allocate_ui_with_layout(vec2(measure, 0.0), layout, |ui| {
                 ui.set_max_width(measure);
-                open_link = content(ui, name, entry, body, builtin, links);
+                open_link = content(ui, name, entry, body, origin.builtin, links);
             });
             ui.add_space(design::XL);
             let width = ui.available_width().min(REFERENCE_MAX);
@@ -140,7 +140,7 @@ pub(crate) fn show(
     }
     // Rules text keeps its measure in a wide side panel too.
     style::measure(ui, |ui| {
-        let open_link = content(ui, name, entry, body, builtin, links);
+        let open_link = content(ui, name, entry, body, origin.builtin, links);
         ui.add_space(design::L);
         design::rule(ui);
         reference(ui, name, entry, body, origin);
@@ -201,7 +201,7 @@ fn reference(
         design::quiet_section(ui, "Technical details", |ui| {
             for section in technical {
                 design::quiet_section(ui, &section.title, |ui| {
-                    style::markdown(ui, section.body, true);
+                    style::compact_markdown(ui, section.body);
                 });
             }
         });

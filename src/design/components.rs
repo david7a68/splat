@@ -223,7 +223,7 @@ pub fn focus_ring(ui: &Ui, rect: Rect) {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum Kind {
+enum Kind {
     Primary,
     Secondary,
     Quiet,
@@ -360,6 +360,13 @@ impl<'a> Action<'a> {
         }
         let hovered = response.hovered() && ui.is_enabled();
         let pressed = response.is_pointer_button_down_on() && ui.is_enabled();
+        let plain_fill = if pressed {
+            c.selected
+        } else if hovered {
+            c.hover
+        } else {
+            Color32::TRANSPARENT
+        };
         let (fill, stroke) = match self.kind {
             // Disabled, it loses its fill, so it cannot outweigh what can be pressed.
             Kind::Primary if !ui.is_enabled() => (
@@ -374,39 +381,12 @@ impl<'a> Action<'a> {
                 },
                 Stroke::NONE,
             ),
-            Kind::Secondary => (
-                if pressed {
-                    c.selected
-                } else if hovered {
-                    c.hover
-                } else {
-                    Color32::TRANSPARENT
-                },
-                Stroke::new(HAIRLINE_WIDTH, c.field_border),
-            ),
+            Kind::Secondary => (plain_fill, Stroke::new(HAIRLINE_WIDTH, c.field_border)),
             // On, the control has its own fill and edge: it can stand on any surface,
             // the dock's included.
             Kind::Quiet if self.selected => (c.current_row, Stroke::new(HAIRLINE_WIDTH, c.accent)),
-            Kind::Quiet => (
-                if pressed {
-                    c.selected
-                } else if hovered {
-                    c.hover
-                } else {
-                    Color32::TRANSPARENT
-                },
-                Stroke::NONE,
-            ),
-            Kind::Destructive => (
-                if pressed {
-                    c.selected
-                } else if hovered {
-                    c.hover
-                } else {
-                    Color32::TRANSPARENT
-                },
-                Stroke::new(HAIRLINE_WIDTH, c.destructive),
-            ),
+            Kind::Quiet => (plain_fill, Stroke::NONE),
+            Kind::Destructive => (plain_fill, Stroke::new(HAIRLINE_WIDTH, c.destructive)),
         };
         ui.painter().rect(
             rect,
@@ -557,11 +537,6 @@ pub fn text_input(ui: &mut Ui, name: &str, text: &mut String, hint: &str, width:
     );
     named(ui, &response, name);
     response
-}
-
-/// Name a dropdown for assistive technology. Its visible text is its value.
-pub fn named_combo(ui: &Ui, inner: &egui::InnerResponse<Option<()>>, name: &str) {
-    named(ui, &inner.response, name);
 }
 
 /// A short whole-number field, with no label of its own. Letters typed into it are
@@ -961,16 +936,15 @@ pub fn spinner(ui: &mut Ui) {
     ui.spinner();
 }
 
-/// A short note beside a small action, such as `Draft discarded.` with its `Undo`.
-/// Returns true when the action is pressed.
-pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+/// `Draft discarded.` beside its undo. Returns true when the undo is pressed.
+pub fn draft_discarded(ui: &mut Ui) -> bool {
     let mut pressed = false;
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
             ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-            message(ui, tone, text);
+            message(ui, Tone::Info, "Draft discarded.");
         });
-        pressed = Action::secondary(action)
+        pressed = Action::secondary("Undo discard")
             .density(Density::Read)
             .show(ui)
             .clicked();

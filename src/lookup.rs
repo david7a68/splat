@@ -545,8 +545,8 @@ impl Lookup {
                     &view::Origin {
                         path: &current.entry.path,
                         owner: &current.owner,
+                        builtin: current.builtin,
                     },
-                    current.builtin,
                     index.as_ref(),
                 );
             });

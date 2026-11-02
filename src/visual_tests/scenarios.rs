@@ -581,12 +581,12 @@ pub mod encounter_build {
                 .all(|word| detail.contains(word)),
             format!("The Wolf result shows CR, HP and AC: {detail}"),
         );
-        d.click_nth(ADD, 0);
+        d.click_first(ADD);
         d.expect("6. ");
         d.click_below("6. ", DUPLICATE);
         d.expect("7. ");
         d.type_text(BOSS);
-        d.click_nth(ADD, 0);
+        d.click_first(ADD);
         d.expect("8. ");
         d.state("creatures-added", Sizes::All);
         d.click(SAVE_ENCOUNTER);
@@ -609,7 +609,7 @@ pub mod encounter_build {
         );
         // Read a full stat block in Lookup, with the editor still open.
         let before = d.interaction_count();
-        d.click_nth(READ, 0);
+        d.click_first(READ);
         let cost = d.interaction_count() - before;
         let read = d.has_containing("ARMOR CLASS");
         d.state("stat-block-beside-editor", Sizes::All);
@@ -1284,7 +1284,7 @@ pub mod prep_to_table {
                 d.state("first-player-initiative", Sizes::Default);
                 d.goal_within("T4.3", "enter one player's initiative", 2);
             }
-            // Enter goes to the next player who has no initiative (review M-7).
+            // Enter goes to the next player who has no initiative.
             if index + 1 == PLAYERS.len() / 2 {
                 d.press(Key::Enter);
                 let next = format!("Initiative for {}", PLAYERS[index + 1].0);
@@ -1847,7 +1847,7 @@ pub mod run_folder_defect {
             let names = d.enabled_page_buttons();
             for name in &names {
                 if name == NEW_ENCOUNTER || name == SAVE_ENCOUNTER || d.has(name) {
-                    d.click_nth(name, 0);
+                    d.click_first(name);
                 }
                 if d.has(CLOSE_RUN) && !d.is_disabled(CLOSE_RUN) {
                     close_run(d);
