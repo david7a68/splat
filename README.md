@@ -317,6 +317,10 @@ that is a conflict, settled from the panel: use the sheet's value, or keep yours
 conflict is found again after a close, an app close or a crash. A value you did not change takes
 the sheet's.
 
+While sync reads a sheet, that sheet decides Maximum HP, and the field says so. Stop sync to change it
+in the run. A maximum set while sync was off stays until the next first read, where the notice and the
+log say what it became. A message from sync stays under the list until you dismiss it.
+
 A save from an earlier version can hold unsent values as its last match, so on its first read every
 difference asks, once. Its new `started` field is optional, and earlier saves load. Spell slots and
 limited uses are not in the saved run: an unsent one asks at the next first read in the same session,

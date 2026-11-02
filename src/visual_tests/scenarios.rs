@@ -1328,6 +1328,85 @@ pub mod run_long_names {
     }
 }
 
+/// A player who did not arrive: combat begins without them, and they can come back.
+pub mod run_absent_player {
+    use super::*;
+    const ENCOUNTER: &str = "Shrine of Cinders";
+    const PLAYER: &str = "Brannoch Vale";
+    const OTHERS: [(&str, &str); 4] = [
+        ("Iselle Marrowind", "19"),
+        ("Kestrel Dunmoor", "21"),
+        ("Oren Thistlewick", "11"),
+        ("Sable Harrowgate", "13"),
+    ];
+    const ROLL_NPCS: &str = "Roll NPC initiative";
+    const BEGIN: &str = "Begin combat";
+    const NO_INITIATIVE: &str = "No initiative";
+    const TURN_ORDER_FIRST: &str = "Kestrel Dunmoor";
+
+    pub fn run(d: &mut Driver<'_>) {
+        run_saved_encounter(d, ENCOUNTER);
+        d.click(&format!("Absent: {PLAYER}"));
+        d.click(ROLL_NPCS);
+        for (name, total) in OTHERS {
+            d.type_into(&format!("Initiative for {name}"), total);
+        }
+        d.state("ready-with-one-absent", Sizes::All);
+        // The turn order follows the totals, with no place taken by the absent player.
+        let turn_order = d.painted_from_label(TURN_ORDER_FIRST);
+        d.observe(
+            "Absent player",
+            turn_order.contains("Kestrel Dunmoor"),
+            format!("The setup's turn order starts with the highest total: {turn_order}"),
+        );
+        d.observe(
+            "Absent player",
+            !d.is_disabled(BEGIN) && d.visible_text("Everyone is ready"),
+            "Combat can begin with a player absent, and with no initiative for them",
+        );
+        d.click(BEGIN);
+        d.state("began-without-them", Sizes::All);
+        let first = current_participant(d);
+        d.observe(
+            "Absent player",
+            first.as_deref() == Some("Kestrel Dunmoor") && d.row_words(PLAYER).contains("Absent"),
+            format!("The first turn is {first:?}, and their row says Absent"),
+        );
+        d.begin_task();
+
+        // Back in the second turn: last in the order, and the DM says when it is.
+        d.click(NEXT_TURN);
+        let turn = current_participant(d);
+        d.click_row(PLAYER);
+        d.click("Mark present");
+        d.state("back-with-no-initiative", Sizes::All);
+        let last = roster_places(d).last().map(|row| row.0.clone());
+        d.observe(
+            "Absent player",
+            d.row_words(PLAYER).contains(NO_INITIATIVE)
+                && last.as_deref() == Some(PLAYER)
+                && current_participant(d) == turn,
+            format!(
+                "Back with none: the row says so, they are last ({last:?}), and the turn stays"
+            ),
+        );
+        d.click("Record");
+        d.type_into(&format!("Initiative for {PLAYER}"), "20");
+        d.click("Set initiative");
+        d.state("initiative-set-in-combat", Sizes::Default);
+        let order: Vec<String> = roster_places(d).into_iter().map(|row| row.0).collect();
+        d.observe(
+            "Absent player",
+            order.first().map(String::as_str) == Some("Kestrel Dunmoor")
+                && order.get(1).map(String::as_str) == Some(PLAYER)
+                && current_participant(d) == turn
+                && !d.row_words(PLAYER).contains(NO_INITIATIVE),
+            format!("Their place follows the total, and the turn stays: {order:?}"),
+        );
+        d.begin_task();
+    }
+}
+
 /// W4: cold start to the first turn of a new run.
 pub mod prep_to_table {
     use super::*;
@@ -1365,6 +1444,11 @@ pub mod prep_to_table {
         let marked = d.has(&format!("Mark present: {player}"));
         let after = inits(d);
         d.state("absent-at-start", Sizes::All);
+        d.observe(
+            "Absent player",
+            d.visible_text("6 need initiative"),
+            "Someone absent is not counted among those who still need initiative",
+        );
         d.observe(
             "T4.3",
             !before.is_empty() && before == after && d.visible_text("Absent ·"),
@@ -1793,6 +1877,19 @@ pub mod run_sync_conflict {
             clear_before
                 && d.visible_text(&format!("From D&D Beyond: {changed}. {UNDO_CLEARED}")),
             format!("Simulated sheet read: a message says, only after it, what changed from what to what: {changed}"),
+        );
+        // It stays through what the DM does next, and the DM dismisses it.
+        d.click(NEXT_TURN);
+        d.observe(
+            "T3.4",
+            d.visible_text(UNDO_CLEARED) && d.has(DISMISS_NOTICE),
+            "The message stays after the next turn, until the DM dismisses it",
+        );
+        d.click(DISMISS_NOTICE);
+        d.observe(
+            "T3.4",
+            !d.visible_text(UNDO_CLEARED),
+            "Dismissing removes it",
         );
         d.click(STOP_SYNC);
         d.begin_task();
@@ -2527,6 +2624,10 @@ pub mod run_roster_conflict {
         d.click(CONDITIONS);
         for condition in LOADED_CONDITIONS {
             d.click(condition);
+        }
+        // The first read's message stays until dismissed, and it is not what this measures.
+        if d.has("Dismiss this message") {
+            d.click("Dismiss this message");
         }
         let errored = LOADED_CONDITIONS.len() + 1;
         d.app_mut()

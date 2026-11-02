@@ -2,7 +2,8 @@
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
-    Command, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run, display, mode_label,
+    Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run, display,
+    mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -181,7 +182,6 @@ impl Run {
         match self.apply(command) {
             Err(error) => self.error = Some(error),
             Ok(()) => {
-                self.notice = None;
                 self.condition.clear();
                 self.note.clear();
                 if follow {
@@ -340,7 +340,9 @@ impl Run {
         };
         action.blocked_if(
             self.history.is_empty(),
-            if self.reopened {
+            if self.undo_stopped {
+                "Undo stopped when a value came from D&D Beyond or the sync panel. See the log."
+            } else if self.reopened {
                 "Undo does not survive a restart. Later steps can be undone."
             } else {
                 "Nothing to undo yet."
@@ -444,12 +446,12 @@ impl Run {
                         ui.available_width(),
                         self.state.order.len(),
                     );
-                    let notice_below = self.live_header(ui, scale);
+                    self.live_header(ui, scale);
                     self.error_line(ui);
                     let room = ui.available_height() - DOCK_HEIGHT - FOOTER_HEIGHT;
                     // A message goes in the room under the list, so it moves no row while
-                    // the DM's eye is on them. A long one wraps there.
-                    let notice = self.notice.clone().filter(|_| notice_below);
+                    // the DM's eye is on them, and stays until they dismiss it. A long one wraps.
+                    let notice = self.notice.clone();
                     let notice_height = notice.as_ref().map_or(0.0, |notice| {
                         let width = ui.available_width() - 32.0;
                         let font = Type::Small.font(ui);
@@ -501,7 +503,7 @@ impl Run {
     /// The round and the turn are the strongest things on the page, above any row, and
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
     /// True if the notice has no room on the header's line, so it goes under the list.
-    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) -> bool {
+    fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) {
         let c = colors();
         let strip = self.strip();
         let name = strip.current.as_deref().unwrap_or_default();
@@ -577,7 +579,6 @@ impl Run {
         // Undo has this line's first claim, so it can always name the action in full.
         let undo_label = self.undo_label();
         let mut undo = false;
-        let mut dismiss = false;
         // What sync needs from the DM. These stay until the cause is gone. A stopped sync
         // comes first, because nothing else can be resolved without a connection.
         let kept = match strip.unsent.as_slice() {
@@ -622,13 +623,6 @@ impl Run {
                 )
             })
         };
-        // A notice too long for this line takes its own, below, in full.
-        let notice_font = Type::Small.font(ui);
-        let undo_room = design::number_width(ui, &undo_label, &Type::Strong.font(ui)) + 72.0;
-        let notice_fits = self.notice.as_ref().is_none_or(|notice| {
-            design::number_width(ui, notice, &notice_font) + undo_room + 32.0 < ui.available_width()
-        });
-        let notice_below = self.notice.is_some() && (sync_alert.is_some() || !notice_fits);
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), 28.0),
             Layout::right_to_left(Align::Center),
@@ -652,10 +646,6 @@ impl Run {
                                 (Type::Small, short)
                             };
                         ui.label(role.rich(ui, text.as_str()).color(*color));
-                    } else if let Some(notice) = self.notice.as_ref().filter(|_| notice_fits) {
-                        dismiss =
-                            design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                        ui.label(Type::Small.rich(ui, notice).color(c.result.warning));
                     } else if nobody_present {
                         // Its first sentence, beside a long Undo. Next turn's hover has the rest.
                         let first = NOBODY_PRESENT
@@ -682,9 +672,6 @@ impl Run {
         );
         ui.add_space(2.0);
         design::rule(ui);
-        if dismiss {
-            self.notice = None;
-        }
         if undo {
             self.undo();
             self.focus_amount = true;
@@ -692,7 +679,6 @@ impl Run {
         if next_turn {
             self.run_command(Command::Next);
         }
-        notice_below
     }
 
     /// The sync state a row shows, if this participant has one.
@@ -1696,14 +1682,26 @@ impl Run {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = design::S;
+                let c_warning = colors().result.warning;
                 let p = &self.state.participants[index];
                 let mut hp = p.hp;
                 let mut max = p.max_hp;
                 design::group_label(ui, "Correct HP");
+                let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
                 ui.horizontal_wrapped(|ui| {
                     optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
-                    optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                    design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
+                        optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                    });
                 });
+                if sheet_decides {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small.rich(ui, MAX_FROM_SHEET).color(colors().muted),
+                        )
+                        .wrap(),
+                    );
+                }
                 if hp != p.hp || max != p.max_hp {
                     command = Some(Command::Health(index, hp, max));
                 }
@@ -1713,6 +1711,44 @@ impl Run {
                     if bonus != p.initiative_bonus {
                         command = Some(Command::Bonus(index, bonus));
                     }
+                } else if p.initiative.is_none() {
+                    // Absent at the start, so no roll was asked for. The DM says when it is.
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    "No initiative yet: last in the order until you set it. The current turn stays.",
+                                )
+                                .color(c_warning),
+                        )
+                        .wrap(),
+                    );
+                    let field = format!("Initiative for {}", p.name);
+                    let text = self.setup_inputs.entry(index).or_default();
+                    let total = text.trim().parse::<i64>().ok();
+                    ui.horizontal(|ui| {
+                        let response = design::number_field(
+                            ui,
+                            &field,
+                            text,
+                            "Init",
+                            72.0,
+                            Density::Read.control(),
+                        );
+                        let enter = response.lost_focus()
+                            && ui.input(|i| i.key_pressed(Key::Enter));
+                        let pressed = Action::secondary("Set initiative")
+                            .density(Density::Read)
+                            .blocked_if(total.is_none(), "Type a total first.")
+                            .show(ui)
+                            .clicked();
+                        if (pressed || enter)
+                            && let Some(total) = total
+                        {
+                            command = Some(Command::Initiative(index, Some(total)));
+                        }
+                    });
                 } else {
                     ui.label(
                         Type::Small
@@ -1840,7 +1876,7 @@ impl Run {
             .state
             .participants
             .iter()
-            .filter(|p| p.initiative.is_none())
+            .filter(|p| p.initiative.is_none() && p.present)
             .count();
         let missing_hp = self
             .state
@@ -2615,6 +2651,9 @@ impl RowLayout {
         if !p.present {
             add(&format!("{} Absent", icons::ABSENT), c.muted);
         }
+        if p.present && p.initiative.is_none() {
+            add("No initiative", c.result.warning);
+        }
         if p.concentration {
             add(
                 &format!("{} Conc", icons::CONCENTRATING),
@@ -2751,7 +2790,8 @@ fn paint_row(
         painter,
         initiative_right,
         line_y,
-        &display(p.initiative),
+        &p.initiative
+            .map_or_else(|| "—".to_owned(), |n| n.to_string()),
         &numeral,
         if current { c.turn.current } else { c.muted },
     );

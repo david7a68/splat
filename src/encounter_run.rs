@@ -138,9 +138,12 @@ impl Participant {
             initial,
         })
     }
-    fn ready(&self) -> bool {
+    fn health_known(&self) -> bool {
         matches!((self.hp, self.max_hp), (Some(hp), Some(max)) if max > 0 && hp >= 0 && hp <= max)
-            && self.initiative.is_some()
+    }
+    /// Ready to begin. Someone who is not here has no roll to make.
+    fn ready(&self) -> bool {
+        self.health_known() && (self.initiative.is_some() || !self.present)
     }
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -191,7 +194,10 @@ pub(crate) struct Run {
     /// Test builds have no session. This lets the party-sync control be exercised.
     simulate_connection: bool,
     scroll_to_selected: bool,
+    /// What sync changed. It stays until the DM dismisses it, whatever they do next.
     notice: Option<String>,
+    /// A value reached the run with no step of its own, so Undo stops there.
+    undo_stopped: bool,
     setup_inputs: BTreeMap<usize, String>,
     /// The participant whose initiative the last step set, to merge keystrokes.
     last_initiative: Option<usize>,
@@ -227,6 +233,8 @@ enum Panel {
     Keys,
 }
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
+pub(crate) const MAX_FROM_SHEET: &str =
+    "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
 pub(crate) const NOBODY_PRESENT: &str =
     "No participants are present. Mark one present or end the encounter.";
 const CLOSE_BLOCKED: &str =
@@ -343,6 +351,7 @@ impl Run {
             simulate_connection: false,
             scroll_to_selected: false,
             notice: None,
+            undo_stopped: false,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
             hide_panel: false,
@@ -369,13 +378,40 @@ impl Run {
             .order
             .sort_by_key(|i| std::cmp::Reverse(state.participants[*i].initiative));
     }
+    /// A place for someone whose initiative was set during combat. The current turn stays
+    /// current, and no one else moves relative to each other.
+    fn take_place_in_order(state: &mut State, index: usize) {
+        let current = state.order[state.cursor];
+        state.order.retain(|i| *i != index);
+        let total = state.participants[index].initiative;
+        let place = state
+            .order
+            .iter()
+            .position(|i| state.participants[*i].initiative < total)
+            .unwrap_or(state.order.len());
+        state.order.insert(place, index);
+        if let Some(cursor) = state.order.iter().position(|i| *i == current) {
+            state.cursor = cursor;
+        }
+    }
     fn apply(&mut self, command: Command) -> Result<(), String> {
         if matches!(self.state.phase, Phase::Ended { .. }) {
             return Err("This encounter has ended. Undo the ending to continue.".into());
         }
+        // The sheet decides the maximum while sync reads it, and sync cannot write one. A value
+        // that could not stay is refused here, with the reason, not replaced at the next tick.
+        if let Command::Health(index, _, max) = &command
+            && self
+                .syncs
+                .get(index)
+                .is_some_and(|sync| sync.ready() && sync.max_hp() != *max)
+        {
+            return Err(MAX_FROM_SHEET.into());
+        }
         // Merge typed digits of one initiative into one undo step.
         let initiative_edit = match &command {
-            Command::Initiative(index, _) => Some(*index),
+            // Typed digits merge only in setup. In combat a total is set once, as one step.
+            Command::Initiative(index, _) if self.state.phase == Phase::Setup => Some(*index),
             _ => None,
         };
         if initiative_edit.is_some() && initiative_edit == self.last_initiative {
@@ -633,11 +669,18 @@ impl Run {
                 format!("{amount} healing applied; {} HP remains.", p.hp.unwrap())
             }
             Command::Initiative(_, total) => {
-                if state.phase != Phase::Setup {
+                // In combat, only for someone who came back without one.
+                if state.phase != Phase::Setup && (p.initiative.is_some() || total.is_none()) {
                     return Err("Initiative is fixed during combat.".into());
                 }
                 p.initiative = total;
-                format!("Initiative set to {}.", display(total))
+                let change = format!("Initiative set to {}.", display(total));
+                if state.phase == Phase::Running {
+                    let label = format!("{}: {change}", p.name);
+                    Self::take_place_in_order(state, index);
+                    return Ok(label);
+                }
+                change
             }
             Command::Bonus(_, bonus) => {
                 if state.phase != Phase::Setup {
@@ -670,7 +713,9 @@ impl Run {
             }
             Command::Presence(_, present) => {
                 p.present = present;
-                if present {
+                if present && p.initiative.is_none() && state.phase != Phase::Setup {
+                    "Marked present with no initiative: last in the order until you set it.".into()
+                } else if present {
                     "Marked present; retains initiative and state.".into()
                 } else {
                     "Marked absent; retains initiative and state.".into()
@@ -862,7 +907,6 @@ impl Run {
         if let Err(error) = self.apply(Command::Next) {
             self.error = Some(error);
         } else {
-            self.notice = None;
             self.amount.clear();
             self.scroll_to_selected = true;
             self.focus_amount = true;
@@ -1050,8 +1094,20 @@ fn groups_that_differ(
 }
 
 /// What changed for this participant, from what to what.
-fn change_line(name: &str, before: &SheetShadow, after: &SheetShadow) -> String {
+fn change_line(
+    name: &str,
+    before: &SheetShadow,
+    after: &SheetShadow,
+    maximum: (Option<i64>, Option<i64>),
+) -> String {
     let mut parts = Vec::new();
+    if maximum.0 != maximum.1 {
+        parts.push(format!(
+            "maximum HP {} → {}",
+            display(maximum.0),
+            display(maximum.1)
+        ));
+    }
     if before.hp != after.hp {
         parts.push(format!("HP {} → {}", display(before.hp), display(after.hp)));
     }
@@ -1117,7 +1173,7 @@ fn local_group(
 ) -> Option<serde_json::Value> {
     match group {
         SheetGroup::Hp => Some(serde_json::json!({
-            "removedHitPoints": max_hp? - p.hp?,
+            "removedHitPoints": (max_hp? - p.hp?).max(0),
             "temporaryHitPoints": p.temporary_hp,
         })),
         SheetGroup::Death => Some(serde_json::json!({
@@ -1162,10 +1218,12 @@ fn hold_local_changes(p: &mut Participant, sync: &mut crate::combat_sync::Combat
     let sheet = sync.values().clone();
     let max = sync.max_hp();
     for group in groups_that_differ(p, &sheet, max) {
+        // Above the sheet's maximum, a value can only be the sheet's own: the notice says so.
         if changed.contains(&group)
             && let Some(local) = sheet
                 .get(group.key())
                 .and_then(|t| local_group(p, group, t, max))
+                .filter(|local| sheet.get(group.key()) != Some(local))
         {
             sync.hold_conflict(group.key(), local);
         }
@@ -1255,7 +1313,7 @@ impl Run {
                     if before.hp != shadow.hp
                         && let (Some(current), Some(max)) = (before.hp, sync.max_hp())
                     {
-                        hp["removedHitPoints"] = (max - current).into();
+                        hp["removedHitPoints"] = (max - current).max(0).into();
                     }
                     if before.temp != shadow.temp {
                         hp["temporaryHitPoints"] = before.temp.into();
@@ -1281,13 +1339,15 @@ impl Run {
                 hold_local_changes(p, sync);
             }
             if sync.ready() {
+                let maximum_before = p.max_hp;
                 apply_sheet_values(p, sync.values(), sync.max_hp());
                 let after = SheetShadow::of(p);
                 // Anything that reached the run here took no step of its own. Undo would put
                 // the older value back and send it, so the steps before it end here.
-                let changed = !shadow_differences(&before, &after).is_empty();
+                let changed =
+                    !shadow_differences(&before, &after).is_empty() || maximum_before != p.max_hp;
                 if changed {
-                    let line = change_line(&p.name, &before, &after);
+                    let line = change_line(&p.name, &before, &after, (maximum_before, p.max_hp));
                     if sync.updated || first_read {
                         from_sheet.push(line);
                     } else {
@@ -1336,6 +1396,7 @@ impl Run {
         let what = what.join(" ");
         self.state.log.push(what.clone());
         self.notice = Some(format!("{what} Undo history was cleared."));
+        self.undo_stopped = true;
     }
     /// A sheet changed outside Splat, with these words for what changed.
     #[cfg(test)]
@@ -1541,7 +1602,7 @@ impl Run {
                     || !(-1..=1).contains(&p.initiative_mode)
             })
             || (state.phase != Phase::Setup
-                && (!state.participants.iter().all(Participant::ready) || state.round == 0))
+                && (!state.participants.iter().all(Participant::health_known) || state.round == 0))
         {
             return Err("Saved run state is invalid; its file has not been changed.".into());
         }
@@ -1582,6 +1643,7 @@ impl Run {
             simulate_connection: false,
             scroll_to_selected: true,
             notice: None,
+            undo_stopped: false,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
             hide_panel: false,
@@ -2735,6 +2797,166 @@ mod tests {
         // A reopened run has no such value, and no claim is made for it.
         let reopened = close_and_reopen(&mut run, campaign);
         assert!(reopened.unsent_only_here_names().is_empty());
+    }
+    #[test]
+    fn an_absent_participant_needs_no_initiative_to_begin() {
+        let mut run = run();
+        run.apply(Command::Initiative(1, Some(14))).unwrap();
+        run.apply(Command::Initiative(2, Some(9))).unwrap();
+        assert!(
+            run.apply(Command::Begin).is_err(),
+            "still here, so a roll is due"
+        );
+        assert_eq!(
+            run.state.order,
+            vec![1, 2, 0],
+            "setup keeps the order sorted"
+        );
+        run.apply(Command::Presence(0, false)).unwrap();
+        run.apply(Command::Begin).unwrap();
+        // Last in the order, and no turn is theirs while they are away.
+        assert_eq!(run.state.order, vec![1, 2, 0]);
+        assert_eq!(run.current(), Some(1));
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Next).unwrap();
+        assert_eq!(run.current(), Some(1));
+        assert_eq!(run.state.round, 2);
+    }
+    #[test]
+    fn someone_back_with_no_initiative_is_last_until_the_dm_sets_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        run.apply(Command::Initiative(1, Some(14))).unwrap();
+        run.apply(Command::Initiative(2, Some(9))).unwrap();
+        run.apply(Command::Presence(0, false)).unwrap();
+        run.apply(Command::Begin).unwrap();
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Presence(0, true)).unwrap();
+        assert!(run.state.log.last().unwrap().contains("no initiative"));
+        // A run in this state saves and opens.
+        let campaign = stored(&mut run, dir.path());
+        let mut run = close_and_reopen(&mut run, campaign);
+        assert_eq!(run.state.participants[0].initiative, None);
+        // Their turn comes last, with no ruling on where they should be.
+        run.apply(Command::Next).unwrap();
+        assert_eq!(run.current(), Some(0));
+        run.apply(Command::Next).unwrap();
+        assert_eq!(run.current(), Some(1));
+        // The DM sets it: they take their place, and the current turn stays current.
+        run.apply(Command::Initiative(0, Some(12))).unwrap();
+        assert_eq!(run.state.order, vec![1, 0, 2]);
+        assert_eq!(run.current(), Some(1));
+        // Once only, and a named step.
+        assert!(run.apply(Command::Initiative(0, Some(20))).is_err());
+        assert!(run.undo_label().contains("initiative"));
+        run.undo();
+        assert_eq!(run.state.order, vec![1, 2, 0]);
+        assert_eq!(run.state.participants[0].initiative, None);
+    }
+    #[test]
+    fn a_maximum_the_sheet_decides_is_refused_with_the_reason_not_replaced() {
+        let (mut run, _, max) = matched_with_sheet(5);
+        let hp = run.state.participants[0].hp;
+        let refused = run
+            .apply(Command::Health(0, hp, Some(max + 8)))
+            .unwrap_err();
+        assert_eq!(refused, MAX_FROM_SHEET);
+        assert_eq!(run.state.participants[0].max_hp, Some(max));
+        // Current HP can still be corrected, and it goes out as an edit.
+        run.apply(Command::Health(0, Some(max - 7), Some(max)))
+            .unwrap();
+        connected_tick(&mut run);
+        assert_eq!(run.state.participants[0].hp, Some(max - 7));
+        assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 7);
+    }
+    #[test]
+    fn a_maximum_set_while_sync_was_off_is_replaced_only_with_a_message() {
+        let (mut run, _, max) = matched_with_sheet(0);
+        run.syncs.get_mut(&0).unwrap().stop();
+        connected_tick(&mut run);
+        run.apply(Command::Health(0, Some(max + 3), Some(max + 8)))
+            .unwrap();
+        connected_tick(&mut run);
+        assert_eq!(
+            run.state.participants[0].max_hp,
+            Some(max + 8),
+            "kept while off"
+        );
+        reconnect(&mut run);
+        read_sheet(&mut run, max, 0);
+        // The sheet cannot hold it, so nothing is sent: it stands, and the words say what went.
+        assert_eq!(run.state.participants[0].max_hp, Some(max));
+        assert!(run.syncs[&0].conflict_keys().is_empty());
+        assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 0);
+        let notice = run.notice.clone().unwrap();
+        assert!(
+            notice.contains(&format!("maximum HP {} → {max}", max + 8)),
+            "{notice}"
+        );
+        assert!(
+            notice.contains(&format!("HP {} → {max}", max + 3)),
+            "{notice}"
+        );
+        assert!(run.state.log.iter().any(|line| line.contains("maximum HP")));
+    }
+    #[test]
+    fn a_change_to_the_maximum_alone_still_says_so() {
+        let (mut run, _, max) = matched_with_sheet(0);
+        run.syncs.get_mut(&0).unwrap().stop();
+        connected_tick(&mut run);
+        run.apply(Command::Health(0, Some(max), Some(max + 8)))
+            .unwrap();
+        connected_tick(&mut run);
+        reconnect(&mut run);
+        read_sheet(&mut run, max, 0);
+        assert_eq!(run.state.participants[0].hp, Some(max));
+        let notice = run.notice.clone().unwrap();
+        assert!(
+            notice.contains(&format!("maximum HP {} → {max}", max + 8)),
+            "{notice}"
+        );
+        assert!(run.history.is_empty(), "the named step no longer matches");
+    }
+    #[test]
+    fn hp_above_the_sheets_maximum_never_sends_a_negative_value() {
+        let (mut run, _, max) = matched_with_sheet(5);
+        connected_tick(&mut run);
+        // However it got there: an older step, for one.
+        run.state.participants[0].hp = Some(max + 3);
+        connected_tick(&mut run);
+        let removed = run.syncs[&0].values()["hp"]["removedHitPoints"]
+            .as_i64()
+            .unwrap();
+        assert_eq!(removed, 0);
+        // And not in a conflict held at a first read.
+        let (mut run, _, max) = matched_with_sheet(5);
+        run.syncs.get_mut(&0).unwrap().stop();
+        connected_tick(&mut run);
+        run.state.participants[0].hp = Some(max + 3);
+        run.state.participants[0].max_hp = Some(max + 3);
+        reconnect(&mut run);
+        read_sheet(&mut run, max, 5);
+        for group in run.syncs[&0].values().values() {
+            assert!(
+                group["removedHitPoints"].as_i64().unwrap_or(0) >= 0,
+                "{group}"
+            );
+        }
+    }
+    #[test]
+    fn the_undo_notice_stays_until_the_dm_dismisses_it() {
+        let (mut run, _, max) = matched_with_sheet(5);
+        read_sheet(&mut run, max, 8);
+        assert!(
+            run.notice
+                .as_ref()
+                .unwrap()
+                .contains("Undo history was cleared")
+        );
+        assert!(run.undo_stopped, "plain Undo gives this reason on hover");
+        run.next_turn();
+        run.apply(Command::Damage(0, 1)).unwrap();
+        assert!(run.notice.is_some(), "still there after the next steps");
     }
     #[test]
     fn the_existing_controls_settle_a_reconnect_conflict() {

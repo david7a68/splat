@@ -39,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 27] = [
+const SCENARIOS: [(&str, Seed, Script); 28] = [
     (
         "library-browse",
         Seed::Empty,
@@ -125,6 +125,11 @@ const SCENARIOS: [(&str, Seed, Script); 27] = [
         "run-edge-states",
         Seed::Campaign,
         scenarios::run_edge_states::run,
+    ),
+    (
+        "run-absent-player",
+        Seed::Campaign,
+        scenarios::run_absent_player::run,
     ),
     (
         "run-long-names",
