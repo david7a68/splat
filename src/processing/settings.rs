@@ -31,12 +31,7 @@ const LLM_CHOICES: [(&str, Provider, &str, &str); 6] = [
         ANTHROPIC_URL,
         ANTHROPIC_MODEL,
     ),
-    (
-        "OpenAI",
-        Provider::OpenAiCompatible,
-        "https://api.openai.com/v1",
-        "",
-    ),
+    ("OpenAI", Provider::OpenAiCompatible, OPENAI_URL, ""),
     (
         "Google Gemini",
         Provider::OpenAiCompatible,
@@ -65,6 +60,7 @@ const SPEECH_CHOICES: [(&str, &str, &str); 3] = [
         "",
     ),
 ];
+const OTHER_SERVICE: &str = "Another service";
 
 #[derive(Default)]
 struct Store {
@@ -143,11 +139,14 @@ enum Reply {
 pub struct ProcessingSettings {
     store: Store,
     pub config: Config,
+    /// A recording is live, so a new input cannot apply to it.
+    pub recording_now: bool,
     started: bool,
     load_error: Option<String>,
     save_error: Option<String>,
     probe: Option<Probe>,
     probing: Option<mpsc::Receiver<Probe>>,
+    probed: Option<std::time::Instant>,
     codex_found: bool,
     speech_key: KeyField,
     llm_key: KeyField,
@@ -162,11 +161,13 @@ impl Default for ProcessingSettings {
         Self {
             store: Store::user(),
             config: Config::default(),
+            recording_now: false,
             started: false,
             load_error: None,
             save_error: None,
             probe: None,
             probing: None,
+            probed: None,
             codex_found: false,
             speech_key: KeyField::default(),
             llm_key: KeyField::default(),
@@ -202,8 +203,24 @@ impl ProcessingSettings {
         self.replies = Some((tx, rx));
     }
 
+    /// Look again for recorders and inputs. A microphone can be plugged in at any time.
+    pub fn look_again(&mut self) {
+        if self.probing.is_none() {
+            self.probing = Some(recording::probe());
+            self.probed = Some(std::time::Instant::now());
+        }
+    }
+
     pub fn poll(&mut self, ctx: &egui::Context) {
         self.start(ctx);
+        // The table is waiting while a chosen input is missing, so keep looking.
+        if self.input_missing()
+            && self
+                .probed
+                .is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(5))
+        {
+            self.look_again();
+        }
         if let Some(found) = self.probing.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.probe = Some(found);
             self.probing = None;
@@ -274,10 +291,17 @@ impl ProcessingSettings {
         self.config.input = Some(name.to_owned());
     }
 
+    /// A key for the service chosen now. A key saved for another service does not count,
+    /// because it must never be sent to a different company.
     pub fn has_key(&self, slot: KeySlot) -> bool {
         match slot {
-            KeySlot::Speech => self.speech_key.saved || self.held_speech_key.is_some(),
-            KeySlot::Llm => self.llm_key.saved || self.held_llm_key.is_some(),
+            KeySlot::Speech => {
+                (self.speech_key.saved || self.held_speech_key.is_some())
+                    && self.config.speech_key_fits()
+            }
+            KeySlot::Llm => {
+                (self.llm_key.saved || self.held_llm_key.is_some()) && self.config.llm_key_fits()
+            }
         }
     }
 
@@ -286,11 +310,11 @@ impl ProcessingSettings {
         self.config.problem().or_else(|| {
             let codex = self.config.provider == Provider::CodexCli;
             if !self.has_key(KeySlot::Speech) && !super::is_local(&self.config.speech_url) {
-                Some("Save an API key for the speech service in Settings.".into())
+                Some("Save an API key for this speech service in Settings.".into())
             } else if codex && !self.codex_found {
                 Some("The codex command was not found. Install Codex, or choose another LLM in Settings.".into())
             } else if !codex && !self.has_key(KeySlot::Llm) && !super::is_local(&self.config.llm_url) {
-                Some("Save an API key for the LLM in Settings.".into())
+                Some("Save an API key for this LLM in Settings.".into())
             } else {
                 None
             }
@@ -299,13 +323,22 @@ impl ProcessingSettings {
 
     /// A copy of any key held only for this run. Keys in the keyring load on the worker.
     pub fn held_keys(&self) -> (Option<Zeroizing<String>>, Option<Zeroizing<String>>) {
-        (self.held_speech_key.clone(), self.held_llm_key.clone())
+        (
+            self.held_speech_key
+                .clone()
+                .filter(|_| self.config.speech_key_fits()),
+            self.held_llm_key
+                .clone()
+                .filter(|_| self.config.llm_key_fits()),
+        )
     }
 
     #[cfg(test)]
     pub fn simulate_keys(&mut self) {
         self.speech_key.saved = true;
         self.llm_key.saved = true;
+        self.config.speech_key_for = self.config.speech_url.clone();
+        self.config.llm_key_for = self.config.llm_url.clone();
     }
 
     fn persist(&mut self) {
@@ -322,6 +355,10 @@ impl ProcessingSettings {
             ui.ctx().clone(),
         );
         let saved = self.field(slot).saved;
+        let fits = match slot {
+            KeySlot::Speech => self.config.speech_key_fits(),
+            KeySlot::Llm => self.config.llm_key_fits(),
+        };
         let held = self.held(slot).is_some();
         let mut save = false;
         let mut forget = false;
@@ -356,6 +393,11 @@ impl ProcessingSettings {
             });
         });
         if save {
+            match slot {
+                KeySlot::Speech => self.config.speech_key_for = self.config.speech_url.clone(),
+                KeySlot::Llm => self.config.llm_key_for = self.config.llm_url.clone(),
+            }
+            self.persist();
             let key = Zeroizing::new(self.field(slot).typing.trim().to_owned());
             self.field(slot).typing.zeroize();
             self.field(slot).typing.clear();
@@ -385,11 +427,17 @@ impl ProcessingSettings {
                 Tone::Warning,
                 &format!("{error} Splat keeps the key until it closes."),
             );
-        } else if saved {
+        } else if saved && fits {
             ui.label(
                 Type::Small
                     .rich(ui, format!("{} Saved in the desktop keyring.", icons::OK))
                     .color(colors().document.saved),
+            );
+        } else if saved {
+            design::message(
+                ui,
+                Tone::Warning,
+                "The saved key is for another service, so Splat will not send it here. Save a key for this service.",
             );
         }
     }
@@ -443,7 +491,7 @@ impl ProcessingSettings {
                     design::field(ui, "Input", None, None, |ui| {
                         let inner = egui::ComboBox::from_id_salt("recording_input")
                             .selected_text(&label)
-                            .width(ui.available_width().min(design::FORM_WIDTH) - design::S)
+                            .width(ui.available_width().min(design::FORM_WIDTH))
                             .icon(design::combo_icon)
                             .show_ui(ui, |ui| {
                                 changed |= ui
@@ -468,6 +516,13 @@ impl ProcessingSettings {
                     if changed {
                         self.persist();
                     }
+                    if self.recording_now {
+                        design::message(
+                            ui,
+                            Tone::Info,
+                            "A new input applies to the next recording. Stop and record again to use it.",
+                        );
+                    }
                 }
             }
         }
@@ -481,20 +536,36 @@ impl ProcessingSettings {
                 .rich(ui, "Writes a transcript from the audio, before the LLM. The Codex CLI cannot take audio, so this is a separate service, with its own key. It must offer the OpenAI audio/transcriptions API.")
                 .color(c.muted),
         );
-        ui.horizontal_wrapped(|ui| {
-            for (name, url, model) in SPEECH_CHOICES {
-                if Action::quiet(name)
-                    .name(&format!("Use {name} for speech"))
-                    .selected(self.config.speech_url == url)
-                    .show(ui)
-                    .clicked()
-                {
-                    self.config.speech_url = url.to_owned();
-                    self.config.speech_model = model.to_owned();
-                    self.persist();
-                }
-            }
+        let current = SPEECH_CHOICES
+            .iter()
+            .find(|(_, url, _)| self.config.speech_url == *url)
+            .map_or(OTHER_SERVICE, |(name, ..)| name);
+        let mut chosen = None;
+        design::field(ui, "Speech service", None, None, |ui| {
+            let inner = egui::ComboBox::from_id_salt("speech_service")
+                .selected_text(current)
+                .width(ui.available_width().min(design::FORM_WIDTH))
+                .icon(design::combo_icon)
+                .show_ui(ui, |ui| {
+                    for (name, url, model) in SPEECH_CHOICES {
+                        if ui.selectable_label(current == name, name).clicked() {
+                            chosen = Some((url, model));
+                        }
+                    }
+                    if ui
+                        .selectable_label(current == OTHER_SERVICE, OTHER_SERVICE)
+                        .clicked()
+                    {
+                        chosen = Some(("", ""));
+                    }
+                });
+            design::named(ui, &inner.response, "Speech service");
         });
+        if let Some((url, model)) = chosen {
+            self.config.speech_url = url.to_owned();
+            self.config.speech_model = model.to_owned();
+            self.persist();
+        }
         let mut changed = false;
         changed |= design::text_field(
             ui,
@@ -529,43 +600,53 @@ impl ProcessingSettings {
                 )
                 .color(c.muted),
         );
-        ui.horizontal_wrapped(|ui| {
-            for (name, provider, url, model) in LLM_CHOICES {
-                if Action::quiet(name)
-                    .name(&format!("Use {name} for the LLM"))
-                    .selected(self.config.provider == provider && self.config.llm_url == url)
-                    .show(ui)
-                    .clicked()
-                {
-                    self.config.provider = provider;
-                    self.config.llm_url = url.to_owned();
-                    self.config.llm_model = model.to_owned();
-                    self.persist();
-                }
-            }
+        let current = LLM_CHOICES
+            .iter()
+            .find(|(_, provider, url, _)| {
+                self.config.provider == *provider && self.config.llm_url == *url
+            })
+            .map_or(OTHER_SERVICE, |(name, ..)| name);
+        let mut chosen = None;
+        design::field(ui, "LLM service", None, None, |ui| {
+            let inner = egui::ComboBox::from_id_salt("llm_service")
+                .selected_text(current)
+                .width(ui.available_width().min(design::FORM_WIDTH))
+                .icon(design::combo_icon)
+                .show_ui(ui, |ui| {
+                    for (name, provider, url, model) in LLM_CHOICES {
+                        if ui.selectable_label(current == name, name).clicked() {
+                            chosen = Some((provider, url, model));
+                        }
+                    }
+                    if ui
+                        .selectable_label(current == OTHER_SERVICE, OTHER_SERVICE)
+                        .clicked()
+                    {
+                        chosen = Some((Provider::OpenAiCompatible, "", ""));
+                    }
+                });
+            design::named(ui, &inner.response, "LLM service");
         });
+        if let Some((provider, url, model)) = chosen {
+            self.config.provider = provider;
+            self.config.llm_url = url.to_owned();
+            self.config.llm_model = model.to_owned();
+            self.persist();
+        }
         let mut changed = false;
-        design::field(ui, "Kind of API", None, None, |ui| {
-            changed |= design::segmented(
-                ui,
-                &mut self.config.provider,
-                &[
-                    (Provider::CodexCli, Provider::CodexCli.word()),
-                    (Provider::Anthropic, Provider::Anthropic.word()),
-                    (
-                        Provider::OpenAiCompatible,
-                        Provider::OpenAiCompatible.word(),
-                    ),
-                ],
-            );
-        });
         let codex = self.config.provider == Provider::CodexCli;
         if !codex {
             changed |= design::text_field(ui, "LLM address", &mut self.config.llm_url, None, None)
                 .changed();
         }
-        changed |=
-            design::text_field(ui, "LLM model", &mut self.config.llm_model, None, None).changed();
+        changed |= design::text_field(
+            ui,
+            "LLM model",
+            &mut self.config.llm_model,
+            Some("The name your service gives it."),
+            None,
+        )
+        .changed();
         if changed {
             self.persist();
         }
@@ -580,42 +661,45 @@ impl ProcessingSettings {
             self.key_row(ui, KeySlot::Llm, "LLM API key");
         }
         let mut changed = false;
-        for (label, help, prompt, default) in [
-            (
-                "First pass: clean and mark",
-                "Cleans the raw transcript and marks events in it.",
-                &mut self.config.clean_prompt,
-                super::default_clean_prompt(),
-            ),
-            (
-                "Second pass: check and summarize",
-                "Checks the first pass against the raw transcript, corrects it, and writes the summary. Splat divides its reply at the headings # Review and # Marked transcript.",
-                &mut self.config.review_prompt,
-                super::default_review_prompt(),
-            ),
-        ] {
-            design::field(ui, label, Some(help), None, |ui| {
-                let response = ui.add(
-                    egui::TextEdit::multiline(prompt)
-                        .desired_width(
-                            ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S,
-                        )
-                        .desired_rows(6)
-                        .margin(egui::vec2(design::S, design::S)),
-                );
-                design::named(ui, &response, label);
-                changed |= response.changed();
-            });
-            if *prompt != default
-                && Action::quiet("Reset")
-                    .name(&format!("Reset: {label}"))
-                    .show(ui)
-                    .clicked()
-            {
-                *prompt = default;
-                changed = true;
+        // Technical, and a stray key here changes every later job.
+        design::quiet_section(ui, "Instructions to the LLM", |ui| {
+            for (label, help, prompt, default) in [
+                (
+                    "First pass: clean and mark",
+                    "Cleans the raw transcript and marks events in it.",
+                    &mut self.config.clean_prompt,
+                    super::default_clean_prompt(),
+                ),
+                (
+                    "Second pass: check and summarize",
+                    "Checks the first pass against the raw transcript, corrects it, and writes the summary. Splat divides its reply at the headings # Review and # Marked transcript.",
+                    &mut self.config.review_prompt,
+                    super::default_review_prompt(),
+                ),
+            ] {
+                design::field(ui, label, Some(help), None, |ui| {
+                    let response = ui.add(
+                        egui::TextEdit::multiline(prompt)
+                            .desired_width(
+                                ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S,
+                            )
+                            .desired_rows(6)
+                            .margin(egui::vec2(design::S, design::S)),
+                    );
+                    design::named(ui, &response, label);
+                    changed |= response.changed();
+                });
+                if *prompt != default
+                    && Action::quiet("Reset")
+                        .name(&format!("Reset: {label}"))
+                        .show(ui)
+                        .clicked()
+                {
+                    *prompt = default;
+                    changed = true;
+                }
             }
-        }
+        });
         if changed {
             self.persist();
         }
@@ -625,7 +709,7 @@ impl ProcessingSettings {
         let c = colors();
         ui.label(
             Type::Small
-                .rich(ui, "Recording is your choice in each session. Splat sends nothing until you select Process on a recording.")
+                .rich(ui, "Recording is your choice in each session. Splat sends nothing until you select Process on a recording. Changes here save as you type. A key needs Save key.")
                 .color(c.muted),
         );
         ui.add_space(design::S);
@@ -634,6 +718,14 @@ impl ProcessingSettings {
         }
         if let Some(error) = &self.save_error {
             design::message(ui, Tone::Error, error);
+        }
+        if let Some(problem) = self.problem() {
+            let problem = problem.replace(" in Settings", "");
+            design::message(
+                ui,
+                Tone::Info,
+                &format!("Before you can process: {problem}"),
+            );
         }
         self.input_section(ui);
         ui.add_space(design::M);

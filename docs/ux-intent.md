@@ -276,7 +276,7 @@ switching (`src/main.rs:164`), which is correct and must stay.
 campaign's folder, and each encounter, rest, journey, day and major event is on one timeline that any note
 can refer to. **Context:** desk and table. **Frequency:** every session.
 
-**Done well:** T11.1 to T11.4.
+**Done well:** T11.1 to T11.4, and T11.8.
 
 ### W12. Record a session and process it later
 **Trigger:** the table agrees to be recorded. **Goal:** the audio is safe, its state is plain, and later it
@@ -539,11 +539,12 @@ reading the code, not from a test run.
 | T10.3 | Connect states: busy, error, keyring warning, connected, each with words | settings | state, look | Partly |
 | T11.1 | A titled session from a template in ≤ 4, or 2 with no title. The note holds the filled template | session-notes | cost, state | New |
 | T11.2 | A long rest on the timeline in ≤ 2, from the session's page | session-notes | cost | New |
-| T11.3 | An encounter run puts itself on the timeline, in the open session | session-notes | state | New |
+| T11.3 | An encounter run puts itself on the timeline, in the newest session. Reading an older note does not change that | session-notes | state | New |
 | T11.4 | An event has a reference. A note can link it, reads as its words, and the event lists the note | session-notes | state | New |
-| T11.5 | Recording needs a stated step, stays in view on every page, and Stop keeps the file | session-recording | state | New |
-| T11.6 | Process states what is missing, and where audio and words go, before anything is sent | session-recording | state | New |
+| T11.5 | Recording needs a stated step, and its true state stays in view on every page, including a stall or a stop. Stop keeps the file | session-recording | state | New |
+| T11.6 | Process states what is missing, and where audio and words go, before anything is sent. A failure stays in view on every page | session-recording | state | New |
 | T11.7 | A marker reaches the timeline only when the DM adds it. What the second pass changed can be read | session-recording | state | New |
+| T11.8 | A note during a run in ≤ 2, beside the roster, in the session being played | session-notes | cost, view | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

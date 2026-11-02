@@ -155,16 +155,6 @@ pub enum Provider {
     OpenAiCompatible,
 }
 
-impl Provider {
-    pub fn word(self) -> &'static str {
-        match self {
-            Self::CodexCli => "Codex CLI",
-            Self::Anthropic => "Anthropic",
-            Self::OpenAiCompatible => "OpenAI-compatible",
-        }
-    }
-}
-
 /// What the DM chose. It holds no secret: keys stay in the desktop keyring.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -176,6 +166,9 @@ pub struct Config {
     pub provider: Provider,
     pub llm_url: String,
     pub llm_model: String,
+    /// The address each saved key was saved for. A key never goes anywhere else.
+    pub speech_key_for: String,
+    pub llm_key_for: String,
     pub clean_prompt: String,
     pub review_prompt: String,
 }
@@ -189,6 +182,8 @@ impl Default for Config {
             provider: Provider::CodexCli,
             llm_url: String::new(),
             llm_model: CODEX_MODEL.to_owned(),
+            speech_key_for: String::new(),
+            llm_key_for: String::new(),
             clean_prompt: default_clean_prompt(),
             review_prompt: default_review_prompt(),
         }
@@ -228,6 +223,10 @@ pub fn host(text: &str) -> String {
         .unwrap_or_else(|| text.trim().to_owned())
 }
 
+fn same_service(saved_for: &str, url: &str) -> bool {
+    !saved_for.trim().is_empty() && host(saved_for) == host(url)
+}
+
 fn endpoint(base: &str, path: &str) -> Result<Url, String> {
     let base = service_url(base)?;
     let joined = format!("{}/{path}", base.as_str().trim_end_matches('/'));
@@ -235,15 +234,28 @@ fn endpoint(base: &str, path: &str) -> Result<Url, String> {
 }
 
 impl Config {
+    /// Is the saved speech key for the service chosen now?
+    pub fn speech_key_fits(&self) -> bool {
+        same_service(&self.speech_key_for, &self.speech_url)
+    }
+
+    pub fn llm_key_fits(&self) -> bool {
+        same_service(&self.llm_key_for, &self.llm_url)
+    }
+
     /// The first thing that stops Process, in the words the DM reads.
     pub fn problem(&self) -> Option<String> {
-        if self.speech_url.trim().is_empty() || self.speech_model.trim().is_empty() {
-            return Some("Choose a speech service in Settings.".into());
+        if self.speech_url.trim().is_empty() {
+            return Some("Enter the speech service's address in Settings.".into());
         }
-        if self.llm_model.trim().is_empty()
-            || (self.provider != Provider::CodexCli && self.llm_url.trim().is_empty())
-        {
-            return Some("Choose an LLM in Settings.".into());
+        if self.speech_model.trim().is_empty() {
+            return Some("Enter the speech model's name in Settings.".into());
+        }
+        if self.provider != Provider::CodexCli && self.llm_url.trim().is_empty() {
+            return Some("Enter the LLM's address in Settings.".into());
+        }
+        if self.llm_model.trim().is_empty() {
+            return Some("Enter the LLM model's name in Settings.".into());
         }
         service_url(&self.speech_url).err().or_else(|| {
             (self.provider != Provider::CodexCli)
@@ -331,6 +343,11 @@ pub fn cleaned_path(recording: &Path) -> PathBuf {
     recording.with_extension("cleaned.md")
 }
 
+/// What a person must know about the result, beside it, for as long as it stands.
+pub fn warning_path(recording: &Path) -> PathBuf {
+    recording.with_extension("warning.md")
+}
+
 /// What the second pass changed, and what it could not verify.
 pub fn review_path(recording: &Path) -> PathBuf {
     recording.with_extension("review.md")
@@ -389,6 +406,13 @@ impl Transcript {
     }
 }
 
+/// How far a transcript got when it is not finished: parts done, and parts in all.
+pub fn transcript_short_of(recording: &Path) -> Option<(u64, u64)> {
+    Transcript::read(&transcript_path(recording))
+        .filter(|t| !t.complete())
+        .map(|t| (t.parts_done, t.parts))
+}
+
 /// Is this file's transcript finished? It can be part of the way through.
 #[cfg(test)]
 fn transcript_complete(recording: &Path) -> bool {
@@ -431,17 +455,21 @@ fn failure(service: &str, response: Response) -> Failure {
                 .map(str::to_owned)
         })
         .unwrap_or_default();
-    let advice = match status {
-        401 | 403 => " Check the API key in Settings.",
-        404 => " Check the address and the model in Settings.",
-        _ => "",
-    };
     let detail: String = detail.chars().take(300).collect();
-    let words = if detail.is_empty() {
-        format!("{service} answered with status {status}.{advice}")
-    } else {
-        format!("{service} answered with status {status}: {detail}{advice}")
+    let mut words = match status {
+        401 | 403 => format!("{service} did not accept the API key. Check it in Settings."),
+        404 => format!("{service} does not know this address or model. Check them in Settings."),
+        408 | 409 | 429 => format!(
+            "{service} is busy, or your limit is reached. Wait, then process it again. It goes on from where it stopped."
+        ),
+        500.. => format!(
+            "{service} has a problem on its side. Process it again later. It goes on from where it stopped."
+        ),
+        _ => format!("{service} refused the request, with status {status}."),
     };
+    if !detail.is_empty() {
+        words.push_str(&format!(" It said: {detail}"));
+    }
     Failure { words, retryable }
 }
 
@@ -480,7 +508,7 @@ fn with_retries<T>(
     }
 }
 
-const CANCELLED: &str = "Cancelled. Process starts again from where it stopped.";
+pub const CANCELLED: &str = "Cancelled. Processing it again goes on from where it stopped.";
 
 fn transcribe_part(
     client: &Client,
@@ -909,7 +937,10 @@ fn ask(
         return Err(format!("{model} returned no text."));
     }
     let cut_off = matches!(stream.stop.as_deref(), Some("max_tokens" | "length"))
-        .then(|| "The model stopped at its length limit, so the result is cut off.".to_owned());
+        .then(|| {
+            "The model stopped at its length limit, so the result is cut off. The raw transcript is whole. Choose a model with a longer limit in Settings to process all of it."
+                .to_owned()
+        });
     Ok((stream.text, cut_off))
 }
 
@@ -965,10 +996,14 @@ fn coverage_problem(raw: &str, result: &str) -> Option<String> {
         .filter(|heading| !found.contains(heading))
         .map(|heading| heading.trim_start_matches("## "))
         .collect();
-    if !missing.is_empty() {
+    if let [first, rest @ ..] = missing.as_slice() {
+        let times = match rest.len() {
+            0 => (*first).to_owned(),
+            1..=3 => missing.join(", "),
+            more => format!("{first} and {more} more parts"),
+        };
         return Some(format!(
-            "The result has no text for {}. Compare it with the raw transcript.",
-            missing.join(", ")
+            "The result has no text for {times}. Compare it with the raw transcript."
         ));
     }
     let words = |text: &str| text.split_whitespace().count() as f64;
@@ -988,13 +1023,16 @@ fn clean_and_review(
     let model = config.llm_model.trim();
     let name = serde_json::to_string(model).map_err(|e| e.to_string())?;
     let note = "This is a draft from an LLM. Check it against your own memory.";
+    // Only the summary reads as prose someone could rely on. The Reader marks the rest.
     let write = |path: PathBuf, field: &str, body: &str| {
+        let lead = if field == "summary" {
+            format!("> {note}\n\n")
+        } else {
+            String::new()
+        };
         write_atomic(
             &path,
-            &format!(
-                "---\n{field}_model: {name}\n---\n\n> {note}\n\n{}\n",
-                body.trim()
-            ),
+            &format!("---\n{field}_model: {name}\n---\n\n{lead}{}\n", body.trim()),
         )
     };
 
@@ -1047,7 +1085,19 @@ fn clean_and_review(
         &cleaned
     });
     write(marked_path(&request.recording), "marked", marked)?;
-    Ok(warning.or_else(|| coverage_problem(raw, marked)))
+    // A cut says that the result stops, and this says where.
+    let warning = match (warning, coverage_problem(raw, marked)) {
+        (Some(first), Some(second)) => Some(format!("{first} {second}")),
+        (first, second) => first.or(second),
+    };
+    let warning_file = warning_path(&request.recording);
+    match &warning {
+        Some(words) => write_atomic(&warning_file, words)?,
+        None => {
+            let _ = fs::remove_file(warning_file);
+        }
+    }
+    Ok(warning)
 }
 
 fn run(
@@ -1065,6 +1115,27 @@ pub struct Job {
     pub progress: Progress,
     cancel: Arc<AtomicBool>,
     messages: mpsc::Receiver<Message>,
+    /// A test job that stays in progress, for a capture of that state.
+    #[cfg(test)]
+    held: Option<mpsc::Sender<Message>>,
+}
+
+#[cfg(test)]
+impl Job {
+    pub fn held(recording: PathBuf, progress: Progress) -> Self {
+        let (tx, messages) = mpsc::channel();
+        Self {
+            recording,
+            progress,
+            cancel: Arc::new(AtomicBool::new(false)),
+            messages,
+            held: Some(tx),
+        }
+    }
+
+    pub fn is_held(&self) -> bool {
+        self.held.is_some()
+    }
 }
 
 impl Drop for Job {
@@ -1076,6 +1147,10 @@ impl Drop for Job {
 impl Job {
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Relaxed);
+    }
+
+    pub fn cancelling(&self) -> bool {
+        self.cancel.load(Ordering::Relaxed)
     }
 
     /// The newest progress, then the result once there is one.
@@ -1143,6 +1218,7 @@ pub fn start(
             &summary_path(&request.recording),
             "---\nsummary_model: \"test\"\n---\n\n> This is a draft from an LLM. Check it against your own memory.\n\n## Recap\n\nThe party held the bridge against the cinder wolves.\n",
         )?;
+        let _ = fs::remove_file(warning_path(&request.recording));
         write_atomic(
             &cleaned_path(&request.recording),
             "---\ncleaned_model: \"test\"\n---\n\nThe wolves came out of the ash at dusk.\n",
@@ -1153,7 +1229,7 @@ pub fn start(
         )?;
         write_atomic(
             &marked_path(&request.recording),
-            "---\nmarked_model: \"test\"\n---\n\n## 00:00:00\n\n<!-- splat:event kind=\"encounter\" at=\"00:00:00\" title=\"Wolves at the bridge\" place=\"Emberfall bridge\" -->\nThe wolves came out of the ash at dusk.\n\n<!-- splat:event kind=\"long_rest\" at=\"00:00:00\" title=\"Rest at the mill\" duration=\"8 hours\" -->\nWe rest at the mill.\n",
+            "---\nmarked_model: \"test\"\n---\n\n## 00:00:00\n\n<!-- splat:event kind=\"encounter\" at=\"00:00:00\" title=\"Wolves at the bridge\" place=\"Emberfall bridge\" -->\nThe wolves came out of the ash at dusk.\n\n## 00:10:00\n\n<!-- splat:event kind=\"long_rest\" at=\"00:10:00\" title=\"Rest at the mill\" duration=\"8 hours\" -->\nWe rest at the mill.\n",
         )
     };
     let _ = tx.send(Message::Done(write().map(|()| None)));
@@ -1162,6 +1238,7 @@ pub fn start(
         progress: Progress::Reading,
         cancel: Arc::new(AtomicBool::new(false)),
         messages,
+        held: None,
     }
 }
 
@@ -1273,6 +1350,8 @@ mod tests {
                 clean_prompt: "Clean it.".into(),
                 review_prompt: "Check it.".into(),
                 input: None,
+                speech_key_for: speech.into(),
+                llm_key_for: llm.into(),
             },
             context: "Session 12. The Bridge.".into(),
             speech_hint: "A D&D session in the Emberfall Marches.".into(),
@@ -1554,6 +1633,11 @@ mod tests {
         request.codex_program = fake_codex(dir.path(), &["First.", "Just a recap."], 0);
         let warning = go(&request).unwrap().unwrap();
         assert!(warning.contains("without a check"), "{warning}");
+        // It lasts as long as the result, past any message on screen.
+        assert_eq!(
+            fs::read_to_string(warning_path(&request.recording)).unwrap(),
+            warning
+        );
         assert!(
             fs::read_to_string(marked_path(&request.recording))
                 .unwrap()
@@ -1751,7 +1835,9 @@ mod tests {
             (200, anthropic_stream(REVIEWED, "end_turn")),
         ]);
         let request = request(dir.path(), &url, &url, Provider::Anthropic, 1);
-        assert!(go(&request).unwrap().unwrap().contains("cut off"));
+        let warning = go(&request).unwrap().unwrap();
+        assert!(warning.contains("cut off"), "{warning}");
+        assert!(warning.contains("raw transcript is whole"), "{warning}");
         assert!(summary_path(&request.recording).exists());
     }
 
@@ -1765,10 +1851,10 @@ mod tests {
         let request = request(dir.path(), &url, &url, Provider::Anthropic, 1);
         let error = go(&request).unwrap_err();
         assert!(
-            error.contains("status 401") && error.contains("invalid key"),
+            error.contains("did not accept the API key") && error.contains("invalid key"),
             "{error}"
         );
-        assert!(error.contains("API key in Settings"), "{error}");
+        assert!(error.contains("Check it in Settings"), "{error}");
         assert!(!error.contains("speech-secret"));
         assert_eq!(seen.lock().unwrap().len(), 1);
     }
@@ -1839,6 +1925,20 @@ mod tests {
     }
 
     #[test]
+    fn a_key_fits_only_the_service_it_was_saved_for() {
+        let config = Config {
+            speech_url: "https://api.openai.com/v1".into(),
+            speech_key_for: "https://api.openai.com/v1/".into(),
+            llm_url: "https://openrouter.ai/api/v1".into(),
+            llm_key_for: "https://api.anthropic.com".into(),
+            ..Config::default()
+        };
+        assert!(config.speech_key_fits());
+        assert!(!config.llm_key_fits());
+        assert!(!Config::default().speech_key_fits());
+    }
+
+    #[test]
     fn the_fallback_is_asked_for_only_where_it_exists() {
         let official = Url::parse(ANTHROPIC_URL).unwrap();
         assert!(wants_anthropic_fallback(&official, "claude-opus-5-5"));
@@ -1889,8 +1989,14 @@ mod tests {
         let config: Config = serde_json::from_str(r#"{"llm_model": "mine"}"#).unwrap();
         assert_eq!(config.llm_model, "mine");
         assert_eq!(config.clean_prompt, default_clean_prompt());
-        let text = serde_json::to_string(&Config::default()).unwrap();
-        assert!(!text.to_lowercase().contains("key"));
+        // The only fields about keys say which service one is for, never the key.
+        let value = serde_json::to_value(Config::default()).unwrap();
+        for name in value.as_object().unwrap().keys() {
+            assert!(
+                !name.contains("key") || name.ends_with("_key_for"),
+                "{name}"
+            );
+        }
     }
 
     #[test]
@@ -1906,5 +2012,34 @@ mod tests {
         assert_eq!(Transcript::read(&path).unwrap(), transcript);
         // The catalogue scan treats any `splat_` frontmatter line as an entry.
         assert!(!fs::read_to_string(&path).unwrap().contains("splat_"));
+    }
+
+    #[test]
+    fn many_missing_times_name_the_first() {
+        let heading = |minute: u32| format!("## 00:{minute:02}:00\n\nwords\n\n");
+        let raw: String = (0..9).map(heading).collect();
+        let warning = coverage_problem(&raw, &heading(0)).unwrap();
+        assert!(warning.contains("00:01:00 and 7 more parts"), "{warning}");
+    }
+
+    #[test]
+    fn a_transcript_that_stops_early_says_how_far_it_got() {
+        let dir = tempfile::tempdir().unwrap();
+        let recording = dir.path().join("r.wav");
+        assert_eq!(transcript_short_of(&recording), None);
+        let mut transcript = Transcript {
+            parts_done: 3,
+            parts: 24,
+            body: "Words.\n".into(),
+        };
+        transcript
+            .write(&transcript_path(&recording), "model")
+            .unwrap();
+        assert_eq!(transcript_short_of(&recording), Some((3, 24)));
+        transcript.parts_done = 24;
+        transcript
+            .write(&transcript_path(&recording), "model")
+            .unwrap();
+        assert_eq!(transcript_short_of(&recording), None);
     }
 }

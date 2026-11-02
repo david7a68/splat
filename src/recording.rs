@@ -21,6 +21,10 @@ const CHECK_EVERY: Duration = Duration::from_secs(1);
 /// A recorder buffers, so a file can pause briefly without anything being wrong.
 const STALLED_AFTER: Duration = Duration::from_secs(10);
 const STOP_WAIT: Duration = Duration::from_secs(5);
+const STOP_ON_UI_FOR: Duration = Duration::from_millis(500);
+/// A table goes quiet often. Only this long a silence means the input can be wrong.
+const SILENT_AFTER: Duration = Duration::from_secs(60);
+const HEARD_FOR: Duration = Duration::from_secs(5);
 /// How far back from a part's limit to look for a quiet place to cut.
 const CUT_SEARCH_SECONDS: u64 = 20;
 
@@ -180,7 +184,7 @@ pub enum Health {
     Starting,
     /// Sound in the last second.
     Hearing,
-    /// The file grows, but it holds silence. The input can be muted.
+    /// The file grows, but it has held only silence for a while. The input can be muted.
     Silent,
     /// The file has not grown for some seconds.
     Stalled,
@@ -193,6 +197,8 @@ enum Capture {
         child: Child,
         errors: fs::File,
     },
+    /// `stop` took the child away.
+    Done,
     #[cfg(test)]
     Simulated,
 }
@@ -200,10 +206,10 @@ enum Capture {
 pub struct Recorder {
     capture: Capture,
     path: PathBuf,
-    started: u64,
     health: Health,
     size: u64,
     grew: Instant,
+    heard: Instant,
     checked: Instant,
 }
 
@@ -257,10 +263,10 @@ impl Recorder {
         Self {
             capture,
             path,
-            started: crate::hermetic::now(),
             health: Health::Starting,
             size: 0,
             grew: now,
+            heard: now,
             checked: now,
         }
     }
@@ -269,8 +275,15 @@ impl Recorder {
         &self.path
     }
 
+    /// How much audio is in the file. It stops when the audio stops being saved, so that
+    /// a clock on screen cannot look healthy during a stall.
     pub fn seconds(&self) -> u64 {
-        crate::hermetic::now().saturating_sub(self.started)
+        self.size.saturating_sub(WAV_HEADER as u64) / BYTES_PER_SECOND
+    }
+
+    /// Sound in the last few seconds.
+    pub fn heard_just_now(&self) -> bool {
+        self.heard.elapsed() < HEARD_FOR
     }
 
     pub fn health(&self) -> &Health {
@@ -279,11 +292,11 @@ impl Recorder {
 
     #[cfg(test)]
     pub fn simulate_health(&mut self, health: Health) {
+        self.heard = Instant::now();
         self.health = health;
     }
 
     /// Look at the child and the file, about once a second.
-    #[cfg_attr(not(test), allow(irrefutable_let_patterns))]
     pub fn poll(&mut self) {
         let now = Instant::now();
         if now.duration_since(self.checked) < CHECK_EVERY {
@@ -316,42 +329,58 @@ impl Recorder {
         if size > self.size {
             self.size = size;
             self.grew = now;
-            self.health = match last_second_peak(&self.path, size) {
-                Some(peak) if peak >= SILENCE_PEAK => Health::Hearing,
-                Some(_) => Health::Silent,
-                None => Health::Starting,
-            };
+            let peak = last_second_peak(&self.path, size);
+            if peak.is_some_and(|peak| peak >= SILENCE_PEAK) {
+                self.heard = now;
+                self.health = Health::Hearing;
+            } else if now.duration_since(self.heard) >= SILENT_AFTER {
+                self.health = Health::Silent;
+            } else if self.health == Health::Stalled {
+                self.health = Health::Starting;
+            }
         } else if now.duration_since(self.grew) >= STALLED_AFTER {
             self.health = Health::Stalled;
         }
     }
 
     /// Finish the file. What was captured stays, whatever the recorder did at the end.
-    #[cfg_attr(not(test), allow(irrefutable_let_patterns))]
     pub fn stop(mut self) -> PathBuf {
-        if let Capture::Child { child, .. } = &mut self.capture {
-            // SAFETY: `kill` takes a PID and a signal. The child has not been reaped.
-            let pid = child.id() as i32;
+        let path = self.path.clone();
+        let capture = std::mem::replace(&mut self.capture, Capture::Done);
+        if let Capture::Child { mut child, .. } = capture {
             if matches!(child.try_wait(), Ok(None)) {
+                // SAFETY: `kill` takes a PID and a signal. The child has not been reaped.
                 unsafe {
-                    libc::kill(pid, libc::SIGINT);
+                    libc::kill(child.id() as i32, libc::SIGINT);
                 }
             }
             let waiting = Instant::now();
-            while matches!(child.try_wait(), Ok(None)) && waiting.elapsed() < STOP_WAIT {
-                std::thread::sleep(Duration::from_millis(50));
+            while matches!(child.try_wait(), Ok(None)) && waiting.elapsed() < STOP_ON_UI_FOR {
+                std::thread::sleep(Duration::from_millis(20));
             }
-            let _ = child.kill();
+            if matches!(child.try_wait(), Ok(None)) {
+                // A stalled recorder can ignore the signal, and the table must not wait.
+                let late = path.clone();
+                std::thread::spawn(move || {
+                    let waiting = Instant::now();
+                    while matches!(child.try_wait(), Ok(None)) && waiting.elapsed() < STOP_WAIT {
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let _ = repair_header(&late);
+                });
+                return path;
+            }
             let _ = child.wait();
         }
         // A recorder that died early leaves lengths of zero in its header.
-        let _ = repair_header(&self.path);
-        self.path.clone()
+        let _ = repair_header(&path);
+        path
     }
 }
 
 impl Drop for Recorder {
-    #[cfg_attr(not(test), allow(irrefutable_let_patterns))]
     fn drop(&mut self) {
         if let Capture::Child { child, .. } = &mut self.capture
             && matches!(child.try_wait(), Ok(None))
@@ -831,6 +860,12 @@ mod tests {
         let mut recorder = Recorder::spawn(script(dir.path(), "exec sleep 30"), path).unwrap();
         recorder.checked = Instant::now() - CHECK_EVERY;
         recorder.poll();
+        // A quiet moment is normal at a table, and says nothing yet.
+        assert_eq!(recorder.health(), &Health::Starting);
+        recorder.size = 0;
+        recorder.heard = Instant::now() - SILENT_AFTER;
+        recorder.checked = Instant::now() - CHECK_EVERY;
+        recorder.poll();
         assert_eq!(recorder.health(), &Health::Silent);
         recorder.checked = Instant::now() - CHECK_EVERY;
         recorder.grew = Instant::now() - STALLED_AFTER;
@@ -875,7 +910,11 @@ mod tests {
         recorder.stop();
         let layout = Layout::read(&path).unwrap();
         println!("{health:?} {layout:?}");
-        assert_eq!(health, Health::Silent);
+        assert_eq!(
+            health,
+            Health::Starting,
+            "Silence, and not long enough to warn"
+        );
         assert_eq!((layout.rate, layout.channels, layout.bits), (16_000, 1, 16));
         assert!(layout.seconds() >= 1, "{layout:?}");
         assert!(!layout.header_wrong);

@@ -336,7 +336,7 @@ impl<'a> Action<'a> {
     }
     /// Show the keyboard command beside the label, so it can be learned at the table.
     pub fn key(mut self, key: &'a str) -> Self {
-        self.key = Some(key);
+        self.key = (!key.is_empty()).then_some(key);
         self
     }
     pub fn selected(mut self, selected: bool) -> Self {
@@ -512,6 +512,33 @@ pub fn link(ui: &mut Ui, label: &str) -> Response {
             Stroke::new(1.0, color.gamma_multiply(0.6)),
         );
         ui.painter().galley(pos2(rect.left(), y), galley, color);
+        if response.has_focus() {
+            focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// A link that wraps, for text of unknown length such as a title an LLM wrote.
+pub fn wrapped_link(ui: &mut Ui, label: &str) -> Response {
+    let c = colors();
+    let room = ui.available_width().max(1.0);
+    let text = Type::Body.rich(ui, label).color(c.accent).underline();
+    let galley = egui::WidgetText::from(text).into_galley(
+        ui,
+        Some(egui::TextWrapMode::Wrap),
+        room,
+        egui::TextStyle::Body,
+    );
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(galley.size().x, galley.size().y.max(24.0)),
+        Sense::click(),
+    );
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), label));
+    if ui.is_rect_visible(rect) {
+        let top = rect.center().y - galley.size().y / 2.0;
+        ui.painter()
+            .galley(pos2(rect.left(), top), galley, c.accent);
         if response.has_focus() {
             focus_ring(ui, rect);
         }
@@ -778,6 +805,43 @@ pub fn status(ui: &mut Ui, state: Status<'_>) -> Response {
     ui.add(egui::Label::new(job).truncate())
 }
 
+/// A status that also leads to where the DM can act on it. The line wraps, because the
+/// words are a warning and must not be cut.
+pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
+    let format = egui::TextFormat {
+        font_id: Type::Small.font(ui),
+        color: state.color,
+        ..Default::default()
+    };
+    let mut job = LayoutJob::default();
+    job.append(state.icon, 0.0, format.clone());
+    job.append(" ", 0.0, format.clone());
+    job.append(
+        state.word,
+        0.0,
+        egui::TextFormat {
+            underline: egui::Stroke::new(1.0, state.color),
+            ..format
+        },
+    );
+    job.wrap.max_width = ui.available_width().max(1.0);
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(galley.size().x, galley.size().y.max(24.0)),
+        Sense::click(),
+    );
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), state.word));
+    if ui.is_rect_visible(rect) {
+        let top = rect.center().y - galley.size().y / 2.0;
+        ui.painter()
+            .galley(pos2(rect.left(), top), galley, state.color);
+        if response.has_focus() {
+            focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// A label over a large value, with no box. The label stays on one line.
 pub fn stat_tile(ui: &mut Ui, label: &str, value: &str) {
     let c = colors();
@@ -991,11 +1055,21 @@ pub fn draft_discarded(ui: &mut Ui) -> bool {
 
 /// A message with one action beside it. Returns true when the action is used.
 pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
-    message(ui, tone, text);
-    Action::quiet(action)
-        .density(Density::Read)
-        .show(ui)
-        .clicked()
+    let room = number_width(ui, action, &Type::Strong.font(ui)) + 3.0 * S;
+    let mut pressed = false;
+    ui.horizontal_top(|ui| {
+        let width = (ui.available_width() - room).max(0.0);
+        ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+            // Level with the action, on the message's first line.
+            ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+            message(ui, tone, text)
+        });
+        pressed = Action::quiet(action)
+            .density(Density::Read)
+            .show(ui)
+            .clicked();
+    });
+    pressed
 }
 
 /// A focused dialog. Only the brief's three modal tasks use this. Escape is the caller's.
@@ -1036,10 +1110,11 @@ pub fn side_panel_width(available: f32) -> f32 {
 /// A panel's title row with its close control.
 pub fn panel_header(ui: &mut Ui, title: &str, close: &str) -> bool {
     let mut closed = false;
-    ui.horizontal(|ui| {
-        ui.label(Type::Heading.rich(ui, title).color(colors().text));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            closed = icon_button(ui, icons::CLOSE, close).clicked();
+    // The control first, and the title in what is left. A long title wraps.
+    ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+        closed = icon_button(ui, icons::CLOSE, close).clicked();
+        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+            ui.add(egui::Label::new(Type::Heading.rich(ui, title).color(colors().text)).wrap());
         });
     });
     closed

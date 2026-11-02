@@ -113,6 +113,8 @@ pub struct Note {
     pub title: String,
     pub date: String,
     pub path: PathBuf,
+    /// Other files that claim this session, such as a sync conflict's copy.
+    pub also: Vec<PathBuf>,
 }
 
 impl Note {
@@ -159,6 +161,7 @@ fn parse_note(path: &Path, text: &str) -> Option<Note> {
         title: text_of("session_title"),
         date: text_of("session_date"),
         path: path.to_owned(),
+        also: Vec::new(),
     })
 }
 
@@ -174,13 +177,42 @@ pub fn list_notes(folder: &Path) -> Vec<Note> {
             parse_note(&path, &fs::read_to_string(&path).ok()?)
         })
         .collect();
-    notes.sort_by(|a, b| {
+    // The plainest name first, so that a copy such as `Session 12 (conflict).md` never wins.
+    notes.sort_by_key(|note| (note.path.as_os_str().len(), note.path.clone()));
+    let mut unique: Vec<Note> = Vec::new();
+    for note in notes {
+        match unique.iter_mut().find(|kept| kept.id == note.id) {
+            Some(kept) => kept.also.push(note.path),
+            None => unique.push(note),
+        }
+    }
+    unique.sort_by(|a, b| {
         b.number
             .cmp(&a.number)
             .then_with(|| b.date.cmp(&a.date))
             .then_with(|| a.path.cmp(&b.path))
     });
-    notes
+    unique
+}
+
+/// Notes that claim a session but cannot be read, by file name. Their files are safe.
+pub fn unreadable_notes(folder: &Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(folder)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|file| file.path())
+        .filter(|path| path.extension().is_some_and(|e| e == "md"))
+        .filter(|path| {
+            fs::read_to_string(path).is_ok_and(|text| {
+                text.lines().any(|line| line.starts_with("session_id:"))
+                    && parse_note(path, &text).is_none()
+            })
+        })
+        .filter_map(|path| Some(path.file_name()?.to_string_lossy().into_owned()))
+        .collect();
+    names.sort();
+    names
 }
 
 /// What a file name cannot hold, in any common file system.
@@ -220,11 +252,36 @@ pub struct NewNote<'a> {
 
 /// Fill a template's placeholders. An unknown one stays, in case it belongs to Obsidian.
 pub fn fill_template(new: &NewNote<'_>) -> String {
-    new.template
+    let filled = new
+        .template
         .replace("{{number}}", &new.number.to_string())
         .replace("{{title}}", new.title.trim())
         .replace("{{date}}", new.date)
-        .replace("{{campaign}}", new.campaign)
+        .replace("{{campaign}}", new.campaign);
+    // An empty title must not leave `# Session 12: ` behind.
+    filled
+        .split_inclusive('\n')
+        .map(|line| {
+            let bare = line.trim_end();
+            match bare.strip_suffix(':') {
+                Some(kept) if bare.starts_with('#') => {
+                    format!(
+                        "{kept}{}",
+                        &line[line.trim_end_matches(['\n', '\r']).len()..]
+                    )
+                }
+                _ => line.to_owned(),
+            }
+        })
+        .collect()
+}
+
+/// The heading a template makes for a session.
+fn session_heading(number: u32, title: &str) -> String {
+    match title.trim() {
+        "" => format!("# Session {number}"),
+        title => format!("# Session {number}: {title}"),
+    }
 }
 
 pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
@@ -273,6 +330,36 @@ pub fn update_details(note: &Note, title: &str, date: &str, number: u32) -> Resu
             ),
         ],
     )?;
+    // A heading the DM has not changed follows the new name.
+    let old = session_heading(note.number, &note.title);
+    let new = session_heading(number, title);
+    let patched = match split_note(&patched) {
+        Some((front, body))
+            if body.lines().find(|line| !line.trim().is_empty()) == Some(old.as_str()) =>
+        {
+            format!("{front}{}", body.replacen(&old, &new, 1))
+        }
+        _ => patched,
+    };
+    // So does a date line near the top, as a template writes it.
+    let patched = match split_note(&patched) {
+        Some((front, body)) if !note.date.is_empty() => {
+            let head: usize = body.split_inclusive('\n').take(4).map(str::len).sum();
+            let (top, rest) = body.split_at(head);
+            let moved: String = top
+                .split_inclusive('\n')
+                .map(|line| {
+                    if line.starts_with(&note.date) {
+                        line.replacen(&note.date, date.trim(), 1)
+                    } else {
+                        line.to_owned()
+                    }
+                })
+                .collect();
+            format!("{front}{moved}{rest}")
+        }
+        _ => patched,
+    };
     replace_file(&note.path, &patched)?;
     parse_note(&note.path, &patched).ok_or_else(|| "The note could not be read back.".to_owned())
 }
@@ -354,17 +441,33 @@ pub fn create_template(folder: &Path, name: &str, body: &str) -> Result<Template
     })
 }
 
+/// A recording's file name as the DM reads it, with the time written as a time.
+pub fn recording_title(path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    match stem.split_once(' ') {
+        Some((date, time)) => format!("{date} {}", time.replace('-', ":")),
+        None => stem,
+    }
+}
+
 /// One recording of a session, and what later processing has made from it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Recording {
     pub path: PathBuf,
     pub name: String,
+    /// The name as the DM reads it, with the time written as a time.
+    pub title: String,
     pub seconds: Option<u64>,
     pub bytes: u64,
     pub transcript: bool,
     pub summary: bool,
     pub marked: bool,
     pub review: bool,
+    /// What the DM must know about the result, if anything.
+    pub warning: Option<String>,
     /// The events an LLM marked. The DM chooses which go on the timeline.
     pub markers: Vec<crate::timeline::Marker>,
 }
@@ -387,6 +490,7 @@ pub fn list_recordings(folder: &Path, session: Uuid) -> Vec<Recording> {
                     .file_stem()
                     .map(|stem| stem.to_string_lossy().into_owned())
                     .unwrap_or_default(),
+                title: recording_title(&path),
                 seconds: crate::recording::Layout::read(&path)
                     .ok()
                     .map(|l| l.seconds()),
@@ -395,6 +499,7 @@ pub fn list_recordings(folder: &Path, session: Uuid) -> Vec<Recording> {
                 summary: crate::processing::summary_path(&path).exists(),
                 marked: crate::processing::marked_path(&path).exists(),
                 review: crate::processing::review_path(&path).exists(),
+                warning: fs::read_to_string(crate::processing::warning_path(&path)).ok(),
                 markers: [
                     crate::processing::marked_path(&path),
                     crate::processing::summary_path(&path),
@@ -426,6 +531,7 @@ pub fn delete_recording(path: &Path) -> Result<(), String> {
         crate::processing::marked_path(path),
         crate::processing::cleaned_path(path),
         crate::processing::review_path(path),
+        crate::processing::warning_path(path),
     ] {
         match fs::remove_file(made) {
             Ok(()) => {}
@@ -434,6 +540,119 @@ pub fn delete_recording(path: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// The heading a note's events and summaries belong under, if the note has it.
+const WHAT_HAPPENED: &str = "## What happened";
+
+/// Where a note's `What happened` section ends, if it has one.
+fn what_happened_end(body: &str) -> Option<usize> {
+    body.match_indices(WHAT_HAPPENED)
+        .find(|(at, _)| {
+            (*at == 0 || body[..*at].ends_with('\n'))
+                && body[at + WHAT_HAPPENED.len()..]
+                    .chars()
+                    .next()
+                    .is_none_or(|c| c == '\n' || c == '\r')
+        })
+        .map(|(at, _)| at + WHAT_HAPPENED.len())
+        .map(|start| {
+            body[start..]
+                .find("\n## ")
+                .map_or(body.len(), |next| start + next)
+        })
+}
+
+/// Add words to a note where a DM would put them: at the end of its `What happened`
+/// section, or at the end of the note.
+pub fn insert_in_note(body: &mut String, words: &str) {
+    let end = what_happened_end(body).unwrap_or(body.len());
+    let kept = body[..end].trim_end().len();
+    let rest = body[end..].to_owned();
+    body.truncate(kept);
+    if !body.is_empty() {
+        body.push_str("\n\n");
+    }
+    body.push_str(words.trim());
+    body.push('\n');
+    body.push_str(&rest);
+}
+
+/// Open a fresh line at the same place, for typing during play. Returns the caret, in
+/// characters, and whether the text had to change to make the line.
+pub fn fresh_line_in_note(body: &mut String) -> (usize, bool) {
+    let end = what_happened_end(body).unwrap_or(body.len());
+    let kept = body[..end].trim_end().len();
+    let blank = body[kept..].chars().take_while(|c| *c == '\n').count();
+    let before = if kept == 0 { 0 } else { 2 };
+    // What follows stays a line of its own, or the DM's words would join a heading.
+    let after = if body[kept..].trim().is_empty() { 0 } else { 2 };
+    let changed = blank < before + after;
+    if changed {
+        body.insert_str(kept, &"\n".repeat(before + after - blank));
+    }
+    (body[..kept + before].chars().count(), changed)
+}
+
+/// A text's headings, one level down, so that it sits inside a section of a note.
+pub fn nested_in_note(text: &str) -> String {
+    text.split_inclusive('\n')
+        .map(|line| {
+            if line.starts_with('#') {
+                format!("#{line}")
+            } else {
+                line.to_owned()
+            }
+        })
+        .collect()
+}
+
+/// A note for the Reader, without the heading and date the page already shows above it.
+pub fn without_own_heading(body: &str, note: &Note) -> String {
+    let heading = format!("# {}", note.label());
+    let mut lines = body.split_inclusive('\n').peekable();
+    while lines.peek().is_some_and(|line| line.trim().is_empty()) {
+        lines.next();
+    }
+    if lines.peek().map(|line| line.trim_end()) != Some(heading.as_str()) {
+        return body.to_owned();
+    }
+    lines.next();
+    while lines.peek().is_some_and(|line| line.trim().is_empty()) {
+        lines.next();
+    }
+    if !note.date.is_empty()
+        && lines
+            .peek()
+            .is_some_and(|line| line.starts_with(&note.date))
+    {
+        lines.next();
+    }
+    lines.collect::<String>().trim_start().to_owned()
+}
+
+/// A long text, divided at its time headings, so that each part can be read alone.
+pub fn parts_of(text: &str) -> Vec<(String, String)> {
+    let mut parts: Vec<(String, String)> = Vec::new();
+    for line in text.split_inclusive('\n') {
+        let heading = line.trim_end().strip_prefix("## ").filter(|time| {
+            time.len() == 8 && time.as_bytes()[2] == b':' && time.as_bytes()[5] == b':'
+        });
+        match (heading, parts.last_mut()) {
+            (Some(time), _) => parts.push((time.to_owned(), line.to_owned())),
+            (None, Some(last)) => last.1.push_str(line),
+            (None, None) => parts.push((String::new(), line.to_owned())),
+        }
+    }
+    // Words before the first heading are read with it.
+    if parts.len() > 1 && parts[0].0.is_empty() {
+        let first = parts.remove(0);
+        parts[0].1.insert_str(0, &first.1);
+    }
+    if parts.is_empty() {
+        parts.push((String::new(), String::new()));
+    }
+    parts
 }
 
 /// A file's frontmatter removed, for reading. Text with none is returned as it is.
@@ -448,6 +667,8 @@ pub enum DraftState {
     Saved,
     /// The file changed outside Splat during an edit. Saving stops until the DM chooses.
     Conflict,
+    /// The file is gone from the folder. It may have been moved or renamed.
+    Missing,
     Failed(String),
 }
 
@@ -459,6 +680,12 @@ pub struct Draft {
     pub body: String,
     baseline: Option<String>,
     pub state: DraftState,
+    /// What the file holds now, once the DM asks to see it during a conflict.
+    pub on_disk: Option<String>,
+    /// This note's new ID, once it was saved again after its file went.
+    pub restored: Option<Uuid>,
+    /// The words the DM chose to lose, until the next edit.
+    pub dropped: Option<String>,
     last_edit: Option<Instant>,
 }
 
@@ -472,12 +699,19 @@ impl Draft {
             body: body.to_owned(),
             baseline: Some(text.clone()),
             state: DraftState::Clean,
+            on_disk: None,
+            restored: None,
+            dropped: None,
             last_edit: None,
         })
     }
 
+    /// A conflict or a failed save stays in view through more typing, until it is resolved.
     pub fn edited(&mut self) {
-        self.state = DraftState::Unsaved;
+        self.dropped = None;
+        if !self.needs_attention() {
+            self.state = DraftState::Unsaved;
+        }
         self.last_edit = Some(Instant::now());
     }
 
@@ -485,12 +719,18 @@ impl Draft {
     pub fn unsaved(&self) -> bool {
         matches!(
             self.state,
-            DraftState::Unsaved | DraftState::Conflict | DraftState::Failed(_)
+            DraftState::Unsaved
+                | DraftState::Conflict
+                | DraftState::Missing
+                | DraftState::Failed(_)
         )
     }
 
     pub fn needs_attention(&self) -> bool {
-        matches!(self.state, DraftState::Conflict | DraftState::Failed(_))
+        matches!(
+            self.state,
+            DraftState::Conflict | DraftState::Missing | DraftState::Failed(_)
+        )
     }
 
     fn due_at(&self, now: Instant) -> bool {
@@ -506,7 +746,11 @@ impl Draft {
         }
         let current = fs::read_to_string(&self.path).ok();
         if current != self.baseline {
-            self.state = DraftState::Conflict;
+            self.state = if current.is_none() {
+                DraftState::Missing
+            } else {
+                DraftState::Conflict
+            };
             return;
         }
         self.write();
@@ -525,8 +769,43 @@ impl Draft {
         }
     }
 
+    /// Save the words where the file was. A renamed file can still hold this note's ID, so
+    /// this one takes a new ID, and two rows can never answer for one session.
+    pub fn save_again(&mut self) {
+        if self.prefix.contains("session_id:") {
+            let id = crate::hermetic::new_uuid();
+            let patched = patch_fields(
+                &format!("{}{}", self.prefix, self.body),
+                &[("session_id", Some(Value::String(id.to_string())))],
+            );
+            match patched.as_deref().map(split_note) {
+                Ok(Some((prefix, _))) => {
+                    self.prefix = prefix.to_owned();
+                    self.restored = Some(id);
+                }
+                _ => {
+                    self.state =
+                        DraftState::Failed("Not saved. Its properties cannot be read.".into());
+                    return;
+                }
+            }
+        }
+        if let Some(parent) = self.path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        self.write();
+    }
+
+    /// Read the file's own words, so that the DM can choose knowing both.
+    pub fn show_disk(&mut self) {
+        self.on_disk = fs::read_to_string(&self.path)
+            .ok()
+            .map(|text| body_of(&text).to_owned());
+    }
+
     /// The DM keeps this version over the one on disk.
     pub fn overwrite(&mut self) {
+        self.on_disk = None;
         // The frontmatter on disk can be newer, and the DM chose only about the words.
         if let Ok(current) = fs::read_to_string(&self.path)
             && let Some((prefix, _)) = split_note(&current)
@@ -534,6 +813,22 @@ impl Draft {
             self.prefix = prefix.to_owned();
         }
         self.write();
+    }
+
+    /// Back to the file, keeping the draft's words for one step of undo.
+    pub fn reload_keeping_undo(&mut self) -> Result<(), String> {
+        let words = self.body.clone();
+        self.reload()?;
+        self.dropped = Some(words);
+        Ok(())
+    }
+
+    /// Bring back what `reload_keeping_undo` dropped.
+    pub fn undo_reload(&mut self) {
+        if let Some(words) = self.dropped.take() {
+            self.body = words;
+            self.edited();
+        }
     }
 
     /// Back to the file, and the draft's words are gone.
@@ -622,6 +917,35 @@ mod tests {
     }
 
     #[test]
+    fn a_copy_of_a_note_shows_one_row_and_the_plain_file_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(dir.path(), &new_note(12, "", "Words")).unwrap();
+        let copy = dir.path().join("Session 12 (conflict).md");
+        fs::copy(&note.path, &copy).unwrap();
+        let notes = list_notes(dir.path());
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].path, note.path);
+        assert_eq!(notes[0].also, [copy]);
+    }
+
+    #[test]
+    fn a_note_that_cannot_be_read_is_named_and_a_stranger_is_not() {
+        let dir = tempfile::tempdir().unwrap();
+        create_note(dir.path(), &new_note(1, "", "Fine")).unwrap();
+        fs::write(
+            dir.path().join("Broken.md"),
+            "---\nsession_id: [\n---\nWords",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("Plain.md"),
+            "Mentions session_id in passing",
+        )
+        .unwrap();
+        assert_eq!(unreadable_notes(dir.path()), ["Broken.md"]);
+    }
+
+    #[test]
     fn two_notes_with_one_name_both_survive() {
         let dir = tempfile::tempdir().unwrap();
         let first = create_note(dir.path(), &new_note(3, "", "A")).unwrap();
@@ -651,6 +975,42 @@ mod tests {
             text.contains("tags: [dnd]") && text.ends_with("My words\n"),
             "{text}"
         );
+    }
+
+    #[test]
+    fn a_blank_title_leaves_no_colon_and_a_rename_moves_the_heading() {
+        let dir = tempfile::tempdir().unwrap();
+        let template = "# Session {{number}}: {{title}}\n\nNote: stays.\n";
+        let note = create_note(dir.path(), &new_note(3, "", template)).unwrap();
+        let text = fs::read_to_string(&note.path).unwrap();
+        assert!(text.ends_with("# Session 3\n\nNote: stays.\n"), "{text}");
+        let note = update_details(&note, "The Bridge", "2026-11-01", 3).unwrap();
+        let text = fs::read_to_string(&note.path).unwrap();
+        assert!(
+            text.ends_with("# Session 3: The Bridge\n\nNote: stays.\n"),
+            "{text}"
+        );
+        // A heading the DM wrote stays.
+        let body = text.replace("# Session 3: The Bridge", "# Our own heading");
+        fs::write(&note.path, body).unwrap();
+        let note = update_details(&note, "Another", "2026-11-01", 3).unwrap();
+        assert!(
+            fs::read_to_string(&note.path)
+                .unwrap()
+                .contains("# Our own heading")
+        );
+        assert_eq!(note.title, "Another");
+    }
+
+    #[test]
+    fn a_new_date_moves_the_date_line_and_only_that() {
+        let dir = tempfile::tempdir().unwrap();
+        let template = "# Session {{number}}\n\n{{date}}, The Marches\n\nOn 2026-11-01 we met.\n";
+        let note = create_note(dir.path(), &new_note(1, "", template)).unwrap();
+        update_details(&note, "", "2026-11-07", 1).unwrap();
+        let text = fs::read_to_string(&note.path).unwrap();
+        assert!(text.contains("\n2026-11-07, The Marches\n"), "{text}");
+        assert!(text.contains("On 2026-11-01 we met."), "{text}");
     }
 
     #[test]
@@ -690,14 +1050,31 @@ mod tests {
         draft.save();
         assert_eq!(draft.state, DraftState::Conflict);
         assert_eq!(fs::read_to_string(&note.path).unwrap(), outside);
+        // More typing does not hide the choice.
+        draft.body.push_str("And more\n");
+        draft.edited();
+        assert_eq!(draft.state, DraftState::Conflict);
         // Saving again changes nothing until the DM chooses.
         draft.save();
         assert_eq!(fs::read_to_string(&note.path).unwrap(), outside);
 
         draft.overwrite();
         assert_eq!(draft.state, DraftState::Saved);
-        assert!(fs::read_to_string(&note.path).unwrap().ends_with("Mine\n"));
+        assert!(
+            fs::read_to_string(&note.path)
+                .unwrap()
+                .ends_with("And more\n")
+        );
 
+        fs::write(&note.path, &outside).unwrap();
+        draft.body = "Kept for one step\n".into();
+        draft.edited();
+        draft.save();
+        draft.reload_keeping_undo().unwrap();
+        draft.undo_reload();
+        assert_eq!(draft.body, "Kept for one step\n");
+        assert_eq!(draft.state, DraftState::Unsaved);
+        draft.overwrite();
         fs::write(&note.path, &outside).unwrap();
         draft.body = "Lost\n".into();
         draft.edited();
@@ -705,6 +1082,36 @@ mod tests {
         draft.reload().unwrap();
         assert_eq!(draft.state, DraftState::Clean);
         assert!(draft.body.contains("From Obsidian"));
+    }
+
+    #[test]
+    fn a_note_whose_file_went_is_saved_again_under_a_new_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(dir.path(), &new_note(4, "", "Start\n")).unwrap();
+        let mut draft = Draft::open(&note.path).unwrap();
+        // Renamed in Obsidian.
+        let renamed = dir.path().join("Renamed.md");
+        fs::rename(&note.path, &renamed).unwrap();
+        draft.body = "My words\n".into();
+        draft.edited();
+        draft.save();
+        assert_eq!(draft.state, DraftState::Missing);
+        assert!(draft.needs_attention() && draft.unsaved());
+        assert!(!note.path.exists());
+
+        draft.save_again();
+        assert_eq!(draft.state, DraftState::Saved);
+        let id = draft.restored.unwrap();
+        assert_ne!(id, note.id);
+        let notes = list_notes(dir.path());
+        assert_eq!(notes.len(), 2);
+        assert!(notes.iter().any(|n| n.id == id && n.path == note.path));
+        assert!(notes.iter().any(|n| n.id == note.id && n.path == renamed));
+        assert!(
+            fs::read_to_string(&note.path)
+                .unwrap()
+                .ends_with("My words\n")
+        );
     }
 
     #[test]
@@ -723,6 +1130,122 @@ mod tests {
         fs::write(&note.path, "---\nsession_id: x\n---\nAgain").unwrap();
         draft.follow_disk();
         assert_eq!(draft.body, "Mine");
+    }
+
+    #[test]
+    fn words_go_under_what_happened_or_at_the_end() {
+        let mut note = "# Title\n\n## What happened\n\nWe met.\n\n\n## Next\n\nLater.\n".to_owned();
+        insert_in_note(&mut note, "[[Timeline#^a|Rest]]");
+        assert_eq!(
+            note,
+            "# Title\n\n## What happened\n\nWe met.\n\n[[Timeline#^a|Rest]]\n\n## Next\n\nLater.\n"
+        );
+        let mut last = "## What happened\n".to_owned();
+        insert_in_note(&mut last, "A");
+        assert_eq!(last, "## What happened\n\nA\n");
+        let mut none = "Free text\n\n".to_owned();
+        insert_in_note(&mut none, "A");
+        assert_eq!(none, "Free text\n\nA\n");
+        let mut empty = String::new();
+        insert_in_note(&mut empty, "A");
+        assert_eq!(empty, "A\n");
+        // A longer heading that starts the same way is not this one.
+        let mut other = "## What happened later\n\nX\n".to_owned();
+        insert_in_note(&mut other, "A");
+        assert!(other.ends_with("X\n\nA\n"), "{other}");
+    }
+
+    #[test]
+    fn a_table_note_starts_on_a_fresh_line_under_what_happened() {
+        let template = "# Title\n\n## What happened\n\n\n\n## Open threads\n\n";
+        let mut body = template.to_owned();
+        let (caret, changed) = fresh_line_in_note(&mut body);
+        assert!(!changed);
+        assert_eq!(body, template);
+        assert_eq!(
+            body.chars().take(caret).collect::<String>(),
+            "# Title\n\n## What happened\n\n"
+        );
+
+        let mut tight = "## What happened\n## Next\n".to_owned();
+        let (caret, changed) = fresh_line_in_note(&mut tight);
+        assert!(changed);
+        assert_eq!(tight, "## What happened\n\n\n\n## Next\n");
+        assert_eq!(
+            tight.chars().take(caret).collect::<String>(),
+            "## What happened\n\n"
+        );
+
+        // Accented text counts in characters, which is what the caret counts.
+        let mut plain = "Été".to_owned();
+        let (caret, _) = fresh_line_in_note(&mut plain);
+        assert_eq!(caret, 5);
+        assert_eq!(plain, "Été\n\n");
+
+        let mut empty = String::new();
+        assert_eq!(fresh_line_in_note(&mut empty), (0, false));
+
+        // A second note, and a third, never join the heading that follows.
+        let mut note = template.to_owned();
+        for words in ["First note.", "Second note.", "Third note."] {
+            let (caret, _) = fresh_line_in_note(&mut note);
+            let at = note
+                .char_indices()
+                .nth(caret)
+                .map_or(note.len(), |(at, _)| at);
+            note.insert_str(at, words);
+        }
+        assert_eq!(
+            note,
+            "# Title\n\n## What happened\n\nFirst note.\n\nSecond note.\n\nThird note.\n\n## Open threads\n\n"
+        );
+    }
+
+    #[test]
+    fn a_summary_nested_in_a_note_keeps_the_notes_sections() {
+        let mut note = "## What happened\n\nWe met.\n\n## Open threads\n\n".to_owned();
+        insert_in_note(
+            &mut note,
+            &nested_in_note("> A draft.\n\n## Recap\n\nA rest.\n"),
+        );
+        assert_eq!(
+            note,
+            "## What happened\n\nWe met.\n\n> A draft.\n\n### Recap\n\nA rest.\n\n## Open threads\n\n"
+        );
+        // A later note still finds the end of the section, after the nested heading.
+        let (caret, _) = fresh_line_in_note(&mut note);
+        let before: String = note.chars().take(caret).collect();
+        assert!(before.ends_with("A rest.\n\n"), "{before}");
+    }
+
+    #[test]
+    fn the_reader_leaves_out_only_what_the_page_already_shows() {
+        let note = Note {
+            id: Uuid::from_u128(1),
+            number: 2,
+            title: "Bridge".into(),
+            date: "2026-11-01".into(),
+            path: "a.md".into(),
+            also: Vec::new(),
+        };
+        let body = "# Session 2: Bridge\n\n2026-11-01, The Marches\n\n## What happened\n";
+        assert_eq!(without_own_heading(body, &note), "## What happened\n");
+        // A heading the DM wrote stays, and so does a date line under it.
+        let own = "# Our night\n\n2026-11-01\n";
+        assert_eq!(without_own_heading(own, &note), own);
+    }
+
+    #[test]
+    fn a_text_divides_at_time_headings_and_loses_nothing() {
+        let text =
+            "> A note.\n\n## 00:00:00\n\nOne.\n\n## People\n\nTwo.\n\n## 00:10:00\n\nThree.\n";
+        let parts = parts_of(text);
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0].0, "00:00:00");
+        assert_eq!(parts[1].0, "00:10:00");
+        assert_eq!(parts[0].1.clone() + &parts[1].1, text);
+        assert_eq!(parts_of("No times.\n").len(), 1);
+        assert_eq!(parts_of("").len(), 1);
     }
 
     #[test]

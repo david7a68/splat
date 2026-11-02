@@ -149,7 +149,8 @@ late responses cannot apply an old name to a new link.
 **Sessions** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
 by default, and you can change it there). **Timeline** holds every encounter, rest, travel interval, day and other
 major event in story order, in `Timeline.md` in the same folder. The list in its frontmatter is the record, and Splat
-writes the body from it. An encounter run adds its own event when combat begins, in the session that is open.
+writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
+session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
 
 Each event has a reference such as `[[Timeline#^t-1a2b3c4d5e|Rest at the mill]]`. Paste it in any note: it is a block
 link in Obsidian, and Splat lists the notes that link to an event.

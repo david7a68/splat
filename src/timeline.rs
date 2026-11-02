@@ -60,7 +60,7 @@ impl Kind {
             Self::ShortRest => "Short rest",
             Self::LongRest => "Long rest",
             Self::Travel => "Travel",
-            Self::Event => "Event",
+            Self::Event => "Major event",
         }
     }
 
@@ -99,6 +99,9 @@ pub struct Event {
     pub session: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run: Option<Uuid>,
+    /// The marker this came from, so that a rename does not offer it again.
+    #[serde(default, skip_serializing_if = "is_empty")]
+    pub marker: String,
 }
 
 impl Event {
@@ -216,10 +219,11 @@ pub fn for_reading(text: &str, events: &[Event]) -> String {
     let mut copied = 0;
     each_reference(text, |start, end, id, label| {
         out.push_str(&text[copied..start]);
-        match label {
-            Some(label) => out.push_str(label),
-            None => match events.iter().position(|event| event.id == id) {
-                Some(index) => out.push_str(&events[index].label(days[index])),
+        // The event's name now, not the name it had when the link was made.
+        match events.iter().position(|event| event.id == id) {
+            Some(index) => out.push_str(&events[index].label(days[index])),
+            None => match label {
+                Some(label) => out.push_str(&format!("{label} (removed from the timeline)")),
                 None => out.push_str("(event not on the timeline)"),
             },
         }
@@ -237,6 +241,28 @@ pub struct Marker {
     pub at: String,
     pub place: String,
     pub duration: String,
+}
+
+impl Marker {
+    /// How this marker reads in the Reader.
+    pub fn reading_words(&self) -> String {
+        let title = if self.title.is_empty() {
+            self.kind.word()
+        } else {
+            &self.title
+        };
+        format!("**{}: {title}**", self.kind.word())
+    }
+
+    /// Which marker this is, across the times a recording's list is read.
+    pub fn key(&self, recording: &str) -> String {
+        format!(
+            "{recording} {} {} {}",
+            self.at,
+            self.kind.wire(),
+            self.title
+        )
+    }
 }
 
 const MARKER_START: &str = "<!-- splat:event ";
@@ -293,13 +319,8 @@ pub fn markers_for_reading(text: &str) -> String {
     let mut copied = 0;
     each_marker(text, |start, end, marker| {
         out.push_str(&text[copied..start]);
-        let title = if marker.title.is_empty() {
-            marker.kind.word()
-        } else {
-            &marker.title
-        };
         // A blank line follows, so that the words stay apart from the marker's line.
-        out.push_str(&format!("**{}: {title}**\n", marker.kind.word()));
+        out.push_str(&format!("{}\n", marker.reading_words()));
         copied = end;
     });
     out.push_str(&text[copied..]);
@@ -390,8 +411,13 @@ pub struct Book {
     pub conflict: bool,
     /// The file cannot be read as a timeline. It is left as it is, and nothing saves.
     pub unreadable: Option<String>,
+    /// The file was here, and it is gone. Its events stay in memory until the DM chooses.
+    pub gone: bool,
     pub error: Option<String>,
-    removed: Option<(usize, Event)>,
+    /// What was removed, where it was, and the name it had there.
+    removed: Option<(usize, Event, String)>,
+    /// What a reload replaced, until the next edit.
+    dropped: Option<Vec<Event>>,
     /// Each session's note name, for links in the file's body.
     pub session_links: BTreeMap<Uuid, String>,
 }
@@ -402,6 +428,8 @@ impl Book {
         if self.path == path {
             return;
         }
+        // An edit in its pause before saving goes with the file it belongs to.
+        self.save();
         *self = Self {
             path,
             session_links: std::mem::take(&mut self.session_links),
@@ -416,6 +444,7 @@ impl Book {
         self.conflict = false;
         self.error = None;
         self.unreadable = None;
+        self.gone = false;
         let Some(path) = &self.path else {
             self.events.clear();
             return;
@@ -437,8 +466,14 @@ impl Book {
                 self.baseline = Some(bytes);
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                self.events.clear();
-                self.baseline = None;
+                if self.baseline.is_some() {
+                    self.gone = true;
+                    self.unreadable = Some(format!(
+                        "{FILE} is gone from the folder. It may have been moved or renamed. Splat will not start another by itself."
+                    ));
+                } else {
+                    self.events.clear();
+                }
             }
             Err(e) => {
                 self.events.clear();
@@ -452,6 +487,7 @@ impl Book {
         self.dirty = true;
         self.last_edit = Some(Instant::now());
         self.removed = None;
+        self.dropped = None;
     }
 
     fn write(&mut self) -> Result<(), String> {
@@ -495,6 +531,39 @@ impl Book {
         }
     }
 
+    /// The file went, and the DM keeps these events: they go where it was.
+    pub fn save_again(&mut self) {
+        self.gone = false;
+        self.unreadable = None;
+        self.baseline = None;
+        if let Err(error) = self.write() {
+            self.error = Some(format!("The timeline was not saved. {error}"));
+        }
+    }
+
+    /// An edit is waiting for its pause before it saves.
+    pub fn unsaved(&self) -> bool {
+        self.dirty
+    }
+
+    /// Back to the file, keeping what was here for one step of undo.
+    pub fn reload_keeping_undo(&mut self) {
+        let events = self.events.clone();
+        self.reload();
+        self.dropped = Some(events);
+    }
+
+    pub fn dropped(&self) -> Option<usize> {
+        self.dropped.as_ref().map(Vec::len)
+    }
+
+    pub fn undo_reload(&mut self) {
+        if let Some(events) = self.dropped.take() {
+            self.events = events;
+            self.touch();
+        }
+    }
+
     pub fn not_saved(&self) -> bool {
         self.dirty && (self.conflict || self.error.is_some())
     }
@@ -529,10 +598,16 @@ impl Book {
         }
     }
 
-    pub fn add(&mut self, kind: Kind, session: Option<Uuid>, after: Option<&str>) -> String {
+    /// Add after the session's last event, or at the end. A rest found in an old recording
+    /// belongs with its session, not after what happened since.
+    pub fn add(&mut self, kind: Kind, session: Option<Uuid>) -> String {
         let id = new_id();
-        let at = after
-            .and_then(|after| self.events.iter().position(|event| event.id == after))
+        let at = session
+            .and_then(|session| {
+                self.events
+                    .iter()
+                    .rposition(|event| event.session == Some(session))
+            })
             .map_or(self.events.len(), |index| index + 1);
         self.events.insert(
             at,
@@ -546,27 +621,42 @@ impl Book {
                 result: String::new(),
                 session,
                 run: None,
+                marker: String::new(),
             },
         );
         self.touch();
         id
     }
 
+    /// Put an event straight after another, or first. The list is the story's order.
+    pub fn place_after(&mut self, id: &str, after: Option<&str>) {
+        let Some(index) = self.events.iter().position(|event| event.id == id) else {
+            return;
+        };
+        let event = self.events.remove(index);
+        let at = after
+            .and_then(|after| self.events.iter().position(|event| event.id == after))
+            .map_or(0, |index| index + 1);
+        self.events.insert(at, event);
+        self.touch();
+    }
+
     /// One press and one step of undo, not a dialog.
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.events.iter().position(|event| event.id == id) {
+            let label = self.events[index].label(day_numbers(&self.events)[index]);
             let event = self.events.remove(index);
             self.touch();
-            self.removed = Some((index, event));
+            self.removed = Some((index, event, label));
         }
     }
 
-    pub fn removed(&self) -> Option<&Event> {
-        self.removed.as_ref().map(|(_, event)| event)
+    pub fn removed(&self) -> Option<&str> {
+        self.removed.as_ref().map(|(.., label)| label.as_str())
     }
 
     pub fn undo_remove(&mut self) -> Option<String> {
-        let (index, event) = self.removed.take()?;
+        let (index, event, _) = self.removed.take()?;
         let id = event.id.clone();
         self.events.insert(index.min(self.events.len()), event);
         self.touch();
@@ -589,8 +679,15 @@ impl Book {
         true
     }
 
-    /// Every run sits on the timeline without a step from the DM. The DM's words stay.
+    /// Every run sits on the timeline without a step from the DM. The DM's words stay, and
+    /// so does the DM's undo, because a new round is not an edit.
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>) {
+        let removed = self.removed.take();
+        self.apply_run(fact, session);
+        self.removed = removed;
+    }
+
+    fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>) {
         if self.unreadable.is_some() {
             return;
         }
@@ -630,7 +727,7 @@ impl Book {
                 }
             }
             None => {
-                let id = self.add(Kind::Encounter, session, None);
+                let id = self.add(Kind::Encounter, session);
                 let event = self
                     .events
                     .iter_mut()
@@ -643,20 +740,19 @@ impl Book {
         }
     }
 
-    /// Is this marker's event on the timeline already, in this session?
-    pub fn has_marker(&self, marker: &Marker, session: Option<Uuid>) -> bool {
-        self.events.iter().any(|event| {
-            event.kind == marker.kind && event.session == session && event.title == marker.title
-        })
+    /// The event added from this marker, however it was renamed since.
+    pub fn event_of_marker(&self, key: &str) -> Option<&Event> {
+        self.events.iter().find(|event| event.marker == key)
     }
 
     /// The DM accepts a suggestion from a transcript.
-    pub fn add_marker(&mut self, marker: &Marker, session: Option<Uuid>) -> String {
-        let id = self.add(marker.kind, session, None);
+    pub fn add_marker(&mut self, marker: &Marker, key: &str, session: Option<Uuid>) -> String {
+        let id = self.add(marker.kind, session);
         let event = self.event_mut(&id).expect("the event just added");
         event.title.clone_from(&marker.title);
         event.place.clone_from(&marker.place);
         event.duration.clone_from(&marker.duration);
+        event.marker = key.to_owned();
         if !marker.at.is_empty() {
             event.notes = format!("Near {} in the recording.", marker.at);
         }
@@ -691,10 +787,10 @@ mod tests {
     fn events_round_trip_and_the_body_names_each_as_a_block() {
         let dir = tempfile::tempdir().unwrap();
         let mut first = book(dir.path());
-        let day = first.add(Kind::Day, None, None);
+        let day = first.add(Kind::Day, None);
         first.event_mut(&day).unwrap().title = "Harvest Eve".into();
-        let rest = first.add(Kind::LongRest, None, None);
-        let travel = first.add(Kind::Travel, None, None);
+        let rest = first.add(Kind::LongRest, None);
+        let travel = first.add(Kind::Travel, None);
         first.event_mut(&travel).unwrap().duration = "3 days".into();
         first.save();
         assert!(!first.not_saved());
@@ -714,10 +810,10 @@ mod tests {
     #[test]
     fn days_number_in_list_order_and_events_keep_the_day_they_follow() {
         let mut book = Book::default();
-        book.add(Kind::Event, None, None);
-        let first = book.add(Kind::Day, None, None);
-        book.add(Kind::LongRest, None, None);
-        book.add(Kind::Day, None, None);
+        book.add(Kind::Event, None);
+        let first = book.add(Kind::Day, None);
+        book.add(Kind::LongRest, None);
+        book.add(Kind::Day, None);
         assert_eq!(day_numbers(&book.events), [0, 1, 1, 2]);
         assert!(book.move_by(&first, -1));
         assert_eq!(day_numbers(&book.events), [1, 1, 1, 2]);
@@ -727,8 +823,8 @@ mod tests {
     #[test]
     fn a_reference_resolves_and_reads_as_its_words() {
         let mut book = Book::default();
-        let day = book.add(Kind::Day, None, None);
-        let id = book.add(Kind::Encounter, None, None);
+        let day = book.add(Kind::Day, None);
+        let id = book.add(Kind::Encounter, None);
         book.event_mut(&id).unwrap().title = "Bridge [Ambush]".into();
         let days = day_numbers(&book.events);
         let link = reference(&book.events[1], days[1]);
@@ -740,7 +836,15 @@ mod tests {
         );
         assert_eq!(
             for_reading(&note, &book.events),
-            "We fought at Bridge Ambush, on Day 1. Then (event not on the timeline)."
+            "We fought at Bridge [Ambush], on Day 1. Then (event not on the timeline)."
+        );
+        // The name now, and a removed event says so.
+        book.event_mut(&id).unwrap().title = "The bridge".into();
+        assert_eq!(for_reading(&link, &book.events), "The bridge");
+        let gone = "[[Timeline#^gone|Old words]]";
+        assert_eq!(
+            for_reading(gone, &book.events),
+            "Old words (removed from the timeline)"
         );
         assert_eq!(
             for_reading("no links [[Other]]", &book.events),
@@ -752,12 +856,12 @@ mod tests {
     fn a_change_on_disk_stops_saving_until_the_dm_chooses() {
         let dir = tempfile::tempdir().unwrap();
         let mut book = book(dir.path());
-        book.add(Kind::Day, None, None);
+        book.add(Kind::Day, None);
         book.save();
         let path = dir.path().join(FILE);
         let outside = "---\ntimeline_version: 1\ntimeline:\n- id: t-outside\n  kind: event\n---\n";
         fs::write(&path, outside).unwrap();
-        book.add(Kind::LongRest, None, None);
+        book.add(Kind::LongRest, None);
         book.save();
         assert!(book.conflict && book.not_saved());
         assert_eq!(fs::read_to_string(&path).unwrap(), outside);
@@ -765,7 +869,7 @@ mod tests {
         assert!(!book.conflict);
         assert_eq!(book.events.len(), 1);
         assert_eq!(book.events[0].id, "t-outside");
-        book.add(Kind::Day, None, None);
+        book.add(Kind::Day, None);
         fs::write(&path, outside.replace("t-outside", "t-again")).unwrap();
         book.save();
         book.overwrite();
@@ -779,6 +883,25 @@ mod tests {
     }
 
     #[test]
+    fn a_reload_in_a_conflict_has_one_step_of_undo() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut book = book(dir.path());
+        book.add(Kind::Day, None);
+        book.save();
+        let outside = "---\ntimeline_version: 1\ntimeline: []\n---\n";
+        fs::write(dir.path().join(FILE), outside).unwrap();
+        let rest = book.add(Kind::LongRest, None);
+        book.save();
+        assert!(book.conflict);
+        book.reload_keeping_undo();
+        assert!(book.events.is_empty());
+        assert_eq!(book.dropped(), Some(2));
+        book.undo_reload();
+        assert_eq!(book.events[1].id, rest);
+        assert_eq!(book.dropped(), None);
+    }
+
+    #[test]
     fn an_unreadable_file_is_left_alone_and_nothing_saves() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(FILE);
@@ -787,7 +910,7 @@ mod tests {
         assert!(book.unreadable.is_some());
         book.record_run(&fact(RunState::Running), None);
         assert!(book.events.is_empty());
-        book.add(Kind::Day, None, None);
+        book.add(Kind::Day, None);
         book.save();
         assert_eq!(fs::read_to_string(&path).unwrap(), "written by hand");
     }
@@ -828,17 +951,52 @@ mod tests {
     }
 
     #[test]
+    fn a_new_round_is_not_an_edit_so_undo_stays() {
+        let mut book = Book::default();
+        let rest = book.add(Kind::LongRest, None);
+        book.record_run(&fact(RunState::Running), None);
+        book.remove(&rest);
+        let next = RunFact {
+            round: 4,
+            ..fact(RunState::Running)
+        };
+        book.record_run(&next, None);
+        assert_eq!(book.events[0].result, "Round 4");
+        assert_eq!(book.undo_remove(), Some(rest));
+    }
+
+    #[test]
+    fn a_file_that_goes_keeps_the_events_and_starts_nothing_by_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(FILE);
+        let mut book = book(dir.path());
+        let rest = book.add(Kind::LongRest, None);
+        book.save();
+        fs::rename(&path, dir.path().join("Moved.md")).unwrap();
+        book.reload();
+        assert!(book.gone && book.unreadable.is_some());
+        assert_eq!(book.events[0].id, rest);
+        book.record_run(&fact(RunState::Running), None);
+        assert_eq!(book.events.len(), 1);
+        assert!(!path.exists());
+        book.save_again();
+        assert!(!book.gone && book.unreadable.is_none());
+        assert!(fs::read_to_string(&path).unwrap().contains(&rest));
+    }
+
+    #[test]
     fn remove_has_one_step_of_undo_until_the_next_edit() {
         let mut book = Book::default();
-        book.add(Kind::Day, None, None);
-        let rest = book.add(Kind::LongRest, None, None);
-        book.add(Kind::Travel, None, None);
+        book.add(Kind::Day, None);
+        let rest = book.add(Kind::LongRest, None);
+        book.add(Kind::Travel, None);
         book.remove(&rest);
+        assert_eq!(book.removed(), Some("Long rest"));
         assert_eq!(book.events.len(), 2);
         assert_eq!(book.undo_remove(), Some(rest.clone()));
         assert_eq!(book.events[1].id, rest);
         book.remove(&rest);
-        book.add(Kind::Day, None, None);
+        book.add(Kind::Day, None);
         assert!(book.undo_remove().is_none());
     }
 
@@ -876,25 +1034,51 @@ mod tests {
             "<!-- splat:event kind=\"travel\" at=\"00:10:00\" title=\"To Emberfall\" duration=\"3 days\" -->",
         )
         .remove(0);
+        let key = marker.key("night");
         let mut book = Book::default();
-        assert!(!book.has_marker(&marker, session));
-        let id = book.add_marker(&marker, session);
+        assert!(book.event_of_marker(&key).is_none());
+        let id = book.add_marker(&marker, &key, session);
         let event = book.event_mut(&id).unwrap();
         assert_eq!(
             (event.kind, event.title.as_str(), event.duration.as_str()),
             (Kind::Travel, "To Emberfall", "3 days")
         );
         assert_eq!(event.notes, "Near 00:10:00 in the recording.");
-        assert!(book.has_marker(&marker, session));
-        assert!(!book.has_marker(&marker, None));
+        // A rename does not bring the offer back, and another event does not answer for it.
+        event.title = "The road".into();
+        assert_eq!(
+            book.event_of_marker(&key).map(|event| event.id.as_str()),
+            Some(id.as_str())
+        );
+        let other = book.add(Kind::Travel, session);
+        book.event_mut(&other).unwrap().title = "To Emberfall".into();
+        assert!(book.event_of_marker(&marker.key("another night")).is_none());
     }
 
     #[test]
-    fn a_new_event_can_follow_the_selected_one() {
+    fn an_event_goes_after_its_sessions_last_event() {
+        let (first, second) = (Some(Uuid::from_u128(1)), Some(Uuid::from_u128(2)));
         let mut book = Book::default();
-        let first = book.add(Kind::Day, None, None);
-        book.add(Kind::Day, None, None);
-        let middle = book.add(Kind::LongRest, None, Some(&first));
-        assert_eq!(book.events[1].id, middle);
+        book.add(Kind::Day, first);
+        book.add(Kind::Day, second);
+        let late = book.add(Kind::LongRest, first);
+        assert_eq!(book.events[1].id, late);
+        let new = book.add(Kind::Travel, Some(Uuid::from_u128(3)));
+        assert_eq!(book.events[3].id, new);
+    }
+
+    #[test]
+    fn an_event_can_be_placed_after_any_other_or_first() {
+        let mut book = Book::default();
+        let first = book.add(Kind::Day, None);
+        let second = book.add(Kind::Day, None);
+        let third = book.add(Kind::LongRest, None);
+        book.place_after(&third, Some(&first));
+        assert_eq!(book.events[1].id, third);
+        book.place_after(&second, None);
+        assert_eq!(book.events[0].id, second);
+        // Named after itself, or after what is gone, it goes first and is not lost.
+        book.place_after(&first, Some("gone"));
+        assert_eq!(book.events.len(), 3);
     }
 }

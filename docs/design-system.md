@@ -143,12 +143,12 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Rail toggle | `nav_toggle` | Lookup and panels. Its own `Open` word, so that it never looks like the current page |
 | Segmented | `segmented` | Words with an underline, not a pill |
 | List row | `row`, `two_line_row` | Fixed height, for `show_rows`. Paints hover at the current frame |
-| Status | `status`, `Status` | Icon, word, colour |
+| Status | `status`, `status_link`, `Status` | Icon, word, colour. `status_link` also leads to where the DM can act |
 | Stat tile | `stat_tile` | A label over a large value, with no box |
 | HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
 | Empty state | `empty_state` | What this is, and the one next step |
 | Message | `message`, `Tone` | Inline. Never modal |
-| Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup and the run. Above 820 px, the run's panel has two columns |
+| Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2 entries` |
@@ -219,8 +219,17 @@ colour for kinds, because a kind is not a state. An event's detail sits beside t
 rule as Lookup.
 
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
-While it records, the rail keeps the word and the time in view on every page, and the session's page says what
-the recorder hears: `Hearing sound`, `Silent. Check the input`, or `The file stopped growing`. Words from an LLM
+While it records, the rail keeps the word and the time in view on every page. The time counts audio in the file, so it
+stops when saving stops. The rail and the session's page say the same state: `Recording`, `Recording silence`, or `Not saving
+audio`. A stall takes a banner at the bottom of every page, with `Record again`, because at the table the DM looks at the roster and
+not at the rail. It is at the bottom so that it never moves `Next turn`. A recording or a job that fails takes the same banner, and
+the rail, until the DM dismisses it or tries again. Silence takes no banner, because a table goes quiet often. After a minute it shows in the rail,
+on the session's page, and on the run's own notice line.
+
+**Notes** (Ctrl+J) opens the note of the session being played beside any page, as Lookup does, so a note never means leaving
+the run. The caret starts on a fresh line under `What happened`. The panel never follows the page to another session: opening
+an older note closes it. On the Sessions page, which has the same note itself, the panel stays away, and Ctrl+J goes to the editor. New events and runs go to the newest session unless the DM chooses another, and the Timeline says which before it
+happens. Reading an older note changes neither. Beside the panel, the run's buttons work, and each step gives the keyboard back to the note, except a field that the DM is typing in. Lookup takes the panel's place, and the notes come back when it closes, because the DM may go on typing with their eyes on the table. Only a click on a row or on Amount takes it to Amount, for one number. A letter typed there goes to the note, with the digits before it. While Notes are open and the keyboard is on nothing, as after a stray click, what is typed or pasted still goes to the note. In the panel, Tab indents and does not leave the note, so that it cannot reach `Next turn`. Escape closes the panel. What the DM asks for in the run's own side panel, such as `Conditions`, replaces the notes when both have no room. Words from an LLM
 are marked as a draft, the second pass's changes can be read, and a marker in a transcript has `Add`, not an automatic place on the timeline.
 
 ## The catalogue
