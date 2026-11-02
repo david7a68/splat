@@ -84,6 +84,33 @@ pub struct Catalogue {
     keys: BTreeMap<String, Uuid>,
     pub errors: Vec<String>,
     files: BTreeMap<Uuid, (PathBuf, String)>,
+    namespaces: BTreeSet<String>,
+    neighbours: BTreeMap<String, String>,
+}
+/// Names, by namespace, of the packages in folders beside the registered ones. A reference
+/// holds only a namespace, so this is what lets a missing package appear under its own name.
+fn neighbouring_packages(modules: &[Module]) -> BTreeMap<String, String> {
+    let parents: BTreeSet<_> = modules.iter().filter_map(|m| m.path.parent()).collect();
+    parents
+        .into_iter()
+        .filter_map(|parent| fs::read_dir(parent).ok())
+        .flatten()
+        .flatten()
+        .filter_map(|folder| {
+            let text = fs::read_to_string(folder.path().join("Package.md")).ok()?;
+            let manifest = Entry::parse("Package.md", &text).ok()?;
+            let namespace = manifest.fields.get("splat_namespace")?.as_str()?.to_owned();
+            (manifest.kind == "package").then_some((namespace, manifest.name))
+        })
+        .collect()
+}
+/// A short list of the entries that need something, for an issue that names many of them.
+fn needed_by(names: &BTreeSet<String>) -> String {
+    let shown: Vec<_> = names.iter().take(3).map(String::as_str).collect();
+    match names.len().saturating_sub(shown.len()) {
+        0 => shown.join(", "),
+        more => format!("{} and {more} more", shown.join(", ")),
+    }
 }
 impl Catalogue {
     fn insert(&mut self, entry: Entry, owner: Uuid, private: bool) -> Result<(), String> {
@@ -112,13 +139,30 @@ impl Catalogue {
             Reference::Key(key) => self.keys.get(key).copied(),
         };
         id.filter(|id| self.entries.contains_key(id))
-            .ok_or_else(|| format!("Unavailable content: {reference:?}"))
+            .ok_or_else(|| format!("Unavailable content: {reference}"))
     }
     pub fn resolve_ref(&self, reference: &EntryRef) -> Result<Uuid, String> {
         self.resolve(&reference.reference()?)
     }
+    /// The package an unresolved reference points into, when no such package is loaded.
+    fn missing_package(&self, reference: &Reference) -> Option<String> {
+        let Reference::Key(key) = reference else {
+            return None;
+        };
+        let (namespace, _) = key.split_once(':')?;
+        (!self.namespaces.contains(namespace)).then(|| {
+            self.neighbours
+                .get(namespace)
+                .cloned()
+                .unwrap_or_else(|| namespace.to_owned())
+        })
+    }
     pub fn load(modules: &[Module], campaign: Option<&Campaign>) -> Result<Self, String> {
-        let mut result = Self::default();
+        let mut result = Self {
+            namespaces: BTreeSet::from(["dnd2024".to_owned()]),
+            neighbours: neighbouring_packages(modules),
+            ..Self::default()
+        };
         let builtin = builtin_manifest();
         let builtin_id = builtin.id;
         let definitions = content::definitions::entries()?;
@@ -132,7 +176,6 @@ impl Catalogue {
             name: "D&D 2024 · SRD 5.2.1".into(),
             entries: ids,
         });
-        let mut namespaces = BTreeSet::from(["dnd2024".to_owned()]);
         for module in modules {
             let read = content::read_directory(&module.path);
             let (entries, errors) = match read {
@@ -163,7 +206,7 @@ impl Catalogue {
                 .get("splat_namespace")
                 .and_then(Value::as_str)
                 .ok_or("Missing package namespace")?;
-            if !namespaces.insert(ns.to_owned()) {
+            if !result.namespaces.insert(ns.to_owned()) {
                 return Err(format!("Duplicate package namespace: {ns}"));
             }
             let ids = entries.iter().map(|e| e.id).collect();
@@ -205,7 +248,7 @@ impl Catalogue {
                         .get("splat_namespace")
                         .and_then(Value::as_str)
                         .ok_or("Missing campaign namespace")?;
-                    if !namespaces.insert(ns.into()) {
+                    if !result.namespaces.insert(ns.into()) {
                         return Err(format!("Duplicate owner namespace: {ns}"));
                     }
                 }
@@ -270,6 +313,9 @@ impl Catalogue {
                 .map(|(id, _)| *id),
         );
         let mut visited = BTreeSet::new();
+        // One issue for each thing that is missing, however many entries need it.
+        let mut missing_packages = BTreeSet::new();
+        let mut missing_entries = BTreeMap::<String, BTreeSet<String>>::new();
         while let Some(id) = queue.pop_front() {
             if !visited.insert(id) {
                 continue;
@@ -297,12 +343,35 @@ impl Catalogue {
                                 }
                                 queue.push_back(dep);
                             }
-                            Err(e) => result.errors.push(format!("{}: {e}", entry.entry.name)),
+                            Err(_) => match self.missing_package(&reference) {
+                                Some(package) => {
+                                    missing_packages.insert(package);
+                                }
+                                None => {
+                                    missing_entries
+                                        .entry(reference.to_string())
+                                        .or_default()
+                                        .insert(entry.entry.name.clone());
+                                }
+                            },
                         }
                     }
                 }
             }
         }
+        result.errors.extend(
+            missing_packages
+                .iter()
+                .map(|package| format!("Package not found: {package}")),
+        );
+        result
+            .errors
+            .extend(missing_entries.iter().map(|(reference, names)| {
+                format!(
+                    "Entry not found: {reference} · needed by {}",
+                    needed_by(names)
+                )
+            }));
         // Cycles between named rule groups are invalid selection units.
         fn visit(
             cat: &Catalogue,
@@ -1069,5 +1138,79 @@ mod tests {
         assert!(closure.required.contains_key(&spell));
         assert!(!cat.entries[&spell].private);
         assert_eq!(cat.entries[&spell].owner, builtin_manifest().id);
+    }
+    fn write_package(folder: &Path, namespace: &str, name: &str, requires: &str) -> Uuid {
+        let id = Uuid::new_v4();
+        fs::create_dir(folder).unwrap();
+        fs::write(
+            folder.join("Package.md"),
+            format!(
+                "---\nsplat_schema: 1\nsplat_id: \"{id}\"\nsplat_kind: \"package\"\nsplat_key: \"{namespace}:package\"\nsplat_name: \"{name}\"\nsplat_namespace: \"{namespace}\"\nsplat_requires:\n  - key: \"{requires}\"\n---\n"
+            ),
+        )
+        .unwrap();
+        id
+    }
+    fn write_creature(folder: &Path, name: &str, requires: &str) {
+        let text = patch_fields(
+            &note_text(name, "creature", None),
+            &[(
+                "splat_requires",
+                Some(
+                    serde_yaml_ng::to_value(vec![EntryRef {
+                        id: None,
+                        key: Some(requires.into()),
+                        link: None,
+                    }])
+                    .unwrap(),
+                ),
+            )],
+        )
+        .unwrap();
+        fs::write(folder.join(format!("{name}.md")), text).unwrap();
+    }
+    #[test]
+    fn each_missing_package_and_entry_is_one_issue() {
+        let temp = tempfile::tempdir().unwrap();
+        let book = temp.path().join("Monster Manual");
+        let id = write_package(&book, "book", "Monster Manual", "phb:package");
+        write_creature(&book, "Arch-hag", "phb:spells/plane_shift");
+        write_creature(&book, "Blue Slaad", "phb:spells/wish");
+        write_creature(&book, "Cambion", "phb:spells/plane_shift");
+        for name in ["Devil", "Elf", "Fiend", "Ghoul"] {
+            write_creature(&book, name, "book:spells/lost");
+        }
+        let neighbour = temp.path().join("Players Handbook");
+        write_package(
+            &neighbour,
+            "phb",
+            "Player's Handbook (2024)",
+            "dnd2024:package/srd",
+        );
+        let modules = [Module {
+            id,
+            name: "Monster Manual".into(),
+            path: book,
+        }];
+        let issues = || {
+            Catalogue::load(&modules, None)
+                .unwrap()
+                .closure(
+                    &[PackageSelection {
+                        package: EntryRef::id(id),
+                        selection: Selection::All,
+                    }],
+                    Uuid::new_v4(),
+                )
+                .errors
+        };
+        let lost = "Entry not found: book:spells/lost · needed by Devil, Elf, Fiend and 1 more";
+        assert_eq!(
+            issues(),
+            ["Package not found: Player's Handbook (2024)", lost]
+        );
+        // With nothing beside the package to name it, the namespace still identifies it.
+        fs::remove_dir_all(neighbour).unwrap();
+        assert_eq!(issues(), ["Package not found: phb", lost]);
     }
 }
