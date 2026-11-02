@@ -3011,20 +3011,36 @@ impl RowLayout {
             words.push((condition.clone(), c.participant.condition));
         }
         let separator = design::number_width(ui, " · ", &font);
-        // A separator stands between words on one line, and never opens the next.
+        // A separator stands between words on one line, and never opens the next. A word moves
+        // to the next line only if it fits whole there. A longer one starts here and wraps, so
+        // that a long effect costs no line it does not need.
+        let max_width = job.wrap.max_width;
         let flow = |words: &[(String, egui::Color32)]| -> (Vec<bool>, usize) {
             let mut used = 0.0;
             let mut breaks = Vec::with_capacity(words.len());
             let mut lines = usize::from(!words.is_empty());
             for (at, (text, _)) in words.iter().enumerate() {
                 let width = design::number_width(ui, text, &font);
-                let wrap = at > 0 && used + separator + width > job.wrap.max_width;
+                let start = used + if at > 0 { separator } else { 0.0 };
+                let fits_here = start + width <= max_width;
+                let wrap = at > 0 && !fits_here && width <= max_width;
                 breaks.push(wrap);
                 if wrap {
                     lines += 1;
                     used = width;
+                } else if fits_here {
+                    used = start + width;
                 } else {
-                    used += width + if at > 0 { separator } else { 0.0 };
+                    let mut long = egui::text::LayoutJob::default();
+                    long.wrap.max_width = max_width;
+                    long.append(
+                        text,
+                        start,
+                        egui::TextFormat::simple(font.clone(), egui::Color32::PLACEHOLDER),
+                    );
+                    let galley = ui.fonts_mut(|fonts| fonts.layout_job(long));
+                    lines += galley.rows.len().saturating_sub(1);
+                    used = galley.rows.last().map_or(0.0, |row| row.rect().right());
                 }
             }
             (breaks, lines)

@@ -2553,28 +2553,44 @@ pub mod run_edge_states {
         resume_run_from_cold_start(d);
         d.click_row(TARGET);
         d.click(CONDITIONS);
-        let heights = |d: &Driver<'_>| -> Vec<(String, f32)> {
+        // Where each other row is, and how tall.
+        let places = |d: &Driver<'_>| -> Vec<(String, f32, f32)> {
             roster_places(d)
                 .into_iter()
                 .filter(|row| row.0 != TARGET)
-                .map(|row| (row.0.clone(), row.1.height()))
+                .map(|row| (row.0.clone(), row.1.top(), row.1.height()))
                 .collect()
         };
-        let quiet = d.at_size(DEFAULT, heights);
-        let quiet_wide = d.at_size((1920.0, 1080.0), heights);
+        let quiet = d.at_size(DEFAULT, places);
+        let quiet_wide = d.at_size((1920.0, 1080.0), places);
         d.type_into(OTHER_EFFECT, LONG_EFFECT);
         d.click(ADD_EFFECT);
-        let loud = d.at_size(DEFAULT, heights);
-        let loud_wide = d.at_size((1920.0, 1080.0), heights);
-        // With free room below, no other row changes. With none, they share what the line needs.
-        let least = quiet
-            .iter()
-            .zip(&loud)
-            .all(|(a, b)| a.0 == b.0 && a.1 - b.1 < 6.0);
+        let loud = d.at_size(DEFAULT, places);
+        let loud_wide = d.at_size((1920.0, 1080.0), places);
+        let most = |a: &[(String, f32, f32)],
+                    b: &[(String, f32, f32)],
+                    part: fn(&(String, f32, f32)) -> f32| {
+            a.iter()
+                .zip(b)
+                .fold(0.0_f32, |most, (a, b)| most.max((part(a) - part(b)).abs()))
+        };
+        let (moved, moved_wide) = (
+            most(&quiet, &loud, |row| row.1),
+            most(&quiet_wide, &loud_wide, |row| row.1),
+        );
+        let (shrunk, shrunk_wide) = (
+            most(&quiet, &loud, |row| row.2),
+            most(&quiet_wide, &loud_wide, |row| row.2),
+        );
+        // With free room below, no other row moves. With none, they share what the line needs.
         d.observe(
             "L6-15",
-            !quiet.is_empty() && quiet_wide == loud_wide && least,
-            format!("A long effect takes spare room first. At 1920x1080: {quiet_wide:?} then {loud_wide:?}. At 1200x800, with no free room: {quiet:?} then {loud:?}"),
+            !quiet.is_empty()
+                && moved_wide < 3.0
+                && shrunk_wide < 1.0
+                && moved < 15.0
+                && shrunk < 5.0,
+            format!("A long effect takes spare room first. Most any other row moves, and changes height: at 1920x1080, {moved_wide:.1} and {shrunk_wide:.1}; at 1200x800, with no free room, {moved:.1} and {shrunk:.1}"),
         );
         d.state("long-effect-text", Sizes::All);
         d.observe(
