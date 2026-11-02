@@ -10,6 +10,7 @@ use crate::{
     execution::model::{Creature, Health, Pool, Stat},
 };
 pub use cache::Cache;
+pub use campaign::CampaignCopyError;
 pub use content::ContentNote;
 pub use presentation::description_text;
 use serde::{Deserialize, Serialize};

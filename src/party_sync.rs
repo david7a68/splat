@@ -7,10 +7,11 @@ use reqwest::{
 };
 use serde::Deserialize;
 use serde_json::Value;
-use splat::character::{EntitySnapshot, now};
+use splat::character::{CampaignCopyError, EntitySnapshot, now};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io::Read,
+    path::PathBuf,
     sync::{
         Arc, Mutex,
         mpsc::{self, Receiver},
@@ -196,7 +197,27 @@ enum Event {
     Cache(Result<Vec<EntitySnapshot>, String>),
     Roster(Result<Vec<Member>, Failure>),
     Sheet(String, Box<Result<EntitySnapshot, Failure>>),
-    Warning(String),
+    CampaignCopy(String, Result<Vec<PathBuf>, CampaignCopyError>),
+    Stored(Stored, Result<(), String>),
+}
+/// What a local storage warning is about. The next success for the same thing clears it.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Stored {
+    SavedSheets,
+    Roster,
+    Sheet(String),
+    CampaignCopy(String),
+}
+fn save_campaign_copy(
+    record: &EntitySnapshot,
+    path: &std::path::Path,
+    force: bool,
+) -> Result<Vec<PathBuf>, CampaignCopyError> {
+    if force {
+        record.overwrite_campaign_copy(path)
+    } else {
+        record.save_campaign_copy(path).map(|_| Vec::new())
+    }
 }
 #[derive(Default)]
 pub struct Reader {
@@ -207,7 +228,15 @@ pub struct Reader {
     pub sheets: BTreeMap<String, EntitySnapshot>,
     pub errors: BTreeMap<String, String>,
     pub error: Option<String>,
-    pub warning: Option<String>,
+    pub warnings: BTreeMap<Stored, String>,
+    /// Characters whose campaign notes have local edits, each with the note that stopped its save.
+    pub conflicts: BTreeMap<String, PathBuf>,
+    /// Archives that hold edits a force read replaced. They stay listed until dismissed.
+    pub archived: Vec<PathBuf>,
+    /// Characters whose next read replaces those edits. The DM asked for this.
+    force: BTreeSet<String>,
+    /// The characters that the running read replaces edits for.
+    forcing: BTreeSet<String>,
     pub selected: Option<String>,
     pub loaded: bool,
     pub online_ids: std::collections::BTreeSet<String>,
@@ -265,6 +294,7 @@ impl Reader {
             self.stream = None;
             self.stream_open = false;
             self.pending = None;
+            self.forcing.clear();
             self.gate = Arc::new(Mutex::new(true));
         }
         if visible && !self.visible {
@@ -300,9 +330,10 @@ impl Reader {
                         if !*active {
                             break;
                         }
-                        if let Err(e) = record.save_campaign_copy(&scope.path) {
-                            let _ = tx.send(Event::Warning(e));
-                        }
+                        let _ = tx.send(Event::CampaignCopy(
+                            record.source.character_id.clone(),
+                            save_campaign_copy(record, &scope.path, false),
+                        ));
                     }
                 }
             }
@@ -398,6 +429,14 @@ impl Reader {
             self.refresh_requested = false;
             self.last_check = Some(Instant::now());
             self.next = Some(Instant::now() + INTERVAL);
+            for id in std::mem::take(&mut self.force) {
+                if let Some(record) = self.sheets.get(&id).cloned()
+                    && let Some(path) = self.campaign_path()
+                {
+                    let saved = save_campaign_copy(&record, path, true);
+                    self.campaign_copy_saved(id, saved);
+                }
+            }
             return;
         }
         if self.pending.is_some() || self.cooldown.is_some_and(|t| t > Instant::now()) {
@@ -408,6 +447,8 @@ impl Reader {
         };
         let selected = self.selected.clone();
         let full = full || selected.is_none();
+        let force = std::mem::take(&mut self.force);
+        self.forcing = force.clone();
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         self.error = None;
@@ -436,19 +477,25 @@ impl Reader {
                     // The authoritative roster prevents removed members from returning offline.
                     if let Ok(active) = gate.lock()
                         && *active
-                        && let Err(e) = crate::hermetic::character_cache().and_then(|c| {
+                    {
+                        let saved = crate::hermetic::character_cache().and_then(|c| {
                             c.save_roster(
                                 scope.local,
                                 &scope.remote,
                                 &members.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),
                             )
-                        })
-                    {
-                        let _ = tx.send(Event::Warning(e));
+                        });
+                        let _ = tx.send(Event::Stored(Stored::Roster, saved));
                     }
                     members.into_iter().map(|m| m.id).collect::<Vec<_>>()
                 } else {
-                    vec![selected.unwrap_or_default()]
+                    force
+                        .iter()
+                        .cloned()
+                        .chain(selected)
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect()
                 };
                 for id in members {
                     if gate.lock().map_or(true, |active| !*active) {
@@ -463,16 +510,14 @@ impl Reader {
                         if !*active {
                             break;
                         }
-                        if let Ok(record) = &result
-                            && let Err(e) = crate::hermetic::character_cache()
+                        if let Ok(record) = &result {
+                            let saved = crate::hermetic::character_cache()
                                 .and_then(|c| c.save(scope.local, record))
-                        {
-                            let _ = tx.send(Event::Warning(e));
-                        }
-                        if let Ok(record) = &result
-                            && let Err(e) = record.save_campaign_copy(&scope.path)
-                        {
-                            let _ = tx.send(Event::Warning(e));
+                                .map(|_| ());
+                            let _ = tx.send(Event::Stored(Stored::Sheet(id.clone()), saved));
+                            let saved =
+                                save_campaign_copy(record, &scope.path, force.contains(&id));
+                            let _ = tx.send(Event::CampaignCopy(id.clone(), saved));
                         }
                     }
                     if tx.send(Event::Sheet(id, Box::new(result))).is_err() {
@@ -507,7 +552,7 @@ impl Reader {
                             }
                             self.selected = self.members.first().map(|m| m.id.clone());
                         }
-                        Err(e) => self.warning = Some(e),
+                        Err(e) => self.stored(Stored::SavedSheets, Err(e)),
                     }
                 }
                 Ok(Event::Roster(Ok(members))) => {
@@ -517,6 +562,14 @@ impl Reader {
                         .retain(|id, _| members.iter().any(|m| &m.id == id));
                     self.online_ids
                         .retain(|id| members.iter().any(|m| &m.id == id));
+                    self.conflicts
+                        .retain(|id, _| members.iter().any(|m| &m.id == id));
+                    self.warnings.retain(|what, _| match what {
+                        Stored::Sheet(id) | Stored::CampaignCopy(id) => {
+                            members.iter().any(|m| &m.id == id)
+                        }
+                        Stored::SavedSheets | Stored::Roster => true,
+                    });
                     if !members
                         .iter()
                         .any(|m| Some(&m.id) == self.selected.as_ref())
@@ -559,16 +612,67 @@ impl Reader {
                         self.errors.insert(id, e.message);
                     }
                 },
-                Ok(Event::Warning(e)) => self.warning = Some(e),
+                Ok(Event::CampaignCopy(id, result)) => self.campaign_copy_saved(id, result),
+                Ok(Event::Stored(what, result)) => self.stored(what, result),
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
+                    self.forcing.clear();
                     if !self.refresh_requested && self.next.is_none_or(|t| t < Instant::now()) {
                         self.next = Some(Instant::now() + INTERVAL);
                     }
                 }
             }
         }
+    }
+    pub fn stored(&mut self, what: Stored, result: Result<(), String>) {
+        match result {
+            Ok(()) => {
+                self.warnings.remove(&what);
+            }
+            Err(message) => {
+                self.warnings.insert(what, message);
+            }
+        }
+    }
+    /// Saves a sheet that came from elsewhere, such as combat sync, and records the result.
+    pub fn save_campaign_copy(&mut self, id: &str, record: &EntitySnapshot) {
+        if let Some(path) = self.campaign_path() {
+            let saved = save_campaign_copy(record, path, false);
+            self.campaign_copy_saved(id.to_owned(), saved);
+        }
+    }
+    /// A saved note clears its character's warnings, so moving a note aside clears them too.
+    fn campaign_copy_saved(&mut self, id: String, result: Result<Vec<PathBuf>, CampaignCopyError>) {
+        let what = Stored::CampaignCopy(id.clone());
+        match result {
+            Ok(archived) => {
+                self.conflicts.remove(&id);
+                self.archived.extend(archived);
+                self.stored(what, Ok(()));
+            }
+            Err(CampaignCopyError::Conflict(path)) => {
+                self.conflicts.insert(id, path);
+                self.stored(what, Ok(()));
+            }
+            Err(CampaignCopyError::Failed(message)) => self.stored(what, Err(message)),
+        }
+    }
+    /// Reads every character with a conflict again, and replaces its edits with that read.
+    /// It waits its turn behind a running refresh or a rate limit.
+    pub fn force_read(&mut self) {
+        self.force.extend(self.conflicts.keys().cloned());
+        self.refresh_requested = true;
+        self.next = None;
+    }
+    pub fn force_waiting(&self) -> bool {
+        !self.force.is_empty() || !self.forcing.is_empty()
+    }
+    pub fn member_name<'a>(&'a self, id: &'a str) -> &'a str {
+        self.members
+            .iter()
+            .find(|m| m.id == id)
+            .map_or(id, |m| m.name.as_str())
     }
     pub fn select(&mut self, id: String) {
         if self.selected.as_ref() != Some(&id) {
@@ -638,8 +742,45 @@ mod tests {
             false,
         );
         assert!(!*gate.lock().unwrap());
-        assert!(tx.send(Event::Warning("late".into())).is_err());
+        assert!(
+            tx.send(Event::Stored(Stored::Roster, Err("late".into())))
+                .is_err()
+        );
         assert!(!reader.visible);
+    }
+    #[test]
+    fn a_warning_stays_until_the_same_thing_saves_and_force_reads_at_once() {
+        let mut reader = Reader::default();
+        reader.visible = true;
+        reader.stream_open = true;
+        reader.last_check = Some(Instant::now());
+        let path = PathBuf::from("/campaign/note.md");
+        reader.campaign_copy_saved("12".into(), Err(CampaignCopyError::Conflict(path.clone())));
+        reader.campaign_copy_saved(
+            "13".into(),
+            Err(CampaignCopyError::Failed("Disk full".into())),
+        );
+        reader.stored(Stored::Roster, Err("Roster unsaved".into()));
+        assert_eq!(reader.conflicts.keys().collect::<Vec<_>>(), ["12"]);
+        assert_eq!(reader.warnings.len(), 2);
+
+        reader.next = Some(Instant::now() + Duration::from_secs(600));
+        assert!(!reader.wants_refresh(Instant::now()));
+        reader.force_read();
+        assert!(reader.force_waiting());
+        assert!(reader.wants_refresh(Instant::now()));
+        assert_eq!(reader.force.iter().collect::<Vec<_>>(), ["12"]);
+
+        reader.campaign_copy_saved("12".into(), Ok(vec![path.clone()]));
+        reader.campaign_copy_saved("13".into(), Ok(Vec::new()));
+        assert!(reader.conflicts.is_empty());
+        assert_eq!(reader.archived, [path]);
+        assert_eq!(
+            reader.warnings.keys().collect::<Vec<_>>(),
+            [&Stored::Roster]
+        );
+        reader.stored(Stored::Roster, Ok(()));
+        assert!(reader.warnings.is_empty());
     }
     #[test]
     fn stream_driven_refresh_obeys_visibility_debounce_and_rate_limits() {
