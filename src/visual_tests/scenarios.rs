@@ -4025,6 +4025,12 @@ pub mod session_notes {
         d.expect("Copied");
         d.expect("MENTIONED IN");
         d.state("timeline-event", Sizes::AllAndHiDpi);
+        d.pass_time(std::time::Duration::from_secs(4));
+        d.observe(
+            "T11.4",
+            !d.visible_text("Copied"),
+            "After a few seconds, the word Copied goes",
+        );
         d.observe(
             "T11.4",
             d.has_containing(&format!("Session 1: {TITLE}")),

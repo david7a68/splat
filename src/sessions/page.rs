@@ -112,7 +112,7 @@ struct Reading {
 struct Added {
     id: String,
     label: String,
-    at: Instant,
+    at: crate::hermetic::Moment,
     count: usize,
 }
 
@@ -1888,7 +1888,7 @@ impl Sessions {
             self.added = Some(Added {
                 id: id.clone(),
                 label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
-                at: Instant::now(),
+                at: crate::hermetic::moment(),
                 count: book.events.len(),
             });
         }
@@ -1899,7 +1899,7 @@ impl Sessions {
                 .iter()
                 .position(|event| event.id == just.id)
                 .map(|at| book.events[at].label(days[at]));
-            if just.at.elapsed() >= UNDO_ADD_FOR
+            if crate::hermetic::since(just.at) >= UNDO_ADD_FOR
                 || just.count != book.events.len()
                 || current.as_ref() != Some(&just.label)
             {

@@ -1,8 +1,9 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
 use super::{Book, Event, Kind, day_numbers, reference};
 use crate::design::{self, Action, Density, Tone, Type, colors, icons};
+use crate::hermetic::{Moment, moment, since};
 use eframe::egui;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use uuid::Uuid;
 
 const ROW: f32 = 44.0;
@@ -52,13 +53,13 @@ pub struct TimelinePage {
     search: String,
     session: Option<Uuid>,
     selected: Option<String>,
-    copied: Option<(String, Instant)>,
+    copied: Option<(String, Moment)>,
     focus_title: bool,
     scroll_to: Option<usize>,
     /// The Place after list just opened, so it shows the event's own place.
     show_place: bool,
     /// An event just added with the buttons, with one step of undo.
-    just_added: Option<(String, Instant)>,
+    just_added: Option<(String, Moment)>,
     /// The list opens where the story is now, at its end.
     opened: bool,
     /// The run open now, whose event must stay while it runs.
@@ -419,7 +420,7 @@ impl TimelinePage {
         self.just_added = self
             .just_added
             .take()
-            .filter(|(id, at)| at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id));
+            .filter(|(id, at)| since(*at) < UNDO_ADD_FOR && self.selected.as_ref() == Some(id));
         if let Some((id, _)) = self.just_added.clone() {
             ui.ctx().request_repaint_after(UNDO_ADD_FOR);
             let days = day_numbers(&book.events);
@@ -515,12 +516,12 @@ impl TimelinePage {
                             .clicked()
                         {
                             ui.ctx().copy_text(link.clone());
-                            self.copied = Some((id.clone(), Instant::now()));
+                            self.copied = Some((id.clone(), moment()));
                         }
                         self.copied = self
                             .copied
                             .take()
-                            .filter(|(_, at)| at.elapsed() < COPIED_FOR);
+                            .filter(|(_, at)| since(*at) < COPIED_FOR);
                         if let Some((copied, _)) = &self.copied {
                             ui.ctx().request_repaint_after(COPIED_FOR);
                             if *copied == id {
@@ -756,7 +757,7 @@ impl TimelinePage {
         if let Some(id) = quick_add(ui, book, current) {
             self.reveal(&id, book);
             self.focus_title = true;
-            self.just_added = Some((id, Instant::now()));
+            self.just_added = Some((id, moment()));
         }
         self.new_events_line(ui, sessions, current);
         if let Some(words) = self.dated.clone()
@@ -780,7 +781,7 @@ impl TimelinePage {
                 let id = book.add(Kind::Day, current);
                 self.reveal(&id, book);
                 self.focus_title = true;
-                self.just_added = Some((id, Instant::now()));
+                self.just_added = Some((id, moment()));
             }
             return;
         }
