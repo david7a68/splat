@@ -1980,7 +1980,7 @@ impl Run {
         );
         self.sync_shadows.insert(index, shadow);
     }
-    /// Give one participant a D&D Beyond conflict, as the sync panel would show it.
+    /// Give one participant a D&D Beyond conflict.
     pub fn simulate_sync_conflict(&mut self, name: &str) {
         self.simulate_sync_state(name, crate::combat_sync::SyncState::Conflict);
     }

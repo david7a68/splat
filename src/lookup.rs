@@ -552,16 +552,17 @@ impl Lookup {
             .id_salt(("lookup_reader", current.entry.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let title = current.entry.reading().ok().flatten().map_or_else(
-                    || presentation::display_name(&current.entry.name).to_owned(),
-                    |reading| reading.title,
-                );
-                style::title(ui, &title);
-                let line = if current.entry.reading().ok().flatten().is_some() {
-                    presentation::reading_subtitle(&current.entry, &current.subtitle)
-                } else {
-                    current.subtitle.clone()
+                let (title, line) = match current.entry.reading().ok().flatten() {
+                    Some(reading) => (
+                        reading.title,
+                        presentation::reading_subtitle(&current.entry, &current.subtitle),
+                    ),
+                    None => (
+                        presentation::display_name(&current.entry.name).to_owned(),
+                        current.subtitle.clone(),
+                    ),
                 };
+                style::title(ui, &title);
                 style::subtitle(ui, &format!("{line} · {}", current.owner));
                 link = view::show(
                     ui,

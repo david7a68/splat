@@ -394,10 +394,9 @@ impl Splat {
             self.confirm_close = false;
             return;
         }
-        let lost_sync = usize::from(!self.encounters.lost_on_app_close_names().is_empty());
-        let nothing_lost = lost_sync == 0;
-        let only_sync =
-            items.len() == 1 + lost_sync && !self.encounters.pending_sync_names().is_empty();
+        let nothing_lost = self.encounters.lost_on_app_close_names().is_empty();
+        let only_sync = items.len() == 1 + usize::from(!nothing_lost)
+            && !self.encounters.pending_sync_names().is_empty();
         let background =
             usize::from(self.sessions.recording()) + usize::from(self.sessions.processing());
         let (title, keep_label, discard_label, advice) = if items.len() == background {

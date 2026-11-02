@@ -252,11 +252,11 @@ impl DndBeyond {
                     crate::design::rule(ui);
                 }
                 // Rows like the list above, each with its verb. The chosen one says so.
-                let chosen = local.importing().map(str::to_owned);
+                let chosen = local.importing();
                 let mut pick = None;
                 for remote in &self.campaigns {
                     let added = local.is_added(&remote.id);
-                    let is_chosen = chosen.as_deref() == Some(remote.id.as_str());
+                    let is_chosen = chosen == Some(remote.id.as_str());
                     ui.push_id(&remote.id, |ui| {
                         ui.horizontal(|ui| {
                             ui.set_min_height(crate::design::Density::Scan.row());
@@ -290,7 +290,7 @@ impl DndBeyond {
                                         .show(ui)
                                         .clicked()
                                     {
-                                        pick = Some((remote.id.clone(), remote.name.clone()));
+                                        pick = Some(remote);
                                     }
                                 },
                             );
@@ -298,8 +298,8 @@ impl DndBeyond {
                     });
                     crate::design::rule(ui);
                 }
-                if let Some((id, name)) = pick {
-                    local.start_import(&id, &name);
+                if let Some(remote) = pick {
+                    local.start_import(&remote.id, &remote.name);
                 }
             });
     }
@@ -336,15 +336,13 @@ impl DndBeyond {
         }
         if crate::design::Action::secondary("Refresh campaigns")
             .density(crate::design::Density::Read)
-            .blocked(if let Some(blocked) = blocked {
-                Some(blocked)
-            } else if session.is_none() {
+            .blocked(blocked.or(if session.is_none() {
                 Some("Connect to D&D Beyond in Settings first.")
             } else if self.pending.is_some() {
                 Some("Already refreshing.")
             } else {
                 None
-            })
+            }))
             .show(ui)
             .clicked()
             && let Some(session) = session.clone()

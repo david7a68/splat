@@ -1021,7 +1021,7 @@ impl CombatSync {
                 });
             ui.push_id(&key, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    let busy = self.choice_blocked();
+                    let blocked = self.choice_blocked();
                     let max = self.max_hp().unwrap_or(0);
                     let sheet = self.remote.as_ref().and_then(|r| r.groups.get(&key));
                     let (use_label, keep_label) = (
@@ -1034,7 +1034,7 @@ impl CombatSync {
                     if Action::secondary(&use_label)
                         .name("Use D&D Beyond values")
                         .density(Density::Read)
-                        .blocked(busy)
+                        .blocked(blocked)
                         .show(ui)
                         .clicked()
                     {
@@ -1047,7 +1047,7 @@ impl CombatSync {
                     if Action::secondary(&keep_label)
                         .name("Keep Splat values and retry")
                         .density(Density::Read)
-                        .blocked(busy.or(
+                        .blocked(blocked.or(
                             (!writable).then_some(
                                 "This session cannot edit this character on D&D Beyond.",
                             ),

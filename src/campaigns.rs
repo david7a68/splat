@@ -700,7 +700,6 @@ impl Campaigns {
         );
         egui::CollapsingHeader::new(title)
             .icon(design::section_icon)
-            .icon(design::section_icon)
             .id_salt(("campaign_form", self.editing))
             .open(self.remote.as_ref().map(|_| true))
             .default_open(editing || self.data.campaigns.is_empty())
@@ -717,7 +716,6 @@ impl Campaigns {
                     } else {
                         "Add this campaign"
                     };
-                    let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
                     let unchanged = original.as_ref().is_some_and(|(name, path)| {
                         self.name.trim() == name.as_str() && self.path.trim() == path.as_str()
                     });
@@ -728,7 +726,7 @@ impl Campaigns {
                     {
                         self.error = Some(error);
                     }
-                    if (editing || !missing || self.remote.is_some())
+                    if (editing || waiting.is_none() || self.remote.is_some())
                         && Action::quiet("Cancel").show(ui).clicked()
                     {
                         self.clear_form();

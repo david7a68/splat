@@ -1361,15 +1361,14 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         .iter()
         .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
-    if !filtered.is_empty() {
-        ui.weak(design::count(filtered.len(), "entry", "entries"));
-    }
     if filtered.is_empty() {
         ui.label(if search.is_empty() {
             "No entries returned for this character."
         } else {
             "No entries match this filter."
         });
+    } else {
+        ui.weak(design::count(filtered.len(), "entry", "entries"));
     }
     let mut last_level = None;
     for (i, (name, meta, description, level)) in filtered.into_iter().enumerate() {

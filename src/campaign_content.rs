@@ -63,8 +63,7 @@ fn required_table(
     module: &crate::content_workspace::ModuleIndex,
 ) {
     enum Row<'a> {
-        Group(String),
-        Empty(String),
+        Line(String, Type, egui::Color32),
         Entry(&'a Uuid, &'a std::collections::BTreeSet<String>),
     }
     let c = colors();
@@ -87,19 +86,25 @@ fn required_table(
     let (here, own) = (sorted(false), sorted(true));
     let mut rows = Vec::with_capacity(here.len() + own.len() + 2);
     if here.is_empty() {
-        rows.push(Row::Empty(format!(
-            "Nothing in {} is needed by what is chosen.",
-            module.name
-        )));
+        rows.push(Row::Line(
+            format!("Nothing in {} is needed by what is chosen.", module.name),
+            Type::Body,
+            c.muted,
+        ));
     } else {
-        rows.push(Row::Group(format!("In {} ({})", module.name, here.len())));
+        rows.push(Row::Line(
+            format!("In {} ({})", module.name, here.len()),
+            Type::Heading,
+            c.text,
+        ));
         rows.extend(here.into_iter().map(|(id, why)| Row::Entry(id, why)));
     }
     if !own.is_empty() {
-        rows.push(Row::Group(format!(
-            "Campaign entries ({}), always available",
-            own.len()
-        )));
+        rows.push(Row::Line(
+            format!("Campaign entries ({}), always available", own.len()),
+            Type::Heading,
+            c.text,
+        ));
         rows.extend(own.into_iter().map(|(id, why)| Row::Entry(id, why)));
     }
     const ROW: f32 = 26.0;
@@ -132,21 +137,13 @@ fn required_table(
         .show_rows(ui, ROW, rows.len(), |ui, range| {
             for row in &rows[range] {
                 match row {
-                    Row::Group(title) => {
+                    Row::Line(words, role, color) => {
                         let (rect, _) = ui.allocate_exact_size(
                             egui::vec2(ui.available_width(), ROW),
                             egui::Sense::hover(),
                         );
-                        let font = Type::Heading.font(ui);
-                        cell(ui, rect, design::S, rect.width(), title, font, c.text);
-                    }
-                    Row::Empty(words) => {
-                        let (rect, _) = ui.allocate_exact_size(
-                            egui::vec2(ui.available_width(), ROW),
-                            egui::Sense::hover(),
-                        );
-                        let font = Type::Body.font(ui);
-                        cell(ui, rect, design::S, rect.width(), words, font, c.muted);
+                        let font = role.font(ui);
+                        cell(ui, rect, design::S, rect.width(), words, font, *color);
                     }
                     Row::Entry(id, reasons) => {
                         let entry = &catalogue.entries[*id].entry;
@@ -1097,11 +1094,6 @@ mod tests {
         assert!(content.discarded_selections.is_none());
         assert!(content.discarded_repair.is_none());
     }
-}
-
-#[cfg(test)]
-mod repair_tests {
-    use super::*;
 
     /// L6-46: the parser's line, counted in the whole note.
     #[test]

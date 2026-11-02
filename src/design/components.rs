@@ -468,14 +468,10 @@ impl<'a> Action<'a> {
     }
 }
 
-/// How wide a secondary action with this label is, to share a line with something that must
-/// keep its words.
-pub fn action_width(ui: &Ui, label: &str, icon: bool, key: bool) -> f32 {
-    let icon_width = if icon {
-        Type::Body.size() + XS + 2.0
-    } else {
-        0.0
-    };
+/// How wide a secondary action with an icon and this label is, to share a line with something
+/// that must keep its words.
+pub fn action_width(ui: &Ui, label: &str, key: bool) -> f32 {
+    let icon_width = Type::Body.size() + XS + 2.0;
     let key_width = if key {
         number_width(ui, "U", &Type::Small.font(ui)) + S
     } else {

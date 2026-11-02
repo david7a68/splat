@@ -177,15 +177,16 @@ pub fn keep_dice_together(text: &str) -> String {
                 && sides.chars().all(|c| c.is_ascii_digit())
         })
     };
+    let is_sign = |word: &str| matches!(word, "+" | "-" | "\u{2212}");
     let words: Vec<&str> = text.split(' ').collect();
     let mut kept = String::with_capacity(text.len());
     for (at, word) in words.iter().enumerate() {
         if at > 0 {
-            let sign = |word: &&str| matches!(*word, "+" | "-" | "\u{2212}");
-            let after_dice = sign(word) && is_dice(words[at - 1]);
-            let number = |word: &str| word.starts_with(|c: char| c.is_ascii_digit());
-            let after_sign =
-                at >= 2 && sign(&words[at - 1]) && is_dice(words[at - 2]) && number(word);
+            let after_dice = is_sign(word) && is_dice(words[at - 1]);
+            let after_sign = at >= 2
+                && is_sign(words[at - 1])
+                && is_dice(words[at - 2])
+                && word.starts_with(|c: char| c.is_ascii_digit());
             kept.push(if after_dice || after_sign {
                 '\u{a0}'
             } else {

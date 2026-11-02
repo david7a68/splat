@@ -699,10 +699,6 @@ impl Run {
         let mut review_conflict = false;
         let mut dismiss_notice = false;
         let total = ui.available_width();
-        // A conflict's words come first, so a long Undo gives up its name before they lose size.
-        let undo_width = |ui: &egui::Ui, label: &str| {
-            design::action_width(ui, label, true, !self.history.is_empty())
-        };
         let review = strip.conflict.is_some();
         let link = if review {
             design::number_width(ui, "Review", &Type::Body.font(ui)) + 2.0 * design::S
@@ -719,10 +715,12 @@ impl Run {
             )),
             None => None,
         };
+        // A conflict's words come first, so a long Undo gives up its name before they lose size.
+        let undo_width = design::action_width(ui, &undo_label, !self.history.is_empty());
         let shown_undo = match (beside, self.undo_label_short()) {
             (Some((words, role, more)), Some(short))
                 if design::number_width(ui, words, &role.font(ui))
-                    >= total - undo_width(ui, &undo_label) - more - design::S =>
+                    >= total - undo_width - more - design::S =>
             {
                 short
             }
@@ -1140,15 +1138,14 @@ impl Run {
                     }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                         // The panel's title has the whole of a name too long for this line.
-                        let role = Type::Heading;
                         let shown = design::words_that_fit(
                             ui,
                             &p.name,
-                            &role.font(ui),
+                            &Type::Heading.font(ui),
                             ui.available_width(),
                         );
                         let response = ui
-                            .label(role.rich(ui, shown).color(c.text))
+                            .label(Type::Heading.rich(ui, shown).color(c.text))
                             .on_hover_text(&p.name);
                         design::named(ui, &response, &format!("Selected: {}", p.name));
                     });
@@ -1683,11 +1680,18 @@ impl Run {
         let is_sheet = p.definition.fields.contains_key("splat_external");
         ui.add(egui::Label::new(Type::Title.rich(ui, &p.name).color(colors().text)).wrap());
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
-        let log = if self.log_marked() {
-            format!("{} Log", icons::WARN)
+        let (log, log_name) = if self.log_marked() {
+            (format!("{} Log", icons::WARN), LOG_MARKED)
         } else {
-            "Log".to_owned()
+            ("Log".to_owned(), "Log")
         };
+        let tabs = [
+            (Panel::Reference, reference, reference),
+            (Panel::Conditions, "Conditions", "Conditions"),
+            (Panel::Record, "Record", "Record"),
+            (Panel::Log, log.as_str(), log_name),
+            (Panel::Encounter, "Prep", "Prep"),
+        ];
         if ui.available_width() >= PANEL_TWO_COLUMNS {
             // Room for both: the reference stays open, with the DM's records beside it.
             let tab = if self.panel == Panel::Reference {
@@ -1720,16 +1724,7 @@ impl Run {
                         ui.spacing_mut().item_spacing.x = spacing;
                         ui.set_min_height(height);
                         ui.set_max_width(column);
-                        design::segmented_named(
-                            ui,
-                            &mut picked,
-                            &[
-                                (Panel::Conditions, "Conditions", "Conditions"),
-                                (Panel::Record, "Record", "Record"),
-                                (Panel::Log, log.as_str(), self.log_tab_name()),
-                                (Panel::Encounter, "Prep", "Prep"),
-                            ],
-                        );
+                        design::segmented_named(ui, &mut picked, &tabs[1..]);
                         design::rule(ui);
                         self.needs_the_dm(ui, index);
                         self.panel_body(ui, index, picked);
@@ -1740,19 +1735,7 @@ impl Run {
                 self.panel = picked;
             }
         } else {
-            let mut picked = self.panel;
-            design::segmented_named(
-                ui,
-                &mut picked,
-                &[
-                    (Panel::Reference, reference, reference),
-                    (Panel::Conditions, "Conditions", "Conditions"),
-                    (Panel::Record, "Record", "Record"),
-                    (Panel::Log, log.as_str(), self.log_tab_name()),
-                    (Panel::Encounter, "Prep", "Prep"),
-                ],
-            );
-            self.panel = picked;
+            design::segmented_named(ui, &mut self.panel, &tabs);
             design::rule(ui);
             self.needs_the_dm(ui, index);
             self.panel_body(ui, index, self.panel);
@@ -1784,10 +1767,6 @@ impl Run {
                 || strip.conflict.is_some()
                 || !strip.unsent.is_empty()
                 || strip.sync_error.is_some())
-    }
-
-    fn log_tab_name(&self) -> &'static str {
-        if self.log_marked() { LOG_MARKED } else { "Log" }
     }
 
     fn panel_body(&mut self, ui: &mut egui::Ui, index: usize, panel: Panel) {
