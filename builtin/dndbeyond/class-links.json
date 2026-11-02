@@ -1,0 +1,727 @@
+{
+  "classes": {
+    "2190875": {
+      "class": "barbarian",
+      "feats": {},
+      "features": {
+        "10292150": {
+          "name": "Rage",
+          "required_level": 1,
+          "rule": "dnd2024:class_features/barbarian_level_1_rage",
+          "source_sha256": "1cb68f009e755aa03c63828588c973b2db47590361f3368f6f31b40ad82e56bf"
+        },
+        "10292151": {
+          "name": "Unarmored Defense",
+          "required_level": 1,
+          "rule": "dnd2024:class_features/barbarian_level_1_unarmored_defense",
+          "source_sha256": "f3a37f8d02dbcb7e020c7ccc17a9781842d5317d0e0916f98e05fb391841c730"
+        },
+        "10292152": {
+          "name": "Weapon Mastery",
+          "required_level": 1,
+          "rule": "dnd2024:class_features/barbarian_level_1_weapon_mastery",
+          "source_sha256": "ff03ecfe14ba41c322a8070b89bb18ca963c484c90b41fd8fcd89b414ffe1207"
+        },
+        "10292153": {
+          "name": "Danger Sense",
+          "required_level": 2,
+          "rule": "dnd2024:class_features/barbarian_level_2_danger_sense",
+          "source_sha256": "05dd5d859afac2c09ac3bb3f80529c9528c425d17de485fbcdbd79b71e01dbed"
+        },
+        "10292154": {
+          "name": "Reckless Attack",
+          "required_level": 2,
+          "rule": "dnd2024:class_features/barbarian_level_2_reckless_attack",
+          "source_sha256": "55af1a487484c5113cdcf13536af64c4c217ec87271ac86b1c7dc69eb0b961be"
+        },
+        "10292155": {
+          "name": "Barbarian Subclass",
+          "required_level": 3,
+          "rule": "dnd2024:class_features/barbarian_level_3_barbarian_subclass",
+          "source_sha256": "b3973ae728aa2abf003c13354136deae5291fa2bf446993c01356bbfb353f3b6"
+        },
+        "10292156": {
+          "name": "Primal Knowledge",
+          "required_level": 3,
+          "rule": "dnd2024:class_features/barbarian_level_3_primal_knowledge",
+          "source_sha256": "b4429968c5612a39a62f13a788f18830f6fd8c7a7d0f1e258bfeed774cb618ab"
+        },
+        "10292157": {
+          "name": "Ability Score Improvement",
+          "required_level": 4,
+          "rule": "dnd2024:class_features/barbarian_level_4_ability_score_improvement",
+          "source_sha256": "ad4c5dde8f5b51d74ad5eb1dec124ce9a5463558904e924be0bfcc0d2003c88e"
+        },
+        "10292158": {
+          "name": "Extra Attack",
+          "required_level": 5,
+          "rule": "dnd2024:class_features/barbarian_level_5_extra_attack",
+          "source_sha256": "ac21348c70d401ae5b86bdb89b3e3ca835225eb2b5cacf7b00ef951d1d3fb6f8"
+        },
+        "10292159": {
+          "name": "Fast Movement",
+          "required_level": 5,
+          "rule": "dnd2024:class_features/barbarian_level_5_fast_movement",
+          "source_sha256": "74ab426868a98d11d6ce6556da885554cfbd2fe76094cd9477aac1e54358932c"
+        },
+        "10292160": {
+          "name": "Feral Instinct",
+          "required_level": 7,
+          "rule": "dnd2024:class_features/barbarian_level_7_feral_instinct",
+          "source_sha256": "d3bb7beabf4faabdf53738d9b501081fc1b3c4e61a3abde2d11137030bc660b5"
+        },
+        "10292161": {
+          "name": "Instinctive Pounce",
+          "required_level": 7,
+          "rule": "dnd2024:class_features/barbarian_level_7_instinctive_pounce",
+          "source_sha256": "014f17f4d7be17b622394f9ad9691a23f3a2949e10c5ee3e9f5dab62f53129b2"
+        },
+        "10292162": {
+          "name": "8: Ability Score Improvement",
+          "required_level": 8,
+          "rule": "dnd2024:class_features/barbarian_level_4_ability_score_improvement",
+          "source_sha256": "a9d918609aa4b3a4a9bc89eff714f3fa24d94feae15042993bd190f7df73117b"
+        },
+        "10292163": {
+          "name": "Brutal Strike",
+          "required_level": 9,
+          "rule": "dnd2024:class_features/barbarian_level_9_brutal_strike",
+          "source_sha256": "4a6c0f83434f469db7a04bcf7b7acb5cfc3ae34e2b7d8ee781bd0ceb31ee9e2c"
+        },
+        "10292164": {
+          "name": "Relentless Rage",
+          "required_level": 11,
+          "rule": "dnd2024:class_features/barbarian_level_11_relentless_rage",
+          "source_sha256": "fb6b89a32c97ad921fbc8d1f2935a0ccc02a8a725fe5a123a79f5afd73905d2c"
+        },
+        "10292165": {
+          "name": "12: Ability Score Improvement",
+          "required_level": 12,
+          "rule": "dnd2024:class_features/barbarian_level_4_ability_score_improvement",
+          "source_sha256": "be0a508074222e8173d60e891c65df1cae85f33861124618945c28323f574493"
+        },
+        "10292166": {
+          "name": "Improved Brutal Strike",
+          "required_level": 13,
+          "rule": "dnd2024:class_features/barbarian_level_13_improved_brutal_strike",
+          "source_sha256": "ae81e1d3b5e9028653d3ab3adbf972c0ba82de3a98523c8669c19cf7e26bb970"
+        },
+        "10292167": {
+          "name": "Persistent Rage",
+          "required_level": 15,
+          "rule": "dnd2024:class_features/barbarian_level_15_persistent_rage",
+          "source_sha256": "9381e50f617079c007c1648a6f5092936bba116fd39c11240788bb25f54eb581"
+        },
+        "10292168": {
+          "name": "16: Ability Score Improvement",
+          "required_level": 16,
+          "rule": "dnd2024:class_features/barbarian_level_4_ability_score_improvement",
+          "source_sha256": "5e15dd62d90b85f46df99524993019d9704c91204405401a5015b7ad48fdccb7"
+        },
+        "10292169": {
+          "name": "Improved Brutal Strike",
+          "required_level": 17,
+          "rule": "dnd2024:class_features/barbarian_level_17_improved_brutal_strike",
+          "source_sha256": "618f0dc76605bf6c51ed0ad8c2de6205cfd6a836409fd9410bac1a723178e3c8"
+        },
+        "10292170": {
+          "name": "Indomitable Might",
+          "required_level": 18,
+          "rule": "dnd2024:class_features/barbarian_level_18_indomitable_might",
+          "source_sha256": "98dd8584f7898b8b105744e9e5a7733d16dc814976e806777ebb7f6d248f5e04"
+        },
+        "10292171": {
+          "name": "Epic Boon",
+          "required_level": 19,
+          "rule": "dnd2024:class_features/barbarian_level_19_epic_boon",
+          "source_sha256": "0dfb840556069bdaa4487a472d03a084fa258f153222dc94fba53db0cf3e6ea8"
+        },
+        "10292172": {
+          "name": "Primal Champion",
+          "required_level": 20,
+          "rule": "dnd2024:class_features/barbarian_level_20_primal_champion",
+          "source_sha256": "7828d8068f5a2567520b74e6c2b1220f1093aace7dab07100fd42fa3ec01c516"
+        },
+        "10292173": {
+          "name": "Core Barbarian Traits",
+          "required_level": 1,
+          "rule": "dnd2024:classes/barbarian",
+          "source_sha256": "c7c0766ccf172450155ccf2dece6d2ca3a208939b875f8654c099369671ba616"
+        },
+        "10292174": {
+          "name": "Rage",
+          "required_level": 1,
+          "rule": "dnd2024:class_features/barbarian_level_1_rage",
+          "source_sha256": "2ae3d21227348f9af7f4b879528bbd64d42a24424dbb8175e23e441f7f3d3ec2"
+        },
+        "10292175": {
+          "name": "4: Weapon Mastery",
+          "required_level": 4,
+          "rule": "dnd2024:class_features/barbarian_level_1_weapon_mastery",
+          "source_sha256": "c8fb4c6642891aab6aebbd1d18105ea85901111253282097895cb5b8a1905250"
+        },
+        "10292176": {
+          "name": "10: Weapon Mastery",
+          "required_level": 10,
+          "rule": "dnd2024:class_features/barbarian_level_1_weapon_mastery",
+          "source_sha256": "df6dcb3fc0f0d81ea1162046e6abb098ee7968fcfb01710f7cb03b1227dd6022"
+        },
+        "1789105": {
+          "name": "Weapon Mastery",
+          "required_level": null,
+          "rule": "dnd2024:class_features/barbarian_level_1_weapon_mastery",
+          "source_sha256": "ee336ce3b08544530f00bd2ce0fffa77a037b3cc9eb8246a6b23f7cce916a417"
+        }
+      },
+      "name": "Barbarian",
+      "skills": {
+        "6105": {
+          "label": "Athletics",
+          "source_sha256": "0f2d11a20ac812cf54a94bf734762fa4902a099057633ce5a231ebc67cbe64cd",
+          "value": "athletics"
+        },
+        "6106": {
+          "label": "Nature",
+          "source_sha256": "754501c8a357113ee43f5b4c4c585117df2b4b0d53c8c838e80c122c98fdad2c",
+          "value": "nature"
+        },
+        "6107": {
+          "label": "Animal Handling",
+          "source_sha256": "a385cd14013dca690bcca2e4d5d6f2829583936399e2b1b9d87039500a1306dc",
+          "value": "animal_handling"
+        },
+        "6108": {
+          "label": "Perception",
+          "source_sha256": "4ac7f2d5e8df6b96e730b01f8c5ad9dc4bb393ad8004ecf165c80e01cd836513",
+          "value": "perception"
+        },
+        "6109": {
+          "label": "Survival",
+          "source_sha256": "8c314f326220b601a7d3fd0ca38de30978d038a6ff96942bb621c916d5ca9a6a",
+          "value": "survival"
+        },
+        "6110": {
+          "label": "Intimidation",
+          "source_sha256": "9224057856f4d9faca9c3824af81fd3f9340846659ee1bc297f877c850acbc5a",
+          "value": "intimidation"
+        }
+      },
+      "source_sha256": "c487b44f2dabdfadef2fe0d61ebfc47bd0eab614444ce14d8221f9f8d54371e7",
+      "subclasses": {},
+      "weapons": {
+        "4496688": {
+          "label": "Greataxe (Cleave)",
+          "source_sha256": "f6a91295f2c79e39a70160d4b68d6838578df0eeb40f59c034f418f8dfbed7a8",
+          "value": "dnd2024:equipment/greataxe"
+        },
+        "4496689": {
+          "label": "Halberd (Cleave)",
+          "source_sha256": "b6d6ea75ad473ea1440f26a77c9ef1b5833d17a5cfbbb6bf1b68e88ea66f73dc",
+          "value": "dnd2024:equipment/halberd"
+        },
+        "4496690": {
+          "label": "Glaive (Graze)",
+          "source_sha256": "c2a5369af60d74d0cb6bcca9105e82c64f7bd1432dc1a50f57dc11f4539af4c2",
+          "value": "dnd2024:equipment/glaive"
+        },
+        "4496691": {
+          "label": "Greatsword (Graze)",
+          "source_sha256": "350839a69f5d31edad48f79f7966fd39a0c52924a3f67eef314792cb1c15c861",
+          "value": "dnd2024:equipment/greatsword"
+        },
+        "4496692": {
+          "label": "Dagger (Nick)",
+          "source_sha256": "0f3db003597271de895bc005c6526654f21102ba1847bcfd298fb8f91054644c",
+          "value": "dnd2024:equipment/dagger"
+        },
+        "4496693": {
+          "label": "Light Hammer (Nick)",
+          "source_sha256": "963d624e198c42592d16beee78e584f776bed0edb6b7247906ae3e2c879c8bff",
+          "value": "dnd2024:equipment/light_hammer"
+        },
+        "4496694": {
+          "label": "Scimitar (Nick)",
+          "source_sha256": "40fe037cc880a82dfb99c44e92486c12a367c8613de1ae75f4d3edc3e5b354ca",
+          "value": "dnd2024:equipment/scimitar"
+        },
+        "4496695": {
+          "label": "Sickle (Nick)",
+          "source_sha256": "e5b2f4e1ef18d61194194eff5746e2120912e4db26bebec90865e521770d5066",
+          "value": "dnd2024:equipment/sickle"
+        },
+        "4496696": {
+          "label": "Greatclub (Push)",
+          "source_sha256": "89bb66920b600815bf2caaba6b8d2d6721287e2377f0112f853455dd5cc1e274",
+          "value": "dnd2024:equipment/greatclub"
+        },
+        "4496697": {
+          "label": "Heavy Crossbow (Push)",
+          "source_sha256": "d9d88342a73d54143a12502fb18a69bd326b8773680c7922b3251090aae6e518",
+          "value": "dnd2024:equipment/heavy_crossbow"
+        },
+        "4496698": {
+          "label": "Pike (Push)",
+          "source_sha256": "7bac168846e7c51620aca6d895dadd57756760c3d1dee38a3efd0b5f889e736d",
+          "value": "dnd2024:equipment/pike"
+        },
+        "4496699": {
+          "label": "Warhammer (Push)",
+          "source_sha256": "972663848eb5752201daaa46997da5ed86d5474d2cb714f8902ec5424f33cf03",
+          "value": "dnd2024:equipment/warhammer"
+        },
+        "4496700": {
+          "label": "Flail (Sap)",
+          "source_sha256": "a3c26de1f6b0c4589385b3298b7c3824922ff2acec6f94bc99f473a8f55644c7",
+          "value": "dnd2024:equipment/flail"
+        },
+        "4496701": {
+          "label": "Longsword (Sap)",
+          "source_sha256": "3a1246b9b7a6c5a6ef270321428f7d24419224dd6a941624e191a75bf142df6d",
+          "value": "dnd2024:equipment/longsword"
+        },
+        "4496702": {
+          "label": "Mace (Sap)",
+          "source_sha256": "840c911967e71fc00048f9da949273a5c48f09a4fd86a815a4d3013fc43e6894",
+          "value": "dnd2024:equipment/mace"
+        },
+        "4496703": {
+          "label": "Morningstar (Sap)",
+          "source_sha256": "169bee1c5c96b69893855597882388fe3987979f0825c86916acee6beae7c3a1",
+          "value": "dnd2024:equipment/morningstar"
+        },
+        "4496704": {
+          "label": "Spear (Sap)",
+          "source_sha256": "7ada70d52f10ef9aee388be9f6b6c087e2c662a84aafc9da2b64f3f7c409a8ad",
+          "value": "dnd2024:equipment/spear"
+        },
+        "4496705": {
+          "label": "War Pick (Sap)",
+          "source_sha256": "3504f5f7ce0b5b62439146ae1ee2afe44f5c883a91cedfb5d55e57005007fe82",
+          "value": "dnd2024:equipment/war_pick"
+        },
+        "4496706": {
+          "label": "Club (Slow)",
+          "source_sha256": "6c7c53d11d1f8cb5ae60ad4f6f2c9cd25e9068ac6b73b42e6d55e8cfbf2d0b62",
+          "value": "dnd2024:equipment/club"
+        },
+        "4496707": {
+          "label": "Javelin (Slow)",
+          "source_sha256": "855260758f5c00f0061ec3d25b4454d0a95d4e40acbb44fd2591531a9d971857",
+          "value": "dnd2024:equipment/javelin"
+        },
+        "4496708": {
+          "label": "Light Crossbow (Slow)",
+          "source_sha256": "8c5c5a3b9ca2ef4a98df6e796321da103184a2456aa07a11103379ce7cdf9703",
+          "value": "dnd2024:equipment/light_crossbow"
+        },
+        "4496709": {
+          "label": "Longbow (Slow)",
+          "source_sha256": "ec14331c6eb293308c0f01ac266fce08a5e716139db97d59d06c0a0337fcc665",
+          "value": "dnd2024:equipment/longbow"
+        },
+        "4496710": {
+          "label": "Musket (Slow)",
+          "source_sha256": "a0c074d17e7a3effa1efd5a6e2b44b431021564ba669c4823799228edea106bb",
+          "value": "dnd2024:equipment/musket"
+        },
+        "4496711": {
+          "label": "Sling (Slow)",
+          "source_sha256": "fe4dad9c3064543fb4eae9391bf5d3541fe2fff57f675170ace310a45b90304d",
+          "value": "dnd2024:equipment/sling"
+        },
+        "4496712": {
+          "label": "Whip (Slow)",
+          "source_sha256": "04227bec9c72ec40cbd020e7f156bdf95654fff95f35bd1731ba065683f73b2e",
+          "value": "dnd2024:equipment/whip"
+        },
+        "4496713": {
+          "label": "Battleaxe (Topple)",
+          "source_sha256": "4eaf87b9625a36766054b86700ef1f748a8a0cbf9e294a47e6edb6830ea66e6c",
+          "value": "dnd2024:equipment/battleaxe"
+        },
+        "4496714": {
+          "label": "Lance (Topple)",
+          "source_sha256": "da907a41b2327a971435223ff79a3920fe6bd34d7df7985204a0d48173453335",
+          "value": "dnd2024:equipment/lance"
+        },
+        "4496715": {
+          "label": "Maul (Topple)",
+          "source_sha256": "5caadf26f4278a64783346c5343586d90e5872ba952670f218d2d49bd4fead68",
+          "value": "dnd2024:equipment/maul"
+        },
+        "4496716": {
+          "label": "Quarterstaff (Topple)",
+          "source_sha256": "2a8fdf5be6e5919807eb4d2f20f6f1dee199958c842e5a0185c66de649aa1cfc",
+          "value": "dnd2024:equipment/quarterstaff"
+        },
+        "4496717": {
+          "label": "Trident (Topple)",
+          "source_sha256": "972d16e2a5d79f6b0ab2e4379bb70af332f0500c8263270869c5ae8e81682ee0",
+          "value": "dnd2024:equipment/trident"
+        },
+        "4496718": {
+          "label": "Blowgun (Vex)",
+          "source_sha256": "970813910e66b8fcb38a91efac5abb0a90375a0f1a1b035ae639f1285f395d26",
+          "value": "dnd2024:equipment/blowgun"
+        },
+        "4496719": {
+          "label": "Dart (Vex)",
+          "source_sha256": "82eb7aab25217908676b78c91a86bf764222d8391c6ceef0f1539d3bd506cb5b",
+          "value": "dnd2024:equipment/dart"
+        },
+        "4496720": {
+          "label": "Hand Crossbow (Vex)",
+          "source_sha256": "a3b362ebd07913451ccb6748d3aa6c41bf4041374d62bd965363be1636d5012b",
+          "value": "dnd2024:equipment/hand_crossbow"
+        },
+        "4496721": {
+          "label": "Handaxe (Vex)",
+          "source_sha256": "3b75558aed3e601d70ef92ba18daf028e8e559462993bbb0bb1507db70ad3693",
+          "value": "dnd2024:equipment/handaxe"
+        },
+        "4496722": {
+          "label": "Pistol (Vex)",
+          "source_sha256": "6bd47fd52190f17999c3fe1cc289886638b42fee5fd3444919545d9622bace63",
+          "value": "dnd2024:equipment/pistol"
+        },
+        "4496723": {
+          "label": "Rapier (Vex)",
+          "source_sha256": "103d811b53085a59b9aa8572fbb7c91307daf97b06aa25a7ad133f80beaef1bd",
+          "value": "dnd2024:equipment/rapier"
+        },
+        "4496724": {
+          "label": "Shortbow (Vex)",
+          "source_sha256": "4cb95b938224ad89c025896e6ddde0bdb1c2a1baafba92c3c3642a825f6f86a6",
+          "value": "dnd2024:equipment/shortbow"
+        },
+        "4496725": {
+          "label": "Shortsword (Vex)",
+          "source_sha256": "a34eb049d6e4eb4b0a198dc77943f8ffd5766a6288bb0d106f618803e33c2e63",
+          "value": "dnd2024:equipment/shortsword"
+        },
+        "4496802": {
+          "label": "Greataxe (Cleave)",
+          "source_sha256": "acafba1db9d40b5f7ebe714184cb49aa29a7277cf6bc609dbd9b69babca5887d",
+          "value": "dnd2024:equipment/greataxe"
+        },
+        "4496803": {
+          "label": "Halberd (Cleave)",
+          "source_sha256": "398e107598be6682e97dca4df7486b92fe9b916a4cb2481dbf08c1ea14419001",
+          "value": "dnd2024:equipment/halberd"
+        },
+        "4496804": {
+          "label": "Glaive (Graze)",
+          "source_sha256": "b0cb6e6b81a42835e28f1a0725f167840115a984a0a50d5d7a5583c1e2a32200",
+          "value": "dnd2024:equipment/glaive"
+        },
+        "4496805": {
+          "label": "Greatsword (Graze)",
+          "source_sha256": "05fcce0a9b5ebc011077efb345b8b0f41204cb1cc212eb5bc5247bfa8a861c77",
+          "value": "dnd2024:equipment/greatsword"
+        },
+        "4496806": {
+          "label": "Dagger (Nick)",
+          "source_sha256": "5129c55431a3596910c18249cec7f79fff62a205abd45faeb36a1de57362232f",
+          "value": "dnd2024:equipment/dagger"
+        },
+        "4496807": {
+          "label": "Light Hammer (Nick)",
+          "source_sha256": "06084563f841d80ef6eade81e830d603836cd041ec9000a9985189ec62d3bbbc",
+          "value": "dnd2024:equipment/light_hammer"
+        },
+        "4496808": {
+          "label": "Scimitar (Nick)",
+          "source_sha256": "403f8353ff4caaee2be4d6fdbb727a792f434bb9eccbb2f60a05e84daf9dbf55",
+          "value": "dnd2024:equipment/scimitar"
+        },
+        "4496809": {
+          "label": "Sickle (Nick)",
+          "source_sha256": "f84332d2f0d2decbd223d8d82c04121c662523852c8c5e33110e21f5efa973f7",
+          "value": "dnd2024:equipment/sickle"
+        },
+        "4496810": {
+          "label": "Greatclub (Push)",
+          "source_sha256": "75586221bff846db3bb523adcbde46d1a502c6d6b2b8873abe759b8729dc1606",
+          "value": "dnd2024:equipment/greatclub"
+        },
+        "4496811": {
+          "label": "Heavy Crossbow (Push)",
+          "source_sha256": "b902ffab1b8da9b862703a8ee2ac7986ff0d02932770a28cbaff2584fcd0db24",
+          "value": "dnd2024:equipment/heavy_crossbow"
+        },
+        "4496812": {
+          "label": "Pike (Push)",
+          "source_sha256": "631874c406a864656ad0e0c3858621d4c7446ff56c25a98219c8011734dd15bd",
+          "value": "dnd2024:equipment/pike"
+        },
+        "4496813": {
+          "label": "Warhammer (Push)",
+          "source_sha256": "aaa3f42bcd4b9b2f84bde82ab82b14427a11cb5cda88d563c06a2d087d92f2a3",
+          "value": "dnd2024:equipment/warhammer"
+        },
+        "4496814": {
+          "label": "Flail (Sap)",
+          "source_sha256": "348b4a05aab573e3d87b3573aadd3697a6cb019c83900bfb04d40f8b31bab4cc",
+          "value": "dnd2024:equipment/flail"
+        },
+        "4496815": {
+          "label": "Longsword (Sap)",
+          "source_sha256": "26c049bbd7e37d2ace8e947db3e9ae7ddf25546495c08455d8018e78891a234f",
+          "value": "dnd2024:equipment/longsword"
+        },
+        "4496816": {
+          "label": "Mace (Sap)",
+          "source_sha256": "531d1e23e69eceaae6c6d6ecda03986226e125171a9568662bded8cd70b917df",
+          "value": "dnd2024:equipment/mace"
+        },
+        "4496817": {
+          "label": "Morningstar (Sap)",
+          "source_sha256": "7a825a66e0aa9d8800b82c3d490c2a92d0a8200677fdb58a29c4934e21354b7f",
+          "value": "dnd2024:equipment/morningstar"
+        },
+        "4496818": {
+          "label": "Spear (Sap)",
+          "source_sha256": "bf2c964c456ea315b266527c75fc5698f758cd0aabadea4edb0432c5c49e4450",
+          "value": "dnd2024:equipment/spear"
+        },
+        "4496819": {
+          "label": "War Pick (Sap)",
+          "source_sha256": "b5f9264fd8a9a91068d154bc43463bea10bfeb7ec3f3fb50e6d5595270b3775f",
+          "value": "dnd2024:equipment/war_pick"
+        },
+        "4496820": {
+          "label": "Club (Slow)",
+          "source_sha256": "392faefa1d7e7d931655247ac53220d651b57578135d62d4d29d9de79e59da19",
+          "value": "dnd2024:equipment/club"
+        },
+        "4496821": {
+          "label": "Javelin (Slow)",
+          "source_sha256": "f49bb4c65bb52847ca2127a1fe1eb9d9793868aec2a44037fc2b36778a54c665",
+          "value": "dnd2024:equipment/javelin"
+        },
+        "4496822": {
+          "label": "Light Crossbow (Slow)",
+          "source_sha256": "98c8a1741342f80d0807645d5c24f581666e1eee4891a84db79578bdeaf163d5",
+          "value": "dnd2024:equipment/light_crossbow"
+        },
+        "4496823": {
+          "label": "Longbow (Slow)",
+          "source_sha256": "6119be5a19ee68589bbd4b5e41ce265e92316509475c27072f3162cf4ba0b682",
+          "value": "dnd2024:equipment/longbow"
+        },
+        "4496824": {
+          "label": "Musket (Slow)",
+          "source_sha256": "23a5d88f9f71e7dc6cc379a0a0d6edc86886d32e348abe87447270758aa0f15e",
+          "value": "dnd2024:equipment/musket"
+        },
+        "4496825": {
+          "label": "Sling (Slow)",
+          "source_sha256": "6cbade2650c0a689a01f9f3d62bbd435843bde106985fb9c6820552d675cb0be",
+          "value": "dnd2024:equipment/sling"
+        },
+        "4496826": {
+          "label": "Whip (Slow)",
+          "source_sha256": "a514e9aec855f10623f580c448c1fb3e72f46ef714053e59496765c828f6506c",
+          "value": "dnd2024:equipment/whip"
+        },
+        "4496827": {
+          "label": "Battleaxe (Topple)",
+          "source_sha256": "60b1028fcb4f7ab0993299b55c004188a5989979b2611ddafab1d292f9283a6d",
+          "value": "dnd2024:equipment/battleaxe"
+        },
+        "4496828": {
+          "label": "Lance (Topple)",
+          "source_sha256": "0795a0743b4317453b8176c22a4d391054306e3da7b308274a928f3c14edacb9",
+          "value": "dnd2024:equipment/lance"
+        },
+        "4496829": {
+          "label": "Maul (Topple)",
+          "source_sha256": "382097e3f944f9404b3fc1e239a4601f9305f1989b964d06a0967049f109da56",
+          "value": "dnd2024:equipment/maul"
+        },
+        "4496830": {
+          "label": "Quarterstaff (Topple)",
+          "source_sha256": "4c0bc0a3a3fd6d68f4aa7c239be59c027815d92ebb67b5e5c9d017946551d872",
+          "value": "dnd2024:equipment/quarterstaff"
+        },
+        "4496831": {
+          "label": "Trident (Topple)",
+          "source_sha256": "f30da83e49062856d770ceca0d0c44ae03a7726d767803f701e1cea0751a4488",
+          "value": "dnd2024:equipment/trident"
+        },
+        "4496832": {
+          "label": "Blowgun (Vex)",
+          "source_sha256": "4bd9c1b4ea184aee2509ead876e2eda42479c270bb1dc69a12cac8e46ba53820",
+          "value": "dnd2024:equipment/blowgun"
+        },
+        "4496833": {
+          "label": "Dart (Vex)",
+          "source_sha256": "3f79547eeae6c5ab4e0876812aa47ad976e1600190df7be8e2299f1ac261e5bb",
+          "value": "dnd2024:equipment/dart"
+        },
+        "4496834": {
+          "label": "Hand Crossbow (Vex)",
+          "source_sha256": "e26fee69f4d456a9b85ad7577d4df37a40ade9778746a50d48a6363a6c9558c8",
+          "value": "dnd2024:equipment/hand_crossbow"
+        },
+        "4496835": {
+          "label": "Handaxe (Vex)",
+          "source_sha256": "7cbbb10122cbeec04eb650421222cae1f9b55592e93e16d9258fb63e6d880e4b",
+          "value": "dnd2024:equipment/handaxe"
+        },
+        "4496836": {
+          "label": "Pistol (Vex)",
+          "source_sha256": "4c2a88eb2e1b5892c9079f9cb80860c6fc10af14061224cf09dc8acddb6d6ee2",
+          "value": "dnd2024:equipment/pistol"
+        },
+        "4496837": {
+          "label": "Rapier (Vex)",
+          "source_sha256": "f0500aa0c144c1b70323b2c7cf379f239478473ab5a44b1fe9c17bd492284b39",
+          "value": "dnd2024:equipment/rapier"
+        },
+        "4496838": {
+          "label": "Shortbow (Vex)",
+          "source_sha256": "da5535bbd24fc8935f1681f878878bef343c1a6e3dc14a005e6cc6d040aab663",
+          "value": "dnd2024:equipment/shortbow"
+        },
+        "4496839": {
+          "label": "Shortsword (Vex)",
+          "source_sha256": "f0f1081ff687dedfb35c70db4ae6bafeb098b14cbee78d8bf127143860447242",
+          "value": "dnd2024:equipment/shortsword"
+        }
+      }
+    },
+    "2190886": {
+      "class": "wizard",
+      "feats": {},
+      "features": {
+        "10292382": {
+          "name": "Core Wizard Traits",
+          "required_level": 1,
+          "rule": "dnd2024:classes/wizard",
+          "source_sha256": "cc805c575c5ee057e87a308dcd878782d8a6efe774cae8db89eb262a362d8198"
+        },
+        "10292383": {
+          "name": "Spellcasting",
+          "required_level": 1,
+          "rule": "dnd2024:class_features/wizard_level_1_spellcasting",
+          "source_sha256": "23e64d85b917ce85b4fbb71f2d9f51dbbd313b24f0f7f6ce0c84c5f4b63b5d84"
+        },
+        "10292384": {
+          "name": "Ritual Adept",
+          "required_level": 1,
+          "rule": "dnd2024:class_features/wizard_level_1_ritual_adept",
+          "source_sha256": "c49a9cf43986cfe295a13b70baecb1ad4d14c041a3cee2cc825e801aff1abab4"
+        },
+        "10292385": {
+          "name": "Arcane Recovery",
+          "required_level": 1,
+          "rule": "dnd2024:class_features/wizard_level_1_arcane_recovery",
+          "source_sha256": "e85717b8bbd8852cdd89bfcdee37d1510a9453e48656588f5bfa7c1ad85c8e3f"
+        },
+        "10292386": {
+          "name": "Scholar",
+          "required_level": 2,
+          "rule": "dnd2024:class_features/wizard_level_2_scholar",
+          "source_sha256": "9ecbf9b0aeb922177f8a0742845791372ac625e3e13bcee013f5fea0c22ce8d0"
+        },
+        "10292387": {
+          "name": "Wizard Subclass",
+          "required_level": 3,
+          "rule": "dnd2024:class_features/wizard_level_3_wizard_subclass",
+          "source_sha256": "8c036f5c4fa27a519db51a11bd3f2ed5d8e568cf582090576b7374d182801d40"
+        },
+        "10292388": {
+          "name": "Ability Score Improvement",
+          "required_level": 4,
+          "rule": "dnd2024:class_features/wizard_level_4_ability_score_improvement",
+          "source_sha256": "65659cba7f67b6ff9de92fdc44f1ec59a6223868f3c89980f25e166c7246af68"
+        },
+        "10292389": {
+          "name": "Memorize Spell",
+          "required_level": 5,
+          "rule": "dnd2024:class_features/wizard_level_5_memorize_spell",
+          "source_sha256": "cbcceed16d9f5b11824799a4d081565782cff39bf92d313d67ebea30ad2149d7"
+        },
+        "10292390": {
+          "name": "8: Ability Score Improvement",
+          "required_level": 8,
+          "rule": "dnd2024:class_features/wizard_level_4_ability_score_improvement",
+          "source_sha256": "bb7cc1242bbf2e5b4102479f0e0ce0547f52cc930951cf8b8c179e053bd659a9"
+        },
+        "10292391": {
+          "name": "12: Ability Score Improvement",
+          "required_level": 12,
+          "rule": "dnd2024:class_features/wizard_level_4_ability_score_improvement",
+          "source_sha256": "67f761922410202ac9403310ceb5f2a57c4616018822c0453c552a4b42ea9901"
+        },
+        "10292392": {
+          "name": "16: Ability Score Improvement",
+          "required_level": 16,
+          "rule": "dnd2024:class_features/wizard_level_4_ability_score_improvement",
+          "source_sha256": "84b71bb200736f45f40e6cffd0d9d9e5d67dd73c45fad2b5a23e8c3c5b0a8cf3"
+        },
+        "10292393": {
+          "name": "Spell Mastery",
+          "required_level": 18,
+          "rule": "dnd2024:class_features/wizard_level_18_spell_mastery",
+          "source_sha256": "edb642a313399cec9658140cd3e14ee5107269f08f95923c2757e8a3bd02d301"
+        },
+        "10292394": {
+          "name": "Epic Boon",
+          "required_level": 19,
+          "rule": "dnd2024:class_features/wizard_level_19_epic_boon",
+          "source_sha256": "db816daeef7c4f25a84fb5220d0297098f5818102bf64452208a01efdcb3dcd4"
+        },
+        "10292395": {
+          "name": "Signature Spells",
+          "required_level": 20,
+          "rule": "dnd2024:class_features/wizard_level_20_signature_spells",
+          "source_sha256": "71d981bd8d09595277dc897652fdcc7668d42482aa401a1dd2e661fb7728f2b9"
+        }
+      },
+      "name": "Wizard",
+      "skills": {
+        "6187": {
+          "label": "Arcana",
+          "source_sha256": "f26f671d9975046c8eb21b64944f22f292a7b71c93f9b6f08c73d924b2b969b5",
+          "value": "arcana"
+        },
+        "6188": {
+          "label": "History",
+          "source_sha256": "bdc938c9367b28914c474c6e2d7447d0341d30bed622a254b4401641906e81bb",
+          "value": "history"
+        },
+        "6189": {
+          "label": "Investigation",
+          "source_sha256": "d134b2eb8591e10937ad142516f1267c1209634b691caa9b05bdff43708fc8b5",
+          "value": "investigation"
+        },
+        "6190": {
+          "label": "Nature",
+          "source_sha256": "ae957e18e946d13dc14c3cd251852b7e5687082d6f3cbf9b54224683467728bb",
+          "value": "nature"
+        },
+        "6191": {
+          "label": "Religion",
+          "source_sha256": "381ebacf36ec686d91ad3bf1308887c3203064617932e8f0bb728782e42d7ea6",
+          "value": "religion"
+        },
+        "6192": {
+          "label": "Insight",
+          "source_sha256": "ff2d6b7faa650c7f78b1cec68dcd65fbdd809102be9934516d1d0bbc8a038dd2",
+          "value": "insight"
+        },
+        "6193": {
+          "label": "Medicine",
+          "source_sha256": "fc00c10774ba250cfbd48e6e0a6c35b19661f9c568bfcb8d7c085069e1a366a8",
+          "value": "medicine"
+        }
+      },
+      "source_sha256": "ba1c216bd808e3ab4157da61704754ce74faa9fc8e6c73b55a540873c799b4af",
+      "subclasses": {},
+      "weapons": {}
+    }
+  },
+  "version": 1
+}

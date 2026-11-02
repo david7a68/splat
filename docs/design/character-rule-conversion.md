@@ -86,7 +86,7 @@ snapshot representation contract without inventing an unknown base calculation.
 Import metadata version 2 separates:
 
 - `gaps`: missing or unmatched rule conversion.
-- `engine_gaps`: unavailable engine adapter names.
+- `engine_gaps`: required engine adapter names. `content::adapters` says which are implemented.
 - `required_inputs`: unset source selections or encounter-specific facts.
 - `rule_fingerprint`: a fingerprint of the typed rule/action/trait/effect fields,
   parameters, contracts, character bindings, stats, resources, spell/item rules,
@@ -142,3 +142,53 @@ The source names Wrathful Smite without identifying its edition, and the spell
 is outside the SRD catalogue. Bloodsworn variants containing the optional Wrath
 reward keep a conditional conversion gap until its intended version and rule
 are established. A placeholder spell name never becomes a free or verified cast.
+
+## Character check
+
+D&D Beyond stays the source of truth for an imported character. The check compares a
+sheet with what the SRD rules give for its classes, levels and choices. It reports
+differences and changes nothing. It reads the provider cache and the published sheet,
+so it adds no saved fields. It appears in Party under **Source & parity**, and this
+command runs it on a cache folder without writing. It fails on a difference or a choice the
+rules do not allow. An unset choice is reported, but it is an incomplete sheet, not a failure:
+
+```sh
+devenv shell -- cargo run --locked --bin verify-content -- --check-characters CACHE_DIRECTORY
+```
+
+[`character::build`](../../src/character/build.rs) knows only the catalogue. It gives
+the features, capacities, class values, spell slots and choices for a class, a level
+and a subclass. Multiclass characters use their total level for the proficiency bonus
+and the Multiclass Spellcaster table for slots. Pact Magic stays separate.
+
+[`character::check`](../../src/character/check.rs) compares that result with the sheet:
+
+| Finding | Meaning |
+| --- | --- |
+| Differs | D&D Beyond and the SRD rules give different results |
+| Missing choice | The rules ask for a decision the sheet does not have |
+| Choice not allowed | The sheet's decision is one the rules do not allow |
+| Not compared | Splat has no reviewed link, so it cannot say |
+
+`builtin/dndbeyond/class-links.json` holds the class links. Each class, feature, option and
+subclass pins a SHA-256 of its provider source. If that source changes, the link stops applying
+and the item shows as not compared, and no feature, saving throw or choice proved by that source
+counts as a match. Numbers from a linked class's tables, such as spell slots and cantrips, are
+compared directly, so a changed feature description does not stop those comparisons.
+
+The links now cover the 2024 Barbarian and Wizard, because those are the SRD classes the
+cached party has. The other ten classes work in `character::build`, but their D&D Beyond IDs
+are not known yet, so those characters show as not compared. No cached character has passed
+level 1, so subclass and feat option IDs are also unknown, and the shape of D&D Beyond's feat
+rows at higher levels has not been seen. Spell slots are not compared for a multiclass
+character, because the importer does not create pools for one.
+
+To link another class, cache a character of that class, compare its source with the SRD,
+add its D&D Beyond ID to `CLASSES` in `scripts/dndbeyond_class_links.py`, and run the script
+on the cache folder. That allowlist is the review of the edition. Within a listed class the
+script proposes each feature's rule from a source-matched conversion, or else from its name
+and level, and prints a similarity score for each linked feature. Read the low scores before
+you commit. Wizard Subclass scores low because the SRD text also has the spellbook sidebar.
+Subclass and feat links are added by hand, and a rerun keeps them. Weapons that are not in the
+SRD, such as firearms, stay unlinked on purpose. Species, background and class tool choices are
+not checked yet.

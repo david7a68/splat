@@ -9,6 +9,7 @@ The candidate schema for the agreed scope is complete and ready for review.
 The design is committed. A [read-only verifier and SRD source import](../srd-import.md)
 now exercise part of the format. A [bounded execution proof](../execution-proof.md) now runs converted SRD mechanics.
 The [whole-SRD catalogue](../srd-definitions.md) now contains typed rule specifications with explicit engine gaps.
+The [character check](character-rule-conversion.md#character-check) compares D&D Beyond characters with the SRD class rules.
 The content editor, campaign content loader, and basic encounter roster editor are implemented.
 The encounter editor saves local templates with direct creature references, starting HP and overrides, and a DM can prepare encounter groups to add during a run;
 manual DM runs now save independent state, initiative, HP, conditions, and a combat log

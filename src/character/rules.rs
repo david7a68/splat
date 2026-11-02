@@ -8,6 +8,7 @@ use crate::content::character::{
 };
 use std::sync::OnceLock;
 mod campaign_options;
+pub(super) use campaign_options::option_fingerprint;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -117,7 +118,7 @@ pub(super) fn retired_shared_paths(record: &EntitySnapshot) -> Result<Vec<String
     Ok(paths.into_iter().collect())
 }
 
-fn fingerprint(source: &Value) -> String {
+pub(super) fn fingerprint(source: &Value) -> String {
     let keys = [
         "id",
         "entityTypeId",
@@ -350,7 +351,7 @@ fn feature_key(d: &Value) -> String {
         .simple()
     )
 }
-fn source_id(v: &Value) -> String {
+pub(super) fn source_id(v: &Value) -> String {
     v.as_str()
         .map(str::to_owned)
         .or_else(|| v.as_u64().map(|n| n.to_string()))

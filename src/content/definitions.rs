@@ -33,6 +33,7 @@ pub struct Conversion {
     pub source_sha256: String,
     pub source_path: String,
     pub pages: Vec<u16>,
+    /// The contracts this definition requires. `adapters` says which of them are still open.
     pub engine_gaps: Vec<String>,
     pub conversion_gaps: Vec<String>,
     pub execution_profiles: Vec<String>,
@@ -322,6 +323,11 @@ pub struct CatalogueReport {
     pub adjudications: Vec<serde_json::Value>,
     pub executable_full_definitions: usize,
     pub executable_profiles: usize,
+    /// Contracts the catalogue requires, whether or not they are implemented.
+    pub required_engine_contracts: usize,
+    /// Required contracts on the engine's implemented list.
+    pub implemented_engine_contracts: Vec<String>,
+    /// Required contracts with no implementation yet.
     pub engine_gaps: BTreeMap<String, Vec<String>>,
     pub conversion_gaps: BTreeMap<String, Vec<String>>,
 }
@@ -338,6 +344,8 @@ pub fn verify() -> CatalogueReport {
         adjudications: Vec::new(),
         executable_full_definitions: 0,
         executable_profiles: 0,
+        required_engine_contracts: 0,
+        implemented_engine_contracts: Vec::new(),
         engine_gaps: BTreeMap::new(),
         conversion_gaps: BTreeMap::new(),
     };
@@ -454,12 +462,14 @@ pub fn verify() -> CatalogueReport {
                 {
                     return Err(format!("Contract provenance mismatch: {key}"));
                 }
-                for capability in &contract.capabilities {
-                    report
-                        .engine_capabilities
-                        .entry(capability.clone())
-                        .or_default()
-                        .push(key.into());
+                if !super::adapters::is_implemented(&contract.id) {
+                    for capability in &contract.capabilities {
+                        report
+                            .engine_capabilities
+                            .entry(capability.clone())
+                            .or_default()
+                            .push(key.into());
+                    }
                 }
             }
             match meta.status {
@@ -468,7 +478,12 @@ pub fn verify() -> CatalogueReport {
                 Status::Informational => report.informational_definitions += 1,
             }
             for gap in meta.engine_gaps {
-                report.engine_gaps.entry(gap).or_default().push(key.into());
+                report.required_engine_contracts += 1;
+                if super::adapters::is_implemented(&gap) {
+                    report.implemented_engine_contracts.push(gap);
+                } else {
+                    report.engine_gaps.entry(gap).or_default().push(key.into());
+                }
             }
             if !meta.conversion_gaps.is_empty() {
                 report
@@ -486,6 +501,12 @@ pub fn verify() -> CatalogueReport {
         }
         if !contract_definitions.is_empty() {
             return Err("Registry contains unknown definitions".into());
+        }
+        if let Some(unknown) = super::adapters::implemented()
+            .iter()
+            .find(|id| !contract_ids.contains(id))
+        {
+            return Err(format!("Implemented adapter has no contract: {unknown}"));
         }
         for reference in &source.entries {
             if ["creature", "spell", "magic_item", "glossary"].contains(&reference.category()) {
@@ -515,7 +536,7 @@ pub fn verify() -> CatalogueReport {
         report.structure.warnings.extend(checked.warnings);
         report.structure.limitations = vec![
             "Catalogue definitions and proof profiles are alternate views of the same identities. Do not load both as distinct definitions.".into(),
-            "Rule specifications are converted, but their registered adapters are not implemented. Informational entries have no rule behavior. Source-specific choices and geometry facts must be resolved for affected runs.".into(),
+            "Rule specifications are converted. Implemented means engine code handles the contract in full; every other required contract is an open engine gap. It does not make a definition executable by the action interpreter. Informational entries have no rule behavior. Source-specific choices and geometry facts must be resolved for affected runs.".into(),
         ];
         Ok(())
     })();
@@ -553,6 +574,21 @@ mod tests {
         assert_eq!(report.executable_full_definitions, 0);
         assert_eq!(report.executable_profiles, 32);
         assert!(report.engine_gaps.contains_key("dnd2024:spell_polymorph"));
+        assert_eq!(report.required_engine_contracts, 1970);
+        assert_eq!(report.implemented_engine_contracts.len(), 35);
+        assert_eq!(report.engine_gaps.len(), 1970 - 35);
+        for implemented in &report.implemented_engine_contracts {
+            assert!(!report.engine_gaps.contains_key(implemented));
+        }
+        // These need more than character building, so they stay open.
+        for open in [
+            "dnd2024:class_features_wizard_level_3_wizard_subclass",
+            "dnd2024:classes_barbarian",
+            "dnd2024:class_features_barbarian_level_4_ability_score_improvement",
+            "dnd2024:class_features_barbarian_level_19_epic_boon",
+        ] {
+            assert!(report.engine_gaps.contains_key(open), "{open}");
+        }
         assert!(report.conversion_gaps.is_empty());
         assert!(report.engine_capabilities.contains_key("spellcasting"));
     }

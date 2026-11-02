@@ -18,7 +18,7 @@ for verification:
 | `source_path`, `source_sha256` | Exact pinned source file |
 | `pages` | Nonempty SRD page list, 1–364 |
 | `conversion_gaps` | Unresolved clause keys or extraction diagnostics |
-| `engine_gaps` | Required unavailable registered mechanic names |
+| `engine_gaps` | Required registered mechanic names. `content::adapters` says which are implemented; the rest are open gaps |
 | `execution_profiles` | Keys of separately tested bounded projections |
 | `parent_name` | Optional original heading context |
 | `line_span` / `line_spans` | One extraction address or an ordered list of disjoint addresses: `first`, `count`. Mutually exclusive |
@@ -68,9 +68,10 @@ Registry format 2 retains each interface, a specification fingerprint and a
 closed structural schema. The specification itself lives in the note body. Object fields are exact, arrays declare their permitted
 record shapes, and primitive types are checked. An independent fingerprint
 binds the built-in definition to its reviewed specification. The registry
-always records `implemented: false`; content cannot register executable code.
-A future engine adapter must validate the source-specific semantic constraints
-as well as these structural types.
+always records `implemented: false`, because content cannot register executable code.
+The list of implemented contracts lives in Rust, in `content::adapters`. An engine
+adapter must validate the source-specific semantic constraints as well as these
+structural types.
 
 ## Descriptive fields retained with mechanics
 

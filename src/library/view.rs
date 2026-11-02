@@ -223,7 +223,20 @@ fn reference(
     let status = conversion
         .and_then(|c| c.get("status"))
         .and_then(|s| s.as_str());
+    let gap_list = |key: &'static str| {
+        conversion
+            .and_then(move |c| c.get(key))
+            .and_then(|v| v.as_sequence())
+            .into_iter()
+            .flatten()
+            .filter_map(|gap| gap.as_str())
+    };
+    let open_gaps: Vec<&str> = gap_list("engine_gaps")
+        // Only built-in rules can be on the implemented list. A note cannot claim it by name.
+        .filter(|gap| !origin.builtin || !splat::content::adapters::is_implemented(gap))
+        .collect();
     let support = match status {
+        Some("specified") if open_gaps.is_empty() => "Implemented",
         Some("specified") => "Incomplete",
         Some("informational") => "Reference only",
         Some("partial") => "Conversion incomplete",
@@ -232,18 +245,9 @@ fn reference(
     // A verdict means nothing at a table, so it waits inside.
     design::quiet_section(ui, "Engine support", |ui| {
         ui.label(support);
-        if let Some(conversion) = conversion {
-            for key in ["conversion_gaps", "engine_gaps"] {
-                for gap in conversion
-                    .get(key)
-                    .and_then(|v| v.as_sequence())
-                    .into_iter()
-                    .flatten()
-                {
-                    if let Some(gap) = gap.as_str() {
-                        ui.monospace(gap);
-                    }
-                }
+        if conversion.is_some() {
+            for gap in gap_list("conversion_gaps").chain(open_gaps.iter().copied()) {
+                ui.monospace(gap);
             }
         } else {
             ui.label("Draft structure does not establish engine support.");

@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use uuid::Uuid;
 
+pub mod adapters;
 pub mod art;
 pub mod builtin;
 pub mod character;
