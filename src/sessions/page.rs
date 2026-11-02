@@ -1645,9 +1645,14 @@ impl Sessions {
                     .font(design::reader::prose_type(ui).font(ui))
                     .layouter(&mut layouter)
                     .margin(egui::vec2(design::S, design::S))
-                    .desired_width(ui.available_width().min(EDITOR_WIDTH))
+                    // The box fits the text, which wraps at the Reader's measure.
+                    .desired_width(
+                        ui.available_width()
+                            .min(design::READER_MEASURE + 2.0 * design::S),
+                    )
                     .min_size(egui::vec2(0.0, ui.available_height()))
                     .show(ui);
+                crate::markdown_source::paint_section_rules(ui, &output);
                 let response = output.response;
                 design::named(ui, &response, "Note text");
                 self.note_had_focus = response.has_focus();

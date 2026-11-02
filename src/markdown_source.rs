@@ -15,7 +15,9 @@ enum Role {
     Prose,
     Strong,
     Italic,
-    Code,
+    /// Code among words, on its own fill. A block's rows would make an uneven patch.
+    InlineCode,
+    CodeBlock,
     Title,
     Section,
     MinorHeading,
@@ -79,7 +81,7 @@ fn looks(text: &str) -> Runs {
                 look.markup = true;
             }),
             Event::Start(Tag::CodeBlock(_)) => mark(&mut bytes, &|look| {
-                look.role = Role::Code;
+                look.role = Role::CodeBlock;
                 look.markup = true;
             }),
             Event::Start(Tag::Table(_)) | Event::Html(_) | Event::InlineHtml(_) | Event::Rule => {
@@ -95,6 +97,11 @@ fn looks(text: &str) -> Runs {
                     .for_each(|look| look.markup = true);
             }
             Event::Start(Tag::BlockQuote(_)) => {
+                mark(&mut bytes, &|look| {
+                    if look.role == Role::Prose {
+                        look.role = Role::Italic;
+                    }
+                });
                 let mut at = range.start;
                 for line in text[range.clone()].split_inclusive('\n') {
                     let prefix = line.len() - line.trim_start_matches([' ', '>']).len();
@@ -108,7 +115,7 @@ fn looks(text: &str) -> Runs {
             }
             Event::Code(_) => {
                 mark(&mut bytes, &|look| {
-                    look.role = Role::Code;
+                    look.role = Role::InlineCode;
                     look.markup = true;
                 });
                 let ticks = text[range.clone()]
@@ -138,13 +145,40 @@ fn looks(text: &str) -> Runs {
     Arc::new(runs)
 }
 
+/// A text's looks, and where each section heading ends, in characters.
+struct Styled {
+    runs: Runs,
+    section_ends: Vec<usize>,
+}
+
 #[derive(Default)]
 struct Styler;
 
-impl ComputerMut<&str, Runs> for Styler {
-    fn compute(&mut self, text: &str) -> Runs {
-        looks(text)
+impl ComputerMut<&str, Arc<Styled>> for Styler {
+    fn compute(&mut self, text: &str) -> Arc<Styled> {
+        let runs = looks(text);
+        let section_ends = runs
+            .iter()
+            .enumerate()
+            .filter(|(index, (_, look))| {
+                look.role == Role::Section
+                    && runs
+                        .get(index + 1)
+                        .is_none_or(|(_, next)| next.role != Role::Section)
+            })
+            .map(|(_, (range, _))| text[..range.end].chars().count())
+            .collect();
+        Arc::new(Styled { runs, section_ends })
     }
+}
+
+fn styled_text(ui: &egui::Ui, text: &str) -> Arc<Styled> {
+    ui.ctx().memory_mut(|memory| {
+        memory
+            .caches
+            .cache::<FrameCache<Arc<Styled>, Styler>>()
+            .get(text)
+    })
 }
 
 fn format(ui: &egui::Ui, prose: Type, look: Look) -> TextFormat {
@@ -152,17 +186,22 @@ fn format(ui: &egui::Ui, prose: Type, look: Look) -> TextFormat {
         Role::Prose => prose,
         Role::Strong | Role::MinorHeading => Type::ProseStrong,
         Role::Italic => Type::ProseItalic,
-        Role::Code => Type::Mono,
+        Role::InlineCode | Role::CodeBlock => Type::Mono,
         Role::Title => Type::Title,
         Role::Section => Type::Section,
     };
+    let keeps_its_line = !matches!(look.role, Role::Prose | Role::Strong | Role::Italic);
     let mut font_id = role.font(ui);
     if matches!(look.role, Role::Strong | Role::Italic) {
         font_id.size = prose.size();
     }
-    let keeps_its_line = !matches!(look.role, Role::Prose | Role::Strong | Role::Italic);
+    // Markup is in the plain face beside the words it marks. It keeps their size, so that
+    // the two share a baseline.
+    if look.markup {
+        font_id.family = prose.font(ui).family;
+    }
     let color = if look.markup {
-        colors().muted
+        colors().faint
     } else if look.link {
         colors().accent
     } else {
@@ -170,12 +209,18 @@ fn format(ui: &egui::Ui, prose: Type, look: Look) -> TextFormat {
     };
     TextFormat {
         font_id,
+        // Mono's own line puts code on the baseline of the serif beside it.
         line_height: Some(if keeps_its_line {
             role.line()
         } else {
             prose.line()
         }),
         color,
+        background: if look.role == Role::InlineCode && !look.markup {
+            design::reader::inline_code_fill()
+        } else {
+            egui::Color32::TRANSPARENT
+        },
         strikethrough: if look.struck && !look.markup {
             Stroke::new(1.0, color)
         } else {
@@ -188,13 +233,12 @@ fn format(ui: &egui::Ui, prose: Type, look: Look) -> TextFormat {
 /// A `TextEdit` layouter. The text is parsed again only when it changes.
 pub fn layouter(ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32) -> Arc<egui::Galley> {
     let text = text.as_str();
-    let runs = ui
-        .ctx()
-        .memory_mut(|memory| memory.caches.cache::<FrameCache<Runs, Styler>>().get(text));
+    let styled = styled_text(ui, text);
     let prose = design::reader::prose_type(ui);
     let mut job = LayoutJob {
         text: text.to_owned(),
-        sections: runs
+        sections: styled
+            .runs
             .iter()
             .map(|(range, look)| egui::text::LayoutSection {
                 leading_space: 0.0,
@@ -204,8 +248,26 @@ pub fn layouter(ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32) -> Arc<eg
             .collect(),
         ..Default::default()
     };
-    job.wrap.max_width = wrap_width;
+    // Lines break where the Reader breaks them, so a note keeps its shape between views.
+    job.wrap.max_width = wrap_width.min(design::READER_MEASURE);
     ui.fonts_mut(|fonts| fonts.layout_job(job))
+}
+
+const RULE_GAP: f32 = 3.0;
+
+/// The rule under a section heading, as in the Reader. A layouter cannot draw one.
+pub fn paint_section_rules(ui: &egui::Ui, output: &egui::text_edit::TextEditOutput) {
+    let galley = &output.galley;
+    let painter = ui.painter().with_clip_rect(output.text_clip_rect);
+    let left = output.galley_pos.x;
+    for end in &styled_text(ui, &galley.job.text).section_ends {
+        let row = galley.pos_from_cursor(egui::text::CCursor::new(*end));
+        painter.hline(
+            left..=left + galley.job.wrap.max_width,
+            output.galley_pos.y + row.bottom() + RULE_GAP,
+            Stroke::new(design::HAIRLINE_WIDTH, colors().rule),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -317,12 +379,12 @@ mod tests {
     #[test]
     fn code_keeps_its_words_as_typed() {
         let inline = "Roll `1d20 *2*` now";
-        assert_eq!(look_of(inline, "1d20 *2*").role, Role::Code);
+        assert_eq!(look_of(inline, "1d20 *2*").role, Role::InlineCode);
         assert!(look_of(inline, "`").markup);
 
         let fence = "```\n# not a heading\n```\n";
         let code = look_of(fence, "# not a heading");
-        assert_eq!(code.role, Role::Code);
+        assert_eq!(code.role, Role::CodeBlock);
         assert!(!code.markup);
     }
 
@@ -338,6 +400,31 @@ mod tests {
             styled(quote)
                 .iter()
                 .any(|(part, look)| *part == ">" && look.markup)
+        );
+    }
+
+    #[test]
+    fn a_quote_reads_as_italic_with_its_mark_quiet() {
+        let text = "> *a* said\n";
+        assert_eq!(look_of(text, " ").role, Role::Italic);
+        assert_eq!(look_of(text, " said").role, Role::Italic);
+        assert!(look_of(text, ">").markup);
+    }
+
+    #[test]
+    fn only_section_headings_get_a_rule_and_it_ends_with_the_heading() {
+        let ends = |text: &str| Styler.compute(text).section_ends.clone();
+        assert_eq!(ends("# Title\n\nWords\n\n#### Minor\n"), [] as [usize; 0]);
+        // Counted in characters, as a caret is.
+        let text = "é\n\n## Über\n\n### Later ##\n";
+        let [first, second] = ends(text)[..] else {
+            panic!("two headings: {:?}", ends(text));
+        };
+        let chars: Vec<char> = text.chars().collect();
+        assert_eq!(chars[..first].iter().collect::<String>(), "é\n\n## Über");
+        assert_eq!(
+            chars[first..second].iter().collect::<String>(),
+            "\n\n### Later ##"
         );
     }
 
