@@ -249,6 +249,10 @@ mod tests {
             options.directory(&campaign).unwrap(),
             dir.path().join("Sessions/Combat")
         );
+        let rule = "Rules/Encounter Initiative.md";
+        let source = fs::read_to_string(dir.path().join(rule)).unwrap();
+        let rule = Entry::parse(rule, &source).unwrap();
+        assert_eq!(splat::content::validate(&[rule]).warnings.len(), 0);
         let text = fs::read_to_string(dir.path().join("Campaign.md")).unwrap();
         assert!(options.save(&campaign, &document.text).is_err());
         assert_eq!(
