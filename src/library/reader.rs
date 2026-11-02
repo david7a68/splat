@@ -317,18 +317,20 @@ pub(super) fn show(
                         style::identity(ui, &identity);
                     }
                 }
-                let (cards, details): (Vec<_>, Vec<_>) =
+                // One table at one pitch, with the long values last, and a rule to close it.
+                let (short, long): (Vec<_>, Vec<_>) =
                     facts.into_iter().partition(|(label, value)| {
                         !matches!(
                             label.as_str(),
                             "Components" | "Equipment" | "Prerequisites" | "Prerequisite"
                         ) && value.len() < 70
                     });
-                style::facts(ui, &cards);
-                for (label, value) in details {
-                    style::detail(ui, &label, &value);
+                let table: Vec<_> = short.into_iter().chain(long).collect();
+                if !table.is_empty() {
+                    style::facts(ui, &table);
+                    crate::design::rule(ui);
+                    ui.add_space(crate::design::S);
                 }
-                ui.add_space(crate::design::S);
                 style::source_prose(ui, &presentation::overview_markdown(&prose));
             } else {
                 // An intro has no printed heading, so the reader adds none.

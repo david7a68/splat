@@ -76,7 +76,7 @@ pub mod library_browse {
 
         search_library(d, "wizard");
         d.scroll_until(ENTRY_LIST, CLASS_ROW, 80);
-        d.click_containing(CLASS_ROW);
+        d.click_starting(CLASS_ROW);
         d.state("class-traits-and-features", Sizes::All);
         d.goal("open a class");
 
@@ -162,7 +162,7 @@ pub mod library_author {
     const CHANGED_ON_DISK: &str = "This note changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
-    const MANAGE_TITLE: &str = "Register an existing package folder";
+    const MANAGE_TITLE: &str = "Register folder";
     const CLOSE_WINDOW: &str = "Close the package form";
     const NEW_ENTRY: &str = "New entry";
     const CREATE_ENTRY: &str = "Create entry";
@@ -317,6 +317,18 @@ pub mod library_author {
         d.click(MANAGE_PACKAGES);
         d.expect(MANAGE_TITLE);
         d.state("manage-packages", Sizes::All);
+        let whole_form = d.at_size(DEFAULT, |d| {
+            d.has("Browse for package folder")
+                && d.has("Browse for new package folder")
+                && d.visible_text("Enter the folder's path first.")
+                && d.visible_text("Enter a folder, a name and a namespace first.")
+                && d.visible_text("opens each entry's key")
+        });
+        d.observe(
+            "M6-6",
+            whole_form,
+            "At 1200x800: two groups, Browse on each, a help line for Namespace, and each reason in view",
+        );
         escape_closes(d, "manage packages form", MANAGE_TITLE, CLOSE_WINDOW);
         d.goal("open and close the package form");
 
@@ -326,6 +338,11 @@ pub mod library_author {
         d.click(CREATE_ENTRY);
         d.expect(NEW_NAME);
         d.state("new-entry-created", Sizes::All);
+        d.observe(
+            "L6-32",
+            d.visible_text(&format!("Created {NEW_NAME}")),
+            "A new entry says it was created, and where",
+        );
         d.goal("create a new entry");
 
         // Name clash: the same name again is refused, and the typed name stays.
@@ -1137,6 +1154,8 @@ pub mod empty {
 pub mod run_lookup {
     use super::*;
     const SECOND_RESULT: &str = "Delayed Blast Fireball";
+    const ITEM: &str = "Dragon Orb";
+    const CLASS: &str = "Wizard";
     const PARTICIPANT: &str = "Ember Cultist";
     const SPELL_QUERY: &str = "fireball";
     const SPELL: &str = "Fireball";
@@ -1158,6 +1177,26 @@ pub mod run_lookup {
         d.expect(SPELL);
         d.state("reading-spell-beside-run", Sizes::All);
         d.goal_within("T2.1", "read a spell from a run", 3);
+        // An item and a class read beside the run as they do in the Library.
+        look_up_again(d, ITEM.to_lowercase().as_str());
+        d.state("item-beside-run", Sizes::Default);
+        d.observe(
+            "T9-2",
+            d.in_view(ITEM)
+                && d.visible_text("Wondrous Item, Artifact (Requires Attunement)")
+                && d.in_view(NEXT_TURN),
+            "An item in Lookup has its one identity line, beside the roster",
+        );
+        look_up_again(d, CLASS.to_lowercase().as_str());
+        d.state("class-beside-run", Sizes::Default);
+        d.observe(
+            "T9-2",
+            d.in_view(CLASS) && d.in_view(NEXT_TURN),
+            "A class in Lookup opens beside the roster",
+        );
+        look_up_again(d, SPELL_QUERY);
+        d.expect(SPELL);
+        d.begin_task();
         // In a short panel the text gets the height, and the list is one click away.
         d.observe(
             "T2.1",
@@ -1256,6 +1295,11 @@ pub mod run_lookup {
         look_up(d, &OTHER_NOTE.to_lowercase());
         d.state("lookup-with-draft-open", Sizes::All);
         d.goal("try a lookup with a draft open");
+        d.observe(
+            "L6-27",
+            d.is_disabled("Open in Library") && d.visible_text("Draft in Library"),
+            "Open in Library is off, and the panel says why with no hover",
+        );
         d.press(Key::Escape);
         let kept = d
             .editor_text()

@@ -196,6 +196,7 @@ fn prose(ui: &mut egui::Ui, text: &str, spell_links: &mut impl FnMut(&mut egui::
 /// One ability row of the stat block's attribute table.
 fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
     let c = colors();
+    let [label_width, score_width, modifier_width, save_width] = ABILITY_COLUMNS;
     let modifier = stat(entry, ability).map(|score| (score - 10).div_euclid(2));
     // An absent override does not establish proficiency or a save total.
     let save = stat(entry, &format!("save_{ability}"));
@@ -203,29 +204,53 @@ fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
         ui.spacing_mut().item_spacing.x = design::XS;
         cell(
             ui,
-            30.0,
+            label_width,
             &ability[..3].to_uppercase(),
             Type::StatLabel,
             c.text,
         );
-        cell(ui, 24.0, &value(entry, ability), Type::Stat, c.text);
+        cell(ui, score_width, &value(entry, ability), Type::Stat, c.text);
         cell(
             ui,
-            26.0,
+            modifier_width,
             &modifier.map_or_else(|| "—".into(), design::signed),
             Type::Stat,
             c.muted,
         );
         cell(
             ui,
-            56.0,
-            &save.map_or_else(
-                || "Save —".into(),
-                |v| format!("Save {}", design::signed(v)),
-            ),
+            save_width,
+            &save.map_or_else(|| "—".into(), design::signed),
             Type::Stat,
             c.muted,
         );
+    });
+}
+
+/// Label, score, modifier and saving throw.
+const ABILITY_COLUMNS: [f32; 4] = [30.0, 24.0, 26.0, 38.0];
+
+/// The heads of the attribute table's last two columns, once for each side of the table.
+fn ability_head(ui: &mut egui::Ui) {
+    let c = colors();
+    let [label_width, score_width, modifier_width, save_width] = ABILITY_COLUMNS;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = design::XS;
+        ui.allocate_exact_size(
+            egui::vec2(label_width + design::XS + score_width, Type::Label.line()),
+            egui::Sense::hover(),
+        );
+        for (width, word) in [(modifier_width, "MOD"), (save_width, "SAVE")] {
+            let (rect, _) =
+                ui.allocate_exact_size(egui::vec2(width, Type::Label.line()), egui::Sense::hover());
+            ui.painter().text(
+                rect.right_center(),
+                egui::Align2::RIGHT_CENTER,
+                word,
+                Type::Label.font(ui),
+                c.muted,
+            );
+        }
     });
 }
 
@@ -355,10 +380,11 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry) {
         // An authored creature can have no scores. There is nothing to tabulate.
     } else if two_columns {
         ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = design::M;
+            ui.spacing_mut().item_spacing.x = design::XL;
             for column in ABILITIES.chunks(3) {
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 1.0;
+                    ability_head(ui);
                     for ability in column {
                         ability_row(ui, entry, ability);
                     }
@@ -367,6 +393,7 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry) {
         });
     } else {
         ui.spacing_mut().item_spacing.y = 1.0;
+        ability_head(ui);
         for ability in ABILITIES {
             ability_row(ui, entry, ability);
         }

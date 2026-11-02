@@ -44,9 +44,6 @@ pub fn heavy_rule(ui: &mut Ui) {
 
 const LABEL_WIDTH: f32 = 112.0;
 
-/// About 70 characters of a fact's value, in stat type.
-const DETAIL_MEASURE: f32 = 330.0;
-
 /// One row of a reference table: a label column, then a wrapped value.
 pub fn detail(ui: &mut Ui, label: &str, value: &str) {
     let c = colors();
@@ -64,11 +61,9 @@ pub fn detail(ui: &mut Ui, label: &str, value: &str) {
         let (rect, _) =
             ui.allocate_exact_size(vec2(LABEL_WIDTH, Type::Stat.line()), egui::Sense::hover());
         ui.painter().galley(rect.min, galley, c.text);
-        // A long value keeps the reader's measure in this smaller type.
-        let room = vec2(ui.available_width().min(DETAIL_MEASURE), 0.0);
-        ui.allocate_ui(room, |ui| {
-            ui.add(egui::Label::new(Type::Stat.rich(ui, value).color(c.text)).wrap());
-        });
+        // The reader's measure leaves about 65 characters of stat type here, so a value
+        // needs no measure of its own.
+        ui.add(egui::Label::new(Type::Stat.rich(ui, value).color(c.text)).wrap());
     });
 }
 
@@ -77,10 +72,13 @@ pub fn facts(ui: &mut Ui, facts: &[(String, String)]) {
     if facts.is_empty() {
         return;
     }
-    ui.spacing_mut().item_spacing.y = 2.0;
-    for (label, value) in facts {
-        detail(ui, label, value);
-    }
+    // Tight here only. What follows keeps its own spacing.
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        for (label, value) in facts {
+            detail(ui, label, value);
+        }
+    });
     ui.add_space(S);
 }
 

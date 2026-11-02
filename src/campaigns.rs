@@ -677,28 +677,7 @@ impl Campaigns {
                 ui.label(format!("{name} · D&D Beyond ID {id}"));
             }
             design::text_field(ui, "Campaign name", &mut self.name, None, None);
-            // The button sits on the field's line, and ends where the fields above end.
-            let room = ui.available_width();
-            let field = ui
-                .vertical(|ui| {
-                    ui.set_max_width((room - BROWSE_WIDTH).max(120.0));
-                    design::text_field(ui, "Folder", &mut self.path, None, None)
-                })
-                .inner;
-            let browse = egui::Rect::from_min_size(
-                egui::pos2(field.rect.right() + design::S, field.rect.top()),
-                egui::vec2(BROWSE_WIDTH, field.rect.height()),
-            );
-            ui.scope_builder(egui::UiBuilder::new().max_rect(browse), |ui| {
-                if Action::secondary("Browse…")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                    && let Some(path) = crate::hermetic::pick_folder()
-                {
-                    self.path = path.to_string_lossy().into_owned();
-                }
-            });
+            folder_field(ui, "Folder", &mut self.path, None);
             ui.horizontal(|ui| {
                 let submit = if editing {
                     "Save details"
@@ -737,6 +716,35 @@ impl Campaigns {
 
 /// The Browse button and the gap before it, beside the folder field.
 const BROWSE_WIDTH: f32 = 92.0;
+
+/// A folder's path, with `Browse…` on the field's line, ending where the fields above end.
+pub(crate) fn folder_field(ui: &mut egui::Ui, label: &str, path: &mut String, help: Option<&str>) {
+    let room = ui.available_width();
+    let field = ui
+        .vertical(|ui| {
+            ui.set_max_width((room - BROWSE_WIDTH).max(120.0));
+            design::text_field(ui, label, path, help, None)
+        })
+        .inner;
+    let below = ui.cursor().top();
+    let browse = egui::Rect::from_min_size(
+        egui::pos2(field.rect.right() + design::S, field.rect.top()),
+        egui::vec2(BROWSE_WIDTH, field.rect.height()),
+    );
+    ui.scope_builder(egui::UiBuilder::new().max_rect(browse), |ui| {
+        if Action::secondary("Browse…")
+            .density(Density::Read)
+            .name(&format!("Browse for {}", label.to_lowercase()))
+            .show(ui)
+            .clicked()
+            && let Some(picked) = crate::hermetic::pick_folder()
+        {
+            *path = picked.to_string_lossy().into_owned();
+        }
+    });
+    // Back under the field and its help line, which this button sits beside.
+    ui.add_space((below - ui.cursor().top()).max(0.0));
+}
 
 /// By number, because a link can be stored with other formatting. An ID that is not a number
 /// links to nothing, and neither does a campaign with no link.

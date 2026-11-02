@@ -410,7 +410,7 @@ impl Lookup {
             && !self.results_open
             && self.current.is_some()
             && Action::quiet(&design::count(matches.len(), "result", "results"))
-                .icon(icons::DOWN)
+                .icon(icons::NEXT)
                 .density(Density::Read)
                 .name("Show the results")
                 .show(ui)
@@ -481,7 +481,7 @@ impl Lookup {
                             ui,
                             RESULT_ROW,
                             selected,
-                            &item.entry.name,
+                            presentation::display_name(&item.entry.name),
                             &detail,
                         );
                         if response.clicked() {
@@ -538,6 +538,13 @@ impl Lookup {
                 {
                     self.open_in_library = Some(current.entry.clone());
                 }
+                if self.library_draft {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "Draft in Library")
+                            .color(colors().document.unsaved),
+                    );
+                }
             });
         });
         let mut link = None;
@@ -545,12 +552,10 @@ impl Lookup {
             .id_salt(("lookup_reader", current.entry.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let title = current
-                    .entry
-                    .reading()
-                    .ok()
-                    .flatten()
-                    .map_or_else(|| current.entry.name.clone(), |reading| reading.title);
+                let title = current.entry.reading().ok().flatten().map_or_else(
+                    || presentation::display_name(&current.entry.name).to_owned(),
+                    |reading| reading.title,
+                );
                 style::title(ui, &title);
                 style::subtitle(ui, &format!("{} · {}", current.subtitle, current.owner));
                 link = view::show(

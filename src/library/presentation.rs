@@ -27,7 +27,7 @@ impl Section {
         ("Characters", &[Self::Characters]),
         ("Game rules", &[Self::Rules, Self::Glossary]),
         ("Preparation", &[Self::Encounters]),
-        ("Package", &[Self::Other]),
+        ("", &[Self::Other]),
     ];
 
     pub fn label(self) -> &'static str {
@@ -72,7 +72,7 @@ pub(crate) fn category(entry: &Entry) -> &str {
 /// A list's second line. Everyday words and existing facts only: never schema terms.
 pub(crate) fn subtitle(entry: &Entry) -> String {
     if entry.kind == "package" {
-        return "Package".into();
+        return "About this package".into();
     }
     let category = category(entry).replace('_', " ");
     let mut category = {
@@ -91,12 +91,45 @@ pub(crate) fn subtitle(entry: &Entry) -> String {
         .and_then(|meta| meta.get("parent_name"))
         .and_then(|value| value.as_str());
     // Only a real parent. A file's name is not a word for a reader.
-    match parent {
-        Some(parent) if !parent.eq_ignore_ascii_case(&entry.name) => {
-            format!("{category} · {parent}")
-        }
-        _ => category,
+    if let Some(parent) = parent.filter(|parent| !parent.eq_ignore_ascii_case(&entry.name)) {
+        category.push_str(" · ");
+        category.push_str(parent);
     }
+    if let Some(level) = class_level(entry) {
+        category.push_str(&format!(" · Level {level}"));
+    }
+    category
+}
+
+/// A name as a reader wants it. Imported headings can end with a colon or with dots.
+pub(crate) fn display_name(name: &str) -> &str {
+    let trimmed = name.trim_end();
+    let trimmed = trimmed
+        .strip_suffix("...")
+        .or_else(|| trimmed.strip_suffix('\u{2026}'))
+        .or_else(|| trimmed.strip_suffix(':'))
+        .unwrap_or(trimmed)
+        .trim_end();
+    if trimmed.is_empty() { name } else { trimmed }
+}
+
+/// `pp. 7` is one page, and a reader says so. A range stays as it is.
+pub(crate) fn page_words(locator: &str) -> String {
+    match locator.strip_prefix("pp. ") {
+        Some(page) if page.chars().all(|c| c.is_ascii_digit()) => format!("p. {page}"),
+        _ => locator.to_owned(),
+    }
+}
+
+/// Which of several with one name on one page: `2nd`, `3rd`.
+pub(crate) fn ordinal(n: usize) -> String {
+    let suffix = match (n % 10, n % 100) {
+        (1, x) if x != 11 => "st",
+        (2, x) if x != 12 => "nd",
+        (3, x) if x != 13 => "rd",
+        _ => "th",
+    };
+    format!("{n}{suffix}")
 }
 
 /// The one fact a DM scans for: CR, spell level, or item rarity. Nothing is invented.
@@ -117,18 +150,15 @@ fn list_fact(entry: &Entry) -> Option<String> {
     Some(rarity.replace('_', " "))
 }
 
-/// Class scope already owns the feature's class and required level.
-pub(crate) fn class_level(entry: &Entry) -> Option<String> {
-    let scope = entry
+/// Class scope owns the level a feature needs.
+fn class_level(entry: &Entry) -> Option<u64> {
+    entry
         .fields
         .get("splat_rule")?
         .get("parameters")?
-        .get("class_scope")?;
-    let class = scope.get("class")?.as_str()?;
-    let level = scope.get("minimum_level")?.as_u64()?;
-    let mut letters = class.chars();
-    let name = format!("{}{}", letters.next()?.to_uppercase(), letters.as_str());
-    Some(format!("{name} · Level {level}"))
+        .get("class_scope")?
+        .get("minimum_level")?
+        .as_u64()
 }
 
 pub(crate) struct ReadingSection<'a> {
@@ -580,6 +610,27 @@ pub(crate) fn reading_sections<'a>(body: &'a str, name: &str) -> Vec<ReadingSect
 mod reading_tests {
     use super::*;
     use crate::design;
+
+    /// L6-31, L7-17: a list row and the reader use one form, and raw source marks stay out.
+    #[test]
+    fn names_and_second_lines_read_cleanly() {
+        assert_eq!(display_name("Bard Subclass:"), "Bard Subclass");
+        assert_eq!(display_name("Becoming a Wizard ..."), "Becoming a Wizard");
+        assert_eq!(display_name("St."), "St.");
+        assert_eq!(display_name("..."), "...");
+        assert_eq!(page_words("pp. 7"), "p. 7");
+        assert_eq!(page_words("pp. 7-8"), "pp. 7-8");
+        assert_eq!(ordinal(2), "2nd");
+        assert_eq!(ordinal(11), "11th");
+        let path = "definitions/class_features/bard_level_3_bard_subclass.md";
+        let text = splat::content::definitions::source_file(path).unwrap();
+        let entry = Entry::parse(path, text).unwrap();
+        assert!(
+            subtitle(&entry).ends_with("· Level 3"),
+            "{}",
+            subtitle(&entry)
+        );
+    }
 
     /// The `## Source text` of every built-in note that the reader shows.
     fn corpus() -> Vec<(String, String)> {

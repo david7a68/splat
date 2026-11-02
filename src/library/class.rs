@@ -199,13 +199,16 @@ fn related(entry: &Entry, links: &dyn Links) -> Vec<(usize, String)> {
     let Some(class) = class else {
         return Vec::new();
     };
-    [
-        format!("dnd2024:tables/{class}_progression"),
-        format!("dnd2024:rules/{class}_{class}_spell_list"),
-    ]
-    .into_iter()
-    .filter_map(|key| links.find(&Reference::Key(key)))
-    .collect()
+    // A subclass leads up to its class first, by more than Back.
+    let parent = (!supports(entry)).then(|| format!("dnd2024:classes/{class}"));
+    parent
+        .into_iter()
+        .chain([
+            format!("dnd2024:tables/{class}_progression"),
+            format!("dnd2024:rules/{class}_{class}_spell_list"),
+        ])
+        .filter_map(|key| links.find(&Reference::Key(key)))
+        .collect()
 }
 
 pub(super) fn show_features(ui: &mut egui::Ui, entry: &Entry, links: &dyn Links) -> Option<usize> {

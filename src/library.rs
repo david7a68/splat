@@ -80,7 +80,9 @@ struct Note {
 }
 impl Note {
     fn name(&self) -> &str {
-        self.entry.as_ref().map_or(&self.path, |e| &e.name)
+        self.entry
+            .as_ref()
+            .map_or(&self.path, |e| presentation::display_name(&e.name))
     }
     fn section(&self) -> Section {
         self.entry
@@ -187,6 +189,12 @@ impl Loaded {
                     .map_or_else(|| "Invalid note".to_owned(), presentation::subtitle);
                 match &note.owner {
                     Owner::Builtin => line,
+                    // Its name is the row's name. The second line need not say it again.
+                    Owner::Package(_)
+                        if note.entry.as_ref().is_some_and(|e| e.kind == "package") =>
+                    {
+                        line
+                    }
                     Owner::Package(module) => format!("{line} · {}", module.name),
                     Owner::Campaign(_) => format!("{line} · Campaign"),
                 }
@@ -203,6 +211,7 @@ impl Loaded {
             for &i in indices {
                 // The printed page tells them apart, in the DM's own terms.
                 if let Some(page) = self.notes[i].entry.as_ref().and_then(source_page) {
+                    let page = presentation::page_words(&page);
                     subtitles[i].push_str(&format!(" · {page}"));
                 }
             }
@@ -215,7 +224,7 @@ impl Loaded {
                 .or_insert(0_usize);
             *count += 1;
             if *count > 1 {
-                subtitles[i].push_str(&format!(" · {count}"));
+                subtitles[i].push_str(&format!(" · {}", presentation::ordinal(*count)));
             }
         }
         subtitles
@@ -573,6 +582,8 @@ pub struct Library {
     path: String,
     name: String,
     namespace: String,
+    /// The folder of a package that does not exist yet. `path` is one that does.
+    new_package_path: String,
     new_name: String,
     new_kind: String,
     source: bool,
@@ -1216,6 +1227,7 @@ impl Library {
             self.selected = Some(i);
             self.draft = self.loaded.as_ref().unwrap().notes[i].text.clone();
             self.error = None;
+            self.message = None;
             self.source = false;
         }
         let subtitle = self
@@ -1380,51 +1392,94 @@ impl Library {
                         }
                     });
                 });
-                ui.label("Register an existing package folder, or create a new package.");
-                design::text_field(ui, "Absolute folder path", &mut self.path, None, None);
-                design::group_label(ui, "For a new package only");
-                design::text_field(ui, "Name", &mut self.name, None, None);
-                design::text_field(ui, "Namespace", &mut self.namespace, None, None);
-                ui.horizontal_wrapped(|ui| {
-                    let no_path = self.path.trim().is_empty();
-                    let register = Action::secondary("Register folder")
-                        .blocked(locked.or(no_path.then_some("Enter the folder's path first.")))
-                        .show(ui)
-                        .clicked();
-                    let create = Action::primary("Create package")
-                        .blocked(
-                            locked.or((no_path
-                                || self.name.trim().is_empty()
-                                || self.namespace.trim().is_empty())
-                            .then_some("Enter a path, a name and a namespace first.")),
-                        )
-                        .show(ui)
-                        .clicked();
-                    if register || create {
-                        let result = if create {
-                            create_module(
-                                Path::new(self.path.trim()),
-                                &self.name,
-                                self.namespace.trim(),
-                            )
-                        } else {
-                            local_module(Path::new(self.path.trim()))
-                        };
-                        match result.and_then(|m| {
-                            campaigns.register_module(m.clone())?;
-                            Ok(m)
-                        }) {
-                            Ok(m) => {
-                                self.scope = Scope::Package(m.id);
-                                self.form = false;
-                                self.search.clear();
-                                self.section = Section::All;
-                                self.stale = true;
-                            }
-                            Err(e) => self.error = Some(e),
-                        }
+                // What each action waits for, in view: at a desk, a greyed button is a question.
+                let why = |ui: &mut egui::Ui, reason: Option<&str>| {
+                    if let Some(reason) = reason {
+                        ui.label(Type::Small.rich(ui, reason).color(c.muted));
                     }
-                });
+                };
+                ui.add_space(design::XS);
+                design::group_label(ui, "Add a package you already have");
+                ui.add_space(design::XS);
+                crate::campaigns::folder_field(
+                    ui,
+                    "Package folder",
+                    &mut self.path,
+                    Some("A folder that already holds a Package.md note. Its files stay where they are."),
+                );
+                let reason = locked.or(self
+                    .path
+                    .trim()
+                    .is_empty()
+                    .then_some("Enter the folder's path first."));
+                let register = Action::secondary("Register folder")
+                    .blocked(reason)
+                    .show(ui)
+                    .clicked();
+                why(ui, reason);
+                ui.add_space(design::M);
+                design::rule(ui);
+                ui.add_space(design::M);
+                design::group_label(ui, "Create a new package");
+                ui.add_space(design::XS);
+                crate::campaigns::folder_field(
+                    ui,
+                    "New package folder",
+                    &mut self.new_package_path,
+                    Some("Splat creates this folder. The folder it sits in must already exist."),
+                );
+                design::text_field(ui, "Name", &mut self.name, None, None);
+                design::text_field(
+                    ui,
+                    "Namespace",
+                    &mut self.namespace,
+                    Some("A short word that opens each entry's key, such as ashen_marches. It cannot change later."),
+                    None,
+                );
+                let missing: Vec<&str> = [
+                    (self.new_package_path.trim().is_empty(), "a folder"),
+                    (self.name.trim().is_empty(), "a name"),
+                    (self.namespace.trim().is_empty(), "a namespace"),
+                ]
+                .into_iter()
+                .filter_map(|(empty, word)| empty.then_some(word))
+                .collect();
+                let waiting = match missing.as_slice() {
+                    [] => None,
+                    [one] => Some(format!("Enter {one} first.")),
+                    [one, two] => Some(format!("Enter {one} and {two} first.")),
+                    _ => Some("Enter a folder, a name and a namespace first.".to_owned()),
+                };
+                let reason = locked.or(waiting.as_deref());
+                let create = Action::primary("Create package")
+                    .blocked(reason)
+                    .show(ui)
+                    .clicked();
+                why(ui, reason);
+                if register || create {
+                    let result = if create {
+                        create_module(
+                            Path::new(self.new_package_path.trim()),
+                            &self.name,
+                            self.namespace.trim(),
+                        )
+                    } else {
+                        local_module(Path::new(self.path.trim()))
+                    };
+                    match result.and_then(|m| {
+                        campaigns.register_module(m.clone())?;
+                        Ok(m)
+                    }) {
+                        Ok(m) => {
+                            self.scope = Scope::Package(m.id);
+                            self.form = false;
+                            self.search.clear();
+                            self.section = Section::All;
+                            self.stale = true;
+                        }
+                        Err(e) => self.error = Some(e),
+                    }
+                }
                 ui.add_space(design::M);
                 design::group_label(ui, "Registered packages");
                 design::rule(ui);
@@ -1511,10 +1566,14 @@ impl Library {
                 }
                 let combo = egui::ComboBox::from_id_salt("new_kind")
                     .icon(design::combo_icon)
-                    .selected_text(&self.new_kind)
+                    .selected_text(reader_style::human_label(&self.new_kind))
                     .show_ui(ui, |ui| {
                         for kind in ["creature", "spell", "item", "effect", "rule", "rule_group"] {
-                            ui.selectable_value(&mut self.new_kind, kind.into(), kind);
+                            ui.selectable_value(
+                                &mut self.new_kind,
+                                kind.into(),
+                                reader_style::human_label(kind),
+                            );
                         }
                     });
                 design::named(ui, &combo.response, "Kind of entry");
@@ -1550,6 +1609,7 @@ impl Library {
                     let path = format!("{name}.md");
                     let text = note_text(name, &self.new_kind, None);
                     let owner = places[place].clone();
+                    let place_name = owner.label();
                     let root = owner.root().expect("a writable owner").to_path_buf();
                     match write_note(&root, &path, None, &text) {
                         Ok(entry) => {
@@ -1574,6 +1634,11 @@ impl Library {
                             self.section = Section::All;
                             self.source = true;
                             self.draft = text;
+                            self.message = Some(format!(
+                                "Created {} in {}.",
+                                self.new_name.trim(),
+                                place_name
+                            ));
                             self.new_name.clear();
                             self.error = None;
                             // Show the new entry, wherever the DM chose to put it.
@@ -1615,8 +1680,8 @@ impl Library {
         self.message = None;
     }
 
-    /// In a wide window, the reader and its margin sit together in the pane, with the scroll
-    /// bar beside them rather than across an empty band.
+    /// In a wide window, the reader and its margin sit together in the pane, and the scroll
+    /// bar has the pane's edge, wherever they end.
     fn editor(&mut self, ui: &mut egui::Ui, subtitle: &str) {
         let spare = ui.available_width() - view::WIDE_READER;
         if spare <= 0.0 {
@@ -1625,9 +1690,9 @@ impl Library {
         }
         ui.horizontal_top(|ui| {
             ui.add_space(spare / 2.0);
-            let size = egui::vec2(view::WIDE_READER, ui.available_height());
+            // To the pane's edge, where the scroll bar goes. The reader caps its own width.
+            let size = ui.available_size();
             ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
-                ui.set_max_width(view::WIDE_READER);
                 self.editor_pane(ui, subtitle);
             });
         });
@@ -1667,9 +1732,6 @@ impl Library {
         let title = reading
             .as_ref()
             .map_or(note.name(), |reading| reading.title.as_str());
-        let reading_subtitle = reading
-            .as_ref()
-            .and_then(|_| presentation::class_level(parsed.as_ref().ok()?));
         let dirty = self.draft != note.text;
         if dirty {
             self.message = None;
@@ -1794,7 +1856,22 @@ impl Library {
                     .key("Ctrl+S")
                     .show(ui)
                     .clicked();
-                design::status(ui, state);
+                // A draft holds Copy to… and Packages back. The slot says so where it has the room.
+                let held = "Unsaved · Save or discard to copy or change packages";
+                let room = ui.available_width() - 150.0;
+                let fits = design::number_width(ui, held, &Type::Small.font(ui)) < room;
+                let held_back = dirty && !conflict && note.error.is_none() && fits;
+                design::status(
+                    ui,
+                    if held_back {
+                        Status {
+                            word: held,
+                            ..state
+                        }
+                    } else {
+                        state
+                    },
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if dirty
                         && !conflict
@@ -1903,10 +1980,7 @@ impl Library {
                             );
                             reader_style::title(ui, title);
                             if note.entry.is_some() {
-                                reader_style::subtitle(
-                                    ui,
-                                    reading_subtitle.as_deref().unwrap_or(subtitle),
-                                );
+                                reader_style::subtitle(ui, subtitle);
                             }
                         });
                         open_link = view::show(
@@ -2570,9 +2644,9 @@ mod tests {
                 .join("\n");
             for expected in [
                 "Bard Subclass",
-                "Bard · Level 3",
+                "Definition · class feature · Bard",
                 "Choose a Bard subclass.",
-                "Available in this package",
+                "Available",
                 "Source text",
             ] {
                 assert!(rendered.contains(expected), "{rendered}");
@@ -2803,7 +2877,9 @@ mod tests {
             for expected in [
                 "ARMOR CLASS",
                 "STR",
-                "Save +5",
+                "MOD",
+                "SAVE",
+                "+5",
                 "Vampiric Connection.",
                 "Umbral Dagger.",
                 "Deathless Agility.",

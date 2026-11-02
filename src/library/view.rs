@@ -36,7 +36,12 @@ fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Opti
     let mut selected = None;
     if !reading.related.is_empty() {
         ui.add_space(design::S);
-        style::section_heading(ui, &reading.related_heading);
+        // A note's words about its package read wrongly in a wider scope, so they go here.
+        let heading = reading
+            .related_heading
+            .strip_suffix(" in this package")
+            .unwrap_or(&reading.related_heading);
+        style::section_heading(ui, heading);
         for (target, label) in &reading.related {
             let reference = Uuid::parse_str(target)
                 .map_or_else(|_| Reference::Key(target.clone()), Reference::Id);
@@ -131,7 +136,8 @@ pub(crate) fn show(
             let layout = Layout::top_down(Align::Min);
             let measure = design::READER_MEASURE;
             ui.allocate_ui_with_layout(vec2(measure, 0.0), layout, |ui| {
-                ui.set_max_width(measure);
+                // Its full width whatever the entry holds, so the margin has one place.
+                ui.set_width(measure);
                 open_link = content(ui, entry, reading, &sections, styled, builtin, links);
             });
             ui.add_space(design::XL);
