@@ -8,6 +8,8 @@ pub const NAV_SETTINGS: &str = "Settings";
 pub const NAV_PARTY: &str = "Party";
 pub const NAV_ENCOUNTERS: &str = "Encounters";
 pub const NAV_LOOKUP: &str = "Lookup";
+pub const NAV_SESSIONS: &str = "Sessions";
+pub const NAV_TIMELINE: &str = "Timeline";
 pub const TAB_ENTRIES: &str = "Campaign entries";
 pub const TAB_PACKAGES: &str = "Packages";
 pub const TAB_RUN_SETTINGS: &str = "Rules and runs";
@@ -57,6 +59,15 @@ pub fn go_campaign(d: &mut Driver<'_>) {
 
 pub fn go_encounters(d: &mut Driver<'_>) {
     d.click(NAV_ENCOUNTERS);
+}
+
+/// A new session from the first template, with a title.
+pub fn new_session(d: &mut Driver<'_>, title: &str) {
+    d.click("New session");
+    d.expect("Create session");
+    d.type_into("Session title", title);
+    d.click("Create session");
+    d.expect(&format!("Session 1: {title}"));
 }
 
 pub fn go_party(d: &mut Driver<'_>) {

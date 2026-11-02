@@ -271,6 +271,23 @@ switching (`src/main.rs:164`), which is correct and must stay.
 
 **Done well:** T10.1 to T10.3.
 
+### W11. Keep the session's notes and its timeline
+**Trigger:** the DM prepares a session, or something happens at the table. **Goal:** the notes are in the
+campaign's folder, and each encounter, rest, journey, day and major event is on one timeline that any note
+can refer to. **Context:** desk and table. **Frequency:** every session.
+
+**Done well:** T11.1 to T11.4, and T11.8.
+
+### W12. Record a session and process it later
+**Trigger:** the table agrees to be recorded. **Goal:** the audio is safe, its state is plain, and later it
+becomes a raw transcript, a clean transcript with event markers that a second pass has checked, and a draft
+summary, from services the DM chose. **Context:** table to
+start and stop, desk to process. **Frequency:** optional.
+
+Recording records. It does not rule: a marker is a suggestion, and only the DM puts it on the timeline.
+
+**Done well:** T11.5 to T11.7.
+
 ## 3. Information architecture
 
 ### Current model
@@ -297,6 +314,8 @@ visual form (sidebar or top bar).
 **Top-level**
 - **Run**: exists only while a run is open. Always first. It is a place, not a mode of a tab.
 - **Encounters**: templates and their saved runs. Reached first when a campaign is active.
+- **Sessions**: session notes, session templates, recordings and their processing.
+- **Timeline**: every encounter, rest, travel interval, day and major event, apart from any one session.
 - **Party**: sheets.
 - **Library**: one catalogue of built-in, package, and campaign-owned entries. Default scope
   is what this campaign can use, with a switch to all. Editing and `Copy to…` stay here.
@@ -351,6 +370,9 @@ These describe need, not layout. Screens can merge or split.
 | **Campaign: packages** | What can this campaign use? | Tick, `Save selections` | Package state (all, some, none); required dependencies and reasons; unavailable packages | Entry list and search | Scanning, 2,000+ rows | No manifest; dirty; saved; partial; required locked; unavailable package; content issues; repair blocks save; missing folder |
 | **Campaign entries** | What does this campaign own? | Open, edit | Name, kind, text | `Copy to…` | Reading | Empty; no selection; dirty; invalid note repair; save error |
 | **Party** | What is this character's state, and how fresh? | Choose member, read | Name, HP, AC, status with age; page content | `Refresh party`, Combat sync, Source & parity | Scanning, then reading | Not linked; no session; offline cached; refreshing; live; polling; no members; no local copy; fetch error; storage warning |
+| **Sessions** | What did we do, and what is next? | Write notes; `New session` | Session list; notes; save state; recording state | Read view, events, recordings, templates, folder | Reading | No session; new form; unsaved; changed on disk; save failed; no recorder; recording in another session |
+| **Recordings** | Is the audio safe, and what became of it? | `Record`, `Stop recording`, `Process` | Live state and time; each recording's length and state; where Process sends it | Transcript, marked transcript, summary, markers, delete | Glanceable to record, reading after | Consent step; hearing; silent; stalled; stopped by itself; not configured; processing; cancelled; failed; processed |
+| **Timeline** | What happened, in what order? | Add an event, read | Days; events in story order; kind; duration, place, result; session | Filters, search, reference, mentions, move, remove | Scanning | Empty; no match; changed on disk; unreadable file; save failed; removed with undo |
 | **Sync panel** | Do Splat and D&D Beyond agree? | Resolve conflict | Conflict: Splat value, D&D Beyond value; pending; last match | Slots, limited uses, conditions | Glanceable when in conflict | Off; first read; matching; pending; conflict; read-only; wrong campaign; duplicate character; error; disconnected |
 | **Settings: account** | Am I connected? | `Connect`, `Disconnect` | State; error or keyring warning; steps | Trust text | Scanning | Busy; connected; not connected; refresh failed; keyring unavailable; removal failed |
 | **Campaign list** | Which campaigns exist, where? | `Open campaign` | Active campaign, folder state, link state | Details, remove | Scanning | None; invalid settings (read-only, blocked); folder unavailable; offline cached name; link conflict; blocked by draft or run |
@@ -515,6 +537,14 @@ reading the code, not from a test run.
 | T10.1 | First launch shows one next step. Library works with no campaign | empty | state, look | Partly |
 | T10.2 | No campaign: each page says what to do, and no page is blank | empty | state | Partly |
 | T10.3 | Connect states: busy, error, keyring warning, connected, each with words | settings | state, look | Partly |
+| T11.1 | A titled session from a template in ≤ 4, or 2 with no title. The note holds the filled template | session-notes | cost, state | New |
+| T11.2 | A long rest on the timeline in ≤ 2, from the session's page | session-notes | cost | New |
+| T11.3 | An encounter run puts itself on the timeline, in the newest session. Reading an older note does not change that | session-notes | state | New |
+| T11.4 | An event has a reference. A note can link it, reads as its words, and the event lists the note | session-notes | state | New |
+| T11.5 | Recording needs a stated step, and its true state stays in view on every page, including a stall or a stop. Stop keeps the file | session-recording | state | New |
+| T11.6 | Process states what is missing, and where audio and words go, before anything is sent. A failure stays in view on every page | session-recording | state | New |
+| T11.7 | A marker reaches the timeline only when the DM adds it. What the second pass changed can be read | session-recording | state | New |
+| T11.8 | A note during a run in ≤ 2, beside the roster, in the session being played | session-notes | cost, view | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

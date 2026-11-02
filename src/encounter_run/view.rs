@@ -155,7 +155,7 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
 }
 
 /// The run's keyboard commands.
-const KEYS: [(&str, &str); 8] = [
+const KEYS: [(&str, &str); 9] = [
     ("N", "Next turn"),
     ("Enter", "Damage the selected row by the amount"),
     ("Shift+Enter", "Heal the selected row by the amount"),
@@ -164,6 +164,7 @@ const KEYS: [(&str, &str); 8] = [
     ("A", "Focus the amount"),
     ("C", "Conditions"),
     ("Ctrl+K", "Open or close Lookup. Escape also closes it"),
+    ("Ctrl+J", "Open or close Notes. Escape also closes them"),
 ];
 
 impl Run {
@@ -183,13 +184,23 @@ impl Run {
 
     fn run_command(&mut self, command: Command) {
         let follow = matches!(command, Command::Next | Command::Begin);
+        // A field that reports each key keeps the keyboard, or the next digit lands in the
+        // note. The roll goes on to the first empty field.
+        let keeps_keyboard = matches!(
+            command,
+            Command::Initiative(..) | Command::Health(..) | Command::Bonus(..) | Command::RollNpcs
+        );
         match self.apply(command) {
             Err(error) => self.error = Some(error),
             Ok(()) => {
                 self.condition.clear();
                 self.note.clear();
+                // Beside a panel, every step gives the keyboard back, or words typed next
+                // would go nowhere.
+                if follow || (self.lookup_open && !keeps_keyboard) {
+                    self.follow_with_keyboard();
+                }
                 if follow {
-                    self.focus_amount = true;
                     self.scroll_to_selected = true;
                     self.amount.clear();
                     if self.panel == Panel::Conditions {
@@ -211,7 +222,28 @@ impl Run {
                 self.panel = Panel::Reference;
             }
         }
+        // Beside a panel, the digits of an earlier number must not join this one.
+        if self.lookup_open {
+            self.amount.clear();
+        }
         self.focus_amount = true;
+    }
+
+    /// After a step, the keyboard goes to Amount, for the next number. Beside a panel, the
+    /// DM may be typing there, and a digit and Enter must never become damage. Only a click
+    /// on a row or on Amount itself takes the keyboard from a panel, for one number.
+    pub(super) fn follow_with_keyboard(&mut self) {
+        if self.lookup_open {
+            self.amount.clear();
+            self.return_focus = true;
+        } else {
+            self.focus_amount = true;
+        }
+    }
+
+    /// A footer's second step waits for an answer, and Escape belongs to it.
+    pub fn footer_step_open(&self) -> bool {
+        self.closing || self.ending
     }
 
     /// Escape backs out of a footer's second step, in every phase.
@@ -223,6 +255,7 @@ impl Run {
         {
             self.closing = false;
             self.ending = false;
+            self.return_focus = self.lookup_open;
             return true;
         }
         false
@@ -303,7 +336,7 @@ impl Run {
         }
         if undo {
             self.undo();
-            self.focus_amount = true;
+            self.follow_with_keyboard();
         }
         if up {
             self.step_selection(-1);
@@ -326,7 +359,7 @@ impl Run {
                 Command::Damage(index, amount)
             });
             self.amount.clear();
-            self.focus_amount = true;
+            self.follow_with_keyboard();
         }
         if conditions {
             self.open_conditions_tab();
@@ -337,7 +370,7 @@ impl Run {
         let action = Action::secondary(label)
             .icon(icons::UNDO)
             .density(Density::Read);
-        let action = if matches!(self.state.phase, Phase::Running) {
+        let action = if matches!(self.state.phase, Phase::Running) && !self.lookup_open {
             action.key("U")
         } else {
             action
@@ -419,6 +452,8 @@ impl Run {
     // ---- Live -------------------------------------------------------------------
 
     fn live_view(&mut self, ui: &mut egui::Ui) -> bool {
+        // Before the keys, which give way to the keyboard beside a panel.
+        self.back_out_on_escape(ui);
         self.live_keys(ui);
         let mut closed = false;
         let width = panel_width(ui);
@@ -515,6 +550,7 @@ impl Run {
                                 }
                                 if dismiss {
                                     self.notice = None;
+                                    self.return_focus = self.lookup_open;
                                 }
                             },
                         );
@@ -545,7 +581,7 @@ impl Run {
                 next_turn = Action::primary("Next turn")
                     .icon(icons::NEXT)
                     .density(Density::Glance)
-                    .key("N")
+                    .key(if self.lookup_open { "" } else { "N" })
                     .blocked(nobody_present.then_some(NOBODY_PRESENT))
                     .show(ui)
                     .clicked();
@@ -648,6 +684,7 @@ impl Run {
                 )
             })
         };
+        let mut review_conflict = false;
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), 28.0),
             Layout::right_to_left(Align::Center),
@@ -655,13 +692,24 @@ impl Run {
                 ui.set_min_height(28.0);
                 undo = self
                     .undo_action(&undo_label)
-                    .hint("Undo the last step (U)")
+                    .hint(if self.lookup_open {
+                        "Undo the last step"
+                    } else {
+                        "Undo the last step (U)"
+                    })
                     .show(ui)
                     .clicked();
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     if let Some(SyncAlert { text, short, color }) = &sync_alert {
+                        // Notes hide the panel with the conflict's controls, so one word leads there.
+                        let review = self.hide_panel && strip.conflict.is_some();
+                        let link = if review {
+                            design::number_width(ui, "Review", &Type::Body.font(ui)) + design::S
+                        } else {
+                            0.0
+                        };
                         // Next to a long Undo it gives up size, then the word Sync, never the name.
-                        let room = ui.available_width();
+                        let room = ui.available_width() - link;
                         let (role, text) =
                             if design::number_width(ui, text, &Type::Strong.font(ui)) < room {
                                 (Type::Strong, text)
@@ -671,6 +719,13 @@ impl Run {
                                 (Type::Small, short)
                             };
                         ui.label(role.rich(ui, text.as_str()).color(*color));
+                        review_conflict = review && design::link(ui, "Review").clicked();
+                    } else if let Some(notice) = self.recording_notice {
+                        // Beside a long Undo, the state stays and its advice goes.
+                        let fits = design::number_width(ui, notice, &Type::Small.font(ui))
+                            < ui.available_width();
+                        let words = if fits { notice } else { "Recording silence" };
+                        ui.label(Type::Small.rich(ui, words).color(c.result.warning));
                     } else if nobody_present {
                         // Its first sentence, beside a long Undo. Next turn's hover has the rest.
                         let first = NOBODY_PRESENT
@@ -697,9 +752,12 @@ impl Run {
         );
         ui.add_space(2.0);
         design::rule(ui);
+        if review_conflict {
+            self.review_conflict();
+        }
         if undo {
             self.undo();
-            self.focus_amount = true;
+            self.follow_with_keyboard();
         }
         if next_turn {
             self.run_command(Command::Next);
@@ -917,6 +975,7 @@ impl Run {
         let index = self.selected;
         let mut command = None;
         let mut open_conditions = false;
+        let mut open_side = false;
         let frame = egui::Frame::new()
             .fill(c.selected)
             .inner_margin(egui::Margin::symmetric(design::S as i8, design::XS as i8));
@@ -986,10 +1045,20 @@ impl Run {
                     {
                         command = Some(Command::Concentration(index, !p.concentration));
                     }
+                    // Notes hide the panel with the saves, so one word leads there.
+                    if self.hide_panel
+                        && p.hp == Some(0)
+                        && Action::quiet("Death saves")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                    {
+                        open_side = true;
+                    }
                     if Action::quiet("Conditions")
                         .density(Density::Read)
                         .name("Conditions for this participant")
-                        .key("C")
+                        .key(if self.lookup_open { "" } else { "C" })
                         .show(ui)
                         .clicked()
                     {
@@ -1022,6 +1091,9 @@ impl Run {
         if open_conditions {
             self.open_conditions_tab();
         }
+        if open_side {
+            self.close_lookup = true;
+        }
         if let Some(command) = command {
             let applied = matches!(
                 command,
@@ -1030,7 +1102,7 @@ impl Run {
             self.run_command(command);
             if applied {
                 self.amount.clear();
-                self.focus_amount = true;
+                self.follow_with_keyboard();
             }
         }
     }
@@ -1040,7 +1112,48 @@ impl Run {
         self.close_lookup = true;
     }
 
+    /// Beside Notes, a letter in Amount means the DM went on writing. It and the digits
+    /// before it go to the note, and they never apply as an amount.
+    fn take_words_for_note(&mut self, ui: &egui::Ui) {
+        let id = design::focus_id(AMOUNT);
+        if let Some(typed) =
+            Self::words_in_number_field(self.notes_open, ui, id, |c| c.is_ascii_digit())
+        {
+            self.for_note = Some(format!("{}{typed}", std::mem::take(&mut self.amount)));
+            self.return_focus = true;
+        }
+    }
+
+    /// What was typed in this field beside Notes, when it cannot be a number.
+    fn words_in_number_field(
+        notes_open: bool,
+        ui: &egui::Ui,
+        id: egui::Id,
+        number: impl Fn(char) -> bool,
+    ) -> Option<String> {
+        if !notes_open || !ui.ctx().memory(|memory| memory.has_focus(id)) {
+            return None;
+        }
+        ui.input_mut(|i| {
+            let typed: String = i
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    egui::Event::Text(text) => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect();
+            let words = typed.chars().any(|c| !number(c));
+            if words {
+                i.events
+                    .retain(|event| !matches!(event, egui::Event::Text(_)));
+            }
+            words.then_some(typed)
+        })
+    }
+
     fn amount_field(&mut self, ui: &mut egui::Ui) {
+        self.take_words_for_note(ui);
         let response = design::number_field(
             ui,
             AMOUNT,
@@ -1166,11 +1279,16 @@ impl Run {
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
             if self.ending {
-                design::text_input(ui, "Outcome", &mut self.outcome, "Outcome", 120.0);
+                let field = design::text_input(ui, "Outcome", &mut self.outcome, "Outcome", 120.0);
+                if std::mem::take(&mut self.focus_outcome) {
+                    field.request_focus();
+                }
+                let enter = field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
                 if Action::destructive("End encounter")
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
+                    || enter
                 {
                     let outcome = if self.outcome.trim().is_empty() {
                         "Undecided".to_owned()
@@ -1186,6 +1304,7 @@ impl Run {
                     .clicked()
                 {
                     self.ending = false;
+                    self.return_focus = self.lookup_open;
                 }
                 return;
             }
@@ -1218,6 +1337,7 @@ impl Run {
                 .clicked()
             {
                 self.ending = true;
+                self.focus_outcome = true;
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 self.save_status(ui);
@@ -1229,7 +1349,8 @@ impl Run {
                     .show(ui)
                     .clicked()
                 {
-                    self.panel = if self.panel == Panel::Keys {
+                    // Hidden behind Notes, the DM has not seen them yet.
+                    self.panel = if self.panel == Panel::Keys && !self.hide_panel {
                         Panel::Reference
                     } else {
                         Panel::Keys
@@ -1279,6 +1400,7 @@ impl Run {
             .clicked()
         {
             self.closing = false;
+            self.return_focus = self.lookup_open;
         }
         Action::destructive("Close now")
             .density(Density::Read)
@@ -1385,6 +1507,7 @@ impl Run {
             .clicked()
         {
             self.toggle_party_sync();
+            self.return_focus = self.lookup_open;
         }
     }
 
@@ -1507,7 +1630,7 @@ impl Run {
                                 (Panel::Conditions, "Conditions"),
                                 (Panel::Record, "Record"),
                                 (Panel::Log, "Log"),
-                                (Panel::Encounter, "Notes"),
+                                (Panel::Encounter, "Prep"),
                             ],
                         );
                         design::rule(ui);
@@ -1527,7 +1650,7 @@ impl Run {
                     (Panel::Conditions, "Conditions"),
                     (Panel::Record, "Record"),
                     (Panel::Log, "Log"),
-                    (Panel::Encounter, "Notes"),
+                    (Panel::Encounter, "Prep"),
                 ],
             );
             design::rule(ui);
@@ -1541,7 +1664,7 @@ impl Run {
             Panel::Conditions => self.conditions_tab(ui, index),
             Panel::Record => self.record_tab(ui, index),
             Panel::Log => self.log_tab(ui),
-            Panel::Keys => Self::keys_tab(ui),
+            Panel::Keys => self.keys_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
         }
     }
@@ -1553,7 +1676,7 @@ impl Run {
             .show(ui, |ui| style::markdown(ui, &self.setup_details));
     }
 
-    fn keys_tab(ui: &mut egui::Ui) {
+    fn keys_tab(&self, ui: &mut egui::Ui) {
         let c = colors();
         ui.add_space(design::XS);
         design::group_label(ui, "Keyboard commands");
@@ -1576,7 +1699,11 @@ impl Run {
                 Type::Small
                     .rich(
                         ui,
-                        "Letters work when the amount has focus, or nothing has.",
+                        if self.lookup_open {
+                            "Letters do nothing while Notes or Lookup is open. Use the buttons."
+                        } else {
+                            "Letters work when the amount has focus, or nothing has."
+                        },
                     )
                     .color(c.muted),
             )
@@ -1780,6 +1907,7 @@ impl Run {
                             && let Some(total) = total
                         {
                             command = Some(Command::Initiative(index, Some(total)));
+                            self.return_focus = self.lookup_open;
                         }
                     });
                 } else {
@@ -1918,9 +2046,11 @@ impl Run {
             .filter(|p| !matches!((p.hp, p.max_hp), (Some(hp), Some(max)) if max > 0 && hp >= 0 && hp <= max))
             .count();
         let blocked = if missing_hp > 0 {
-            Some(format!(
-                "{missing_hp} need valid HP. Open Record to set it."
-            ))
+            Some(if self.hide_panel {
+                format!("{missing_hp} need valid HP.")
+            } else {
+                format!("{missing_hp} need valid HP. Open Record to set it.")
+            })
         } else if missing_initiative > 0 {
             Some(format!("{missing_initiative} need initiative."))
         } else {
@@ -1955,17 +2085,36 @@ impl Run {
             },
         );
         // Always one line, so the rows below never move during entry (T4.3).
-        ui.label(match &blocked {
-            Some(blocked) => Type::Small
-                .rich(ui, blocked)
-                .color(colors().document.unsaved),
-            None => Type::Small
-                .rich(ui, "Everyone is ready.")
-                .color(colors().result.success),
+        ui.horizontal(|ui| {
+            let tied = self.tied_with_panel_hidden();
+            ui.label(match &blocked {
+                Some(blocked) => Type::Small
+                    .rich(ui, blocked)
+                    .color(colors().document.unsaved),
+                None if tied > 0 => Type::Small
+                    .rich(ui, format!("Everyone is ready. {tied} tied."))
+                    .color(colors().document.unsaved),
+                None => Type::Small
+                    .rich(ui, "Everyone is ready.")
+                    .color(colors().result.success),
+            });
+            // Notes hide the panel with Record and the order of ties, so one word leads there.
+            if self.hide_panel {
+                let (word, panel) = if missing_hp > 0 {
+                    ("Open Record", Panel::Record)
+                } else {
+                    ("Turn order", Panel::Reference)
+                };
+                if design::link(ui, word).clicked() {
+                    self.panel = panel;
+                    self.close_lookup = true;
+                }
+            }
         });
         design::rule(ui);
         self.error_line(ui);
-        if std::mem::take(&mut self.focus_first_missing) {
+        // Opening beside a panel, the DM can be typing there, and a digit is not an initiative.
+        if std::mem::take(&mut self.focus_first_missing) && !self.lookup_open {
             self.focus_field = self
                 .state
                 .participants
@@ -2010,6 +2159,7 @@ impl Run {
                 let label = self.undo_label();
                 if self.undo_action(&label).show(ui).clicked() {
                     self.undo();
+                    self.return_focus = self.lookup_open;
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     self.save_status(ui)
@@ -2024,7 +2174,14 @@ impl Run {
             self.run_command(command);
             // Next is the first player still without a number.
             if rolled {
-                self.focus_first_missing = true;
+                self.focus_field = self
+                    .state
+                    .participants
+                    .iter()
+                    .position(|p| p.initiative.is_none() && p.present);
+                if self.focus_field.is_none() {
+                    self.return_focus = self.lookup_open;
+                }
             }
         }
         closed
@@ -2074,8 +2231,17 @@ impl Run {
                 .inner;
             if response.clicked() {
                 self.selected = index;
+                self.return_focus = self.lookup_open;
             }
             let field_name = format!("Initiative for {name}");
+            // Beside Notes, a letter goes to the note, and the number stays as it is.
+            let in_field = design::focus_id(&field_name);
+            if let Some(typed) = Self::words_in_number_field(self.notes_open, ui, in_field, |c| {
+                c.is_ascii_digit() || c == '-'
+            }) {
+                self.for_note = Some(typed);
+                self.return_focus = true;
+            }
             let text = self
                 .setup_inputs
                 .entry(index)
@@ -2143,6 +2309,7 @@ impl Run {
             .clicked()
             {
                 self.setup_expanded = if expanded { None } else { Some(index) };
+                self.return_focus = self.lookup_open;
             }
         });
         if enter {
@@ -2152,6 +2319,9 @@ impl Run {
                 let p = &self.state.participants[*i];
                 p.initiative.is_none() && p.present
             });
+            if self.focus_field.is_none() {
+                self.return_focus = self.lookup_open;
+            }
         }
         if expanded {
             ui.horizontal(|ui| {
@@ -2192,7 +2362,7 @@ impl Run {
                 (Panel::Reference, "Turn order"),
                 (Panel::Record, "Record"),
                 (Panel::Log, "Log"),
-                (Panel::Encounter, "Notes"),
+                (Panel::Encounter, "Prep"),
             ],
         );
         design::rule(ui);
@@ -2210,6 +2380,26 @@ impl Run {
             Panel::Log => self.log_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
         }
+    }
+
+    /// How many the DM must order, when Notes hide the panel that says so.
+    fn tied_with_panel_hidden(&self) -> usize {
+        if !self.hide_panel || self.initiative.roster_ties {
+            return 0;
+        }
+        let initiative = |at: usize| {
+            self.state
+                .order
+                .get(at)
+                .and_then(|index| self.state.participants[*index].initiative)
+        };
+        (0..self.state.order.len())
+            .filter(|&at| {
+                initiative(at).is_some()
+                    && ((at > 0 && initiative(at - 1) == initiative(at))
+                        || initiative(at + 1) == initiative(at))
+            })
+            .count()
     }
 
     fn turn_order_preview(&mut self, ui: &mut egui::Ui) {
@@ -2369,6 +2559,7 @@ impl Run {
                         .clicked()
                     {
                         self.undo();
+                        self.return_focus = self.lookup_open;
                     }
                 } else {
                     ui.label(
@@ -2409,37 +2600,40 @@ impl Run {
                 closed = self.close_confirmation(ui, "The run stays saved.");
             });
         }
-        let width = design::side_panel_width(ui.ctx().content_rect().width());
-        egui::SidePanel::right("run_ended_log")
-            .resizable(false)
-            .exact_width(width)
-            .frame(side_frame())
-            .show_inside(ui, |ui| {
-                // With choices to make, they have the column, and the log waits behind a
-                // heading. Never a pair of choices cut by a second scroll.
-                let choosing = self.conflict_count() > 0;
-                let room = if choosing {
-                    ui.available_height() - Density::Read.control() - design::M
-                } else {
-                    ui.available_height() * 0.6
-                };
-                egui::ScrollArea::vertical()
-                    .id_salt("run_ended_sync")
-                    .max_height(room)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        self.sync_block(ui);
-                        if !self.setup_details.is_empty() {
-                            design::section(ui, "Notes", |ui| self.notes_tab(ui));
-                        }
-                    });
-                if choosing {
-                    design::section(ui, "Combat log", |ui| self.log_tab(ui));
-                } else {
-                    design::group_label(ui, "Combat log");
-                    self.log_tab(ui);
-                }
-            });
+        // Beside a panel, the final state comes first.
+        if !self.hide_panel {
+            let width = design::side_panel_width(ui.ctx().content_rect().width());
+            egui::SidePanel::right("run_ended_log")
+                .resizable(false)
+                .exact_width(width)
+                .frame(side_frame())
+                .show_inside(ui, |ui| {
+                    // With choices to make, they have the column, and the log waits behind a
+                    // heading. Never a pair of choices cut by a second scroll.
+                    let choosing = self.conflict_count() > 0;
+                    let room = if choosing {
+                        ui.available_height() - Density::Read.control() - design::M
+                    } else {
+                        ui.available_height() * 0.6
+                    };
+                    egui::ScrollArea::vertical()
+                        .id_salt("run_ended_sync")
+                        .max_height(room)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            self.sync_block(ui);
+                            if !self.setup_details.is_empty() {
+                                design::section(ui, "Prep", |ui| self.notes_tab(ui));
+                            }
+                        });
+                    if choosing {
+                        design::section(ui, "Combat log", |ui| self.log_tab(ui));
+                    } else {
+                        design::group_label(ui, "Combat log");
+                        self.log_tab(ui);
+                    }
+                });
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
             .show_inside(ui, |ui| {

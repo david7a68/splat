@@ -3187,7 +3187,7 @@ pub mod nav_table {
         silent.extend(d.disabled_without_reason());
         // The run's tabs, then a fresh run's setup and a finished run's end.
         d.click(BACK_TO_RUN);
-        for tab in ["Conditions", "Record", "Log", "Notes"] {
+        for tab in ["Conditions", "Record", "Log", "Prep"] {
             d.click(tab);
             silent.extend(d.disabled_without_reason());
         }
@@ -3216,5 +3216,1035 @@ pub mod nav_table {
                 "Disabled controls with no reason, in words, on hover, across 15 views: {silent:?}"
             ),
         );
+    }
+}
+
+/// W11: notes, templates and a timeline that stands apart from them.
+pub mod session_notes {
+    use super::*;
+
+    const TITLE: &str = "Ash on the Road";
+    const LONG_TITLE: &str =
+        "The Long Road from Emberfall Through the Ash Marshes to the Drowned Mill";
+    const NEW_EVENTS_COMBO: usize = 1;
+    const UNDO_NEXT_TURN: &str = "Undo: next turn";
+    const ADD_DAY: &str = "Add Day";
+    const ADD_LONG_REST: &str = "Add Long rest";
+    const ADD_SHORT_REST: &str = "Add Short rest";
+    const ADD_TRAVEL: &str = "Add Travel";
+    const ADD_EVENT: &str = "Add Major event";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        d.expect("No session notes yet");
+        d.state("sessions-empty", Sizes::Default);
+        d.check_tab_order("sessions-empty");
+
+        d.begin_task();
+        d.click("New session");
+        d.state("session-form", Sizes::Default);
+        d.type_into("Session title", TITLE);
+        d.click("Create session");
+        d.expect(&format!("Session 1: {TITLE}"));
+        d.goal_within("T11.1", "start a titled session from a template", 4);
+        d.state("session-write", Sizes::AllAndHiDpi);
+        let filled = d
+            .editor_text()
+            .is_some_and(|text| text.contains("Recap of last time") && text.contains(TITLE));
+        d.observe(
+            "T11.1",
+            filled,
+            "The new note holds the template, filled in",
+        );
+
+        d.type_into_editor("\nThe road was covered in ash, and the wolves followed us.\n");
+        d.press_ctrl(Key::S);
+        d.expect("Notes saved");
+        d.state("session-written", Sizes::Default);
+
+        d.click("Read");
+        d.state("session-read", Sizes::All);
+
+        // A rest, on the session's own page, with no step away from it.
+        d.click("Events");
+        d.state("session-events-empty", Sizes::Default);
+        d.begin_task();
+        d.click(ADD_LONG_REST);
+        d.goal_within("T11.2", "put a long rest on the timeline", 2);
+        d.expect("Long rest added to Session 1.");
+        d.state("session-event-added", Sizes::Default);
+        d.click(ADD_SHORT_REST);
+        d.observe(
+            "T11.2",
+            d.has_containing("Short rest added to Session 1."),
+            "An event added here says so, in words",
+        );
+        d.click("Undo add");
+        d.observe(
+            "T11.2",
+            !d.has("Short rest") && d.has_containing("Removed"),
+            "A mis-press has one step of undo, and that has one too",
+        );
+        d.click("Undo remove");
+        d.expect("Short rest");
+        d.click("Short rest");
+        d.scroll_until(pos2(780.0, 400.0), "Remove this event", 10);
+        d.click("Remove this event");
+        d.click(NAV_SESSIONS);
+        d.click(ADD_TRAVEL);
+        d.click(ADD_EVENT);
+        d.state("session-events", Sizes::Default);
+        d.click("Add to notes: Long rest");
+        d.expect("In notes");
+        d.observe(
+            "T11.2",
+            !d.has("Undo add"),
+            "Undo goes at the next thing the DM does, so it cannot undo the wrong event",
+        );
+        d.state("session-event-in-notes", Sizes::Default);
+        d.click("Write");
+        let linked = d.editor_text().is_some_and(|text| {
+            let what = text.find("## What happened");
+            let next = text.find("## People and places");
+            let link = text.find("[[Timeline#^");
+            matches!((what, link, next), (Some(a), Some(b), Some(c)) if a < b && b < c)
+        });
+        d.observe(
+            "T11.4",
+            linked,
+            "An event's link goes under What happened in the note",
+        );
+        d.press_ctrl(Key::S);
+        d.click("Read");
+        d.expect("ON THE TIMELINE");
+        d.state("session-read-linked", Sizes::Default);
+        let reads_as_words = !d.visible_text("[[Timeline");
+        d.observe(
+            "T11.4",
+            reads_as_words,
+            "The Reader shows the link as its words",
+        );
+
+        // The timeline is a place of its own, with every kind of event.
+        d.click(NAV_TIMELINE);
+        d.expect("Long rest");
+        d.state("timeline-session-events", Sizes::All);
+        d.check_tab_order("timeline");
+        d.click(ADD_DAY);
+        d.type_text("Harvest Eve");
+        // A day opens what follows it, so move it to the top.
+        for _ in 0..3 {
+            d.click("Move earlier");
+        }
+        d.state("timeline-day-added", Sizes::All);
+        d.click_containing("Long rest · Day 1 · Session 1");
+        d.expect("LINK");
+        d.replace_text_in("Title", "Rest at the mill");
+        d.type_into("Where", "Old mill");
+        d.press_ctrl(Key::S);
+        d.expect("Copy link");
+        d.click("Copy link");
+        d.expect("Copied");
+        d.expect("MENTIONED IN");
+        d.state("timeline-event", Sizes::AllAndHiDpi);
+        d.observe(
+            "T11.4",
+            d.has_containing(&format!("Session 1: {TITLE}")),
+            "An event lists the session notes that link to it",
+        );
+        // The Reader follows the event's name now, not the name when it was linked.
+        d.click_containing("Rest at the mill");
+        d.click("Open this session");
+        d.click("Read");
+        d.observe(
+            "T11.4",
+            d.visible_text("Rest at the mill"),
+            "A renamed event reads under its new name in the note",
+        );
+        d.click("Write");
+        d.click(NAV_TIMELINE);
+        d.click("Rests");
+        d.state("timeline-filtered", Sizes::Default);
+        d.observe(
+            "T11.3",
+            d.is_disabled("Move earlier"),
+            "A filtered list cannot move an event past one it hides",
+        );
+        d.click("All");
+        d.scroll_until(pos2(780.0, 400.0), "Remove this event", 10);
+        d.click("Remove this event");
+        d.expect("Undo remove");
+        d.state("timeline-removed", Sizes::Default);
+        d.click_containing("Travel ·");
+        d.observe(
+            "T11.4",
+            d.has("Undo remove"),
+            "Selecting another event keeps the undo for a removal",
+        );
+        d.click("Undo remove");
+        d.expect("Rest at the mill");
+
+        // Back to the note from the event, and the file is readable outside Splat.
+        d.click_containing("Rest at the mill");
+        d.click("Open this session");
+        d.expect(&format!("Session 1: {TITLE}"));
+
+        // Words that could not be saved survive anything that would open the note again.
+        d.click("Write");
+        d.type_into_editor("\nMy words during the conflict.\n");
+        d.app_mut().sessions.simulate_disk_change();
+        d.press_ctrl(Key::S);
+        d.expect("Changed on disk");
+        d.expect("Overwrite with my draft");
+        d.click("Show disk version");
+        d.observe(
+            "T11.4",
+            d.has_containing("Written in Obsidian."),
+            "A conflict shows the file's words, so the DM chooses knowing both",
+        );
+        d.state("note-conflict", Sizes::Default);
+        d.click(NAV_TIMELINE);
+        d.observe(
+            "T11.4",
+            d.has_containing("Notes not saved"),
+            "A note that could not be saved stays in the rail on other pages",
+        );
+        d.state("note-conflict-elsewhere", Sizes::Default);
+        d.click("Notes not saved");
+        d.expect("Overwrite with my draft");
+        d.click(NAV_TIMELINE);
+        d.click_containing("Rest at the mill");
+        d.click("Open this session");
+        d.observe(
+            "T11.4",
+            d.editor_text()
+                .is_some_and(|text| text.contains("My words during the conflict.")),
+            "Opening the session again keeps the words that could not be saved",
+        );
+        d.click("Overwrite with my draft");
+        d.expect("Notes saved");
+
+        // A long title wraps, and the controls stay where they are.
+        d.click("Edit session details");
+        d.replace_text_in("Date", "Nov 2");
+        d.click("Save details");
+        d.expect("Enter the date as YYYY-MM-DD.");
+        d.replace_text_in("Date", crate::hermetic::today().as_str());
+        d.replace_text_in("Session title", LONG_TITLE);
+        d.click("Save details");
+        d.observe(
+            "T11.1",
+            d.editor_text()
+                .is_some_and(|text| text.contains(&format!("# Session 1: {LONG_TITLE}"))),
+            "Renaming a session moves the heading the template made",
+        );
+        d.state("session-long-title", Sizes::All);
+        d.click("Edit session details");
+        d.replace_text_in("Session title", TITLE);
+        d.click("Save details");
+
+        d.click("Templates");
+        d.expect("Standard session");
+        d.state("templates-built-in", Sizes::All);
+        d.click("Customize this template");
+        d.expect("This campaign");
+        d.state("templates-own", Sizes::Default);
+        d.type_into_editor("Edited in the template.\n");
+        d.click("New template");
+        d.type_into("Template name", "Downtime");
+        d.state("templates-new", Sizes::Default);
+        d.click("Create template");
+        d.expect("Downtime");
+        d.click("Delete this template");
+        d.expect("Undo delete");
+        d.state("templates-deleted", Sizes::Default);
+        d.click("Undo delete");
+        d.expect("Downtime");
+
+        d.click("Folder");
+        d.expect("SESSION FOLDER");
+        d.state("session-folder", Sizes::Default);
+        d.click("Session notes");
+
+        // Reading last week's note does not send tonight's run there.
+        d.click(NAV_TIMELINE);
+        d.open_combo_at(NEW_EVENTS_COMBO);
+        d.click("No session");
+        d.click(NAV_SESSIONS);
+        d.click("New session");
+        d.type_into("Session title", "Tonight");
+        d.click("Create session");
+        d.expect("Session 2: Tonight");
+        d.observe(
+            "T11.1",
+            d.editor_text()
+                .is_some_and(|text| text.contains("Edited in the template.")),
+            "A template edited a moment ago is what a new session starts from",
+        );
+        d.click_containing(&format!("Session 1: {TITLE}"));
+        d.click("Events");
+        d.observe(
+            "T11.3",
+            d.has_containing("These go to Session 1, not the session being played (Session 2)."),
+            "Adding an event to an older session says so before it happens",
+        );
+        d.state("session-events-older", Sizes::Default);
+        d.click("Write");
+        d.observe(
+            "T11.8",
+            d.has_containing(
+                "You are writing in Session 1, not the session being played (Session 2).",
+            ),
+            "Writing in an older note says so",
+        );
+        d.state("session-write-older", Sizes::Default);
+        go_encounters(d);
+        resume_run(d, RUN);
+
+        // T11.8: a note during a run, with the roster still in view.
+        d.begin_task();
+        d.press_ctrl(Key::J);
+        d.type_text("The ogre fled over the bridge.");
+        d.goal_within("T11.8", "take a note during a run", 2);
+        d.expect("Close notes");
+        d.observe(
+            "T11.8",
+            d.in_view(NEXT_TURN)
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("The ogre fled")),
+            "The note goes in the session being played, and the run stays in view",
+        );
+        d.state("run-with-notes", Sizes::All);
+        let wide_screen = d.at_size((1536.0, 864.0), |d| d.in_view(NEXT_TURN) && !d.has("Prep"));
+        d.observe(
+            "T11.8",
+            wide_screen,
+            "At 1536 px, a panel beside the run leaves the roster its room",
+        );
+        // A click on Next turn moves the caret, so what is typed next must not change the run.
+        let turn = current_participant(d);
+        d.click(NEXT_TURN);
+        let moved = current_participant(d);
+        d.observe(
+            "T11.8",
+            moved != turn,
+            "Next turn still works with Notes open",
+        );
+        // Words typed next go to the note. A digit and Enter must not become damage.
+        let hp = |d: &Driver<'_>| {
+            d.nodes()
+                .iter()
+                .map(|node| node.name.clone())
+                .filter(|name| name.contains("HP"))
+                .collect::<Vec<_>>()
+        };
+        let before = hp(d);
+        d.type_text("Ogre took 12 from Rohan");
+        d.press(Key::Enter);
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("Ogre took 12 from Rohan")),
+            "After Next turn, what the DM types still goes to the note",
+        );
+        d.observe(
+            "T11.8",
+            before == hp(d),
+            "A number typed for the note never becomes damage",
+        );
+        d.press(Key::N);
+        d.press(Key::U);
+        d.observe(
+            "T11.8",
+            current_participant(d) == moved,
+            "With Notes open, stray typing never changes the run",
+        );
+        d.observe(
+            "T11.8",
+            !d.has("Next turn N"),
+            "With Notes open, the run shows no key hint that would not work",
+        );
+        d.click(UNDO_NEXT_TURN);
+        d.observe(
+            "T11.8",
+            d.editor_text().is_some_and(|text| {
+                let what = text.find("## What happened");
+                let note = text.find("The ogre fled");
+                let next = text.find("## People and places");
+                matches!((what, note, next), (Some(a), Some(b), Some(c)) if a < b && b < c)
+            }),
+            "A note typed at the table goes under What happened",
+        );
+        // A click on a row takes the keyboard to Amount for one number, and then it goes back.
+        d.click_row("Ember Cultist");
+        let full = hp(d);
+        d.type_text("7");
+        d.press(Key::Enter);
+        let hurt = hp(d);
+        d.observe(
+            "T11.8",
+            full != hurt,
+            "With Notes open, a click on a row still lets a number apply",
+        );
+        d.type_text("The cultist took 12 more");
+        d.press(Key::Enter);
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("The cultist took 12 more")),
+            "After a number applies, what the DM types goes to the note",
+        );
+        d.observe(
+            "T11.8",
+            hurt == hp(d),
+            "The words after a number never become more damage",
+        );
+        d.click_containing("Undo: 7 damage");
+        d.type_text("Undone.");
+        d.observe(
+            "T11.8",
+            full == hp(d) && d.editor_text().is_some_and(|text| text.contains("Undone.")),
+            "After Undo by its button, what the DM types goes to the note",
+        );
+        // After a click on a row, the DM can go on writing. A digit in those words is not damage.
+        d.click_row("Ember Cultist");
+        let whole = hp(d);
+        // One key at a time, as a person types, because the keyboard moves on the way.
+        for key in "2 wolves flee".chars() {
+            d.type_text(&key.to_string());
+        }
+        d.press(Key::Enter);
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("2 wolves flee")),
+            "After a click on a row, words typed go to the note",
+        );
+        d.observe(
+            "T11.8",
+            whole == hp(d),
+            "A number in those words never becomes damage",
+        );
+        // Lookup takes the place of the notes, and they come back with it closed.
+        let turn = current_participant(d);
+        d.type_text("Iselle casts ");
+        d.press_ctrl(Key::K);
+        d.observe(
+            "T11.8",
+            !d.has("Close notes"),
+            "One panel beside the page at a time",
+        );
+        d.press(Key::Escape);
+        d.type_text("Bless");
+        d.press(Key::N);
+        d.observe(
+            "T11.8",
+            d.has("Close notes")
+                && d.editor_text()
+                    .is_some_and(|text| text.contains("Iselle casts Bless"))
+                && current_participant(d) == turn,
+            "After Lookup, the sentence goes on where it was, and typing never changes the run",
+        );
+        // A stray click takes the keyboard from the note, and the words still go there.
+        d.harness_focus_nothing();
+        d.type_text(" ");
+        d.type_text("too");
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("Iselle casts Bless too")),
+            "After a stray click, what the DM types still goes on in the note",
+        );
+        // Tab indents. It must not walk to Next turn, where the next space would press it.
+        d.press(Key::Tab);
+        d.type_text(" ");
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("Bless too\t "))
+                && current_participant(d) == turn,
+            "Tab and space in the note stay in the note, and the turn does not move",
+        );
+        // A step changes nothing in the note until the DM types.
+        let unchanged = d.editor_text();
+        d.click(NEXT_TURN);
+        d.observe(
+            "T11.8",
+            unchanged == d.editor_text(),
+            "A click on Next turn alone leaves the note as it was",
+        );
+        d.type_text("Next thought.");
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("\n\nNext thought.")),
+            "What is typed after a step starts a line of its own",
+        );
+        d.click(NEXT_TURN);
+        d.press(Key::Backspace);
+        d.type_text("!");
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("Next thought!")),
+            "A correction after a step goes on with the same line",
+        );
+        d.click_containing("Undo");
+        d.click_containing("Undo");
+        // What the DM asks for in the side panel must not stay hidden behind the notes.
+        d.click_row("Ember Cultist");
+        d.click("Conditions for this participant");
+        d.observe(
+            "T11.8",
+            !d.has("Close notes") && d.has_containing("Poisoned"),
+            "Conditions show, in place of the notes, when both have no room",
+        );
+        d.press_ctrl(Key::J);
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("The cultist took 12 more")),
+            "Notes closed that way keep their words",
+        );
+        d.click_row("Iselle Marrowind");
+        d.type_text("99");
+        d.press(Key::Enter);
+        d.click("Death saves");
+        d.observe(
+            "T11.8",
+            !d.has("Close notes") && d.has_containing("0 successes"),
+            "Death saves show, in place of the notes, when both have no room",
+        );
+        d.click_containing("Undo: 99 damage");
+        d.press_ctrl(Key::J);
+        // The panel must not follow the page to an older note.
+        d.click(NAV_SESSIONS);
+        d.click_containing(&format!("Session 1: {TITLE}"));
+        d.observe(
+            "T11.8",
+            !d.has("Close notes"),
+            "Opening an older note closes the panel, so that no word goes there",
+        );
+        d.press_ctrl(Key::J);
+        d.observe(
+            "T11.8",
+            d.has_containing("Session 2: Tonight") && !d.has("Close notes"),
+            "Notes open on the session being played. On this page the page itself holds them",
+        );
+        d.state("sessions-with-notes", Sizes::All);
+        d.click(BACK_TO_RUN);
+        d.press_ctrl(Key::J);
+        // Coming back from the page, where the note can change, the caret starts fresh.
+        d.click(NAV_SESSIONS);
+        d.click(BACK_TO_RUN);
+        d.type_text("The wolves returned.");
+        d.observe(
+            "T11.8",
+            d.editor_text()
+                .is_some_and(|text| text.contains("The wolves returned.\n\n## People and places")),
+            "A second note keeps the next heading on its own line",
+        );
+        d.press(Key::Escape);
+        d.observe(
+            "T11.8",
+            !d.has("Close notes"),
+            "Escape closes the notes beside the run",
+        );
+        // A note that looks like last week's says so where the words go.
+        d.click(NAV_SESSIONS);
+        d.click("Edit session details");
+        d.replace_text_in("Date", "2025-12-25");
+        d.click("Save details");
+        d.click(BACK_TO_RUN);
+        d.press_ctrl(Key::J);
+        d.observe(
+            "T11.8",
+            d.has_containing("This session is dated 2025-12-25."),
+            "The panel warns when the session being played looks like an old one",
+        );
+        d.state("run-with-old-note", Sizes::Default);
+        d.observe(
+            "T11.8",
+            d.has_containing("Old session"),
+            "During a run, the rail says that events are going to an old session",
+        );
+        d.click("Play this one");
+        d.observe(
+            "T11.8",
+            !d.has_containing("This session is dated"),
+            "A session prepared earlier can be played with one press",
+        );
+        d.press(Key::Escape);
+
+        d.click(NAV_TIMELINE);
+        d.expect(RUN);
+        d.state("timeline-with-run", Sizes::All);
+        // Beside a panel at the minimum window, the list keeps its room.
+        d.press_ctrl(Key::K);
+        d.state("timeline-beside-lookup", Sizes::All);
+        d.click(NAV_SESSIONS);
+        d.expect("All sessions");
+        d.state("session-beside-lookup", Sizes::Default);
+        d.click("All sessions");
+        d.expect("Session 1: ");
+        d.state("session-list-beside-lookup", Sizes::Default);
+        d.click_containing("Session 2: Tonight");
+        d.expect("All sessions");
+        d.press_ctrl(Key::K);
+        d.click(NAV_TIMELINE);
+        d.observe(
+            "T11.3",
+            d.has_containing("Encounter · Round 2 · Session 2"),
+            "A run went to the newest session, with no step, though an older note was read",
+        );
+        d.goal("use the timeline during a run");
+
+        // A new session changes where the next events go, and the open run stays.
+        d.click(NAV_SESSIONS);
+        d.click("New session");
+        d.type_into("Session title", "Later that night");
+        d.press(Key::Enter);
+        d.observe(
+            "T11.3",
+            d.has_containing("stays in Session 2"),
+            "A new session during a run says that the run's event stays where it was",
+        );
+        d.state("new-session-during-run", Sizes::Default);
+
+        // Setup beside the notes. Each digit must stay in its field.
+        d.click(BACK_TO_RUN);
+        d.press_ctrl(Key::J);
+        d.expect("Close notes");
+        d.app_mut()
+            .encounters
+            .simulate_sync_conflict("Iselle Marrowind");
+        d.settle();
+        d.click("Review");
+        d.observe(
+            "T11.8",
+            !d.has("Close notes"),
+            "A conflict's controls show, in place of the notes, when both have no room",
+        );
+        d.click("Use D&D Beyond values");
+        d.app_mut().encounters.simulate_session_end();
+        d.settle();
+        d.click("Close run");
+        if d.has("Close anyway") {
+            d.click("Close anyway");
+        } else {
+            d.click("Close now");
+        }
+        run_saved_encounter(d, "Shrine of Cinders");
+        d.press_ctrl(Key::J);
+        let note = d.editor_text();
+        d.click("Initiative for Iselle Marrowind");
+        d.type_text("1");
+        d.type_text("7");
+        d.observe(
+            "T11.8",
+            note.is_some() && note == d.editor_text(),
+            "Initiative typed beside the notes stays in its field",
+        );
+        d.state("run-setup-with-notes", Sizes::Default);
+        d.click("Initiative for Oren Thistlewick");
+        d.type_text("2");
+        d.type_text(" ");
+        d.type_text("wolves");
+        d.observe(
+            "T11.8",
+            d.editor_text().is_some_and(|text| text.contains(" wolves")),
+            "A letter typed in an initiative field goes to the note",
+        );
+        for (name, total) in [
+            ("Brannoch Vale", "17"),
+            ("Kestrel Dunmoor", "15"),
+            ("Oren Thistlewick", "14"),
+            ("Sable Harrowgate", "13"),
+            ("Ember Cultist 1", "12"),
+            ("Ember Cultist 2", "11"),
+        ] {
+            d.click(&format!("Initiative for {name}"));
+            d.type_text(total);
+        }
+        d.observe(
+            "T11.8",
+            d.has_containing("Everyone is ready. 2 tied."),
+            "Notes hide the order of ties, so setup says that there are ties",
+        );
+        d.click("Turn order");
+        d.observe(
+            "T11.8",
+            !d.has("Close notes") && d.has_containing(" ties"),
+            "What Notes hide in setup is one click away",
+        );
+    }
+}
+
+/// W12: record a session, and process it later with the DM's chosen services.
+pub mod session_recording {
+    use super::*;
+    use crate::{
+        processing::{CANCELLED, Progress},
+        recording::Health,
+    };
+
+    const TITLE: &str = "The Bridge";
+    const RECORDING: &str = "19:00";
+    const WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        new_session(d, TITLE);
+
+        // A stale input stops here, rather than record from another microphone.
+        d.app_mut().processing.simulate_input("gone.mic");
+        d.settle();
+        d.observe(
+            "T11.5",
+            d.is_disabled("Record this session"),
+            "A chosen input that is gone blocks recording",
+        );
+        d.app_mut().processing.simulate_input("table.mic");
+        d.settle();
+
+        // T11.5: nothing records without a stated step.
+        d.click("Record this session");
+        d.expect("Start recording");
+        d.state("record-consent", Sizes::Default);
+        d.observe(
+            "T11.5",
+            d.has_containing(&format!("Record Session 1: {TITLE}.")),
+            "The step names the session the audio goes to",
+        );
+        d.observe(
+            "T11.5",
+            d.has_containing("Tell everyone at the table first"),
+            "Recording starts only after the DM is told to tell the table",
+        );
+        d.click("Start recording");
+        d.expect("Stop recording");
+        d.expect("Waiting for sound");
+        d.state("recording-starting", Sizes::Default);
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Hearing);
+        d.settle();
+        d.expect("Hearing sound");
+        d.state("recording-hearing", Sizes::AllAndHiDpi);
+        d.click("Recordings (1)");
+        d.expect("· Recording");
+        d.state("recording-listed", Sizes::Default);
+        d.click("Write");
+
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Silent);
+        d.settle();
+        d.expect("Silent for over a minute");
+        // On the run, the same words must not paint over a long Undo.
+        go_encounters(d);
+        resume_run_from_cold_start(d);
+        d.click_row("Ember Cultist");
+        d.type_text("7");
+        d.press(Key::Enter);
+        d.observe(
+            "T11.5",
+            d.has_containing("Undo: 7 damage") && d.has_containing("Recording silence"),
+            "A silent input shows on the run, beside a long Undo",
+        );
+        d.state("run-silent", Sizes::Default);
+        d.click_containing("Undo: 7 damage");
+        close_run(d);
+        d.click_containing("Sessions · Silent");
+        d.expect("Silent for over a minute");
+        d.expect("Check the input in Settings");
+        d.state("recording-silent", Sizes::Default);
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stalled);
+        d.settle();
+        d.expect("Not saving audio after");
+        d.state("recording-stalled", Sizes::Default);
+        d.observe(
+            "T11.5",
+            d.has("Record again"),
+            "A stall offers one press to record again",
+        );
+        d.observe(
+            "T11.5",
+            d.has_containing("not saving audio after")
+                && d.has_containing("What was saved is kept"),
+            "A stall takes a banner, in words, on the session's page too",
+        );
+
+        // A failing recording reaches the DM on any other page.
+        go_library(d);
+        d.observe(
+            "T11.5",
+            d.has_containing("Sessions · Not saving") && d.has_containing("Not saving audio"),
+            "A stall shows in the rail on other pages",
+        );
+        d.state("recording-stalled-elsewhere", Sizes::Default);
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Hearing);
+        d.settle();
+        d.observe(
+            "T11.5",
+            d.has_containing("Rec 00:00:00") && d.has_containing("Recording"),
+            "Recording, with its time, stays in the rail on other pages",
+        );
+        d.state("recording-on-another-page", Sizes::Default);
+        // A close does not end it by surprise.
+        d.request_close();
+        d.expect("Keep working");
+        d.state("recording-close-prompt", Sizes::Default);
+        d.click("Keep working");
+        d.observe(
+            "T11.5",
+            d.page_title().as_deref() == Some("Library"),
+            "Keep working leaves the DM on the page they were on",
+        );
+        d.click_containing("Sessions · ");
+        d.expect("Stop recording");
+        d.click("Stop recording");
+        d.expect("saved: 2026-01-01 19:00");
+
+        d.click("Recordings (1)");
+        d.expect(RECORDING);
+        d.observe(
+            "T11.5",
+            d.has_containing("Not processed"),
+            "Stop keeps the recording in the session",
+        );
+        d.state("recording-saved-no-key", Sizes::Default);
+
+        // T11.6: the default services are named, and what is missing is said.
+        d.observe(
+            "T11.6",
+            d.has_containing("Save an API key for this speech service"),
+            "Process states what is missing before it can run",
+        );
+        d.click("Open Settings");
+        d.expect("Speech service");
+        d.state("processing-settings", Sizes::All);
+        d.observe(
+            "T11.6",
+            d.field_text("LLM model").as_deref() == Some("gpt-6.1-sol")
+                && d.field_text("Speech model").as_deref() == Some("gpt-transcribe"),
+            "The defaults are Sol through the Codex CLI, after OpenAI's gpt-transcribe",
+        );
+        d.scroll_until(pos2(600.0, 400.0), "LLM service", 12);
+        d.click("LLM service");
+        d.state("processing-llm-choices", Sizes::Default);
+        d.click("Anthropic");
+        d.state("processing-settings-anthropic", Sizes::Default);
+        d.click("LLM service");
+        d.click("Codex CLI, GPT-6.1 Sol");
+        d.click("Account and campaigns");
+
+        d.app_mut().processing.simulate_keys();
+        d.settle();
+        // A key saved for one service is not sent to another.
+        d.click("Recording and processing");
+        d.scroll_until(pos2(600.0, 400.0), "LLM service", 12);
+        d.click("LLM service");
+        d.click("Anthropic");
+        d.observe(
+            "T11.6",
+            d.has_containing("for another service"),
+            "A saved key does not follow the DM to a different service",
+        );
+        d.state("key-for-another-service", Sizes::Default);
+        d.click("LLM service");
+        d.click("Codex CLI, GPT-6.1 Sol");
+        d.click("Account and campaigns");
+        d.click(NAV_SESSIONS);
+        d.expect("names to api.openai.com");
+        d.state("recording-ready", Sizes::Default);
+        d.observe(
+            "T11.6",
+            d.has_containing("events go to Codex (gpt-6.1-sol) twice"),
+            "The page says where the audio and the words will go",
+        );
+
+        // Each state of a job, in words.
+        d.app_mut()
+            .sessions
+            .simulate_job(Progress::Transcribing { part: 3, of: 24 });
+        d.settle();
+        d.expect("Transcribing part 3 of 24");
+        d.state("processing-speech", Sizes::Default);
+        d.request_close();
+        d.expect("processing it again goes on from there");
+        d.state("processing-close-prompt", Sizes::Default);
+        d.click("Keep working");
+        d.app_mut()
+            .sessions
+            .simulate_job_end(Err(CANCELLED.to_owned()));
+        d.settle();
+        d.expect("Cancelled");
+        d.state("processing-cancelled", Sizes::Default);
+        d.app_mut().sessions.simulate_job(Progress::Asking {
+            pass: crate::processing::Pass::Review,
+            seconds: 42,
+        });
+        d.settle();
+        d.expect("Pass 2 of 2: checking the first pass, 42 s");
+        d.state("processing-second-pass", Sizes::Default);
+        d.app_mut().sessions.simulate_job_end(Err(
+            "The LLM is busy, or your limit is reached. Wait, then process it again.".to_owned(),
+        ));
+        d.settle();
+        // A failure reaches the DM on any other page, and a routine message cannot hide it.
+        go_library(d);
+        d.observe(
+            "T11.6",
+            d.has_containing("Processing failed"),
+            "A failed job stays in the rail on other pages",
+        );
+        d.state("processing-failed-elsewhere", Sizes::Default);
+        d.click(NAV_SESSIONS);
+        d.expect("your limit is reached");
+        d.state("processing-failed", Sizes::Default);
+
+        // Trying again answers the failure, so no old word stays beside a new result.
+        d.click_containing("Process:");
+        d.expect("is processed");
+        d.observe(
+            "T11.6",
+            !d.has_containing("Processing failed") && !d.has_containing("your limit is reached"),
+            "A successful retry clears the failure",
+        );
+
+        // T11.7: a marker is a suggestion until the DM adds it.
+        d.expect("EVENTS MARKED IN THIS RECORDING: 2");
+        d.state("recording-processed", Sizes::AllAndHiDpi);
+        d.click(NAV_TIMELINE);
+        d.observe(
+            "T11.7",
+            !d.has_containing("Rest at the mill"),
+            "Markers do not reach the timeline by themselves",
+        );
+        d.click(NAV_SESSIONS);
+        d.click_containing("Add to timeline: Rest at the mill");
+        d.expect("On the timeline");
+        d.state("marker-added", Sizes::Default);
+        d.observe(
+            "T11.7",
+            d.has("Add to timeline: Wolves at the bridge (0)"),
+            "Adding one marker leaves the other a suggestion",
+        );
+
+        // Each text reads in the whole pane, a part at a time, and a marker opens its place.
+        d.click("00:10:00");
+        d.expect("Part 2 of 2");
+        d.expect("Long rest: Rest at the mill");
+        d.state("marked-transcript", Sizes::All);
+        d.click("Earlier part");
+        d.expect("Part 1 of 2");
+        d.click("Back to recordings");
+        d.click("What the check changed");
+        d.expect("Restored");
+        d.state("second-pass-review", Sizes::Default);
+        d.click("Back to recordings");
+        d.click("Summary");
+        d.state("recording-summary", Sizes::Default);
+        d.click("Back to recordings");
+        d.click(NAV_TIMELINE);
+        d.observe(
+            "T11.7",
+            d.has_containing("Rest at the mill"),
+            "A marker the DM adds is on the timeline, with its place and length",
+        );
+        d.click(NAV_SESSIONS);
+
+        // A warning lasts as long as the result, past the message and the rail.
+        d.app_mut().sessions.simulate_job(Progress::Asking {
+            pass: crate::processing::Pass::Review,
+            seconds: 9,
+        });
+        d.settle();
+        go_library(d);
+        d.app_mut().sessions.simulate_job_end_warned(WARNING);
+        d.settle();
+        d.observe(
+            "T11.6",
+            d.has_containing("Processed: check it"),
+            "A result with a warning does not read as done on other pages",
+        );
+        d.state("processing-warned-elsewhere", Sizes::Default);
+        d.click(NAV_SESSIONS);
+        d.observe(
+            "T11.6",
+            d.has_containing("Processed, with a warning"),
+            "The recording's own row keeps the warning",
+        );
+        d.state("recording-warned", Sizes::Default);
+
+        d.click_containing("Process again:");
+        d.expect("Replace the results");
+        d.state("process-again-confirm", Sizes::Default);
+        d.click("Not now");
+
+        d.click_containing("Delete recording:");
+        d.expect("Keep the recording");
+        d.state("recording-delete", Sizes::Default);
+        d.click("Delete recording");
+        d.expect("Recording deleted.");
+
+        // A recorder that ends by itself says so, wherever the DM is.
+        d.click("Record this session");
+        d.click("Start recording");
+        go_library(d);
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stopped("no such device".to_owned()));
+        d.settle();
+        d.observe(
+            "T11.5",
+            d.has_containing("Recording stopped"),
+            "A recording that stops by itself stays in the rail on other pages",
+        );
+        d.state("recording-stopped-elsewhere", Sizes::Default);
+        d.click(NAV_SESSIONS);
+        d.expect("no such device");
+        d.state("recording-stopped", Sizes::Default);
+        d.observe(
+            "T11.5",
+            d.has("Record again"),
+            "A recording that stopped by itself also offers one press to record again",
+        );
+        d.click("Record again");
+        d.expect("Stop recording");
+        d.observe(
+            "T11.5",
+            !d.has_containing("stopped by itself"),
+            "Recording again clears the error",
+        );
+        // An input chosen now cannot reach the recording that is running.
+        go_settings(d);
+        d.click("Recording and processing");
+        d.expect("A new input applies to the next recording");
+        d.state("input-during-recording", Sizes::Default);
+        d.click_containing("Sessions · ");
+        d.click("Stop recording");
+
+        // A note renamed in Obsidian keeps the DM's words, and no two rows share one session.
+        d.click("Write");
+        d.type_into_editor("Words typed after the rename.\n");
+        d.app_mut().sessions.simulate_file_renamed();
+        d.press_ctrl(Key::S);
+        d.expect("File gone");
+        d.state("note-file-gone", Sizes::Default);
+        d.click("Save my words as a new file");
+        d.expect("Notes saved");
+        d.observe(
+            "T11.4",
+            d.editor_text()
+                .is_some_and(|text| text.contains("Words typed after the rename.")),
+            "A note whose file went keeps its words, saved under a new identity",
+        );
+        d.goal("record a session and process it");
     }
 }

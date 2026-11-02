@@ -622,6 +622,7 @@ impl<'a> Driver<'a> {
                     && node.rect.max.x < 140.0
                     && !node.name.is_empty()
                     && node.name != "Lookup"
+                    && node.name != "Notes"
             })
             .map(|node| node.name)
             .collect()

@@ -41,8 +41,39 @@ pub fn file_time(path: &std::path::Path) -> Option<u64> {
         .map(|elapsed| elapsed.as_secs())
 }
 
+/// Local time, by the system's zone. A session's date is the DM's date, not UTC's.
+#[cfg(not(test))]
+fn local_time() -> libc::tm {
+    let seconds = now() as libc::time_t;
+    // SAFETY: both pointers are valid for this call, and `tm` is plain data.
+    unsafe {
+        let mut time: libc::tm = std::mem::zeroed();
+        libc::localtime_r(&seconds, &mut time);
+        time
+    }
+}
+
+/// Today's local date, as `2026-11-01`.
+#[cfg(not(test))]
+pub fn today() -> String {
+    let time = local_time();
+    format!(
+        "{:04}-{:02}-{:02}",
+        time.tm_year + 1900,
+        time.tm_mon + 1,
+        time.tm_mday
+    )
+}
+
+/// The local date and time, for a file's name.
+#[cfg(not(test))]
+pub fn local_stamp() -> String {
+    let time = local_time();
+    format!("{} {:02}-{:02}", today(), time.tm_hour, time.tm_min)
+}
+
 #[cfg(test)]
-pub use closed::{character_cache, file_time, new_uuid, now, pick_folder};
+pub use closed::{character_cache, file_time, local_stamp, new_uuid, now, pick_folder, today};
 
 #[cfg(test)]
 pub mod closed {
@@ -94,6 +125,14 @@ pub mod closed {
 
     pub fn now() -> u64 {
         FIXED_NOW
+    }
+
+    pub fn today() -> String {
+        crate::encounter_run::calendar_date(FIXED_NOW)
+    }
+
+    pub fn local_stamp() -> String {
+        format!("{} 19-00", today())
     }
 
     /// The fixed clock, for a file too: a real one would change every capture of its date.

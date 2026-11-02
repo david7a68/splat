@@ -67,6 +67,69 @@ impl Vault for DesktopVault {
     }
 }
 
+/// An API key for later processing of a recording, one for each service.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeySlot {
+    Speech,
+    Llm,
+}
+
+#[cfg(not(test))]
+impl KeySlot {
+    fn entry(self) -> Result<keyring::Entry, String> {
+        let name = match self {
+            Self::Speech => "speech-api-key",
+            Self::Llm => "llm-api-key",
+        };
+        keyring::Entry::new("splat", name).map_err(|_| "The desktop keyring is unavailable.".into())
+    }
+}
+
+#[cfg(not(test))]
+pub fn load_key(slot: KeySlot) -> Result<Option<Zeroizing<String>>, String> {
+    match slot.entry()?.get_password() {
+        Ok(key) => Ok(Some(Zeroizing::new(key))),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(_) => Err("Could not read the desktop keyring. Unlock it and try again.".into()),
+    }
+}
+
+#[cfg(not(test))]
+pub fn save_key(slot: KeySlot, key: &str) -> Result<(), String> {
+    slot.entry()?
+        .set_password(key)
+        .map_err(|_| "The key could not be saved in the desktop keyring.".into())
+}
+
+#[cfg(not(test))]
+pub fn forget_key(slot: KeySlot) -> Result<(), String> {
+    match slot.entry()?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(_) => Err("The key could not be removed from the desktop keyring.".into()),
+    }
+}
+
+// Test builds have no route to the desktop keyring.
+#[cfg(test)]
+pub fn load_key(_: KeySlot) -> Result<Option<Zeroizing<String>>, String> {
+    Ok(None)
+}
+
+#[cfg(test)]
+pub fn save_key(_: KeySlot, _: &str) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(test)]
+pub fn forget_key(_: KeySlot) -> Result<(), String> {
+    Ok(())
+}
+
+/// Keyring calls can wait on a locked wallet, so none runs on the UI thread.
+pub fn in_background(work: impl FnOnce() + Send + 'static) {
+    thread::spawn(work);
+}
+
 pub enum Action {
     Restore,
     Connect {

@@ -2,8 +2,8 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
-The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Party**, **Library**, **Campaign**,
-and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry and opens
+The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Sessions**, **Timeline**, **Party**,
+**Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry and opens
 beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
 state, and the app reopens on the last page or the open run. Simulation is later work.
 
@@ -143,6 +143,49 @@ or reconnecting. UI repaints do not repeatedly request data. The last successful
 name is cached as `splat_dndbeyond_campaign_name` and shown while offline or refreshing.
 Failed requests retain the cache. Replacing or removing a link clears its name;
 late responses cannot apply an old name to a new link.
+
+## Sessions and the timeline
+
+**Sessions** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
+by default, and you can change it there). **Timeline** holds every encounter, rest, travel interval, day and other
+major event in story order, in `Timeline.md` in the same folder. The list in its frontmatter is the record, and Splat
+writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
+session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
+
+Each event has a reference such as `[[Timeline#^t-1a2b3c4d5e|Rest at the mill]]`. Paste it in any note: it is a block
+link in Obsidian, and Splat lists the notes that link to an event.
+
+### Recording
+
+**Record** on a session uses the host's recorder (`pw-record`, then `parecord`, then `arecord`) to write 16 kHz mono WAV
+under `Sessions/Recordings/<session id>/`. Tell the table first. The recorder is a child process that stops if Splat
+dies, and the file stays if it does.
+
+### Processing a recording
+
+Nothing leaves the computer until you select **Process** on a recording. Choose the services in **Settings**.
+
+1. A **speech service** writes `<recording>.transcript.md`. The default is OpenAI's `gpt-transcribe`, and any service
+   with the OpenAI `audio/transcriptions` API works. It needs a key, kept in the desktop keyring. Audio goes up in parts
+   of at most 10 minutes (the limit is 25 MB), each cut at the quietest moment nearby, and each with the end of the last
+   part as its `prompt`. Processing resumes at the next part after a failure.
+2. An **LLM** goes over the transcript twice. The default is `gpt-6.1-sol` through the `codex` command, with your Codex
+   sign-in, in a read-only sandbox. Anthropic and any OpenAI-compatible API are options. The Codex CLI takes no audio, so
+   step 1 cannot use it.
+   - The first pass cleans the raw words and marks events, in `<recording>.cleaned.md`.
+   - The second pass checks that against the raw transcript and corrects it. It writes `<recording>.marked.md`, the result,
+     `<recording>.review.md`, what it changed and could not verify, and `<recording>.summary.md`.
+
+   Splat then checks the result itself: every time heading must be there, and it must not be far shorter than the raw
+   words. The raw transcript never changes. A failed second pass keeps the first, and only the second runs again.
+
+The default instructions for each pass, which you can edit in Settings, ask for one marker before each event:
+
+```
+<!-- splat:event kind="long_rest" at="01:12:00" title="Rest at the mill" place="Old mill" duration="8 hours" -->
+```
+
+A marker is a suggestion. The recording's row lists them, and only what you add goes on the timeline.
 
 ## Library workspace
 

@@ -92,6 +92,8 @@ pub struct Colors {
     pub on_accent: Color32,
     pub focus: Color32,
     pub destructive: Color32,
+    /// A microphone is live. Always with the word and the icon.
+    pub recording: Color32,
     pub turn: Turn,
     pub hp: Hp,
     pub participant: Participant,
@@ -130,6 +132,7 @@ pub const DARK: Colors = Colors {
     on_accent: rgb(0x14110E),
     focus: rgb(0xC9D6F2),
     destructive: RED,
+    recording: RED,
     turn: Turn {
         current: rgb(0xA9BDE6),
         next: MUTED,
@@ -515,6 +518,7 @@ mod tests {
             ("result.success", c.result.success),
             ("result.info", c.result.info),
             ("destructive", c.destructive),
+            ("recording", c.recording),
         ]
     }
 

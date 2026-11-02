@@ -68,6 +68,7 @@ pub fn tokens(ui: &mut egui::Ui) {
             ("accent_fill", c.accent_fill),
             ("focus", c.focus),
             ("destructive", c.destructive),
+            ("recording", c.recording),
         ],
     );
     swatches(

@@ -18,7 +18,11 @@ mod party;
 mod party_stream;
 mod party_sync;
 mod persistence;
+mod processing;
+mod recording;
+mod sessions;
 mod settings;
+mod timeline;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
@@ -46,6 +50,10 @@ fn main() -> eframe::Result {
 struct Splat {
     page: Page,
     campaign_tab: CampaignTab,
+    settings_tab: SettingsTab,
+    shown_page: Page,
+    /// Notes closed for Lookup, and they come back with it closed.
+    notes_gave_way: bool,
     started: bool,
     confirm_close: bool,
     discard_on_close: bool,
@@ -58,6 +66,14 @@ struct Splat {
     party: party::Party,
     encounters: encounters::Encounters,
     lookup: lookup::Lookup,
+    sessions: sessions::page::Sessions,
+    timeline: timeline::Book,
+    timeline_page: timeline::page::TimelinePage,
+    processing: processing::settings::ProcessingSettings,
+    /// What the open run last told the timeline.
+    run_fact: Option<timeline::RunFact>,
+    /// New events and runs go to a session dated before today.
+    old_session: bool,
     ui_store: ui_state::Store,
     tab_direction: Option<egui::FocusDirection>,
     step_past: Option<(egui::Id, egui::FocusDirection)>,
@@ -70,6 +86,9 @@ impl Default for Splat {
         Self {
             page: Page::default(),
             campaign_tab: CampaignTab::default(),
+            settings_tab: SettingsTab::default(),
+            shown_page: Page::default(),
+            notes_gave_way: false,
             started: false,
             confirm_close: false,
             discard_on_close: false,
@@ -82,6 +101,12 @@ impl Default for Splat {
             party: Default::default(),
             encounters: Default::default(),
             lookup: Default::default(),
+            sessions: Default::default(),
+            timeline: Default::default(),
+            timeline_page: Default::default(),
+            processing: Default::default(),
+            run_fact: None,
+            old_session: false,
             ui_store: ui_state::Store::user(),
             tab_direction: None,
             step_past: None,
@@ -107,6 +132,8 @@ enum Page {
     Run,
     #[default]
     Encounters,
+    Sessions,
+    Timeline,
     Party,
     Library,
     Campaign,
@@ -118,6 +145,8 @@ impl Page {
         match self {
             Self::Run => "Run",
             Self::Encounters => "Encounters",
+            Self::Sessions => "Sessions",
+            Self::Timeline => "Timeline",
             Self::Party => "Party",
             Self::Library => "Library",
             Self::Campaign => "Campaign",
@@ -127,6 +156,8 @@ impl Page {
     fn from_name(name: &str) -> Option<Self> {
         [
             Self::Encounters,
+            Self::Sessions,
+            Self::Timeline,
             Self::Party,
             Self::Library,
             Self::Campaign,
@@ -143,6 +174,13 @@ enum CampaignTab {
     Packages,
     RunSettings,
     Link,
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+enum SettingsTab {
+    #[default]
+    Account,
+    Recording,
 }
 
 impl Splat {
@@ -246,6 +284,12 @@ impl Splat {
     fn blocked_switch(&self) -> Option<&'static str> {
         if self.encounters.has_run() {
             Some("Close the run to change campaigns.")
+        } else if self.sessions.recording() {
+            Some("Stop the recording to change campaigns.")
+        } else if self.sessions.processing() {
+            Some("Wait for processing to finish, or cancel it, to change campaigns.")
+        } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
+            Some("Resolve the unsaved session file to change campaigns.")
         } else if self.campaign_content.dirty()
             || self.encounters.dirty()
             || self.library.campaign_draft()
@@ -304,6 +348,28 @@ impl Splat {
                 Page::Run,
             ));
         }
+        for item in self.sessions.not_saved() {
+            items.push((item, Page::Sessions));
+        }
+        if self.timeline.not_saved() {
+            items.push(("The timeline is not saved.".to_owned(), Page::Timeline));
+        }
+        if let Some(label) = self.sessions.recording_label() {
+            items.push((
+                format!(
+                    "{label} is recording. Closing stops it, and what is recorded so far is kept."
+                ),
+                Page::Sessions,
+            ));
+        }
+        if let Some(label) = self.sessions.processing_label() {
+            items.push((
+                format!(
+                    "{label} is processing. Closing stops it. What is done is kept, and processing it again goes on from there."
+                ),
+                Page::Sessions,
+            ));
+        }
         items
     }
 
@@ -315,7 +381,16 @@ impl Splat {
             return;
         }
         let only_sync = items.len() == 1 && !self.encounters.pending_sync_names().is_empty();
-        let (title, keep_label, discard_label, advice) = if only_sync {
+        let background =
+            usize::from(self.sessions.recording()) + usize::from(self.sessions.processing());
+        let (title, keep_label, discard_label, advice) = if items.len() == background {
+            (
+                "Work in progress",
+                "Keep working",
+                "Stop and close",
+                "Nothing already saved is lost either way.",
+            )
+        } else if only_sync {
             (
                 "Sync has not finished",
                 "Return to run",
@@ -346,8 +421,10 @@ impl Splat {
         });
         if keep {
             self.confirm_close = false;
-            // The first thing named is where the DM goes.
-            self.page = items[0].1;
+            // The first thing named is where the DM goes, if anything needs them there.
+            if items.len() != background {
+                self.page = items[0].1;
+            }
         }
         if discard {
             self.discard_on_close = true;
@@ -405,31 +482,79 @@ impl Splat {
                         self.page = Page::Run;
                     }
                 }
+                let recording = self.sessions.recording_detail();
                 for (page, icon) in [
                     (Page::Encounters, icons::ENCOUNTERS),
+                    (Page::Sessions, icons::SESSIONS),
+                    (Page::Timeline, icons::TIMELINE),
                     (Page::Party, icons::PARTY),
                     (Page::Library, icons::LIBRARY),
                     (Page::Campaign, icons::CAMPAIGN),
                 ] {
                     let current = self.visible_page() == Some(page);
-                    if design::nav_item(ui, icon, page.name(), None, current).clicked() {
+                    let detail = recording.as_deref().filter(|_| page == Page::Sessions);
+                    if design::nav_item(ui, icon, page.name(), detail, current).clicked() {
                         self.page = page;
                     }
                 }
                 // Push the rest down in tree order, so Tab still follows reading order.
                 let statuses = self.statuses(connection);
                 let status_height = statuses.len() as f32 * (Type::Small.line() + 2.0);
-                let bottom = 2.0 * (Density::Scan.control() + 2.0) + status_height + design::S;
+                let lost = usize::from(self.sessions.busy_with_edit())
+                    + usize::from(self.timeline.not_saved());
+                let bottom = 3.0 * (Density::Scan.control() + 2.0)
+                    + status_height
+                    + lost as f32 * (Density::Read.control() + 2.0)
+                    + design::S;
                 ui.add_space((ui.available_height() - bottom).max(0.0));
                 for state in statuses {
                     design::status(ui, state);
+                }
+                // Words that could not be saved lead to where the DM can choose.
+                for (lost, word, target) in [
+                    (
+                        self.sessions.busy_with_edit(),
+                        "Notes not saved",
+                        Page::Sessions,
+                    ),
+                    (
+                        self.timeline.not_saved(),
+                        "Timeline not saved",
+                        Page::Timeline,
+                    ),
+                ] {
+                    if lost
+                        && design::status_link(
+                            ui,
+                            Status {
+                                icon: icons::ERROR,
+                                word,
+                                color: colors().document.invalid,
+                            },
+                        )
+                        .clicked()
+                    {
+                        self.page = target;
+                    }
                 }
                 ui.add_space(design::XS);
                 if design::nav_toggle(ui, icons::SEARCH, "Lookup", "Ctrl+K", self.lookup.open)
                     .on_hover_text("Search everything, beside this page (Ctrl+K)")
                     .clicked()
                 {
-                    self.lookup.toggle();
+                    self.toggle_lookup();
+                }
+                if design::nav_toggle(
+                    ui,
+                    icons::DRAFT,
+                    "Notes",
+                    "Ctrl+J",
+                    self.sessions.notes_open && self.page != Page::Sessions,
+                )
+                .on_hover_text("This session's notes, beside this page (Ctrl+J)")
+                .clicked()
+                {
+                    self.toggle_notes();
                 }
                 if design::nav_item(
                     ui,
@@ -443,6 +568,23 @@ impl Splat {
                     self.page = Page::Settings;
                 }
             });
+    }
+
+    /// One panel beside the page at a time.
+    fn toggle_lookup(&mut self) {
+        self.notes_give_way();
+        self.lookup.toggle();
+    }
+
+    fn notes_give_way(&mut self) {
+        self.notes_gave_way |= self.sessions.notes_open;
+        self.sessions.notes_open = false;
+    }
+
+    fn toggle_notes(&mut self) {
+        self.notes_gave_way = false;
+        self.lookup.close();
+        self.sessions.toggle_notes(self.page == Page::Sessions);
     }
 
     /// What is unsure, always where the DM looks (principle 6).
@@ -482,6 +624,57 @@ impl Splat {
                     color: c.document.unsaved,
                 });
             }
+        }
+        if let Some((icon, word, color)) = self.sessions.recording_status() {
+            statuses.push(Status { icon, word, color });
+        }
+        for word in self.sessions.alert_words() {
+            statuses.push(Status {
+                icon: icons::ERROR,
+                word,
+                color: c.result.error,
+            });
+        }
+        if self.timeline.unreadable.is_some() {
+            statuses.push(Status {
+                icon: icons::ERROR,
+                word: "Timeline not readable",
+                color: c.document.invalid,
+            });
+        }
+        if self.sessions.just_saved() {
+            statuses.push(Status {
+                icon: icons::OK,
+                word: "Recording saved",
+                color: c.document.saved,
+            });
+        }
+        if self.sessions.processing() {
+            statuses.push(Status {
+                icon: icons::AUDIO,
+                word: "Processing audio",
+                color: c.connection.busy,
+            });
+        } else if self.sessions.job_warned() {
+            statuses.push(Status {
+                icon: icons::WARN,
+                word: "Processed: check it",
+                color: c.result.warning,
+            });
+        } else if self.sessions.job_done() {
+            statuses.push(Status {
+                icon: icons::SUCCESS,
+                word: "Processing done",
+                color: c.result.success,
+            });
+        }
+        // A run files itself under this session, and the run's own page has no room to say so.
+        if self.run_fact.is_some() && self.old_session {
+            statuses.push(Status {
+                icon: icons::WARN,
+                word: "Old session",
+                color: c.result.warning,
+            });
         }
         if self.party.sync_stopped {
             statuses.push(Status {
@@ -560,6 +753,7 @@ impl Splat {
                             && let Some(run) = self.encounters.run_mut()
                         {
                             run.next_turn();
+                            self.sessions.after_a_step_back_to_note(self.notes_gave_way);
                         }
                         if Action::secondary("Back to run").show(ui).clicked() {
                             self.page = Page::Run;
@@ -652,9 +846,31 @@ impl Splat {
                 design::page_header(
                     ui,
                     "Settings",
-                    Some("Your D&D Beyond account and your campaign list"),
+                    Some("Your D&D Beyond account, your campaign list, and session recording"),
                     |_| {},
                 );
+                let tab_changed = design::segmented(
+                    ui,
+                    &mut self.settings_tab,
+                    &[
+                        (SettingsTab::Account, "Account and campaigns"),
+                        (SettingsTab::Recording, "Recording and processing"),
+                    ],
+                );
+                if tab_changed {
+                    self.processing.look_again();
+                }
+                if self.settings_tab == SettingsTab::Recording {
+                    egui::ScrollArea::vertical()
+                        .id_salt("recording_settings")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.add_space(design::S);
+                            ui.set_max_width(design::FORM_WIDTH + design::XXL);
+                            self.processing.show(ui);
+                        });
+                    return;
+                }
                 let blocked = self.blocked_switch();
                 egui::ScrollArea::vertical()
                     .id_salt("settings_page")
@@ -708,6 +924,31 @@ impl Splat {
                             list(ui, &mut self.campaigns, &mut self.dndbeyond);
                         }
                     });
+            }
+            Page::Sessions => {
+                if active.is_some() {
+                    self.sessions.show(ui, &self.processing, &mut self.timeline);
+                } else {
+                    self.no_campaign(ui, "No campaign to keep notes for yet");
+                }
+            }
+            Page::Timeline => {
+                if let Some(campaign) = &active {
+                    let links = self.sessions.links();
+                    let current = self.sessions.current();
+                    self.timeline_page.open_run = self.run_fact.as_ref().map(|fact| fact.id);
+                    self.timeline_page.dated = self.sessions.current_dated();
+                    self.timeline_page.show(
+                        ui,
+                        &mut self.timeline,
+                        campaign.id,
+                        &campaign.name,
+                        &links,
+                        current,
+                    );
+                } else {
+                    self.no_campaign(ui, "No campaign, so no timeline yet");
+                }
             }
             Page::Library => {
                 self.library.show(ui, &mut self.campaigns);
@@ -822,9 +1063,17 @@ impl Splat {
                 }
                 let party = &self.party;
                 if let Some(run) = self.encounters.run_mut() {
-                    run.lookup_open = self.lookup.open;
+                    run.recording_notice = self.sessions.run_notice();
+                    let panel = self.lookup.open || self.sessions.notes_open;
+                    // Beside a panel, a letter is the next word typed, never a command. A click
+                    // on Next turn moves the caret, so stray typing must not change the run.
+                    run.lookup_open = panel;
+                    run.notes_open = self.sessions.notes_open;
                     // A wide window has room for both, so the stat block stays.
-                    run.hide_panel = self.lookup.open && ui.ctx().content_rect().width() < 1500.0;
+                    // The roster comes first. The stat block stays only with room for both.
+                    let stat_block = design::side_panel_width(ui.ctx().content_rect().width());
+                    run.hide_panel =
+                        panel && ui.available_width() - stat_block < design::RUN_COMPACT.max_width;
                     run.content = self.lookup.index();
                     let sheet = run.wanted_sheet().and_then(|id| party.sheet(&id));
                     run.set_sheet(sheet);
@@ -832,11 +1081,29 @@ impl Splat {
                 if self.encounters.show_run(ui, &campaign) {
                     self.page = Page::Encounters;
                 }
+                if let Some(words) = self
+                    .encounters
+                    .run_mut()
+                    .and_then(|run| run.for_note.take())
+                {
+                    self.sessions.words_for_note(words);
+                }
                 if self
                     .encounters
                     .run_mut()
-                    .is_some_and(|run| std::mem::take(&mut run.close_lookup))
+                    .is_some_and(|run| std::mem::take(&mut run.return_focus))
                 {
+                    self.sessions.after_a_step_back_to_note(self.notes_gave_way);
+                }
+                if let Some(run) = self.encounters.run_mut()
+                    && std::mem::take(&mut run.close_lookup)
+                {
+                    // What the DM asked for is in the side panel. Notes give way only when
+                    // they hide it, and their words stay in the draft.
+                    if run.hide_panel {
+                        self.sessions.notes_open = false;
+                        self.notes_gave_way = false;
+                    }
                     self.lookup.close();
                 }
             }
@@ -851,6 +1118,7 @@ impl Splat {
             .take()
             .or_else(|| self.encounters.peek.take())
         {
+            self.notes_give_way();
             self.lookup.open_id(id);
         }
         if let Some(position) = self
@@ -858,6 +1126,7 @@ impl Splat {
             .run_mut()
             .and_then(|run| run.lookup_request.take())
         {
+            self.notes_give_way();
             self.lookup.open_position(position);
         }
         if std::mem::take(&mut self.campaigns.wants_encounters) {
@@ -872,6 +1141,32 @@ impl Splat {
         if std::mem::take(&mut self.party.wants_link_page) {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Link;
+        }
+        if std::mem::take(&mut self.sessions.wants_sessions_page) {
+            self.page = Page::Sessions;
+        }
+        if std::mem::take(&mut self.sessions.wants_processing_settings) {
+            self.page = Page::Settings;
+            self.settings_tab = SettingsTab::Recording;
+        }
+        if let Some(id) = self.sessions.wants_event.take() {
+            self.timeline_page.reveal(&id, &self.timeline);
+            self.page = Page::Timeline;
+        }
+        if std::mem::take(&mut self.timeline_page.play_current) {
+            self.sessions.play_current();
+        }
+        if let Some(session) = self.timeline_page.new_events_to.take() {
+            self.sessions.set_current(session);
+        }
+        if let Some(session) = self.timeline_page.open_session.take() {
+            self.sessions.open(session);
+            self.page = Page::Sessions;
+        }
+        if let Some(root) = self.sessions.manifest_changed.take() {
+            self.campaign_content.refresh_destination(&root);
+            self.encounters.refresh_content(ctx, &self.campaigns, &root);
+            self.timeline.open(None);
         }
         if let Some(source) = self.library.copy.take() {
             self.copy_dialog = Some(copy_dialog::CopyDialog::new(source, &self.campaigns, ctx));
@@ -889,15 +1184,23 @@ impl eframe::App for Splat {
         if !self.started {
             self.start();
         }
-        if ctx.input(|i| i.viewport().close_requested())
-            && (self.library.dirty()
+        if ctx.input(|i| i.viewport().close_requested()) {
+            // An edit in its pause before saving is saved now, not reported as a loss.
+            self.sessions.flush();
+            self.timeline.save();
+            if (self.library.dirty()
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()
-                || self.encounters.pending_sync())
-            && !self.discard_on_close
-        {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            self.confirm_close = true;
+                || self.encounters.pending_sync()
+                || self.sessions.recording()
+                || self.sessions.processing()
+                || self.sessions.busy_with_edit()
+                || self.timeline.not_saved())
+                && !self.discard_on_close
+            {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.confirm_close = true;
+            }
         }
         if self.confirm_close {
             self.close_prompt(ctx);
@@ -911,12 +1214,48 @@ impl eframe::App for Splat {
         self.lookup.poll(ctx, &self.campaigns);
         self.encounters.poll(ctx, &self.campaigns);
         self.lookup.library_draft = self.library.dirty();
+        self.processing.poll(ctx);
+        self.processing.recording_now = self.sessions.recording();
+        let open = self.campaigns.active_campaign();
+        self.sessions.poll(ctx, open.as_ref(), &mut self.timeline);
+        self.old_session = self.sessions.current_dated().is_some();
+        let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
+        if fact != self.run_fact {
+            if let Some(fact) = &fact {
+                self.timeline.record_run(fact, self.sessions.current());
+            }
+            self.run_fact = fact;
+        }
+        self.sessions.open_run = self.run_fact.as_ref().and_then(|fact| {
+            let event = self
+                .timeline
+                .events
+                .iter()
+                .find(|e| e.run == Some(fact.id))?;
+            Some((fact.name.clone(), event.session?))
+        });
         let modal = self.copy_dialog.is_some()
             || self.confirm_close
             || ctx.memory(|memory| memory.top_modal_layer()).is_some();
         if !modal {
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
-                self.lookup.toggle();
+                self.toggle_lookup();
+            }
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::J)) {
+                self.toggle_notes();
+            }
+            // Not on Sessions, where the panel is away, and not over a footer's second step.
+            if self.sessions.notes_open
+                && self.page != Page::Sessions
+                && !(self.page == Page::Run
+                    && self
+                        .encounters
+                        .run()
+                        .is_some_and(|run| run.footer_step_open()))
+                && !egui::Popup::is_any_open(ctx)
+                && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+            {
+                self.sessions.notes_open = false;
             }
             // A dialog takes Escape first, and a form elsewhere has nothing to do with it.
             if self.lookup.open
@@ -952,9 +1291,20 @@ impl eframe::App for Splat {
         );
         self.encounters
             .tick_sync(ctx, session, epoch, active.as_ref());
+        self.sessions.on_page = self.page == Page::Sessions;
+        self.sessions.banner(ctx, &self.processing);
         self.run_strip(ctx);
+        // With no panel left, going on typing must reach the note and never change the run.
+        if self.notes_gave_way && !self.lookup.open {
+            self.notes_gave_way = false;
+            self.sessions.notes_come_back();
+        }
         if self.lookup.open {
             self.lookup.show(ctx);
+        }
+        // The Sessions page has this note itself, so two editors would squeeze a small window.
+        if self.sessions.notes_open && self.page != Page::Sessions {
+            self.sessions.notes_panel(ctx);
         }
         egui::CentralPanel::default()
             .frame(
@@ -988,6 +1338,17 @@ impl eframe::App for Splat {
             }
             if !open {
                 self.copy_dialog = None;
+            }
+        }
+        // Coming back to a page beside the open note, the keyboard goes back to the note.
+        if self.page != self.shown_page {
+            let from_sessions = self.shown_page == Page::Sessions;
+            self.shown_page = self.page;
+            if from_sessions {
+                // The note can have changed there, so an old caret could land inside a line.
+                self.sessions.fresh_focus_in_panel();
+            } else if self.page != Page::Sessions {
+                self.sessions.return_focus_to_note();
             }
         }
         self.skip_unnamed_focus(ctx);

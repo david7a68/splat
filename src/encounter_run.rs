@@ -203,6 +203,8 @@ pub(crate) struct Run {
     last_initiative: Option<usize>,
     /// Lookup is beside the run, so the run's own panel gives up its space.
     pub hide_panel: bool,
+    /// The recording needs a look, shown where the run's notices go, so nothing moves.
+    pub recording_notice: Option<&'static str>,
     /// Lookup is open. Letters are then the next word of a search, never a command.
     pub lookup_open: bool,
     /// Opened from a save, so there is no undo history to go back through.
@@ -219,6 +221,14 @@ pub(crate) struct Run {
     focus_first_missing: bool,
     /// The panel needs its space back, so Lookup should close.
     pub close_lookup: bool,
+    /// A button took the keyboard from the panel beside the run, so it goes back.
+    pub return_focus: bool,
+    /// Whether the panel beside the run is Notes, where words typed in Amount belong.
+    pub notes_open: bool,
+    /// Words typed in Amount beside Notes. A letter is never the one number.
+    pub for_note: Option<String>,
+    /// The end step just opened, and its one field takes the keyboard.
+    focus_outcome: bool,
     /// The file changed under this run. Saving stops until the DM chooses what to keep.
     disk_conflict: bool,
 }
@@ -351,6 +361,7 @@ impl Run {
             simulate_connection: false,
             scroll_to_selected: false,
             notice: None,
+            recording_notice: None,
             undo_stopped: false,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
@@ -360,6 +371,10 @@ impl Run {
             content: None,
             lookup_request: None,
             close_lookup: false,
+            return_focus: false,
+            notes_open: false,
+            for_note: None,
+            focus_outcome: false,
             disk_conflict: false,
             sheet: None,
             sheet_for: None,
@@ -902,6 +917,19 @@ impl Run {
             name: self.name.clone(),
         }
     }
+    /// What the timeline records about this run.
+    pub fn timeline_fact(&self) -> crate::timeline::RunFact {
+        crate::timeline::RunFact {
+            id: self.id,
+            name: self.name.clone(),
+            round: self.state.round,
+            state: match &self.state.phase {
+                Phase::Setup => crate::timeline::RunState::Setup,
+                Phase::Running => crate::timeline::RunState::Running,
+                Phase::Ended { outcome } => crate::timeline::RunState::Ended(outcome.clone()),
+            },
+        }
+    }
     /// The strip's Next turn, usable from any page.
     pub fn next_turn(&mut self) {
         if let Err(error) = self.apply(Command::Next) {
@@ -909,7 +937,7 @@ impl Run {
         } else {
             self.amount.clear();
             self.scroll_to_selected = true;
-            self.focus_amount = true;
+            self.follow_with_keyboard();
         }
     }
     /// Show the first participant with a conflict, so it can be resolved.
@@ -1643,6 +1671,7 @@ impl Run {
             simulate_connection: false,
             scroll_to_selected: true,
             notice: None,
+            recording_notice: None,
             undo_stopped: false,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
@@ -1652,6 +1681,10 @@ impl Run {
             content: None,
             lookup_request: None,
             close_lookup: false,
+            return_focus: false,
+            notes_open: false,
+            for_note: None,
+            focus_outcome: false,
             disk_conflict: false,
             sheet: None,
             sheet_for: None,
