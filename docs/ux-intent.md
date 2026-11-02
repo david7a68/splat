@@ -307,7 +307,7 @@ recap, the plan, the note, the rest to record. **Context:** table. **Frequency:*
 the plan, so that a DM never chooses between Encounters, Timeline and the note in the gap between two fights. A measured
 evening is in `artifacts/dm-audit/README.md`.
 
-**Done well:** T12.0 to T12.9, and T14.1 to T14.5.
+**Done well:** T12.0 to T12.9, T14.1 to T14.5, and T14.7.
 
 ## 3. Information architecture
 
@@ -577,6 +577,7 @@ reading the code, not from a test run.
 | T14.3 | A marked table rolls, with a typed result as well, and its row shows | world | state | New |
 | T14.4 | A rule found by its heading, beside a run, in ≤ 2 | world | cost, view | New |
 | T14.5 | A new NPC joins the fight, and the run stays on screen | world | state | New |
+| T14.7 | The generator gives a name and three attributes, and writes nothing until the DM saves | world | state | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |

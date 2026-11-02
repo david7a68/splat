@@ -246,6 +246,23 @@ splat_world:
 **Add to run** on an NPC puts them in the open fight under their own name, on their stat block. It does not change the
 encounter, and Undo removes them. A location lists what is in it, and World shows locations as a tree.
 
+**Generate NPC** in Lookup rolls a name and three attributes: look, manner and want. **Reroll** rolls them all again,
+and nothing is written until **Save NPC**, which creates the note in `NPCs/` and opens it. **Discard** lets it go.
+
+The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key
+`npc-name`, `npc-look`, `npc-manner` or `npc-want` in any world note. The first table in path order wins, session notes
+don't count, and a part with no table uses the built-in list. A bad table says so beside the result, and the list stands in:
+
+```markdown
+<!-- splat:rolls key=npc-name dice=1d4 -->
+
+| d4 | Name |
+| --- | --- |
+| 1 | Tally |
+| 2 | Blot |
+| 3-4 | Rook |
+```
+
 The design and what is still only proposed are in [World and house rules](docs/design/world-and-house-rules.md).
 
 ## Library workspace

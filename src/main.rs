@@ -16,6 +16,7 @@ mod library;
 mod lookup;
 mod markdown_source;
 mod markdown_view;
+mod npc_generator;
 mod party;
 mod party_stream;
 mod party_sync;
