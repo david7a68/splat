@@ -1,6 +1,8 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
+mod ad_hoc;
 mod view;
 use crate::encounter_settings::{Grouping, Initiative};
+pub(crate) use ad_hoc::RunCreature;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -12,7 +14,7 @@ use splat::{
     execution::dice::{Dice, Random},
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -108,6 +110,26 @@ impl RunGroup {
         let member = self.members.first()?;
         let base = Base::of(&member.entry, &self.side);
         member.overrides.resolve(&base).ok()
+    }
+    /// How many, on which side, and what they are worth, in one line.
+    pub(crate) fn summary(&self) -> String {
+        let mut summary = format!(
+            "{} · {} · XP {}",
+            crate::design::count(self.creature_count() as usize, "creature", "creatures"),
+            crate::design::reader::human_label(&self.side),
+            self.xp
+        );
+        if !self.xp_unknown.is_empty() || self.unavailable > 0 {
+            summary.push_str(" or more");
+        }
+        if self
+            .members
+            .iter()
+            .any(|member| !member.overrides.is_empty())
+        {
+            summary.push_str(" · Changed");
+        }
+        summary
     }
     /// Every creature the note names, whether or not it can be found now.
     pub(crate) fn creature_count(&self) -> u64 {
@@ -292,6 +314,36 @@ impl Participant {
         });
         Ok(participant)
     }
+    /// Begin from where the last fight left this player, not from their sheet. Returns what
+    /// the sheet would have given, if that is different.
+    pub fn carry_over(&mut self, carry: &Carry) -> Option<(Option<i64>, i64)> {
+        if !self.definition.fields.contains_key("splat_external") {
+            return None;
+        }
+        let from_a_fight = carry.values.get(&self.definition.id).copied();
+        let (hp, temp) = match from_a_fight {
+            Some(values) => values,
+            None if carry.full => (self.max_hp?, 0),
+            None => return None,
+        };
+        let hp = self.max_hp.map_or(hp, |max| hp.min(max));
+        let sheet = (self.hp, self.temporary_hp);
+        if sheet == (Some(hp), temp) {
+            return None;
+        }
+        self.hp = Some(hp);
+        self.temporary_hp = temp;
+        // After a fight, what it began with, so that sync reads this as the start and not as the
+        // DM's edit: a first read takes the sheet's value, as it does for any value left alone.
+        // Full HP from a rest is the DM's ruling, so a sheet that differs is a conflict to settle.
+        if from_a_fight.is_some()
+            && let Some(started) = &mut self.started
+        {
+            started.hp = Some(hp);
+            started.temp = temp;
+        }
+        Some(sheet)
+    }
     fn health_known(&self) -> bool {
         matches!((self.hp, self.max_hp), (Some(hp), Some(max)) if max > 0 && hp >= 0 && hp <= max)
     }
@@ -316,6 +368,21 @@ struct State {
     log: Vec<String>,
     random: Random,
 }
+/// Each carried player's place in the roster, and HP and temporary HP from their sheet.
+type SheetValues = Vec<(usize, Option<i64>, i64)>;
+/// HP that came from the last fight, not from the sheets.
+struct CarriedHp {
+    from: String,
+    sheets: SheetValues,
+    /// Fights whose runs could not be read, so their HP is not here.
+    missing: Vec<String>,
+}
+/// The last roll, beside the dice.
+struct LastRoll {
+    total: String,
+    /// The log line behind the total.
+    line: String,
+}
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
@@ -332,6 +399,16 @@ pub(crate) struct Run {
     /// What each history step did, for a named Undo.
     history_labels: Vec<String>,
     selected: usize,
+    /// More targets for one amount, beside the selected row. Never saved.
+    also: BTreeSet<usize>,
+    /// The targets that take half of a damage amount, for a save.
+    halved: BTreeSet<usize>,
+    /// How many steps the DM has taken or taken back since this opened. A sheet's change is
+    /// not one, and neither is opening a run to read it. Never saved.
+    dm_steps: usize,
+    /// Never saved.
+    carried: Option<CarriedHp>,
+    last_roll: Option<LastRoll>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
     condition: String,
@@ -395,6 +472,11 @@ pub(crate) struct Run {
     /// The campaign's encounter groups, as they read from disk, once they have been read. A
     /// run does not save these.
     pub groups: Option<Arc<Vec<Arc<RunGroup>>>>,
+    /// The campaign's creatures that can join a fight, once they have been read.
+    pub creatures: Option<Arc<Vec<Arc<RunCreature>>>>,
+    /// The names linked in tonight's plan. Those groups come first in the panel.
+    pub planned: Vec<String>,
+    ad_hoc: ad_hoc::AdHoc,
     /// The total typed beside each group in the panel, until it is used.
     group_totals: BTreeMap<Uuid, String>,
 }
@@ -411,10 +493,14 @@ enum Panel {
 }
 /// How an added group's log line starts. The group panel shows that line while it is the last.
 const GROUP_ADDED: &str = "Encounter group ";
+/// How one creature's log line starts, with no group to name.
+const ONE_ADDED: &str = "Added by hand: ";
 /// What the group panel says of an addition before it points to the Log.
 const GROUP_LINE_LIMIT: usize = 200;
 /// What a saved run may hold. A larger one does not open again.
 const MAX_PARTICIPANTS: usize = 2000;
+/// Where a run's own text ends. Saved runs hold both parts in one string.
+pub(crate) const SETUP_HEADING: &str = "## Setup (DM reference)";
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
 const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
@@ -469,6 +555,10 @@ enum Command {
     Roll(String),
     /// Add every member of an encounter group, on this total, or by rolling.
     AddGroup(Arc<RunGroup>, Option<i64>),
+    /// One line of creatures with no group behind them.
+    AddCreature(Arc<RunGroup>, Option<i64>),
+    /// One amount on several targets, as one step of undo.
+    Several(Vec<Command>),
 }
 /// A d20 for initiative, with the bonus and the roll mode. Returns the die and the total.
 fn roll_initiative(random: &mut Random, bonus: i64, mode: i8) -> Result<(i64, i64), String> {
@@ -593,11 +683,16 @@ impl Run {
             history: Vec::new(),
             history_labels: Vec::new(),
             selected: 0,
+            also: BTreeSet::new(),
+            halved: BTreeSet::new(),
+            dm_steps: 0,
+            carried: None,
+            last_roll: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),
-            dice: "1d20".into(),
-            outcome: "Undecided".into(),
+            dice: String::new(),
+            outcome: String::new(),
             error: None,
             confirm_close: false,
             setup_details,
@@ -636,8 +731,65 @@ impl Run {
             focus_field: None,
             focus_first_missing: true,
             groups: None,
+            creatures: None,
+            planned: Vec::new(),
+            ad_hoc: ad_hoc::AdHoc::default(),
             group_totals: BTreeMap::new(),
         })
+    }
+    /// Opened for this fight and closed again with nothing done.
+    pub fn untouched_setup(&self) -> bool {
+        self.state.phase == Phase::Setup
+            && self.history.is_empty()
+            && !self.reopened
+            && !self.undo_stopped
+    }
+    /// HP came from the last fight, not from the sheets, and the log says so.
+    pub fn note_carry(&mut self, carry: &Carry, sheets: SheetValues) {
+        // A fight that cannot be read carries nothing, and the log must not say it did.
+        if !sheets.is_empty() {
+            self.state
+                .log
+                .push(format!("Party HP carried over from {}.", carry.from));
+        }
+        self.carried = Some(CarriedHp {
+            from: carry.from.clone(),
+            sheets,
+            missing: carry.missing.clone(),
+        });
+        self.dirty = true;
+    }
+    /// The carried values that still differ from the sheets, as one step back to the sheets.
+    fn back_to_sheets(&self) -> Option<(String, Command)> {
+        let carried = self.carried.as_ref()?;
+        let mut commands = Vec::new();
+        for (index, hp, temp) in &carried.sheets {
+            let p = self.state.participants.get(*index)?;
+            // Sync is reading the sheet itself, and these values may be older than that.
+            let reading = self.syncs.get(index).is_some_and(|sync| sync.ready());
+            if !reading && (p.hp, p.temporary_hp) != (*hp, *temp) {
+                commands.push(Command::Health(*index, *hp, p.max_hp));
+                commands.push(Command::TempHp(*index, *temp));
+            }
+        }
+        (!commands.is_empty()).then(|| (carried.from.clone(), Command::Several(commands)))
+    }
+    /// The fights whose HP could not be read, in words.
+    fn carry_missing(&self) -> Option<String> {
+        let carried = self.carried.as_ref()?;
+        (!carried.missing.is_empty()).then(|| {
+            format!(
+                "Could not read the run of {}, so that fight's HP did not carry over.",
+                carried.missing.join(", ")
+            )
+        })
+    }
+    /// The read-aloud text and notes, and the setup's technical details, if a run has them.
+    fn prep(&self) -> (&str, Option<&str>) {
+        match self.setup_details.split_once(SETUP_HEADING) {
+            Some((prep, technical)) => (prep.trim(), Some(technical.trim())),
+            None => (self.setup_details.trim(), None),
+        }
     }
     fn current(&self) -> Option<usize> {
         (self.state.phase == Phase::Running).then(|| self.state.order[self.state.cursor])
@@ -730,7 +882,7 @@ impl Run {
         group: &RunGroup,
         total: Option<i64>,
         grouping: Grouping,
-    ) -> Result<String, String> {
+    ) -> Result<(String, String), String> {
         if let Some(problem) = &group.problem {
             return Err(format!("{}: {problem}", group.name));
         }
@@ -765,11 +917,7 @@ impl Run {
         if state.phase == Phase::Setup {
             Self::sort_initiative(state);
         }
-        Ok(format!(
-            "{GROUP_ADDED}{} added: {}. {initiative}.",
-            group.name,
-            names.join(", ")
-        ))
+        Ok((names.join(", "), initiative))
     }
     fn apply(&mut self, command: Command) -> Result<(), String> {
         if matches!(self.state.phase, Phase::Ended { .. }) {
@@ -943,7 +1091,30 @@ impl Run {
                 format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total)
             }
             Command::AddGroup(group, total) => {
-                Self::join_group(&mut next, &group, total, self.initiative.grouping)?
+                let (added, initiative) =
+                    Self::join_group(&mut next, &group, total, self.initiative.grouping)?;
+                format!("{GROUP_ADDED}{} added: {added}. {initiative}.", group.name)
+            }
+            Command::AddCreature(group, total) => {
+                let first = next.participants.len();
+                let (added, initiative) =
+                    Self::join_group(&mut next, &group, total, self.initiative.grouping)?;
+                // There is no group to have arrived with.
+                for p in &mut next.participants[first..] {
+                    if let Some(from) = &mut p.added_from {
+                        from.group.clear();
+                    }
+                }
+                format!("{ONE_ADDED}{added}. {initiative}.")
+            }
+            Command::Several(commands) => {
+                let mut lines = commands
+                    .into_iter()
+                    .map(|command| Self::participant_command(&mut next, command))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let last = lines.pop().ok_or("Choose a target first.")?;
+                next.log.append(&mut lines);
+                last
             }
             other => Self::participant_command(&mut next, other)?,
         };
@@ -952,11 +1123,15 @@ impl Run {
             self.history.remove(0);
             self.history_labels.remove(0);
         }
+        self.dm_steps += 1;
         self.history.push(std::mem::replace(&mut self.state, next));
         self.history_labels.push(undo_label);
         self.last_initiative = initiative_edit;
         if follow_turn && let Some(current) = self.current() {
             self.selected = current;
+            // Whichever way the turn moved, targets chosen for it no longer stand.
+            self.also.clear();
+            self.halved.clear();
         }
         self.dirty = true;
         self.error = None;
@@ -1047,9 +1222,9 @@ impl Run {
                 format!("{amount} healing applied; {} HP remains.", p.hp.unwrap())
             }
             Command::Initiative(_, total) => {
-                // In combat, only for someone who came back without one.
-                if state.phase != Phase::Setup && (p.initiative.is_some() || total.is_none()) {
-                    return Err("Initiative is fixed during combat.".into());
+                // In combat, a total can be set or corrected, and never taken away.
+                if state.phase != Phase::Setup && total.is_none() {
+                    return Err("Enter an initiative total.".into());
                 }
                 p.initiative = total;
                 let change = format!("Initiative set to {}.", display(total));
@@ -1143,6 +1318,7 @@ impl Run {
     }
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
+            self.dm_steps += 1;
             self.history_labels.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
             let confirmed: Vec<_> = self
@@ -1159,6 +1335,7 @@ impl Run {
             self.dirty = true;
             self.error = None;
             self.last_initiative = None;
+            self.last_roll = None;
         }
     }
     /// Undo can take away an encounter group, and these all hold a participant's place.
@@ -1239,7 +1416,47 @@ impl Run {
             Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
             Command::Note(i, _) => format!("note on {}", name(i)),
             Command::Roll(expression) => format!("{expression} roll"),
-            Command::AddGroup(group, _) => format!("add {}", group.name),
+            Command::AddGroup(group, _) | Command::AddCreature(group, _) => {
+                format!("add {}", group.name)
+            }
+            Command::Several(commands) => {
+                let word = match commands.first() {
+                    Some(Command::Health(..)) => return "HP from the sheets".to_owned(),
+                    Some(Command::RemoveCondition(i, _)) => {
+                        return format!("Exhaustion on {}", name(i));
+                    }
+                    Some(Command::Heal(_, amount)) => format!("{amount} healing to"),
+                    Some(Command::TempHp(_, amount)) => format!("{amount} temporary HP on"),
+                    Some(Command::Damage(_, amount)) => {
+                        // The largest amount, so a half does not misname the step.
+                        let most = commands
+                            .iter()
+                            .filter_map(|command| match command {
+                                Command::Damage(_, amount) => Some(*amount),
+                                _ => None,
+                            })
+                            .max()
+                            .unwrap_or(*amount);
+                        format!("{most} damage to")
+                    }
+                    _ => "a change to".to_owned(),
+                };
+                let halves = commands
+                    .iter()
+                    .filter_map(|command| match command {
+                        Command::Damage(_, amount) => Some(*amount),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                let most = halves.iter().copied().max().unwrap_or(0);
+                let half = halves.iter().filter(|amount| **amount < most).count();
+                let saved = if half > 0 {
+                    format!(", half for {half}")
+                } else {
+                    String::new()
+                };
+                format!("{word} {} participants{saved}", commands.len())
+            }
         }
     }
     fn undo_label(&self) -> String {
@@ -1312,6 +1529,7 @@ impl Run {
                 Phase::Running => crate::timeline::RunState::Running,
                 Phase::Ended { outcome } => crate::timeline::RunState::Ended(outcome.clone()),
             },
+            steps: self.dm_steps,
         }
     }
     /// The strip's Next turn, usable from any page.
@@ -1328,6 +1546,8 @@ impl Run {
     pub fn review_conflict(&mut self) {
         if let Some(index) = self.first_sync_in(crate::combat_sync::SyncState::Conflict) {
             self.selected = index;
+            self.also.clear();
+            self.halved.clear();
             self.scroll_to_selected = true;
             // Its controls are in the side panel, which Lookup covers.
             self.close_lookup = true;
@@ -2142,11 +2362,16 @@ impl Run {
             dirty: false,
             history: Vec::new(),
             history_labels: Vec::new(),
+            also: BTreeSet::new(),
+            halved: BTreeSet::new(),
+            dm_steps: 0,
+            carried: None,
+            last_roll: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),
-            dice: "1d20".into(),
-            outcome: "Undecided".into(),
+            dice: String::new(),
+            outcome: String::new(),
             error: None,
             confirm_close: false,
             syncs,
@@ -2184,6 +2409,9 @@ impl Run {
             focus_field: None,
             focus_first_missing: true,
             groups: None,
+            creatures: None,
+            planned: Vec::new(),
+            ad_hoc: ad_hoc::AdHoc::default(),
             group_totals: BTreeMap::new(),
         })
     }
@@ -2360,6 +2588,85 @@ impl DeletedRun {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+}
+
+/// Where the party stands between fights in one session.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Carry {
+    /// The fight or the rest it comes from, in words.
+    pub from: String,
+    /// A long rest the DM said restored everyone. A later fight's values still come first.
+    pub full: bool,
+    /// HP and temporary HP, by the character's identity.
+    pub values: BTreeMap<Uuid, (i64, i64)>,
+    /// Fights whose runs could not be read.
+    pub missing: Vec<String>,
+}
+
+/// One fight after the fact: how each participant ended, and what the log says.
+pub struct FightSummary {
+    /// Combat ended, so these are the final values. A run can also be closed mid-fight.
+    pub ended: bool,
+    pub rows: Vec<FightRow>,
+    pub log: Vec<String>,
+}
+
+pub struct FightRow {
+    pub name: String,
+    pub player: bool,
+    pub hp: Option<i64>,
+    pub max_hp: Option<i64>,
+    pub temporary_hp: i64,
+    pub conditions: Vec<String>,
+    pub present: bool,
+}
+
+/// A saved run's file, within the size limit.
+fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
+    if fs::metadata(path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
+        return Err("Saved run exceeds the size limit.".into());
+    }
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let saved: SavedRun =
+        serde_json::from_slice(&bytes).map_err(|e| format!("Invalid saved run: {e}"))?;
+    if saved.version != 1 || saved.campaign != campaign {
+        return Err("Unsupported run version or wrong campaign.".into());
+    }
+    Ok(saved)
+}
+
+/// How the players stood when this run was last saved.
+pub fn party_at_end(path: &Path, campaign: Uuid) -> Result<BTreeMap<Uuid, (i64, i64)>, String> {
+    Ok(read_saved(path, campaign)?
+        .state
+        .participants
+        .iter()
+        .filter(|p| p.definition.fields.contains_key("splat_external"))
+        .filter_map(|p| Some((p.definition.id, (p.hp?, p.temporary_hp))))
+        .collect())
+}
+
+/// A finished or interrupted fight, to read in place.
+pub fn fight_summary(path: &Path, campaign: Uuid) -> Result<FightSummary, String> {
+    let state = read_saved(path, campaign)?.state;
+    Ok(FightSummary {
+        ended: matches!(state.phase, Phase::Ended { .. }),
+        rows: state
+            .order
+            .iter()
+            .filter_map(|index| state.participants.get(*index))
+            .map(|p| FightRow {
+                name: p.name.clone(),
+                player: p.definition.fields.contains_key("splat_external"),
+                hp: p.hp,
+                max_hp: p.max_hp,
+                temporary_hp: p.temporary_hp,
+                conditions: p.conditions.clone(),
+                present: p.present,
+            })
+            .collect(),
+        log: state.log.iter().rev().cloned().collect(),
+    })
 }
 
 /// A UTC date and time, so two runs saved on one day can be told apart.
@@ -2683,7 +2990,8 @@ mod tests {
         run.apply(Command::Begin).unwrap();
         assert_eq!(run.current(), Some(1));
         assert!(run.apply(Command::RollInitiative(0)).is_err());
-        assert!(run.apply(Command::Initiative(0, Some(30))).is_err());
+        // In combat a total can be corrected, and never taken away.
+        assert!(run.apply(Command::Initiative(0, None)).is_err());
     }
     #[test]
     fn missing_or_inconsistent_health_requires_dm_input() {
@@ -3741,7 +4049,7 @@ mod tests {
         assert_eq!(run.state.order, vec![1, 0, 2]);
         assert_eq!(run.current(), Some(1));
         // Once only, and a named step.
-        assert!(run.apply(Command::Initiative(0, Some(20))).is_err());
+        assert!(run.apply(Command::Initiative(0, None)).is_err());
         assert!(run.undo_label().contains("initiative"));
         run.undo();
         assert_eq!(run.state.order, vec![1, 2, 0]);
@@ -4018,6 +4326,192 @@ mod tests {
         assert_eq!(run.undo_label(), format!("Undo: 7 damage to {name}"));
         run.undo();
         assert_eq!(run.undo_label(), "Undo: begin combat");
+    }
+    #[test]
+    fn one_amount_on_several_targets_is_one_step_and_half_rounds_down() {
+        let mut run = run();
+        begin(&mut run);
+        run.state
+            .participants
+            .iter_mut()
+            .for_each(|p| p.temporary_hp = 0);
+        let hp: Vec<_> = run.state.participants.iter().map(|p| p.hp).collect();
+        run.selected = 0;
+        run.also.insert(1);
+        run.halved.insert(1);
+        let steps = run.history.len();
+        let lines = run.state.log.len();
+        run.apply(run.amount_command(5, Command::Damage)).unwrap();
+        assert_eq!(run.history.len(), steps + 1);
+        assert_eq!(run.state.log.len(), lines + 2);
+        assert_eq!(run.state.participants[0].hp, hp[0].map(|n| (n - 5).max(0)));
+        assert_eq!(run.state.participants[1].hp, hp[1].map(|n| (n - 2).max(0)));
+        assert_eq!(
+            run.undo_label(),
+            "Undo: 5 damage to 2 participants, half for 1"
+        );
+        run.undo();
+        assert_eq!(run.state.participants[0].hp, hp[0]);
+        assert_eq!(run.state.participants[1].hp, hp[1]);
+        // Half is for a save. Healing goes to every target in full.
+        run.also.insert(1);
+        run.halved.insert(1);
+        match run.amount_command(5, Command::Heal) {
+            Command::Several(commands) => assert!(
+                commands
+                    .iter()
+                    .all(|command| matches!(command, Command::Heal(_, 5)))
+            ),
+            _ => panic!("two targets are one step"),
+        }
+    }
+    #[test]
+    fn a_turn_that_moves_from_another_page_lets_go_of_the_targets() {
+        let mut run = run();
+        begin(&mut run);
+        run.also.insert(1);
+        run.halved.insert(1);
+        run.next_turn();
+        assert!(run.also.is_empty() && run.halved.is_empty());
+        // Even if the two meet, one target takes one amount.
+        run.selected = 1;
+        run.also.insert(1);
+        run.also.insert(0);
+        assert_eq!(run.targets().iter().filter(|at| **at == 1).count(), 1);
+    }
+    #[test]
+    fn a_wrong_initiative_moves_its_row_and_the_turn_stays_with_one_step_back() {
+        let mut run = run();
+        begin(&mut run);
+        let current = run.current().unwrap();
+        let other = (0..run.state.participants.len())
+            .find(|index| *index != current)
+            .unwrap();
+        let order = run.state.order.clone();
+        run.apply(Command::Initiative(other, Some(100))).unwrap();
+        assert_eq!(run.state.order[0], other);
+        assert_eq!(run.current(), Some(current));
+        run.undo();
+        assert_eq!(run.state.order, order);
+        assert!(run.apply(Command::Initiative(other, None)).is_err());
+    }
+    #[test]
+    fn only_the_dm_moves_a_run_on_the_timeline() {
+        let mut run = run();
+        begin(&mut run);
+        let fact = run.timeline_fact();
+        // A sheet's change reaches the log with no step of the DM's.
+        run.state
+            .log
+            .push("Kestrel: HP changed on D&D Beyond.".into());
+        assert_eq!(run.timeline_fact(), fact);
+        run.apply(Command::Damage(0, 1)).unwrap();
+        let hit = run.timeline_fact();
+        assert!(hit.played_since(&fact));
+        run.undo();
+        assert!(run.timeline_fact().played_since(&hit));
+    }
+
+    #[test]
+    fn a_setup_with_nothing_done_is_untouched_until_sync_changes_it() {
+        let mut run = run();
+        assert!(run.untouched_setup());
+        run.undo_stopped = true;
+        assert!(!run.untouched_setup());
+    }
+    #[test]
+    fn a_ctrl_click_on_the_selected_row_gives_the_selection_to_another_target() {
+        let mut run = run();
+        run.selected = 0;
+        run.toggle_target(1);
+        assert!(run.also.contains(&1));
+        run.toggle_target(0);
+        assert_eq!(run.selected, 1);
+        assert!(run.also.is_empty());
+    }
+    #[test]
+    fn the_prep_tab_separates_a_runs_words_from_its_setup() {
+        let mut run = run();
+        run.setup_details = format!("Ash falls.\n\n{SETUP_HEADING}\n\n```yaml\nroster: []\n```");
+        let (prep, technical) = run.prep();
+        assert_eq!(prep, "Ash falls.");
+        assert!(technical.unwrap().contains("roster"));
+        // An older save, or a run with no setup, has only words.
+        run.setup_details = "Only words.".into();
+        assert_eq!(run.prep(), ("Only words.", None));
+    }
+    #[test]
+    fn a_player_starts_from_the_last_fight_and_the_sheet_is_one_step_back() {
+        let id = Uuid::new_v4();
+        let entry = Entry::parse(
+            "Hero.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{size: medium}}\nsplat_external: {{provider: test}}\nsplat_stats:\n  max_hp: {{value: 41}}\nsplat_initial:\n  hp: 11\n---\n"
+            ),
+        )
+        .unwrap();
+        let mut hero =
+            Participant::new("hero".into(), "party".into(), entry, &Mapping::new(), true).unwrap();
+        let carry = Carry {
+            from: "the bridge".into(),
+            full: false,
+            values: BTreeMap::from([(id, (7, 2))]),
+            missing: Vec::new(),
+        };
+        assert_eq!(hero.carry_over(&carry), Some((Some(11), 0)));
+        assert_eq!((hero.hp, hero.temporary_hp), (Some(7), 2));
+        // A value the same as the sheet has nothing to say.
+        assert_eq!(hero.carry_over(&carry), None);
+        let rested = Carry {
+            from: "the long rest".into(),
+            full: true,
+            values: BTreeMap::new(),
+            missing: vec!["the shrine".into()],
+        };
+        hero.carry_over(&rested);
+        assert_eq!((hero.hp, hero.temporary_hp), (Some(41), 0));
+        // A ruling is not what the sheet began with, so sync treats it as the DM's value.
+        assert_eq!(hero.started.as_ref().and_then(|s| s.hp), Some(7));
+
+        let mut run = Run::new("Next".into(), vec![hero], String::new()).unwrap();
+        run.note_carry(&rested, vec![(0, Some(11), 0)]);
+        assert!(run.carry_missing().unwrap().contains("the shrine"));
+        assert!(run.state.log.last().unwrap().contains("carried over"));
+        let (from, back) = run.back_to_sheets().unwrap();
+        assert_eq!(from, "the long rest");
+        run.apply(back).unwrap();
+        assert_eq!(run.state.participants[0].hp, Some(11));
+        assert_eq!(run.undo_label(), "Undo: HP from the sheets");
+        assert!(run.back_to_sheets().is_none());
+        run.undo();
+        assert_eq!(run.state.participants[0].hp, Some(41));
+    }
+    #[test]
+    fn a_monster_does_not_carry_anything() {
+        let id = Uuid::new_v4();
+        let entry = Entry::parse(
+            "Wolf.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{size: medium}}\nsplat_stats:\n  max_hp: {{value: 11}}\n---\n"
+            ),
+        )
+        .unwrap();
+        let mut wolf = Participant::new(
+            "wolf".into(),
+            "enemies".into(),
+            entry,
+            &Mapping::new(),
+            true,
+        )
+        .unwrap();
+        let carry = Carry {
+            from: "the bridge".into(),
+            full: true,
+            values: BTreeMap::from([(id, (1, 0))]),
+            missing: Vec::new(),
+        };
+        assert_eq!(wolf.carry_over(&carry), None);
+        assert_eq!(wolf.hp, Some(11));
     }
     #[test]
     fn initiative_digits_merge_into_one_undo_step() {
@@ -4374,6 +4868,171 @@ mod tests {
         run.undo();
         assert_eq!(run.state.participants.len(), 3);
     }
+    fn known_wolf() -> Arc<RunCreature> {
+        let mut entry = creature();
+        entry.name = "Wolf".into();
+        Arc::new(RunCreature {
+            entry: Arc::new(entry),
+            lower: "wolf".into(),
+            detail: "A wolf".into(),
+        })
+    }
+    fn form(query: &str, hp: &str) -> ad_hoc::AdHoc {
+        ad_hoc::AdHoc {
+            query: query.into(),
+            hp: hp.into(),
+            ..Default::default()
+        }
+    }
+    fn add_from(run: &mut Run, form: &ad_hoc::AdHoc, known: &[Arc<RunCreature>]) {
+        let checked = form.check(known).unwrap();
+        run.apply(Command::AddCreature(form.group(checked), form.total()))
+            .unwrap();
+    }
+
+    #[test]
+    fn a_creature_made_up_at_the_table_joins_is_undone_and_stays_in_the_saved_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        begin(&mut run);
+        let before = run.state.participants.len();
+        let mut ghost = form("  Ghost of the Mill ", "22");
+        ghost.ac = "14".into();
+        ghost.total = "9".into();
+        ghost.count = "2".into();
+        add_from(&mut run, &ghost, &[]);
+        let p = &run.state.participants[before];
+        assert_eq!(p.name, "Ghost of the Mill 1");
+        assert_eq!(
+            (p.hp, p.max_hp, p.armor_class),
+            (Some(22), Some(22), Some(14))
+        );
+        assert_eq!(p.initiative, Some(9));
+        assert_eq!(p.side, "enemies");
+        assert!(p.changes.is_none(), "nothing here replaces a stat block");
+        assert_eq!(p.added_from.as_ref().unwrap().group, "");
+        assert!(run.state.log.last().unwrap().starts_with(ONE_ADDED));
+        run.undo();
+        assert_eq!(run.state.participants.len(), before);
+        add_from(&mut run, &ghost, &[]);
+        let campaign = stored(&mut run, dir.path());
+        let reopened = close_and_reopen(&mut run, campaign);
+        let p = &reopened.state.participants[before + 1];
+        assert_eq!(p.name, "Ghost of the Mill 2");
+        assert_eq!(p.max_hp, Some(22));
+        assert_eq!(p.definition.name, "Ghost of the Mill");
+    }
+
+    #[test]
+    fn a_creature_found_in_the_campaign_keeps_its_values_unless_the_dm_types_others() {
+        let known = [known_wolf()];
+        let mut run = run();
+        begin(&mut run);
+        let before = run.state.participants.len();
+        // The whole name typed is the same as choosing it, and has what it needs.
+        let mut wolf = form("WOLF", "");
+        wolf.total = "5".into();
+        add_from(&mut run, &wolf, &known);
+        let p = &run.state.participants[before];
+        assert_eq!(p.max_hp, Some(20));
+        assert!(p.changes.is_none());
+        let mut changed = form("", "31");
+        changed.picked = Some(known[0].clone());
+        changed.ac = "9".into();
+        changed.total = "5".into();
+        add_from(&mut run, &changed, &known);
+        let p = run.state.participants.last().unwrap();
+        assert_eq!((p.max_hp, p.armor_class), (Some(31), Some(9)));
+        let changes = p.changes.as_ref().unwrap();
+        assert_eq!(
+            changes.base.max_hp,
+            Some(20),
+            "the change shows what it replaced"
+        );
+        // The same number the entry has is no change.
+        let mut same = form("", "20");
+        same.picked = Some(known[0].clone());
+        same.total = "5".into();
+        add_from(&mut run, &same, &known);
+        assert!(run.state.participants.last().unwrap().changes.is_none());
+    }
+
+    #[test]
+    fn a_search_shows_the_whole_name_first_then_names_that_start_with_it() {
+        let named = |name: &str| {
+            Arc::new(RunCreature {
+                entry: Arc::new(creature()),
+                lower: name.into(),
+                detail: String::new(),
+            })
+        };
+        let known = [
+            named("cinder wolf"),
+            named("dire wolf"),
+            named("wolf spider"),
+            named("wolf"),
+        ];
+        let found: Vec<_> = ad_hoc::matches_for(&known, "wolf")
+            .iter()
+            .map(|creature| creature.lower.as_str())
+            .collect();
+        assert_eq!(found, ["wolf", "wolf spider", "cinder wolf", "dire wolf"]);
+    }
+
+    #[test]
+    fn an_ended_fight_takes_no_arrivals_and_an_undo_of_the_ending_does() {
+        let mut run = run();
+        assert!(run.takes_arrivals(), "setup can take them");
+        begin(&mut run);
+        assert!(run.takes_arrivals());
+        run.apply(Command::End("Won".into())).unwrap();
+        assert!(!run.takes_arrivals());
+        run.undo();
+        assert!(run.takes_arrivals());
+    }
+
+    #[test]
+    fn a_creature_form_says_what_it_still_needs() {
+        let known = [known_wolf()];
+        let error = |form: ad_hoc::AdHoc| form.check(&known).err().unwrap();
+        assert!(error(form("", "")).contains("Find or name"));
+        assert!(error(form("Ghost", "")).contains("Type its HP"));
+        assert!(error(form("Ghost", "0")).contains("HP must be"));
+        let mut many = form("Ghost", "5");
+        many.count = "0".into();
+        assert!(error(many).contains("Count must be"));
+        let mut armor = form("Ghost", "5");
+        armor.ac = "1001".into();
+        assert!(error(armor).contains("AC must be"));
+        let mut blank = creature();
+        blank.fields.clear();
+        let unknown = [Arc::new(RunCreature {
+            entry: Arc::new(blank),
+            lower: "blank".into(),
+            detail: String::new(),
+        })];
+        let mut no_hp = form("", "");
+        no_hp.picked = Some(unknown[0].clone());
+        let error = no_hp.check(&unknown).err().unwrap();
+        assert!(error.contains("no maximum HP"), "{error}");
+    }
+
+    #[test]
+    fn an_added_creature_counts_as_the_dms_step_and_follows_the_side_rule() {
+        let mut run = run();
+        run.initiative.grouping = Grouping::BySide;
+        begin(&mut run);
+        let side_total = run.state.participants[0].initiative;
+        let fact = run.timeline_fact();
+        add_from(&mut run, &form("Ghost", "5"), &[]);
+        assert!(run.timeline_fact().played_since(&fact));
+        assert_eq!(
+            run.state.participants.last().unwrap().initiative,
+            side_total,
+            "by side, it takes its side's initiative with no roll"
+        );
+    }
+
     #[test]
     fn a_saved_run_reopens_with_added_groups_and_their_changes() {
         let dir = tempfile::tempdir().unwrap();

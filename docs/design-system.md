@@ -185,6 +185,15 @@ numbers, or of a name and a number, become a table. `presentation::reading_tests
 rules over every built-in note, so a fault cannot come back unseen. A window wide enough
 moves the rarely wanted sections (source, engine support, technical details) to a margin.
 
+## The session's plan
+
+The Session page is a list the DM works down, beside the note. A row is an icon, a link and a second line, with one action on
+the right. A row opens in place, and its fields use the same form parts as the Timeline page. The first fight to come has
+the primary button and the others the secondary, so the eye goes to the next thing to do. The word for a fight is **Start
+fight**, on this page and on Encounters. Add buttons stay at the foot of the plan, and a message opens above them, so
+that they do not move under the pointer. A fight's row lists the party first, with HP right-aligned in the run's tints, and
+everyone else behind one word. In a page narrower than 720 px, the plan and the note have a tab each.
+
 ## The live run
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
@@ -222,8 +231,9 @@ the panel, those words open the second line instead, so that a name is never cut
 - **Encounter editor:** each of the encounter's groups has a frame below the roster, with its name,
   side, members and notes. The frame that takes the search's results has an accent outline, and
   `Add to` above the search names it. The Encounters page keeps these groups in one closed section.
-- **Groups:** a tab beside the stat block lists the encounter's own groups, then the groups for any
-  encounter, with members, count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
+- **Arrivals:** a tab beside the stat block adds one creature, found or made up, in two fixed rows of
+  fields. Below it, the tab lists the encounter's own groups, then those in tonight's plan, then the
+  others for any encounter, with members, count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
   outline while one is held. Each group also has a field for a total, blank to roll, and an `Add`
   button that the keyboard reaches. No step asks for confirmation, because Undo names the addition.
 

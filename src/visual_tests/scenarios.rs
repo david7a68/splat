@@ -642,10 +642,11 @@ pub mod encounter_build {
         // A new draft selects its name, and adding moves focus to the search.
         d.click(NEW_ENCOUNTER);
         d.type_text(NEW_NAME);
+        d.expect("5. ");
         d.state("new-encounter", Sizes::Default);
 
-        d.click(ADD_PARTY);
-        d.expect("5. ");
+        // The party is already there, and Enter goes on to the search.
+        d.press(Key::Enter);
         d.type_text(MONSTER);
         d.state("find-creature", Sizes::Default);
         // The result row for the plain Wolf, not a word anywhere on the page.
@@ -818,8 +819,7 @@ pub mod encounter_run {
     pub fn run(d: &mut Driver<'_>) {
         d.expect(READY_TO_RUN);
         d.state("saved-runs", Sizes::Default);
-        d.click_beside(RUN, RESUME);
-        d.expect(&format!("{RUN_HEADING}{RUN}"));
+        resume_run(d, RUN);
         d.expect(CURRENT_TURN);
         d.state("initiative-list", Sizes::AllAndHiDpi);
         d.check_tab_order("encounter run");
@@ -2144,7 +2144,7 @@ pub mod party_from_run {
         d.state("in-the-run", Sizes::Default);
         d.goal("resume the run");
 
-        d.click_containing(MEMBER);
+        d.click_row(MEMBER);
         d.expect(SHEET_TITLE);
         d.state("sheet-beside-run", Sizes::All);
         d.goal_within("T7.1", "open a participant's sheet from the run", 1);
@@ -2182,11 +2182,11 @@ pub mod party_from_run {
         d.goal("read a page and return to the run");
 
         // The hardest rows: 0 HP, absent, and many conditions. Words, not only colour.
-        d.click_containing(MEMBER);
+        d.click_row(MEMBER);
         d.type_text(ZERO_DAMAGE);
         d.press(Key::Enter);
         d.expect("0 HP");
-        d.click_containing(ABSENT_ROW);
+        d.click_row(ABSENT_ROW);
         d.click(ABSENT);
         d.click(CONDITIONS);
         for condition in MANY_CONDITIONS {
@@ -2208,7 +2208,7 @@ pub mod party_from_run {
             unread.is_empty() && row.contains("Absent") && zero.contains("0 HP"),
             format!("At 960x640, {ABSENT_ROW} paints: {row}. {MEMBER} paints: {zero}. Missing: {unread:?}"),
         );
-        d.click_containing(MEMBER);
+        d.click_row(MEMBER);
         d.state("zero-hp-selected", Sizes::Default);
 
         // The third view of a run. It reads differently, and undo can reopen it.
@@ -2235,7 +2235,6 @@ pub mod library_to_encounter {
     pub fn run(d: &mut Driver<'_>) {
         d.click(NEW_ENCOUNTER);
         d.type_text(DRAFT_NAME);
-        d.click(ADD_PARTY);
         d.expect(SEEDED_ROW);
         d.state("draft-open", Sizes::Default);
         d.begin_task();
@@ -2458,7 +2457,7 @@ pub mod column_resize {
         d.state("session-fills-its-column", Sizes::All);
     }
 
-    /// Write, Read and Events use the whole column, and Write and Read break lines alike.
+    /// Write and Read use the whole column beside the plan, and break lines alike.
     fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
         d.set_base(LARGE);
         let page = right_of(d, "New session");
@@ -2479,7 +2478,6 @@ pub mod column_resize {
             format!("Longest line in a wide window: {write} in Write, {read} in Read"),
         );
         d.state("session-read-fills-its-column", Sizes::All);
-        d.click("Events");
         d.click("Add Major event");
         let action = d
             .nodes()
@@ -2488,8 +2486,8 @@ pub mod column_resize {
             .map_or(0.0, |node| node.rect.right());
         d.observe(
             CHECK,
-            filled(action),
-            format!("An event's action reaches {action} of {page}"),
+            action > 0.0 && action < page,
+            format!("An event in the plan has its action, at {action} of {page}"),
         );
         d.state("session-events-fill-their-column", Sizes::All);
     }
@@ -3443,7 +3441,6 @@ pub mod nav_table {
         go_encounters(d);
         d.click(NEW_ENCOUNTER);
         d.type_text(DRAFT_NAME);
-        d.click(ADD_PARTY);
         go_settings(d);
         go_encounters(d);
         d.observe(
@@ -3576,11 +3573,11 @@ pub mod session_notes {
         d.expect("Notes saved");
         d.state("session-written", Sizes::Default);
 
-        d.click("Read");
+        read_note(d);
         d.state("session-read", Sizes::All);
 
         // A rest, on the session's own page, with no step away from it.
-        d.click("Events");
+        show_plan(d);
         d.state("session-events-empty", Sizes::Default);
         d.begin_task();
         d.click(ADD_LONG_REST);
@@ -3616,7 +3613,7 @@ pub mod session_notes {
             "Undo goes at the next thing the DM does, so it cannot undo the wrong event",
         );
         d.state("session-event-in-notes", Sizes::Default);
-        d.click("Write");
+        write_note(d);
         let linked = d.editor_text().is_some_and(|text| {
             let what = text.find("## What happened");
             let next = text.find("## People and places");
@@ -3629,7 +3626,7 @@ pub mod session_notes {
             "An event's link goes under What happened in the note",
         );
         d.press_ctrl(Key::S);
-        d.click("Read");
+        read_note(d);
         d.expect("ON THE TIMELINE");
         d.state("session-read-linked", Sizes::Default);
         let reads_as_words = !d.visible_text("[[Timeline");
@@ -3669,13 +3666,13 @@ pub mod session_notes {
         // The Reader follows the event's name now, not the name when it was linked.
         d.click_containing("Rest at the mill");
         d.click("Open this session");
-        d.click("Read");
+        read_note(d);
         d.observe(
             "T11.4",
             d.visible_text("Rest at the mill"),
             "A renamed event reads under its new name in the note",
         );
-        d.click("Write");
+        write_note(d);
         d.click(NAV_TIMELINE);
         d.click("Rests");
         d.state("timeline-filtered", Sizes::Default);
@@ -3704,7 +3701,7 @@ pub mod session_notes {
         d.expect(&format!("Session 1: {TITLE}"));
 
         // Words that could not be saved survive anything that would open the note again.
-        d.click("Write");
+        write_note(d);
         d.type_into_editor("\nMy words during the conflict.\n");
         d.app_mut().sessions.simulate_disk_change();
         d.press_ctrl(Key::S);
@@ -3795,15 +3792,15 @@ pub mod session_notes {
                 .is_some_and(|text| text.contains("Edited in the template.")),
             "A template edited a moment ago is what a new session starts from",
         );
-        d.click_containing(&format!("Session 1: {TITLE}"));
-        d.click("Events");
+        d.click_starting(&format!("Session 1: {TITLE}"));
+        show_plan(d);
         d.observe(
             "T11.3",
             d.has_containing("These go to Session 1, not the session being played (Session 2)."),
             "Adding an event to an older session says so before it happens",
         );
         d.state("session-events-older", Sizes::Default);
-        d.click("Write");
+        write_note(d);
         d.observe(
             "T11.8",
             d.has_containing(
@@ -4033,7 +4030,7 @@ pub mod session_notes {
         d.press_ctrl(Key::J);
         // The panel must not follow the page to an older note.
         d.click(NAV_SESSIONS);
-        d.click_containing(&format!("Session 1: {TITLE}"));
+        d.click_starting(&format!("Session 1: {TITLE}"));
         d.observe(
             "T11.8",
             !d.has("Close notes"),
@@ -4248,7 +4245,7 @@ pub mod session_recording {
         d.click("Recordings (1)");
         d.expect("· Recording");
         d.state("recording-listed", Sizes::Default);
-        d.click("Write");
+        write_note(d);
 
         d.app_mut()
             .sessions
@@ -4269,7 +4266,7 @@ pub mod session_recording {
         d.state("run-silent", Sizes::Default);
         d.click_containing("Undo: 7 damage");
         close_run(d);
-        d.click_containing("Sessions · Silent");
+        d.click_containing("Session · Silent");
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
         d.state("recording-silent", Sizes::Default);
@@ -4295,7 +4292,7 @@ pub mod session_recording {
         go_library(d);
         d.observe(
             "T11.5",
-            d.has_containing("Sessions · Not saving") && d.has_containing("Not saving audio"),
+            d.has_containing("Session · Not saving") && d.has_containing("Not saving audio"),
             "A stall shows in the rail on other pages",
         );
         d.state("recording-stalled-elsewhere", Sizes::Default);
@@ -4319,7 +4316,7 @@ pub mod session_recording {
             d.page_title().as_deref() == Some("Library"),
             "Keep working leaves the DM on the page they were on",
         );
-        d.click_containing("Sessions · ");
+        d.click_containing("Session · ");
         d.expect("Stop recording");
         d.click("Stop recording");
         d.expect("saved: 2026-01-01 19:00");
@@ -4553,11 +4550,11 @@ pub mod session_recording {
         d.click("Recording and processing");
         d.expect("A new input applies to the next recording");
         d.state("input-during-recording", Sizes::Default);
-        d.click_containing("Sessions · ");
+        d.click_containing("Session · ");
         d.click("Stop recording");
 
         // A note renamed in Obsidian keeps the DM's words, and no two rows share one session.
-        d.click("Write");
+        write_note(d);
         d.type_into_editor("Words typed after the rename.\n");
         d.app_mut().sessions.simulate_file_renamed();
         d.press_ctrl(Key::S);
@@ -4579,7 +4576,7 @@ pub mod session_recording {
 pub mod encounter_groups {
     use super::*;
     const LIST_HEADING: &str = "Encounter groups (4)";
-    const GROUPS_TAB: &str = "Groups";
+    const GROUPS_TAB: &str = "Arrivals";
     const NEW_GROUP: &str = "New group";
     const SAVE_GROUP: &str = "Save group";
     const SAVED_NOTE: &str = "Group saved.";
@@ -4843,7 +4840,7 @@ pub mod encounter_history {
 pub mod encounter_owned_groups {
     use super::*;
     const SHRINE: &str = "Shrine of Cinders";
-    const GROUPS_TAB: &str = "Groups";
+    const GROUPS_TAB: &str = "Arrivals";
     const BELONGS_DROPDOWN: usize = 1;
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
@@ -5030,7 +5027,7 @@ pub mod run_overrides {
 
     pub fn run(d: &mut Driver<'_>) {
         // The card has both values, and marks what the run cannot apply.
-        d.click_beside(RUN_ARENA, RESUME);
+        resume_run(d, RUN_ARENA);
         d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
         d.click_row(RIVAL);
         d.state("overridden-participant", Sizes::AllAndHiDpi);
@@ -5088,9 +5085,565 @@ pub mod run_no_groups {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN);
-        d.click("Groups");
+        d.click("Arrivals");
         d.expect("No encounter groups yet");
         d.state("no-groups", Sizes::Default);
         d.goal("see that a campaign has no groups");
+    }
+}
+
+/// W13: one creature joins a fight with nothing prepared, made up or found.
+pub mod run_add_creature {
+    use super::*;
+    const FIELD: &str = "Find or name a creature";
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN);
+        d.click("Arrivals");
+        d.expect(FIELD);
+        d.state("arrivals-empty", Sizes::All);
+        d.check_tab_order("run, arrivals panel");
+
+        d.type_into(FIELD, "Ghost of the Mill");
+        d.expect("Made up here");
+        d.observe(
+            "T13.7",
+            d.has_containing("Type its HP"),
+            "A creature made up with no HP says what it needs",
+        );
+        d.state("arrivals-made-up-needs-hp", Sizes::All);
+        d.type_into("New creature HP", "22");
+        d.type_into("New creature AC", "14");
+        d.type_into("New creature initiative total", "9");
+        d.state("arrivals-made-up-ready", Sizes::Default);
+        d.click("Add Ghost of the Mill to the initiative list");
+        d.expect("Added by hand: Ghost of the Mill");
+        d.state("arrivals-made-up-added", Sizes::All);
+        d.goal("add a creature made up at the table to a running fight");
+        d.click_row("Ghost of the Mill");
+        d.click("Stat block");
+        d.expect("Added by hand");
+        d.state("made-up-creature-sheet", Sizes::Default);
+        d.click("Arrivals");
+        d.expect(FIELD);
+        d.observe(
+            "T13.7",
+            d.has_containing("Ghost of the Mill") && d.has_containing("Initiative 9"),
+            "A made-up creature joins the running fight, and the panel says where it went",
+        );
+
+        d.type_into(FIELD, "wolf");
+        d.expect("Choose Wolf");
+        d.state("arrivals-found", Sizes::Default);
+        d.observe(
+            "T13.7",
+            d.has("Add Wolf to the initiative list"),
+            "The button says which creature the words typed will add",
+        );
+        d.click("Choose Wolf");
+        d.type_into("New creature count", "2");
+        d.state("arrivals-found-chosen", Sizes::Default);
+        d.click("Add Wolf to the initiative list");
+        d.expect("Added by hand: Wolf");
+        d.goal("add two of a campaign's creatures to a running fight");
+        d.observe(
+            "T13.7",
+            d.has_containing("Wolf 1") && d.has_containing("Wolf 2"),
+            "Creatures found in the campaign join with numbered names",
+        );
+    }
+}
+
+/// W13 and W14: a group assembled in the session's plan is first in the run's panel.
+pub mod session_plan_groups {
+    use super::*;
+
+    pub fn run(d: &mut Driver<'_>) {
+        // The Library has been read before the group exists, so it must read again after.
+        go_library(d);
+        d.expect(SEARCH_LIBRARY);
+        d.click(NAV_SESSIONS);
+        new_session(d, "The Crossing");
+        show_plan(d);
+        d.click("Add a group");
+        d.click("New group");
+        d.expect("Back to the plan");
+        d.type_text("Ash Pack");
+        d.state("plan-group-empty", Sizes::All);
+        d.observe(
+            "T14.6",
+            d.has_containing("Session 1: The Crossing"),
+            "Assembling a group stays on the session's page",
+        );
+        d.type_into(FIND_CREATURE, "wolf");
+        d.click_beside("Wolf", ADD);
+        d.click_beside("Wolf", ADD);
+        d.state("plan-group-assembled", Sizes::All);
+        d.click("Save group");
+        d.expect("Edit group Ash Pack");
+        d.state("plan-group-saved", Sizes::All);
+        d.goal("assemble a group in the session's plan");
+        d.observe(
+            "T14.6",
+            d.has_containing("2 creatures") && !d.has("Back to the plan"),
+            "A group saved from the plan is linked in it, with what it holds",
+        );
+        go_library(d);
+        d.type_into(SEARCH_LIBRARY, "Ash Pack");
+        d.expect("Ash Pack");
+        d.observe(
+            "T14.6",
+            d.in_view_containing("Ash Pack"),
+            "A group saved from the plan is in the Library at once",
+        );
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+
+        d.click("Add a group");
+        d.click(&format!("Plan {GROUP_RIVALS}"));
+        d.expect(&format!("Edit group {GROUP_RIVALS}"));
+        d.state("plan-with-groups", Sizes::Default);
+
+        d.click(&format!("Edit group {GROUP_RIVALS}"));
+        d.expect("Back to the plan");
+        d.state("plan-group-edit", Sizes::Default);
+        d.click("Back to the plan");
+        d.expect(&format!("Edit group {GROUP_RIVALS}"));
+
+        d.click(NAV_ENCOUNTERS);
+        resume_run(d, RUN);
+        d.click("Arrivals");
+        d.expect("IN TONIGHT'S PLAN");
+        d.state("arrivals-tonight-first", Sizes::All);
+        d.observe(
+            "T14.6",
+            d.has("FOR ANY ENCOUNTER"),
+            "The groups in tonight's plan come first in the run's panel",
+        );
+
+        // From the plan, with the fight open: one press to where the group can arrive.
+        d.click("Stat block");
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+        let route = format!("Go to Arrivals for {GROUP_RIVALS}");
+        d.expect(&route);
+        d.state("plan-groups-fight-open", Sizes::All);
+        d.click(&route);
+        d.expect("IN TONIGHT'S PLAN");
+        d.observe(
+            "T14.6",
+            d.has(&format!("Add {GROUP_RIVALS} to the initiative list")),
+            "With a fight open, a planned group's row goes to the Arrivals panel in one press",
+        );
+
+        // A group belongs to the plan it began in, whichever note is on screen when it is saved.
+        d.click(NAV_SESSIONS);
+        d.click("New session");
+        d.type_into("Session title", "The Ford");
+        d.click("Create session");
+        d.expect("Session 2: The Ford");
+        show_plan(d);
+        d.click("Add a group");
+        d.click("New group");
+        d.expect("Back to the plan");
+        d.type_text("Border Watch");
+        d.type_into(FIND_CREATURE, "wolf");
+        d.click_beside_exact("Wolf", ADD);
+        d.click_starting("Session 1: The Crossing");
+        d.expect("Go to it");
+        d.state("plan-group-in-another-session", Sizes::Default);
+        let stays_out = !d.has("Save group");
+        d.click("Go to it");
+        d.click("Save group");
+        d.expect("Go to Arrivals for Border Watch");
+        d.click_starting("Session 1: The Crossing");
+        d.expect(&format!("Go to Arrivals for {GROUP_RIVALS}"));
+        d.observe(
+            "T14.6",
+            stays_out && !d.has("Go to Arrivals for Border Watch"),
+            "A group is linked in the plan it began in, with another note open on the way",
+        );
+    }
+}
+
+/// W14: an evening from the session's one page: the plan, the fights, and what they leave behind.
+pub mod session_plan {
+    use super::*;
+    /// New events go to this session, by the Timeline page's own control.
+    fn go_timeline_choose_session(d: &mut Driver<'_>, session: &str) {
+        d.click(NAV_TIMELINE);
+        d.open_combo_at(1);
+        d.click_starting(session);
+    }
+
+    const FIRST: &str = "Bridge Ambush";
+    const SECOND: &str = "Shrine of Cinders";
+    const PLAYERS: [(&str, &str); 5] = [
+        ("Brannoch Vale", "15"),
+        ("Iselle Marrowind", "19"),
+        ("Kestrel Dunmoor", "21"),
+        ("Oren Thistlewick", "11"),
+        ("Sable Harrowgate", "13"),
+    ];
+
+    fn roll_and_begin(d: &mut Driver<'_>) {
+        d.click("Roll NPC initiative");
+        for (name, total) in PLAYERS {
+            d.type_into(&format!("Initiative for {name}"), total);
+        }
+    }
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        new_session(d, "The Road");
+        d.type_into_editor("Hobb the miller says the toll collectors have not been paid.\n");
+        d.press_ctrl(Key::S);
+        d.click("New session");
+        d.type_into("Session title", "The Crossing");
+        d.click("Create session");
+        d.expect("Session 2: The Crossing");
+        d.state("new-session-with-last-time", Sizes::All);
+        d.observe(
+            "T12.6",
+            d.has_containing("Last time: Session 1: The Road")
+                && d.visible_text("Hobb the miller says the toll collectors have not been paid."),
+            "A new session shows what the last one left, with nothing to open",
+        );
+
+        // T12.1: from the plan to the fight, and back to the plan.
+        show_plan(d);
+        d.state("plan-empty", Sizes::Default);
+        for name in [FIRST, SECOND] {
+            d.click("Add a fight");
+            d.click(&format!("Plan {name}"));
+        }
+        d.expect(&format!("Start fight: {FIRST}"));
+        d.state("plan-with-fights", Sizes::AllAndHiDpi);
+        d.check_tab_order("session plan");
+        write_note(d);
+        d.observe(
+            "T12.1",
+            d.editor_text()
+                .is_some_and(|text| text.contains(&format!("[[{FIRST}]]"))),
+            "The plan is in the note's own words, so Obsidian sees it too",
+        );
+        read_note(d);
+        d.observe(
+            "T12.1",
+            !d.visible_text("[[") && d.has(FIRST),
+            "The Reader shows a link as its words, and lists it to follow",
+        );
+        d.state("note-read-with-links", Sizes::Default);
+        show_plan(d);
+        d.begin_task();
+        d.click(&format!("Start fight: {FIRST}"));
+        d.goal_within("T12.1", "start a planned fight from the session", 1);
+        d.expect(&format!("{RUN_HEADING}{FIRST}"));
+        d.state("setup-with-read-aloud", Sizes::All);
+        d.observe(
+            "T12.7",
+            d.visible_text("Wolves hold the far bank") && !d.visible_text("roster:"),
+            "Setup shows what to read to the table, and no YAML",
+        );
+        d.click("Prep");
+        d.state("prep-tab", Sizes::Default);
+        d.observe(
+            "T12.7",
+            d.has("Technical details") && !d.visible_text("roster:"),
+            "Prep keeps the setup's YAML closed under Technical details",
+        );
+        d.click("Turn order");
+        roll_and_begin(d);
+        d.click("Begin combat");
+        d.expect(CURRENT_TURN);
+
+        // T12.3: one amount on several targets, one step of undo.
+        d.click_row("Cinder Wolf 1");
+        d.ctrl_click_row("Cinder Wolf 2");
+        d.ctrl_click_row("Ember Cultist");
+        d.expect("Half damage: Ember Cultist");
+        d.click("Half damage: Ember Cultist");
+        d.state("several-targets", Sizes::All);
+        d.begin_task();
+        d.type_text("8");
+        d.press(Key::Enter);
+        let cost = d.goal("damage several targets, once they are chosen");
+        let (wolf, cultist) = (d.row_hp("Cinder Wolf 2"), d.row_hp("Ember Cultist"));
+        d.observe(
+            "T12.3",
+            cost <= 2 && wolf == Some(14) && cultist == Some(29),
+            format!("Full and half from one amount, in {cost}: wolf {wolf:?}, cultist {cultist:?}"),
+        );
+        d.observe(
+            "T12.3",
+            d.has_containing("Undo: 8 damage to 3 participants, half for 1"),
+            "One step of undo, and it says how many, and how many took half",
+        );
+        d.state("several-targets-applied", Sizes::Default);
+        d.click_containing("Undo: 8 damage");
+        d.observe(
+            "T12.3",
+            d.row_hp("Cinder Wolf 2") == Some(22) && d.row_hp("Ember Cultist") == Some(33),
+            "Undo takes the whole step back",
+        );
+
+        // T12.4: dice beside the amount, with the stat block still open.
+        d.click_row("Ember Cultist");
+        d.begin_task();
+        d.type_into("Dice", "1d1+3");
+        d.press(Key::Enter);
+        let cost = d.goal("roll dice beside the stat block");
+        d.state("dice-in-the-dock", Sizes::All);
+        d.observe(
+            "T12.4",
+            cost <= 3 && d.visible_text("Scorching Sickle") && d.visible_text("4"),
+            format!("The result shows in {cost}, and the stat block stays"),
+        );
+
+        // T12.5: a look at someone else, and back.
+        let turn = current_participant(d).unwrap_or_default();
+        d.press(Key::Escape);
+        d.observe(
+            "T12.5",
+            participant_is_selected(d, &turn),
+            "Escape selects the current turn again",
+        );
+
+        // T12.8: a condition's rule, from its word on the row.
+        d.click_row("Oren Thistlewick");
+        d.click(CONDITIONS);
+        d.click("Frightened");
+        d.begin_task();
+        d.click("Rule: Frightened");
+        d.expect("Close Lookup");
+        d.state("rule-from-the-row", Sizes::Default);
+        d.press(Key::Escape);
+        d.goal_within("T12.8", "read a condition's rule from its row", 2);
+
+        // T12.9: words the DM wrote, found beside the fight.
+        d.press_ctrl(Key::K);
+        d.type_text("miller");
+        d.state("lookup-finds-a-note", Sizes::All);
+        d.observe(
+            "T12.9",
+            d.visible_text("Hobb the miller says") && d.in_view(NEXT_TURN),
+            "Lookup finds last session's note, and the run stays in view",
+        );
+        d.press(Key::Escape);
+
+        // T14.2: a number typed wrong can be put right, and the turn stays.
+        let turn = current_participant(d);
+        d.click_row("Ember Cultist");
+        d.click("Record");
+        d.state("correct-initiative", Sizes::Default);
+        d.type_into("Initiative for Ember Cultist", "30");
+        d.click("Set initiative");
+        d.observe(
+            "T14.2",
+            roster_places(d).first().map(|row| row.0.as_str()) == Some("Ember Cultist")
+                && current_participant(d) == turn,
+            "A wrong initiative moves its row, and whose turn it is does not change",
+        );
+        d.click_containing("Undo: initiative for Ember Cultist");
+
+        // T14.3: Exhaustion is one level, however many steps it takes.
+        d.click_row("Oren Thistlewick");
+        d.click(CONDITIONS);
+        d.click("Exhaustion");
+        d.click("More exhaustion");
+        d.click("More exhaustion");
+        d.state("exhaustion-level", Sizes::Default);
+        let row = d.row_words("Oren Thistlewick");
+        d.observe(
+            "T14.3",
+            row.contains("Exhaustion (3)") && !row.contains("Exhaustion (2)"),
+            format!("Each step replaces the last level: {row}"),
+        );
+        d.click("Less exhaustion");
+        d.click("Less exhaustion");
+        d.click("Less exhaustion");
+
+        // Kestrel ends this fight hurt, so the next one has something to carry.
+        d.click_row("Kestrel Dunmoor");
+        d.type_text("4");
+        d.press(Key::Enter);
+        d.click("End encounter…");
+        d.type_text("Held the bridge");
+        d.press(Key::Enter);
+        d.expect("Ended: Held the bridge");
+        d.begin_task();
+        d.click(CLOSE_RUN);
+        d.goal_within("T12.1", "go back from a finished fight", 1);
+        d.observe(
+            "T12.1",
+            d.page_title().as_deref() == Some("Session"),
+            "Close run goes back to the page the fight began on",
+        );
+
+        // T12.5: how a fight ended, in place.
+        show_plan(d);
+        d.state("plan-after-a-fight", Sizes::All);
+        d.begin_task();
+        d.click(FIRST);
+        d.expect("FINAL HP");
+        d.goal_within("T12.5", "read how a fight ended", 1);
+        d.state("fight-in-place", Sizes::All);
+        d.observe(
+            "T12.5",
+            d.visible_text("7/41") && d.page_title().as_deref() == Some("Session"),
+            "Final HP reads in the plan, with no run to reopen",
+        );
+        d.click(FIRST);
+
+        // T14.4: a patrol can be planned again after it is played.
+        d.click("Add a fight");
+        d.click(&format!("Plan {FIRST}"));
+        d.observe(
+            "T14.4",
+            d.has(&format!("Start fight: {FIRST}")),
+            "A fight planned a second time can start a second time",
+        );
+        d.state("plan-the-same-fight-again", Sizes::Default);
+
+        // T12.2: the next fight remembers the last one.
+        d.click(&format!("Start fight: {SECOND}"));
+        let kestrel = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Kestrel Dunmoor ·"))
+                .map_or_else(String::new, |node| node.name)
+        };
+        d.state("setup-carries-hp", Sizes::All);
+        d.observe(
+            "T12.2",
+            kestrel(d).contains("HP 7/41") && d.has_containing("Party HP carries over"),
+            format!("Setup says where HP came from: {}", kestrel(d)),
+        );
+        d.begin_task();
+        d.click("Use the sheets' HP");
+        d.goal_within("T12.2", "go back to the sheets' HP", 1);
+        d.observe(
+            "T12.2",
+            kestrel(d).contains("HP 11/41"),
+            format!("One press gives the sheet's value: {}", kestrel(d)),
+        );
+        close_run(d);
+
+        // T12.2: a long rest is the DM's ruling, and the next fight follows it.
+        show_plan(d);
+        d.click("Add Long rest");
+        d.click("Everyone to full");
+        d.state("long-rest-restores", Sizes::Default);
+        d.click(&format!("Start fight: {SECOND}"));
+        d.observe(
+            "T12.2",
+            kestrel(d).contains("HP 41/41"),
+            format!("After Everyone to full: {}", kestrel(d)),
+        );
+        close_run(d);
+
+        // T14.5: a restart keeps the session being played, and where a run goes back to.
+        d.click("New session");
+        d.type_text("Later");
+        d.click("Create session");
+        d.expect("Session 3: Later");
+        go_timeline_choose_session(d, "Session 2: The Crossing");
+        d.click(NAV_SESSIONS);
+        d.click_starting("Session 2: The Crossing ·");
+        show_plan(d);
+        d.click(&format!("Start fight: {FIRST}"));
+        d.expect(&format!("{RUN_HEADING}{FIRST}"));
+        d.app_mut().sessions.flush();
+        d.app_mut().timeline.save();
+        d.settle();
+        d.restart();
+        d.expect(&format!("{RUN_HEADING}{FIRST}"));
+        close_run(d);
+        d.observe(
+            "T14.5",
+            d.page_title().as_deref() == Some("Session")
+                && d.has_containing("Session 2: The Crossing"),
+            "After a restart, Close run goes to the page the run began on, in the session chosen",
+        );
+
+        // Party says what it shows, and lets the DM compare.
+        go_party(d);
+        d.state("party-from-tonight", Sizes::All);
+        d.observe(
+            "T12.2",
+            d.has_containing("from tonight's fights"),
+            "Party says its HP is from tonight",
+        );
+        d.observe(
+            "T12.0",
+            d.has_containing("Per 14") && d.has_containing("Ins 11"),
+            "Passive Perception and Insight compare without opening a sheet",
+        );
+
+        // What is unfinished can go on or go away. What is over is in the history.
+        go_encounters(d);
+        d.state("saved-runs-history", Sizes::All);
+        d.observe(
+            "T14.1",
+            d.has(RESUME) && d.has_containing(HISTORY),
+            "An interrupted run can be resumed, and ended runs are in the history",
+        );
+        let delete = format!("Delete the saved run of {SECOND}");
+        let before = d.has_containing(&delete);
+        d.click_starting(&delete);
+        d.expect("Undo delete");
+        d.state("run-removed", Sizes::Default);
+        d.click("Undo delete");
+        d.observe(
+            "T14.1",
+            before && d.has_containing(&delete),
+            "A deleted run has one step of undo",
+        );
+
+        // T12.0: an encounter, whole, with no trip to the Library.
+        d.click(NEW_ENCOUNTER);
+        d.type_text("Ford of Ash");
+        d.expect("5. ");
+        d.press(Key::Enter);
+        d.type_text("werewolf");
+        d.click_first(ADD);
+        d.expect("6. Werewolf");
+        d.begin_task();
+        d.click("Make it yours");
+        d.expect("6. Werewolf copy");
+        d.state("make-it-yours", Sizes::All);
+        d.observe(
+            "T12.0",
+            d.has("Save creature") && d.has_containing("Hit points"),
+            "A creature that names itself copies, swaps in and opens beside the roster",
+        );
+        d.replace_text_in("Hit points", "90");
+        d.press_ctrl(Key::S);
+        d.expect("Add participants");
+        d.goal_within("T12.0", "make a creature your own", 7);
+        d.observe(
+            "T12.0",
+            d.has_containing("HP 90"),
+            "The roster shows the new hit points",
+        );
+        d.type_into("Read-aloud and notes", "Ash falls on the ford.");
+        d.state("read-aloud-field", Sizes::All);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Encounter saved.");
+        d.click("Back to encounters");
+
+        // A save on Encounters reaches the Library, so its next save is not a false conflict.
+        go_library(d);
+        d.click_containing("Encounters   ");
+        d.click_containing("Ford of Ash");
+        d.click(EDIT_MARKDOWN);
+        d.type_into_editor("More tactics.\n");
+        d.press_ctrl(Key::S);
+        d.observe(
+            "T12.0",
+            !d.has("Overwrite with my draft"),
+            "The Library holds the encounter's latest file",
+        );
+        d.begin_task();
     }
 }

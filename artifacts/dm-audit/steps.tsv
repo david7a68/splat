@@ -1,0 +1,218 @@
+phase	task	kind	what	interactions	from	pages	blocked
+before	Start tonight's session note	Nav	Session	1	Encounters	Session	false
+before	Start tonight's session note	Do	New session	1	Session		false
+before	Start tonight's session note	Do	type the title	1	Session		false
+before	Start tonight's session note	Do	Create session	1	Session		false
+before	Recall what happened last session, and where the story stands	Find	open Last time	1	Session		false
+before	Compare the party's passive Perception, to plan an ambush	Nav	Party	1	Session	Party	false
+before	Build tonight's encounter	Nav	Session	1	Party	Session	false
+before	Build tonight's encounter	Find	Add a fight	1	Session		false
+before	Build tonight's encounter	Nav	New encounter	1	Session	Encounters	false
+before	Build tonight's encounter	Do	type the name	1	Encounters		false
+before	Build tonight's encounter	Do	go on to the search	1	Encounters		false
+before	Build tonight's encounter	Find	search: wolf	1	Encounters		false
+before	Build tonight's encounter	Find	read the Wolf stat block	1	Encounters		false
+before	Build tonight's encounter	Panel	close the stat block	1	Encounters		false
+before	Build tonight's encounter	Do	add a Wolf	1	Encounters		false
+before	Build tonight's encounter	Do	duplicate it	1	Encounters		false
+before	Build tonight's encounter	Find	search: ogre	3	Encounters		false
+before	Build tonight's encounter	Do	add an Ogre	1	Encounters		false
+before	Build tonight's encounter	Do	Save encounter	1	Encounters		false
+before	Make the boss your own: copy it, change it, and swap it in	Do	Make it yours	1	Encounters		false
+before	Make the boss your own: copy it, change it, and swap it in	Do	change its hit points	3	Encounters		false
+before	Make the boss your own: copy it, change it, and swap it in	Do	save the creature	1	Encounters		false
+before	Make the boss your own: copy it, change it, and swap it in	Do	Save encounter	1	Encounters		false
+before	Write the read-aloud text and tactics for the encounter	Do	write the text	2	Encounters		false
+before	Write the read-aloud text and tactics for the encounter	Do	save	1	Encounters		false
+before	Back to the session plan, with tonight's encounter in it	Nav	Back to session	1	Encounters	Session	false
+before	Back to the session plan, with tonight's encounter in it	Find	Add a fight	1	Session		false
+before	Back to the session plan, with tonight's encounter in it	Do	plan the second fight	2	Session		false
+during	Start recording	Do	Record this session	1	Session		false
+during	Start recording	Do	Start recording	1	Session		false
+during	Read last session's recap aloud	Find	open Last time	1	Session		false
+during	A player asks who Captain Varra is	Panel	open Lookup	1	Session		false
+during	A player asks who Captain Varra is	Find	search: varra	1	Session		false
+during	A player asks who Captain Varra is	Panel	close Lookup	1	Session		false
+during	Note what the party decides	Panel	go to the note	1	Session		false
+during	Note what the party decides	Do	type the note	1	Session		false
+during	The party travels for half a day: record it	Do	Add Travel	1	Session		false
+during	Ambush: read the read-aloud text and start the fight	Nav	Start fight: Ashfall Crossing	1	Session	Run	false
+during	Ambush: read the read-aloud text and start the fight	Do	Roll NPC initiative	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	type Brannoch Vale's initiative	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	next field with Enter	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	type Iselle Marrowind's initiative	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	next field with Enter	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	type Kestrel Dunmoor's initiative	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	next field with Enter	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	type Oren Thistlewick's initiative	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	next field with Enter	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	type Sable Harrowgate's initiative	1	Run		false
+during	Ambush: read the read-aloud text and start the fight	Do	Begin combat	1	Run		false
+during	Combat: round 1	Find	select the target	1	Run		false
+during	Combat: round 1	Do	type the damage	1	Run		false
+during	Combat: round 1	Do	apply with Enter	1	Run		false
+during	Combat: round 1	Do	Next turn	1	Run		false
+during	Combat: round 1	Find	select the target	1	Run		false
+during	Combat: round 1	Do	type the damage	1	Run		false
+during	Combat: round 1	Do	apply with Enter	1	Run		false
+during	Combat: round 1	Do	Next turn	1	Run		false
+during	Combat: round 1	Find	select the target	1	Run		false
+during	Combat: round 1	Do	type the damage	1	Run		false
+during	Combat: round 1	Do	apply with Enter	1	Run		false
+during	Combat: round 1	Do	Next turn	1	Run		false
+during	Combat: round 1	Find	select the target	1	Run		false
+during	Combat: round 1	Do	type the damage	1	Run		false
+during	Combat: round 1	Do	apply with Enter	1	Run		false
+during	Combat: round 1	Do	Next turn	1	Run		false
+during	Combat: round 1	Find	select the target	1	Run		false
+during	Combat: round 1	Do	type the damage	1	Run		false
+during	Combat: round 1	Do	apply with Enter	1	Run		false
+during	Combat: round 1	Do	Next turn	1	Run		false
+during	Combat: round 1	Find	select the target	1	Run		false
+during	Combat: round 1	Do	type the damage	1	Run		false
+during	Combat: round 1	Do	apply with Enter	1	Run		false
+during	Combat: round 1	Do	Next turn	1	Run		false
+during	Combat: round 1	Find	select the target	1	Run		false
+during	Combat: round 1	Do	type the damage	1	Run		false
+during	Combat: round 1	Do	apply with Enter	1	Run		false
+during	Combat: round 1	Do	Next turn	1	Run		false
+during	Combat: round 1	Find	select the target	1	Run		false
+during	Combat: round 1	Do	type the damage	1	Run		false
+during	Combat: round 1	Do	apply with Enter	1	Run		false
+during	Combat: round 1	Do	Next turn	1	Run		false
+during	A player casts Fireball: read the spell	Panel	open Lookup	1	Run		false
+during	A player casts Fireball: read the spell	Find	search: fireball	1	Run		false
+during	A player casts Fireball: read the spell	Panel	close Lookup	1	Run		false
+during	Fireball hits three enemies: apply half to one, full to two	Find	select Wolf 1	1	Run		false
+during	Fireball hits three enemies: apply half to one, full to two	Find	add Wolf 2	1	Run		false
+during	Fireball hits three enemies: apply half to one, full to two	Find	add the boss	1	Run		false
+during	Fireball hits three enemies: apply half to one, full to two	Do	half for Wolf 1	1	Run		false
+during	Fireball hits three enemies: apply half to one, full to two	Do	type the damage	1	Run		false
+during	Fireball hits three enemies: apply half to one, full to two	Do	apply with Enter	1	Run		false
+during	A wolf frightens Oren: mark the condition	Find	select Oren	1	Run		false
+during	A wolf frightens Oren: mark the condition	Sub	Conditions for this participant	1	Run		false
+during	A wolf frightens Oren: mark the condition	Do	Frightened	1	Run		false
+during	What does Frightened do?	Panel	open the rule from the row	1	Run		false
+during	What does Frightened do?	Panel	close Lookup	1	Run		false
+during	Iselle starts concentrating: mark it	Find	select Iselle	1	Run		false
+during	Iselle starts concentrating: mark it	Do	Concentrating	1	Run		false
+during	Combat: round 2	Find	select the target	1	Run		false
+during	Combat: round 2	Do	type the damage	1	Run		false
+during	Combat: round 2	Do	apply with Enter	1	Run		false
+during	Combat: round 2	Do	Next turn	1	Run		false
+during	Combat: round 2	Find	select the target	1	Run		false
+during	Combat: round 2	Do	type the damage	1	Run		false
+during	Combat: round 2	Do	apply with Enter	1	Run		false
+during	Combat: round 2	Do	Next turn	1	Run		false
+during	Combat: round 2	Find	select the target	1	Run		false
+during	Combat: round 2	Do	type the damage	1	Run		false
+during	Combat: round 2	Do	apply with Enter	1	Run		false
+during	Combat: round 2	Do	Next turn	1	Run		false
+during	Combat: round 2	Find	select the target	1	Run		false
+during	Combat: round 2	Do	type the damage	1	Run		false
+during	Combat: round 2	Do	apply with Enter	1	Run		false
+during	Combat: round 2	Do	Next turn	1	Run		false
+during	Combat: round 2	Find	select the target	1	Run		false
+during	Combat: round 2	Do	type the damage	1	Run		false
+during	Combat: round 2	Do	apply with Enter	1	Run		false
+during	Combat: round 2	Do	Next turn	1	Run		false
+during	Combat: round 2	Find	select the target	1	Run		false
+during	Combat: round 2	Do	type the damage	1	Run		false
+during	Combat: round 2	Do	apply with Enter	1	Run		false
+during	Combat: round 2	Do	Next turn	1	Run		false
+during	Combat: round 2	Find	select the target	1	Run		false
+during	Combat: round 2	Do	type the damage	1	Run		false
+during	Combat: round 2	Do	apply with Enter	1	Run		false
+during	Combat: round 2	Do	Next turn	1	Run		false
+during	Combat: round 2	Find	select the target	1	Run		false
+during	Combat: round 2	Do	type the damage	1	Run		false
+during	Combat: round 2	Do	apply with Enter	1	Run		false
+during	Combat: round 2	Do	Next turn	1	Run		false
+during	Check Iselle's spell save DC and spell list	Find	select Iselle	1	Run		false
+during	Check Iselle's spell save DC and spell list	Sub	Spells	1	Run		false
+during	Check Iselle's spell save DC and spell list	Find	select the current turn again	1	Run		false
+during	Roll a save for a monster	Do	type the dice	3	Run		false
+during	Roll a save for a monster	Do	roll with Enter	1	Run		false
+during	On a player's turn, read a monster's reaction	Find	select the Wolf	1	Run		false
+during	On a player's turn, read a monster's reaction	Find	select the current turn again	1	Run		false
+during	A player asks what the miller said last session	Panel	open Lookup	1	Run		false
+during	A player asks what the miller said last session	Find	search: miller	1	Run		false
+during	A player asks what the miller said last session	Panel	close Lookup	1	Run		false
+during	Note a moment beside the fight	Panel	open Notes	1	Run		false
+during	Note a moment beside the fight	Do	type the note	1	Run		false
+during	Note a moment beside the fight	Panel	close Notes	1	Run		false
+during	Combat: round 3	Find	select the target	1	Run		false
+during	Combat: round 3	Do	type the damage	1	Run		false
+during	Combat: round 3	Do	apply with Enter	1	Run		false
+during	Combat: round 3	Do	Next turn	1	Run		false
+during	Combat: round 3	Find	select the target	1	Run		false
+during	Combat: round 3	Do	type the damage	1	Run		false
+during	Combat: round 3	Do	apply with Enter	1	Run		false
+during	Combat: round 3	Do	Next turn	1	Run		false
+during	Combat: round 3	Find	select the target	1	Run		false
+during	Combat: round 3	Do	type the damage	1	Run		false
+during	Combat: round 3	Do	apply with Enter	1	Run		false
+during	Combat: round 3	Do	Next turn	1	Run		false
+during	Combat: round 3	Find	select the target	1	Run		false
+during	Combat: round 3	Do	type the damage	1	Run		false
+during	Combat: round 3	Do	apply with Enter	1	Run		false
+during	Combat: round 3	Do	Next turn	1	Run		false
+during	Combat: round 3	Find	select the target	1	Run		false
+during	Combat: round 3	Do	type the damage	1	Run		false
+during	Combat: round 3	Do	apply with Enter	1	Run		false
+during	Combat: round 3	Do	Next turn	1	Run		false
+during	Combat: round 3	Find	select the target	1	Run		false
+during	Combat: round 3	Do	type the damage	1	Run		false
+during	Combat: round 3	Do	apply with Enter	1	Run		false
+during	Combat: round 3	Do	Next turn	1	Run		false
+during	Combat: round 3	Find	select the target	1	Run		false
+during	Combat: round 3	Do	type the damage	1	Run		false
+during	Combat: round 3	Do	apply with Enter	1	Run		false
+during	Combat: round 3	Do	Next turn	1	Run		false
+during	Combat: round 3	Find	select the target	1	Run		false
+during	Combat: round 3	Do	type the damage	1	Run		false
+during	Combat: round 3	Do	apply with Enter	1	Run		false
+during	Combat: round 3	Do	Next turn	1	Run		false
+during	A wolf is dead: take it out of the order	Find	select Wolf 2	1	Run		false
+during	A wolf is dead: take it out of the order	Do	Absent	1	Run		false
+during	End the fight	Do	End encounter…	1	Run		false
+during	End the fight	Do	type the outcome	1	Run		false
+during	End the fight	Do	end with Enter	1	Run		false
+during	End the fight	Nav	Close run	1	Run	Session	false
+during	Record a short rest	Do	Add Short rest	1	Session		false
+during	Next fight: start it, with the party as it stands	Nav	Start fight: Shrine of Cinders	1	Session	Run	false
+during	Next fight: roll and begin	Do	Roll NPC initiative	1	Run		false
+during	Next fight: roll and begin	Do	type Brannoch Vale's initiative	1	Run		false
+during	Next fight: roll and begin	Do	next field with Enter	1	Run		false
+during	Next fight: roll and begin	Do	type Iselle Marrowind's initiative	1	Run		false
+during	Next fight: roll and begin	Do	next field with Enter	1	Run		false
+during	Next fight: roll and begin	Do	type Kestrel Dunmoor's initiative	1	Run		false
+during	Next fight: roll and begin	Do	next field with Enter	1	Run		false
+during	Next fight: roll and begin	Do	type Oren Thistlewick's initiative	1	Run		false
+during	Next fight: roll and begin	Do	next field with Enter	1	Run		false
+during	Next fight: roll and begin	Do	type Sable Harrowgate's initiative	1	Run		false
+during	Next fight: roll and begin	Do	Begin combat	1	Run		false
+during	Next fight: end it after a short exchange	Do	End encounter…	1	Run		false
+during	Next fight: end it after a short exchange	Do	End encounter	1	Run		false
+during	Next fight: end it after a short exchange	Nav	Close run	1	Run	Session	false
+during	The players start a fight you did not plan, and then talk their way out	Find	Add a fight	1	Session		false
+during	The players start a fight you did not plan, and then talk their way out	Nav	New encounter	1	Session	Encounters	false
+during	The players start a fight you did not plan, and then talk their way out	Do	type the name	1	Encounters		false
+during	The players start a fight you did not plan, and then talk their way out	Do	go on to the search	1	Encounters		false
+during	The players start a fight you did not plan, and then talk their way out	Find	search: bandit	1	Encounters		false
+during	The players start a fight you did not plan, and then talk their way out	Do	add a Bandit	1	Encounters		false
+during	The players start a fight you did not plan, and then talk their way out	Nav	Start fight	1	Encounters	Run	false
+during	The players start a fight you did not plan, and then talk their way out	Nav	close the run again	2	Run	Session	false
+during	Stop recording	Do	Stop recording	1	Session		false
+after	Review how the fight went: log and final HP	Find	open the fight	1	Session		false
+after	Say where the fight happened	Sub	Details	1	Session		false
+after	Say where the fight happened	Do	type where it happened	3	Session		false
+after	Process the recording and read the summary	Sub	Recordings (1)	1	Session		false
+after	Process the recording and read the summary	Do	Process	1	Session		false
+after	Process the recording and read the summary	Sub	Summary	1	Session		false
+after	Process the recording and read the summary	Sub	Back to recordings	1	Session		false
+after	Add a suggested event to the timeline	Do	add the marker	1	Session		false
+after	Write the wrap-up in the note	Sub	Plan and notes	1	Session		false
+after	Write the wrap-up in the note	Do	type the wrap-up	3	Session		false
+after	Link the fight in the note	Do	Add to notes	2	Session		false
+after	Check the party's HP for next time	Nav	Party	1	Session	Party	false

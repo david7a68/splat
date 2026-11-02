@@ -75,14 +75,21 @@ pub struct TimelinePage {
     pub play_current: bool,
 }
 
-/// One button for each kind of event. Returns the new event's ID.
-pub fn quick_add(ui: &mut egui::Ui, book: &mut Book, session: Option<Uuid>) -> Option<String> {
+/// One button for each of these kinds of event. Returns the new event's ID.
+pub fn quick_add(
+    ui: &mut egui::Ui,
+    book: &mut Book,
+    session: Option<Uuid>,
+    kinds: &[Kind],
+    first: impl FnOnce(&mut egui::Ui),
+) -> Option<String> {
     let blocked = book.unreadable.is_some();
     let mut added = None;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = design::XS;
         ui.label(Type::Small.rich(ui, "Add").color(colors().muted));
-        for kind in Kind::ALL {
+        first(ui);
+        for &kind in kinds {
             if Action::secondary(kind.word())
                 .icon(kind.icon())
                 .name(&format!("Add {}", kind.word()))
@@ -753,7 +760,7 @@ impl TimelinePage {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
             book.save();
         }
-        if let Some(id) = quick_add(ui, book, current) {
+        if let Some(id) = quick_add(ui, book, current, &Kind::ALL, |_| {}) {
             self.reveal(&id, book);
             self.focus_title = true;
             self.just_added = Some((id, Instant::now()));

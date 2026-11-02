@@ -202,6 +202,9 @@ mod tests {
             session,
             run: run.id,
             marker: String::new(),
+            restores: false,
+            continued_in: None,
+            played_order: 0,
         }
     }
     fn link(label: &str) -> SessionLink {

@@ -662,7 +662,7 @@ fn write_history(campaign: &Campaign, module: &Path) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
     let mut book = crate::timeline::Book::default();
     book.open(Some(&sessions));
-    book.record_run(&past, Some(session));
+    book.record_run(&past, Some(session), false);
     book.save();
     Ok(())
 }

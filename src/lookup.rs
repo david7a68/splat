@@ -17,6 +17,31 @@ use uuid::Uuid;
 
 const RESULT_ROW: f32 = 40.0;
 pub const SEARCH_NAME: &str = "Search everything";
+/// How many lines of a long note show where the words were found.
+const FOUND_LINES: usize = 3;
+const FOUND_FROM_LINES: usize = 12;
+
+/// Where something the DM wrote lives, so that it can open there.
+#[derive(Clone, Debug, PartialEq)]
+pub enum WrittenIn {
+    Session(Uuid),
+    Event(String),
+}
+
+/// Something the DM wrote, for searching beside the books: a session's note or a timeline event.
+pub struct Written {
+    pub title: String,
+    pub detail: String,
+    pub text: String,
+    pub place: WrittenIn,
+}
+
+/// One line of the results.
+#[derive(Clone, Copy, PartialEq)]
+enum Hit {
+    Entry(usize),
+    Written(usize),
+}
 
 /// True if `name` appears in `text` as whole words, in any case.
 pub fn names_word(text: &str, name: &str) -> bool {
@@ -86,6 +111,7 @@ impl ContentIndex {
             }
         };
         let builtin = catalogue.modules.first().map(|module| module.id);
+        const FROM_SHEET: &str = "From a character sheet";
         // A spell copied from a character sheet is not the book's text. It sorts after.
         let from_sheet = |entry: &Entry| {
             Uuid::parse_str(
@@ -104,7 +130,11 @@ impl ContentIndex {
             .map(|e| Item {
                 lower: e.entry.name.to_lowercase(),
                 subtitle: presentation::subtitle(&e.entry),
-                owner: owner_name(e.owner, e.private),
+                owner: if from_sheet(&e.entry) {
+                    FROM_SHEET.to_owned()
+                } else {
+                    owner_name(e.owner, e.private)
+                },
                 private: e.private,
                 section: presentation::Section::for_entry(&e.entry),
                 builtin: Some(e.owner) == builtin,
@@ -128,6 +158,19 @@ impl ContentIndex {
         }
         index.items = items;
         Ok(index)
+    }
+
+    /// The rule for an official condition, by the name on a run's row.
+    pub fn condition_rule(&self, condition: &str) -> Option<usize> {
+        let name = condition.split(" (").next()?.trim().to_lowercase();
+        if !crate::combat_sync::CONDITIONS
+            .iter()
+            .any(|(_, official)| official.eq_ignore_ascii_case(&name))
+        {
+            return None;
+        }
+        let wanted = format!("{name} [condition]");
+        self.items.iter().position(|item| item.lower == wanted)
     }
 
     pub fn position(&self, id: Uuid) -> Option<usize> {
@@ -191,8 +234,13 @@ pub struct Lookup {
     pending: Option<mpsc::Receiver<Result<ContentIndex, String>>>,
     error: Option<String>,
     scope: Option<(Option<Uuid>, Vec<Uuid>)>,
-    matches: Option<(String, Vec<usize>)>,
+    matches: Option<(String, Vec<Hit>)>,
     current: Option<usize>,
+    /// What the DM wrote, read once each time the panel opens.
+    written: Vec<Written>,
+    written_stale: bool,
+    /// The note or event being read, in place of an entry.
+    reading_written: Option<usize>,
     /// Identity, because a rebuilt index can change positions.
     history: Vec<Uuid>,
     waiting_for: Option<Uuid>,
@@ -201,6 +249,8 @@ pub struct Lookup {
     highlight: usize,
     /// An entry the DM asked to see in the Library.
     pub open_in_library: Option<Entry>,
+    /// A note or an event the DM asked to see where it lives.
+    pub open_written: Option<WrittenIn>,
     /// A draft there means this entry cannot open there yet. Reading here still works.
     pub library_draft: bool,
 }
@@ -278,7 +328,35 @@ impl Lookup {
         Some(index.items.get(self.current?)?.entry.id)
     }
 
+    /// Is the panel open with old words, or none? The shell then passes them in.
+    pub fn wants_written(&self) -> bool {
+        self.open && self.written_stale
+    }
+
+    pub fn set_written(&mut self, written: Vec<Written>) {
+        self.written = written;
+        self.written_stale = false;
+        self.matches = None;
+        self.reading_written = None;
+    }
+
+    /// An entry named in a note's link, if there is one by that name.
+    pub fn open_name(&mut self, name: &str) -> bool {
+        let found = self.index.as_ref().and_then(|index| {
+            let wanted = name.to_lowercase();
+            index
+                .search(&wanted)
+                .into_iter()
+                .find(|at| index.items[*at].lower == wanted)
+        });
+        if let Some(position) = found {
+            self.open_position(position);
+        }
+        found.is_some()
+    }
+
     pub fn toggle(&mut self) {
+        self.written_stale = true;
         self.open = !self.open;
         self.focus_search = self.open;
         self.results_open = self.current.is_none() || !self.query.is_empty();
@@ -291,6 +369,8 @@ impl Lookup {
     /// Open one entry from a link somewhere else in the app.
     pub fn open_position(&mut self, position: usize) {
         self.open = true;
+        self.written_stale = true;
+        self.reading_written = None;
         self.navigate(position);
         self.results_open = false;
         self.query.clear();
@@ -298,6 +378,8 @@ impl Lookup {
 
     pub fn open_id(&mut self, id: Uuid) {
         self.open = true;
+        self.written_stale = true;
+        self.reading_written = None;
         self.results_open = false;
         // The field must not name something other than the entry on screen.
         self.query.clear();
@@ -316,7 +398,23 @@ impl Lookup {
         self.current = Some(position);
     }
 
+    /// What the DM wrote that has these words. A name match comes before words in a note.
+    fn search_written(&self, query: &str) -> Vec<usize> {
+        let mut found: Vec<(bool, usize)> = self
+            .written
+            .iter()
+            .enumerate()
+            .filter_map(|(at, written)| {
+                let in_title = written.title.to_lowercase().contains(query);
+                (in_title || written.text.to_lowercase().contains(query)).then_some((!in_title, at))
+            })
+            .collect();
+        found.sort_unstable();
+        found.into_iter().map(|(_, at)| at).collect()
+    }
+
     fn back(&mut self) {
+        self.reading_written = None;
         if let Some(id) = self.history.pop()
             && let Some(position) = self.index.as_ref().and_then(|index| index.position(id))
         {
@@ -348,7 +446,7 @@ impl Lookup {
             ui,
             SEARCH_NAME,
             &mut self.query,
-            "Spell, creature, rule, item…",
+            "Spell, creature, rule, note…",
             width,
         );
         if std::mem::take(&mut self.focus_search) {
@@ -387,23 +485,33 @@ impl Lookup {
             let found = if query.is_empty() {
                 Vec::new()
             } else {
-                index.search(&query)
+                index
+                    .search(&query)
+                    .into_iter()
+                    .map(Hit::Entry)
+                    .chain(self.search_written(&query).into_iter().map(Hit::Written))
+                    .collect()
             };
             self.matches = Some((query.clone(), found));
             self.highlight = 0;
         }
-        let matches = &self.matches.as_ref().unwrap().1;
+        let matches = self.matches.as_ref().unwrap().1.clone();
         if before != self.query && !query.is_empty() {
             // In a short panel the best match opens by itself, and its text gets the height.
             self.results_open = matches.is_empty() || ui.available_height() >= 600.0;
-            if let Some(&top) = matches.first() {
-                self.current = Some(top);
+            match matches.first() {
+                Some(Hit::Entry(top)) => {
+                    self.current = Some(*top);
+                    self.reading_written = None;
+                }
+                Some(Hit::Written(top)) => self.reading_written = Some(*top),
+                None => {}
             }
         }
         let mut chosen = None;
         if !query.is_empty()
             && !self.results_open
-            && self.current.is_some()
+            && (self.current.is_some() || self.reading_written.is_some())
             && Action::quiet(&design::count(matches.len(), "result", "results"))
                 .icon(icons::DOWN)
                 .density(Density::Read)
@@ -450,10 +558,7 @@ impl Lookup {
             if matches.is_empty() {
                 ui.label(
                     Type::Body
-                        .rich(
-                            ui,
-                            "No entries found. Check the spelling, or try fewer words.",
-                        )
+                        .rich(ui, "Nothing found. Check the spelling, or try fewer words.")
                         .color(colors().muted),
                 );
             }
@@ -468,27 +573,44 @@ impl Lookup {
                 .auto_shrink([false, true])
                 .show_rows(ui, RESULT_ROW, matches.len(), |ui, range| {
                     for row in range {
-                        let position = matches[row];
-                        let item = &index.items[position];
-                        let detail = format!("{} · {}", item.subtitle, item.owner);
-                        let selected = self.current == Some(position);
-                        let response = design::two_line_row(
-                            ui,
-                            RESULT_ROW,
-                            selected,
-                            &item.entry.name,
-                            &detail,
-                        );
+                        let hit = matches[row];
+                        let (title, detail, selected) = match hit {
+                            Hit::Entry(position) => {
+                                let item = &index.items[position];
+                                (
+                                    item.entry.name.as_str(),
+                                    format!("{} · {}", item.subtitle, item.owner),
+                                    self.reading_written.is_none()
+                                        && self.current == Some(position),
+                                )
+                            }
+                            Hit::Written(at) => {
+                                let written = &self.written[at];
+                                (
+                                    written.title.as_str(),
+                                    written.detail.clone(),
+                                    self.reading_written == Some(at),
+                                )
+                            }
+                        };
+                        let response =
+                            design::two_line_row(ui, RESULT_ROW, selected, title, &detail);
                         if response.clicked() {
-                            chosen = Some(position);
+                            chosen = Some(hit);
                         }
                     }
                 });
             ui.spacing_mut().item_spacing.y = design::XS;
         }
-        if let Some(position) = chosen {
-            if self.current != Some(position) {
-                self.navigate(position);
+        if let Some(hit) = chosen {
+            match hit {
+                Hit::Entry(position) => {
+                    self.reading_written = None;
+                    if self.current != Some(position) {
+                        self.navigate(position);
+                    }
+                }
+                Hit::Written(at) => self.reading_written = Some(at),
             }
             // Arrow keys walk the list. A click on a row means read it.
             if !response.has_focus() {
@@ -496,6 +618,10 @@ impl Lookup {
             }
         }
         design::rule(ui);
+        if let Some(at) = self.reading_written {
+            self.written_reader(ui, at, &query);
+            return;
+        }
         let Some(current) = self.current.and_then(|c| index.items.get(c)) else {
             if query.is_empty() {
                 ui.add_space(design::S);
@@ -503,7 +629,7 @@ impl Lookup {
                     Type::Body
                         .rich(
                             ui,
-                            "Search built-in rules, every package, and this campaign's own entries. Press Escape to close.",
+                            "Search built-in rules, every package, this campaign's own entries, session notes and the timeline. Press Escape to close.",
                         )
                         .color(colors().muted),
                 );
@@ -566,6 +692,58 @@ impl Lookup {
             self.results_open = false;
             // The field must not name something other than the entry on screen.
             self.query.clear();
+        }
+    }
+
+    /// A note or an event, with the lines that have the words first: a long note must not
+    /// make the DM hunt for the sentence that answers the table's question.
+    fn written_reader(&mut self, ui: &mut egui::Ui, at: usize, query: &str) {
+        let Some(written) = self.written.get(at) else {
+            self.reading_written = None;
+            return;
+        };
+        let place = match written.place {
+            WrittenIn::Session(_) => "Open this session",
+            WrittenIn::Event(_) => "Open on the timeline",
+        };
+        let mut open = false;
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                open = Action::quiet(place)
+                    .icon(icons::OPEN_OUT)
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked();
+            });
+        });
+        egui::ScrollArea::vertical()
+            .id_salt(("lookup_written", at))
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                style::title(ui, &written.title);
+                style::subtitle(ui, &written.detail);
+                let found: Vec<&str> = written
+                    .text
+                    .lines()
+                    .filter(|line| !query.is_empty() && line.to_lowercase().contains(query))
+                    .take(FOUND_LINES)
+                    .collect();
+                // A short note is all in view, and needs no second copy of its own line.
+                if !found.is_empty() && written.text.lines().count() > FOUND_FROM_LINES {
+                    design::group_label(ui, "Found here");
+                    for line in found {
+                        let words = line.trim_start_matches(['#', '-', '*', ' ']);
+                        ui.add(
+                            egui::Label::new(Type::Body.rich(ui, words).color(colors().text))
+                                .wrap(),
+                        );
+                    }
+                    design::rule(ui);
+                }
+                crate::markdown_view::show_compact(ui, &written.text);
+            });
+        if open {
+            self.open_written = Some(written.place.clone());
         }
     }
 }

@@ -145,6 +145,10 @@ impl GroupDraft {
     pub(super) fn path(&self) -> &str {
         &self.path
     }
+    /// Its name, when a plan could link it: it is for any encounter.
+    pub(super) fn linkable_name(&self) -> Option<&str> {
+        self.setup.encounter.is_none().then(|| self.name.trim())
+    }
     pub(super) fn belongs_to(&self, encounter: Uuid) -> bool {
         self.setup
             .encounter
@@ -195,8 +199,33 @@ impl GroupDraft {
     }
     /// An encounter being saved with this group counts as there, though it is not on disk yet.
     fn validate(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), String> {
-        if self.name.trim().is_empty() {
+        let name = self.name.trim();
+        if name.is_empty() {
             return Err("Enter a group name.".into());
+        }
+        // A plan links a group for any encounter by its name, so that name must mean one thing.
+        // A group that belongs to an encounter is not linked, and each can have "Reinforcements".
+        let linkable = self.setup.encounter.is_none();
+        if linkable
+            && snapshot.groups.iter().any(|group| {
+                group.encounter.is_none()
+                    && group.path != self.path
+                    && group.name.eq_ignore_ascii_case(name)
+            })
+        {
+            return Err(format!(
+                "Another group is named {name}. Choose another name."
+            ));
+        }
+        if linkable
+            && snapshot
+                .templates
+                .iter()
+                .any(|template| template.name.eq_ignore_ascii_case(name))
+        {
+            return Err(format!(
+                "An encounter is named {name}. Choose another name."
+            ));
         }
         if self.setup.side.trim().is_empty() {
             return Err("Enter a default side for this group.".into());
@@ -431,24 +460,8 @@ fn list_row(ui: &mut egui::Ui, group: &RunGroup, blocked: Option<&'static str>) 
                     egui::Label::new(Type::Strong.rich(ui, &group.name).color(colors().text))
                         .truncate(),
                 );
-                let mut summary = format!(
-                    "{} · {} · XP {}",
-                    design::count(group.creature_count() as usize, "creature", "creatures"),
-                    design::reader::human_label(&group.side),
-                    group.xp
-                );
-                if !group.xp_unknown.is_empty() || group.unavailable > 0 {
-                    summary.push_str(" or more");
-                }
-                if group
-                    .members
-                    .iter()
-                    .any(|member| !member.overrides.is_empty())
-                {
-                    summary.push_str(" · Changed");
-                }
                 ui.add(
-                    egui::Label::new(Type::Small.rich(ui, summary).color(colors().muted))
+                    egui::Label::new(Type::Small.rich(ui, group.summary()).color(colors().muted))
                         .truncate(),
                 );
                 if let Some(problem) = &group.problem {
@@ -1146,17 +1159,60 @@ impl Encounters {
         let Some(draft) = self.group_draft.as_mut() else {
             return;
         };
+        let old_name = draft.baseline.as_ref().map(|_| draft.saved_name.clone());
+        // Only a group for any encounter can be linked in a plan.
+        let was_linkable = draft.saved_setup.encounter.is_none();
+        let path = draft.path.clone();
         match draft.save(active, modules) {
             Ok(()) => {
+                let name = draft.name.trim().to_owned();
+                let linkable = draft.setup.encounter.is_none();
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Group saved.".into());
                 // The list and an open run read groups from the snapshot.
                 self.refreshing = true;
                 self.start_load(ctx, active.clone(), modules.to_vec());
+                match old_name {
+                    None if self.group_in_plan && linkable => self.saved_for_plan = Some(name),
+                    Some(old)
+                        if was_linkable
+                            && old.trim() != name
+                            && !self.name_stays_taken(&path, old.trim()) =>
+                    {
+                        self.renamed_group = Some((old.trim().to_owned(), name));
+                    }
+                    _ => {}
+                }
+                if self.group_in_plan {
+                    self.close_group_in_plan();
+                }
             }
             Err(e) => self.error = Some(e),
         }
+    }
+
+    /// Whether something else still has this group's old name. A link with that name may mean
+    /// the other thing, so a rename leaves it alone.
+    fn name_stays_taken(&self, path: &str, old: &str) -> bool {
+        self.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot
+                .templates
+                .iter()
+                .any(|template| template.name.eq_ignore_ascii_case(old))
+                || snapshot.groups.iter().any(|group| {
+                    group.encounter.is_none()
+                        && group.path != path
+                        && group.name.eq_ignore_ascii_case(old)
+                })
+        })
+    }
+
+    /// The plan shows again. The group stays where the DM left it.
+    fn close_group_in_plan(&mut self) {
+        self.group_draft = None;
+        self.group_in_plan = false;
+        self.message = None;
     }
 
     pub(super) fn group_editor_view(
@@ -1164,8 +1220,20 @@ impl Encounters {
         ui: &mut egui::Ui,
         active: &Campaign,
         campaigns: &Campaigns,
+        in_plan: bool,
     ) {
         let dirty = self.draft_dirty();
+        // The Session page has no save of its own to give this key to.
+        let save_key = in_plan
+            && dirty
+            && ui
+                .ctx()
+                .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        let (back_word, back_name) = if in_plan {
+            ("Plan", "Back to the plan")
+        } else {
+            ("Encounters", "Back to encounters")
+        };
         let compact = ui.available_width() < 760.0;
         let saved_note = self.message.clone();
         let focus_name = std::mem::take(&mut self.focus_name);
@@ -1174,9 +1242,9 @@ impl Encounters {
         // The title and its actions need more room than the panes do.
         let two_rows = ui.available_width() < 1040.0;
         let title = |ui: &mut egui::Ui, back: &mut bool, draft: &mut GroupDraft| {
-            *back = Action::quiet("Encounters")
+            *back = Action::quiet(back_word)
                 .icon(icons::BACK)
-                .name("Back to encounters")
+                .name(back_name)
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)
                 .clicked();
@@ -1231,8 +1299,7 @@ impl Encounters {
         }
         design::rule(ui);
         if back {
-            self.group_draft = None;
-            self.message = None;
+            self.close_group_in_plan();
             self.error = None;
             return;
         }
@@ -1248,7 +1315,7 @@ impl Encounters {
             self.discarded = None;
             return;
         }
-        if save {
+        if save || save_key {
             self.save_group_draft(ui.ctx(), active, campaigns.modules());
         }
         self.discard_undo(ui);
@@ -1597,6 +1664,260 @@ mod tests {
         id
     }
 
+    /// The draft closes on save, so that the plan shows again with its new link.
+    #[test]
+    fn a_group_saved_from_the_plan_goes_back_to_it_and_a_rename_follows() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let ctx = egui::Context::default();
+        let mut encounters = Encounters::default();
+        encounters.new_group_in_plan();
+        assert!(encounters.group_open_in_plan());
+        let draft = encounters.group_draft.as_mut().unwrap();
+        draft.name = "Ash Pack".into();
+        draft.add(scout);
+        let path = draft.path.clone();
+        encounters.save_group_draft(&ctx, &campaign, &[]);
+        assert_eq!(
+            encounters.saved_for_plan.take().as_deref(),
+            Some("Ash Pack")
+        );
+        assert!(!encounters.group_open_in_plan());
+        assert!(encounters.group_draft.is_none());
+
+        assert!(encounters.open_group_in_plan(&path, &campaign));
+        encounters.group_draft.as_mut().unwrap().name = "Cinder Pack".into();
+        encounters.save_group_draft(&ctx, &campaign, &[]);
+        assert_eq!(encounters.saved_for_plan, None, "it is linked already");
+        assert_eq!(
+            encounters.renamed_group.take(),
+            Some(("Ash Pack".to_owned(), "Cinder Pack".to_owned()))
+        );
+        assert!(!encounters.group_open_in_plan());
+    }
+
+    #[test]
+    fn a_group_taken_up_on_the_encounters_page_links_nothing_but_a_rename_still_follows() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let ctx = egui::Context::default();
+        let mut encounters = Encounters {
+            group_draft: Some(GroupDraft::new()),
+            ..Encounters::default()
+        };
+        let draft = encounters.group_draft.as_mut().unwrap();
+        draft.name = "Ash Pack".into();
+        draft.add(scout);
+        encounters.save_group_draft(&ctx, &campaign, &[]);
+        assert_eq!(encounters.saved_for_plan, None);
+        assert!(encounters.group_draft.is_some(), "this page keeps it open");
+        encounters.group_draft.as_mut().unwrap().name = "Cinder Pack".into();
+        encounters.save_group_draft(&ctx, &campaign, &[]);
+        assert_eq!(
+            encounters.renamed_group.take(),
+            Some(("Ash Pack".to_owned(), "Cinder Pack".to_owned()))
+        );
+    }
+
+    #[test]
+    fn a_rename_leaves_links_that_may_mean_something_else_with_the_old_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let mut draft = GroupDraft::new();
+        draft.name = "Patrol".into();
+        draft.add(scout);
+        draft.save(&campaign, &[]).unwrap();
+        // Older files can share a name. Nothing saved through the app can.
+        write_note(
+            dir.path(),
+            "Patrol encounter.md",
+            None,
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Patrol\nsplat_encounter: {{roster: []}}\n---\n",
+                Uuid::new_v4()
+            ),
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let mut encounters = Encounters {
+            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+            group_draft: Some(GroupDraft::open(dir.path(), &draft.path).unwrap()),
+            ..Encounters::default()
+        };
+        encounters.group_draft.as_mut().unwrap().name = "Scouts".into();
+        encounters.save_group_draft(&ctx, &campaign, &[]);
+        assert_eq!(encounters.error, None);
+        assert_eq!(encounters.renamed_group, None, "the fight keeps its links");
+    }
+
+    #[test]
+    fn one_name_means_one_thing_to_a_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let mut first = GroupDraft::new();
+        first.name = "Patrol".into();
+        first.add(scout);
+        first.save(&campaign, &[]).unwrap();
+        let mut second = GroupDraft::new();
+        second.name = " PATROL ".into();
+        second.add(scout);
+        let error = second.save(&campaign, &[]).unwrap_err();
+        assert!(error.contains("Another group"), "{error}");
+        assert!(!dir.path().join(&second.path).exists());
+        // A group keeps its own name through an edit.
+        first.notes = "New words.".into();
+        first.save(&campaign, &[]).unwrap();
+        write_note(
+            dir.path(),
+            "Ford.md",
+            None,
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Ford\nsplat_encounter: {{roster: []}}\n---\n",
+                Uuid::new_v4()
+            ),
+        )
+        .unwrap();
+        second.name = "ford".into();
+        let error = second.save(&campaign, &[]).unwrap_err();
+        assert!(error.contains("An encounter"), "{error}");
+    }
+
+    #[test]
+    fn groups_of_different_encounters_can_share_a_name_and_a_plan_offers_neither() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let encounter = |name: &str| {
+            let id = Uuid::new_v4();
+            write_note(
+                dir.path(),
+                &format!("{name}.md"),
+                None,
+                &format!(
+                    "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter: {{roster: []}}\n---\n"
+                ),
+            )
+            .unwrap();
+            id
+        };
+        let (bridge, shrine) = (encounter("Bridge"), encounter("Shrine"));
+        for owner in [bridge, shrine] {
+            let mut draft = GroupDraft::for_encounter(owner);
+            draft.name = "Reinforcements".into();
+            draft.add(scout);
+            draft.save(&campaign, &[]).unwrap();
+        }
+        // A group for any encounter is linked by name, so it can take a name only they have.
+        let mut free = GroupDraft::new();
+        free.name = "Reinforcements".into();
+        free.add(scout);
+        free.save(&campaign, &[]).unwrap();
+        let encounters = Encounters {
+            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+            ..Encounters::default()
+        };
+        let offered = encounters.plan_groups();
+        assert_eq!(offered.len(), 1);
+        assert_eq!(offered[0].encounter, None);
+    }
+
+    #[test]
+    fn a_group_saved_for_an_encounter_from_the_plan_is_not_linked_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let owner = Uuid::new_v4();
+        write_note(
+            dir.path(),
+            "Bridge.md",
+            None,
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {owner}\nsplat_kind: encounter\nsplat_name: Bridge\nsplat_encounter: {{roster: []}}\n---\n"
+            ),
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let mut encounters = Encounters::default();
+        encounters.new_group_in_plan();
+        let mut draft = GroupDraft::for_encounter(owner);
+        draft.name = "Wave".into();
+        draft.add(scout);
+        encounters.group_draft = Some(draft);
+        encounters.save_group_draft(&ctx, &campaign, &[]);
+        assert_eq!(encounters.error, None);
+        assert_eq!(encounters.saved_for_plan, None);
+        assert!(!encounters.group_open_in_plan());
+    }
+
+    #[test]
+    fn an_encounter_draft_left_open_does_not_hide_a_plan_groups_undo() {
+        let mut encounters = Encounters {
+            draft: Some(Draft::new()),
+            ..Encounters::default()
+        };
+        encounters.new_group_in_plan();
+        encounters.discarded_group = encounters.group_draft.take();
+        assert!(encounters.group_discarded_in_plan());
+        encounters.undo_group_discard_in_plan();
+        assert!(encounters.group_open_in_plan());
+    }
+
+    #[test]
+    fn a_group_discarded_in_the_plan_can_come_back_there() {
+        let mut encounters = Encounters::default();
+        encounters.new_group_in_plan();
+        encounters.group_draft.as_mut().unwrap().name = "Ash Pack".into();
+        encounters.discarded_group = encounters.group_draft.take();
+        assert!(encounters.group_discarded_in_plan());
+        assert!(!encounters.group_open_in_plan());
+        encounters.undo_group_discard_in_plan();
+        assert!(encounters.group_open_in_plan());
+        assert_eq!(encounters.group_draft.as_ref().unwrap().name, "Ash Pack");
+    }
+
+    #[test]
+    fn a_group_that_cannot_save_stays_open_in_the_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let ctx = egui::Context::default();
+        let mut encounters = Encounters::default();
+        encounters.new_group_in_plan();
+        encounters.save_group_draft(&ctx, &campaign, &[]);
+        assert!(encounters.group_open_in_plan());
+        assert!(encounters.error.as_deref().unwrap().contains("empty"));
+        assert_eq!(encounters.saved_for_plan, None);
+    }
+
+    #[test]
+    fn a_run_is_offered_every_creature_but_a_linked_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        creature(dir.path(), "Scout");
+        let id = Uuid::new_v4();
+        write_note(
+            dir.path(),
+            "Hero.md",
+            None,
+            &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{}}\nsplat_external: {{provider: dndbeyond, character_id: '1'}}\n---\n"),
+        )
+        .unwrap();
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let names: Vec<_> = snapshot
+            .run_creatures
+            .iter()
+            .map(|creature| creature.entry.name.as_str())
+            .collect();
+        assert!(names.contains(&"Scout"), "its own");
+        assert!(
+            !names.contains(&"Hero"),
+            "a sheet can be added once, on the roster"
+        );
+    }
+
     #[test]
     fn a_group_saves_reopens_and_keeps_its_notes_and_order() {
         let dir = tempfile::tempdir().unwrap();
@@ -1851,6 +2172,39 @@ mod tests {
         reopened.read_groups(dir.path(), &snapshot).unwrap();
         assert_eq!(reopened.groups.len(), 1);
         assert!(!reopened.dirty());
+    }
+
+    #[test]
+    fn groups_saved_together_cannot_both_take_one_name_for_any_encounter() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let mut draft = Draft::new();
+        let group = |name: &str| {
+            let mut group = GroupDraft::new();
+            group.name = name.into();
+            group.add(scout);
+            group
+        };
+        draft.groups = vec![group("Rivals"), group(" RIVALS ")];
+        let error = draft.save(&campaign, &[]).unwrap_err();
+        assert!(error.contains("needs a name of its own"), "{error}");
+        assert!(!dir.path().join(&draft.path).exists(), "nothing is written");
+        // Nor can one take the name of the encounter saved with it.
+        draft.name = "Ford".into();
+        draft.groups = vec![group("ford")];
+        let error = draft.save(&campaign, &[]).unwrap_err();
+        assert!(error.contains("needs a name of its own"), "{error}");
+        // Two that belong to the encounter can share one.
+        let own = |name: &str| {
+            let mut group = GroupDraft::for_encounter(draft.id);
+            group.name = name.into();
+            group.add(scout);
+            group
+        };
+        let both = vec![own("Rivals"), own("Rivals")];
+        draft.groups = both;
+        draft.save(&campaign, &[]).unwrap();
     }
 
     #[test]

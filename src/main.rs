@@ -75,6 +75,10 @@ struct Splat {
     processing: processing::settings::ProcessingSettings,
     /// What the open run last told the timeline.
     run_fact: Option<timeline::RunFact>,
+    /// Where Close run goes: the page the run was opened from.
+    run_origin: Page,
+    /// What the party's carried state was last read for.
+    carry_key: Option<(Option<uuid::Uuid>, timeline::PartyState, bool, Page, bool)>,
     /// New events and runs go to a session dated before today.
     old_session: bool,
     art: art::Loader,
@@ -110,6 +114,8 @@ impl Default for Splat {
             timeline_page: Default::default(),
             processing: Default::default(),
             run_fact: None,
+            run_origin: Page::Encounters,
+            carry_key: None,
             old_session: false,
             art: Default::default(),
             ui_store: ui_state::Store::user(),
@@ -150,7 +156,7 @@ impl Page {
         match self {
             Self::Run => "Run",
             Self::Encounters => "Encounters",
-            Self::Sessions => "Sessions",
+            Self::Sessions => "Session",
             Self::Timeline => "Timeline",
             Self::Party => "Party",
             Self::Library => "Library",
@@ -159,6 +165,10 @@ impl Page {
         }
     }
     fn from_name(name: &str) -> Option<Self> {
+        // The page's name until it became the place for tonight.
+        if name == "Sessions" {
+            return Some(Self::Sessions);
+        }
         [
             Self::Encounters,
             Self::Sessions,
@@ -195,6 +205,7 @@ impl Splat {
         self.started = true;
         let saved = self.ui_store.load();
         design::restore_column_widths(ctx, saved.column_widths);
+        self.sessions.restored_session = saved.playing;
         let active = self.campaigns.active_campaign();
         self.page =
             saved
@@ -222,7 +233,20 @@ impl Splat {
         let active = self.campaigns.active_campaign();
         let state = ui_state::UiState {
             column_widths: design::column_widths(ctx),
-            page: Some(self.page.name().to_owned()).filter(|_| self.page != Page::Run),
+            // With a run open, the page it began on: Close run goes back there after a restart.
+            page: Some(
+                if self.page == Page::Run {
+                    self.run_origin
+                } else {
+                    self.page
+                }
+                .name()
+                .to_owned(),
+            ),
+            playing: active
+                .as_ref()
+                .zip(self.sessions.chosen_session())
+                .map(|(campaign, session)| (campaign.id, session)),
             open_run: self.encounters.run().and_then(|run| {
                 Some(ui_state::OpenRun {
                     campaign: active.as_ref()?.id,
@@ -232,6 +256,57 @@ impl Splat {
             }),
         };
         self.ui_store.save(&state);
+    }
+
+    /// Where the party stands in the session being played, from the timeline and the last
+    /// fight's file. It is read again when any of those could have changed.
+    fn update_carry(&mut self) {
+        let session = self.sessions.current();
+        let state = timeline::party_state(&self.timeline.events, session);
+        let active = self.campaigns.active_campaign();
+        let directory = active
+            .as_ref()
+            .and_then(|campaign| self.encounters.run_directory(campaign));
+        // The folder comes with a background read, so a restart gets here before it does.
+        let key = (
+            session,
+            state.clone(),
+            self.run_fact.is_some(),
+            self.page,
+            directory.is_some(),
+        );
+        if self.carry_key.as_ref() == Some(&key) {
+            return;
+        }
+        self.carry_key = Some(key);
+        let carry = active
+            .filter(|_| state.rested || !state.fights.is_empty())
+            .map(|campaign| {
+                let mut carry = encounter_run::Carry {
+                    from: "the long rest".to_owned(),
+                    full: state.rested,
+                    values: Default::default(),
+                    missing: Vec::new(),
+                };
+                for (run, name) in state.fights {
+                    let read = directory
+                        .as_ref()
+                        .map(|directory| directory.join(format!("{run}.json")))
+                        .ok_or_else(String::new)
+                        .and_then(|path| encounter_run::party_at_end(&path, campaign.id));
+                    match read {
+                        // A later fight has the newer word on anyone who was in it.
+                        Ok(values) => {
+                            carry.values.extend(values);
+                            carry.from = name;
+                        }
+                        Err(_) => carry.missing.push(name),
+                    }
+                }
+                carry
+            });
+        self.party.tonight.clone_from(&carry);
+        self.encounters.carry = carry;
     }
 
     /// Tab must not stop on a scroll handle: it has no name and no visible focus. egui
@@ -330,13 +405,19 @@ impl Splat {
                 Page::Campaign,
             ));
         }
-        if self.encounters.draft_dirty() {
-            let name = self.encounters.draft_name().unwrap_or_default();
+        let name = self.encounters.draft_name().unwrap_or_default();
+        if self.encounters.encounter_dirty() {
             items.push((
                 format!(
                     "{} \u{201c}{name}\u{201d} has unsaved changes.",
                     self.encounters.draft_kind()
                 ),
+                Page::Encounters,
+            ));
+        }
+        if self.encounters.creature_dirty() {
+            items.push((
+                format!("A creature in \u{201c}{name}\u{201d} has unsaved changes."),
                 Page::Encounters,
             ));
         }
@@ -642,7 +723,11 @@ impl Splat {
         }];
         for (dirty, word) in [
             (self.library.dirty(), "Library draft"),
-            (self.encounters.draft_dirty(), self.encounters.draft_word()),
+            (
+                self.encounters.encounter_dirty(),
+                self.encounters.draft_word(),
+            ),
+            (self.encounters.creature_dirty(), "Creature draft"),
             (self.campaign_content.dirty(), "Campaign draft"),
         ] {
             if dirty {
@@ -966,8 +1051,33 @@ impl Splat {
                     });
             }
             Page::Sessions => {
-                if active.is_some() {
-                    self.sessions.show(ui, &self.processing, &mut self.timeline);
+                if let Some(campaign) = &active {
+                    let fights = self.encounters.plan_fights();
+                    let groups = self.encounters.plan_groups();
+                    let blocked = self.encounters.plan_blocked();
+                    let group_blocked = self.encounters.plan_group_blocked();
+                    let group_open = self.encounters.group_open_in_plan();
+                    let group_discarded = self.encounters.group_discarded_in_plan();
+                    let arrivals_open = self.encounters.run_takes_arrivals();
+                    let run_directory = self.encounters.run_directory(campaign);
+                    let (encounters, campaigns) = (&mut self.encounters, &self.campaigns);
+                    let mut group_editor = |ui: &mut egui::Ui| {
+                        encounters.group_in_plan_view(ui, campaign, campaigns);
+                    };
+                    let plan = sessions::page::Plan {
+                        fights: &fights,
+                        groups: &groups,
+                        group_blocked,
+                        group_open,
+                        group_discarded,
+                        arrivals_open,
+                        group_editor: std::cell::RefCell::new(&mut group_editor),
+                        blocked,
+                        run_directory,
+                        open_run: self.run_fact.as_ref().map(|fact| fact.id),
+                    };
+                    self.sessions
+                        .show(ui, &self.processing, &mut self.timeline, &plan);
                 } else {
                     self.no_campaign(ui, "No campaign to keep notes for yet");
                 }
@@ -1020,13 +1130,6 @@ impl Splat {
                             sessions: &sessions,
                         },
                     );
-                    if self.encounters.saved {
-                        self.encounters.saved = false;
-                        if let Some(campaign) = &active {
-                            self.campaign_content.refresh_destination(&campaign.path);
-                            self.lookup.refresh();
-                        }
-                    }
                 } else {
                     self.no_campaign(ui, "No campaign to prepare yet");
                 }
@@ -1076,10 +1179,6 @@ impl Splat {
                     }
                     CampaignTab::RunSettings => {
                         self.encounters.run_settings(ui, &self.campaigns);
-                        if self.encounters.saved {
-                            self.encounters.saved = false;
-                            self.campaign_content.refresh_destination(&campaign.path);
-                        }
                     }
                     CampaignTab::Link => {
                         // The same guard as Settings: a link or folder change would stop
@@ -1128,7 +1227,8 @@ impl Splat {
                     run.set_sheet(sheet);
                 }
                 if self.encounters.show_run(ui, &campaign) {
-                    self.page = Page::Encounters;
+                    self.page = self.run_origin;
+                    self.sessions.forget_fight();
                 }
                 if let Some(words) = self
                     .encounters
@@ -1181,7 +1281,75 @@ impl Splat {
         if std::mem::take(&mut self.campaigns.wants_encounters) {
             self.page = Page::Encounters;
         }
+        let active = self.campaigns.active_campaign();
+        // What the Library, Campaign and Lookup hold of this file is now out of date.
+        if std::mem::take(&mut self.encounters.saved)
+            && let Some(campaign) = &active
+        {
+            self.library.refresh_destination(&campaign.path, ctx);
+            self.campaign_content.refresh_destination(&campaign.path);
+            self.lookup.refresh();
+        }
+        if let Some(name) = self.encounters.saved_for_plan.take() {
+            self.sessions.add_to_plan(&name);
+        }
+        if let Some((old, new)) = self.encounters.renamed_group.take() {
+            self.sessions.rename_links(&old, &new);
+        }
+        if std::mem::take(&mut self.sessions.wants_group_undo) {
+            self.encounters.undo_group_discard_in_plan();
+        }
+        if std::mem::take(&mut self.sessions.wants_arrivals) {
+            self.encounters.show_arrivals();
+            self.page = Page::Run;
+        }
+        if std::mem::take(&mut self.sessions.wants_new_group) {
+            self.encounters.new_group_in_plan();
+        }
+        if let Some(path) = self.sessions.wants_group.take()
+            && let Some(campaign) = &active
+            && !self.encounters.open_group_in_plan(&path, campaign)
+        {
+            self.page = Page::Encounters;
+        }
+        self.encounters.planned_groups = self.sessions.tonight_links();
+        if std::mem::take(&mut self.encounters.wants_session) {
+            self.page = Page::Sessions;
+        }
+        if let Some(campaign) = &active {
+            let asked =
+                self.sessions.wants_fight.is_some() || self.sessions.wants_saved_run.is_some();
+            if let Some(path) = self.sessions.wants_fight.take() {
+                self.encounters
+                    .run_path(&path, campaign, self.campaigns.modules());
+            }
+            if let Some(path) = self.sessions.wants_saved_run.take() {
+                self.encounters.open_saved_run(&path, campaign);
+            }
+            // Encounters shows why, and a button that seems dead tells the table nothing.
+            if asked && !self.encounters.go_to_run {
+                self.page = Page::Encounters;
+            }
+        }
+        if std::mem::take(&mut self.sessions.wants_new_fight) {
+            self.encounters.new_from_plan();
+            self.page = Page::Encounters;
+        }
+        if std::mem::take(&mut self.sessions.wants_back_to_run) {
+            self.page = Page::Run;
+        }
+        if let Some(name) = self.sessions.wants_lookup.take() {
+            self.notes_give_way();
+            if !self.lookup.open_name(&name) {
+                self.sessions.no_entry_named(&name);
+            }
+        }
         if std::mem::take(&mut self.encounters.go_to_run) {
+            if std::mem::take(&mut self.encounters.run_from_session) {
+                self.run_origin = Page::Sessions;
+            } else if self.page != Page::Run {
+                self.run_origin = self.page;
+            }
             self.page = Page::Run;
         }
         if std::mem::take(&mut self.party.wants_settings) {
@@ -1219,6 +1387,17 @@ impl Splat {
         }
         if let Some(source) = self.library.copy.take() {
             self.copy_dialog = Some(copy_dialog::CopyDialog::new(source, &self.campaigns, ctx));
+        }
+        match self.lookup.open_written.take() {
+            Some(lookup::WrittenIn::Session(id)) => {
+                self.sessions.open(id);
+                self.page = Page::Sessions;
+            }
+            Some(lookup::WrittenIn::Event(id)) => {
+                self.timeline_page.reveal(&id, &self.timeline);
+                self.page = Page::Timeline;
+            }
+            None => {}
         }
         if let Some(entry) = self.lookup.open_in_library.take()
             && self.library.reveal(&entry)
@@ -1280,6 +1459,7 @@ impl eframe::App for Splat {
             }
             self.run_fact = fact;
         }
+        self.update_carry();
         self.sessions.open_run = self.run_fact.as_ref().and_then(|fact| {
             let event = self
                 .timeline
@@ -1361,6 +1541,10 @@ impl eframe::App for Splat {
             self.sessions.notes_come_back();
         }
         if self.lookup.open {
+            if self.lookup.wants_written() {
+                self.lookup
+                    .set_written(self.sessions.written(&self.timeline));
+            }
             self.lookup.show(ctx);
         }
         // The Sessions page has this note itself, so two editors would squeeze a small window.
