@@ -53,6 +53,8 @@ pub enum Seed {
     LargeRosters,
     /// `Campaign`, plus two encounter groups, and an encounter and a run with overrides.
     Groups,
+    /// `Campaign`, plus plain world notes with links, headings and a roll table.
+    World,
     /// `Campaign`, plus ended runs: one on the timeline under a session, one with no event.
     History,
     /// `Groups`, plus groups that belong to an encounter, and one whose encounter is gone.
@@ -135,6 +137,9 @@ fn seed_campaigns(
     }
     if seed == Seed::OwnedGroups {
         write_owned_groups(&active.path)?;
+    }
+    if seed == Seed::World {
+        write_world_notes(&active.path)?;
     }
 
     let data = UserData {
@@ -328,6 +333,34 @@ fn write_art(root: &Path) -> Result<(), String> {
         format!("# Art Index\n\n```json\n{index}\n```\n"),
     )
     .map_err(|e| e.to_string())
+}
+
+/// Plain notes, as a DM writes them in Obsidian, with no Splat fields.
+fn write_world_notes(root: &Path) -> Result<(), String> {
+    for (path, text) in [
+        (
+            "Setting.md",
+            "# Setting\n\nA cold war around an inner sea.\n\n[[Verori|The home country]]\n",
+        ),
+        (
+            "Powers/Verori.md",
+            "# Verori\n\nNo ruler, only a law code.\n",
+        ),
+        (
+            "Gate Mechanics.md",
+            "# Gate Mechanics\n\n## Forced trips\n\nEvery forced trip rolls here.\n\n\
+             <!-- splat:rolls key=forced_trip dice=1d20 -->\n\n\
+             | d20 | Result |\n| --- | --- |\n| 1-5 | No connection. |\n\
+             | 6-10 | Rough arrival. |\n| 11-20 | Clean arrival. |\n\n\
+             ## Reliability\n\nA field gate fails on a low roll.\n",
+        ),
+    ] {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().ok_or("A note needs a folder.")?)
+            .map_err(|e| e.to_string())?;
+        fs::write(path, text).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn write_campaign_notes(root: &Path) -> Result<(), String> {

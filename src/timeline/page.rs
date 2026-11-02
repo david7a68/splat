@@ -1,5 +1,5 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
-use super::{Book, Event, Kind, day_numbers, reference};
+use super::{Book, Event, Kind, clock, clock_now, clock_words, day_numbers, reference};
 use crate::design::{self, Action, Density, Tone, Type, colors, icons};
 use eframe::egui;
 use std::time::{Duration, Instant};
@@ -73,6 +73,10 @@ pub struct TimelinePage {
     pub dated: Option<String>,
     /// The DM is playing that session after all.
     pub play_current: bool,
+    /// The campaign's locations and their other names, to suggest for an event's place.
+    pub places: Vec<(Uuid, Vec<String>)>,
+    /// The DM asked to read this location.
+    pub open_place: Option<Uuid>,
 }
 
 /// One button for each of these kinds of event. Returns the new event's ID.
@@ -381,8 +385,49 @@ impl TimelinePage {
         }
     }
 
+    /// Locations the typed place could be, or a link to the one it is. The place stays text.
+    fn place_help(&mut self, ui: &mut egui::Ui, event: &mut Event) -> bool {
+        let typed = event.place.trim().to_lowercase();
+        if typed.is_empty() {
+            return false;
+        }
+        let exact: Vec<_> = self
+            .places
+            .iter()
+            .filter(|(_, names)| names.iter().any(|name| name.to_lowercase() == typed))
+            .collect();
+        if let [(id, names)] = exact.as_slice() {
+            if design::link(ui, &format!("Read {}", names[0])).clicked() {
+                self.open_place = Some(*id);
+            }
+            return false;
+        }
+        let mut changed = false;
+        ui.horizontal_wrapped(|ui| {
+            let close = self
+                .places
+                .iter()
+                .filter_map(|(_, names)| names.iter().find(|n| n.to_lowercase().contains(&typed)))
+                .take(5);
+            for name in close {
+                if design::link(ui, name).clicked() {
+                    event.place = name.clone();
+                    changed = true;
+                }
+            }
+        });
+        changed
+    }
+
     fn list(&mut self, ui: &mut egui::Ui, book: &Book, sessions: &[SessionLink]) {
         let days = day_numbers(&book.events);
+        if let Some(now) = clock_now(&book.events) {
+            ui.label(
+                Type::Small
+                    .rich(ui, format!("Now: {}", clock_words(now)))
+                    .color(colors().muted),
+            );
+        }
         let rows: Vec<usize> = (0..book.events.len())
             .filter(|&index| self.matches(&book.events[index], days[index]))
             .collect();
@@ -497,6 +542,7 @@ impl TimelinePage {
             })
             .collect();
         let ids: Vec<String> = book.events.iter().map(|event| event.id.clone()).collect();
+        let starts = clock(&book.events)[index];
         egui::ScrollArea::vertical()
             .id_salt(("timeline_detail", &id))
             .auto_shrink([false, false])
@@ -564,12 +610,20 @@ impl TimelinePage {
                         ui,
                         "How long",
                         &mut event.duration,
-                        Some("In the story, in your own words: 3 days, an hour."),
+                        Some("A number and a unit move the clock: 3 days, 8 hours, an hour."),
                         None,
                     )
                     .changed();
                 }
+                if let Some(start) = starts {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("Starts: {}", clock_words(start)))
+                            .color(c.muted),
+                    );
+                }
                 changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
+                changed |= self.place_help(ui, event);
                 design::field(ui, "Session", None, None, |ui| {
                     let label = event
                         .session

@@ -76,7 +76,10 @@ struct Marker {
 
 fn marker(raw: &str) -> Result<Option<Marker>, String> {
     let raw = raw.trim();
-    if !raw.starts_with("<!-- splat:") || raw.starts_with("<!-- splat:inventory") {
+    if !raw.starts_with("<!-- splat:")
+        || raw.starts_with("<!-- splat:inventory")
+        || raw.starts_with(super::ROLLS_MARKER)
+    {
         return Ok(None);
     }
     if let Some(config) = raw

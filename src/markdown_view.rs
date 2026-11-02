@@ -1,8 +1,45 @@
-//! Read-only Markdown presentation. Content cannot execute UI actions.
+//! Read-only Markdown presentation. Content cannot execute UI actions, but it can say which note
+//! a link names, and a roll table can ask for a roll. Whoever drew it decides what happens next.
 use crate::design::{self, Type, colors};
 use eframe::egui::{self, text::LayoutJob};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::borrow::Cow;
+
+/// A link to a note, as `world::with_links` writes one.
+pub const NOTE_LINK: &str = "splat-note:";
+/// An embedded image, as `world::with_links` writes one.
+pub const FILE_LINK: &str = "splat-file:";
+
+fn clicked_id() -> egui::Id {
+    egui::Id::new("markdown_clicked_note")
+}
+
+fn heading_id() -> egui::Id {
+    egui::Id::new("markdown_wanted_heading")
+}
+
+/// The note link the DM pressed, for whoever just drew this Markdown.
+pub fn take_note_link(ctx: &egui::Context) -> Option<String> {
+    ctx.data_mut(|data| data.remove_temp::<String>(clicked_id()))
+}
+
+/// Ask the next draw to scroll to this heading. `None` ends the request.
+pub fn want_heading(ctx: &egui::Context, heading: Option<String>) {
+    ctx.data_mut(|data| match heading {
+        Some(heading) => data.insert_temp(heading_id(), heading),
+        None => data.remove::<String>(heading_id()),
+    });
+}
+
+/// True once, for the heading a draw was asked to show.
+pub fn wanted_heading(ctx: &egui::Context, heading: &str) -> bool {
+    let wanted = ctx.data(|data| data.get_temp::<String>(heading_id()));
+    if wanted.is_some_and(|wanted| wanted.eq_ignore_ascii_case(heading.trim())) {
+        want_heading(ctx, None);
+        return true;
+    }
+    false
+}
 
 #[cfg(test)]
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
@@ -31,7 +68,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let mut job = LayoutJob::default();
     let mut heading = None;
     let mut inventory_table = false;
-    let mut target: Option<String> = None;
+    let mut target = Targets::default();
+    let mut note_link: Option<(usize, String)> = None;
+    let mut rolls = None;
     let mut in_link = false;
     let mut code = false;
     let mut strong = false;
@@ -48,29 +87,55 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
         &source,
         Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
     ) {
+        // A roll marker belongs to the table right after it, not to a later one.
+        if matches!(
+            event,
+            Event::Start(
+                Tag::Paragraph
+                    | Tag::Heading { .. }
+                    | Tag::List(_)
+                    | Tag::CodeBlock(_)
+                    | Tag::BlockQuote(_)
+            )
+        ) {
+            rolls = None;
+        }
         match event {
             Event::Html(ref text) if text.trim().starts_with("<!-- splat:inventory") => {
                 inventory_table = true;
             }
+            Event::Html(ref text) if crate::roll_table::rolls_marker(text).is_some() => {
+                rolls = crate::roll_table::rolls_marker(text);
+            }
             Event::Text(ref text) if in_figure && &**text == "image" => {}
             Event::Start(Tag::Link { dest_url, .. }) if table.is_none() => {
                 // A link to an image with a local copy shows the image instead of opening a page.
-                if let Some(path) = crate::art::link_art(&ctx, &dest_url) {
+                let local = crate::art::link_art(&ctx, &dest_url)
+                    .or_else(|| dest_url.strip_prefix(FILE_LINK).map(Into::into));
+                if let Some(path) = local {
                     figures.push(path);
                     in_figure = true;
                     continue;
                 }
-                if target.is_some() {
+                if let Some(note) = dest_url.strip_prefix(NOTE_LINK) {
+                    note_link = Some((job.text.len(), note.to_owned()));
+                    in_link = true;
+                    continue;
+                }
+                if target.url.is_some() {
                     flush(ui, &mut job, &mut target);
                 }
                 if dest_url.starts_with("https://") || dest_url.starts_with("http://") {
-                    target = Some(dest_url.into_string());
+                    target.url = Some(dest_url.into_string());
                     in_link = true;
                 }
             }
             Event::End(TagEnd::Link) => {
                 in_link = false;
                 in_figure = false;
+                if let Some((start, note)) = note_link.take() {
+                    target.notes.push((start..job.text.len(), note));
+                }
             }
             Event::Start(Tag::Table(_)) => {
                 flush(ui, &mut job, &mut target);
@@ -144,6 +209,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                             });
                         }
                     });
+                    if let Some(marker) = rolls.take() {
+                        crate::roll_table::roll_control(ui, &marker, &rows);
+                    }
                     ui.add_space(design::S);
                 }
                 inventory_table = false;
@@ -171,6 +239,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 heading = Some(level);
             }
             Event::End(TagEnd::Heading(level)) => {
+                if wanted_heading(ui.ctx(), &job.text) {
+                    ui.scroll_to_cursor(Some(egui::Align::TOP));
+                }
                 draw_figures(ui, &mut figures, &job);
                 flush(ui, &mut job, &mut target);
                 if level == pulldown_cmark::HeadingLevel::H2
@@ -462,12 +533,59 @@ fn display_field_value(value: &str) -> String {
     }
 }
 
-fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Option<String>) {
+/// What the words waiting to be drawn link to.
+#[derive(Default)]
+struct Targets {
+    /// The whole block opens this page.
+    url: Option<String>,
+    /// These words open these notes. A note can have many, in one paragraph.
+    notes: Vec<(std::ops::Range<usize>, String)>,
+}
+
+/// A paragraph with links to notes stays one paragraph, and only its links can be pressed.
+fn draw_with_note_links(
+    ui: &mut egui::Ui,
+    job: LayoutJob,
+    notes: Vec<(std::ops::Range<usize>, String)>,
+) {
+    let text = job.text.clone();
+    let (position, galley, response) = egui::Label::new(job)
+        .wrap()
+        .sense(egui::Sense::click())
+        .layout_in_ui(ui);
+    ui.painter().galley(position, galley.clone(), colors().text);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, text.as_str()));
+    let Some(pointer) = response.hover_pos() else {
+        return;
+    };
+    let at = galley.cursor_from_pos(pointer - position).index;
+    let byte = text
+        .char_indices()
+        .nth(at)
+        .map_or(text.len(), |(byte, _)| byte);
+    if let Some((_, note)) = notes.iter().find(|(range, _)| range.contains(&byte)) {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        if response.clicked() {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(clicked_id(), note.clone()));
+        }
+    }
+}
+
+fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
     if job.is_empty() {
         return;
     }
+    let notes = std::mem::take(&mut target.notes);
+    if !notes.is_empty() {
+        // A web link in the same words must not carry over to the next paragraph.
+        target.url = None;
+        draw_with_note_links(ui, std::mem::take(job), notes);
+        ui.add_space(design::S);
+        return;
+    }
     let label = egui::Label::new(std::mem::take(job)).wrap();
-    if let Some(url) = target.take() {
+    if let Some(url) = target.url.take() {
         if ui
             .add(label.sense(egui::Sense::click()))
             .on_hover_text(&url)

@@ -7,6 +7,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use uuid::Uuid;
 
+/// A note's line that makes the table below it rollable. It holds no entry data.
+pub const ROLLS_MARKER: &str = "<!-- splat:rolls ";
+
+/// True if a note's text has a marker that holds entry data.
+pub fn has_data_marker(text: &str) -> bool {
+    text.match_indices("<!-- splat:")
+        .any(|(at, _)| !text[at..].starts_with(ROLLS_MARKER))
+}
+
 pub mod adapters;
 pub mod art;
 pub mod builtin;
@@ -153,6 +162,7 @@ impl Entry {
             "container",
             "encounter",
             "encounter_group",
+            "world",
             "sequence",
             "rule",
             "rule_group",
@@ -212,6 +222,7 @@ impl Entry {
             "effect" => Some("splat_effect"),
             "encounter" => Some("splat_encounter"),
             "encounter_group" => Some("splat_encounter_group"),
+            "world" => Some("splat_world"),
             "sequence" => Some("splat_sequence"),
             "rule" => Some("splat_rule"),
             "rule_group" => Some("splat_rule_group"),
@@ -233,6 +244,14 @@ impl Entry {
         }
         if self.kind == "encounter_group" {
             encounter_group::EncounterGroup::of(self)?;
+        }
+        if self.kind == "world"
+            && field(&self.fields, "splat_world")
+                .and_then(|world| world.get("type"))
+                .and_then(Value::as_str)
+                .is_none_or(|kind| kind.trim().is_empty())
+        {
+            return Err("splat_world needs a type, such as npc or location".into());
         }
         if self.kind == "encounter"
             && let Some(roster) = field(&self.fields, "splat_encounter")
@@ -838,6 +857,7 @@ pub fn validate_all(entries: &[&Entry]) -> Report {
         "splat_effects",
         "splat_encounter",
         "splat_encounter_group",
+        "splat_world",
         "splat_forms",
         "splat_health",
         "splat_hit_dice",

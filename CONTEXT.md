@@ -169,6 +169,28 @@ or leave combat. Phases have independent triggers and can overlap.
 An event or condition that causes a planned change in an encounter, once by
 default or repeatedly when explicitly configured.
 
+**World**:
+The fictional setting of a campaign, as notes and entries.
+_Avoid_: Setting, which is confused with app settings.
+
+**World note**:
+A plain Markdown file in a campaign that Splat reads and does not own. Its path is its identity.
+
+**World entry**:
+A note with a Splat identity that represents something in the world.
+
+**NPC**:
+A world entry for a person the DM plays. It can point at a stat block, and it is not a creature entry.
+
+**Location**:
+A world entry for a place. Locations can be inside other locations.
+
+**Roll table**:
+An existing Markdown table that a marker makes rollable.
+
+**Campaign clock**:
+The one count of standard hours, computed from the timeline, whatever world the party is on.
+
 **Session**:
 One meeting of the table, with its notes in a Markdown file in the campaign's folder.
 

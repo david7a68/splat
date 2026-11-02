@@ -207,7 +207,7 @@ fn reference(
 ) {
     let technical: Vec<_> = sections
         .iter()
-        .filter(|section| section.body.contains("<!-- splat:"))
+        .filter(|section| splat::content::has_data_marker(section.body))
         .collect();
     if !styled && !technical.is_empty() {
         ui.add_space(design::M);
@@ -242,17 +242,19 @@ fn reference(
         Some("partial") => "Conversion incomplete",
         _ => "Not established",
     };
-    // A verdict means nothing at a table, so it waits inside.
-    design::quiet_section(ui, "Engine support", |ui| {
-        ui.label(support);
-        if conversion.is_some() {
-            for gap in gap_list("conversion_gaps").chain(open_gaps.iter().copied()) {
-                ui.monospace(gap);
+    // A verdict means nothing at a table, so it waits inside. Someone in the world has none.
+    if entry.is_none_or(|entry| entry.kind != "world") {
+        design::quiet_section(ui, "Engine support", |ui| {
+            ui.label(support);
+            if conversion.is_some() {
+                for gap in gap_list("conversion_gaps").chain(open_gaps.iter().copied()) {
+                    ui.monospace(gap);
+                }
+            } else {
+                ui.label("Draft structure does not establish engine support.");
             }
-        } else {
-            ui.label("Draft structure does not establish engine support.");
-        }
-    });
+        });
+    }
     design::quiet_section(ui, "Source and identifiers", |ui| {
         ui.label(origin.owner);
         ui.label(origin.path);

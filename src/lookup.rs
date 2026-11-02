@@ -1,16 +1,18 @@
 //! Lookup: search and read any entry beside the current page, without navigating.
-//! It covers built-in, package and campaign-owned entries in one index (T2.3).
+//! It covers built-in, package and campaign-owned entries in one index (T2.3), and the
+//! campaign's plain notes, with each heading as its own result.
 use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
     design::{self, Action, Density, Tone, Type, colors, icons, reader as style},
     library::{presentation, view},
     persistence::{Campaign, Module},
+    world::{self, Go, Nav, Reader, Role},
 };
 use eframe::egui;
 use splat::content::{Entry, Reference};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, mpsc},
 };
 use uuid::Uuid;
@@ -45,15 +47,32 @@ enum Hit {
 
 /// True if `name` appears in `text` as whole words, in any case.
 pub fn names_word(text: &str, name: &str) -> bool {
+    names_lower_word(&text.to_lowercase(), &name.to_lowercase())
+}
+
+/// `names_word`, for words already in lower case.
+fn names_lower_word(text: &str, name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
     let boundary = |c: Option<char>| c.is_none_or(|c| !c.is_alphanumeric());
-    let (text, name) = (text.to_lowercase(), name.to_lowercase());
-    text.match_indices(&name).any(|(at, _)| {
+    text.match_indices(name).any(|(at, _)| {
         boundary(text[..at].chars().next_back()) && boundary(text[at + name.len()..].chars().next())
     })
 }
+
+/// Where an item came from.
+#[derive(Clone, Debug, PartialEq)]
+enum Source {
+    Entry,
+    /// A plain note. It has no file identity of its own.
+    Note(Role),
+    /// A heading in a plain note: the note, and the heading's words.
+    Heading(Uuid, String),
+}
+
+/// The World page's list, by group, with each row's position and how deep it sits.
+pub type WorldGroups = BTreeMap<(u8, String), Vec<(usize, usize)>>;
 
 pub struct Item {
     pub entry: Entry,
@@ -65,6 +84,9 @@ pub struct Item {
     pub section: presentation::Section,
     builtin: bool,
     from_sheet: bool,
+    source: Source,
+    /// For notes and world entries, whose words can also be searched.
+    lower_body: String,
 }
 
 /// Every entry the active campaign can see, including all registered packages.
@@ -74,6 +96,14 @@ pub struct ContentIndex {
     by_id: HashMap<Uuid, usize>,
     by_key: HashMap<String, usize>,
     spells: Vec<usize>,
+    creatures: Vec<usize>,
+    /// Lower-case file stems and paths in the campaign, as Obsidian finds a link's target.
+    files: HashMap<String, Vec<usize>>,
+    /// Plain world notes and world entries.
+    world: Vec<usize>,
+    mentions: HashMap<Uuid, Vec<usize>>,
+    /// What the campaign's files looked like just before this was read.
+    files_seen: Option<u64>,
     pub errors: Vec<String>,
 }
 
@@ -95,6 +125,84 @@ impl Item {
             Origin::Book
         }
     }
+
+    pub fn is_note(&self) -> bool {
+        matches!(self.source, Source::Note(_))
+    }
+
+    pub fn is_world_note(&self) -> bool {
+        self.source == Source::Note(Role::World)
+    }
+
+    pub fn is_private(&self) -> bool {
+        self.private
+    }
+
+    pub fn is_builtin(&self) -> bool {
+        self.builtin
+    }
+
+    fn file_keys(&self) -> [String; 2] {
+        let path = self.entry.path.trim_end_matches(".md").to_lowercase();
+        let stem = path.rsplit('/').next().unwrap_or(&path).to_owned();
+        [stem, path]
+    }
+}
+
+/// The Lookup items for one plain note: the note, then one for each heading.
+fn note_items(
+    note: world::PlainNote,
+    owner: &str,
+    images: &HashMap<String, std::path::PathBuf>,
+) -> Vec<Item> {
+    let subtitle = match note.role {
+        Role::World => "World note",
+        Role::Session => "Session note",
+        Role::Transcript => "Transcript",
+    };
+    let item = |entry: Entry, subtitle: String, lower_body: String, source: Source| Item {
+        lower: entry.name.to_lowercase(),
+        subtitle,
+        owner: owner.to_owned(),
+        private: true,
+        section: presentation::Section::World,
+        builtin: false,
+        from_sheet: false,
+        source,
+        lower_body,
+        entry,
+    };
+    // The reader already shows the name as the title.
+    let shown = note
+        .body
+        .trim_start()
+        .strip_prefix(&format!("# {}\n", note.name))
+        .unwrap_or(&note.body);
+    let body = world::with_links(shown, images);
+    let headings = world::headings(&body);
+    let main = item(
+        world::note_entry(&note.path, &note.name, body),
+        subtitle.to_owned(),
+        note.body.to_lowercase(),
+        Source::Note(note.role),
+    );
+    let mut items = Vec::new();
+    for heading in headings {
+        // A note's own title is the note.
+        if heading.eq_ignore_ascii_case(&note.name) {
+            continue;
+        }
+        let name = format!("{} › {heading}", note.name);
+        let path = format!("{}#{heading}", note.path);
+        items.push(item(
+            world::note_entry(&path, &name, String::new()),
+            format!("Heading in {}", note.name),
+            String::new(),
+            Source::Heading(main.entry.id, heading),
+        ));
+    }
+    items.push(main);
+    items
 }
 
 impl ContentIndex {
@@ -139,12 +247,36 @@ impl ContentIndex {
                 section: presentation::Section::for_entry(&e.entry),
                 builtin: Some(e.owner) == builtin,
                 from_sheet: from_sheet(&e.entry),
+                source: Source::Entry,
+                // Another name finds a world entry as its words do.
+                lower_body: if e.entry.kind == "world" {
+                    format!("{} {}", world::aliases(&e.entry).join(" "), e.entry.body)
+                        .to_lowercase()
+                } else {
+                    String::new()
+                },
                 entry: e.entry.clone(),
             })
             .collect();
+        let files_seen = campaign.map(|campaign| world::fingerprint(&campaign.path));
+        if let Some(campaign) = campaign {
+            let sessions = crate::sessions::folder(campaign)
+                .unwrap_or_else(|_| campaign.path.join(crate::sessions::DEFAULT_FOLDER));
+            let scan = world::scan(&campaign.path, &sessions);
+            for item in &mut items {
+                if item.entry.kind == "world" {
+                    item.entry.body = world::with_links(&item.entry.body, &scan.images);
+                }
+            }
+            let owner = owner_name(campaign.id, true);
+            for note in scan.notes {
+                items.extend(note_items(note, &owner, &scan.images));
+            }
+        }
         items.sort_by(|a, b| a.lower.cmp(&b.lower).then(a.entry.id.cmp(&b.entry.id)));
         let mut index = Self {
             errors: catalogue.errors.clone(),
+            files_seen,
             ..Default::default()
         };
         for (position, item) in items.iter().enumerate() {
@@ -155,8 +287,24 @@ impl ContentIndex {
             if item.entry.kind == "spell" {
                 index.spells.push(position);
             }
+            if item.entry.kind == "creature" {
+                index.creatures.push(position);
+            }
+            let heading = matches!(item.source, Source::Heading(..));
+            if item.private && !heading {
+                let [stem, path] = item.file_keys();
+                index.files.entry(stem).or_default().push(position);
+                if item.entry.path.contains('/') {
+                    index.files.entry(path).or_default().push(position);
+                }
+            }
+            if item.is_world_note() || item.entry.kind == "world" {
+                index.world.push(position);
+            }
         }
         index.items = items;
+        index.mentions = index.find_mentions();
+        index.errors.extend(index.place_loops());
         Ok(index)
     }
 
@@ -173,27 +321,251 @@ impl ContentIndex {
         self.items.iter().position(|item| item.lower == wanted)
     }
 
+    /// Who links to each note or entry, and who names each world entry in whole words.
+    fn find_mentions(&self) -> HashMap<Uuid, Vec<usize>> {
+        let mut found: HashMap<Uuid, Vec<usize>> = HashMap::new();
+        let sources: Vec<(usize, Vec<String>)> = (0..self.items.len())
+            .filter(|&at| !self.items[at].lower_body.is_empty())
+            .map(|at| (at, world::links_in(&self.items[at].lower_body)))
+            .collect();
+        for &target in &self.world {
+            let item = &self.items[target];
+            let keys = item.file_keys();
+            let mut names = Vec::new();
+            if item.entry.kind == "world" {
+                names.push(item.entry.name.to_lowercase());
+                names.extend(world::aliases(&item.entry).iter().map(|a| a.to_lowercase()));
+            }
+            for (source, links) in &sources {
+                let body = &self.items[*source].lower_body;
+                if *source != target
+                    && (links.iter().any(|link| keys.contains(link))
+                        || names.iter().any(|name| names_lower_word(body, name)))
+                {
+                    found.entry(item.entry.id).or_default().push(*source);
+                }
+            }
+        }
+        found
+    }
+
+    fn parent(&self, position: usize) -> Option<usize> {
+        let reference = world::place(&self.items[position].entry)?;
+        self.position_of(&reference)
+    }
+
+    fn place_loops(&self) -> Vec<String> {
+        self.world
+            .iter()
+            .filter(|&&start| {
+                std::iter::successors(self.parent(start), |&at| self.parent(at))
+                    .take(self.world.len())
+                    .any(|at| at == start)
+            })
+            .map(|&start| {
+                format!(
+                    "{}: its place is inside itself.",
+                    self.items[start].entry.path
+                )
+            })
+            .collect()
+    }
+
+    pub fn position_of(&self, reference: &Reference) -> Option<usize> {
+        match reference {
+            Reference::Id(id) => self.by_id.get(id),
+            Reference::Key(key) => self.by_key.get(key),
+        }
+        .copied()
+    }
+
+    /// Where a link in a note leads.
+    pub fn follow(&self, target: &str, from: &Item) -> Go {
+        let (name, heading) = match target.split_once('#') {
+            Some((name, heading)) => (name.trim(), Some(heading.trim())),
+            None => (target.trim(), None),
+        };
+        if name.eq_ignore_ascii_case("timeline")
+            && let Some(id) = heading.and_then(|heading| heading.strip_prefix('^'))
+        {
+            return Go::Timeline(id.to_owned());
+        }
+        let heading = heading
+            .filter(|heading| !heading.starts_with('^'))
+            .map(|heading| heading.rsplit('#').next().unwrap_or(heading).to_owned());
+        if name.is_empty() {
+            return match self.position(from.entry.id) {
+                Some(position) => Go::Item(position, heading),
+                None => Go::Missing(target.to_owned()),
+            };
+        }
+        let key = name.trim_end_matches(".md").to_lowercase();
+        match self.files.get(&key).map(Vec::as_slice) {
+            Some(&[position]) => Go::Item(position, heading),
+            Some(many) => Go::Many(many.to_vec()),
+            None => Go::Missing(name.to_owned()),
+        }
+    }
+
+    /// The campaign's locations, each with its name first, then its other names.
+    pub fn places(&self) -> Vec<(Uuid, Vec<String>)> {
+        self.world
+            .iter()
+            .map(|&at| &self.items[at].entry)
+            .filter(|entry| entry.kind == "world" && world::world_type(entry) == "location")
+            .map(|entry| {
+                let mut names = vec![entry.name.clone()];
+                names.extend(world::aliases(entry).into_iter().map(str::to_owned));
+                (entry.id, names)
+            })
+            .collect()
+    }
+
+    /// World entries whose place is this one.
+    pub fn inside(&self, entry: &Entry) -> Vec<usize> {
+        if entry.kind != "world" {
+            return Vec::new();
+        }
+        self.world
+            .iter()
+            .copied()
+            .filter(|&at| {
+                self.parent(at)
+                    .is_some_and(|p| self.items[p].entry.id == entry.id)
+            })
+            .collect()
+    }
+
+    pub fn mentions_of(&self, id: Uuid) -> &[usize] {
+        self.mentions.get(&id).map_or(&[], Vec::as_slice)
+    }
+
+    /// Creatures by name, exact matches first and then each word's start.
+    pub fn creatures_matching(&self, query: &str, limit: usize) -> Vec<usize> {
+        let query = query.trim().to_lowercase();
+        if query.is_empty() {
+            return Vec::new();
+        }
+        let mut found: Vec<(u8, usize)> = self
+            .creatures
+            .iter()
+            .filter_map(|&at| {
+                let name = &self.items[at].lower;
+                name.contains(&query).then(|| {
+                    let rank = u8::from(*name != query) + u8::from(!name.starts_with(&query));
+                    (rank, at)
+                })
+            })
+            .collect();
+        found.sort_unstable();
+        found.into_iter().take(limit).map(|(_, at)| at).collect()
+    }
+
+    /// NPCs, locations as a tree, other types, then notes by folder.
+    pub fn world_groups(&self, search: &str) -> WorldGroups {
+        let mut groups = WorldGroups::new();
+        let mut locations = Vec::new();
+        for &at in &self.world {
+            let item = &self.items[at];
+            if !item.lower.contains(search) && !item.lower_body.contains(search) {
+                continue;
+            }
+            let entry = &item.entry;
+            let group = if entry.kind != "world" {
+                let folder = entry
+                    .path
+                    .rsplit_once('/')
+                    .map_or("Notes", |(folder, _)| folder);
+                (3, folder.to_owned())
+            } else {
+                match world::world_type(entry) {
+                    "npc" => (0, "NPCs".to_owned()),
+                    "location" => {
+                        locations.push(at);
+                        continue;
+                    }
+                    other => (2, world::type_label(other)),
+                }
+            };
+            groups.entry(group).or_default().push((at, 0));
+        }
+        if !locations.is_empty() {
+            groups.insert((1, "Locations".to_owned()), self.location_tree(&locations));
+        }
+        groups
+    }
+
+    fn location_tree(&self, locations: &[usize]) -> Vec<(usize, usize)> {
+        fn walk(
+            children: &BTreeMap<Option<usize>, Vec<usize>>,
+            parent: Option<usize>,
+            depth: usize,
+            rows: &mut Vec<(usize, usize)>,
+        ) {
+            for &at in children.get(&parent).into_iter().flatten() {
+                rows.push((at, depth));
+                walk(children, Some(at), depth + 1, rows);
+            }
+        }
+        let present: HashSet<usize> = locations.iter().copied().collect();
+        let mut children: BTreeMap<Option<usize>, Vec<usize>> = BTreeMap::new();
+        for &at in locations {
+            let parent = self.parent(at).filter(|parent| present.contains(parent));
+            children.entry(parent).or_default().push(at);
+        }
+        let mut rows = Vec::new();
+        walk(&children, None, 0, &mut rows);
+        // A loop has no root. It still shows, flat, and the index reports it.
+        let seen: HashSet<usize> = rows.iter().map(|&(at, _)| at).collect();
+        rows.extend(
+            locations
+                .iter()
+                .filter(|at| !seen.contains(at))
+                .map(|&at| (at, 0)),
+        );
+        rows
+    }
+
+    /// The note a result opens, and the heading to show, for a heading's result.
+    fn target_of(&self, position: usize) -> (usize, Option<String>) {
+        if let Source::Heading(note, heading) = &self.items[position].source
+            && let Some(note) = self.position(*note)
+        {
+            return (note, Some(heading.clone()));
+        }
+        (position, None)
+    }
+
     pub fn position(&self, id: Uuid) -> Option<usize> {
         self.by_id.get(&id).copied()
     }
 
-    /// Best first: exact name, then a prefix, then a word, then anywhere in the name.
+    /// Best first: exact name, then a prefix, then a word, then anywhere in the name. A note's
+    /// words come last.
     fn search(&self, query: &str) -> Vec<usize> {
         let mut found: Vec<(u8, Origin, usize)> = self
             .items
             .iter()
             .enumerate()
             .filter_map(|(index, item)| {
+                // What the DM wrote in a session has its own results, from the session page.
+                if matches!(item.source, Source::Note(Role::Session | Role::Transcript)) {
+                    return None;
+                }
                 let rank = if item.lower == query {
                     0
                 } else if item.lower.starts_with(query) {
                     1
-                } else if names_word(&item.lower, query) {
-                    2
                 } else if item.lower.contains(query) {
-                    3
+                    if names_lower_word(&item.lower, query) {
+                        2
+                    } else {
+                        3
+                    }
                 } else if item.section.label().to_lowercase() == query {
                     4
+                } else if item.lower_body.contains(query) {
+                    5
                 } else {
                     return None;
                 };
@@ -207,11 +579,8 @@ impl ContentIndex {
 
 impl view::Links for ContentIndex {
     fn find(&self, reference: &Reference) -> Option<(usize, String)> {
-        let index = match reference {
-            Reference::Id(id) => self.by_id.get(id),
-            Reference::Key(key) => self.by_key.get(key),
-        }?;
-        Some((*index, self.items[*index].entry.name.clone()))
+        let index = self.position_of(reference)?;
+        Some((index, self.items[index].entry.name.clone()))
     }
     fn find_spell(&self, reference: &Reference) -> Option<(usize, String)> {
         self.find(reference)
@@ -253,6 +622,12 @@ pub struct Lookup {
     pub open_written: Option<WrittenIn>,
     /// A draft there means this entry cannot open there yet. Reading here still works.
     pub library_draft: bool,
+    campaign: Option<Campaign>,
+    pub reader: Reader,
+    create_error: Option<String>,
+    /// A check of the campaign's files, away from the frame.
+    checking: Option<mpsc::Receiver<u64>>,
+    was_focused: bool,
 }
 
 impl Lookup {
@@ -268,6 +643,33 @@ impl Lookup {
     /// Load or reload in the background when the active campaign or packages change.
     pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
         let active = campaigns.active_campaign();
+        // Coming back from Obsidian, show what was just written there.
+        let focused = ctx.input(|i| i.focused);
+        if focused
+            && !self.was_focused
+            && let Some(campaign) = &active
+        {
+            let (tx, rx) = mpsc::channel();
+            let path = campaign.path.clone();
+            let waker = ctx.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(world::fingerprint(&path));
+                waker.request_repaint();
+            });
+            self.checking = Some(rx);
+        }
+        self.was_focused = focused;
+        if let Some(seen) = self.checking.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.checking = None;
+            if self
+                .index
+                .as_ref()
+                .is_some_and(|index| index.files_seen != Some(seen))
+            {
+                self.scope = None;
+            }
+        }
+        self.campaign = active.clone();
         let scope = (
             active.as_ref().map(|c| c.id),
             campaigns.modules().iter().map(|m| m.id).collect::<Vec<_>>(),
@@ -376,6 +778,14 @@ impl Lookup {
         self.query.clear();
     }
 
+    /// Open with this search, for a link to something that does not exist yet.
+    pub fn search_for(&mut self, words: &str) {
+        self.open = true;
+        self.query = words.to_owned();
+        self.focus_search = true;
+        self.results_open = true;
+    }
+
     pub fn open_id(&mut self, id: Uuid) {
         self.open = true;
         self.written_stale = true;
@@ -413,6 +823,31 @@ impl Lookup {
         found.into_iter().map(|(_, at)| at).collect()
     }
 
+    /// Go to a result. A heading's result opens its note at that heading.
+    fn open_result(&mut self, index: &ContentIndex, position: usize) {
+        let (position, heading) = index.target_of(position);
+        if self.current != Some(position) {
+            self.navigate(position);
+        }
+        self.reader.show_heading(heading);
+    }
+
+    fn follow(&mut self, nav: Nav) {
+        match nav {
+            Nav::Item(position) => {
+                self.navigate(position);
+                self.results_open = false;
+                // The field must not name something other than the entry on screen.
+                self.query.clear();
+            }
+            Nav::Missing(words) => self.search_for(&words),
+            Nav::Reload(id) => {
+                self.refresh();
+                self.waiting_for = Some(id);
+            }
+        }
+    }
+
     fn back(&mut self) {
         self.reading_written = None;
         if let Some(id) = self.history.pop()
@@ -446,7 +881,7 @@ impl Lookup {
             ui,
             SEARCH_NAME,
             &mut self.query,
-            "Spell, creature, rule, note…",
+            "Spell, creature, rule, note, heading…",
             width,
         );
         if std::mem::take(&mut self.focus_search) {
@@ -501,13 +936,46 @@ impl Lookup {
             self.results_open = matches.is_empty() || ui.available_height() >= 600.0;
             match matches.first() {
                 Some(Hit::Entry(top)) => {
-                    self.current = Some(*top);
+                    let (position, heading) = index.target_of(*top);
+                    self.current = Some(position);
+                    self.reader.show_heading(heading);
                     self.reading_written = None;
                 }
                 Some(Hit::Written(top)) => self.reading_written = Some(*top),
                 None => {}
             }
         }
+        // Outside the results, because a new name can also match unrelated prose.
+        if let Some(campaign) = self.campaign.clone().filter(|_| !query.is_empty()) {
+            let mut made = None;
+            ui.horizontal_wrapped(|ui| {
+                for (label, kind) in [("New NPC", "npc"), ("New location", "location")] {
+                    if Action::quiet(label)
+                        .icon(icons::ADD)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        made = Some(world::create_entry(&campaign, &self.query, kind));
+                    }
+                }
+            });
+            match made {
+                Some(Ok(id)) => {
+                    self.create_error = None;
+                    self.query.clear();
+                    self.results_open = false;
+                    self.refresh();
+                    self.waiting_for = Some(id);
+                }
+                Some(Err(error)) => self.create_error = Some(error),
+                None => {}
+            }
+        }
+        if let Some(error) = &self.create_error {
+            design::message(ui, Tone::Error, error);
+        }
+        let matches = &self.matches.as_ref().unwrap().1;
         let mut chosen = None;
         if !query.is_empty()
             && !self.results_open
@@ -606,9 +1074,7 @@ impl Lookup {
             match hit {
                 Hit::Entry(position) => {
                     self.reading_written = None;
-                    if self.current != Some(position) {
-                        self.navigate(position);
-                    }
+                    self.open_result(&index, position);
                 }
                 Hit::Written(at) => self.reading_written = Some(at),
             }
@@ -646,6 +1112,9 @@ impl Lookup {
             {
                 self.back();
             }
+            if current.is_note() {
+                return;
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if Action::quiet("Open in Library")
                     .icon(icons::OPEN_OUT)
@@ -661,37 +1130,17 @@ impl Lookup {
                 }
             });
         });
-        let mut link = None;
+        let mut nav = self.reader.choices(ui, &index);
+        let (reader, campaign) = (&mut self.reader, self.campaign.as_ref());
         egui::ScrollArea::vertical()
             .id_salt(("lookup_reader", current.entry.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let title = current
-                    .entry
-                    .reading()
-                    .ok()
-                    .flatten()
-                    .map_or_else(|| current.entry.name.clone(), |reading| reading.title);
-                style::title(ui, &title);
-                style::subtitle(ui, &format!("{} · {}", current.subtitle, current.owner));
-                link = view::show(
-                    ui,
-                    &current.entry.name,
-                    Some(&current.entry),
-                    &current.entry.body,
-                    &view::Origin {
-                        path: &current.entry.path,
-                        owner: &current.owner,
-                        builtin: current.builtin,
-                    },
-                    index.as_ref(),
-                );
+                let read = reader.read(ui, current, &index, campaign);
+                nav = nav.take().or(read);
             });
-        if let Some(position) = link {
-            self.navigate(position);
-            self.results_open = false;
-            // The field must not name something other than the entry on screen.
-            self.query.clear();
+        if let Some(nav) = nav {
+            self.follow(nav);
         }
     }
 
@@ -775,6 +1224,156 @@ mod tests {
         };
         lookup.open_id(Uuid::new_v4());
         assert!(lookup.query.is_empty());
+    }
+
+    fn campaign_with(notes: &[(&str, &str)]) -> (tempfile::TempDir, Campaign) {
+        let dir = tempfile::tempdir().unwrap();
+        for (path, text) in notes {
+            let path = dir.path().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        (dir, campaign)
+    }
+
+    fn entry_note(id: Uuid, name: &str, world: &str) -> String {
+        format!(
+            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: world\nsplat_name: {name}\nsplat_world:\n{world}\n---\n"
+        )
+    }
+
+    #[test]
+    fn a_note_a_heading_and_past_play_are_all_found() {
+        let (_dir, campaign) = campaign_with(&[
+            (
+                "Gate Mechanics.md",
+                "# Gate Mechanics\n\n## Reliability\n\nA failure range of quartz.\n",
+            ),
+            (
+                "Sessions/Session 1.md",
+                "---\nsession_id: x\n---\nThe clerk said quartz.\n",
+            ),
+        ]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let names = |query: &str| -> Vec<String> {
+            index
+                .search(query)
+                .into_iter()
+                .map(|at| index.items[at].entry.name.clone())
+                .collect()
+        };
+        assert_eq!(names("gate mechanics")[0], "Gate Mechanics");
+        assert_eq!(names("reliability")[0], "Gate Mechanics › Reliability");
+        // A body match comes after every name match. A session note has its own results.
+        assert_eq!(names("quartz"), ["Gate Mechanics"]);
+        let hit = index.search("reliability")[0];
+        let (note, heading) = index.target_of(hit);
+        assert_eq!(index.items[note].entry.name, "Gate Mechanics");
+        assert_eq!(heading.as_deref(), Some("Reliability"));
+    }
+
+    #[test]
+    fn links_resolve_as_obsidian_does_and_do_not_guess() {
+        let (_dir, campaign) = campaign_with(&[
+            ("Setting.md", "See [[Verori#Culture]] and [[Twin]].\n"),
+            ("Powers/Verori.md", "# Verori\n\n## Culture\n"),
+            ("A/Twin.md", "One\n"),
+            ("B/Twin.md", "Two\n"),
+        ]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let at = index.position(world::note_id("Setting.md")).unwrap();
+        let from = &index.items[at];
+        match index.follow("Verori#Culture", from) {
+            Go::Item(position, heading) => {
+                assert_eq!(index.items[position].entry.path, "Powers/Verori.md");
+                assert_eq!(heading.as_deref(), Some("Culture"));
+            }
+            _ => panic!("the note exists"),
+        }
+        assert!(matches!(index.follow("powers/verori", from), Go::Item(..)));
+        assert!(matches!(index.follow("Twin", from), Go::Many(found) if found.len() == 2));
+        assert!(matches!(index.follow("A/Twin", from), Go::Item(..)));
+        assert!(
+            matches!(index.follow("Ashori Deepcut", from), Go::Missing(name) if name == "Ashori Deepcut")
+        );
+        assert!(matches!(index.follow("Timeline#^t-1", from), Go::Timeline(id) if id == "t-1"));
+        assert!(matches!(index.follow("#Anywhere", from), Go::Item(position, _) if position == at));
+        // Who links to a note is listed on it.
+        let verori = index.position(world::note_id("Powers/Verori.md")).unwrap();
+        assert_eq!(index.mentions_of(index.items[verori].entry.id), [at]);
+    }
+
+    #[test]
+    fn world_entries_form_a_tree_and_name_themselves_in_mentions() {
+        let city = Uuid::new_v4();
+        let city_note = entry_note(city, "Ixdoash", "  type: location");
+        let pit = entry_note(
+            Uuid::new_v4(),
+            "The Pit",
+            &format!("  type: location\n  in: {{id: {city}}}"),
+        );
+        let gravel = entry_note(
+            Uuid::new_v4(),
+            "Gravel",
+            "  type: npc\n  aliases: [Champion]\n  status: alive",
+        );
+        let (_dir, campaign) = campaign_with(&[
+            ("Locations/Ixdoash.md", city_note.as_str()),
+            ("Locations/The Pit.md", pit.as_str()),
+            ("NPCs/Gravel.md", gravel.as_str()),
+            (
+                "Sessions/Session 1.md",
+                "---\nsession_id: x\n---\nThe champion waved.\n",
+            ),
+        ]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert!(index.errors.is_empty(), "{:?}", index.errors);
+        let groups = index.world_groups("");
+        let locations = &groups[&(1, "Locations".to_owned())];
+        let rows: Vec<_> = locations
+            .iter()
+            .map(|&(at, depth)| (index.items[at].entry.name.as_str(), depth))
+            .collect();
+        assert_eq!(rows, [("Ixdoash", 0), ("The Pit", 1)]);
+        let at = index.position(city).unwrap();
+        let inside = index.inside(&index.items[at].entry);
+        assert_eq!(index.items[inside[0]].entry.name, "The Pit");
+        let gravel = groups[&(0, "NPCs".to_owned())][0].0;
+        let mentions = index.mentions_of(index.items[gravel].entry.id);
+        assert_eq!(index.items[mentions[0]].entry.name, "Session 1");
+        assert_eq!(index.places().len(), 2);
+        // Search narrows the page, and a whole note's words count.
+        assert_eq!(index.world_groups("champion").len(), 1);
+    }
+
+    #[test]
+    fn a_place_inside_itself_is_reported_and_still_listed() {
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let note = |id, name, parent: Uuid| {
+            entry_note(
+                id,
+                name,
+                &format!("  type: location\n  in: {{id: {parent}}}"),
+            )
+        };
+        let (first, second) = (note(a, "A", b), note(b, "B", a));
+        let (_dir, campaign) = campaign_with(&[
+            ("Locations/A.md", first.as_str()),
+            ("Locations/B.md", second.as_str()),
+        ]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        assert_eq!(index.errors.len(), 2, "{:?}", index.errors);
+        assert_eq!(
+            index.world_groups("")[&(1, "Locations".to_owned())].len(),
+            2
+        );
     }
 
     #[test]
