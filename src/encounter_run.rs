@@ -966,6 +966,23 @@ fn remote_identity(p: &Participant) -> Option<(String, String)> {
         external.get("character_id")?.as_str()?.into(),
     ))
 }
+/// The sheet groups a participant shows. A sheet has others, which the run only keeps.
+#[derive(Clone, Copy, PartialEq)]
+enum SheetGroup {
+    Hp,
+    Death,
+    Conditions,
+}
+impl SheetGroup {
+    /// Its name in the sheet's values, and so in a saved run.
+    fn key(self) -> &'static str {
+        match self {
+            Self::Hp => "hp",
+            Self::Death => "death",
+            Self::Conditions => "conditions",
+        }
+    }
+}
 /// Show these sheet values on the participant.
 fn apply_sheet_values(
     p: &mut Participant,
@@ -973,18 +990,18 @@ fn apply_sheet_values(
     max_hp: Option<i64>,
 ) {
     if let Some(max) = max_hp
-        && let Some(hp) = values.get("hp")
+        && let Some(hp) = values.get(SheetGroup::Hp.key())
     {
         p.max_hp = Some(max);
         p.hp = Some((max - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0));
         p.temporary_hp = hp["temporaryHitPoints"].as_i64().unwrap_or(0);
     }
-    if let Some(death) = values.get("death") {
+    if let Some(death) = values.get(SheetGroup::Death.key()) {
         p.successes = death["successCount"].as_u64().unwrap_or(0).min(3) as u8;
         p.failures = death["failCount"].as_u64().unwrap_or(0).min(3) as u8;
     }
     if let Some(conditions) = values
-        .get("conditions")
+        .get(SheetGroup::Conditions.key())
         .and_then(serde_json::Value::as_object)
     {
         p.conditions.retain(|c| recognized_condition(c).is_none());
@@ -1005,14 +1022,14 @@ fn groups_that_differ(
     p: &Participant,
     values: &BTreeMap<String, serde_json::Value>,
     max_hp: Option<i64>,
-) -> Vec<&'static str> {
+) -> Vec<SheetGroup> {
     let mut shown = p.clone();
     apply_sheet_values(&mut shown, values, max_hp);
     shadow_differences(&SheetShadow::of(p), &SheetShadow::of(&shown))
 }
 
 /// Which groups hold different values in these two. Only conditions the sheet knows count.
-fn shadow_differences(now: &SheetShadow, then: &SheetShadow) -> Vec<&'static str> {
+fn shadow_differences(now: &SheetShadow, then: &SheetShadow) -> Vec<SheetGroup> {
     let sorted = |conditions: &[String]| {
         let mut conditions: Vec<String> = conditions
             .iter()
@@ -1024,13 +1041,13 @@ fn shadow_differences(now: &SheetShadow, then: &SheetShadow) -> Vec<&'static str
     };
     let mut groups = Vec::new();
     if (now.hp, now.temp) != (then.hp, then.temp) {
-        groups.push("hp");
+        groups.push(SheetGroup::Hp);
     }
     if (now.successes, now.failures) != (then.successes, then.failures) {
-        groups.push("death");
+        groups.push(SheetGroup::Death);
     }
     if sorted(&now.conditions) != sorted(&then.conditions) {
-        groups.push("conditions");
+        groups.push(SheetGroup::Conditions);
     }
     groups
 }
@@ -1038,20 +1055,20 @@ fn shadow_differences(now: &SheetShadow, then: &SheetShadow) -> Vec<&'static str
 /// This group as the sheet would hold the participant's values.
 fn local_group(
     p: &Participant,
-    key: &str,
+    group: SheetGroup,
     template: &serde_json::Value,
     max_hp: Option<i64>,
 ) -> Option<serde_json::Value> {
-    match key {
-        "hp" => Some(serde_json::json!({
+    match group {
+        SheetGroup::Hp => Some(serde_json::json!({
             "removedHitPoints": max_hp? - p.hp?,
             "temporaryHitPoints": p.temporary_hp,
         })),
-        "death" => Some(serde_json::json!({
+        SheetGroup::Death => Some(serde_json::json!({
             "successCount": p.successes,
             "failCount": p.failures,
         })),
-        "conditions" => {
+        SheetGroup::Conditions => {
             let mut conditions = template.clone();
             let values = conditions.as_object_mut()?;
             for (id, _) in crate::combat_sync::CONDITIONS {
@@ -1064,7 +1081,6 @@ fn local_group(
             }
             Some(conditions)
         }
-        _ => None,
     }
 }
 
@@ -1081,15 +1097,17 @@ fn hold_local_changes(p: &Participant, sync: &mut crate::combat_sync::CombatSync
     let changed = match (matched, &p.started) {
         (Some(matched), _) => groups_that_differ(p, &matched, p.max_hp),
         (None, Some(started)) => shadow_differences(&SheetShadow::of(p), started),
-        (None, None) => vec!["hp", "death", "conditions"],
+        (None, None) => vec![SheetGroup::Hp, SheetGroup::Death, SheetGroup::Conditions],
     };
     let sheet = sync.values().clone();
     let max = sync.max_hp();
-    for key in groups_that_differ(p, &sheet, max) {
-        if changed.contains(&key)
-            && let Some(local) = sheet.get(key).and_then(|t| local_group(p, key, t, max))
+    for group in groups_that_differ(p, &sheet, max) {
+        if changed.contains(&group)
+            && let Some(local) = sheet
+                .get(group.key())
+                .and_then(|t| local_group(p, group, t, max))
         {
-            sync.hold_conflict(key, local);
+            sync.hold_conflict(group.key(), local);
         }
     }
 }
@@ -1161,9 +1179,12 @@ impl Run {
             if sync.stopped_after_read() {
                 let values = sync.values().clone();
                 let max = sync.max_hp();
-                for key in groups_that_differ(p, &values, max) {
-                    if let Some(local) = values.get(key).and_then(|t| local_group(p, key, t, max)) {
-                        sync.note_while_stopped(key, local);
+                for group in groups_that_differ(p, &values, max) {
+                    if let Some(local) = values
+                        .get(group.key())
+                        .and_then(|t| local_group(p, group, t, max))
+                    {
+                        sync.note_while_stopped(group.key(), local);
                     }
                 }
             }
@@ -1171,7 +1192,7 @@ impl Run {
             if sync.ready()
                 && let Some(shadow) = self.sync_shadows.get(index)
             {
-                if let Some(mut hp) = sync.values().get("hp").cloned() {
+                if let Some(mut hp) = sync.values().get(SheetGroup::Hp.key()).cloned() {
                     if before.hp != shadow.hp
                         && let (Some(current), Some(max)) = (before.hp, sync.max_hp())
                     {
@@ -1180,25 +1201,19 @@ impl Run {
                     if before.temp != shadow.temp {
                         hp["temporaryHitPoints"] = before.temp.into();
                     }
-                    sync.set_group("hp", hp);
+                    sync.set_group(SheetGroup::Hp.key(), hp);
                 }
                 if before.successes != shadow.successes || before.failures != shadow.failures {
-                    sync.set_group("death",serde_json::json!({"successCount":before.successes,"failCount":before.failures}));
+                    sync.set_group(SheetGroup::Death.key(),serde_json::json!({"successCount":before.successes,"failCount":before.failures}));
                 }
+                let group = SheetGroup::Conditions;
                 if before.conditions != shadow.conditions
-                    && let Some(mut conditions) = sync.values().get("conditions").cloned()
+                    && let Some(conditions) = sync
+                        .values()
+                        .get(group.key())
+                        .and_then(|t| local_group(p, group, t, sync.max_hp()))
                 {
-                    if let Some(values) = conditions.as_object_mut() {
-                        for (id, _) in crate::combat_sync::CONDITIONS {
-                            values.remove(&id.to_string());
-                        }
-                        for condition in &before.conditions {
-                            if let Some((id, level)) = recognized_condition(condition) {
-                                values.insert(id.to_string(), level);
-                            }
-                        }
-                    }
-                    sync.set_group("conditions", conditions);
+                    sync.set_group(group.key(), conditions);
                 }
             }
             sync.tick(ctx, session.clone(), epoch, &campaign, &id);
@@ -1208,14 +1223,14 @@ impl Run {
             }
             if sync.ready() {
                 apply_sheet_values(p, sync.values(), sync.max_hp());
-                if sync.updated && before != SheetShadow::of(p) {
+                let after = SheetShadow::of(p);
+                if sync.updated && before != after {
                     if first_read {
                         first_read_change = true;
                     } else {
                         external_change = true;
                     }
                 }
-                let after = SheetShadow::of(p);
                 if before.hp != after.hp {
                     first_read_lines.push(format!(
                         "{} HP {} → {}",
@@ -1233,7 +1248,7 @@ impl Run {
                     p.combat_values = confirmed;
                     changes.push(p.name.clone());
                 }
-                self.sync_shadows.insert(*index, SheetShadow::of(p));
+                self.sync_shadows.insert(*index, after);
                 sync.updated = false;
             } else {
                 self.sync_shadows.remove(index);

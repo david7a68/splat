@@ -42,6 +42,23 @@ const NAME_ROOM: f32 = 11.0;
 /// A panel this wide shows the reference and a tab side by side.
 const PANEL_TWO_COLUMNS: f32 = 820.0;
 
+/// What sync needs from the DM, on the line above the roster.
+struct SyncAlert {
+    text: String,
+    /// For when `text` does not fit beside a long Undo.
+    short: String,
+    color: egui::Color32,
+}
+impl SyncAlert {
+    fn new(icon: &str, text: &str, short: &str, color: egui::Color32) -> Self {
+        Self {
+            text: format!("{icon} {text}"),
+            short: format!("{icon} {short}"),
+            color,
+        }
+    }
+}
+
 pub(super) fn sync_status(state: SyncState) -> Status<'static> {
     let s = colors().sync;
     match state {
@@ -557,49 +574,47 @@ impl Run {
         let mut dismiss = false;
         // What sync needs from the DM. These stay until the cause is gone. A stopped sync
         // comes first, because nothing else can be resolved without a connection.
-        let kept = |names: &[String]| match names {
-            [name] => format!("{name}: kept in Splat, not sent"),
-            names => format!(
+        let kept = match strip.unsent.as_slice() {
+            [] => None,
+            [name] => Some(format!("{name}: kept in Splat, not sent")),
+            names => Some(format!(
                 "{} kept in Splat, not sent",
                 design::count(names.len(), "change", "changes")
-            ),
+            )),
         };
         let sync_alert = if strip.sync_stopped {
-            Some(if strip.unsent.is_empty() {
-                (
-                    format!("{} Sync stopped: connect in Settings", icons::OFFLINE),
-                    format!("{} Sync stopped", icons::OFFLINE),
+            Some(match &kept {
+                None => SyncAlert::new(
+                    icons::OFFLINE,
+                    "Sync stopped: connect in Settings",
+                    "Sync stopped",
                     c.result.error,
-                )
-            } else {
-                (
-                    format!("{} Session ended. {}", icons::OFFLINE, kept(&strip.unsent)),
-                    format!("{} {}", icons::OFFLINE, kept(&strip.unsent)),
+                ),
+                Some(kept) => SyncAlert::new(
+                    icons::OFFLINE,
+                    &format!("Session ended. {kept}"),
+                    kept,
+                    c.result.error,
+                ),
+            })
+        } else if let Some(name) = &strip.conflict {
+            Some(SyncAlert::new(
+                icons::WARN,
+                &format!("Sync conflict: {name}"),
+                &format!("Conflict: {name}"),
+                c.sync.conflict,
+            ))
+        } else if let Some(kept) = &kept {
+            Some(SyncAlert::new(icons::WARN, kept, kept, c.result.warning))
+        } else {
+            strip.sync_error.as_ref().map(|name| {
+                SyncAlert::new(
+                    icons::ERROR,
+                    &format!("Sync error: {name}"),
+                    &format!("Error: {name}"),
                     c.result.error,
                 )
             })
-        } else if let Some(name) = &strip.conflict {
-            Some((
-                format!("{} Sync conflict: {name}", icons::WARN),
-                format!("{} Conflict: {name}", icons::WARN),
-                c.sync.conflict,
-            ))
-        } else {
-            if strip.unsent.is_empty() {
-                strip.sync_error.as_ref().map(|name| {
-                    (
-                        format!("{} Sync error: {name}", icons::ERROR),
-                        format!("{} Error: {name}", icons::ERROR),
-                        c.result.error,
-                    )
-                })
-            } else {
-                Some((
-                    format!("{} {}", icons::WARN, kept(&strip.unsent)),
-                    format!("{} {}", icons::WARN, kept(&strip.unsent)),
-                    c.result.warning,
-                ))
-            }
         };
         // A notice too long for this line takes its own, below, in full.
         let notice_font = Type::Small.font(ui);
@@ -619,7 +634,7 @@ impl Run {
                     .show(ui)
                     .clicked();
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    if let Some((text, short, color)) = &sync_alert {
+                    if let Some(SyncAlert { text, short, color }) = &sync_alert {
                         // Next to a long Undo it gives up size, then the word Sync, never the name.
                         let room = ui.available_width();
                         let (role, text) =

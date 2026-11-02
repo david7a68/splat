@@ -2362,7 +2362,7 @@ pub mod run_sync_states {
         d.state("every-sync-state", Sizes::All);
         d.goal("show every sync state");
 
-        // H5-3: at the default size, 8 rows have the room, and a two-line message takes none
+        // At the default size, 8 rows have the room, and a two-line message takes none
         // of it from them. Each row's height, then the same places with the message up.
         d.click(DISMISS);
         let quiet = d.at_size(DEFAULT, |d| roster_places(d));

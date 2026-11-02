@@ -438,6 +438,17 @@ const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. 
 const DIFFER_AFTER_READ: &str =
     "Splat and D&D Beyond differ, and you changed this while sync was off. Choose which to keep.";
 
+/// A sheet with this damage and nothing else recorded. Test builds cannot read a live one.
+#[cfg(test)]
+fn simulated_sheet(character: u64, max_hp: i64, damage: i64, can_edit: bool) -> Remote {
+    Remote::from_raw(
+        character,
+        max_hp,
+        &json!({"id":character,"canEdit":can_edit,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
+    )
+    .expect("simulated sheet")
+}
+
 #[derive(Default)]
 pub struct CombatSync {
     pub enabled: bool,
@@ -482,12 +493,7 @@ impl CombatSync {
         if matches!(state, SyncState::FirstRead | SyncState::Off) {
             return sync;
         }
-        let read = Remote::from_raw(
-            character,
-            max_hp,
-            &json!({"id":character,"canEdit":state != SyncState::ReadOnly,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
-        )
-        .expect("simulated sheet");
+        let read = simulated_sheet(character, max_hp, damage, state != SyncState::ReadOnly);
         sync.desired = read.groups.clone();
         sync.remote = Some(read);
         if state == SyncState::Pending {
@@ -503,12 +509,7 @@ impl CombatSync {
     /// Test builds cannot read a live sheet, so a visual test shows the panel this way.
     #[cfg(test)]
     pub fn simulated_conflict(character: u64, max_hp: i64, damage: i64) -> Self {
-        let read = Remote::from_raw(
-            character,
-            max_hp,
-            &json!({"id":character,"canEdit":true,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
-        )
-        .expect("simulated sheet");
+        let read = simulated_sheet(character, max_hp, damage, true);
         let mut sync = Self::default();
         sync.enabled = true;
         sync.simulated = true;
@@ -551,7 +552,7 @@ impl CombatSync {
     pub fn session_lost(&self) -> bool {
         self.session_lost
     }
-    /// Changes D&D Beyond has not confirmed: on their way, or stranded by a lost session.
+    /// Changes D&D Beyond has not confirmed: on their way, or stranded with sync off.
     pub fn unconfirmed(&self) -> bool {
         (self.enabled && (self.busy() || self.dirty())) || self.stranded()
     }
@@ -796,9 +797,7 @@ impl CombatSync {
     }
     /// A change the DM recorded while sync was off. It cannot be sent yet, and it counts.
     pub fn note_while_stopped(&mut self, key: &str, local: Value) {
-        if !self.enabled {
-            self.desired.insert(key.into(), local);
-        }
+        self.desired.insert(key.into(), local);
     }
     pub fn use_remote(&mut self, key: &str) {
         if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(key)) {
@@ -816,12 +815,7 @@ impl CombatSync {
     /// A read from D&D Beyond, with the sheet's HP. Test builds have no route to a live one.
     #[cfg(test)]
     pub fn simulate_read(&mut self, character: u64, max_hp: i64, damage: i64) {
-        let remote = Remote::from_raw(
-            character,
-            max_hp,
-            &json!({"id":character,"canEdit":true,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
-        )
-        .expect("simulated sheet");
+        let remote = simulated_sheet(character, max_hp, damage, true);
         let sent = self.desired.clone();
         self.accept(
             Outcome {
