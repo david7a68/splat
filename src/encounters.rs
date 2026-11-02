@@ -920,6 +920,12 @@ impl Encounters {
         }
     }
     /// A new encounter from a session's plan. It joins the plan, and back leads there.
+    /// Whether a fight is open that has not ended.
+    pub fn run_takes_arrivals(&self) -> bool {
+        self.run
+            .as_ref()
+            .is_some_and(crate::encounter_run::Run::takes_arrivals)
+    }
     /// The open run's panel for what joins the fight.
     pub fn show_arrivals(&mut self) {
         if let Some(run) = &mut self.run {

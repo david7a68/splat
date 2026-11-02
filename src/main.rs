@@ -1058,6 +1058,7 @@ impl Splat {
                     let group_blocked = self.encounters.plan_group_blocked();
                     let group_open = self.encounters.group_open_in_plan();
                     let group_discarded = self.encounters.group_discarded_in_plan();
+                    let arrivals_open = self.encounters.run_takes_arrivals();
                     let run_directory = self.encounters.run_directory(campaign);
                     let (encounters, campaigns) = (&mut self.encounters, &self.campaigns);
                     let mut group_editor = |ui: &mut egui::Ui| {
@@ -1069,6 +1070,7 @@ impl Splat {
                         group_blocked,
                         group_open,
                         group_discarded,
+                        arrivals_open,
                         group_editor: std::cell::RefCell::new(&mut group_editor),
                         blocked,
                         run_directory,
@@ -1177,10 +1179,6 @@ impl Splat {
                     }
                     CampaignTab::RunSettings => {
                         self.encounters.run_settings(ui, &self.campaigns);
-                        if self.encounters.saved {
-                            self.encounters.saved = false;
-                            self.campaign_content.refresh_destination(&campaign.path);
-                        }
                     }
                     CampaignTab::Link => {
                         // The same guard as Settings: a link or folder change would stop

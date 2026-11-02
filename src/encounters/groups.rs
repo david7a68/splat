@@ -800,6 +800,7 @@ impl Encounters {
             return;
         };
         let old_name = draft.baseline.as_ref().map(|_| draft.saved_name.clone());
+        let path = draft.path.clone();
         match draft.save(active, modules) {
             Ok(()) => {
                 let name = draft.name.trim().to_owned();
@@ -811,7 +812,9 @@ impl Encounters {
                 self.start_load(ctx, active.clone(), modules.to_vec());
                 match old_name {
                     None if self.group_in_plan => self.saved_for_plan = Some(name),
-                    Some(old) if old.trim() != name => {
+                    Some(old)
+                        if old.trim() != name && !self.name_stays_taken(&path, old.trim()) =>
+                    {
                         self.renamed_group = Some((old.trim().to_owned(), name));
                     }
                     _ => {}
@@ -822,6 +825,21 @@ impl Encounters {
             }
             Err(e) => self.error = Some(e),
         }
+    }
+
+    /// Whether something else still has this group's old name. A link with that name may mean
+    /// the other thing, so a rename leaves it alone.
+    fn name_stays_taken(&self, path: &str, old: &str) -> bool {
+        self.snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot
+                .templates
+                .iter()
+                .any(|template| template.name.eq_ignore_ascii_case(old))
+                || snapshot
+                    .groups
+                    .iter()
+                    .any(|group| group.path != path && group.name.eq_ignore_ascii_case(old))
+        })
     }
 
     /// The plan shows again. The group stays where the DM left it.
@@ -1313,6 +1331,38 @@ mod tests {
             encounters.renamed_group.take(),
             Some(("Ash Pack".to_owned(), "Cinder Pack".to_owned()))
         );
+    }
+
+    #[test]
+    fn a_rename_leaves_links_that_may_mean_something_else_with_the_old_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let mut draft = GroupDraft::new();
+        draft.name = "Patrol".into();
+        draft.add(scout);
+        draft.save(&campaign, &[]).unwrap();
+        // Older files can share a name. Nothing saved through the app can.
+        write_note(
+            dir.path(),
+            "Patrol encounter.md",
+            None,
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: Patrol\nsplat_encounter: {{roster: []}}\n---\n",
+                Uuid::new_v4()
+            ),
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let mut encounters = Encounters {
+            snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
+            group_draft: Some(GroupDraft::open(dir.path(), &draft.path).unwrap()),
+            ..Encounters::default()
+        };
+        encounters.group_draft.as_mut().unwrap().name = "Scouts".into();
+        encounters.save_group_draft(&ctx, &campaign, &[]);
+        assert_eq!(encounters.error, None);
+        assert_eq!(encounters.renamed_group, None, "the fight keeps its links");
     }
 
     #[test]

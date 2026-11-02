@@ -218,6 +218,11 @@ fn short_field(
 }
 
 impl Run {
+    /// An ended fight shows its summary, with no panel to add from.
+    pub(crate) fn takes_arrivals(&self) -> bool {
+        !matches!(self.state.phase, Phase::Ended { .. })
+    }
+
     /// The panel for what joins the fight, in place of whatever was open beside the list.
     pub(crate) fn show_arrivals(&mut self) {
         self.panel = super::Panel::Groups;

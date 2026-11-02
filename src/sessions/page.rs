@@ -87,6 +87,8 @@ pub struct Plan<'a> {
     pub group_open: bool,
     /// A new group started in the plan was discarded there.
     pub group_discarded: bool,
+    /// A fight is open that something can still join.
+    pub arrivals_open: bool,
     pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
     /// Why no fight can start now.
     pub blocked: Option<&'a str>,
@@ -2700,7 +2702,7 @@ impl Sessions {
                             },
                             |ui| {
                                 // With a fight open, what a group needs next is to arrive.
-                                if plan.open_run.is_some() {
+                                if plan.arrivals_open {
                                     if Action::secondary("Arrivals")
                                         .icon(icons::GROUP)
                                         .name(&format!("Go to Arrivals for {}", group.name))

@@ -4952,6 +4952,18 @@ mod tests {
     }
 
     #[test]
+    fn an_ended_fight_takes_no_arrivals_and_an_undo_of_the_ending_does() {
+        let mut run = run();
+        assert!(run.takes_arrivals(), "setup can take them");
+        begin(&mut run);
+        assert!(run.takes_arrivals());
+        run.apply(Command::End("Won".into())).unwrap();
+        assert!(!run.takes_arrivals());
+        run.undo();
+        assert!(run.takes_arrivals());
+    }
+
+    #[test]
     fn a_creature_form_says_what_it_still_needs() {
         let known = [known_wolf()];
         let error = |form: ad_hoc::AdHoc| form.check(&known).err().unwrap();
