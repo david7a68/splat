@@ -3,8 +3,10 @@
 //! Test builds compile a closed variant of each route, so a test can never reach
 //! the user's character cache, a native file dialog, or real time and randomness.
 //! The settings store, keyring and sign-in are closed the same way where they live
-//! (`persistence::Store::user`, `credentials::Vault`, `auth::connect`). Every D&D
-//! Beyond request needs a `Session`, and only `auth::connect` creates one.
+//! (`persistence::Store::user`, `credentials::Vault`, `auth::connect`). Test builds can
+//! make a `Session`, to show the signed-in state, but each route that would use one
+//! returns first (`dndbeyond::fetch`, `party_sync::refresh`, `party_stream::Stream::start`,
+//! `combat_sync::CombatSync::tick`). So no D&D Beyond request is ever sent.
 use splat::character::Cache;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -29,8 +31,18 @@ pub fn now() -> u64 {
     splat::character::now()
 }
 
+/// When a file last changed, in seconds since the epoch.
+#[cfg(not(test))]
+pub fn file_time(path: &std::path::Path) -> Option<u64> {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|elapsed| elapsed.as_secs())
+}
+
 #[cfg(test)]
-pub use closed::{character_cache, new_uuid, now, pick_folder};
+pub use closed::{character_cache, file_time, new_uuid, now, pick_folder};
 
 #[cfg(test)]
 pub mod closed {
@@ -82,5 +94,10 @@ pub mod closed {
 
     pub fn now() -> u64 {
         FIXED_NOW
+    }
+
+    /// The fixed clock, for a file too: a real one would change every capture of its date.
+    pub fn file_time(_: &std::path::Path) -> Option<u64> {
+        Some(FIXED_NOW)
     }
 }

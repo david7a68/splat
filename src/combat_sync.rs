@@ -592,8 +592,9 @@ impl CombatSync {
         campaign: &str,
         id: &str,
     ) {
-        #[cfg(test)]
-        if self.simulated {
+        // Test builds have no route to D&D Beyond. A signed-in test stays on its first read.
+        if cfg!(test) {
+            let _ = (ctx, &session, epoch, campaign, id);
             return;
         }
         let scope = (epoch, campaign.to_owned(), id.to_owned());
@@ -768,25 +769,27 @@ impl CombatSync {
                 Tone::Warning,
                 &format!("{}: {message}", group_label(&key)),
             );
-            for (label, value) in [
-                ("Splat", self.desired.get(&key)),
-                (
-                    "D&D Beyond",
-                    self.remote.as_ref().and_then(|r| r.groups.get(&key)),
-                ),
-            ] {
-                ui.label(
-                    Type::Body
-                        .rich(
-                            ui,
-                            format!(
-                                "{label}: {}",
-                                describe(&key, value, self.max_hp().unwrap_or(0))
-                            ),
-                        )
-                        .color(colors().text),
-                );
-            }
+            // The two values side by side, so the difference is what the eye finds.
+            egui::Grid::new(("conflict_values", &key))
+                .num_columns(2)
+                .spacing([design::L, 2.0])
+                .show(ui, |ui| {
+                    for (label, value) in [
+                        ("Splat", self.desired.get(&key)),
+                        (
+                            "D&D Beyond",
+                            self.remote.as_ref().and_then(|r| r.groups.get(&key)),
+                        ),
+                    ] {
+                        ui.label(Type::Small.rich(ui, label).color(colors().muted));
+                        ui.label(
+                            Type::Strong
+                                .rich(ui, describe(&key, value, self.max_hp().unwrap_or(0)))
+                                .color(colors().text),
+                        );
+                        ui.end_row();
+                    }
+                });
             ui.push_id(&key, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let busy = self.busy().then_some("Wait for the current sheet read.");
@@ -807,7 +810,7 @@ impl CombatSync {
                         .remote
                         .as_ref()
                         .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
-                    if Action::quiet("Keep Splat values and retry")
+                    if Action::secondary("Keep Splat values and retry")
                         .density(Density::Read)
                         .blocked(busy.or(
                             (!writable).then_some(
@@ -844,7 +847,7 @@ impl CombatSync {
         ui.weak("HP, death saves, conditions, spell slots, and supported limited uses · checks every 15 seconds");
         if self.busy() {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::design::spinner(ui);
                 ui.label("Checking character…");
             });
         }
@@ -869,7 +872,7 @@ impl CombatSync {
         });
         self.conflicts(ui);
         let Some(remote) = &self.remote else {
-            ui.label("Connect in Settings and wait for the first sheet read.");
+            ui.label("Waiting for the first sheet read. If it does not come, check the connection in Settings.");
             return;
         };
         if !remote.can_edit {

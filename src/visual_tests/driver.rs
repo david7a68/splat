@@ -25,12 +25,15 @@ const TAB_LIMIT: usize = 80;
 #[derive(Clone, Copy, PartialEq)]
 pub enum Sizes {
     Default,
+    /// The same two sizes, plus the default size at twice the pixel density.
+    DefaultAndHiDpi,
     /// The minimum, default and large sizes.
     All,
     /// All three, plus the default size at twice the pixel density.
     AllAndHiDpi,
 }
 
+#[derive(Default)]
 pub struct Outcome {
     pub violations: Vec<Violation>,
     pub passes: Vec<ergonomics::Pass>,
@@ -50,6 +53,7 @@ pub struct Driver<'a> {
     pub root: PathBuf,
     output: Option<PathBuf>,
     states: usize,
+    checks_run: (usize, usize),
     interactions: u32,
     last_goal: u32,
     window: (f32, f32),
@@ -62,6 +66,38 @@ pub struct Driver<'a> {
     /// The current state has already been on screen long enough to read.
     held: bool,
     pub outcome: Outcome,
+}
+
+impl Outcome {
+    /// A key that did its job is a pass. One that did not is a violation.
+    pub(super) fn keyboard_result(
+        &mut self,
+        scenario: &str,
+        window: String,
+        (kind, view): (&str, &str),
+        passed: bool,
+        detail: String,
+    ) {
+        if passed {
+            self.passes.push(ergonomics::Pass {
+                check: "keyboard".into(),
+                scenario: scenario.to_owned(),
+                state: view.to_owned(),
+                detail: format!("{kind}: {detail}"),
+            });
+        } else {
+            self.violations.push(Violation {
+                check: "keyboard".into(),
+                scenario: scenario.to_owned(),
+                state: view.to_owned(),
+                window,
+                node: kind.to_owned(),
+                role: "keyboard".into(),
+                rect: [0.0; 4],
+                detail,
+            });
+        }
+    }
 }
 
 /// One node's facts, copied out so the tree is free to change.
@@ -144,6 +180,7 @@ impl<'a> Driver<'a> {
             root: root.to_path_buf(),
             output: output.map(Path::to_path_buf),
             states: 0,
+            checks_run: (0, 0),
             interactions: 0,
             last_goal: 0,
             window: SMALL,
@@ -203,26 +240,11 @@ impl<'a> Driver<'a> {
         self.resize(size, 1.0);
     }
 
-    /// The text on screen in full: painted, not cut to an ellipsis, inside the window.
-    /// The accessible name can be whole when the visible text is not.
+    /// The text on screen in full: painted, not cut to an ellipsis, inside the window and
+    /// the pane that clips it. The accessible name can be whole when the visible text is not.
     pub fn visible_text(&self, text: &str) -> bool {
-        fn search(shape: &egui::Shape, text: &str, viewport: egui::Rect) -> bool {
-            match shape {
-                egui::Shape::Vec(shapes) => shapes.iter().any(|s| search(s, text, viewport)),
-                egui::Shape::Text(shape) => {
-                    shape.galley.job.text.contains(text)
-                        && !shape.galley.elided
-                        && viewport.contains_rect(shape.visual_bounding_rect())
-                }
-                _ => false,
-            }
-        }
-        let viewport = self.harness.ctx.content_rect();
-        self.harness
-            .output()
-            .shapes
-            .iter()
-            .any(|clipped| search(&clipped.shape, text, viewport))
+        self.painted_in(self.harness.ctx.content_rect())
+            .contains(text)
     }
 
     /// The node of a run row, by its participant's name.
@@ -230,7 +252,7 @@ impl<'a> Driver<'a> {
         let prefix = format!("{name},");
         self.nodes()
             .into_iter()
-            .find(|node| node.name.starts_with(&prefix))
+            .find(|node| node.name.starts_with(&prefix) && node.role == Role::Button)
     }
 
     /// Check a condition at the working size, then again at the default size.
@@ -429,11 +451,189 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, &format!("Click: {name}"));
     }
 
+    /// Click the one control whose name has this text. Two matches fail the script: a
+    /// script that takes the first one can press Undo instead of a row, and not notice.
     pub fn click_containing(&mut self, name: &str) {
+        let matches: Vec<String> = self
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.contains(name) && Self::is_control(node))
+            .map(|node| node.name)
+            .collect();
+        assert!(
+            matches.len() <= 1,
+            "{}: {name:?} matches more than one control: {matches:?}",
+            self.scenario
+        );
         let rect = self.aim(&format!("control containing {name:?}"), |node| {
             node.name.contains(name) && Self::is_control(node)
         });
         self.click_rect(rect, &format!("Click: {name}"));
+    }
+
+    /// Click the one control whose name starts with this text.
+    pub fn click_starting(&mut self, name: &str) {
+        let matches: Vec<String> = self
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with(name) && Self::is_control(node))
+            .map(|node| node.name)
+            .collect();
+        assert!(
+            matches.len() <= 1,
+            "{}: {name:?} starts more than one control: {matches:?}",
+            self.scenario
+        );
+        let rect = self.aim(&format!("control starting {name:?}"), |node| {
+            node.name.starts_with(name) && Self::is_control(node)
+        });
+        self.click_rect(rect, &format!("Click: {name}"));
+    }
+
+    /// Click a run row, by its participant's name.
+    pub fn click_row(&mut self, name: &str) {
+        let prefix = format!("{name},");
+        let rect = self.aim(&format!("the row of {name:?}"), |node| {
+            node.name.starts_with(&prefix) && Self::is_control(node)
+        });
+        self.click_rect(rect, &format!("Click: {name}"));
+    }
+
+    /// Every text painted inside this rect and whole: not cut to an ellipsis, and not
+    /// outside the clip of the pane it is in. This is what a person can read there.
+    pub fn painted_in(&self, rect: egui::Rect) -> String {
+        fn search(shape: &egui::Shape, clip: egui::Rect, rect: egui::Rect, out: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes
+                        .iter()
+                        .for_each(|shape| search(shape, clip, rect, out));
+                }
+                egui::Shape::Text(text) => {
+                    let bounds = text.visual_bounding_rect();
+                    if rect.contains(bounds.center())
+                        && !text.galley.elided
+                        && clip.expand(1.0).contains_rect(bounds)
+                    {
+                        out.push(text.galley.job.text.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut out = Vec::new();
+        for clipped in &self.harness.output().shapes {
+            search(&clipped.shape, clipped.clip_rect, rect, &mut out);
+        }
+        out.join(" ")
+    }
+
+    /// Where the reader's title is, which moves when the reader scrolls.
+    pub fn scroll_position_of_reader(&self) -> Option<f32> {
+        self.nodes()
+            .into_iter()
+            .find(|node| node.role == Role::Label && node.name.starts_with("Library / "))
+            .map(|node| node.rect.min.y)
+    }
+
+    /// Drop keyboard focus, as a click on plain text does.
+    pub fn harness_focus_nothing(&mut self) {
+        self.clear_focus();
+    }
+
+    /// The buttons in the rail that open a page.
+    pub fn rail_page_buttons(&self) -> Vec<String> {
+        self.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.role == Role::Button
+                    && !node.disabled
+                    && node.rect.max.x < 140.0
+                    && !node.name.is_empty()
+                    && node.name != "Lookup"
+            })
+            .map(|node| node.name)
+            .collect()
+    }
+
+    /// The page's title: the first label at the top of the page, right of the rail.
+    pub fn page_title(&self) -> Option<String> {
+        self.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.role == Role::Label && node.rect.min.x > 140.0 && node.rect.min.y < 40.0
+            })
+            .min_by(|a, b| a.rect.min.x.total_cmp(&b.rect.min.x))
+            .map(|node| node.name)
+    }
+
+    /// What a run row really paints, which its accessible name need not match.
+    pub fn row_words(&self, name: &str) -> String {
+        self.row_node(name)
+            .map_or_else(String::new, |row| self.painted_in(row.shown))
+    }
+
+    /// The name in the dock, which is the selected participant's.
+    pub fn focused_row_name(&self) -> Option<String> {
+        self.nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Selected: "))
+            .map(|node| node.name)
+    }
+
+    /// A run row's current HP, from its accessible name.
+    pub fn row_hp(&self, name: &str) -> Option<i64> {
+        let row = self.row_node(name)?;
+        let (_, rest) = row.name.split_once("HP ")?;
+        rest.split('/').next()?.parse().ok()
+    }
+
+    /// The text in the Markdown editor, or in another multiline field.
+    pub fn editor_text(&self) -> Option<String> {
+        self.harness
+            .root()
+            .children_recursive()
+            .find(|node| node.accesskit_node().role() == Role::MultilineTextInput)
+            .and_then(|node| node.accesskit_node().value())
+    }
+
+    /// The text in a single-line field, by its accessible name.
+    pub fn field_text(&self, name: &str) -> Option<String> {
+        self.harness
+            .root()
+            .children_recursive()
+            .find(|node| {
+                let access = node.accesskit_node();
+                access.role() == Role::TextInput && access.label().as_deref() == Some(name)
+            })
+            .and_then(|node| node.accesskit_node().value())
+    }
+
+    /// Every disabled control here that gives no reason when the pointer rests on it.
+    pub fn disabled_without_reason(&mut self) -> Vec<String> {
+        let names: Vec<(String, egui::Rect)> = self
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.disabled
+                    && node.fully_in_view()
+                    && !node.name.is_empty()
+                    && matches!(node.role, Role::Button | Role::ComboBox | Role::TextInput)
+            })
+            .map(|node| (node.name, node.shown))
+            .collect();
+        let mut silent = Vec::new();
+        for (name, rect) in names {
+            let before = self.nodes().len();
+            self.harness.hover_at(rect.center());
+            self.harness.run_steps(6);
+            if self.nodes().len() <= before {
+                silent.push(name);
+            }
+            self.harness.remove_cursor();
+            self.settle();
+        }
+        silent
     }
 
     /// Click the `index`th visible control with this name, top to bottom.
@@ -540,7 +740,9 @@ impl<'a> Driver<'a> {
 
     fn click_field(&mut self, field: &str) {
         let rect = self.aim(&format!("text field {field:?}"), |node| {
-            Self::is_text_input(node.role) && node.name == field
+            Self::is_text_input(node.role)
+                && !node.disabled
+                && (node.name == field || node.name.starts_with(&format!("{field}: ")))
         });
         self.click_rect(rect, &format!("Click: {field}"));
     }
@@ -575,6 +777,16 @@ impl<'a> Driver<'a> {
         self.type_text(text);
     }
 
+    /// Replace everything in the visible Markdown editor.
+    pub fn replace_editor_text(&mut self, text: &str) {
+        let rect = self.aim("the Markdown editor", |node| {
+            node.role == Role::MultilineTextInput
+        });
+        self.click_rect(rect, "Click: Markdown editor");
+        self.press_ctrl(egui::Key::A);
+        self.type_text(text);
+    }
+
     /// Type into the field that has focus.
     pub fn type_text(&mut self, text: &str) {
         let caption = format!("Type: {text}");
@@ -589,6 +801,22 @@ impl<'a> Driver<'a> {
         let caption = format!("Press: {}", key.name());
         self.film_caption(&caption);
         self.harness.key_press(key);
+        self.interactions += 1;
+        self.settle();
+        self.film_result(&caption, false);
+    }
+
+    /// Shift+key.
+    pub fn press_shift(&mut self, key: egui::Key) {
+        let caption = format!("Press: Shift+{}", key.name());
+        self.film_caption(&caption);
+        self.harness.key_press_modifiers(
+            egui::Modifiers {
+                shift: true,
+                ..Default::default()
+            },
+            key,
+        );
         self.interactions += 1;
         self.settle();
         self.film_result(&caption, false);
@@ -915,6 +1143,7 @@ impl<'a> Driver<'a> {
         let label = format!("{:02}-{name}", self.states);
         let plan: &[((f32, f32), f32)] = match sizes {
             Sizes::Default => &[(SMALL, 1.0), (DEFAULT, 1.0)],
+            Sizes::DefaultAndHiDpi => &[(SMALL, 1.0), (DEFAULT, 1.0), (DEFAULT, 2.0)],
             Sizes::All => &[(SMALL, 1.0), (DEFAULT, 1.0), (LARGE, 1.0)],
             Sizes::AllAndHiDpi => &[(SMALL, 1.0), (DEFAULT, 1.0), (LARGE, 1.0), (DEFAULT, 2.0)],
         };
@@ -922,8 +1151,20 @@ impl<'a> Driver<'a> {
             self.resize(size, density);
             // Logical layout at twice the density matches the 1x capture. The minimum
             // window is the harder test, so a state checked once is checked there.
-            if density == 1.0 && (sizes != Sizes::Default || size == SMALL) {
+            let one_size = matches!(sizes, Sizes::Default | Sizes::DefaultAndHiDpi);
+            if density == 1.0 && (!one_size || size == SMALL) {
                 self.check(&label, size);
+            }
+            // G4's one high density. Egui's chrome is counted once, at 1x.
+            if density != 1.0 {
+                let before = self.outcome.violations.len();
+                self.check(&format!("{label}@2x"), size);
+                let added = self.outcome.violations.split_off(before);
+                self.outcome.violations.extend(
+                    added
+                        .into_iter()
+                        .filter(|violation| !violation.check.ends_with(ergonomics::CHROME_SUFFIX)),
+                );
             }
             self.capture(&label, size, density);
         }
@@ -931,8 +1172,28 @@ impl<'a> Driver<'a> {
         self.hold();
     }
 
+    /// How many times the checks ran at the minimum window, and at high density.
+    pub fn checks_run(&self) -> (usize, usize) {
+        self.checks_run
+    }
+
+    pub fn states_shown(&self) -> usize {
+        self.states
+    }
+
     fn check(&mut self, state: &str, size: (f32, f32)) {
-        let controls = ergonomics::controls(&self.harness);
+        if self.harness.ctx.pixels_per_point() > 1.0 {
+            self.checks_run.1 += 1;
+        } else if size == SMALL {
+            self.checks_run.0 += 1;
+        }
+        // AccessKit reports pixels, and the checks work in points.
+        let mut controls = ergonomics::controls(&self.harness);
+        let scale = 1.0 / self.harness.ctx.pixels_per_point();
+        for control in &mut controls {
+            control.rect = control.rect * scale;
+            control.clip = control.clip.map(|clip| clip * scale);
+        }
         let viewport = self.harness.ctx.content_rect();
         let window = format!("{}x{}", size.0, size.1);
         self.outcome.violations.extend(ergonomics::inspect(
@@ -944,7 +1205,6 @@ impl<'a> Driver<'a> {
         ));
         self.outcome.violations.extend(ergonomics::cut_text(
             &self.harness.output().shapes,
-            &controls,
             self.scenario,
             state,
             &window,
@@ -1073,25 +1333,13 @@ impl<'a> Driver<'a> {
 
     /// Keyboard results use the same pass and violation records as other checks.
     pub fn keyboard_result(&mut self, kind: &str, view: &str, passed: bool, detail: String) {
-        if passed {
-            self.outcome.passes.push(ergonomics::Pass {
-                check: "keyboard".into(),
-                scenario: self.scenario.to_owned(),
-                state: view.to_owned(),
-                detail: format!("{kind}: {detail}"),
-            });
-        } else {
-            self.outcome.violations.push(Violation {
-                check: "keyboard".into(),
-                scenario: self.scenario.to_owned(),
-                state: view.to_owned(),
-                window: format!("{}x{}", self.base.0, self.base.1),
-                node: kind.to_owned(),
-                role: "keyboard".into(),
-                rect: [0.0; 4],
-                detail,
-            });
-        }
+        self.outcome.keyboard_result(
+            self.scenario,
+            format!("{}x{}", self.base.0, self.base.1),
+            (kind, view),
+            passed,
+            detail,
+        );
     }
 
     fn clear_focus(&mut self) {

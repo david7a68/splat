@@ -85,10 +85,13 @@ impl CopyDialog {
                     .rich(ui, &self.source.entry.name)
                     .color(colors().text),
             );
-            ui.label("Create an independent copy with a new identity. Existing references stay unchanged.");
+            if self.completed.is_none() {
+                ui.label(
+                    "This makes a separate copy you can change. Links to the original stay as they are.",
+                );
+            }
             if let Some(message) = &self.completed {
                 design::message(ui, Tone::Success, message);
-                ui.label("The destination refreshes automatically when it has no unsaved changes.");
                 ui.horizontal(|ui| {
                     if let (Some(id), Some(draft)) = (self.copied_creature, &self.draft) {
                         let label = format!("Add to {draft}");
@@ -109,7 +112,7 @@ impl CopyDialog {
             }
             if self.pending.is_some() {
                 ui.horizontal(|ui| {
-                    ui.spinner();
+                    crate::design::spinner(ui);
                     ui.label("Checking content dependencies…");
                 });
             }
@@ -166,7 +169,7 @@ impl CopyDialog {
                 ui,
                 "Subfolder",
                 &mut self.folder,
-                Some("An existing subfolder. Leave blank for the owner folder."),
+                Some("An existing subfolder. Leave blank to use the main folder."),
                 None,
             )
             .changed();
@@ -258,6 +261,17 @@ impl CopyDialog {
                         });
                     match result {
                         Ok(_) => {
+                            // A creature copied to the active campaign can join the open
+                            // draft now. A copy elsewhere is not one this draft can use.
+                            let to_active = self.destination.is_some_and(|(is_campaign, id)| {
+                                is_campaign
+                                    && campaigns.active_campaign().is_some_and(|a| a.id == id)
+                            });
+                            self.copied_creature =
+                                splat::content::Entry::parse(&plan.relative, &plan.text)
+                                    .ok()
+                                    .filter(|entry| to_active && entry.kind == "creature")
+                                    .map(|entry| entry.id);
                             self.completed = Some(format!("Saved: {}", plan.relative));
                             self.refresh = Some(plan.root.clone());
                             self.error = None;

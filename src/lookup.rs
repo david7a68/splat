@@ -282,11 +282,14 @@ impl Lookup {
         self.open = true;
         self.navigate(position);
         self.results_open = false;
+        self.query.clear();
     }
 
     pub fn open_id(&mut self, id: Uuid) {
         self.open = true;
         self.results_open = false;
+        // The field must not name something other than the entry on screen.
+        self.query.clear();
         match self.index.as_ref().and_then(|index| index.position(id)) {
             Some(position) => self.navigate(position),
             None => self.waiting_for = Some(id),
@@ -346,7 +349,7 @@ impl Lookup {
         }
         let Some(index) = self.index.clone() else {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::design::spinner(ui);
                 ui.label(
                     Type::Body
                         .rich(ui, "Reading content…")
@@ -559,6 +562,16 @@ impl Lookup {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opening_an_entry_from_elsewhere_clears_the_old_search() {
+        let mut lookup = Lookup {
+            query: "captain varra".into(),
+            ..Default::default()
+        };
+        lookup.open_id(Uuid::new_v4());
+        assert!(lookup.query.is_empty());
+    }
 
     #[test]
     fn names_match_whole_words_only() {

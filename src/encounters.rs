@@ -209,7 +209,8 @@ struct Creature {
     detail: String,
     party: bool,
 }
-const ROSTER_MAX_WIDTH: f32 = 760.0;
+const ROSTER_MAX_WIDTH: f32 = 860.0;
+const ADD_PANE_MAX_WIDTH: f32 = 640.0;
 const RESULT_ROW: f32 = 40.0;
 fn creature_detail(entry: &Entry, party: bool) -> String {
     let stat = |name: &str| {
@@ -341,6 +342,9 @@ pub struct Encounters {
     search: String,
     error: Option<String>,
     message: Option<String>,
+    /// The draft `Discard changes` last dropped, for one step of undo.
+    discarded: Option<Draft>,
+    discarded_options: Option<crate::encounter_settings::Options>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
     /// A run just opened, so the shell goes to the Run page.
@@ -392,6 +396,15 @@ impl Encounters {
             .simulate_sync_state(name, state);
     }
 
+    /// Show an error line. An empty message clears it.
+    #[cfg(test)]
+    pub fn simulate_run_error(&mut self, message: &str) {
+        self.run
+            .as_mut()
+            .expect("an open run")
+            .simulate_error(message);
+    }
+
     #[cfg(test)]
     pub fn simulate_sheet_update(&mut self, name: &str) {
         self.run
@@ -408,6 +421,18 @@ impl Encounters {
     }
     pub fn run(&self) -> Option<&crate::encounter_run::Run> {
         self.run.as_ref()
+    }
+    pub fn settings_unsaved(&self) -> bool {
+        self.snapshot
+            .as_ref()
+            .is_some_and(|s| s.options != s.saved_options)
+    }
+    /// The open run's name, if it has changes that are not on disk.
+    pub fn run_not_saved(&self) -> Option<String> {
+        self.run
+            .as_ref()
+            .filter(|run| run.needs_save())
+            .map(|run| run.strip().name)
     }
     pub fn unsaved(&self) -> bool {
         self.run
@@ -445,6 +470,11 @@ impl Encounters {
             .is_some_and(crate::encounter_run::Run::pending_sync)
     }
     fn reload(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
+        // A discarded draft belongs to its campaign. Undo must not save it into another.
+        if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
+            self.discarded = None;
+            self.discarded_options = None;
+        }
         self.active = Some(campaign.clone());
         self.draft = None;
         self.snapshot = None;
@@ -481,12 +511,13 @@ impl Encounters {
     }
     /// Keep the snapshot current. The shell calls this every frame.
     pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+        // A run restored at startup comes before the first load. With nothing loaded,
+        // there is nothing a load could drop, so it does not wait for the run to close.
         if let Some(active) = campaigns.active_campaign()
-            && self
-                .active
-                .as_ref()
-                .is_none_or(|c| c.id != active.id || c.path != active.path)
-            && !self.dirty()
+            && match &self.active {
+                None => true,
+                Some(c) => (c.id != active.id || c.path != active.path) && !self.dirty(),
+            }
         {
             self.reload(ctx, active, campaigns.modules().to_vec());
         }
@@ -629,12 +660,20 @@ impl Encounters {
     }
     /// Reopen a run after a restart, with its participants' sync turned back on.
     pub fn restore_run(&mut self, path: &std::path::Path, campaign: uuid::Uuid, synced: &[String]) {
-        if self.run.is_none()
-            && let Ok(mut run) = crate::encounter_run::Run::open(path, campaign)
-        {
-            run.restore_sync(synced);
-            self.run = Some(run);
-            self.go_to_run = true;
+        if self.run.is_some() {
+            return;
+        }
+        match crate::encounter_run::Run::open(path, campaign) {
+            Ok(mut run) => {
+                run.restore_sync(synced);
+                self.run = Some(run);
+                self.go_to_run = true;
+            }
+            Err(error) => {
+                self.error = Some(format!(
+                    "The run open at last close did not reopen: {error}"
+                ));
+            }
         }
     }
     /// The Run page. Returns true when the run has just closed.
@@ -680,6 +719,10 @@ impl Encounters {
         }
         if self.draft.is_some() {
             self.editor_view(ui, &active, campaigns);
+            // What was just read may be what the DM adds next, so the results stay in view.
+            if self.peek.is_some() {
+                self.editor_pane = EditorPane::Add;
+            }
         } else {
             self.list_view(ui, &active, campaigns);
         }
@@ -695,7 +738,22 @@ impl Encounters {
         }
     }
 
+    /// One step back from `Discard changes`. Undo is the guard, so no dialog is needed.
+    fn discard_undo(&mut self, ui: &mut egui::Ui) {
+        if self.draft_dirty() {
+            self.discarded = None;
+        }
+        if self.discarded.is_some()
+            && design::message_with_action(ui, Tone::Info, "Draft discarded.", "Undo discard")
+        {
+            self.draft = self.discarded.take();
+            self.message = None;
+            self.error = None;
+        }
+    }
+
     fn results(&mut self, ui: &mut egui::Ui) {
+        self.discard_undo(ui);
         if let Some(e) = &self.error {
             design::message(ui, Tone::Error, e);
         }
@@ -710,12 +768,19 @@ impl Encounters {
         let settings_changed = self.unsaved();
         let mut new = false;
         let mut reload = false;
+        // With nothing here yet, the page's one action is in its body.
+        let empty = self
+            .snapshot
+            .as_ref()
+            .is_some_and(|s| s.encounters.is_empty() && s.runs.is_empty());
         design::page_header(ui, "Encounters", Some(&active.name), |ui| {
-            new = Action::secondary("New encounter")
-                .icon(icons::ADD)
-                .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
-                .show(ui)
-                .clicked();
+            if !empty {
+                new = Action::secondary("New encounter")
+                    .icon(icons::ADD)
+                    .blocked(blocked.or(loading.then_some("Still reading this campaign.")))
+                    .show(ui)
+                    .clicked();
+            }
             reload = Action::quiet("Reload")
                 .icon(icons::REFRESH)
                 .blocked(
@@ -743,7 +808,7 @@ impl Encounters {
         self.results(ui);
         if self.pending.is_some() {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::design::spinner(ui);
                 ui.label(
                     Type::Body
                         .rich(ui, "Reading this campaign…")
@@ -846,7 +911,7 @@ impl Encounters {
                             };
                             let response = ui.add(
                                 egui::Label::new(Type::Body.rich(ui, &info.label).color(color))
-                                    .truncate(),
+                                    .wrap(),
                             );
                             // The group heading shows the encounter. The tree needs it too.
                             design::named(
@@ -863,6 +928,8 @@ impl Encounters {
         let template_list = |ui: &mut egui::Ui,
                              open_path: &mut Option<String>,
                              run_path: &mut Option<String>| {
+            // The actions stay near the name they belong to.
+            ui.set_max_width(ui.available_width().min(640.0));
             ui.label(Type::Heading.rich(ui, "Encounters").color(colors().text));
             design::rule(ui);
             if snapshot.encounters.is_empty() {
@@ -981,8 +1048,11 @@ impl Encounters {
         let mut run_it = false;
         // Beside Lookup at the minimum window, the roster and the search take turns.
         let compact = ui.available_width() < 760.0;
+        // The title and its actions need more room than the panes do.
+        let two_rows = ui.available_width() < 1040.0;
         let has_run = self.has_run();
         let loading = self.pending.is_some();
+        let saved_note = self.message.clone();
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let mut title = |ui: &mut egui::Ui, width: f32| {
@@ -992,7 +1062,7 @@ impl Encounters {
                     .desired_width(width)
                     .min_size(egui::vec2(0.0, Density::Scan.control()))
                     .margin(egui::vec2(design::S, 5.0))
-                    .font(Type::Section.font(ui)),
+                    .font(Type::Heading.font(ui)),
             );
             design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
             if std::mem::take(focus_name) {
@@ -1005,6 +1075,16 @@ impl Encounters {
                         icon: icons::DRAFT,
                         word: "Unsaved",
                         color: colors().document.unsaved,
+                    },
+                );
+            } else if let Some(note) = &saved_note {
+                // Beside the name, so that saving does not move the roster.
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::OK,
+                        word: note,
+                        color: colors().document.saved,
                     },
                 );
             }
@@ -1021,15 +1101,21 @@ impl Encounters {
                     )
                     .show(ui)
                     .clicked();
-                save = Action::secondary("Save encounter")
-                    .blocked_if(!dirty, "No changes to save.")
-                    .key("Ctrl+S")
-                    .show(ui)
-                    .clicked();
-                discard = Action::quiet("Discard changes")
-                    .blocked_if(!dirty, "No changes to discard.")
-                    .show(ui)
-                    .clicked();
+                // The next thing to do carries the weight: Save while there are changes.
+                save = if dirty {
+                    Action::primary("Save encounter")
+                } else {
+                    Action::secondary("Save encounter")
+                }
+                .blocked_if(!dirty, "No changes to save.")
+                .key("Ctrl+S")
+                .show(ui)
+                .clicked();
+                // Away from Save, because they are never meant to be pressed by the same hand.
+                ui.add_space(design::XL);
+                if dirty {
+                    discard = Action::destructive("Discard changes").show(ui).clicked();
+                }
             });
         };
         let back_action = |ui: &mut egui::Ui| {
@@ -1040,10 +1126,11 @@ impl Encounters {
                 .show(ui)
                 .clicked()
         };
-        if compact {
+        if two_rows {
             ui.horizontal(|ui| {
                 back = back_action(ui);
-                let width = (ui.available_width() - 110.0).max(120.0);
+                // Room is kept for the word beside the name: Unsaved, or a saved note.
+                let width = (ui.available_width() - 150.0).clamp(120.0, 360.0);
                 title(ui, width);
             });
             ui.horizontal(|ui| actions(ui));
@@ -1063,17 +1150,14 @@ impl Encounters {
             return;
         }
         if discard {
-            let draft = self.draft.as_ref().expect("the editor has a draft");
-            match &draft.baseline {
-                Some(_) => match Draft::open(&active.path, &draft.path) {
+            let draft = self.draft.take().expect("the editor has a draft");
+            if draft.baseline.is_some() {
+                match Draft::open(&active.path, &draft.path) {
                     Ok(d) => self.draft = Some(d),
-                    Err(e) => {
-                        self.error = Some(e);
-                        self.draft = None;
-                    }
-                },
-                None => self.draft = None,
+                    Err(e) => self.error = Some(e),
+                }
             }
+            self.discarded = Some(draft);
             return;
         }
         if save {
@@ -1082,9 +1166,12 @@ impl Encounters {
         if run_it {
             self.open_run(active, campaigns.modules());
         }
-        self.results(ui);
+        self.discard_undo(ui);
+        if let Some(e) = &self.error {
+            design::message(ui, Tone::Error, e);
+        }
         let Some(snapshot) = &self.snapshot else {
-            ui.spinner();
+            crate::design::spinner(ui);
             return;
         };
         let draft = self.draft.as_mut().expect("the editor has a draft");
@@ -1118,7 +1205,8 @@ impl Encounters {
         // In a wide window the roster keeps a name near its controls, and the two panes
         // stay together at the left.
         let width = design::side_panel_width(ui.ctx().content_rect().width())
-            .max(ui.available_width() - ROSTER_MAX_WIDTH);
+            .max(ui.available_width() - ROSTER_MAX_WIDTH)
+            .min(ADD_PANE_MAX_WIDTH);
         egui::SidePanel::right("encounter_add")
             .resizable(false)
             .exact_width(width)
@@ -1129,14 +1217,7 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                let room = egui::vec2(
-                    ui.available_width().min(design::PANEL_MAX_WIDTH),
-                    ui.available_height(),
-                );
-                ui.allocate_ui_with_layout(room, egui::Layout::top_down(egui::Align::Min), |ui| {
-                    ui.set_max_width(room.x);
-                    Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
-                });
+                Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -1146,6 +1227,8 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
+                // A name stays near its controls, however wide the window.
+                ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
                 Self::roster_pane(ui, draft, snapshot, focus_search, expanded);
             });
     }
@@ -1171,19 +1254,35 @@ impl Encounters {
             )
             .wrap(),
         );
+        // Who is still to come: a party member belongs on a roster once.
+        let on_roster = |draft: &Draft, id: Uuid| {
+            draft
+                .setup
+                .roster
+                .iter()
+                .any(|slot| slot.creature.as_ref().is_some_and(|c| c.id == Some(id)))
+        };
+        let any_party = snapshot.creatures.iter().any(|c| c.party);
+        let missing: Vec<Uuid> = snapshot
+            .creatures
+            .iter()
+            .filter(|c| c.party && !on_roster(draft, c.id))
+            .map(|c| c.id)
+            .collect();
         if Action::secondary("Add party")
             .icon(icons::PARTY)
-            .blocked_if(
-                !snapshot.creatures.iter().any(|c| c.party),
-                "No saved party copies. Refresh Party first.",
-            )
+            .blocked(if !any_party {
+                Some("No saved party copies. Refresh Party first.")
+            } else if missing.is_empty() {
+                Some("The whole party is on the roster.")
+            } else {
+                None
+            })
             .show(ui)
             .clicked()
         {
-            for c in &snapshot.creatures {
-                if c.party {
-                    draft.add(c.id, true);
-                }
+            for id in missing {
+                draft.add(id, true);
             }
             *focus_search = true;
         }
@@ -1198,11 +1297,29 @@ impl Encounters {
             design::focus_and_select(ui, response.id, search);
         }
         let query = search.to_lowercase();
-        let matches: Vec<&Creature> = snapshot
+        let mut matches: Vec<&Creature> = snapshot
             .creatures
             .iter()
             .filter(|c| c.lower.contains(&query))
             .collect();
+        // The plain name first, so "wolf" finds Wolf before Dire Wolf. The sort keeps the
+        // list's order inside each rank.
+        if !query.is_empty() {
+            matches.sort_by_key(|c| {
+                let name = c.name.to_lowercase();
+                u8::from(name != query) + u8::from(!name.starts_with(&query))
+            });
+        }
+        // Enter adds the best match, with focus kept for the next name.
+        if response.lost_focus()
+            && ui.input(|i| i.key_pressed(egui::Key::Enter))
+            && !query.is_empty()
+            && let Some(first) = matches.first()
+            && !(first.party && on_roster(draft, first.id))
+        {
+            draft.add(first.id, first.party);
+            *focus_search = true;
+        }
         if matches.is_empty() {
             ui.add(
                 egui::Label::new(
@@ -1225,24 +1342,10 @@ impl Encounters {
                     ui.push_id(c.id, |ui| {
                         ui.horizontal(|ui| {
                             ui.set_min_height(RESULT_ROW);
-                            if Action::secondary("Add")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                            {
-                                draft.add(c.id, c.party);
-                                *focus_search = true;
-                            }
-                            if Action::quiet("Read")
-                                .density(Density::Read)
-                                .hint("Read this entry in Lookup. The draft stays open.")
-                                .show(ui)
-                                .clicked()
-                            {
-                                *peek = Some(c.id);
-                            }
+                            // The name is what the eye looks for, so it comes first.
                             ui.vertical(|ui| {
                                 ui.spacing_mut().item_spacing.y = 0.0;
+                                ui.set_max_width((ui.available_width() - 112.0).max(80.0));
                                 ui.add(
                                     egui::Label::new(
                                         Type::Body.rich(ui, &c.name).color(colors().text),
@@ -1256,6 +1359,31 @@ impl Encounters {
                                     .truncate(),
                                 );
                             });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if Action::quiet("Read")
+                                        .density(Density::Read)
+                                        .hint("Read this entry in Lookup. The draft stays open.")
+                                        .show(ui)
+                                        .clicked()
+                                    {
+                                        *peek = Some(c.id);
+                                    }
+                                    if Action::secondary("Add")
+                                        .density(Density::Read)
+                                        .blocked_if(
+                                            c.party && on_roster(draft, c.id),
+                                            "Already on the roster.",
+                                        )
+                                        .show(ui)
+                                        .clicked()
+                                    {
+                                        draft.add(c.id, c.party);
+                                        *focus_search = true;
+                                    }
+                                },
+                            );
                         });
                     });
                 }
@@ -1367,10 +1495,14 @@ impl Encounters {
                         let combo = egui::ComboBox::from_id_salt("side")
                             .icon(design::combo_icon)
                             .width(104.0)
-                            .selected_text(&slot.side)
+                            .selected_text(crate::design::reader::human_label(&slot.side))
                             .show_ui(ui, |ui| {
                                 for side in &sides {
-                                    ui.selectable_value(&mut slot.side, side.clone(), side);
+                                    ui.selectable_value(
+                                        &mut slot.side,
+                                        side.clone(),
+                                        crate::design::reader::human_label(side),
+                                    );
                                 }
                             });
                         design::named_combo(ui, &combo, "Side");
@@ -1475,7 +1607,7 @@ impl Encounters {
         let mut settings_saved = false;
         let mut error = None;
         let Some(snapshot) = &mut self.snapshot else {
-            ui.spinner();
+            crate::design::spinner(ui);
             return;
         };
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
@@ -1521,22 +1653,41 @@ impl Encounters {
             );
             let changed = snapshot.options != snapshot.saved_options;
             ui.horizontal(|ui| {
-                if Action::secondary("Save run settings")
+                let save_key = changed
+                    && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+                let pressed = Action::primary("Save run settings")
+                    .key("Ctrl+S")
                     .blocked_if(!changed, "No changes to save.")
                     .show(ui)
-                    .clicked()
-                {
+                    .clicked();
+                if pressed || save_key {
                     match snapshot.options.save(&active, &snapshot.campaign_text) {
                         Ok(()) => settings_saved = true,
                         Err(e) => error = Some(e),
                     }
                 }
-                if Action::quiet("Discard settings changes")
-                    .blocked_if(!changed, "No changes to discard.")
-                    .show(ui)
-                    .clicked()
+                if changed {
+                    design::status(
+                        ui,
+                        Status {
+                            icon: icons::DRAFT,
+                            word: "Unsaved",
+                            color: colors().document.unsaved,
+                        },
+                    );
+                    self.discarded_options = None;
+                    ui.add_space(design::XL);
+                    if Action::destructive("Discard settings changes").show(ui).clicked() {
+                        self.discarded_options = Some(std::mem::replace(
+                            &mut snapshot.options,
+                            snapshot.saved_options.clone(),
+                        ));
+                    }
+                } else if self.discarded_options.is_some()
+                    && Action::secondary("Undo discard").show(ui).clicked()
+                    && let Some(options) = self.discarded_options.take()
                 {
-                    snapshot.options = snapshot.saved_options.clone();
+                    snapshot.options = options;
                 }
             });
         });
@@ -1563,6 +1714,21 @@ impl Encounters {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn undo_discard_stays_in_its_campaign() {
+        let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (first, second) = (campaign(a.path()), campaign(b.path()));
+        let ctx = egui::Context::default();
+        let mut encounters = Encounters {
+            discarded: Some(Draft::new()),
+            active: Some(first.clone()),
+            ..Default::default()
+        };
+        encounters.reload(&ctx, first, Vec::new());
+        assert!(encounters.discarded.is_some(), "a refresh keeps the undo");
+        encounters.reload(&ctx, second, Vec::new());
+        assert!(encounters.discarded.is_none(), "another campaign drops it");
+    }
     fn campaign(root: &std::path::Path) -> Campaign {
         Campaign {
             id: Uuid::new_v4(),

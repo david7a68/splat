@@ -2,7 +2,7 @@
 //! entries all call `show`, so an entry looks the same everywhere (T6.4).
 use super::{class, creature, presentation, reader};
 use crate::design::{self, Type, colors, reader as style};
-use eframe::egui;
+use eframe::egui::{self, Align, Layout, vec2};
 use splat::content::{Entry, Reading, Reference};
 use uuid::Uuid;
 
@@ -117,95 +117,147 @@ pub(crate) fn show(
     builtin: bool,
     links: &dyn Links,
 ) -> Option<usize> {
+    let room = ui.available_width();
+    // A wide window's margin holds what is rarely wanted, so the prose keeps its measure and
+    // the page has no dead space.
+    if room >= style::READER_MEASURE_WIDTH + design::XXL + REFERENCE_MIN {
+        let mut open_link = None;
+        ui.horizontal_top(|ui| {
+            let layout = Layout::top_down(Align::Min);
+            let measure = style::READER_MEASURE_WIDTH;
+            ui.allocate_ui_with_layout(vec2(measure, 0.0), layout, |ui| {
+                ui.set_max_width(measure);
+                open_link = content(ui, name, entry, body, builtin, links);
+            });
+            ui.add_space(design::XL);
+            let width = ui.available_width().min(REFERENCE_MAX);
+            ui.allocate_ui_with_layout(vec2(width, 0.0), layout, |ui| {
+                ui.set_max_width(width);
+                reference(ui, name, entry, body, origin);
+            });
+        });
+        return open_link;
+    }
     // Rules text keeps its measure in a wide side panel too.
     style::measure(ui, |ui| {
-        let mut open_link = None;
-        let reading = entry.and_then(|entry| entry.reading().ok().flatten());
-        let sections = presentation::reading_sections(body, name);
-        let styled = entry.filter(|entry| creature::supports(entry, &sections));
-        if let Some(reading) = &reading {
-            open_link = reading_view(ui, reading, links);
-        }
-        if let Some(entry) = styled.filter(|_| reading.is_none()) {
-            let references = creature::spell_references(entry);
-            creature::show(ui, entry, &sections, |ui, paragraph| {
-                open_link = open_link.or(spell_links(ui, &references, paragraph, links));
-            });
-        } else {
-            reader::show(ui, entry, &sections, builtin, reading.is_some());
-        }
-        if let Some(entry) = entry.filter(|entry| class::supports(entry)) {
-            open_link = open_link.or(class::show_features(ui, entry, links));
-        }
-        let technical: Vec<_> = sections
-            .iter()
-            .filter(|section| section.body.contains("<!-- splat:"))
-            .collect();
-        if (styled.is_none() || reading.is_some()) && !technical.is_empty() {
-            ui.add_space(design::M);
-            design::quiet_section(ui, "Technical details", |ui| {
-                for section in technical {
-                    design::quiet_section(ui, &section.title, |ui| {
-                        style::markdown(ui, section.body, true);
-                    });
-                }
-            });
-        }
+        let open_link = content(ui, name, entry, body, builtin, links);
         ui.add_space(design::L);
         design::rule(ui);
-        let conversion = entry.and_then(|e| e.fields.get("splat_conversion"));
-        let status = conversion
-            .and_then(|c| c.get("status"))
-            .and_then(|s| s.as_str());
-        let support = match status {
-            Some("specified") => "Incomplete",
-            Some("informational") => "Reference only",
-            Some("partial") => "Conversion incomplete",
-            _ => "Not established",
-        };
-        design::quiet_section(ui, &format!("Engine support · {support}"), |ui| {
-            ui.label(support);
-            if let Some(conversion) = conversion {
-                for key in ["conversion_gaps", "engine_gaps"] {
-                    for gap in conversion
-                        .get(key)
-                        .and_then(|v| v.as_sequence())
-                        .into_iter()
-                        .flatten()
-                    {
-                        if let Some(gap) = gap.as_str() {
-                            ui.monospace(gap);
-                        }
-                    }
-                }
-            } else {
-                ui.label("Draft structure does not establish engine support.");
-            }
-        });
-        design::quiet_section(ui, "Source and identifiers", |ui| {
-            ui.label(origin.owner);
-            ui.label(origin.path);
-            if let Some(entry) = entry {
-                ui.label(format!("{} · {}", entry.kind, entry.id));
-                if let Some(key) = &entry.key {
-                    ui.monospace(key);
-                }
-                if let Some(sources) = entry
-                    .fields
-                    .get("splat_sources")
-                    .and_then(|v| v.as_sequence())
-                {
-                    for source in sources {
-                        let title = source
-                            .get("title")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("Source");
-                        let locator = source.get("locator").and_then(|v| v.as_str()).unwrap_or("");
-                        ui.label(format!("{title} · {locator}"));
-                    }
-                }
-            }
-        });
+        reference(ui, name, entry, body, origin);
         open_link
     })
+}
+
+const REFERENCE_MIN: f32 = 280.0;
+const REFERENCE_MAX: f32 = 360.0;
+
+/// What the entry says.
+fn content(
+    ui: &mut egui::Ui,
+    name: &str,
+    entry: Option<&Entry>,
+    body: &str,
+    builtin: bool,
+    links: &dyn Links,
+) -> Option<usize> {
+    let mut open_link = None;
+    let reading = entry.and_then(|entry| entry.reading().ok().flatten());
+    let sections = presentation::reading_sections(body, name);
+    let styled = entry.filter(|entry| creature::supports(entry, &sections));
+    if let Some(reading) = &reading {
+        open_link = reading_view(ui, reading, links);
+    }
+    if let Some(entry) = styled.filter(|_| reading.is_none()) {
+        let references = creature::spell_references(entry);
+        creature::show(ui, entry, &sections, |ui, paragraph| {
+            open_link = open_link.or(spell_links(ui, &references, paragraph, links));
+        });
+    } else {
+        reader::show(ui, entry, &sections, builtin, reading.is_some());
+    }
+    if let Some(entry) = entry.filter(|entry| class::supports(entry)) {
+        open_link = open_link.or(class::show_features(ui, entry, links));
+    }
+    open_link
+}
+
+/// What is rarely wanted: where the entry comes from, and how it is built.
+fn reference(
+    ui: &mut egui::Ui,
+    name: &str,
+    entry: Option<&Entry>,
+    body: &str,
+    origin: &Origin<'_>,
+) {
+    let reading = entry.and_then(|entry| entry.reading().ok().flatten());
+    let sections = presentation::reading_sections(body, name);
+    let styled = entry.filter(|entry| creature::supports(entry, &sections));
+    let technical: Vec<_> = sections
+        .iter()
+        .filter(|section| section.body.contains("<!-- splat:"))
+        .collect();
+    if (styled.is_none() || reading.is_some()) && !technical.is_empty() {
+        ui.add_space(design::M);
+        design::quiet_section(ui, "Technical details", |ui| {
+            for section in technical {
+                design::quiet_section(ui, &section.title, |ui| {
+                    style::markdown(ui, section.body, true);
+                });
+            }
+        });
+    }
+    let conversion = entry.and_then(|e| e.fields.get("splat_conversion"));
+    let status = conversion
+        .and_then(|c| c.get("status"))
+        .and_then(|s| s.as_str());
+    let support = match status {
+        Some("specified") => "Incomplete",
+        Some("informational") => "Reference only",
+        Some("partial") => "Conversion incomplete",
+        _ => "Not established",
+    };
+    // A verdict means nothing at a table, so it waits inside.
+    design::quiet_section(ui, "Engine support", |ui| {
+        ui.label(support);
+        if let Some(conversion) = conversion {
+            for key in ["conversion_gaps", "engine_gaps"] {
+                for gap in conversion
+                    .get(key)
+                    .and_then(|v| v.as_sequence())
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Some(gap) = gap.as_str() {
+                        ui.monospace(gap);
+                    }
+                }
+            }
+        } else {
+            ui.label("Draft structure does not establish engine support.");
+        }
+    });
+    design::quiet_section(ui, "Source and identifiers", |ui| {
+        ui.label(origin.owner);
+        ui.label(origin.path);
+        if let Some(entry) = entry {
+            ui.label(format!("{} · {}", entry.kind, entry.id));
+            if let Some(key) = &entry.key {
+                ui.monospace(key);
+            }
+            if let Some(sources) = entry
+                .fields
+                .get("splat_sources")
+                .and_then(|v| v.as_sequence())
+            {
+                for source in sources {
+                    let title = source
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Source");
+                    let locator = source.get("locator").and_then(|v| v.as_str()).unwrap_or("");
+                    ui.label(format!("{title} · {locator}"));
+                }
+            }
+        }
+    });
 }

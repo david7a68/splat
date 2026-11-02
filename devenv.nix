@@ -46,5 +46,14 @@
     echo "Output: $out"
     exit "$status"
   '';
+  # Which captures of two visual-test runs differ, above the rendering noise.
+  scripts.visual-compare.exec = ''
+    if [ "$#" -ne 2 ]; then
+      echo "Use two labels, for example: visual-compare iter-2 iter-3" >&2
+      exit 2
+    fi
+    VISUAL_COMPARE_A="$PWD/artifacts/screenshots/$1" VISUAL_COMPARE_B="$PWD/artifacts/screenshots/$2" \
+      cargo test --locked --bin splat visual_compare -- --ignored --nocapture
+  '';
   enterTest = "cargo test --locked";
 }

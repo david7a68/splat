@@ -106,19 +106,24 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                         }
                     };
                     let widths = column_widths(ui, &rows, &columns, &display);
-                    design::rule(ui);
-                    ui.add_space(2.0);
-                    for (i, row) in rows.iter().enumerate() {
-                        design::table_row(ui, &widths, TABLE_GAP, |ui, position| {
-                            let cell = display(
-                                row.get(columns[position]).map(String::as_str).unwrap_or(""),
-                            );
-                            let role = if i == 0 { Type::StatLabel } else { Type::Stat };
-                            ui.add(
-                                egui::Label::new(role.rich(ui, cell).color(colors().text)).wrap(),
-                            );
-                        });
-                    }
+                    // The rules end with the table, not at the measure.
+                    let table_width = widths.iter().sum::<f32>()
+                        + TABLE_GAP * widths.len().saturating_sub(1) as f32;
+                    ui.scope(|ui| {
+                        ui.set_max_width(ui.available_width().min(table_width));
+                        for (i, row) in rows.iter().enumerate() {
+                            design::table_row(ui, &widths, TABLE_GAP, |ui, position| {
+                                let cell = display(
+                                    row.get(columns[position]).map(String::as_str).unwrap_or(""),
+                                );
+                                let role = if i == 0 { Type::StatLabel } else { Type::Stat };
+                                ui.add(
+                                    egui::Label::new(role.rich(ui, cell).color(colors().text))
+                                        .wrap(),
+                                );
+                            });
+                        }
+                    });
                     ui.add_space(design::S);
                 }
                 inventory_table = false;

@@ -393,6 +393,13 @@ impl Reader {
             && (self.refresh_requested || !self.stream_open || safety_due)
     }
     pub fn refresh(&mut self, session: Session, ctx: &egui::Context, full: bool) {
+        // Test builds have no route to D&D Beyond. A signed-in test keeps its saved sheets.
+        if cfg!(test) {
+            self.refresh_requested = false;
+            self.last_check = Some(Instant::now());
+            self.next = Some(Instant::now() + INTERVAL);
+            return;
+        }
         if self.pending.is_some() || self.cooldown.is_some_and(|t| t > Instant::now()) {
             return;
         }

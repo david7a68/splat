@@ -208,14 +208,17 @@ fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
         cell(
             ui,
             26.0,
-            &modifier.map_or_else(|| "—".into(), |v| format!("{v:+}")),
+            &modifier.map_or_else(|| "—".into(), design::signed),
             Type::Stat,
             c.muted,
         );
         cell(
             ui,
             56.0,
-            &save.map_or_else(|| "Save —".into(), |v| format!("Save {v:+}")),
+            &save.map_or_else(
+                || "Save —".into(),
+                |v| format!("Save {}", design::signed(v)),
+            ),
             Type::Stat,
             c.muted,
         );
@@ -225,7 +228,15 @@ fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
 fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Color32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, role.line()), egui::Sense::hover());
     let galley = design::one_line(ui, text, role.font(ui), color, width + design::S);
-    ui.painter().galley(rect.min, galley, color);
+    // Numbers line up on their right edge, so that a column of them can be read down.
+    let numeric = text.starts_with(|c: char| c.is_ascii_digit() || "+\u{2212}\u{2014}".contains(c));
+    let left = if numeric {
+        rect.right() - galley.size().x
+    } else {
+        rect.left()
+    };
+    ui.painter()
+        .galley(egui::pos2(left, rect.top()), galley, color);
 }
 
 /// Armor class, hit points and initiative, under capital labels.
@@ -240,7 +251,7 @@ fn vitals(ui: &mut egui::Ui, entry: &Entry) {
             })
         })
         .unwrap_or_else(|| value(entry, "max_hp"));
-    let initiative = stat(entry, "initiative").map_or_else(|| "—".into(), |v| format!("{v:+}"));
+    let initiative = stat(entry, "initiative").map_or_else(|| "—".into(), design::signed);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);
         for (label, text) in [
@@ -382,7 +393,7 @@ pub(super) fn show(
             if section.title != "Overview" {
                 section_heading(ui, &section.title);
             }
-            reader_style::markdown(ui, &body, false);
+            reader_style::source_prose(ui, &body);
         }
     }
 }

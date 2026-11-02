@@ -38,7 +38,7 @@ pub mod library_browse {
     const ENTRY_COUNT: &str = "2065 entries";
     const SEARCH_RESULTS: &str = "Search results";
     const CREATURE: &str = "Adult Black Dragon";
-    const SPELL: &str = "Fireball";
+    const SPELL_ROW: &str = "Fireball · ";
     const CLASS_ROW: &str = "Wizard · ";
     const CREATURES_SECTION: &str = "Creatures   ";
     const CREATURES_COUNT: &str = "336 entries";
@@ -70,7 +70,7 @@ pub mod library_browse {
         );
 
         search_library(d, "fireball");
-        d.click_containing(SPELL);
+        d.click_starting(SPELL_ROW);
         d.state("spell", Sizes::All);
         d.goal("open a spell");
 
@@ -82,7 +82,8 @@ pub mod library_browse {
 
         let default_width = d.at_size(DEFAULT, Driver::longest_visible_line);
         let large_width = d.at_size(LARGE, Driver::longest_visible_line);
-        let long_entry = default_width <= 75 && large_width <= 75;
+        // Zero would mean no text was found, which is no pass.
+        let long_entry = (20..=75).contains(&default_width) && (20..=75).contains(&large_width);
         // The same measure beside a page, in the panel's smaller prose.
         d.begin_task();
         look_up(d, "fireball");
@@ -92,7 +93,7 @@ pub mod library_browse {
         d.begin_task();
         d.observe(
             "T6.1",
-            long_entry && panel_default <= 75 && panel_large <= 75,
+            long_entry && (20..=75).contains(&panel_default) && (20..=75).contains(&panel_large),
             format!(
                 "Longest line, class: {default_width} at 1200x800, {large_width} at 1920x1080. Lookup: {panel_default}, {panel_large}"
             ),
@@ -144,10 +145,20 @@ pub mod library_author {
     use super::*;
     const LOCAL_PACKAGE: &str = "Local package";
     const NOTE: &str = "Ash Exposure";
+    const NOTE_ROW: &str = "Ash Exposure · ";
     const OTHER_NOTE: &str = "Ashfall";
     const NOTE_FILE: &str = "modules/ashen-marches/Rules/Ash Exposure.md";
     const SAVE: &str = "Save";
     const DISCARD: &str = "Discard changes";
+    const DRAFT_WORDS: &str = "Rangers of the ash line are exempt. ";
+    const SECOND_WORDS: &str = "Rangers carry spare cloth. ";
+    const THIRD_WORDS: &str = "Cloth wears out in a week. ";
+    const OTHER_NOTE_TEXT: &str = "Hot ash falls";
+    const OVERWRITE: &str = "Overwrite with my draft";
+    const RELOAD_DISK: &str = "Reload and lose my draft";
+    const SHOW_DISK: &str = "Show disk version";
+    const EXTERNAL_STATUS: &str = "Changed on disk";
+    const UNDO_DISCARD: &str = "Undo discard";
     const CHANGED_ON_DISK: &str = "This note changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
@@ -164,12 +175,12 @@ pub mod library_author {
         d.begin_task();
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.click(MODULE);
+        d.goal("open a local package");
+        d.click_starting(NOTE_ROW);
         d.expect(LOCAL_PACKAGE);
         d.state("local-package", Sizes::All);
         d.check_tab_order("library, local package");
-        d.goal("open a local package");
 
-        d.click_containing(NOTE);
         d.expect(NOTE);
         d.observe(
             "Package scope",
@@ -180,17 +191,22 @@ pub mod library_author {
         d.state("edit-markdown", Sizes::All);
         d.goal("open a note for editing");
 
-        d.type_into_editor("Rangers of the ash line are exempt. ");
+        d.type_into_editor(DRAFT_WORDS);
         d.expect(UNSAVED_NOTE);
         d.state("dirty", Sizes::All);
         d.goal("change the note");
 
         let other_row_locked = d.is_disabled(OTHER_NOTE);
         d.click_containing(OTHER_NOTE);
+        let draft_here =
+            |d: &Driver<'_>, words: &str| d.editor_text().is_some_and(|text| text.contains(words));
         d.observe(
             "T8.2",
-            !other_row_locked && d.in_view(OTHER_NOTE) && d.has_containing(UNSAVED_NOTE),
-            "Read another entry while a draft is open. It opens in Lookup, and the draft stays",
+            !other_row_locked
+                && d.visible_text(OTHER_NOTE_TEXT)
+                && d.has_containing(UNSAVED_NOTE)
+                && draft_here(d, DRAFT_WORDS),
+            "Read another entry while a draft is open. Its text opens in Lookup, and the draft's words stay in the editor",
         );
         d.state("read-beside-draft", Sizes::Default);
         d.press(Key::Escape);
@@ -207,21 +223,89 @@ pub mod library_author {
         d.state("saved-with-ctrl-s", Sizes::Default);
         d.goal("save with the keyboard");
 
-        d.type_into_editor("Rangers carry spare cloth. ");
+        // External change: the draft stays, and each way out is a control that works.
+        d.type_into_editor(SECOND_WORDS);
         let on_disk = d.root.join(NOTE_FILE);
         let edited =
             std::fs::read_to_string(&on_disk).expect("read note") + "\nEdited elsewhere.\n";
         std::fs::write(&on_disk, edited).expect("edit note on disk");
         d.click(SAVE);
-        let kept = d.has_containing(CHANGED_ON_DISK) && d.has_containing(UNSAVED_NOTE);
         d.observe(
             "T8.3",
-            kept,
-            "A failed save keeps the draft and states the fix",
+            d.has_containing(CHANGED_ON_DISK)
+                && d.has(OVERWRITE)
+                && d.has(RELOAD_DISK)
+                && d.has(SHOW_DISK)
+                && d.visible_text(EXTERNAL_STATUS)
+                && draft_here(d, SECOND_WORDS),
+            "An external change keeps the draft's words, and offers overwrite, reload and the disk version",
         );
         d.state("save-conflict", Sizes::Default);
-        d.click(DISCARD);
         d.goal("handle a failed save");
+        d.click(SHOW_DISK);
+        d.observe(
+            "T8.3",
+            d.has_containing("Edited elsewhere."),
+            "The disk version can be read before choosing",
+        );
+        d.click(RELOAD_DISK);
+        d.observe(
+            "T8.3",
+            draft_here(d, "Edited elsewhere.")
+                && !draft_here(d, SECOND_WORDS)
+                && d.has(UNDO_DISCARD),
+            "Reloading takes the disk version, and the draft is one undo away",
+        );
+        d.click(UNDO_DISCARD);
+        d.observe(
+            "C-4",
+            draft_here(d, SECOND_WORDS),
+            "Undo brings the dropped draft back",
+        );
+        d.click(SAVE);
+        d.observe(
+            "T8.3",
+            !d.has_containing(CHANGED_ON_DISK)
+                && std::fs::read_to_string(&on_disk).is_ok_and(|text| text.contains(SECOND_WORDS)),
+            "After the reload, the same draft saves",
+        );
+
+        // The same way out when the file changes again: overwrite.
+        d.type_into_editor(THIRD_WORDS);
+        let edited = std::fs::read_to_string(&on_disk).expect("read note") + "\nEdited again.\n";
+        std::fs::write(&on_disk, edited).expect("edit note on disk");
+        d.click(SAVE);
+        d.click(OVERWRITE);
+        let text = std::fs::read_to_string(&on_disk).expect("read note");
+        d.observe(
+            "T8.3",
+            text.contains(THIRD_WORDS) && !text.contains("Edited again."),
+            "Overwrite puts the draft on disk in place of the other change",
+        );
+
+        // Invalid note: the save is refused, the words stay, and the reason is on screen.
+        d.type_into_editor(THIRD_WORDS);
+        d.replace_editor_text("no front matter at all");
+        d.click(SAVE);
+        d.observe(
+            "T8.3",
+            d.has_containing("Error: ") && draft_here(d, "no front matter at all"),
+            "An invalid note keeps the draft and states why",
+        );
+        d.click(DISCARD);
+        d.observe(
+            "C-4",
+            d.has(UNDO_DISCARD) && !draft_here(d, "no front matter at all"),
+            "Discard takes one press, and offers undo in place of a dialog",
+        );
+        d.click(UNDO_DISCARD);
+        d.observe(
+            "C-4",
+            draft_here(d, "no front matter at all"),
+            "Undo brings back the discarded draft",
+        );
+        d.click(DISCARD);
+        d.goal("try each way out of a failed save");
 
         d.click(PACKAGE_ACTIONS);
         d.state("package-actions", Sizes::Default);
@@ -238,6 +322,16 @@ pub mod library_author {
         d.expect(NEW_NAME);
         d.state("new-entry-created", Sizes::All);
         d.goal("create a new entry");
+
+        // Name clash: the same name again is refused, and the typed name stays.
+        d.type_into(NEW_NAME_FIELD, NEW_NAME);
+        d.click(CREATE_ENTRY);
+        d.observe(
+            "T8.3",
+            d.has_containing("already exists")
+                && d.field_text(NEW_NAME_FIELD).as_deref() == Some(NEW_NAME),
+            "A name clash states the fix, and the typed name stays",
+        );
     }
 }
 
@@ -251,6 +345,7 @@ pub mod campaign_content {
     const UNSELECTED_ENTRY: &str = "Ash Wraith";
     const DISCARD_SELECTION: &str = "Discard selection changes";
     const CAMPAIGN_ENTRY: &str = "Captain Varra";
+    const SIBLING_ENTRY: &str = "Bridge Ambush";
     const SAVE_ENTRY: &str = "Save";
     const SAVED: &str = "Saved: entry changes.";
     const REQUIRED: &str = "Required dependencies";
@@ -292,15 +387,19 @@ pub mod campaign_content {
         d.expect(CAMPAIGN_ENTRY);
         d.state("own-entries-in-library", Sizes::All);
         d.begin_task();
+        let in_list = |d: &Driver<'_>, name: &str| {
+            d.nodes()
+                .into_iter()
+                .any(|node| node.name.starts_with(name) && node.in_view() && !node.disabled)
+        };
+        let sibling_before = in_list(d, SIBLING_ENTRY);
         d.type_into(SEARCH_LIBRARY, OWN_ENTRY_SEARCH);
-        let row = d
-            .nodes()
-            .into_iter()
-            .find(|node| node.name.starts_with(CAMPAIGN_ENTRY) && node.in_view());
+        let found = in_list(d, CAMPAIGN_ENTRY);
+        let sibling_after = in_list(d, SIBLING_ENTRY);
         d.observe(
             "T8.4",
-            row.is_some_and(|row| !row.disabled),
-            "Typing finds a campaign-owned entry, as a row in the results",
+            sibling_before && found && !sibling_after,
+            format!("Typing finds a campaign-owned entry, and {SIBLING_ENTRY} leaves the list: before {sibling_before}, after {sibling_after}"),
         );
         d.click(CLEAR_SEARCH);
         d.begin_task();
@@ -312,7 +411,7 @@ pub mod campaign_content {
         d.goal("open a campaign entry for editing");
 
         d.type_into_editor("Scarred by the fire at the bridge. ");
-        d.state("entry-dirty", Sizes::All);
+        d.state("entry-dirty", Sizes::Default);
         d.click(SAVE_ENTRY);
         d.expect(SAVED);
         d.state("entry-saved", Sizes::Default);
@@ -330,8 +429,17 @@ pub mod campaign_content {
         d.state("repair-needed", Sizes::Default);
         d.observe(
             "T9.2",
-            d.is_disabled(SAVE_SELECTIONS) && d.has_containing("before saving"),
+            d.is_disabled(SAVE_SELECTIONS) && d.visible_text("before saving"),
             "Save disabled by a repair states its reason",
+        );
+        // The repair opens here, with the note's text in it.
+        d.click_containing(REPAIR);
+        d.state("repair-open", Sizes::Default);
+        d.observe(
+            "T9.2",
+            d.editor_text()
+                .is_some_and(|text| text.contains("splat_id")),
+            "The repair is reachable without leaving the page",
         );
     }
 }
@@ -341,7 +449,7 @@ pub mod party {
     use super::*;
     const FIRST_MEMBER: &str = "Brannoch Vale";
     const SECOND_MEMBER: &str = "Iselle Marrowind";
-    const OFFLINE: &str = "Offline";
+    const OFFLINE: &str = "Not connected";
     const FRESHNESS: &str = "Fetched";
     const PAGES: [(&str, &str); 4] = [
         ("Actions", "page-actions"),
@@ -406,11 +514,6 @@ pub mod party {
         d.expect(NOT_LINKED);
         d.state("campaign-not-linked", Sizes::All);
         d.goal("see a campaign with no link");
-
-        d.unreached(
-            "signed-in party with live updates and combat sync (T7.3)",
-            "the offline sheet, because test builds cannot create a session",
-        );
     }
 }
 
@@ -429,6 +532,17 @@ pub mod encounter_build {
     const RESULT_NAME: &str = "Wolf";
     const EDITOR_NAME: &str = "Encounter name";
     const BACK_TO_LIST: &str = "Back to encounters";
+    const NO_SUCH_CREATURE: &str = "zzz";
+    const SAVED_ROWS: [&str; 8] = [
+        "1. Brannoch Vale",
+        "2. Iselle Marrowind",
+        "3. Kestrel Dunmoor",
+        "4. Oren Thistlewick",
+        "5. Sable Harrowgate",
+        "6. Wolf",
+        "7. Wolf",
+        "8. Cultist",
+    ];
 
     pub fn run(d: &mut Driver<'_>) {
         // T5.3 measures the whole build, so it starts from the cold start.
@@ -483,6 +597,11 @@ pub mod encounter_build {
             "save a roster of party and monsters from a cold start",
             10,
         );
+        d.observe(
+            "T5.3",
+            SAVED_ROWS.iter().all(|row| d.has_label(row)),
+            format!("The saved roster has the 8 rows asked for: {SAVED_ROWS:?}"),
+        );
 
         d.unreached(
             "encounter difficulty and summary",
@@ -495,13 +614,25 @@ pub mod encounter_build {
         let read = d.has_containing("ARMOR CLASS");
         d.state("stat-block-beside-editor", Sizes::All);
         let still_editing = d.has_containing(EDITOR_NAME);
+        // The real loop: read, decide, add. The results stay beside what was just read.
+        let add_in_view = d.nodes().iter().any(|n| n.name == ADD && n.in_view());
         d.press(Key::Escape);
         d.observe(
             "T5.2",
-            cost <= 2 && read && still_editing,
+            cost <= 2 && read && still_editing && add_in_view,
             format!(
-                "A full stat block opens in {cost} beside the editor, and the draft stays open"
+                "A full stat block opens in {cost} beside the editor. The draft stays open, and an Add button is in view: {add_in_view}"
             ),
+        );
+        d.begin_task();
+
+        // A search with no match says so, and what to try.
+        d.replace_text_in(FIND_CREATURE, NO_SUCH_CREATURE);
+        d.state("no-search-results", Sizes::Default);
+        d.observe(
+            "T5.1",
+            d.visible_text("No creatures match"),
+            "A search with no match says so",
         );
         d.begin_task();
 
@@ -509,8 +640,8 @@ pub mod encounter_build {
         let rows = d.nodes().iter().filter(|node| node.name == ADD).count();
         d.observe(
             "T5.4",
-            rows <= VIRTUALISED_LIMIT,
-            format!("{rows} result rows are built each frame with no search text"),
+            rows > 0 && rows <= VIRTUALISED_LIMIT,
+            format!("{rows} result rows are built each frame with no search text, from about 340"),
         );
 
         d.click(BACK_TO_LIST);
@@ -571,8 +702,14 @@ pub mod encounter_run {
         d.review("T4.5", "the live view, to compare with run-setup");
 
         let anchor = d.row_node(ANCHOR_ROW).map(|row| row.rect.min.y);
+        let before = current_participant(d);
         d.click(NEXT_TURN);
-        d.expect(CURRENT_TURN);
+        let after = current_participant(d);
+        d.observe(
+            "T1.1",
+            before.is_some() && after.is_some() && before != after,
+            format!("Next turn moves the current turn: {before:?} then {after:?}"),
+        );
         d.state("next-turn", Sizes::Default);
         d.goal_within("T1.1", "advance the turn", 1);
         let after = d.row_node(ANCHOR_ROW).map(|row| row.rect.min.y);
@@ -582,28 +719,35 @@ pub mod encounter_run {
             format!("Rows hold their places on Next turn: {anchor:?} then {after:?}"),
         );
 
-        d.click_containing(TARGET);
+        d.click_row(TARGET);
         d.state("participant-selected", Sizes::Default);
         d.type_text(DAMAGE);
         d.press(Key::Enter);
-        d.expect(AFTER_DAMAGE);
+        d.observe(
+            "T1.2",
+            d.row_node(TARGET)
+                .is_some_and(|row| row.name.contains(AFTER_DAMAGE))
+                && d.row_words(TARGET).contains("26"),
+            format!("The row paints the new HP: {}", d.row_words(TARGET)),
+        );
         d.observe_both("T1.2", "The damaged row stays in view", |d| {
             d.row_node(TARGET).is_some_and(|row| row.fully_in_view())
         });
         d.state("hp-changed", Sizes::All);
         d.goal_within("T1.2", "damage a named participant who is not current", 3);
 
-        d.click_containing(TARGET);
+        d.click_row(TARGET);
         d.click(CONDITIONS);
         d.state("condition-tab", Sizes::All);
+        let clean = !d.row_words(TARGET).contains(CONDITION);
         d.click(CONDITION);
-        d.expect(CONDITION);
         d.state("condition-added", Sizes::All);
         d.goal_within("T1.5", "add an official condition", 3);
+        let row = d.row_words(TARGET);
         d.observe(
             "T1.5",
-            d.has_containing(CONDITION),
-            "The official condition came from the picker. Nothing was typed",
+            clean && row.contains(CONDITION) && row.contains("26"),
+            format!("The row gains the condition and keeps its HP. Nothing was typed: {row}"),
         );
 
         // The words on screen, in full, not only the accessible name.
@@ -615,7 +759,34 @@ pub mod encounter_run {
         );
         d.click_containing(UNDO);
         d.state("undo", Sizes::Default);
+        d.observe(
+            "T1.6",
+            !d.row_words(TARGET).contains(CONDITION),
+            "Undo removes what it named",
+        );
         d.goal("undo the last action");
+
+        // Shift+Enter heals, and Enter damages. The Keys tab says so.
+        d.click_row(TARGET);
+        let hp = d.row_hp(TARGET);
+        d.type_text("4");
+        d.press(Key::Enter);
+        let hurt = d.row_hp(TARGET);
+        d.type_text("3");
+        d.press_shift(Key::Enter);
+        let healed = d.row_hp(TARGET);
+        d.observe(
+            "T1.7",
+            hurt == hp.map(|hp| hp - 4) && healed == hp.map(|hp| hp - 1),
+            format!("Enter takes 4, then Shift+Enter gives back 3: {hp:?}, {hurt:?}, {healed:?}"),
+        );
+        d.press(Key::U);
+        d.press(Key::U);
+
+        // A target by key: the dock names the row the amount will act on.
+        let selected_before = d.focused_row_name();
+        d.press(Key::ArrowUp);
+        let target = selected_before.is_some() && selected_before != d.focused_row_name();
 
         d.begin_task();
         let before = current_participant(d);
@@ -654,9 +825,9 @@ pub mod encounter_run {
         let keys = d.goal("run a turn, damage, undo and a lookup by keyboard alone");
         d.observe(
             "T1.7",
-            next && damage && undo && search && back,
+            next && target && damage && undo && search && back,
             format!(
-                "Direct key commands, {keys} key presses in all: next turn {next}, damage {damage}, undo {undo}, lookup {search}, close {back}"
+                "Direct key commands, {keys} key presses in all: next turn {next}, target {target}, damage {damage}, undo {undo}, lookup {search}, close {back}"
             ),
         );
         d.expect(RUN_HEADING);
@@ -732,7 +903,7 @@ pub mod settings {
             retry,
             "After a failed attempt, Connect can retry at once",
         );
-        // A real session cannot exist in a test build, so the words are shown directly.
+        // Each state through the same fields a real attempt sets.
         let mut words = true;
         for (state, word) in ACCOUNT_WORDS {
             d.app_mut().settings.simulate(state);
@@ -743,21 +914,17 @@ pub mod settings {
                 Account::Busy => d.state("account-connecting", Sizes::Default),
                 Account::Connected => d.state("account-connected", Sizes::Default),
                 Account::KeyringWarning => d.state("account-keyring-warning", Sizes::Default),
-                Account::NotConnected | Account::Failed => {}
+                Account::NotConnected | Account::Failed | Account::RefreshFailing => {}
             }
         }
         d.observe(
             "T10.3",
             words,
-            "Busy, connected, not connected, failed and keyring warning each have words. Displayed by a simulated state",
+            "Busy, connected, not connected, failed and keyring warning each have words, from a test session",
         );
         d.app_mut().settings.simulate(Account::NotConnected);
         d.settle();
         d.expect(NOT_CONNECTED);
-        d.unreached(
-            "connected account and remote campaign list",
-            "account words with a simulated state, because test builds cannot create a session",
-        );
 
         d.row_of(CAMPAIGNS_SECTION);
         d.state("campaign-list", Sizes::All);
@@ -785,7 +952,7 @@ pub mod dialogs {
     const COPY_TITLE: &str = "Copy entry";
     const CLOSE_WINDOW: &str = "Cancel";
     const NOTE: &str = "Ash Exposure";
-    const CLOSE_PROMPT: &str = "A Library entry has unsaved changes.";
+    const CLOSE_PROMPT: &str = "has unsaved changes.";
     const KEEP_EDITING: &str = "Keep editing";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -824,7 +991,13 @@ pub mod dialogs {
         d.type_into_editor("Draft ruling. ");
         d.expect(UNSAVED_NOTE);
         d.request_close();
-        d.expect(CLOSE_PROMPT);
+        d.observe(
+            "H-13",
+            d.has_containing(&format!("\u{201c}{NOTE}\u{201d}"))
+                && d.has_containing(MODULE)
+                && d.has_containing(CLOSE_PROMPT),
+            "The prompt names the entry, and the package it is in",
+        );
         d.state("unsaved-changes-on-close", Sizes::All);
         d.goal("ask to close with unsaved changes");
 
@@ -917,12 +1090,14 @@ pub mod run_lookup {
     const PACKAGE_ENTRY: &str = "Ash Exposure";
     const CAMPAIGN_ENTRY: &str = "Captain Varra";
     const SPELL_IN_STAT_BLOCK: &str = "Ashfall";
+    const SPELL_BODY: &str = "Hot ash falls";
     const OTHER_NOTE: &str = "Ashfall";
     const NOTE: &str = "Ash Exposure";
+    const DRAFT_WORDS: &str = "Unfinished ruling. ";
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
-        d.click_containing(PARTICIPANT);
+        d.click_row(PARTICIPANT);
         d.state("in-the-run", Sizes::All);
         d.goal("be in a run, with a participant selected");
 
@@ -931,16 +1106,40 @@ pub mod run_lookup {
         d.state("reading-spell-beside-run", Sizes::All);
         d.goal_within("T2.1", "read a spell from a run", 3);
         let builtin_found = d.in_view(SPELL);
-        d.observe_both(
+        d.observe_both("T2.1", "Roster and Next turn stay visible", |d| {
+            d.in_view(NEXT_TURN)
+                && d.row_node(PARTICIPANT)
+                    .is_some_and(|row| row.fully_in_view())
+        });
+        // A click on a result leaves no field in focus. Typing must not run commands.
+        let turn = current_participant(d);
+        d.harness_focus_nothing();
+        d.press(Key::N);
+        d.observe(
             "T2.1",
-            "Roster and Next turn stay visible and clickable",
-            |d| {
-                d.in_view(NEXT_TURN)
-                    && !d.is_disabled(NEXT_TURN)
-                    && d.row_node(PARTICIPANT)
-                        .is_some_and(|row| row.fully_in_view())
-            },
+            current_participant(d) == turn,
+            "With Lookup open, the letter N does not advance the turn",
         );
+        // Pressed, with Lookup open, and it acts. Then undone, so the script goes on.
+        let before = current_participant(d);
+        d.click(NEXT_TURN);
+        let after = current_participant(d);
+        d.observe(
+            "T2.1",
+            before != after && d.in_view(SPELL),
+            format!("Next turn acts with Lookup open: {before:?} then {after:?}"),
+        );
+        // Next turn put the focus in Amount. A search word typed now is not a command.
+        d.press(Key::N);
+        let held = current_participant(d);
+        d.observe(
+            "T2.1",
+            held == after,
+            format!("With Lookup open, N in Amount does not advance: {after:?} then {held:?}"),
+        );
+        d.click_containing("Undo: next turn");
+        d.click_row(PARTICIPANT);
+        d.begin_task();
 
         look_up_again(d, &PACKAGE_ENTRY.to_lowercase());
         let package_found = d.in_view(PACKAGE_ENTRY);
@@ -970,15 +1169,21 @@ pub mod run_lookup {
             .iter()
             .any(|node| node.is_link() && node.name.contains(SPELL_IN_STAT_BLOCK));
         d.begin_task();
+        let unread = !d.visible_text(SPELL_BODY);
         d.click(SPELL_IN_STAT_BLOCK);
-        let opened = d.in_view(SPELL_IN_STAT_BLOCK) && d.in_view(NEXT_TURN);
+        let opened = d.visible_text(SPELL_BODY) && d.in_view(NEXT_TURN);
         d.state("spell-from-stat-block", Sizes::Default);
         d.observe(
             "T2.4",
-            linked && opened,
-            "A spell named in a run stat block opens in 1, beside the roster",
+            linked && unread && opened,
+            "A spell named in a run stat block opens its text beside the roster",
         );
-        d.goal("read the creature's details in the run");
+        let cost = d.goal("read the creature's details in the run");
+        d.observe(
+            "T2.4",
+            cost <= 1,
+            format!("It took {cost}, against a target of 1"),
+        );
         d.press(Key::Escape);
 
         // A draft elsewhere does not block Lookup, and Lookup does not touch the draft.
@@ -986,17 +1191,21 @@ pub mod run_lookup {
         open_local_package(d, MODULE);
         d.click_containing(NOTE);
         d.click(EDIT_MARKDOWN);
-        d.type_into_editor("Unfinished ruling. ");
+        d.type_into_editor(DRAFT_WORDS);
         d.expect(UNSAVED_NOTE);
         d.begin_task();
         look_up(d, &OTHER_NOTE.to_lowercase());
         d.state("lookup-with-draft-open", Sizes::All);
+        d.goal("try a lookup with a draft open");
+        d.press(Key::Escape);
+        let kept = d
+            .editor_text()
+            .is_some_and(|text| text.contains(DRAFT_WORDS));
         d.observe(
             "T2.5",
-            d.in_view(OTHER_NOTE) && d.has_containing(UNSAVED_NOTE) && d.in_view(NEXT_TURN),
-            "Lookup works while a Library draft is unsaved. The draft is kept, and the run strip stays",
+            kept && d.has_containing(UNSAVED_NOTE) && d.in_view(NEXT_TURN),
+            "Lookup works while a Library draft is unsaved. The draft's own words are still in the editor, and the run strip stays",
         );
-        d.goal("try a lookup with a draft open");
     }
 }
 
@@ -1022,22 +1231,55 @@ pub mod prep_to_table {
         d.goal_within("T4.1", "cold start to run setup", 3);
         d.review("T4.5", "the setup view, to compare with the live view");
 
+        // A player who did not arrive can be marked, in Setup, and marked back.
+        d.begin_task();
+        let (player, _) = PLAYERS[0];
+        d.click(&format!("Absent: {player}"));
+        let marked = d.has(&format!("Mark present: {player}"));
+        d.click(&format!("Mark present: {player}"));
+        d.observe(
+            "H-5",
+            marked && d.has(&format!("Absent: {player}")),
+            "Setup has a word for a player who did not arrive, and undoing it takes one press",
+        );
+        d.begin_task();
+
+        d.click("Close run");
+        let asked = d.has("Keep running");
+        d.press(Key::Escape);
+        d.observe(
+            "M-25",
+            asked && !d.has("Keep running") && d.has("Close run"),
+            "Escape backs out of the close prompt in Setup",
+        );
+        d.begin_task();
+
         d.click(ROLL_NPCS);
         d.state("npcs-rolled", Sizes::Default);
         d.goal("roll NPC initiative");
 
         let mut row_moved = false;
         let mut focus_is_here = false;
+        // Every field's place, so that a move anywhere in the list is seen.
+        let places = |d: &mut Driver<'_>| -> Vec<f32> {
+            PLAYERS
+                .iter()
+                .map(|(player, _)| d.row_of(&format!("Initiative for {player}")).min.y)
+                .collect()
+        };
         for (index, (player, total)) in PLAYERS.iter().enumerate() {
             let field = format!("Initiative for {player}");
-            let before = d.row_of(&field).min.y;
+            let before = places(d);
             if std::mem::take(&mut focus_is_here) {
                 d.type_text(total);
             } else {
                 d.type_into(&field, total);
             }
-            let after = d.row_of(&field).min.y;
-            row_moved |= (before - after).abs() > 1.0;
+            let after = places(d);
+            row_moved |= before
+                .iter()
+                .zip(&after)
+                .any(|(before, after)| (before - after).abs() > 1.0);
             if index == 0 {
                 d.state("first-player-initiative", Sizes::Default);
                 d.goal_within("T4.3", "enter one player's initiative", 2);
@@ -1074,6 +1316,7 @@ pub mod prep_to_table {
 /// W4: the app restarted mid-session. Return to the interrupted turn.
 pub mod run_resume {
     use super::*;
+    const INTERRUPTED: &str = "Cinder Wolf 2";
 
     pub fn run(d: &mut Driver<'_>) {
         d.state("cold-start", Sizes::Default);
@@ -1081,11 +1324,12 @@ pub mod run_resume {
         d.expect(CURRENT_TURN);
         d.state("resumed", Sizes::All);
         d.goal_within("T4.2", "cold start to the interrupted turn", 2);
+        // The fixture's saved turn, not whatever the screen says now.
         let current = current_participant(d).unwrap_or_default();
         d.observe(
             "T4.2",
-            participant_is_selected(d, &current),
-            format!("The current participant, {current}, is selected on resume"),
+            current == INTERRUPTED && participant_is_selected(d, INTERRUPTED),
+            format!("The saved turn was {INTERRUPTED}. Now {current} is current, and selected"),
         );
     }
 }
@@ -1151,8 +1395,14 @@ pub mod run_large_roster {
                 .any(|node| node.name.contains(CURRENT_TURN) && node.fully_in_view())
         };
         let mut missed_small = 0;
+        let mut seen = std::collections::BTreeSet::new();
+        let mut stuck = 0;
         for turn in 0..ROUND_LENGTH {
+            let before = current_participant(d);
             d.click(NEXT_TURN);
+            let after = current_participant(d);
+            stuck += usize::from(before == after);
+            seen.extend(after);
             if !current_row_in_view(d) {
                 missed_small += 1;
             }
@@ -1174,8 +1424,8 @@ pub mod run_large_roster {
         d.begin_task();
         d.observe(
             "T1.4",
-            missed_small == 0 && missed_default == 0,
-            format!("Over 20 turns the current row was not fully in view {missed_small} times at 960x640, {missed_default} at 1200x800"),
+            missed_small == 0 && missed_default == 0 && stuck == 0 && seen.len() == ROUND_LENGTH,
+            format!("Over 20 turns the current row was not fully in view {missed_small} times at 960x640, {missed_default} at 1200x800. The turn stayed put {stuck} times, and {} of {ROUND_LENGTH} participants had a turn", seen.len()),
         );
 
         // T2.2 at scale: Lookup and back leave the list's scroll and selection alone.
@@ -1216,7 +1466,8 @@ pub mod run_sync_conflict {
         "Oren Thistlewick",
         "Sable Harrowgate",
     ];
-    const ROW_SYNC_WORDS: [&str; 4] = ["Synced", "First read", "Sync ", "Conflict"];
+    const ROW_SYNC_WORDS: [&str; 2] = ["First read", "Synced"];
+    const DISMISS_NOTICE: &str = "Dismiss this message";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const UNDO_CLEARED: &str = "Undo history was cleared";
@@ -1225,15 +1476,19 @@ pub mod run_sync_conflict {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
+        // Sync needs a session. The rail must not say "Not connected" beside synced rows.
+        d.app_mut()
+            .settings
+            .simulate(crate::settings::Account::Connected);
+        d.settle();
         d.state("run-before-conflict", Sizes::Default);
         d.goal("resume the run");
 
         d.app_mut().encounters.simulate_sync_conflict(SYNCED);
         d.settle();
         d.state("conflict-with-nothing-expanded", Sizes::All);
-        let on_row = d
-            .row_node(SYNCED)
-            .is_some_and(|row| row.name.contains("Conflict") && row.fully_in_view());
+        let on_row = d.row_node(SYNCED).is_some_and(|row| row.fully_in_view())
+            && d.row_words(SYNCED).contains("Conflict");
         d.observe(
             "T3.2",
             on_row,
@@ -1249,8 +1504,8 @@ pub mod run_sync_conflict {
         d.request_close();
         d.observe(
             "T3.5",
-            d.has_containing(CLOSE_PROMPT) && d.has_containing(SYNCED),
-            "Closing the app with pending sync warns, and names the character",
+            d.has_containing(&format!("{CLOSE_PROMPT} to {SYNCED}")),
+            "Closing the app with pending sync warns, and the warning names the character",
         );
         d.state("close-with-pending-sync", Sizes::Default);
         d.press(Key::Escape);
@@ -1293,30 +1548,35 @@ pub mod run_sync_conflict {
         let cost = d.interaction_count() - before;
         d.state("party-sync-on", Sizes::Default);
         let all_rows = PARTY.iter().all(|name| {
-            d.row_node(name)
-                .is_some_and(|row| ROW_SYNC_WORDS.iter().any(|word| row.name.contains(word)))
+            ROW_SYNC_WORDS
+                .iter()
+                .any(|word| d.row_words(name).contains(word))
         });
         d.observe(
             "T3.3",
             cost <= 2 && all_rows && d.has(STOP_SYNC),
-            format!("Sync turned on for the whole party in {cost}. Every party row shows a state: {all_rows}"),
+            format!("Simulated connection: sync turned on for the whole party in {cost}. Every party row paints one of {ROW_SYNC_WORDS:?}: {all_rows}"),
         );
-        d.click(STOP_SYNC);
-        d.begin_task();
 
+        // Clear what an earlier update left, so this update has to make the message.
+        if d.has(DISMISS_NOTICE) {
+            d.click(DISMISS_NOTICE);
+        }
+        let clear_before = !d.has_containing(UNDO_CLEARED);
         d.app_mut().encounters.simulate_sheet_update(SYNCED);
         d.settle();
         d.state("undo-cleared-by-sheet-update", Sizes::Default);
         d.observe(
             "T3.4",
-            d.has_containing(UNDO_CLEARED),
-            "A message appears when a sheet update clears undo history",
+            clear_before && d.visible_text(UNDO_CLEARED) && d.visible_text(SYNCED),
+            "Simulated sheet update: a message appears, and names the character, only after the update",
         );
+        d.click(STOP_SYNC);
+        d.begin_task();
         d.unreached(
             "wrong campaign, duplicate character and a disconnect during sync",
             "the error state on the row, because these need a live session to arise",
         );
-        d.not_measured("T7.3", "Party sync needs a live session");
     }
 
     /// The turn the strip names, on a page other than the run.
@@ -1348,7 +1608,7 @@ pub mod nav_state {
         d.begin_task();
         search_library(d, QUERY);
         d.click_containing(CREATURE);
-        d.state("library-set-up", Sizes::Default);
+        d.state("library-set-up", Sizes::DefaultAndHiDpi);
 
         go_party(d);
         d.click_containing(MEMBER);
@@ -1398,12 +1658,15 @@ pub mod nav_state {
             ),
         );
         d.not_measured(
-            "G1",
-            "tooltips on disabled controls need hover probes of every control",
-        );
-        d.not_measured(
             "G5",
             "the app ships one theme, so there is nothing to compare yet",
+        );
+        // Any violation shows in this run's totals. This says that the checks did run.
+        let (minimum, high) = d.checks_run();
+        d.observe(
+            "G4",
+            minimum >= d.states_shown() && high >= 1,
+            format!("This scenario's checks ran {minimum} times at 960x640 and {high} at 2x"),
         );
     }
 }
@@ -1414,7 +1677,8 @@ pub mod party_from_run {
     const MEMBER: &str = "Kestrel Dunmoor";
     const SHEET_TITLE: &str = "Kestrel Dunmoor";
     const SHEET_PAGE: &str = "Record";
-    const SHEET_PAGE_TEXT: &str = "ARMOR CLASS";
+    const SHEET_SUBPAGE: &str = "Spells";
+    const SHEET_ONLY_TEXT: &str = "Ability scores";
     const OTHER_ROW: &str = "Oren Thistlewick";
     const FRESHNESS: &str = "Fetched";
     const SHEET_TAB: &str = "Sheet";
@@ -1444,15 +1708,19 @@ pub mod party_from_run {
                 d.in_view(NEXT_TURN)
                     && d.row_node(MEMBER).is_some_and(|row| row.fully_in_view())
                     && d.row_node(OTHER_ROW).is_some_and(|row| row.fully_in_view())
-                    && d.in_view_containing(SHEET_PAGE_TEXT)
+                    && participant_is_selected(d, MEMBER)
+                    && d.in_view_containing(SHEET_ONLY_TEXT)
             },
         );
         d.observe_both("T7.2", "The sheet in the run says how old it is", |d| {
             d.in_view_containing(FRESHNESS)
         });
 
+        d.click(SHEET_SUBPAGE);
+        d.state("sheet-spells-beside-run", Sizes::Default);
+        d.begin_task();
         d.click(SHEET_PAGE);
-        d.state("sheet-page", Sizes::Default);
+        d.state("record-tab", Sizes::Default);
         d.click(SHEET_TAB);
         d.expect(RUN_HEADING);
         d.state("back-in-the-run", Sizes::Default);
@@ -1471,15 +1739,19 @@ pub mod party_from_run {
         }
         d.state("zero-absent-many-conditions", Sizes::Default);
         d.review("T1.8", "0 HP and absent are distinct without colour");
-        // Each condition's name is on screen in full, on its row, at the minimum window.
+        // Each word on its own row, in full, at the minimum window. The tab that also has
+        // these words is closed first, so it cannot answer for the row.
+        d.click(SHEET_TAB);
+        let row = d.row_words(ABSENT_ROW);
         let unread: Vec<&str> = MANY_CONDITIONS
             .into_iter()
-            .filter(|condition| !d.visible_text(condition))
+            .filter(|condition| !row.contains(condition))
             .collect();
+        let zero = d.row_words(MEMBER);
         d.observe(
             "T1.8",
-            unread.is_empty() && d.visible_text("0 HP") && d.visible_text("Absent"),
-            format!("At 960x640, words that are not in full view: {unread:?}"),
+            unread.is_empty() && row.contains("Absent") && zero.contains("0 HP"),
+            format!("At 960x640, {ABSENT_ROW} paints: {row}. {MEMBER} paints: {zero}. Missing: {unread:?}"),
         );
         d.click_containing(MEMBER);
         d.state("zero-hp-selected", Sizes::Default);
@@ -1502,36 +1774,53 @@ pub mod library_to_encounter {
     const QUERY: &str = "aboleth";
     const ENTRY: &str = "Aboleth";
     const COPY_NAME: &str = "Aboleth copy";
+    const SEEDED_ROW: &str = "1. Brannoch Vale";
+    const LAST_PARTY_ROW: &str = "5. Sable Harrowgate";
 
     pub fn run(d: &mut Driver<'_>) {
         d.click(NEW_ENCOUNTER);
         d.type_text(DRAFT_NAME);
+        d.click(ADD_PARTY);
+        d.expect(SEEDED_ROW);
         d.state("draft-open", Sizes::Default);
+        d.begin_task();
 
         go_library(d);
         search_library(d, QUERY);
         d.click_containing(ENTRY);
         d.state("library-entry", Sizes::Default);
         copy_open_entry_to_campaign(d);
-        d.click(CLOSE_COPY);
         d.state("copied", Sizes::Default);
 
+        // One press, from the finished dialog, with nothing to reload or search for.
+        d.click(&format!("Add to {DRAFT_NAME}"));
         go_encounters(d);
         d.expect(DRAFT_NAME);
-        d.replace_text_in(FIND_CREATURE, COPY_NAME);
-        let found = d.has_label(COPY_NAME);
-        d.state("copy-in-open-draft-results", Sizes::All);
+        let name_kept = d
+            .field_text(&format!("Encounter name: {DRAFT_NAME}"))
+            .as_deref()
+            == Some(DRAFT_NAME);
+        d.state("copy-in-open-draft-results", Sizes::Default);
         d.observe(
             "T8.1",
-            found,
-            "The copy can join the unsaved draft with no manual reload, and the draft is kept",
+            name_kept
+                && d.has_label(SEEDED_ROW)
+                && d.has_label(LAST_PARTY_ROW)
+                && d.has_label(&format!("6. {COPY_NAME}")),
+            "The party added before the copy is still in the draft, and the copy has joined it with no reload",
         );
+        let cost = d.goal("copy an entry and use it in an encounter");
+        d.observe(
+            "T8.1",
+            cost <= 9,
+            format!("It took {cost}, with nothing to reload or search for again"),
+        );
+        d.replace_text_in(FIND_CREATURE, COPY_NAME);
+        d.begin_task();
 
-        d.click_nth(ADD, 0);
-        d.expect(&format!("1. {COPY_NAME}"));
         d.click(SAVE_ENCOUNTER);
         d.state("copy-in-encounter", Sizes::All);
-        d.goal("copy an entry and use it in an encounter");
+        d.goal("save the encounter with the copy");
     }
 }
 
@@ -1614,10 +1903,12 @@ pub mod gallery {
 pub mod run_restart {
     use super::*;
     const OTHER: &str = "Ember Cultist";
+    const PREVIOUS_CAMPAIGN: &str = "previous campaign";
+    const RUN_FOLDER: &str = "Run folder";
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
-        d.click_containing(OTHER);
+        d.click_row(OTHER);
         d.click(NEXT_TURN);
         let current = current_participant(d).unwrap_or_default();
         d.state("before-restart", Sizes::Default);
@@ -1625,6 +1916,7 @@ pub mod run_restart {
         d.restart();
         d.state("after-restart", Sizes::All);
         d.goal("restart");
+        d.begin_task();
         d.observe(
             "Restart",
             d.has_containing(RUN_HEADING)
@@ -1632,10 +1924,28 @@ pub mod run_restart {
                 && participant_is_selected(d, &current),
             format!("The run reopens by itself on the same turn, {current} selected"),
         );
+        // The other pages load too, with the run still open behind them.
+        go_encounters(d);
+        d.observe(
+            "Restart",
+            d.has_containing(SAVED_RUNS) && !d.has_containing(PREVIOUS_CAMPAIGN),
+            "After a restart into a run, Encounters lists the campaign's encounters",
+        );
+        d.state("encounters-after-restart", Sizes::Default);
+        go_campaign(d);
+        d.click(TAB_RUN_SETTINGS);
+        d.observe(
+            "Restart",
+            d.has_containing(RUN_FOLDER),
+            "After a restart into a run, Rules and runs loads",
+        );
+        d.click(BACK_TO_RUN);
+        d.begin_task();
         // The prompt shares the footer's narrow row, and must keep every word.
         d.click("Close run");
         d.state("close-run-prompt", Sizes::Default);
         d.click("Keep running");
+        d.begin_task();
         close_run(d);
         go_library(d);
         d.restart();
@@ -1659,6 +1969,9 @@ pub mod run_edge_states {
     const ADD_EFFECT: &str = "Add";
     const ABSENT: &str = "Absent";
     const CLOSE_ERROR: &str = "Dismiss this message";
+    const MARK_PRESENT: &str = "Mark present";
+    const KEEP_RUN: &str = "Keep this run";
+    const SAVE_AS_NEW: &str = "Save as a new run";
     const ALL: [&str; 8] = [
         "Brannoch Vale",
         "Cinder Wolf 1",
@@ -1672,7 +1985,7 @@ pub mod run_edge_states {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
-        d.click_containing(TARGET);
+        d.click_row(TARGET);
         d.click(CONDITIONS);
         d.type_into(OTHER_EFFECT, LONG_EFFECT);
         d.click(ADD_EFFECT);
@@ -1685,17 +1998,17 @@ pub mod run_edge_states {
         d.goal("record a long effect");
 
         for name in ALL {
-            d.click_containing(name);
+            d.click_row(name);
             d.click(ABSENT);
         }
         d.click(NEXT_TURN);
         d.expect("No participants are present");
-        d.state("all-absent", Sizes::All);
+        d.state("all-absent", Sizes::Default);
         d.goal("see everyone absent");
         d.click(CLOSE_ERROR);
         for name in ALL {
-            d.click_containing(name);
-            d.click(ABSENT);
+            d.click_row(name);
+            d.click(MARK_PRESENT);
         }
         // A second instance writes the file. Saving must stop and say so.
         let path = d
@@ -1706,13 +2019,60 @@ pub mod run_edge_states {
             .expect("a saved run");
         let text = std::fs::read_to_string(&path).expect("read the run") + "\n";
         std::fs::write(&path, text).expect("change the run on disk");
-        d.click_containing(TARGET);
+        d.click_row(TARGET);
         d.type_text("3");
         d.press(Key::Enter);
         d.expect("changed on disk");
         d.expect("Not saved");
-        d.state("changed-on-disk", Sizes::All);
+        d.state("changed-on-disk", Sizes::Default);
         d.goal("see the run changed on disk");
+        // The state cannot be dismissed, and closing tells the truth about it.
+        d.observe(
+            "C-1",
+            !d.has(CLOSE_ERROR) && d.has(KEEP_RUN) && d.has(SAVE_AS_NEW),
+            "The message stays, with both ways out",
+        );
+        d.click(CLOSE_RUN);
+        d.observe(
+            "C-1",
+            !d.has_containing("stays saved")
+                && d.has("Close anyway")
+                && d.visible_text("loses unsaved changes"),
+            "Close says what it will lose, in place of \"The run stays saved\"",
+        );
+        d.state("close-while-not-saved", Sizes::Default);
+        d.click("Keep running");
+        // Keep this run: the file becomes this run, and later turns save by themselves.
+        d.click(KEEP_RUN);
+        let saved = std::fs::read_to_string(&path).expect("read the run");
+        d.observe(
+            "C-1",
+            d.visible_text("Saved")
+                && !d.has_containing("changed on disk")
+                && saved.contains(LONG_EFFECT),
+            "Keep this run saves it over the changed file",
+        );
+        // It again, and this time save beside it.
+        std::fs::write(&path, saved.clone() + "\n").expect("change the run on disk");
+        d.click_row(TARGET);
+        d.type_text("1");
+        d.press(Key::Enter);
+        d.expect("changed on disk");
+        d.click(SAVE_AS_NEW);
+        let new_path = d
+            .app_mut()
+            .encounters
+            .run()
+            .and_then(|run| run.path().map(std::path::Path::to_path_buf))
+            .expect("a saved run");
+        d.observe(
+            "C-1",
+            new_path != path
+                && new_path.exists()
+                && std::fs::read_to_string(&path).is_ok_and(|text| text == saved.clone() + "\n")
+                && d.visible_text("Saved"),
+            "Save as a new run keeps the changed file as it was, and saves this one beside it",
+        );
         d.unreached(
             "HP unknown on a live row",
             "the setup view, because a live run requires known HP (Run::open and Begin refuse otherwise)",
@@ -1732,10 +2092,17 @@ pub mod run_sync_states {
         ("Oren Thistlewick", SyncState::ReadOnly, "Sync read-only"),
         ("Sable Harrowgate", SyncState::Error, "Sync error"),
     ];
+    /// The first read shows after `Sync party`, and "off" is a row with no word at all.
+    const FIRST_READ: (&str, SyncState, &str) =
+        ("Sable Harrowgate", SyncState::FirstRead, "First read");
     const UNSYNCED_ROW: &str = "Cinder Wolf 1";
+    const USE_REMOTE: &str = "Use D&D Beyond values";
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
+        d.app_mut()
+            .settings
+            .simulate(crate::settings::Account::Connected);
         for (name, state, _) in STATES {
             d.app_mut().encounters.simulate_sync_state(name, state);
         }
@@ -1749,10 +2116,11 @@ pub mod run_sync_states {
                 in_view && text.contains(word),
                 format!("{name}'s row, in view, says {word}: {text}"),
             );
+            let painted = d.row_words(name);
             d.observe(
                 "T3.1",
-                d.visible_text(word),
-                format!("At 960x640, the word {word} is on screen in full"),
+                painted.contains(word),
+                format!("At 960x640, simulated state: {name}'s row paints {word}: {painted}"),
             );
         }
         let plain = d
@@ -1763,8 +2131,54 @@ pub mod run_sync_states {
             !plain.contains("Sync") && !plain.contains("Conflict"),
             format!("A row with no link says nothing about sync: {plain}"),
         );
+        let (name, state, word) = FIRST_READ;
+        d.app_mut().encounters.simulate_sync_state(name, state);
+        d.settle();
+        d.observe(
+            "T3.1",
+            d.row_words(name).contains(word),
+            format!("Simulated: {name}'s row paints {word}"),
+        );
+        // Back to the state this row had, so that the capture shows the other five.
+        let (name, state, _) = STATES[4];
+        d.app_mut().encounters.simulate_sync_state(name, state);
+        d.settle();
         d.state("every-sync-state", Sizes::All);
         d.goal("show every sync state");
+
+        // Ending the encounter does not end the sync. Close waits, and the conflict can be
+        // resolved in the ended view.
+        d.app_mut()
+            .encounters
+            .simulate_sync_conflict("Iselle Marrowind");
+        d.settle();
+        d.click("End encounter…");
+        d.click("End encounter");
+        d.observe(
+            "C-3",
+            d.is_disabled(CLOSE_RUN)
+                && d.row_words("Iselle Marrowind").contains("Conflict")
+                && d.has(USE_REMOTE),
+            "With a conflict, Close is blocked in the ended view, whose row and controls show it",
+        );
+        d.state("ended-with-conflict", Sizes::Default);
+        d.click(USE_REMOTE);
+        for (name, ..) in STATES {
+            let stop = format!("Stop sync for {name}");
+            if d.has(&stop) {
+                d.click(&stop);
+            }
+        }
+        d.observe(
+            "C-3",
+            !d.is_disabled(CLOSE_RUN),
+            "With the sync resolved or stopped, the ended run can close",
+        );
+        d.click_containing("Undo: end encounter");
+        for (name, state, _) in STATES {
+            d.app_mut().encounters.simulate_sync_state(name, state);
+        }
+        d.settle();
         d.app_mut()
             .encounters
             .simulate_sync_conflict("Brannoch Vale");
@@ -1781,9 +2195,18 @@ pub mod run_roster_conflict {
     use crate::combat_sync::SyncState;
     const SYNCED: &str = "Brannoch Vale";
     const USE_REMOTE: &str = "Use D&D Beyond values";
+    const SYNC_PARTY: &str = "Sync party";
+    const STOP_SYNC: &str = "Stop party sync";
+    const AMOUNT: &str = "Amount";
+    const LOADED_ROW: &str = "Kestrel Dunmoor";
+    const LOADED_CONDITIONS: [&str; 5] =
+        ["Blinded", "Charmed", "Grappled", "Paralyzed", "Restrained"];
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN_12);
+        d.app_mut()
+            .settings
+            .simulate(crate::settings::Account::Connected);
         d.app_mut()
             .encounters
             .simulate_sync_state(SYNCED, SyncState::Conflict);
@@ -1804,6 +2227,40 @@ pub mod run_roster_conflict {
             format!("During a conflict at 960x640: {rows} of 12 rows in full view, with the damage entry"),
         );
         d.goal("show a conflict with 12 rows");
+
+        // Section 6's hard case: 5 conditions on a row, the party's sync words, and an
+        // error line, with all 12 rows and the amount field still in view.
+        d.app_mut().encounters.simulate_connection();
+        d.settle();
+        d.click(SYNC_PARTY);
+        d.click_row(LOADED_ROW);
+        d.click(CONDITIONS);
+        for condition in LOADED_CONDITIONS {
+            d.click(condition);
+        }
+        let errored = LOADED_CONDITIONS.len() + 1;
+        d.app_mut()
+            .encounters
+            .simulate_run_error("The reference for Ember Cultist could not be read.");
+        d.settle();
+        d.state("loaded-roster-of-12", Sizes::Default);
+        let nodes = d.nodes();
+        let cut: Vec<&&str> = run_large_roster::ROSTER_12
+            .iter()
+            .filter(|name| {
+                !nodes
+                    .iter()
+                    .any(|n| n.name.starts_with(&format!("{name},")) && n.fully_in_view())
+            })
+            .collect();
+        d.observe(
+            "T1.3",
+            cut.is_empty() && d.in_view(AMOUNT) && d.in_view(APPLY_DAMAGE),
+            format!("At 960x640 with {errored} extra lines, rows not in full view: {cut:?}"),
+        );
+        d.app_mut().encounters.simulate_run_error("");
+        d.settle();
+        d.click(STOP_SYNC);
         d.click_containing(SYNCED);
         d.click(USE_REMOTE);
         close_run(d);
@@ -1841,6 +2298,361 @@ pub mod library_scope {
             "A9",
             before == after && after.as_deref() == Some(ACTIVE),
             format!("The active campaign is {after:?} after browsing, as before: {before:?}"),
+        );
+    }
+}
+
+/// The signed-in path. A test session makes the rail, the page, Party and the import list
+/// share one state. No request leaves the process: see `crate::hermetic`.
+pub mod signed_in {
+    use super::*;
+    use crate::settings::Account;
+    const CONNECTED_PAGE: &str = "Connected to D&D Beyond";
+    const RAIL_CONNECTED: &str = "Connected";
+    const REMOTE: &str = "Add from D&D Beyond";
+    const REMOTE_NAME: &str = "Salt Road";
+    const FRESHNESS: &str = "Connected · Cached sheet · Fetched";
+    const PAGES: [&str; 4] = ["Actions", "Spells", "Equipment", "Features"];
+    const OVERVIEW: &str = "Overview";
+    const MEMBER: &str = "Brannoch Vale";
+    const SYNC_SECTION: &str = "Combat sync";
+    const SYNC_TOGGLE: &str = "Sync combat stats with D&D Beyond";
+    const STOPPED: &str = "Combat sync stopped";
+    const FIRST_READ: &str = "First read";
+    const SYNC_PARTY: &str = "Sync party";
+    const STOP_SYNC: &str = "Stop party sync";
+    const LINK_TAB: &str = "Link and folder";
+    const BLOCKED_REASON: &str = "Close the run to change campaigns.";
+    const EDIT_DETAILS: &str = "Edit details";
+    const RETRYING: &str = "renewing the session failed";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.app_mut().settings.simulate(Account::Connected);
+        d.settle();
+        go_settings(d);
+        d.observe(
+            "T10.3",
+            d.visible_text(CONNECTED_PAGE) && d.visible_text(RAIL_CONNECTED),
+            "With a session, the page and the rail both say Connected",
+        );
+        d.state("settings-connected", Sizes::All);
+        d.click(REMOTE);
+        d.expect(REMOTE_NAME);
+        d.state("remote-campaign-list", Sizes::Default);
+        d.goal("see the remote campaign list");
+        d.click_containing(REMOTE_NAME);
+        d.state("import-remote-campaign", Sizes::Default);
+        d.observe(
+            "T10.3",
+            d.has_containing(REMOTE_NAME),
+            "Choosing a remote campaign opens its import, with the name filled in",
+        );
+        d.click("Cancel");
+        d.begin_task();
+
+        go_party(d);
+        d.click_containing(MEMBER);
+        d.state("party-connected", Sizes::All);
+        d.observe(
+            "T7.2",
+            d.visible_text(FRESHNESS),
+            "Signed in: the sheet says it is connected, and how old it is",
+        );
+        for page in PAGES {
+            d.click(page);
+            d.observe(
+                "T7.2",
+                d.visible_text(FRESHNESS),
+                format!("Signed in: freshness on {page}"),
+            );
+        }
+        d.click(OVERVIEW);
+        d.begin_task();
+
+        // T7.3: sync stops on leaving, and the DM hears of it where they look next.
+        d.click(SYNC_SECTION);
+        d.click(SYNC_TOGGLE);
+        d.state("party-sync-on", Sizes::Default);
+        go_library(d);
+        let rail = d.visible_text("Party sync stopped");
+        go_party(d);
+        let page = d.visible_text(STOPPED);
+        d.state("party-sync-stopped", Sizes::Default);
+        d.observe(
+            "T7.3",
+            rail && page,
+            format!("Leaving Party with sync on: the rail says so: {rail}. The page says so on return: {page}"),
+        );
+        d.click("Dismiss this message");
+        d.observe(
+            "T7.3",
+            !d.has_containing(STOPPED),
+            "The DM can dismiss the message",
+        );
+        d.begin_task();
+
+        // A short network drop keeps the session, and says so.
+        d.app_mut().settings.simulate(Account::RefreshFailing);
+        d.settle();
+        go_settings(d);
+        d.observe(
+            "T10.3",
+            d.visible_text(RETRYING) && d.visible_text(RAIL_CONNECTED),
+            "A failed refresh has its own words, and the rail stays Connected",
+        );
+        d.state("refresh-failing", Sizes::Default);
+        d.app_mut().settings.simulate(Account::Connected);
+        d.settle();
+        d.begin_task();
+
+        // At the table: every party row states its sync, and Stop is offered.
+        go_encounters(d);
+        resume_run(d, RUN);
+        d.click(SYNC_PARTY);
+        d.state("run-connected", Sizes::All);
+        d.observe(
+            "T3.3",
+            d.row_words(MEMBER).contains(FIRST_READ) && d.has(STOP_SYNC),
+            "Signed in: a real click on Sync party puts its first read on the row",
+        );
+
+        // The link cannot change under a run.
+        d.click(STOP_SYNC);
+        go_campaign(d);
+        d.click(LINK_TAB);
+        d.observe(
+            "H-8",
+            d.visible_text(BLOCKED_REASON) && d.is_disabled(EDIT_DETAILS),
+            "With a run open, the link tab states why it is locked, and its controls are",
+        );
+        d.state("link-tab-during-run", Sizes::Default);
+        d.begin_task();
+    }
+}
+
+/// G2: section 3's table, one row at a time. Each row sets state, leaves, and comes back.
+pub mod nav_table {
+    use super::*;
+    const EVERYTHING: &str = "Everything";
+    const SECTION: &str = "Creatures   ";
+    const ENTRY_ROW: &str = "Aboleth · ";
+    const ENTRY: &str = "Aboleth";
+    const LOOKUP_QUERY: &str = "fireball";
+    const LOOKUP_ENTRY: &str = "Fireball";
+    const SELECTED: &str = "Cinder Wolf 7";
+    const UNDO: &str = "Undo: next turn";
+    const MEMBER: &str = "Iselle Marrowind";
+    const SHEET_PAGE: &str = "Spells";
+    const FILTER: &str = "Filter this page";
+    const FILTER_TEXT: &str = "fire";
+    const NOTE_ROW: &str = "Ash Exposure · ";
+    const DRAFT_WORDS: &str = "Kept across pages. ";
+    const DISCARD: &str = "Discard changes";
+    const DRAFT_NAME: &str = "Deep Ford";
+    const FIRST_SLOT: &str = "1. Brannoch Vale";
+    const LINKED_QUERY: &str = "bard subclass";
+    const LINKED_ROW: &str = "Level 3: Bard Subclass";
+    const LINK: &str = "College of Lore";
+    const LINKED_TITLE: &str = "Bard Subclass";
+    const BACK: &str = "Back";
+    const SYNC_PARTY: &str = "Sync party";
+    const STOP_SYNC: &str = "Stop party sync";
+    const FIRST_READ: &str = "First read";
+    const ACTIVE: &str = "Active campaign: The Emberfall Marches";
+
+    pub fn run(d: &mut Driver<'_>) {
+        // T4.4 with more than one group: each saved run under its own encounter.
+        let nodes = d.nodes();
+        let grouped = [RUN, RUN_12, RUN_20].iter().all(|run| {
+            let heading = nodes
+                .iter()
+                .position(|node| node.name == run.to_uppercase());
+            let row = nodes
+                .iter()
+                .position(|node| node.name.starts_with(&format!("{run} · ")));
+            matches!((heading, row), (Some(heading), Some(row)) if heading < row)
+        });
+        d.observe(
+            "T4.4",
+            grouped,
+            "Three saved runs, each under its own encounter's heading",
+        );
+
+        // Open run first, because its strip moves every other page down.
+        resume_run(d, RUN_20);
+
+        // Library: scope, section, entry, scroll.
+        go_library(d);
+        d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+        d.click(EVERYTHING);
+        d.click_containing(SECTION);
+        d.click_starting(ENTRY_ROW);
+        d.scroll_at(pos2(720.0, 400.0), 2);
+        let entry_scroll = d.scroll_position_of_reader();
+        d.begin_task();
+
+        // Open run: selection, amount, scroll, undo, and sync.
+        d.click(BACK_TO_RUN);
+        d.app_mut().encounters.simulate_connection();
+        d.settle();
+        d.click(SYNC_PARTY);
+        for _ in 0..8 {
+            d.click(NEXT_TURN);
+        }
+        d.click_row(SELECTED);
+        d.type_text("7");
+        d.begin_task();
+
+        // Party: member, page, filter.
+        go_party(d);
+        d.click_containing(MEMBER);
+        d.click(SHEET_PAGE);
+        d.type_into(FILTER, FILTER_TEXT);
+        d.begin_task();
+
+        // Lookup: last query and entry, opened over the run.
+        d.click(BACK_TO_RUN);
+        look_up(d, LOOKUP_QUERY);
+        d.expect(LOOKUP_ENTRY);
+        // Measured with Lookup open, because it changes the roster's width.
+        let run_y = d.row_node(SELECTED).map(|row| row.rect.min.y);
+
+        // Away, then back to each.
+        go_settings(d);
+        d.click(BACK_TO_RUN);
+        let amount = d.field_text("Amount");
+        let selected = participant_is_selected(d, SELECTED);
+        let row_y = d.row_node(SELECTED).map(|row| row.rect.min.y);
+        let undo = d.has_containing(UNDO);
+        d.observe(
+            "G2",
+            amount.as_deref() == Some("7") && selected && row_y == run_y && undo,
+            format!("Run: amount {amount:?}, selected {selected}, row {row_y:?} was {run_y:?}, undo {undo}"),
+        );
+        d.observe(
+            "G2",
+            d.row_node("Brannoch Vale")
+                .is_some_and(|row| row.name.contains(FIRST_READ)),
+            "Run: sync stays on across pages",
+        );
+        d.observe(
+            "G2",
+            d.field_text(SEARCH_LOOKUP).as_deref() == Some(LOOKUP_QUERY)
+                && d.has_label(LOOKUP_ENTRY),
+            "Lookup: the query and the entry are as they were",
+        );
+        d.press(Key::Escape);
+
+        go_library(d);
+        let scope = d.visible_text(EVERYTHING);
+        let entry = d.has_label(ENTRY);
+        let scroll = d.scroll_position_of_reader();
+        d.observe(
+            "G2",
+            scope && entry && scroll == entry_scroll && entry_scroll.is_some_and(|y| y < 300.0),
+            format!(
+                "Library: scope {scope}, entry {entry}, scroll {scroll:?} was {entry_scroll:?}"
+            ),
+        );
+        go_party(d);
+        d.observe(
+            "G2",
+            d.has_label(MEMBER) && d.field_text(FILTER).as_deref() == Some(FILTER_TEXT),
+            "Party: member, page and filter are as they were",
+        );
+        d.observe(
+            "G2",
+            d.has(ACTIVE),
+            "Active campaign: the selector still names it",
+        );
+
+        // Reading history.
+        go_library(d);
+        search_library(d, LINKED_QUERY);
+        d.click_containing(LINKED_ROW);
+        d.click(LINK);
+        go_settings(d);
+        go_library(d);
+        d.click(BACK);
+        d.observe(
+            "G2",
+            d.in_view(LINKED_TITLE),
+            "Reading history: Back still returns to the entry before the link",
+        );
+        d.click(CLEAR_SEARCH);
+        d.begin_task();
+
+        // Close the run, to reach the two drafts.
+        d.click(BACK_TO_RUN);
+        d.click(STOP_SYNC);
+        close_run(d);
+
+        // Library draft.
+        go_library(d);
+        open_local_package(d, MODULE);
+        d.click_starting(NOTE_ROW);
+        d.click(EDIT_MARKDOWN);
+        d.type_into_editor(DRAFT_WORDS);
+        go_settings(d);
+        go_library(d);
+        d.observe(
+            "G2",
+            d.editor_text()
+                .is_some_and(|text| text.contains(DRAFT_WORDS)),
+            "Library draft: its words are as they were",
+        );
+        d.click(DISCARD);
+
+        // Encounter draft.
+        go_encounters(d);
+        d.click(NEW_ENCOUNTER);
+        d.type_text(DRAFT_NAME);
+        d.click(ADD_PARTY);
+        go_settings(d);
+        go_encounters(d);
+        d.observe(
+            "G2",
+            d.field_text(&format!("Encounter name: {DRAFT_NAME}"))
+                .as_deref()
+                == Some(DRAFT_NAME)
+                && d.has_label(FIRST_SLOT),
+            "Encounter draft: its name and rows are as they were",
+        );
+        d.click(DISCARD);
+        d.goal("walk section 3's table");
+
+        // G3: every control in the rail goes somewhere of its own.
+        go_library(d);
+        let mut titles = Vec::new();
+        for name in d.rail_page_buttons() {
+            d.click(&name);
+            let title = d.page_title();
+            titles.push((name, title));
+        }
+        let mut distinct: Vec<&Option<String>> = titles.iter().map(|(_, title)| title).collect();
+        distinct.sort();
+        distinct.dedup();
+        d.observe(
+            "G3",
+            titles.len() >= 5
+                && distinct.len() == titles.len()
+                && titles.iter().all(|(_, t)| t.is_some()),
+            format!("Each control in the rail opens a page with its own title: {titles:?}"),
+        );
+
+        // G1: a disabled control says why, on the pages that have the most of them.
+        go_encounters(d);
+        d.click(NEW_ENCOUNTER);
+        let mut silent = d.disabled_without_reason();
+        d.click(DISCARD);
+        go_settings(d);
+        silent.extend(d.disabled_without_reason());
+        go_campaign(d);
+        silent.extend(d.disabled_without_reason());
+        d.observe(
+            "G1",
+            silent.is_empty(),
+            format!("Disabled controls with no reason on hover: {silent:?}"),
         );
     }
 }

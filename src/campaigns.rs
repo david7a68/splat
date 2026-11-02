@@ -17,7 +17,12 @@ pub struct Campaigns {
     path: String,
     remote: Option<(String, String)>,
     confirm_remove: Option<Uuid>,
+    /// The campaign just added, and where to go next.
+    added: Option<String>,
 }
+
+/// The rail's campaign selector, with a name on two lines.
+const SELECTOR_HEIGHT: f32 = 44.0;
 
 impl Default for Campaigns {
     fn default() -> Self {
@@ -31,6 +36,7 @@ impl Default for Campaigns {
             path: String::new(),
             remote: None,
             confirm_remove: None,
+            added: None,
         };
         match Store::user() {
             Ok(store) => {
@@ -103,8 +109,15 @@ impl Campaigns {
             data.campaigns.push(campaign.clone());
         }
         data.active_campaign_id = Some(campaign.id);
+        let adding = self.editing.is_none();
         self.persist(data)?;
         self.clear_form();
+        self.added = adding.then(|| {
+            format!(
+                "Added {}. Next: build an encounter in Encounters.",
+                campaign.name
+            )
+        });
         Ok(())
     }
 
@@ -170,6 +183,7 @@ impl Campaigns {
             path: String::new(),
             remote: None,
             confirm_remove: None,
+            added: None,
         }
     }
 
@@ -324,11 +338,14 @@ impl Campaigns {
         };
         ui.add_enabled_ui(self.writable && blocked.is_none(), |ui| {
             // A name wraps to two lines here, rather than ending in dots.
+            // Small type, so a name fits in two lines. A fixed height, so the items below it stay
+            // in one place, whichever campaign is open.
+            let top = ui.cursor().top();
             let combo = egui::ComboBox::from_id_salt("active_campaign")
                 .icon(design::combo_icon)
                 .width(ui.available_width())
                 .wrap()
-                .selected_text(label)
+                .selected_text(Type::Small.rich(ui, label).color(colors().text))
                 .show_ui(ui, |ui| {
                     ui.set_min_width(220.0);
                     ui.selectable_value(&mut selected, None, "No campaign");
@@ -342,6 +359,8 @@ impl Campaigns {
                 Some(reason) => response.on_disabled_hover_text(reason),
                 None => response.on_hover_text(label),
             };
+            let used = ui.cursor().top() - top;
+            ui.add_space((SELECTOR_HEIGHT - used).max(0.0));
         });
         if selected != current {
             self.select(selected);
@@ -489,8 +508,11 @@ impl Campaigns {
     ) {
         let c = colors();
         self.remove_dialog(ui.ctx());
+        if let Some(added) = &self.added {
+            design::message(ui, Tone::Success, added);
+        }
         ui.horizontal(|ui| {
-            ui.label(Type::Section.rich(ui, "Campaigns").color(c.text));
+            ui.label(Type::Heading.rich(ui, "Campaigns").color(c.text));
             ui.label(
                 Type::Small
                     .rich(ui, format!("{} configured", self.data.campaigns.len()))
@@ -532,21 +554,26 @@ impl Campaigns {
                         ui.set_min_height(Density::Glance.row() + design::XS);
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
-                            ui.set_max_width((ui.available_width() - 196.0).max(120.0));
+                            // The active row has one more action to keep room for.
+                            let actions = if active { 240.0 } else { 180.0 };
+                            ui.set_max_width((ui.available_width() - actions).max(120.0));
                             ui.horizontal(|ui| {
                                 ui.add(
                                     egui::Label::new(
                                         Type::Name.rich(ui, &campaign.name).color(c.text),
                                     )
-                                    .truncate(),
+                                    .wrap(),
                                 );
                                 if active {
                                     ui.label(Type::Small.rich(ui, "Active").color(c.accent));
                                 }
                             });
-                            ui.horizontal(|ui| {
+                            // The folder is worth a word only when it is missing. The link has its own line.
+                            if !campaign.path.is_dir() {
                                 Self::folder_status(ui, &campaign)
                                     .on_hover_text(campaign.path.display().to_string());
+                            }
+                            {
                                 let link = campaign
                                     .dndbeyond_campaign_name
                                     .as_deref()
@@ -558,14 +585,16 @@ impl Campaigns {
                                     .unwrap_or_else(|| "Not linked".to_owned());
                                 ui.add(
                                     egui::Label::new(Type::Small.rich(ui, link).color(c.muted))
-                                        .truncate(),
+                                        .wrap(),
                                 );
-                            });
+                            }
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             // Buttons keep every letter. The name and status give way first.
                             ui.spacing_mut().item_spacing.x = design::XS;
-                            if Action::destructive("Remove…")
+                            // Rarely wanted, and it asks first. It should not be the loudest
+                            // thing on the row.
+                            if Action::quiet("Remove…")
                                 .density(Density::Read)
                                 .name(&format!("Remove {} from Splat", campaign.name))
                                 .show(ui)
@@ -573,6 +602,7 @@ impl Campaigns {
                             {
                                 self.confirm_remove = Some(campaign.id);
                             }
+                            ui.add_space(design::M);
                             if active {
                                 if Action::quiet("Edit details")
                                     .density(Density::Read)
@@ -635,7 +665,7 @@ impl Campaigns {
                 ui.label(format!("{name} · D&D Beyond ID {id}"));
             }
             design::text_field(ui, "Campaign name", &mut self.name, None, None);
-            ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Max), |ui| {
                 ui.vertical(|ui| {
                     ui.set_max_width((ui.available_width() - 112.0).max(120.0));
                     design::text_field(ui, "Folder", &mut self.path, None, None);
@@ -650,12 +680,23 @@ impl Campaigns {
                 }
             });
             ui.horizontal(|ui| {
-                if Action::primary("Open campaign").show(ui).clicked()
+                let submit = if editing {
+                    "Save details"
+                } else {
+                    "Open campaign"
+                };
+                let missing = self.name.trim().is_empty() || self.path.trim().is_empty();
+                if Action::primary(submit)
+                    .blocked_if(missing, "Enter a campaign name and a folder first.")
+                    .show(ui)
+                    .clicked()
                     && let Err(error) = self.save_form()
                 {
                     self.error = Some(error);
                 }
-                if Action::quiet("Cancel").show(ui).clicked() {
+                if (editing || !missing || self.remote.is_some())
+                    && Action::quiet("Cancel").show(ui).clicked()
+                {
                     self.clear_form();
                 }
             });
@@ -726,6 +767,7 @@ mod tests {
             path: String::new(),
             remote: None,
             confirm_remove: None,
+            added: None,
         };
         campaigns.select(Some(first));
         campaigns.link(Some("12".into())).unwrap();

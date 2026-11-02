@@ -12,7 +12,13 @@ fn swatch(ui: &mut egui::Ui, name: &str, color: Color32) {
     let width = SWATCH.x + XS + galley.size().x + S;
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, SWATCH.y), egui::Sense::hover());
     let block = egui::Rect::from_min_size(rect.min, SWATCH);
-    ui.painter().rect_filled(block, 2.0, color);
+    ui.painter().rect(
+        block,
+        2.0,
+        color,
+        egui::Stroke::new(HAIRLINE_WIDTH, colors().rule),
+        egui::StrokeKind::Inside,
+    );
     let text = egui::pos2(block.right() + XS, rect.center().y - galley.size().y / 2.0);
     ui.painter().galley(text, galley, muted);
 }

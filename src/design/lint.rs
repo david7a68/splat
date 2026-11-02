@@ -52,6 +52,10 @@ fn violations(line: &str) -> Vec<&'static str> {
             found.push("raw-colour");
         }
     }
+    // A moving spinner draws from the clock, so captures of one state would differ.
+    if code.contains("ui.spinner()") {
+        found.push("raw-spinner");
+    }
     for pattern in [
         ".size(",
         "FontId::proportional(",

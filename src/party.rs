@@ -43,9 +43,6 @@ impl Party {
             }
             self.combat.stop();
         }
-        if visible {
-            self.sync_stopped = false;
-        }
         self.reader.sync(ctx, epoch, campaign, connected, visible);
     }
     /// The Party page's copy of a character, for the run's side panel.
@@ -74,11 +71,8 @@ impl Party {
                     .blocked(can_refresh)
                     .show(ui)
                     .clicked();
-            } else {
-                open_link = Action::primary("Link this campaign").show(ui).clicked();
             }
         });
-        self.wants_link_page = open_link;
         if refresh && let Some(session) = session.clone() {
             self.reader.refresh(session, ui.ctx(), true);
         }
@@ -88,8 +82,13 @@ impl Party {
                 icons::PARTY,
                 "Link this campaign to D&D Beyond to see its party",
                 "Choose its D&D Beyond campaign under Campaign, Link and folder. The rest of Splat works without a link.",
-                |_| {},
+                |ui| {
+                    if Action::primary("Link this campaign").show(ui).clicked() {
+                        open_link = true;
+                    }
+                },
             );
+            self.wants_link_page = open_link;
             return;
         }
         let cached = self
@@ -101,7 +100,7 @@ impl Party {
             self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
         }) && self.reader.error.is_none();
         let (status_icon, status_word, status_color) = if session.is_none() {
-            (icons::OFFLINE, "Offline", c.connection.offline)
+            (icons::OFFLINE, "Not connected", c.connection.offline)
         } else if self.reader.loading() {
             (icons::BUSY, "Refreshing", c.connection.busy)
         } else if !checked {
@@ -117,7 +116,7 @@ impl Party {
         };
         ui.horizontal_wrapped(|ui| {
             if self.reader.loading() {
-                ui.spinner();
+                crate::design::spinner(ui);
             }
             let age = cached
                 .map(|record| format!(" · Fetched {}", record_age(record)))
@@ -244,6 +243,21 @@ impl Party {
             }
             self.combat.updated = false;
         }
+        if self.sync_stopped {
+            if self.combat.enabled {
+                self.sync_stopped = false;
+            } else {
+                let mut dismiss = false;
+                ui.horizontal(|ui| {
+                    dismiss =
+                        design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+                    design::message(ui, Tone::Warning, SYNC_STOPPED);
+                });
+                if dismiss {
+                    self.sync_stopped = false;
+                }
+            }
+        }
         if session.is_some() {
             design::section(ui, "Combat sync", |ui| self.combat.show(ui));
         }
@@ -344,21 +358,17 @@ pub struct LiveValues {
     pub conditions: Vec<String>,
 }
 
+/// One entry on a sheet page: its name and its facts.
+const ENTRY_ROW: f32 = 40.0;
+/// Sync on this page stops when the DM leaves it or the connection ends. The word stays
+/// until they have seen it.
+const SYNC_STOPPED: &str = "Combat sync stopped when you left this page or lost the connection. Changes made since then did not reach D&D Beyond. Turn it on again below.";
+
 /// How old a sheet is, as a status with words.
 pub struct Freshness {
-    word: String,
-    icon: &'static str,
-    color: egui::Color32,
-}
-
-impl Freshness {
-    pub fn as_status(&self) -> Status<'_> {
-        Status {
-            icon: self.icon,
-            word: &self.word,
-            color: self.color,
-        }
-    }
+    pub word: String,
+    pub icon: &'static str,
+    pub color: egui::Color32,
 }
 
 pub fn freshness(record: &EntitySnapshot, connected: bool) -> Freshness {
@@ -372,7 +382,7 @@ pub fn freshness(record: &EntitySnapshot, connected: bool) -> Freshness {
         }
     } else {
         Freshness {
-            word: format!("Offline · Fetched {age}"),
+            word: format!("Not connected · Fetched {age}"),
             icon: icons::OFFLINE,
             color: c.offline,
         }
@@ -505,6 +515,23 @@ fn member_row(
                 ..Default::default()
             },
         );
+        // The same word as the run's, so that colour is never all that says it.
+        let state_word = match design::hp_state(hp, max_hp) {
+            design::HpState::Zero => Some(("0 HP", c.hp.zero)),
+            design::HpState::Bloodied => Some(("Bloodied", c.hp.bloodied)),
+            _ => None,
+        };
+        if let Some((word, color)) = state_word {
+            job.append(
+                &format!(" · {word}"),
+                0.0,
+                egui::TextFormat {
+                    font_id: small.clone(),
+                    color,
+                    ..Default::default()
+                },
+            );
+        }
         for condition in &conditions {
             job.append(
                 &format!(" · {condition}"),
@@ -1033,8 +1060,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                 }
             ),
             2 => format!(
-                "{} · {}{}",
-                source,
+                "{}{}",
                 def["level"]
                     .as_u64()
                     .map(|n| if n == 0 {
@@ -1160,7 +1186,13 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                 for value in array(&record.character.casting[key]) {
                     ui.label(format!(
                         "{label}: {} · {}",
-                        value["value"],
+                        if key == "spellAttacks" {
+                            value["value"]
+                                .as_i64()
+                                .map_or_else(|| value["value"].to_string(), design::signed)
+                        } else {
+                            value["value"].to_string()
+                        },
                         array(&value["sources"])
                             .iter()
                             .filter_map(Value::as_str)
@@ -1268,31 +1300,36 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             );
             last_level = *level;
         }
-        let response =
-            egui::CollapsingHeader::new(Type::Strong.rich(ui, name).color(colors().text))
-                .icon(design::section_icon)
-                .icon(design::section_icon)
-                .id_salt((page, i, name))
-                .show(ui, |ui| {
-                    ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                    ui.weak(meta);
-                    ui.add_space(design::XS);
-                    for paragraph in description.split("\n\n") {
-                        ui.add(
-                            egui::Label::new(
-                                Type::ProseCompact.rich(ui, paragraph).color(colors().text),
-                            )
-                            .wrap(),
-                        );
-                        ui.add_space(design::XS);
-                    }
-                });
-        if response.body_returned.is_none() {
-            ui.horizontal_wrapped(|ui| {
-                ui.add_space(design::L);
-                ui.weak(meta);
-            });
+        // One fixed row each, so a page of spells can be scanned. Its body opens below.
+        let id = ui.make_persistent_id((page, i, name));
+        let mut state =
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+        let row = design::two_line_row(ui, ENTRY_ROW, state.is_open(), name, meta);
+        let caret = if state.is_open() {
+            icons::DOWN
+        } else {
+            icons::NEXT
+        };
+        ui.painter().text(
+            egui::pos2(row.rect.right() - design::S, row.rect.center().y),
+            egui::Align2::RIGHT_CENTER,
+            caret,
+            Type::Small.font(ui),
+            colors().muted,
+        );
+        if row.clicked() {
+            state.toggle(ui);
         }
-        ui.add_space(4.0);
+        state.show_body_unindented(ui, |ui| {
+            ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+            ui.add_space(design::XS);
+            for paragraph in description.split("\n\n") {
+                ui.add(
+                    egui::Label::new(Type::ProseCompact.rich(ui, paragraph).color(colors().text))
+                        .wrap(),
+                );
+                ui.add_space(design::XS);
+            }
+        });
     }
 }

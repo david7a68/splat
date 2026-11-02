@@ -184,6 +184,10 @@ pub(crate) struct Run {
     last_initiative: Option<usize>,
     /// Lookup is beside the run, so the run's own panel gives up its space.
     pub hide_panel: bool,
+    /// Lookup is open. Letters are then the next word of a search, never a command.
+    pub lookup_open: bool,
+    /// Opened from a save, so there is no undo history to go back through.
+    reopened: bool,
     pub content: Option<Arc<crate::lookup::ContentIndex>>,
     /// A link the DM followed in the side panel.
     pub lookup_request: Option<usize>,
@@ -196,6 +200,8 @@ pub(crate) struct Run {
     focus_first_missing: bool,
     /// The panel needs its space back, so Lookup should close.
     pub close_lookup: bool,
+    /// The file changed under this run. Saving stops until the DM chooses what to keep.
+    disk_conflict: bool,
 }
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Panel {
@@ -207,12 +213,22 @@ enum Panel {
     Encounter,
     Keys,
 }
+const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
+const CLOSE_BLOCKED: &str =
+    "Wait for pending sync changes, resolve conflicts, or turn off combat sync before closing.";
+/// What the one party action does when pressed.
+enum PartySync {
+    Start(Vec<usize>),
+    Stop(Vec<usize>),
+}
 /// What the run strip shows on other pages.
 pub struct Strip {
     pub round: u64,
     pub current: Option<String>,
     pub next: Option<String>,
     pub conflict: Option<String>,
+    /// The last save failed, so the run is only in memory.
+    pub not_saved: bool,
     pub running: bool,
     pub name: String,
 }
@@ -309,9 +325,12 @@ impl Run {
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
             hide_panel: false,
+            lookup_open: false,
+            reopened: false,
             content: None,
             lookup_request: None,
             close_lookup: false,
+            disk_conflict: false,
             sheet: None,
             sheet_for: None,
             sheet_page: 0,
@@ -576,8 +595,13 @@ impl Run {
                 let absorbed = amount.min(p.temporary_hp);
                 p.temporary_hp -= absorbed;
                 p.hp = Some(hp.saturating_sub(amount - absorbed).max(0));
+                let taken_by_temp = if absorbed > 0 {
+                    format!(" ({absorbed} absorbed by temporary HP)")
+                } else {
+                    String::new()
+                };
                 format!(
-                    "{amount} damage applied ({absorbed} absorbed by temporary HP); {} HP remains.",
+                    "{amount} damage applied{taken_by_temp}; {} HP remains.",
                     p.hp.unwrap()
                 )
             }
@@ -773,6 +797,7 @@ impl Run {
     pub fn autosave(&mut self) {
         if self.dirty
             && self.storage.is_some()
+            && !self.disk_conflict
             && let Err(e) = self.save()
         {
             self.error = Some(e);
@@ -790,6 +815,7 @@ impl Run {
             current: self.current().map(name),
             next: self.next_up().map(name),
             conflict,
+            not_saved: self.disk_conflict || (self.dirty && self.error.is_some()),
             running: self.state.phase == Phase::Running,
             name: self.name.clone(),
         }
@@ -799,6 +825,7 @@ impl Run {
         if let Err(error) = self.apply(Command::Next) {
             self.error = Some(error);
         } else {
+            self.notice = None;
             self.amount.clear();
             self.scroll_to_selected = true;
             self.focus_amount = true;
@@ -814,6 +841,8 @@ impl Run {
         {
             self.selected = index;
             self.scroll_to_selected = true;
+            // Its controls are in the side panel, which Lookup covers.
+            self.close_lookup = true;
         }
     }
     /// The character whose sheet the side panel wants, if the selection is linked.
@@ -1063,7 +1092,7 @@ impl Run {
         self.history.clear();
         self.history_labels.clear();
         self.notice = Some(format!(
-            "Undo history was cleared: D&D Beyond changed {}.",
+            "{} changed on D&D Beyond. Undo history was cleared.",
             names.join(", ")
         ));
     }
@@ -1126,7 +1155,8 @@ impl Run {
             Err(e) => return Err(e.to_string()),
         };
         if current != storage.baseline {
-            return Err("This run changed on disk. Your current run is kept in memory; close the other instance before saving.".into());
+            self.disk_conflict = true;
+            return Err(DISK_CONFLICT.into());
         }
         let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
         temp.write_all(&bytes)
@@ -1134,7 +1164,8 @@ impl Run {
             .map_err(|e| e.to_string())?;
         // Recheck after staging, just before atomic replacement.
         if fs::read(&storage.path).ok() != storage.baseline {
-            return Err("Run changed while saving. The external file was kept.".into());
+            self.disk_conflict = true;
+            return Err(DISK_CONFLICT.into());
         }
         if storage.baseline.is_some() {
             temp.persist(&storage.path).map_err(|e| e.to_string())?;
@@ -1145,6 +1176,87 @@ impl Run {
         storage.baseline = Some(bytes);
         self.dirty = false;
         Ok(())
+    }
+    /// The file changed under this run, and the DM keeps this run: it replaces the file.
+    pub fn keep_this_run(&mut self) -> Result<(), String> {
+        let storage = self
+            .storage
+            .as_mut()
+            .ok_or("This run has no save location.")?;
+        storage.baseline = match fs::read(&storage.path) {
+            Ok(bytes) => Some(bytes),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.to_string()),
+        };
+        self.disk_conflict = false;
+        self.dirty = true;
+        self.error = None;
+        self.save()
+    }
+    /// The file changed under this run, and the DM keeps both: this run gets a new file
+    /// beside it, and the changed file stays as it is.
+    pub fn save_as_new_run(&mut self) -> Result<(), String> {
+        let storage = self
+            .storage
+            .as_mut()
+            .ok_or("This run has no save location.")?;
+        let id = crate::hermetic::new_uuid();
+        let path = storage
+            .path
+            .parent()
+            .ok_or("Invalid run location")?
+            .join(format!("{id}.json"));
+        let old_path = std::mem::replace(&mut storage.path, path);
+        let old_baseline = storage.baseline.take();
+        let old_id = std::mem::replace(&mut self.id, id);
+        let new_name = format!("{} (copy)", self.name);
+        let old_name = std::mem::replace(&mut self.name, new_name);
+        self.dirty = true;
+        match self.save() {
+            Ok(()) => {
+                self.disk_conflict = false;
+                self.error = None;
+                Ok(())
+            }
+            Err(error) => {
+                let storage = self.storage.as_mut().expect("storage was set above");
+                storage.path = old_path;
+                storage.baseline = old_baseline;
+                self.id = old_id;
+                self.name = old_name;
+                Err(error)
+            }
+        }
+    }
+    /// A run with this set cannot be saved as it stands.
+    pub fn has_disk_conflict(&self) -> bool {
+        self.disk_conflict
+    }
+    /// Why the run must stay open. Closing drops the worker, so anything it has not
+    /// confirmed would be lost with no message.
+    fn close_block(&self) -> Option<&'static str> {
+        self.pending_sync().then_some(CLOSE_BLOCKED)
+    }
+    /// What `Sync party` does now. A running sync is never restarted: starting one drops
+    /// its pending writes and any open conflict.
+    fn party_sync_plan(&self) -> PartySync {
+        let linked = self.linked_participants();
+        let on = |i: &usize| self.syncs.get(i).is_some_and(|s| s.enabled);
+        let off: Vec<usize> = linked.iter().copied().filter(|i| !on(i)).collect();
+        // A sync that stopped itself has said why. It is not started again by this action
+        // while others run, or it would stop again at once.
+        let startable: Vec<usize> = off
+            .iter()
+            .copied()
+            .filter(|i| self.syncs.get(i).is_none_or(|s| s.error.is_none()))
+            .collect();
+        if !startable.is_empty() {
+            PartySync::Start(startable)
+        } else if linked.iter().any(&on) {
+            PartySync::Stop(linked.into_iter().filter(|i| on(i)).collect())
+        } else {
+            PartySync::Start(off)
+        }
     }
     pub fn open(path: &Path, campaign: Uuid) -> Result<Self, String> {
         if fs::metadata(path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
@@ -1218,9 +1330,12 @@ impl Run {
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
             hide_panel: false,
+            lookup_open: false,
+            reopened: true,
             content: None,
             lookup_request: None,
             close_lookup: false,
+            disk_conflict: false,
             sheet: None,
             sheet_for: None,
             sheet_page: 0,
@@ -1237,11 +1352,7 @@ impl Run {
         for file in fs::read_dir(directory).map_err(|e| e.to_string())? {
             let path = file.map_err(|e| e.to_string())?.path();
             if path.extension().is_some_and(|e| e == "json") {
-                let modified = fs::metadata(&path)
-                    .and_then(|metadata| metadata.modified())
-                    .ok()
-                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|elapsed| elapsed.as_secs());
+                let modified = crate::hermetic::file_time(&path);
                 match Self::open(&path, campaign) {
                     Ok(run) => {
                         let (status, finished) = match run.state.phase {
@@ -1249,14 +1360,20 @@ impl Run {
                             Phase::Running => ("In progress", false),
                             Phase::Ended { .. } => ("Ended", true),
                         };
+                        // The turn it stopped on, so a DM can tell two saves apart at a glance.
+                        let turn = run
+                            .current()
+                            .filter(|_| !finished)
+                            .map(|i| format!(" · {}’s turn", run.state.participants[i].name))
+                            .unwrap_or_default();
                         runs.push(SavedRunInfo {
                             path,
                             encounter: run.name.clone(),
                             label: format!(
-                                "Round {} · {status}{}",
+                                "Round {} · {status}{turn}{}",
                                 run.state.round,
                                 modified.map_or_else(String::new, |at| format!(
-                                    " · {} UTC",
+                                    " · Saved {} UTC",
                                     calendar_time(at)
                                 )),
                             ),
@@ -1324,6 +1441,9 @@ pub fn calendar_date(seconds: u64) -> String {
 impl Run {
     pub fn simulate_connection(&mut self) {
         self.simulate_connection = true;
+    }
+    pub fn simulate_error(&mut self, message: &str) {
+        self.error = (!message.is_empty()).then(|| message.to_owned());
     }
     /// Show one participant in a sync state test builds cannot reach by themselves.
     pub fn simulate_sync_state(&mut self, name: &str, state: crate::combat_sync::SyncState) {
@@ -1631,6 +1751,153 @@ mod tests {
         assert!(run.save().is_err());
         assert_eq!(fs::read(&path).unwrap(), external);
         assert!(Run::open(&path, Uuid::new_v4()).is_err());
+    }
+    /// Change the saved file behind the run's back, as a vault sync tool would.
+    fn run_with_changed_file() -> (tempfile::TempDir, Run, PathBuf, Vec<u8>, Uuid) {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut run = run();
+        begin(&mut run);
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        let path = run.path().unwrap().to_path_buf();
+        let mut other = Run::open(&path, campaign).unwrap();
+        other.apply(Command::Next).unwrap();
+        other.save().unwrap();
+        let external = fs::read(&path).unwrap();
+        run.apply(Command::Damage(0, 5)).unwrap();
+        assert!(run.save().is_err());
+        (dir, run, path, external, campaign)
+    }
+    #[test]
+    fn a_changed_file_stops_saving_and_autosave_does_not_retry() {
+        let (_dir, mut run, path, external, _) = run_with_changed_file();
+        assert!(run.has_disk_conflict());
+        run.apply(Command::Damage(0, 1)).unwrap();
+        run.autosave();
+        assert_eq!(fs::read(&path).unwrap(), external);
+        assert!(run.needs_save());
+        assert!(run.strip().not_saved);
+    }
+    #[test]
+    fn keeping_this_run_replaces_the_changed_file_and_saving_works_again() {
+        let (_dir, mut run, path, _, campaign) = run_with_changed_file();
+        let hp = run.state.participants[0].hp;
+        run.keep_this_run().unwrap();
+        assert!(!run.has_disk_conflict());
+        assert!(!run.needs_save());
+        assert!(!run.strip().not_saved);
+        assert_eq!(
+            Run::open(&path, campaign).unwrap().state.participants[0].hp,
+            hp
+        );
+        // A later change saves by itself, as it did before the conflict.
+        run.apply(Command::Damage(0, 1)).unwrap();
+        run.autosave();
+        assert!(!run.needs_save());
+        assert_eq!(
+            Run::open(&path, campaign).unwrap().state.participants[0].hp,
+            hp.map(|hp| hp - 1)
+        );
+    }
+    #[test]
+    fn saving_as_a_new_run_keeps_both_files() {
+        let (dir, mut run, path, external, campaign) = run_with_changed_file();
+        let hp = run.state.participants[0].hp;
+        run.save_as_new_run().unwrap();
+        assert!(!run.has_disk_conflict());
+        assert_eq!(fs::read(&path).unwrap(), external);
+        let new_path = run.path().unwrap().to_path_buf();
+        assert_ne!(new_path, path);
+        assert_eq!(new_path.parent(), Some(dir.path()));
+        let copy = Run::open(&new_path, campaign).unwrap();
+        assert_eq!(copy.state.participants[0].hp, hp);
+        assert_ne!(copy.id, Run::open(&path, campaign).unwrap().id);
+        assert_eq!(copy.name, "Ambush (copy)");
+    }
+    #[test]
+    fn close_is_refused_in_every_phase_while_sync_has_not_finished() {
+        for phase in [
+            Phase::Setup,
+            Phase::Running,
+            Phase::Ended {
+                outcome: "Won".into(),
+            },
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut run = run();
+            begin(&mut run);
+            run.state.phase = phase.clone();
+            run.configure_storage(Uuid::new_v4(), dir.path(), Initiative::default())
+                .unwrap();
+            run.syncs.insert(
+                0,
+                crate::combat_sync::CombatSync::simulated_conflict(1, 10, 1),
+            );
+            assert_eq!(run.close_block(), Some(CLOSE_BLOCKED), "{phase:?}");
+            assert!(!run.close_run(), "{phase:?}");
+            assert_eq!(run.error.as_deref(), Some(CLOSE_BLOCKED), "{phase:?}");
+            run.syncs.clear();
+            run.error = None;
+            assert!(run.close_run(), "{phase:?}");
+        }
+    }
+    fn linked(run: &mut Run, index: usize, character: &str) {
+        let mut definition = (*run.state.participants[index].definition).clone();
+        definition.fields.insert(
+            "splat_external".into(),
+            serde_yaml_ng::from_str(&format!(
+                "{{provider: dndbeyond, campaign_id: '1', character_id: '{character}'}}"
+            ))
+            .unwrap(),
+        );
+        run.state.participants[index].definition = std::sync::Arc::new(definition);
+    }
+    #[test]
+    fn sync_party_starts_only_those_that_are_off_and_keeps_a_conflict() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        linked(&mut run, 1, "22");
+        run.syncs.insert(
+            0,
+            crate::combat_sync::CombatSync::simulated_conflict(11, 10, 1),
+        );
+        assert!(matches!(
+            run.party_sync_plan(),
+            PartySync::Start(ref start) if start == &vec![1]
+        ));
+        run.toggle_party_sync();
+        assert!(run.syncs[&1].enabled);
+        assert_eq!(
+            run.syncs[&0].state(),
+            crate::combat_sync::SyncState::Conflict,
+            "the running sync keeps its conflict"
+        );
+    }
+    #[test]
+    fn a_sync_stopped_as_a_duplicate_does_not_hide_stop_sync() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        linked(&mut run, 1, "11");
+        let mut on = crate::combat_sync::CombatSync::default();
+        on.start();
+        run.syncs.insert(0, on);
+        let mut stopped = crate::combat_sync::CombatSync::default();
+        stopped.error = Some("Another participant is already syncing this character.".into());
+        run.syncs.insert(1, stopped);
+        assert!(matches!(
+            run.party_sync_plan(),
+            PartySync::Stop(ref stop) if stop == &vec![0]
+        ));
+    }
+    #[test]
+    fn setup_can_mark_a_participant_absent() {
+        let mut run = run();
+        run.apply(Command::Presence(1, false)).unwrap();
+        assert!(!run.state.participants[1].present);
+        assert_eq!(run.state.phase, Phase::Setup);
     }
     #[test]
     fn npc_rolls_follow_campaign_grouping_and_never_change_player_initiative() {

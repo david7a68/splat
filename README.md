@@ -173,8 +173,10 @@ Local packages support new draft entries and Markdown editing. **Save** checks n
 structure, keeps existing UUIDs and kinds, rejects duplicate identities, and checks
 for external edits before replacing a file. Validation messages show unresolved
 references; a package-only check can report references to other packages as unresolved.
-Invalid entry notes remain available for repair. **Discard changes**, then **Reload**,
-to load external edits. Changing pages keeps the draft in memory.
+Invalid entry notes remain available for repair. If the file changed on disk, the save stops
+and offers **Overwrite with my draft**, **Show disk version**, and **Reload and lose my draft**.
+**Discard changes** takes one press and offers **Undo discard** until the next edit. Changing
+pages keeps the draft in memory.
 Save before closing the app; drafts are not persisted.
 
 In **Campaign → Packages**, enable a whole package or select individual
@@ -282,7 +284,8 @@ write to templates or character copies.
 inside the campaign, and accepts another relative folder or an absolute path.
 Saved JSON files contain the run state, combat log, initiative rule, random state,
 and frozen creature definitions. Saves use atomic replacement and detect external
-edits. Failed saves keep the current run in memory and show an error. Undo history
+edits. If the file changed, saving stops until you choose **Keep this run** or **Save as a new
+run**. Other failed saves keep the current run in memory and show an error. Undo history
 is kept for the current session only. Changing the folder does not move old runs.
 
 The same settings select the campaign initiative rule. **Roll NPC initiative**

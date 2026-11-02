@@ -37,6 +37,9 @@ pub struct CampaignContent {
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
     repairs: Vec<(String, String, String)>,
+    /// What `Discard` last dropped, for one step of undo.
+    discarded_selections: Option<Vec<PackageSelection>>,
+    discarded_repair: Option<(String, String)>,
 }
 impl CampaignContent {
     #[cfg(test)]
@@ -58,7 +61,15 @@ impl CampaignContent {
             self.refresh_pending = true;
         }
     }
+    /// Discarded work belongs to its campaign. Undo must not save it into another.
+    fn forget_discards_of_other_campaigns(&mut self, campaign: &Campaign) {
+        if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
+            self.discarded_selections = None;
+            self.discarded_repair = None;
+        }
+    }
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
+        self.forget_discards_of_other_campaigns(&campaign);
         self.refresh_pending = false;
         self.disabled_selections.clear();
         self.repairs = splat::content::read_directory(&campaign.path)
@@ -167,7 +178,7 @@ impl CampaignContent {
         }
         if self.pending.is_some() {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::design::spinner(ui);
                 ui.label("Loading campaign content…");
             });
             return;
@@ -198,6 +209,10 @@ impl CampaignContent {
                         .blocked_if(draft == baseline, "No changes to save.")
                         .show(ui)
                         .clicked()
+                        || (draft != baseline
+                            && ui.input_mut(|i| {
+                                i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
+                            }))
                     {
                         let result = Entry::parse(path, draft).and_then(|entry| {
                             if entry.kind == "package"
@@ -217,12 +232,33 @@ impl CampaignContent {
                             Err(e) => self.error = Some(e),
                         }
                     }
-                    if Action::quiet("Discard repair draft")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
+                    ui.add_space(design::XL);
+                    if draft != baseline
+                        && Action::destructive("Discard repair draft")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
                     {
+                        self.discarded_repair = Some((path.clone(), draft.clone()));
                         *draft = baseline.clone();
+                    }
+                    if draft != baseline
+                        && self
+                            .discarded_repair
+                            .as_ref()
+                            .is_some_and(|(p, _)| p == path)
+                    {
+                        self.discarded_repair = None;
+                    }
+                    if let Some((_, text)) =
+                        self.discarded_repair.as_ref().filter(|(p, _)| p == path)
+                        && Action::secondary("Undo discard")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                    {
+                        *draft = text.clone();
+                        self.discarded_repair = None;
                     }
                 });
             });
@@ -243,12 +279,16 @@ impl CampaignContent {
             let dirty = document.selections != self.saved_selections || document.baseline.is_none();
             let repair = (!self.repairs.is_empty())
                 .then_some("Repair the invalid notes above before saving selections.");
-            if Action::primary("Save selections")
+            let save_key = dirty
+                && repair.is_none()
+                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+            let pressed = Action::primary("Save selections")
                 .density(Density::Read)
+                .key("Ctrl+S")
                 .blocked(repair.or((!dirty).then_some("No changes to save.")))
                 .show(ui)
-                .clicked()
-            {
+                .clicked();
+            if pressed || save_key {
                 match document.save() {
                     Ok(()) => {
                         self.saved_selections = document.selections.clone();
@@ -258,16 +298,29 @@ impl CampaignContent {
                     Err(e) => self.error = Some(e),
                 }
             }
-            if Action::quiet("Discard selection changes")
-                .density(Density::Read)
-                .blocked_if(
-                    document.selections == self.saved_selections,
-                    "No changes to discard.",
-                )
-                .show(ui)
-                .clicked()
+            ui.add_space(design::XL);
+            let changed = document.selections != self.saved_selections;
+            if changed {
+                self.discarded_selections = None;
+                if Action::destructive("Discard selection changes")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.discarded_selections = Some(std::mem::replace(
+                        &mut document.selections,
+                        self.saved_selections.clone(),
+                    ));
+                }
+            } else if self.discarded_selections.is_some()
+                && Action::secondary("Undo discard")
+                    .density(Density::Read)
+                    .hint("Bring back the selection changes you discarded")
+                    .show(ui)
+                    .clicked()
+                && let Some(selections) = self.discarded_selections.take()
             {
-                document.selections = self.saved_selections.clone();
+                document.selections = selections;
             }
             if !self.repairs.is_empty() {
                 ui.label(
@@ -325,8 +378,8 @@ impl CampaignContent {
             design::section(
                 ui,
                 format!(
-                    "{} content issues · affected uses unavailable",
-                    errors.len()
+                    "{} · affected uses unavailable",
+                    design::count(errors.len(), "content issue", "content issues")
                 ),
                 |ui| {
                     egui::ScrollArea::vertical()
@@ -542,7 +595,11 @@ impl CampaignContent {
                 );
                 design::rule(ui);
                 if self.listing == Listing::Required {
-                    let required: Vec<_> = closure.required.iter().collect();
+                    // By name, with the kind: two entries can share a name, and an ID order means nothing.
+                    let mut required: Vec<_> = closure.required.iter().collect();
+                    required.sort_by_key(|(id, _)| {
+                        catalogue.entries[*id].entry.name.to_lowercase()
+                    });
                     if required.is_empty() {
                         ui.label(
                             Type::Body
@@ -554,15 +611,21 @@ impl CampaignContent {
                         .id_salt("required_entries")
                         .auto_shrink([false, false])
                         .show_rows(ui, 24.0, required.len(), |ui, range| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
                             for (id, reasons) in &required[range] {
-                                ui.add(
-                                    egui::Label::new(
+                                let entry = &catalogue.entries[id].entry;
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(ui.available_width(), 24.0),
+                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    |ui| {
+                                ui.add(egui::Label::new(
                                         Type::Body
                                             .rich(
                                                 ui,
                                                 format!(
-                                                    "{} — required by {}",
-                                                    catalogue.entries[id].entry.name,
+                                                    "{} · {} — required by {}",
+                                                    entry.name,
+                                                    entry.kind.replace('_', " "),
                                                     reasons
                                                         .iter()
                                                         .cloned()
@@ -573,6 +636,8 @@ impl CampaignContent {
                                             .color(c.text),
                                     )
                                     .truncate(),
+                                );
+                                    },
                                 );
                             }
                         });
@@ -646,7 +711,7 @@ impl CampaignContent {
                                     }
                                     ui.label(
                                         Type::Small
-                                            .rich(ui, entry.kind.replace('_', " "))
+                                            .rich(ui, crate::library::entry_subtitle(entry))
                                             .color(c.muted),
                                     );
                                     if let Some(why) = &why {
@@ -697,5 +762,43 @@ impl CampaignContent {
         if reload {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn campaign(root: &std::path::Path) -> Campaign {
+        Campaign {
+            id: uuid::Uuid::new_v4(),
+            name: "Test campaign".into(),
+            path: root.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        }
+    }
+
+    #[test]
+    fn undo_discard_stays_in_its_campaign() {
+        let temp = tempfile::tempdir().unwrap();
+        let (first, second) = (
+            campaign(&temp.path().join("a")),
+            campaign(&temp.path().join("b")),
+        );
+        let campaigns = Campaigns::at(temp.path().join("settings.json"));
+        let ctx = egui::Context::default();
+        let mut content = CampaignContent {
+            active: Some(first.clone()),
+            discarded_selections: Some(Vec::new()),
+            discarded_repair: Some(("note.md".into(), "words".into())),
+            ..Default::default()
+        };
+        content.reload(&ctx, &campaigns, first);
+        assert!(content.discarded_selections.is_some(), "a refresh keeps it");
+        assert!(content.discarded_repair.is_some(), "a refresh keeps it");
+        content.reload(&ctx, &campaigns, second);
+        assert!(content.discarded_selections.is_none());
+        assert!(content.discarded_repair.is_none());
     }
 }

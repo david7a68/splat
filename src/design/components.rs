@@ -335,6 +335,7 @@ impl<'a> Action<'a> {
         let room =
             ui.available_width() - 2.0 * padding - icon_width - self.key.map_or(0.0, |_| 30.0);
         let foreground = match self.kind {
+            Kind::Primary if !ui.is_enabled() => c.muted,
             Kind::Primary => c.on_accent,
             Kind::Secondary | Kind::Quiet => c.text,
             Kind::Destructive => c.destructive,
@@ -360,6 +361,11 @@ impl<'a> Action<'a> {
         let hovered = response.hovered() && ui.is_enabled();
         let pressed = response.is_pointer_button_down_on() && ui.is_enabled();
         let (fill, stroke) = match self.kind {
+            // Disabled, it loses its fill, so it cannot outweigh what can be pressed.
+            Kind::Primary if !ui.is_enabled() => (
+                Color32::TRANSPARENT,
+                Stroke::new(HAIRLINE_WIDTH, c.field_border),
+            ),
             Kind::Primary => (
                 if hovered {
                     c.accent_hover
@@ -378,8 +384,11 @@ impl<'a> Action<'a> {
                 },
                 Stroke::new(HAIRLINE_WIDTH, c.field_border),
             ),
+            // On, the control has its own fill and edge: it can stand on any surface,
+            // the dock's included.
+            Kind::Quiet if self.selected => (c.current_row, Stroke::new(HAIRLINE_WIDTH, c.accent)),
             Kind::Quiet => (
-                if self.selected || pressed {
+                if pressed {
                     c.selected
                 } else if hovered {
                     c.hover
@@ -570,8 +579,9 @@ pub fn number_field(
             .id(focus_id(name))
             .desired_width(width - 2.0 * S)
             .min_size(vec2(width, height))
+            // The caret stands a little clear of the first digit.
             .margin(vec2(
-                S,
+                S + 2.0,
                 (height - Type::Numeral.size() - 6.0).max(4.0) / 2.0,
             ))
             .font(Type::Numeral.font(ui))
@@ -812,13 +822,11 @@ pub fn hp_bar(painter: &egui::Painter, rect: Rect, hp: Option<i64>, max: Option<
     let fraction = (hp as f32 / max as f32).clamp(0.0, 1.0);
     let fill = Rect::from_min_size(rect.min, vec2(rect.width() * fraction, rect.height()));
     painter.rect_filled(fill, corner(1.0), hp_color(hp_state(Some(hp), Some(max))));
+    // Above the bar, so that it never hides damage on a nearly full one.
     if temp > 0 {
         let width = (rect.width() * (temp as f32 / max as f32)).clamp(3.0, rect.width());
-        let segment = Rect::from_min_size(
-            pos2(rect.right() - width, rect.top()),
-            vec2(width, rect.height()),
-        );
-        painter.rect_filled(segment, corner(1.0), c.hp.temp);
+        let segment = Rect::from_min_size(pos2(rect.left(), rect.top() - 2.0), vec2(width, 2.0));
+        painter.rect_filled(segment, 0.0, c.hp.temp);
     }
 }
 
@@ -852,8 +860,9 @@ pub fn hp_readout(
     let current_color = match state {
         HpState::Zero => c.hp.zero,
         HpState::Bloodied => c.hp.bloodied,
+        HpState::Damaged => c.hp.damaged,
         HpState::Unknown => c.muted,
-        _ => c.text,
+        HpState::Healthy => c.text,
     };
     let max_text = max.map_or_else(|| "?".to_owned(), |max| max.to_string());
     let slot = number_width(ui, &"0".repeat(3.max(max_text.len())), &fonts.max);
@@ -875,6 +884,15 @@ pub fn hp_readout(
         &fonts.current,
         current_color,
     )
+}
+
+/// A modifier, with a true minus sign: `+3`, `−1`.
+pub fn signed(value: i64) -> String {
+    if value < 0 {
+        format!("\u{2212}{}", value.unsigned_abs())
+    } else {
+        format!("+{value}")
+    }
 }
 
 /// A count and the right word for it: `1 entry`, `2 entries`.
@@ -934,11 +952,40 @@ pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     inner.inner
 }
 
+/// Work in progress. Test builds draw a still mark: the moving one is drawn from the clock,
+/// so two captures of the same state would differ.
+pub fn spinner(ui: &mut Ui) {
+    #[cfg(test)]
+    ui.label(Type::Body.rich(ui, icons::BUSY).color(colors().muted));
+    #[cfg(not(test))]
+    ui.spinner();
+}
+
+/// A short note beside a small action, such as `Draft discarded.` with its `Undo`.
+/// Returns true when the action is pressed.
+pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    let mut pressed = false;
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+            message(ui, tone, text);
+        });
+        pressed = Action::secondary(action)
+            .density(Density::Read)
+            .show(ui)
+            .clicked();
+    });
+    pressed
+}
+
 /// A focused dialog. Only the brief's three modal tasks use this. Escape is the caller's.
 pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
     let c = colors();
     let viewport = ctx.content_rect();
-    egui::Modal::new(Id::new(("dialog", id)))
+    // Anchored at the top, so a dialog does not jump as its steps change its height.
+    let modal_id = Id::new(("dialog", id));
+    egui::Modal::new(modal_id)
+        .area(egui::Modal::default_area(modal_id).anchor(Align2::CENTER_TOP, vec2(0.0, XXL)))
         .backdrop_color(Color32::from_black_alpha(120))
         .frame(
             egui::Frame::new()

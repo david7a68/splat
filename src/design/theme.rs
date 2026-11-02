@@ -142,8 +142,13 @@ fn apply_colors(style: &mut egui::Style, c: &Colors) {
     v.collapsing_header_frame = false;
     v.disabled_alpha = 0.6;
     v.widgets.noninteractive = visuals(c.page, Stroke::new(HAIRLINE_WIDTH, c.hairline), c.text);
-    v.widgets.inactive = visuals(c.raised, Stroke::new(HAIRLINE_WIDTH, c.rule), c.text);
-    v.widgets.hovered = visuals(c.hover, Stroke::new(HAIRLINE_WIDTH, c.field_border), c.text);
+    // A field at rest needs a 3:1 edge, so it shows the same one a secondary button does.
+    v.widgets.inactive = visuals(
+        c.raised,
+        Stroke::new(HAIRLINE_WIDTH, c.field_border),
+        c.text,
+    );
+    v.widgets.hovered = visuals(c.hover, Stroke::new(HAIRLINE_WIDTH, c.text), c.text);
     v.widgets.active = visuals(c.selected, Stroke::new(FOCUS_WIDTH, c.focus), c.text);
     v.widgets.open = visuals(c.selected, Stroke::new(HAIRLINE_WIDTH, c.rule), c.text);
 }

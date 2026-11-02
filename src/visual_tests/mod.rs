@@ -15,6 +15,7 @@
 //! - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios.
 //! - `SPLAT_VISUAL_VIDEO=1`, with captures on, also encodes one video per scenario
 //!   with ffmpeg, into the output folder's `video/`.
+mod compare;
 mod driver;
 mod ergonomics;
 mod fixture;
@@ -38,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 24] = [
+const SCENARIOS: [(&str, Seed, Script); 26] = [
     (
         "library-browse",
         Seed::Empty,
@@ -108,6 +109,8 @@ const SCENARIOS: [(&str, Seed, Script); 24] = [
         Seed::Campaign,
         scenarios::library_scope::run,
     ),
+    ("signed-in", Seed::Campaign, scenarios::signed_in::run),
+    ("nav-table", Seed::LargeRosters, scenarios::nav_table::run),
     (
         "run-sync-states",
         Seed::Campaign,
@@ -318,6 +321,11 @@ fn visual_suite() {
     let current = Baseline::measure(&violations, &costs);
     let known: Baseline = serde_json::from_str(BASELINE).expect("valid baseline.json");
     let (regressions, improvements) = known.compare(&current, &names);
+    let stale: Vec<String> = improvements
+        .iter()
+        .filter(|line| !line.starts_with("task-cost"))
+        .cloned()
+        .collect();
     let totals: BTreeMap<String, usize> = current
         .violations
         .iter()
@@ -373,6 +381,16 @@ fn visual_suite() {
             failed.is_empty() && names.len() == SCENARIOS.len(),
             "Update the baseline only from a full, successful run: {failed:?}"
         );
+        // A goal that failed is a bug, not an allowance.
+        let workflow: Vec<_> = violations
+            .iter()
+            .filter(|violation| violation.check == "workflow")
+            .map(|violation| violation.detail.as_str())
+            .collect();
+        assert!(
+            workflow.is_empty(),
+            "The baseline may not absorb a failed goal: {workflow:?}"
+        );
         let mut text = serde_json::to_string_pretty(&current).expect("encode baseline");
         text.push('\n');
         fs::write(BASELINE_PATH, text).expect("write baseline");
@@ -384,8 +402,22 @@ fn visual_suite() {
         "Scenarios failed:\n{}",
         failed.join("\n")
     );
+    // A run of every scenario must speak for every test in section 8. A deleted `observe`
+    // would otherwise look like nothing at all.
+    if names.len() == SCENARIOS.len() {
+        let silent = silent_section8_tests(&passes, &violations, &not_measured, &look_review);
+        assert!(
+            silent.is_empty(),
+            "Section 8 tests with no result in this run: {silent:?}"
+        );
+    }
     match enforcement() {
         Enforce::Report => {}
+        // A count that fell must fall in the baseline too, or it can quietly grow back.
+        Enforce::Baseline if names.len() == SCENARIOS.len() && !stale.is_empty() => panic!(
+            "These allowances are larger than this run needs. Refresh the baseline:\n{}",
+            stale.join("\n")
+        ),
         Enforce::Baseline => assert!(
             regressions.is_empty(),
             "Ergonomics regressions against {BASELINE_PATH}:\n{}\nDetails: {}",
@@ -399,6 +431,41 @@ fn visual_suite() {
             directory.join("ergonomics.md").display(),
         ),
     }
+}
+
+/// Every test ID in section 8 of the brief that this run has no line for.
+fn silent_section8_tests(
+    passes: &[ergonomics::Pass],
+    violations: &[ergonomics::Violation],
+    not_measured: &[String],
+    look_review: &[String],
+) -> Vec<String> {
+    let brief = include_str!("../../docs/ux-intent.md");
+    let mut ids: Vec<&str> = brief
+        .lines()
+        .filter_map(|line| line.strip_prefix("| "))
+        .filter_map(|line| line.split(" |").next())
+        .filter(|id| {
+            let mut letters = id.chars();
+            matches!(letters.next(), Some('T' | 'G'))
+                && letters.next().is_some_and(|c| c.is_ascii_digit())
+                && id.len() <= 5
+        })
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    let spoken = |id: &str| {
+        let says =
+            |text: &str| text.starts_with(&format!("{id}:")) || text.starts_with(&format!("{id} "));
+        passes.iter().any(|pass| says(&pass.detail))
+            || violations.iter().any(|violation| violation.state == id)
+            || not_measured.iter().any(|line| says(line))
+            || look_review.iter().any(|line| says(line))
+    };
+    ids.into_iter()
+        .filter(|id| !spoken(id))
+        .map(str::to_owned)
+        .collect()
 }
 
 /// The closed routes must stay closed, whatever any scenario does.

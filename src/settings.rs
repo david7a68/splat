@@ -4,7 +4,10 @@ use crate::{
     design::{self, Density, Status, Tone, Type, colors, icons},
 };
 use eframe::egui;
-use std::{sync::mpsc, time::Duration};
+use std::{
+    sync::mpsc,
+    time::{Duration, Instant},
+};
 use zeroize::{Zeroize, Zeroizing};
 
 pub struct Settings {
@@ -21,6 +24,14 @@ pub struct Settings {
     warning: Option<String>,
     /// A saved session failed to restore, so one is still in the keyring.
     saved_session: bool,
+    /// The worker is removing the saved session.
+    forgetting: bool,
+    /// The request in progress renews a working session. The DM need not hear of it.
+    refreshing: bool,
+    /// Refreshes that failed in a row, and when the next one may start.
+    refresh_failures: u32,
+    retry_at: Option<Instant>,
+    refresh_error: Option<String>,
     /// Test builds cannot reach these states. Only the words are checked.
     #[cfg(test)]
     simulated: Option<Account>,
@@ -34,6 +45,16 @@ pub enum Account {
     NotConnected,
     Failed,
     KeyringWarning,
+    /// Still connected, because the token has not expired, but renewing it failed.
+    RefreshFailing,
+}
+
+const SESSION_ENDED: &str = "The D&D Beyond session ended because it could not be renewed. Check your connection, then select Connect.";
+
+/// 5, 10, 20, 40, then 60 seconds. Renewal starts a minute before the token ends at most,
+/// so a short drop gets several tries.
+fn refresh_backoff(failures: u32) -> Duration {
+    Duration::from_secs((5_u64 << failures.saturating_sub(1).min(4)).min(60))
 }
 
 impl Default for Settings {
@@ -51,6 +72,11 @@ impl Default for Settings {
             error: None,
             warning: None,
             saved_session: false,
+            forgetting: false,
+            refreshing: false,
+            refresh_failures: 0,
+            retry_at: None,
+            refresh_error: None,
             #[cfg(test)]
             simulated: None,
         }
@@ -71,7 +97,38 @@ impl Settings {
 
     #[cfg(test)]
     pub fn simulate(&mut self, account: Account) {
-        self.simulated = Some(account);
+        let session = || {
+            Some(Session::for_test(
+                Duration::from_secs(3600),
+                Duration::from_secs(7200),
+            ))
+        };
+        self.simulated = None;
+        self.error = None;
+        self.warning = None;
+        self.refresh_error = None;
+        match account {
+            Account::Busy => self.simulated = Some(Account::Busy),
+            Account::Connected => self.session = session(),
+            Account::NotConnected => self.session = None,
+            Account::Failed => {
+                self.session = None;
+                self.error =
+                    Some("Could not reach D&D Beyond. Check your connection and try again.".into());
+            }
+            Account::KeyringWarning => {
+                self.session = session();
+                self.warning = Some(
+                    "Connected, but the session could not be saved in the desktop keyring.".into(),
+                );
+            }
+            Account::RefreshFailing => {
+                self.session = session();
+                self.refresh_error =
+                    Some("Could not reach D&D Beyond. Check your connection and try again.".into());
+            }
+        }
+        self.account_epoch += 1;
     }
 
     fn account(&self) -> Account {
@@ -79,8 +136,10 @@ impl Settings {
         if let Some(account) = self.simulated {
             return account;
         }
-        if self.busy {
+        if self.busy && !self.refreshing {
             Account::Busy
+        } else if self.session.is_some() && self.refresh_error.is_some() {
+            Account::RefreshFailing
         } else if self.session.is_some() && self.warning.is_some() {
             Account::KeyringWarning
         } else if self.session.is_some() {
@@ -93,7 +152,11 @@ impl Settings {
     }
 
     pub fn connecting(&self) -> bool {
-        self.busy
+        #[cfg(test)]
+        if self.simulated == Some(Account::Busy) {
+            return true;
+        }
+        self.busy && !self.refreshing
     }
 
     pub fn campaign_session(&self) -> (u64, Option<Session>) {
@@ -102,6 +165,8 @@ impl Settings {
 
     fn send(&mut self, action: Action, ctx: &egui::Context) {
         self.restoring = matches!(&action, Action::Restore);
+        self.forgetting = matches!(&action, Action::Forget);
+        self.refreshing = matches!(&action, Action::Refresh(_));
         if !matches!(&action, Action::Refresh(_)) {
             self.warning = None;
             self.account_epoch += 1;
@@ -136,16 +201,32 @@ impl Settings {
                                     self.cookie_input.zeroize();
                                 }
                                 self.session = outcome.session;
+                                self.saved_session = false;
+                                self.refresh_failures = 0;
+                                self.retry_at = None;
+                                self.refresh_error = None;
                                 // Refresh must not erase a failed-save warning.
                                 if outcome.warning.is_some() {
                                     self.warning = outcome.warning;
                                 }
                                 self.error = None;
                             }
+                            // A short network drop must not end sync at the table. The
+                            // token still works, so try again while it lasts.
+                            Err(error)
+                                if self.refreshing
+                                    && self.session.as_ref().is_some_and(|s| !s.expired()) =>
+                            {
+                                self.refresh_failures += 1;
+                                self.retry_at =
+                                    Some(Instant::now() + refresh_backoff(self.refresh_failures));
+                                self.refresh_error = Some(error);
+                            }
                             Err(error) => {
                                 self.session = None;
                                 self.error = Some(error);
-                                self.saved_session = self.restoring;
+                                // A failed removal says to select Disconnect again.
+                                self.saved_session = self.restoring || self.forgetting;
                             }
                         }
                     }
@@ -160,9 +241,19 @@ impl Settings {
         }
         if !self.busy
             && let Some(session) = &self.session
-            && session.needs_refresh()
         {
-            self.send(Action::Refresh(session.cookie()), ctx);
+            if session.expired() {
+                // Every retry failed. The cookie stays for one click on Connect.
+                self.cookie_input = session.cookie().to_string();
+                self.session = None;
+                self.refresh_failures = 0;
+                self.retry_at = None;
+                self.refresh_error = None;
+                self.error = Some(SESSION_ENDED.into());
+            } else if session.needs_refresh() && self.retry_at.is_none_or(|at| Instant::now() >= at)
+            {
+                self.send(Action::Refresh(session.cookie()), ctx);
+            }
         }
         if self.session.is_some() || self.busy {
             ctx.request_repaint_after(Duration::from_secs(1));
@@ -178,15 +269,15 @@ impl Settings {
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        ui.label(Type::Section.rich(ui, "D&D Beyond account").color(c.text));
+        ui.label(Type::Heading.rich(ui, "D&D Beyond account").color(c.text));
         let small = |ui: &mut egui::Ui, text: &str| {
             ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
         };
         let account = self.account();
         let state = match account {
             Account::Busy => Status {
-                icon: icons::BUSY,
-                word: "Connecting: updating your D&D Beyond session",
+                icon: "",
+                word: "Connecting to D&D Beyond",
                 color: c.connection.busy,
             },
             Account::Connected => Status {
@@ -209,10 +300,15 @@ impl Settings {
                 word: "Connected, but the session was not saved",
                 color: c.result.warning,
             },
+            Account::RefreshFailing => Status {
+                icon: icons::WARN,
+                word: "Connected, but renewing the session failed. Retrying.",
+                color: c.result.warning,
+            },
         };
         ui.horizontal(|ui| {
             if account == Account::Busy {
-                ui.spinner();
+                crate::design::spinner(ui);
             }
             design::status(ui, state);
         });
@@ -226,17 +322,15 @@ impl Settings {
             Account::KeyringWarning => {
                 small(ui, "You will need to connect again next time Splat opens.");
             }
+            Account::RefreshFailing => {
+                small(
+                    ui,
+                    "Splat keeps trying. Sync works until the session expires, within a minute.",
+                );
+            }
             _ => {}
         }
-        // A simulated connection has no attempt behind it, so an older error does not apply.
-        #[cfg(test)]
-        let old_error = matches!(
-            self.simulated,
-            Some(Account::Busy | Account::Connected | Account::KeyringWarning)
-        );
-        #[cfg(not(test))]
-        let old_error = false;
-        if let Some(error) = self.error.as_ref().filter(|_| !old_error) {
+        if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
         if let Some(warning) = &self.warning {
@@ -257,7 +351,7 @@ impl Settings {
                 ui.label("3. Select dndbeyond.com and copy the value of CobaltSession.");
                 ui.label("4. Paste only the value below and select Connect.");
             });
-            design::field(ui, "CobaltSession", None, None, |ui| {
+            design::field(ui, "Session cookie", None, None, |ui| {
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut self.cookie_input)
                         .password(true)
@@ -295,10 +389,14 @@ impl Settings {
         if (!matches!(account, Account::NotConnected | Account::Failed)
             || self.warning.is_some()
             || self.saved_session)
-            && design::Action::secondary("Disconnect")
-                .density(Density::Read)
-                .show(ui)
-                .clicked()
+            && design::Action::secondary(if account == Account::Busy {
+                "Cancel"
+            } else {
+                "Disconnect"
+            })
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
         {
             self.disconnect(ui.ctx());
         }
@@ -315,6 +413,114 @@ impl Settings {
 mod tests {
     use super::*;
     use crate::credentials::{Outcome, Reply};
+
+    fn refreshing_settings(
+        expires_in: Duration,
+    ) -> (
+        Settings,
+        egui::Context,
+        mpsc::Receiver<(u64, Action)>,
+        mpsc::Sender<Reply>,
+    ) {
+        let ctx = egui::Context::default();
+        let (worker, commands, results) = Worker::test_channels();
+        let mut settings = Settings::default();
+        settings.initialized = true;
+        settings.worker = Some(worker);
+        settings.session = Some(Session::for_test(Duration::ZERO, expires_in));
+        (settings, ctx, commands, results)
+    }
+
+    #[test]
+    fn a_failed_removal_keeps_disconnect_until_it_works() {
+        let ctx = egui::Context::default();
+        let (worker, commands, results) = Worker::test_channels();
+        let mut settings = Settings::default();
+        settings.initialized = true;
+        settings.worker = Some(worker);
+        settings.disconnect(&ctx);
+        let (id, _) = commands.recv().unwrap();
+        results
+            .send(Reply {
+                id,
+                result: Err("The saved cookie could not be removed.".into()),
+            })
+            .unwrap();
+        settings.poll(&ctx);
+        assert!(settings.saved_session, "the message says to select it");
+        settings.disconnect(&ctx);
+        let (id, _) = commands.recv().unwrap();
+        results
+            .send(Reply {
+                id,
+                result: Ok(Outcome {
+                    session: None,
+                    warning: None,
+                }),
+            })
+            .unwrap();
+        settings.poll(&ctx);
+        assert!(!settings.saved_session);
+    }
+
+    #[test]
+    fn a_failed_refresh_keeps_the_session_and_retries_later() {
+        let (mut settings, ctx, commands, results) = refreshing_settings(Duration::from_secs(600));
+        settings.poll(&ctx);
+        let (id, action) = commands.try_recv().expect("a refresh is due");
+        assert!(matches!(action, Action::Refresh(_)));
+        assert!(!settings.connecting(), "a refresh is not a new connection");
+        assert_ne!(settings.account(), Account::Busy);
+        results
+            .send(Reply {
+                id,
+                result: Err("Could not reach D&D Beyond.".into()),
+            })
+            .unwrap();
+        settings.poll(&ctx);
+        assert!(
+            settings.session.is_some(),
+            "the session outlives one failure"
+        );
+        assert_eq!(settings.account(), Account::RefreshFailing);
+        assert!(settings.error.is_none());
+        assert!(commands.try_recv().is_err(), "it waits before trying again");
+        settings.retry_at = Some(Instant::now());
+        settings.poll(&ctx);
+        let (id, action) = commands.try_recv().expect("the retry");
+        assert!(matches!(action, Action::Refresh(_)));
+        results
+            .send(Reply {
+                id,
+                result: Ok(Outcome {
+                    session: Some(Session::for_test(
+                        Duration::from_secs(60),
+                        Duration::from_secs(600),
+                    )),
+                    warning: None,
+                }),
+            })
+            .unwrap();
+        settings.poll(&ctx);
+        assert_eq!(settings.account(), Account::Connected);
+        assert_eq!(settings.refresh_failures, 0);
+    }
+
+    #[test]
+    fn an_expired_session_ends_with_words_and_the_cookie_ready_to_retry() {
+        let (mut settings, ctx, commands, _results) = refreshing_settings(Duration::ZERO);
+        settings.poll(&ctx);
+        assert!(commands.try_recv().is_err());
+        assert!(settings.session.is_none());
+        assert_eq!(settings.error.as_deref(), Some(SESSION_ENDED));
+        assert_eq!(settings.cookie_input, "test-cookie");
+    }
+
+    #[test]
+    fn the_refresh_wait_grows_and_stays_within_a_minute() {
+        let waits: Vec<u64> = (1..=6).map(|n| refresh_backoff(n).as_secs()).collect();
+        assert_eq!(waits, [5, 10, 20, 40, 60, 60]);
+    }
 
     #[test]
     fn disconnect_clears_input_and_ignores_late_auth_results() {

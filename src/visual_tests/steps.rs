@@ -24,7 +24,7 @@ pub const REVIEW_COPY: &str = "Review copy";
 pub const CREATE_COPY: &str = "Create copy";
 pub const CLOSE_COPY: &str = "Close";
 pub const EDIT_MARKDOWN: &str = "Edit Markdown";
-pub const UNSAVED_NOTE: &str = "Unsaved changes.";
+pub const UNSAVED_NOTE: &str = "Unsaved";
 
 pub const SAVED_RUNS: &str = "Saved runs (";
 pub const RESUME: &str = "Resume";
@@ -125,7 +125,7 @@ pub fn current_participant(d: &Driver<'_>) -> Option<String> {
 
 /// The run shows the selected participant's name as a heading in its side panel.
 pub fn participant_is_selected(d: &Driver<'_>, name: &str) -> bool {
-    d.has_label(name)
+    d.has_label(&format!("Selected: {name}"))
 }
 
 /// Copy one Library entry from the open reader into the active campaign, which is

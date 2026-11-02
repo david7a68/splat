@@ -290,49 +290,64 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
     out
 }
 
-/// Text in a control that lost its end to an ellipsis. A tooltip does not help a DM who
-/// is reading across a table, so a word on a button or a name on a run row must be whole.
+/// Text that may lose its end, each with the reason.
+const ELISION_ALLOWED: &[(&str, &str)] = &[(
+    // The fixture's folder. A path in a one-line field scrolls inside the field.
+    "/tmp/splat-visual-world",
+    "a folder path in a text field",
+)];
+
+/// Painted text that lost its end to an ellipsis, or runs past the edge of its pane. A
+/// tooltip does not help a DM reading across a table, so all of it is reported, whatever
+/// painted it, unless it is in the named list above.
 pub fn cut_text(
     shapes: &[egui::epaint::ClippedShape],
-    controls: &[Control],
     scenario: &str,
     state: &str,
     window: &str,
 ) -> Vec<Violation> {
-    fn search(shape: &egui::Shape, found: &mut Vec<(String, egui::Rect)>) {
+    fn search(
+        shape: &egui::Shape,
+        clip: egui::Rect,
+        found: &mut Vec<(String, egui::Rect, &'static str)>,
+    ) {
         match shape {
-            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| search(shape, found)),
-            egui::Shape::Text(text) if text.galley.elided => {
-                found.push((text.galley.job.text.clone(), text.visual_bounding_rect()));
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| search(shape, clip, found)),
+            egui::Shape::Text(text) => {
+                let bounds = text.visual_bounding_rect();
+                let words = text.galley.job.text.clone();
+                if text.galley.elided {
+                    found.push((words, bounds, "Cut to an ellipsis"));
+                } else if bounds.intersects(clip)
+                    && (bounds.right() > clip.right() + OVERLAP_TOLERANCE
+                        || bounds.left() < clip.left() - OVERLAP_TOLERANCE)
+                {
+                    found.push((words, bounds, "Runs past the edge of its pane"));
+                }
             }
             _ => {}
         }
     }
     let mut found = Vec::new();
     for clipped in shapes {
-        search(&clipped.shape, &mut found);
+        search(&clipped.shape, clipped.clip_rect, &mut found);
     }
     found
         .into_iter()
-        .filter_map(|(text, rect)| {
-            // The line under a list row's name is metadata, and it can give way in a
-            // narrow pane. The row's own name and every button label cannot.
-            let control = controls.iter().find(|control| {
-                !control.is_label()
-                    && !control.chrome
-                    && control.rect.contains(rect.center())
-                    && rect.center().y <= control.rect.center().y + 1.0
-            })?;
-            Some(Violation {
-                check: "clipped".into(),
-                scenario: scenario.to_owned(),
-                state: state.to_owned(),
-                window: window.to_owned(),
-                node: control.name.clone(),
-                role: format!("{:?}", control.role),
-                rect: [rect.left(), rect.top(), rect.width(), rect.height()],
-                detail: format!("Cut to an ellipsis: {text}"),
-            })
+        .filter(|(text, ..)| {
+            !ELISION_ALLOWED
+                .iter()
+                .any(|(start, _)| text.starts_with(start))
+        })
+        .map(|(text, rect, how)| Violation {
+            check: "clipped".into(),
+            scenario: scenario.to_owned(),
+            state: state.to_owned(),
+            window: window.to_owned(),
+            node: text.chars().take(40).collect(),
+            role: "Text".into(),
+            rect: [rect.left(), rect.top(), rect.width(), rect.height()],
+            detail: format!("{how}: {text}"),
         })
         .collect()
 }
@@ -769,5 +784,124 @@ mod tests {
             })
             .expect("the test control should be in the tree");
         assert!(!control.chrome, "{control:?}");
+    }
+
+    fn control(name: &str, role: Role, rect: egui::Rect) -> Control {
+        Control {
+            id: rect.left() as u64 + 1,
+            name: name.to_owned(),
+            placeholder: None,
+            role,
+            rect,
+            disabled: false,
+            scope: 1,
+            clip: None,
+            chrome: false,
+        }
+    }
+
+    fn checks_for(controls: &[Control]) -> Vec<String> {
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 300.0));
+        inspect(controls, viewport, "seeded", "state", "400x300")
+            .into_iter()
+            .map(|violation| violation.check)
+            .collect()
+    }
+
+    fn at(x: f32, y: f32, width: f32, height: f32) -> egui::Rect {
+        egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(width, height))
+    }
+
+    /// Every check can fail. A check that is 0 everywhere looks the same as a broken one.
+    #[test]
+    fn a_clean_control_breaks_no_check() {
+        let clean = control("Save", Role::Button, at(10.0, 10.0, 80.0, 30.0));
+        assert_eq!(checks_for(&[clean]), Vec::<String>::new());
+    }
+
+    #[test]
+    fn keyboard_fails_when_a_key_does_nothing() {
+        let mut outcome = crate::visual_tests::driver::Outcome::default();
+        let key = ("ctrl-s", "library, dirty note");
+        outcome.keyboard_result("seeded", "960x640".into(), key, true, "worked".into());
+        assert!(outcome.violations.is_empty());
+        assert_eq!(outcome.passes.len(), 1);
+        outcome.keyboard_result("seeded", "960x640".into(), key, false, "nothing".into());
+        assert_eq!(outcome.passes.len(), 1);
+        assert_eq!(outcome.violations.len(), 1);
+        assert_eq!(outcome.violations[0].check, "keyboard");
+    }
+
+    #[test]
+    fn target_size_fails_on_a_small_control() {
+        let small = control("Save", Role::Button, at(10.0, 10.0, 16.0, 16.0));
+        assert!(checks_for(&[small]).contains(&"target-size".to_owned()));
+    }
+
+    #[test]
+    fn accessible_name_fails_on_an_unnamed_control() {
+        let unnamed = control("", Role::Button, at(10.0, 10.0, 80.0, 30.0));
+        assert!(checks_for(&[unnamed]).contains(&"accessible-name".to_owned()));
+    }
+
+    #[test]
+    fn in_viewport_fails_outside_the_window() {
+        let outside = control("Save", Role::Button, at(500.0, 10.0, 80.0, 30.0));
+        assert!(checks_for(&[outside]).contains(&"in-viewport".to_owned()));
+    }
+
+    #[test]
+    fn no_overlap_fails_on_two_controls_in_one_place() {
+        let a = control("Save", Role::Button, at(10.0, 10.0, 80.0, 30.0));
+        let b = control("Send", Role::Button, at(20.0, 10.0, 80.0, 30.0));
+        assert!(checks_for(&[a, b]).contains(&"no-overlap".to_owned()));
+    }
+
+    #[test]
+    fn clipped_fails_on_a_control_cut_at_the_side_of_its_pane() {
+        let mut cut = control("Save", Role::Button, at(10.0, 10.0, 80.0, 30.0));
+        cut.clip = Some(at(0.0, 0.0, 50.0, 300.0));
+        assert!(checks_for(&[cut]).contains(&"clipped".to_owned()));
+    }
+
+    /// Painted text has no node for the other checks to find, so this reads the shapes.
+    #[test]
+    fn cut_text_fails_on_a_truncated_label_and_past_a_pane_edge() {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(200.0, 100.0))
+            .build_state(
+                |ctx, _: &mut crate::Splat| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.add(
+                            egui::Label::new("A long label that cannot fit in this little window")
+                                .truncate(),
+                        );
+                        ui.scope(|ui| {
+                            ui.set_clip_rect(at(0.0, 0.0, 30.0, 100.0));
+                            ui.painter().text(
+                                egui::pos2(10.0, 60.0),
+                                egui::Align2::LEFT_CENTER,
+                                "Past the edge",
+                                egui::FontId::proportional(14.0),
+                                egui::Color32::WHITE,
+                            );
+                        });
+                    });
+                },
+                crate::Splat::default(),
+            );
+        harness.run_steps(2);
+        let details: Vec<String> = cut_text(&harness.output().shapes, "seeded", "state", "200x100")
+            .into_iter()
+            .map(|violation| violation.detail)
+            .collect();
+        assert!(
+            details.iter().any(|d| d.starts_with("Cut to an ellipsis")),
+            "{details:?}"
+        );
+        assert!(
+            details.iter().any(|d| d.starts_with("Runs past")),
+            "{details:?}"
+        );
     }
 }

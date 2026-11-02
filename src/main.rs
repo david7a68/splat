@@ -246,28 +246,65 @@ impl Splat {
         }
     }
 
-    fn close_prompt(&mut self, ctx: &egui::Context) {
-        let mut reasons: Vec<String> = Vec::new();
-        if self.library.dirty() {
-            reasons.push("A Library entry has unsaved changes.".into());
+    /// Everything closing the app would lose, by name, with the page where it can be kept.
+    fn unsaved_items(&self) -> Vec<(String, Page)> {
+        let campaign = self
+            .campaigns
+            .active_campaign()
+            .map_or_else(|| "this campaign".to_owned(), |c| c.name);
+        let mut items = Vec::new();
+        if let Some((name, owner)) = self.library.draft_place() {
+            items.push((
+                format!("Library entry \u{201c}{name}\u{201d} in {owner} has unsaved changes."),
+                Page::Library,
+            ));
         }
         if self.campaign_content.dirty() {
-            reasons.push("Campaign content has unsaved changes.".into());
+            items.push((
+                format!("Package choices for {campaign} have unsaved changes."),
+                Page::Campaign,
+            ));
         }
         if self.encounters.draft_dirty() {
-            reasons.push("An encounter has unsaved changes.".into());
+            let name = self.encounters.draft_name().unwrap_or_default();
+            items.push((
+                format!("Encounter \u{201c}{name}\u{201d} has unsaved changes."),
+                Page::Encounters,
+            ));
+        }
+        if self.encounters.settings_unsaved() {
+            items.push((
+                format!("Run settings for {campaign} have unsaved changes."),
+                Page::Campaign,
+            ));
         }
         let names = self.encounters.pending_sync_names();
         if !names.is_empty() {
-            reasons.push(format!(
-                "D&D Beyond has not confirmed changes to {}. They can be lost.",
-                names.join(", ")
+            items.push((
+                format!(
+                    "D&D Beyond has not confirmed changes to {}. They can be lost.",
+                    names.join(", ")
+                ),
+                Page::Run,
             ));
         }
-        if self.encounters.unsaved() && reasons.is_empty() {
-            reasons.push("The run or run settings have changes that could not be saved.".into());
+        if let Some(name) = self.encounters.run_not_saved() {
+            items.push((
+                format!("Run \u{201c}{name}\u{201d} could not be saved."),
+                Page::Run,
+            ));
         }
-        let only_sync = !names.is_empty() && reasons.len() == 1;
+        items
+    }
+
+    fn close_prompt(&mut self, ctx: &egui::Context) {
+        let items = self.unsaved_items();
+        // Sync finished, or a draft was saved, while the prompt was open.
+        if items.is_empty() {
+            self.confirm_close = false;
+            return;
+        }
+        let only_sync = items.len() == 1 && !self.encounters.pending_sync_names().is_empty();
         let (title, keep_label, discard_label, advice) = if only_sync {
             (
                 "Sync has not finished",
@@ -286,8 +323,8 @@ impl Splat {
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let mut discard = false;
         design::dialog(ctx, "unsaved_on_close", title, |ui| {
-            for reason in &reasons {
-                ui.add(egui::Label::new(reason.as_str()).wrap());
+            for (item, _) in &items {
+                ui.add(egui::Label::new(item.as_str()).wrap());
             }
             ui.label(Type::Small.rich(ui, advice).color(colors().muted));
             ui.add_space(design::S);
@@ -299,15 +336,8 @@ impl Splat {
         });
         if keep {
             self.confirm_close = false;
-            self.page = if self.encounters.draft_dirty() {
-                Page::Encounters
-            } else if self.campaign_content.dirty() {
-                Page::Campaign
-            } else if self.encounters.has_run() {
-                Page::Run
-            } else {
-                Page::Library
-            };
+            // The first thing named is where the DM goes.
+            self.page = items[0].1;
         }
         if discard {
             self.discard_on_close = true;
@@ -424,7 +454,7 @@ impl Splat {
         } else {
             Status {
                 icon: icons::OFFLINE,
-                word: "Offline",
+                word: "Not connected",
                 color: c.connection.offline,
             }
         });
@@ -522,6 +552,16 @@ impl Splat {
                         if Action::secondary("Back to run").show(ui).clicked() {
                             self.page = Page::Run;
                         }
+                        if strip.not_saved {
+                            design::status(
+                                ui,
+                                Status {
+                                    icon: icons::ERROR,
+                                    word: "Not saved",
+                                    color: c.document.invalid,
+                                },
+                            );
+                        }
                         if let Some(name) = &strip.conflict {
                             if Action::quiet("Review")
                                 .name("Review sync conflict")
@@ -552,7 +592,7 @@ impl Splat {
             ui,
             icons::CAMPAIGN,
             title,
-            "Add a campaign in Settings, or choose one above Encounters. The Library works without one.",
+            "Add a campaign in Settings. The Library works without one.",
             |ui| {
                 settings = Action::primary("Open Settings").show(ui).clicked();
             },
@@ -595,13 +635,23 @@ impl Splat {
                             };
                         if ui.available_width() >= 720.0 {
                             // A clear gutter, so that the left column's text does not run on.
-                            let spacing = ui.spacing().item_spacing.x;
-                            ui.spacing_mut().item_spacing.x = design::L;
-                            ui.columns(2, |columns| {
-                                columns[0].spacing_mut().item_spacing.x = spacing;
-                                columns[1].spacing_mut().item_spacing.x = spacing;
-                                account(&mut columns[0], &mut self.settings);
-                                list(&mut columns[1], &mut self.campaigns, &mut self.dndbeyond);
+                            // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
+                            let width = (ui.available_width() - design::XL) / 2.0;
+                            ui.horizontal_top(|ui| {
+                                ui.spacing_mut().item_spacing.x = design::XL;
+                                let column = egui::vec2(width, 0.0);
+                                let layout = egui::Layout::top_down(egui::Align::Min);
+                                ui.allocate_ui_with_layout(column, layout, |ui| {
+                                    // Both ways, so the second column starts in one place.
+                                    ui.set_width(width);
+                                    ui.spacing_mut().item_spacing.x = 8.0;
+                                    account(ui, &mut self.settings);
+                                });
+                                ui.allocate_ui_with_layout(column, layout, |ui| {
+                                    ui.set_width(width);
+                                    ui.spacing_mut().item_spacing.x = 8.0;
+                                    list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                                });
                             });
                         } else {
                             account(ui, &mut self.settings);
@@ -693,12 +743,21 @@ impl Splat {
                         }
                     }
                     CampaignTab::Link => {
+                        // The same guard as Settings: a link or folder change would stop
+                        // the run's sync, or hide an open draft.
+                        let blocked = self.blocked_switch();
                         egui::ScrollArea::vertical()
                             .id_salt("campaign_link")
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
-                                self.campaigns.show_active(ui, session, &mut self.dndbeyond);
-                                self.campaigns.show_form_if_editing(ui);
+                                if let Some(reason) = blocked {
+                                    ui.add_space(design::S);
+                                    design::message(ui, Tone::Info, reason);
+                                }
+                                ui.add_enabled_ui(blocked.is_none(), |ui| {
+                                    self.campaigns.show_active(ui, session, &mut self.dndbeyond);
+                                    self.campaigns.show_form_if_editing(ui);
+                                });
                             });
                     }
                 }
@@ -714,7 +773,9 @@ impl Splat {
                 }
                 let party = &self.party;
                 if let Some(run) = self.encounters.run_mut() {
-                    run.hide_panel = self.lookup.open;
+                    run.lookup_open = self.lookup.open;
+                    // A wide window has room for both, so the stat block stays.
+                    run.hide_panel = self.lookup.open && ui.ctx().content_rect().width() < 1500.0;
                     run.content = self.lookup.index();
                     let sheet = run.wanted_sheet().and_then(|id| party.sheet(&id));
                     run.set_sheet(sheet);
@@ -798,14 +859,18 @@ impl eframe::App for Splat {
         self.lookup.poll(ctx, &self.campaigns);
         self.encounters.poll(ctx, &self.campaigns);
         self.lookup.library_draft = self.library.dirty();
-        let modal = self.copy_dialog.is_some() || self.confirm_close;
+        let modal = self.copy_dialog.is_some()
+            || self.confirm_close
+            || ctx.memory(|memory| memory.top_modal_layer()).is_some();
         if !modal {
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
                 self.lookup.toggle();
             }
+            // A dialog takes Escape first, and a form elsewhere has nothing to do with it.
             if self.lookup.open
+                && ctx.memory(|memory| memory.top_modal_layer()).is_none()
                 && !egui::Popup::is_any_open(ctx)
-                && !self.library.form_open()
+                && !(self.page == Page::Library && self.library.form_open())
                 && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
             {
                 self.lookup.close();

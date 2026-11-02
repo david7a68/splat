@@ -201,13 +201,21 @@ impl Loaded {
         }
         for indices in labels.values().filter(|indices| indices.len() > 1) {
             for &i in indices {
-                // The file's own name tells them apart. A full path says nothing more.
-                let stem = Path::new(&self.notes[i].path)
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .replace('_', " ");
-                subtitles[i].push_str(&format!(" · {stem}"));
+                // The printed page tells them apart, in the DM's own terms.
+                if let Some(page) = self.notes[i].entry.as_ref().and_then(source_page) {
+                    subtitles[i].push_str(&format!(" · {page}"));
+                }
+            }
+        }
+        // Two on one page: a plain count is all that is left to tell them apart.
+        let mut seen = std::collections::HashMap::new();
+        for (i, note) in self.notes.iter().enumerate() {
+            let count = seen
+                .entry((note.name(), subtitles[i].clone()))
+                .or_insert(0_usize);
+            *count += 1;
+            if *count > 1 {
+                subtitles[i].push_str(&format!(" · {count}"));
             }
         }
         subtitles
@@ -367,10 +375,7 @@ pub(crate) fn write_note(
         return Err("A note with this name already exists. Choose another name.".into());
     }
     if current.as_deref() != baseline {
-        return Err(
-            "This note changed on disk. Keep your draft, or discard it and reload before saving."
-                .into(),
-        );
+        return Err(NOTE_CHANGED.into());
     }
     let mut temp = tempfile::NamedTempFile::new_in(path.parent().ok_or("Missing parent folder")?)
         .map_err(|e| e.to_string())?;
@@ -443,7 +448,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
             });
         }
     }
-    notes.sort_by_cached_key(|n| n.name().to_lowercase());
+    notes.sort_by_cached_key(|n| natural_key(n.name()));
     Ok(Loaded {
         notes,
         diagnostics,
@@ -510,8 +515,14 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
             Err(error) => all.diagnostics.push(format!("{}: {error}", campaign.name)),
         }
     }
-    all.notes.sort_by_cached_key(|n| n.name().to_lowercase());
+    all.notes.sort_by_cached_key(|n| natural_key(n.name()));
     Ok(all)
+}
+
+/// Undo discard offers words only to the note they came from. Two owners can each have a
+/// note at the same path.
+fn discard_is_for(discarded: Option<&(Option<Uuid>, String, String)>, note: &Note) -> bool {
+    discarded.is_some_and(|(owner, path, _)| *owner == note.owner.id() && *path == note.path)
 }
 
 /// The catalogue needs reloading when either of these changes.
@@ -526,6 +537,15 @@ fn load_key(campaigns: &Campaigns) -> LoadKey {
 
 #[derive(Default)]
 pub struct Library {
+    list_is_empty: bool,
+    /// The list should scroll to the selected entry, which arrived by a link.
+    reveal_row: bool,
+    /// The draft `Discard changes` last dropped, with its note's path, for one step of undo.
+    /// The note's owner and path, and the discarded words.
+    discarded: Option<(Option<Uuid>, String, String)>,
+    /// A save was refused because the file changed. The draft waits for the DM's choice.
+    disk_change: Option<DiskChange>,
+    overwrite_disk: bool,
     scope: Scope,
     load_key: Option<LoadKey>,
     stale: bool,
@@ -561,6 +581,47 @@ pub struct Library {
     pub peek: Option<Uuid>,
     history: Vec<BackStep>,
 }
+/// `pp. 35`, where a built-in entry is printed.
+fn source_page(entry: &Entry) -> Option<String> {
+    let sources = entry.fields.get("splat_sources")?.as_sequence()?;
+    Some(sources.first()?.get("locator")?.as_str()?.to_owned())
+}
+
+/// Sort so that "Level 2" comes before "Level 18".
+fn natural_key(name: &str) -> Vec<(String, u64)> {
+    let lower = name.to_lowercase();
+    let mut parts = Vec::new();
+    let mut text = String::new();
+    let mut chars = lower.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c.is_ascii_digit() {
+            let mut number = u64::from(c.to_digit(10).unwrap_or(0));
+            while let Some(digit) = chars.peek().and_then(|c| c.to_digit(10)) {
+                number = number.saturating_mul(10).saturating_add(u64::from(digit));
+                chars.next();
+            }
+            parts.push((std::mem::take(&mut text), number));
+        } else {
+            text.push(c);
+        }
+    }
+    parts.push((text, 0));
+    parts
+}
+
+/// A list's second line for an entry, for lists outside the Library.
+pub(crate) fn entry_subtitle(entry: &Entry) -> String {
+    presentation::subtitle(entry)
+}
+
+const EDITOR_MAX_WIDTH: f32 = 720.0;
+const NOTE_CHANGED: &str = "This note changed on disk.";
+/// What is on disk now, in place of what the draft started from.
+struct DiskChange {
+    /// None when the file has gone.
+    text: Option<String>,
+    show: bool,
+}
 /// Where Back returns to after following a link.
 struct BackStep {
     path: String,
@@ -571,6 +632,40 @@ impl Library {
     #[cfg(test)]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
+    }
+
+    /// The DM chose the file over the draft. The draft stays one step of undo away.
+    fn reload_note_from_disk(&mut self, index: usize) {
+        let Some(change) = self.disk_change.take() else {
+            return;
+        };
+        let Some(note) = self.loaded.as_mut().and_then(|l| l.notes.get_mut(index)) else {
+            return;
+        };
+        let draft = std::mem::take(&mut self.draft);
+        self.discarded = Some((note.owner.id(), note.path.clone(), draft));
+        match change.text {
+            Some(text) => {
+                match Entry::parse(&note.path, &text) {
+                    Ok(entry) => {
+                        note.entry = Some(entry);
+                        note.error = None;
+                    }
+                    Err(error) => {
+                        note.entry = None;
+                        note.error = Some(error);
+                    }
+                }
+                note.text = text.clone();
+                self.draft = text;
+            }
+            None => self.draft = note.text.clone(),
+        }
+        if let Some(loaded) = &mut self.loaded {
+            loaded.invalidate();
+        }
+        self.matches = None;
+        self.scope_counts = None;
     }
 
     fn open_entry(&mut self, index: usize) {
@@ -593,6 +688,7 @@ impl Library {
         }
         self.selected = Some(index);
         self.draft = note.text.clone();
+        self.disk_change = None;
         self.section = note.section();
         self.search.clear();
         self.matches = None;
@@ -601,6 +697,15 @@ impl Library {
         self.message = None;
     }
 
+    /// The open draft's entry name and owner, if it has changes.
+    pub fn draft_place(&self) -> Option<(String, String)> {
+        let note = self
+            .loaded
+            .as_ref()
+            .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
+            .filter(|n| n.text != self.draft)?;
+        Some((note.name().to_owned(), note.owner.label()))
+    }
     pub fn dirty(&self) -> bool {
         self.loaded
             .as_ref()
@@ -624,6 +729,7 @@ impl Library {
         if self.dirty() {
             return false;
         }
+        self.reveal_row = true;
         let Some((index, in_scope)) = self.loaded.as_ref().and_then(|l| {
             let index = l
                 .notes
@@ -719,23 +825,30 @@ impl Library {
         let compact = ui.available_width() < 640.0;
         let mut open_form = false;
         let mut reload = false;
-        design::page_header(ui, "Library", None, |ui| {
-            ui.add_enabled_ui(locked.is_none(), |ui| {
-                ui.menu_button("Packages", |ui| {
-                    if ui.button("Reload the Library").clicked() {
-                        reload = true;
-                        ui.close();
-                    }
-                    if ui.button("Manage packages…").clicked() {
-                        open_form = true;
-                        ui.close();
-                    }
-                })
-                .response
-                .on_disabled_hover_text(locked.unwrap_or_default());
-            });
+        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Scan.control());
+            ui.label(Type::Title.rich(ui, "Library").color(colors().text));
+            ui.add_space(design::M);
+            // Beside what it changes, not across the page from it.
             self.scope_menu(ui, compact, campaigns);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_enabled_ui(locked.is_none(), |ui| {
+                    ui.menu_button("Packages", |ui| {
+                        if ui.button("Reload the Library").clicked() {
+                            reload = true;
+                            ui.close();
+                        }
+                        if ui.button("Manage packages…").clicked() {
+                            open_form = true;
+                            ui.close();
+                        }
+                    })
+                    .response
+                    .on_disabled_hover_text(locked.unwrap_or_default());
+                });
+            });
         });
+        design::rule(ui);
         if reload {
             self.start_load(ui.ctx(), campaigns);
         }
@@ -753,7 +866,7 @@ impl Library {
                         "No campaign yet. Next step: add one in Settings.",
                     );
                 });
-                if Action::quiet("Add a campaign")
+                if Action::primary("Open Settings")
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
@@ -772,18 +885,12 @@ impl Library {
         }
         if self.pending.is_some() {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::design::spinner(ui);
                 ui.label("Loading the Library…");
             });
             return;
         }
-        if dirty {
-            design::message(
-                ui,
-                Tone::Warning,
-                "Unsaved changes. Other entries open beside this draft, in Lookup.",
-            );
-        }
+
         self.new_entry(ui, dirty, campaigns);
         let Some(loaded) = &self.loaded else {
             return;
@@ -957,10 +1064,13 @@ impl Library {
             self.matches = Some((self.section, query.clone(), found));
         }
         let matches = &self.matches.as_ref().unwrap().2;
+        self.list_is_empty = matches.is_empty();
         // Keep the reader in sync with the visible list without dropping an unsaved draft.
         let mut select = None;
+        // The whole catalogue has no first entry worth opening for the DM.
+        let whole_catalogue = self.section == Section::All && query.is_empty();
         if !dirty && self.selected.is_none_or(|i| !matches.contains(&i)) {
-            select = matches.first().copied();
+            select = matches.first().copied().filter(|_| !whole_catalogue);
             if select.is_none() {
                 self.selected = None;
                 self.draft.clear();
@@ -968,14 +1078,18 @@ impl Library {
         }
         let selected = select.or(self.selected);
         let subtitles = loaded.subtitles();
-        let list_width = (ui.available_width() * 0.34).clamp(170.0, 300.0);
+        // A wide window's list gets room too, so that long names keep their second line.
+        let list_width = (ui.available_width() * 0.38).clamp(190.0, 420.0);
         let mut peek = None;
-        egui::SidePanel::left("library_entries")
+        // Beside Lookup at the minimum window, a draft needs the room more than the list.
+        let hide_list = ui.available_width() < 480.0 && (dirty || self.source);
+        if !hide_list {
+            egui::SidePanel::left("library_entries")
             .resizable(false)
             .exact_width(list_width)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: design::S as i8,
-                right: 0,
+                right: design::S as i8,
                 top: 0,
                 bottom: 0,
             }))
@@ -987,7 +1101,7 @@ impl Library {
                         ui,
                         SEARCH_NAME,
                         &mut self.search,
-                        "Search by name or path…",
+                        "Search by name…",
                         width,
                     );
                     if !self.search.is_empty()
@@ -1058,10 +1172,18 @@ impl Library {
                     );
                 }
                 ui.spacing_mut().item_spacing.y = 0.0;
-                egui::ScrollArea::vertical()
+                let mut list = egui::ScrollArea::vertical()
                     .id_salt(("entry_list", self.section.label(), &query, scope))
-                    .auto_shrink([false, false])
-                    .show_rows(ui, ENTRY_ROW_HEIGHT, matches.len(), |ui, range| {
+                    .auto_shrink([false, false]);
+                if std::mem::take(&mut self.reveal_row)
+                    && let Some(row) =
+                        selected.and_then(|selected| matches.iter().position(|i| *i == selected))
+                {
+                    list = list.vertical_scroll_offset(
+                        (row as f32 - 2.0).max(0.0) * ENTRY_ROW_HEIGHT,
+                    );
+                }
+                list.show_rows(ui, ENTRY_ROW_HEIGHT, matches.len(), |ui, range| {
                         for row in range {
                             let i = matches[row];
                             let note = &loaded.notes[i];
@@ -1089,6 +1211,7 @@ impl Library {
                         }
                     });
             });
+        }
         if peek.is_some() {
             self.peek = peek;
         }
@@ -1266,12 +1389,18 @@ impl Library {
                 design::text_field(ui, "Name", &mut self.name, None, None);
                 design::text_field(ui, "Namespace", &mut self.namespace, None, None);
                 ui.horizontal_wrapped(|ui| {
+                    let no_path = self.path.trim().is_empty();
                     let register = Action::secondary("Register folder")
-                        .blocked(locked)
+                        .blocked(locked.or(no_path.then_some("Enter the folder's path first.")))
                         .show(ui)
                         .clicked();
                     let create = Action::primary("Create package")
-                        .blocked(locked)
+                        .blocked(
+                            locked.or((no_path
+                                || self.name.trim().is_empty()
+                                || self.namespace.trim().is_empty())
+                            .then_some("Enter a path, a name and a namespace first.")),
+                        )
                         .show(ui)
                         .clicked();
                     if register || create {
@@ -1318,7 +1447,7 @@ impl Library {
                                             .rich(ui, module.path.display().to_string())
                                             .color(c.muted),
                                     )
-                                    .truncate(),
+                                    .wrap(),
                                 );
                             });
                             ui.with_layout(
@@ -1437,7 +1566,7 @@ impl Library {
                                 error: None,
                                 owner,
                             });
-                            l.notes.sort_by_cached_key(|n| n.name().to_lowercase());
+                            l.notes.sort_by_cached_key(|n| natural_key(n.name()));
                             l.invalidate();
                             self.matches = None;
                             self.scope_counts = None;
@@ -1479,6 +1608,7 @@ impl Library {
             return;
         };
         self.selected = Some(index);
+        self.reveal_row = true;
         self.draft = self.loaded.as_ref().unwrap().notes[index].text.clone();
         self.section = step.section;
         self.search = step.search;
@@ -1492,11 +1622,27 @@ impl Library {
         let Some(i) = self.selected else {
             ui.label(
                 Type::Body
-                    .rich(ui, "Select an entry to read or edit it.")
+                    .rich(
+                        ui,
+                        if self.list_is_empty {
+                            "Nothing to read here yet."
+                        } else {
+                            "Choose an entry from the list to read it."
+                        },
+                    )
                     .color(colors().muted),
             );
             return;
         };
+        // Overwrite was chosen: what is on disk now becomes what this save replaces.
+        let overwrite = std::mem::take(&mut self.overwrite_disk);
+        let mut file_gone = false;
+        if overwrite && let Some(change) = self.disk_change.take() {
+            match change.text {
+                Some(text) => self.loaded.as_mut().unwrap().notes[i].text = text,
+                None => file_gone = true,
+            }
+        }
         let note = &self.loaded.as_ref().unwrap().notes[i];
         let parsed = Entry::parse(&note.path, &self.draft);
         let reading = parsed
@@ -1514,9 +1660,51 @@ impl Library {
             self.message = None;
         }
         let editable = note.owner.editable();
-        let mut save = dirty
-            && editable
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
+        let conflict = self.disk_change.is_some();
+        let mut save = overwrite
+            || (dirty
+                && editable
+                && !conflict
+                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
+        let d = colors().document;
+        let state = if note.error.is_some() {
+            Status {
+                icon: icons::ERROR,
+                word: "Invalid",
+                color: d.invalid,
+            }
+        } else if conflict {
+            Status {
+                icon: icons::WARN,
+                word: "Changed on disk",
+                color: d.external,
+            }
+        } else if dirty {
+            Status {
+                icon: icons::DRAFT,
+                word: "Unsaved",
+                color: d.unsaved,
+            }
+        } else {
+            match &note.owner {
+                Owner::Builtin => Status {
+                    icon: icons::READ_ONLY,
+                    word: "Built-in · Read only",
+                    color: d.read_only,
+                },
+                Owner::Package(_) => Status {
+                    icon: icons::EDIT,
+                    word: "Local package",
+                    color: d.clean,
+                },
+                Owner::Campaign(_) => Status {
+                    icon: icons::EDIT,
+                    word: "Campaign-owned",
+                    color: d.clean,
+                },
+            }
+        };
+        let save_row = editable && (self.source || dirty);
         let mut go_back = false;
         ui.horizontal_wrapped(|ui| {
             // Back keeps its place, so the tabs beside it do not move.
@@ -1557,58 +1745,104 @@ impl Library {
                     },
                 });
             }
-            if editable {
-                let unchanged = (!dirty).then_some("No changes to save.");
+            if !save_row {
+                design::status(ui, state);
+            }
+        });
+        // Save and Discard are one row, as far apart as the pane allows.
+        if save_row {
+            ui.horizontal(|ui| {
+                // Its right edge is the editor's, so Discard lines up with something.
+                ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
+                let blocked = if conflict {
+                    Some("Choose what to do with the changed file first.")
+                } else {
+                    (!dirty).then_some("No changes to save.")
+                };
                 save |= Action::primary("Save")
                     .density(Density::Read)
-                    .blocked(unchanged)
+                    .blocked(blocked)
                     .key("Ctrl+S")
                     .show(ui)
                     .clicked();
-                if Action::quiet("Discard changes")
+                design::status(ui, state);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if dirty
+                        && !conflict
+                        && Action::destructive("Discard changes")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                    {
+                        self.discarded =
+                            Some((note.owner.id(), note.path.clone(), self.draft.clone()));
+                        self.draft = note.text.clone();
+                        self.error = None;
+                    }
+                });
+            });
+        }
+        // Live, because Discard in this same frame changed the draft.
+        if self.draft != note.text {
+            self.discarded = None;
+        }
+        if discard_is_for(self.discarded.as_ref(), note)
+            && design::message_with_action(ui, Tone::Info, "Draft discarded.", "Undo discard")
+            && let Some((_, _, text)) = self.discarded.take()
+        {
+            self.draft = text;
+        }
+        let mut reload_from_disk = false;
+        if let Some(change) = &mut self.disk_change {
+            design::message(
+                ui,
+                Tone::Error,
+                if change.text.is_some() {
+                    "This note changed on disk. Your draft is safe here until you choose."
+                } else {
+                    "This note's file has gone from disk. Your draft is safe here until you choose."
+                },
+            );
+            ui.horizontal_wrapped(|ui| {
+                if Action::primary("Overwrite with my draft")
                     .density(Density::Read)
-                    .blocked((!dirty).then_some("No changes to discard."))
                     .show(ui)
                     .clicked()
                 {
-                    self.draft = note.text.clone();
-                    self.error = None;
+                    self.overwrite_disk = true;
                 }
+                if change.text.is_some() {
+                    let word = if change.show {
+                        "Hide disk version"
+                    } else {
+                        "Show disk version"
+                    };
+                    if Action::secondary(word)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        change.show = !change.show;
+                    }
+                }
+                ui.add_space(design::XL);
+                reload_from_disk = Action::destructive("Reload and lose my draft")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked();
+            });
+            if change.show
+                && let Some(text) = &change.text
+            {
+                egui::ScrollArea::vertical()
+                    .id_salt("disk_version")
+                    .max_height(180.0)
+                    .show(ui, |ui| {
+                        ui.label(Type::Mono.rich(ui, text).color(colors().muted));
+                    });
+                design::rule(ui);
             }
-            let d = colors().document;
-            let state = if note.error.is_some() {
-                Status {
-                    icon: icons::ERROR,
-                    word: "Invalid",
-                    color: d.invalid,
-                }
-            } else if dirty {
-                Status {
-                    icon: icons::DRAFT,
-                    word: "Unsaved",
-                    color: d.unsaved,
-                }
-            } else {
-                match &note.owner {
-                    Owner::Builtin => Status {
-                        icon: icons::READ_ONLY,
-                        word: "Built-in · Read only",
-                        color: d.read_only,
-                    },
-                    Owner::Package(_) => Status {
-                        icon: icons::EDIT,
-                        word: "Local package",
-                        color: d.clean,
-                    },
-                    Owner::Campaign(_) => Status {
-                        icon: icons::EDIT,
-                        word: "Campaign-owned",
-                        color: d.clean,
-                    },
-                }
-            };
-            design::status(ui, state);
-        });
+        }
         if let Some(error) = &note.error {
             design::message(ui, Tone::Error, error);
         }
@@ -1621,7 +1855,8 @@ impl Library {
                     let response = ui.add(
                         egui::TextEdit::multiline(&mut self.draft)
                             .font(egui::TextStyle::Monospace)
-                            .desired_width(f32::INFINITY)
+                            .margin(egui::vec2(design::S, design::S))
+                            .desired_width(ui.available_width().min(EDITOR_MAX_WIDTH))
                             .min_size(egui::vec2(0.0, ui.available_height()))
                             .interactive(editable),
                     );
@@ -1643,22 +1878,26 @@ impl Library {
                                     reading_subtitle.as_deref().unwrap_or(subtitle),
                                 );
                             }
-                            open_link = view::show(
-                                ui,
-                                note.name(),
-                                parsed.as_ref().ok(),
-                                body,
-                                &view::Origin {
-                                    path: &note.path,
-                                    owner: &note.owner.label(),
-                                },
-                                note.owner == Owner::Builtin,
-                                self.loaded.as_ref().unwrap(),
-                            );
                         });
+                        open_link = view::show(
+                            ui,
+                            note.name(),
+                            parsed.as_ref().ok(),
+                            body,
+                            &view::Origin {
+                                path: &note.path,
+                                owner: &note.owner.label(),
+                            },
+                            note.owner == Owner::Builtin,
+                            self.loaded.as_ref().unwrap(),
+                        );
                     });
                 }
             });
+        if reload_from_disk {
+            self.reload_note_from_disk(i);
+            return;
+        }
         if save {
             let root = note.owner.root().expect("an editable note").to_path_buf();
             let owner_is_campaign = matches!(note.owner, Owner::Campaign(_));
@@ -1692,7 +1931,8 @@ impl Library {
                 {
                     return Err("Another entry already uses this UUID or key.".into());
                 }
-                write_note(&root, &note.path, Some(&note.text), &self.draft)
+                let baseline = (!file_gone).then_some(note.text.as_str());
+                write_note(&root, &note.path, baseline, &self.draft)
             });
             match result {
                 Ok(entry) => {
@@ -1726,6 +1966,14 @@ impl Library {
                     );
                     self.error = None;
                 }
+                Err(e) if e == NOTE_CHANGED => {
+                    self.disk_change = Some(DiskChange {
+                        text: note_path(&root, &note.path)
+                            .ok()
+                            .and_then(|path| fs::read_to_string(path).ok()),
+                        show: false,
+                    });
+                }
                 Err(e) => self.error = Some(e),
             }
         }
@@ -1740,6 +1988,8 @@ impl Library {
                     .map(|e| e.id);
             } else {
                 self.open_entry(index);
+                // Followed from the text, so the list may not show it yet.
+                self.reveal_row = true;
             }
         }
         if go_back {
@@ -2500,6 +2750,24 @@ mod tests {
         );
         assert!(write_note(&root, "../escape.md", None, &text).is_err());
     }
+    #[test]
+    fn undo_discard_is_offered_only_to_the_note_it_came_from() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = create_module(&temp.path().join("first"), "First", "first").unwrap();
+        let second = create_module(&temp.path().join("second"), "Second", "second").unwrap();
+        let note = |module: &Module, path: &str| Note {
+            path: path.into(),
+            text: String::new(),
+            entry: None,
+            error: None,
+            owner: Owner::Package(module.clone()),
+        };
+        let discarded = (Some(first.id), "a.md".to_string(), "words".to_string());
+        assert!(discard_is_for(Some(&discarded), &note(&first, "a.md")));
+        assert!(!discard_is_for(Some(&discarded), &note(&first, "b.md")));
+        assert!(!discard_is_for(Some(&discarded), &note(&second, "a.md")));
+    }
+
     #[test]
     fn library_frame_keeps_campaign_selection_and_draft_independent() {
         let temp = tempfile::tempdir().unwrap();

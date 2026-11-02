@@ -62,6 +62,29 @@ fn parse(bytes: &[u8]) -> Result<Vec<RemoteCampaign>, String> {
 }
 
 fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
+    // Test builds have no route to D&D Beyond. A signed-in test sees this list.
+    if cfg!(test) {
+        return Ok(vec![
+            RemoteCampaign {
+                id: "7700001".into(),
+                name: "The Emberfall Marches".into(),
+                dm_username: None,
+                player_count: Some(5),
+            },
+            RemoteCampaign {
+                id: "7700002".into(),
+                name: "Quiet Harbor".into(),
+                dm_username: None,
+                player_count: Some(4),
+            },
+            RemoteCampaign {
+                id: "9002".into(),
+                name: "Salt Road".into(),
+                dm_username: Some("A DM".into()),
+                player_count: Some(4),
+            },
+        ]);
+    }
     let client = Client::builder()
         .timeout(Duration::from_secs(20))
         .redirect(Policy::none())
@@ -206,7 +229,7 @@ impl DndBeyond {
                     self.refresh(session, ui.ctx());
                 }
                 if self.pending.is_some() {
-                    ui.spinner();
+                    crate::design::spinner(ui);
                 }
                 if let Some(error) = &self.error {
                     crate::design::message(ui, crate::design::Tone::Error, error);
@@ -233,10 +256,10 @@ impl DndBeyond {
                     .color(crate::design::colors().text),
             );
             if self.pending.is_some() {
-                ui.spinner();
+                crate::design::spinner(ui);
                 ui.weak("Refreshing…");
             } else if session.is_none() {
-                ui.weak("Offline · cached name");
+                ui.weak("Not connected · saved name");
             } else {
                 ui.weak("Connected");
             }

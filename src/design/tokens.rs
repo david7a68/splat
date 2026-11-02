@@ -149,8 +149,8 @@ pub const DARK: Colors = Colors {
         condition: rgb(0xDCCBA9),
     },
     side: Side {
-        party: rgb(0xB9B4E6),
-        enemies: rgb(0xDE9DB8),
+        party: rgb(0xCFC6B4),
+        enemies: rgb(0xE89AA6),
         other: rgb(0xB4C08F),
     },
     sync: Sync {
@@ -250,7 +250,7 @@ pub struct RunScale {
 }
 
 pub const RUN_COMPACT: RunScale = RunScale {
-    row: 36.0,
+    row: 38.0,
     name: 16.0,
     hp: 20.0,
     hp_max: 13.0,
@@ -561,6 +561,19 @@ mod tests {
                 let ratio = contrast(foreground, c.current_row);
                 assert!(ratio >= 4.5, "{name} on current_row: {ratio:.2}");
             }
+        }
+    }
+
+    /// What the installed style paints, not only what a token says.
+    #[test]
+    fn a_resting_field_edge_is_three_to_one_on_every_surface() {
+        let ctx = eframe::egui::Context::default();
+        super::super::theme::install(&ctx);
+        let edge = ctx.style().visuals.widgets.inactive.bg_stroke.color;
+        let c = colors();
+        for (name, background) in [("page", c.page), ("rail", c.rail), ("raised", c.raised)] {
+            let ratio = contrast(edge, background);
+            assert!(ratio >= 3.0, "on {name}: {ratio:.2}");
         }
     }
 

@@ -322,7 +322,10 @@ pub(super) fn show(
                 ui.add_space(crate::design::S);
                 style::source_prose(ui, &presentation::overview_markdown(&prose));
             } else {
-                style::section_heading(ui, &section.title);
+                // An intro has no printed heading, so the reader adds none.
+                if section.title != "Overview" {
+                    style::section_heading(ui, &section.title);
+                }
                 style::markdown(ui, section.body, false);
             }
         }
