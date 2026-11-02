@@ -51,7 +51,7 @@ impl Arranged<'_> {
     }
 }
 
-pub(super) const NO_SESSION: &str = "No session";
+const NO_SESSION: &str = "No session";
 
 /// The template a run came from. A save with no record of it matches by name, but only when
 /// one template has that name: entries can share a name, and a wrong match would hide one.
@@ -173,14 +173,8 @@ mod tests {
     }
     fn run(from: &Template, standing: Standing) -> SavedRunInfo {
         SavedRunInfo {
-            path: PathBuf::from(format!("{}.json", Uuid::new_v4())),
-            id: Some(Uuid::new_v4()),
             source: Some(from.id),
-            encounter: from.name.clone(),
-            label: String::new(),
-            standing,
-            saved_at: None,
-            unsent: Vec::new(),
+            ..old_run(&from.name, standing)
         }
     }
     /// A save from before runs recorded their encounter.
@@ -304,7 +298,6 @@ mod tests {
     fn unreadable_runs_stand_apart() {
         let runs = [SavedRunInfo {
             id: None,
-            source: None,
             ..old_run("", Standing::Unreadable)
         }];
         let page = arrange(&[], &runs, None, &[], &[]);

@@ -3136,7 +3136,6 @@ mod tests {
         assert_eq!(run.state.participants[0].hp, Some(max - 9));
         assert_eq!(run.syncs[&0].conflict_keys(), vec!["hp"]);
     }
-    /// Through the file, as a close and reopen does. Anything only in memory is gone.
     #[test]
     fn a_run_keeps_its_encounter_and_says_how_it_stands() {
         let dir = tempfile::tempdir().unwrap();
@@ -3203,6 +3202,7 @@ mod tests {
         run
     }
 
+    /// Through the file, as a close and reopen does. Anything only in memory is gone.
     fn close_and_reopen(run: &mut Run, campaign: Uuid) -> Run {
         run.dirty = true;
         run.save().unwrap();

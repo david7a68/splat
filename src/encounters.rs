@@ -544,9 +544,6 @@ const SYNC_OPTION: &str = "Sync party with D&D Beyond";
 const REPEATABLE_OPTION: &str = "Keep in Ready to run after a run ends";
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
-const IN_PROGRESS: &str = "In progress";
-const READY_TO_RUN: &str = "Ready to run (";
-const HISTORY: &str = "History (";
 impl Encounters {
     #[cfg(test)]
     pub fn busy(&self) -> bool {
@@ -1236,7 +1233,7 @@ impl Encounters {
                 if two_columns {
                     ui.columns(2, |columns| {
                         within_row_width(&mut columns[0], |ui| {
-                            ready_list(ui, &page, snapshot, start_blocked, &mut action);
+                            ready_list(ui, &page, &snapshot.templates, start_blocked, &mut action);
                         });
                         within_row_width(&mut columns[1], |ui| {
                             group_list(ui, snapshot, group_blocked, &mut action);
@@ -1244,7 +1241,7 @@ impl Encounters {
                     });
                 } else {
                     within_row_width(ui, |ui| {
-                        ready_list(ui, &page, snapshot, start_blocked, &mut action);
+                        ready_list(ui, &page, &snapshot.templates, start_blocked, &mut action);
                     });
                     ui.add_space(design::L);
                     within_row_width(ui, |ui| {
@@ -1253,10 +1250,12 @@ impl Encounters {
                 }
                 history_list(ui, &page, start_blocked, &mut action);
             });
+        let Some(action) = action else {
+            return;
+        };
         match action {
-            None => {}
-            Some(ListAction::BackToRun) => self.go_to_run = true,
-            Some(ListAction::OpenGroup(path)) => match GroupDraft::open(&active.path, &path) {
+            ListAction::BackToRun => self.go_to_run = true,
+            ListAction::OpenGroup(path) => match GroupDraft::open(&active.path, &path) {
                 Ok(draft) => {
                     self.group_draft = Some(draft);
                     self.expanded = None;
@@ -1265,17 +1264,15 @@ impl Encounters {
                 }
                 Err(e) => self.error = Some(e),
             },
-            Some(ListAction::Resume(path)) => {
-                match crate::encounter_run::Run::open(&path, active.id) {
-                    Ok(run) => {
-                        self.run = Some(run);
-                        self.go_to_run = true;
-                        self.error = None;
-                    }
-                    Err(e) => self.error = Some(e),
+            ListAction::Resume(path) => match crate::encounter_run::Run::open(&path, active.id) {
+                Ok(run) => {
+                    self.run = Some(run);
+                    self.go_to_run = true;
+                    self.error = None;
                 }
-            }
-            Some(ListAction::Delete(path)) => {
+                Err(e) => self.error = Some(e),
+            },
+            ListAction::Delete(path) => {
                 let deleted = self
                     .snapshot
                     .as_ref()
@@ -1291,7 +1288,7 @@ impl Encounters {
                     None => {}
                 }
             }
-            Some(ListAction::Edit(path)) => match Draft::open(&active.path, &path) {
+            ListAction::Edit(path) => match Draft::open(&active.path, &path) {
                 Ok(d) => {
                     self.draft = Some(d);
                     self.error = None;
@@ -1299,7 +1296,7 @@ impl Encounters {
                 }
                 Err(e) => self.error = Some(e),
             },
-            Some(ListAction::Run(path)) => match Draft::open(&active.path, &path) {
+            ListAction::Run(path) => match Draft::open(&active.path, &path) {
                 Ok(d) => {
                     self.draft = Some(d);
                     self.open_run(active, campaigns.modules());
@@ -2172,7 +2169,7 @@ fn in_progress_list(
     if page.in_progress.is_empty() {
         return;
     }
-    ui.label(Type::Heading.rich(ui, IN_PROGRESS).color(colors().text));
+    ui.label(Type::Heading.rich(ui, "In progress").color(colors().text));
     design::rule(ui);
     if live.is_some() {
         design::message(
@@ -2225,15 +2222,15 @@ fn in_progress_list(
 fn ready_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
-    snapshot: &Snapshot,
+    templates: &[Template],
     start_blocked: Option<&'static str>,
     action: &mut Option<ListAction>,
 ) {
-    let heading = format!("{READY_TO_RUN}{})", page.ready.len());
+    let heading = format!("Ready to run ({})", page.ready.len());
     ui.label(Type::Heading.rich(ui, heading).color(colors().text));
     design::rule(ui);
     if page.ready.is_empty() {
-        let words = if snapshot.templates.is_empty() {
+        let words = if templates.is_empty() {
             "No encounters yet. Create one with New encounter."
         } else {
             "Each encounter has been run. Run one again from History, or create one with New encounter."
@@ -2296,7 +2293,7 @@ fn history_list(
         return;
     }
     ui.add_space(design::L);
-    let title = format!("{HISTORY}{})", page.ended_count());
+    let title = format!("History ({})", page.ended_count());
     design::section_with_id(ui, "encounter_history", title, |ui| {
         ui.set_max_width(ui.available_width().min(ROW_WIDTH));
         for session in &page.history {

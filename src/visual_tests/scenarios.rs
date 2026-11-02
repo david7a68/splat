@@ -4775,7 +4775,6 @@ pub mod encounter_groups {
     }
 }
 
-/// W13: changes built in to one creature, never hidden, in the editor and on the card.
 pub mod encounter_history {
     use super::*;
     const DELETE_RUN: &str = "Delete the saved run of Bridge Ambush";
@@ -4835,6 +4834,7 @@ pub mod encounter_history {
     }
 }
 
+/// W13: changes built in to one creature, never hidden, in the editor and on the card.
 pub mod run_overrides {
     use super::*;
     const RIVAL: &str = "Rival Captain";

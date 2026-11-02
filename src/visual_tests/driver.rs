@@ -816,14 +816,13 @@ impl<'a> Driver<'a> {
 
     /// Like `click_beside`, for a row whose text is exactly this, among longer texts.
     pub fn click_beside_exact(&mut self, text: &str, name: &str) {
-        self.aim(&format!("row with exactly {text:?}"), |node| {
-            node.name == text && !matches!(node.role, Role::TextRun)
-        });
+        let is_row = |node: &Found| node.name == text && !matches!(node.role, Role::TextRun);
+        self.aim(&format!("row with exactly {text:?}"), is_row);
         // One name can head several rows, and only one of them has this control.
         let rows: Vec<_> = self
             .nodes()
             .into_iter()
-            .filter(|node| node.name == text && !matches!(node.role, Role::TextRun))
+            .filter(|node| is_row(node))
             .map(|node| node.rect)
             .collect();
         let rect = self.aim(&format!("{name:?} beside {text:?}"), |node| {
