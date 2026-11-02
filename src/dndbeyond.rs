@@ -222,7 +222,7 @@ impl DndBeyond {
             .default_open(local.all().is_empty())
             .show(ui, |ui| {
                 let Some(session) = session else {
-                    ui.label("Connect your account first, or open an existing folder below.");
+                    ui.label("Connect your account first, or add an existing folder below.");
                     return;
                 };
                 if (!self.loaded && self.error.is_none() && self.pending.is_none())
