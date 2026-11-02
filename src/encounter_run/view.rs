@@ -1775,7 +1775,7 @@ impl Run {
                         ui.spacing_mut().item_spacing.x = spacing;
                         ui.set_min_height(height);
                         ui.set_max_width(column);
-                        design::segmented_named(ui, &mut picked, &tabs[1..], marked);
+                        design::segmented_named(ui, &mut picked, &tabs[1..], marked, None);
                         design::rule(ui);
                         self.needs_the_dm(ui, index);
                         self.panel_body(ui, index, picked);
@@ -1786,7 +1786,8 @@ impl Run {
                 self.panel = picked;
             }
         } else {
-            design::segmented_named(ui, &mut self.panel, &tabs, marked);
+            let longest = (Panel::Reference, "Stat block");
+            design::segmented_named(ui, &mut self.panel, &tabs, marked, Some(longest));
             design::rule(ui);
             self.needs_the_dm(ui, index);
             self.panel_body(ui, index, self.panel);

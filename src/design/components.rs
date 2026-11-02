@@ -754,7 +754,7 @@ pub fn search_field(
 /// One choice from a few, as words with an underline. Returns true when it changed.
 pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T, &str)]) -> bool {
     let named: Vec<(T, &str, &str)> = options.iter().map(|(o, l)| (*o, *l, *l)).collect();
-    segmented_named(ui, value, &named, None)
+    segmented_named(ui, value, &named, None, None)
 }
 
 /// The same, for a tab with its own accessible name: `(value, painted, accessible name)`.
@@ -764,6 +764,9 @@ pub fn segmented_named<T: PartialEq + Copy>(
     value: &mut T,
     options: &[(T, &str, &str)],
     marked: Option<T>,
+    // A tab whose word changes, and its longest word. The tab keeps that width, so the tabs
+    // after it hold their place.
+    room_for: Option<(T, &str)>,
 ) -> bool {
     let mut changed = false;
     let c = colors();
@@ -783,8 +786,15 @@ pub fn segmented_named<T: PartialEq + Copy>(
             } else {
                 one_line(ui, label, font.font(ui), color, ui.available_width())
             };
+            let room = room_for
+                .filter(|(tab, _)| tab == option)
+                .map_or(0.0, |(_, word)| {
+                    one_line(ui, word, font.font(ui), color, f32::INFINITY)
+                        .size()
+                        .x
+                });
             let (rect, response) = ui.allocate_exact_size(
-                vec2(galley.size().x + 2.0 * S, Density::Read.control()),
+                vec2(galley.size().x.max(room) + 2.0 * S, Density::Read.control()),
                 Sense::click(),
             );
             response.widget_info(|| {

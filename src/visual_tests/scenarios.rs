@@ -1507,6 +1507,17 @@ pub mod run_long_names {
                 && tabs_short_name.map(|tab| tab.top()) == tabs_long_name.map(|tab| tab.top()),
             format!("A long name moves no tab: {tabs_short_name:?}, then {tabs_long_name:?}"),
         );
+        // F3-05: a sheet's first tab has a shorter word than a stat block's.
+        d.click_row(ENEMY);
+        let tabs_stat_block = d.place_of(RECORD_TAB);
+        d.click_row(LONG_NAME);
+        d.observe(
+            "L6-7",
+            tabs_long_name.is_some() && tabs_long_name == tabs_stat_block,
+            format!(
+                "From a sheet to a stat block, no tab moves up, down or sideways: {tabs_long_name:?}, then {tabs_stat_block:?}"
+            ),
+        );
         let row = d.row_words(LONG_NAME);
         d.observe(
             "Long names",
