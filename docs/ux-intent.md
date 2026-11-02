@@ -572,6 +572,11 @@ reading the code, not from a test run.
 | T11.6 | Process states what is missing, and where audio and words go, before anything is sent. A failure stays in view on every page | session-recording | state | New |
 | T11.7 | A marker reaches the timeline only when the DM adds it. What the second pass changed can be read | session-recording | state | New |
 | T11.8 | A note during a run in ≤ 2, beside the roster, in the session being played | session-notes | cost, view | New |
+| T14.1 | A plain note reads in Splat, with no change to the file | world | state | New |
+| T14.2 | A link in a note opens the note it names, as in Obsidian | world | state | New |
+| T14.3 | A marked table rolls, with a typed result as well, and its row shows | world | state | New |
+| T14.4 | A rule found by its heading, beside a run, in ≤ 2 | world | cost, view | New |
+| T14.5 | A new NPC joins the fight, and the run stays on screen | world | state | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |

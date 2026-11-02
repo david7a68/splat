@@ -90,3 +90,7 @@ support; neither is treated as an executable rule.
 
 [Markdown layout](markdown-layout.md) defines editable tables and local YAML blocks,
 with identity in frontmatter and generated verification records in package reports.
+
+[World and house rules](world-and-house-rules.md) is a proposed design for campaign settings
+and custom rules, with NPCs, locations, custom timeline event types and a campaign clock.
+World notes, roll tables, NPCs, locations and the clock are implemented. The rest is proposed. [World and rules: later](world-and-rules-later.md) holds the parts it defers.

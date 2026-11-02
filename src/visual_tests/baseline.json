@@ -38,7 +38,8 @@
       "session-plan-groups": 47,
       "session-recording": 106,
       "settings": 17,
-      "signed-in": 38
+      "signed-in": 38,
+      "world": 20
     },
     "clipped": {
       "column-resize": 9
@@ -89,7 +90,8 @@
       "session-plan-groups": 47,
       "session-recording": 105,
       "settings": 17,
-      "signed-in": 38
+      "signed-in": 38,
+      "world": 20
     }
   },
   "task_cost": {
@@ -272,6 +274,9 @@
     },
     "signed-in": {
       "see the remote campaign list": 2
+    },
+    "world": {
+      "T14.4: find a rule by its heading, beside a run": 2
     }
   }
 }

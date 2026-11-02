@@ -10,6 +10,7 @@ pub const NAV_ENCOUNTERS: &str = "Encounters";
 pub const NAV_LOOKUP: &str = "Lookup";
 pub const NAV_SESSIONS: &str = "Session";
 pub const NAV_TIMELINE: &str = "Timeline";
+pub const NAV_WORLD: &str = "World";
 pub const TAB_ENTRIES: &str = "Campaign entries";
 pub const TAB_PACKAGES: &str = "Packages";
 pub const TAB_RUN_SETTINGS: &str = "Rules and runs";

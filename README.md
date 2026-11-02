@@ -2,7 +2,7 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
-The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Session**, **Timeline**, **Party**,
+The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
 opens beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
@@ -164,7 +164,10 @@ not carry over.
 
 **Session** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
 by default, and you can change it there). **Timeline** holds every encounter, rest, travel interval, day and other
-major event in story order, in `Timeline.md` in the same folder. The list in its frontmatter is the record, and Splat
+major event in story order, in `Timeline.md` in the same folder. It is also the campaign's one clock, in hours, counted
+from the first **Day**. A **Day** moves to the start of the next day. A rest adds 8 hours or 1 hour unless you say otherwise,
+and any event adds its length when it reads as a number and a unit, such as `3 days` or `an hour`. A length it cannot read
+moves nothing, and the row says so. A fight does not move the clock. The list in its frontmatter is the record, and Splat
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
 session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
 
@@ -202,6 +205,48 @@ The default instructions for each pass, which you can edit in Settings, ask for 
 ```
 
 A marker is a suggestion. The recording's row lists them, and only what you add goes on the timeline.
+
+## World notes, NPCs and roll tables
+
+**World** lists the Markdown notes in the campaign's folder, with no change to the files. Obsidian stays their editor,
+and Splat picks up changes when you return to it. A note is any Markdown file with no `splat_` field, except session
+notes, `Timeline.md`, session templates, recordings, and anything in a folder whose name starts with a dot. **Lookup**
+(Ctrl+K) searches these notes as well: names first, then each heading, then their words, then session notes and
+transcripts. Links such as `[[Verori]]`, `[[Gate Mechanics#Reliability]]` and `![[Map.png]]` work as in Obsidian. A link
+to two notes asks which one, and a link to nothing offers to create it. Each note lists what links to it.
+
+A one-line marker above a table makes it rollable. The first column is a number or a range, such as `2–5`, and the rows
+must cover what the dice can roll. A bad table says so, and the rest of the note still reads.
+
+```markdown
+<!-- splat:rolls key=gifts dice=1d6 -->
+
+| d6 | The crowd throws |
+| --- | --- |
+| 1-3 | A knife |
+| 4-6 | A potion |
+```
+
+**Roll** and a box for a typed result, for a player's own dice, sit under the table. During a run the result goes in the
+run's log, and Undo takes it back. Otherwise it only shows.
+
+**New NPC** and **New location** in Lookup create a note from the typed words, in `NPCs/` or `Locations/`. **Make world
+entry** gives an existing note an identity, and its text does not change. An entry has a `type` (`npc`, `location`, or a
+word of your own), and can have `aliases`, `status`, `in` (the place it is in) and `creature` (a stat block):
+
+```yaml
+splat_kind: world
+splat_world:
+  type: npc
+  aliases: [Champion of the Red Seat]
+  status: alive
+  creature: {key: dnd2024:creatures/goblin_boss}
+```
+
+**Add to run** on an NPC puts them in the open fight under their own name, on their stat block. It does not change the
+encounter, and Undo removes them. A location lists what is in it, and World shows locations as a tree.
+
+The design and what is still only proposed are in [World and house rules](docs/design/world-and-house-rules.md).
 
 ## Library workspace
 

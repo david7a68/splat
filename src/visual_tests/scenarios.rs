@@ -3530,6 +3530,72 @@ pub mod nav_table {
     }
 }
 
+/// World notes, roll tables, and an NPC made at the table.
+pub mod world {
+    use super::*;
+
+    const NPC: &str = "Ashori Deepcut";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click(NAV_WORLD);
+        d.expect("Search the world");
+        d.state("world-list", Sizes::All);
+        d.check_tab_order("world-list");
+
+        d.click_containing("Setting.md");
+        d.observe(
+            "T14.1",
+            d.visible_text("A cold war around an inner sea."),
+            "A plain note reads in Splat, with no change to the file",
+        );
+        d.click_containing("The home country");
+        d.observe(
+            "T14.2",
+            d.visible_text("No ruler, only a law code."),
+            "An Obsidian link in a note opens the note it names",
+        );
+
+        d.click_containing("Gate Mechanics.md");
+        d.click("Roll forced_trip");
+        d.observe(
+            "T14.3",
+            d.visible_text("forced_trip 1d20") || d.has_containing("forced_trip 1d20"),
+            "A marked table rolls, and its row shows",
+        );
+        d.state("world-table-rolled", Sizes::Default);
+
+        d.click(NAV_ENCOUNTERS);
+        resume_run_from_cold_start(d);
+        d.begin_task();
+        look_up(d, "reliability");
+        d.goal_within("T14.4", "find a rule by its heading, beside a run", 2);
+        d.observe(
+            "T14.4",
+            d.visible_text("A field gate fails on a low roll."),
+            "A heading's result opens its note at that heading",
+        );
+        d.state("world-heading-beside-run", Sizes::All);
+
+        look_up_again(d, NPC);
+        d.click("New NPC");
+        d.settle();
+        d.expect("Add to run");
+        d.state("world-new-npc", Sizes::Default);
+        d.click("Add to run");
+        d.type_into("Stat block", "Guard");
+        d.click("Guard");
+        d.type_into("Initiative", "11");
+        d.click("Add");
+        d.settle();
+        d.observe(
+            "T14.5",
+            d.has_containing(NPC) && d.has(CLOSE_RUN),
+            "A new NPC joins the fight, and the run stays on screen",
+        );
+        d.state("world-npc-in-run", Sizes::Default);
+    }
+}
+
 /// W11: notes, templates and a timeline that stands apart from them.
 pub mod session_notes {
     use super::*;

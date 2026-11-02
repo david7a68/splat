@@ -133,6 +133,22 @@ impl Event {
         }
     }
 
+    /// How far this event moves the campaign's clock, in minutes.
+    fn minutes(&self) -> u64 {
+        match (self.kind, self.duration.trim()) {
+            (Kind::Day, _) => 0,
+            (Kind::LongRest, "") => 8 * HOUR,
+            (Kind::ShortRest, "") => HOUR,
+            (_, text) => read_duration(text).unwrap_or(0),
+        }
+    }
+
+    /// The DM wrote a length that Splat cannot count, so the clock did not move.
+    pub fn time_not_read(&self) -> bool {
+        let text = self.duration.trim();
+        self.kind != Kind::Day && !text.is_empty() && read_duration(text).is_none()
+    }
+
     /// The second line of a row: what is known, with the session if one is given.
     pub fn summary(&self, session: Option<&str>) -> String {
         let mut parts = Vec::new();
@@ -144,6 +160,9 @@ impl Event {
             if !part.trim().is_empty() {
                 parts.push(part.as_str());
             }
+        }
+        if self.time_not_read() {
+            parts.push("time not read");
         }
         if let Some(session) = session {
             parts.push(session);
@@ -223,17 +242,72 @@ struct Front {
     timeline: Vec<Event>,
 }
 
-/// The day each event falls on, in list order. Zero means before the first day.
-pub fn day_numbers(events: &[Event]) -> Vec<u32> {
-    let mut day = 0;
+const HOUR: u64 = 60;
+const DAY: u64 = 24 * HOUR;
+const MONTH: u64 = 30 * DAY;
+const YEAR: u64 = 12 * MONTH;
+
+/// A length in the closed form the clock can count, in minutes: `3 days`, `an hour`.
+pub fn read_duration(text: &str) -> Option<u64> {
+    let mut words = text.split_whitespace();
+    let number = match words.next()?.to_lowercase().as_str() {
+        "a" | "an" => 1.0,
+        number => number.parse::<f64>().ok()?,
+    };
+    let unit = match words.next()?.to_lowercase().trim_end_matches('s') {
+        "minute" => 1,
+        "hour" => HOUR,
+        "day" => DAY,
+        "week" => 7 * DAY,
+        "month" => MONTH,
+        "year" => YEAR,
+        _ => return None,
+    };
+    if words.next().is_some() || !number.is_finite() || number < 0.0 {
+        return None;
+    }
+    let minutes = number * unit as f64;
+    (minutes < u64::MAX as f64 / 2.0).then(|| minutes.round() as u64)
+}
+
+/// The campaign's one clock: the minute each event starts, in list order. It is computed and
+/// never stored, so moving or removing an event corrects it. `None` means before the first day.
+pub fn clock(events: &[Event]) -> Vec<Option<u64>> {
+    let mut now = None;
     events
         .iter()
         .map(|event| {
             if event.kind == Kind::Day {
-                day += 1;
+                // Always the next boundary, so forgotten durations cannot make the count drift.
+                now = Some(now.map_or(0, |minute: u64| (minute / DAY + 1) * DAY));
             }
-            day
+            let start = now;
+            now = now.map(|minute| minute.saturating_add(event.minutes()));
+            start
         })
+        .collect()
+}
+
+/// The clock after every event, for the page to say where the story is now.
+pub fn clock_now(events: &[Event]) -> Option<u64> {
+    clock(events)
+        .last()
+        .copied()
+        .flatten()
+        .zip(events.last())
+        .map(|(start, event)| start.saturating_add(event.minutes()))
+}
+
+/// A moment on the clock in the words a DM reads.
+pub fn clock_words(minute: u64) -> String {
+    format!("Day {}, hour {}", minute / DAY + 1, minute % DAY / HOUR)
+}
+
+/// The day each event falls on, in list order. Zero means before the first day.
+pub fn day_numbers(events: &[Event]) -> Vec<u32> {
+    clock(events)
+        .into_iter()
+        .map(|start| start.map_or(0, |minute| (minute / DAY) as u32 + 1))
         .collect()
 }
 
@@ -952,6 +1026,91 @@ mod tests {
         // The catalogue scan treats any `splat_` frontmatter line as an entry.
         assert!(!text.lines().any(|line| line.starts_with("splat_")));
         assert_eq!(book(dir.path()).events, first.events);
+    }
+
+    fn event(kind: Kind, duration: &str) -> Event {
+        Event {
+            id: String::new(),
+            kind,
+            title: String::new(),
+            duration: duration.to_owned(),
+            place: String::new(),
+            notes: String::new(),
+            result: String::new(),
+            session: None,
+            run: None,
+            marker: String::new(),
+            restores: false,
+            continued_in: None,
+            played_order: 0,
+        }
+    }
+
+    #[test]
+    fn durations_are_read_in_one_closed_form() {
+        assert_eq!(read_duration("8 hours"), Some(480));
+        assert_eq!(read_duration("An hour"), Some(60));
+        assert_eq!(read_duration("1.5 hours"), Some(90));
+        assert_eq!(read_duration("2 weeks"), Some(14 * 1440));
+        assert_eq!(read_duration("1 month"), Some(30 * 1440));
+        assert_eq!(read_duration("1 year"), Some(360 * 1440));
+        for words in ["a few hours", "soon", "", "3", "-1 day", "3 days and a bit"] {
+            assert_eq!(read_duration(words), None, "{words}");
+        }
+    }
+
+    #[test]
+    fn the_clock_adds_exact_durations_and_a_day_moves_to_the_next_boundary() {
+        use Kind::*;
+        let days = |list: &[(Kind, &str)]| {
+            let events: Vec<_> = list.iter().map(|(k, d)| event(*k, d)).collect();
+            (day_numbers(&events), clock_now(&events))
+        };
+        // Before the first day there is no clock, and its durations do not count.
+        assert_eq!(
+            days(&[(Travel, "3 days"), (Day, "")]),
+            (vec![0, 1], Some(0))
+        );
+        assert_eq!(days(&[(Day, ""), (Day, "")]).0, [1, 2]);
+        // A journey moves the clock, so adding a day after it counts another.
+        assert_eq!(
+            days(&[(Day, ""), (Travel, "1 day"), (Day, "")]),
+            (vec![1, 1, 3], Some(2880))
+        );
+        // Forgotten or short durations cannot make the count drift.
+        assert_eq!(days(&[(Day, ""), (LongRest, ""), (Day, "")]).0, [1, 1, 2]);
+        assert_eq!(
+            days(&[(Day, ""), (Travel, "30 hours"), (Day, "")]).0,
+            [1, 1, 3]
+        );
+        assert_eq!(days(&[(Day, ""), (ShortRest, "")]).1, Some(60));
+        assert_eq!(days(&[(Day, ""), (LongRest, "2 hours")]).1, Some(120));
+        // Splitting a journey does not change where it ends.
+        let split = days(&[
+            (Day, ""),
+            (Travel, "20 minutes"),
+            (Travel, "20 minutes"),
+            (Travel, "20 minutes"),
+        ]);
+        assert_eq!(split.1, Some(60));
+        assert_eq!(days(&[(Day, ""), (Encounter, "")]).1, Some(0));
+        assert_eq!(clock_words(1500), "Day 2, hour 1");
+    }
+
+    #[test]
+    fn a_length_the_clock_cannot_read_says_so() {
+        assert!(event(Kind::Travel, "a few hours").time_not_read());
+        assert!(
+            event(Kind::Travel, "a few hours")
+                .summary(None)
+                .contains("time not read")
+        );
+        assert!(!event(Kind::Travel, "3 days").time_not_read());
+        assert!(!event(Kind::Travel, "").time_not_read());
+        assert_eq!(
+            clock_now(&[event(Kind::Day, ""), event(Kind::Travel, "soon")]),
+            Some(0)
+        );
     }
 
     #[test]

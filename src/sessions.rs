@@ -20,8 +20,8 @@ use uuid::Uuid;
 
 const FOLDER_FIELD: &str = "splat_session_storage";
 pub const DEFAULT_FOLDER: &str = "Sessions";
-const TEMPLATES: &str = "Templates";
-const RECORDINGS: &str = "Recordings";
+pub(crate) const TEMPLATES: &str = "Templates";
+pub(crate) const RECORDINGS: &str = "Recordings";
 const SAVE_AFTER: Duration = Duration::from_secs(2);
 
 /// The folder's name as the manifest gives it.
@@ -80,7 +80,7 @@ pub fn save_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
 }
 
 /// The frontmatter block with its fences, and the body after it.
-fn split_note(text: &str) -> Option<(&str, &str)> {
+pub(crate) fn split_note(text: &str) -> Option<(&str, &str)> {
     let start = text.strip_prefix('\u{feff}').unwrap_or(text);
     let newline = if start.starts_with("---\r\n") {
         "\r\n"
@@ -216,7 +216,7 @@ pub fn unreadable_notes(folder: &Path) -> Vec<String> {
 }
 
 /// What a file name cannot hold, in any common file system.
-fn file_safe(text: &str) -> String {
+pub(crate) fn file_safe(text: &str) -> String {
     text.chars()
         .filter(|c| {
             !matches!(

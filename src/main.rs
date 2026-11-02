@@ -22,12 +22,14 @@ mod party_sync;
 mod persistence;
 mod processing;
 mod recording;
+mod roll_table;
 mod sessions;
 mod settings;
 mod timeline;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
+mod world;
 
 use design::{Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
@@ -72,6 +74,7 @@ struct Splat {
     sessions: sessions::page::Sessions,
     timeline: timeline::Book,
     timeline_page: timeline::page::TimelinePage,
+    world_page: world::page::WorldPage,
     processing: processing::settings::ProcessingSettings,
     /// What the open run last told the timeline.
     run_fact: Option<timeline::RunFact>,
@@ -112,6 +115,7 @@ impl Default for Splat {
             sessions: Default::default(),
             timeline: Default::default(),
             timeline_page: Default::default(),
+            world_page: Default::default(),
             processing: Default::default(),
             run_fact: None,
             run_origin: Page::Encounters,
@@ -145,6 +149,7 @@ enum Page {
     Encounters,
     Sessions,
     Timeline,
+    World,
     Party,
     Library,
     Campaign,
@@ -158,6 +163,7 @@ impl Page {
             Self::Encounters => "Encounters",
             Self::Sessions => "Session",
             Self::Timeline => "Timeline",
+            Self::World => "World",
             Self::Party => "Party",
             Self::Library => "Library",
             Self::Campaign => "Campaign",
@@ -173,6 +179,7 @@ impl Page {
             Self::Encounters,
             Self::Sessions,
             Self::Timeline,
+            Self::World,
             Self::Party,
             Self::Library,
             Self::Campaign,
@@ -592,6 +599,7 @@ impl Splat {
                 (Page::Encounters, icons::ENCOUNTERS),
                 (Page::Sessions, icons::SESSIONS),
                 (Page::Timeline, icons::TIMELINE),
+                (Page::World, icons::WORLD),
                 (Page::Party, icons::PARTY),
                 (Page::Library, icons::LIBRARY),
                 (Page::Campaign, icons::CAMPAIGN),
@@ -677,6 +685,41 @@ impl Splat {
                 self.page = Page::Settings;
             }
         });
+    }
+
+    /// What the World page, Lookup and the roll tables in them need from the rest of the app.
+    fn follow_world(&mut self, ctx: &egui::Context) {
+        let sides = self.encounters.run().map(|run| run.side_names());
+        if let Some(words) = self.world_page.ask_lookup.take() {
+            self.notes_give_way();
+            self.lookup.search_for(&words);
+        }
+        let mut refresh = std::mem::take(&mut self.world_page.reload);
+        for reader in [&mut self.world_page.reader, &mut self.lookup.reader] {
+            reader.sides = sides.clone();
+            if let Some(id) = reader.open_timeline.take() {
+                self.timeline_page.reveal(&id, &self.timeline);
+                self.page = Page::Timeline;
+            }
+            if let Some(join) = reader.join.take()
+                && let Some(run) = self.encounters.run_mut()
+            {
+                run.add_group(join.group, join.total);
+                self.page = Page::Run;
+                refresh |= join.saved;
+            }
+        }
+        if refresh {
+            self.lookup.refresh();
+        }
+        if let Some(roll) = roll_table::take_roll(ctx) {
+            let key = roll.key.clone();
+            let result = match self.encounters.run_mut() {
+                Some(run) if !run.ended() => run.roll_table(roll),
+                _ => roll_table::roll_alone(&roll),
+            };
+            roll_table::settle_roll(ctx, &key, result.unwrap_or_else(|error| error));
+        }
     }
 
     /// One panel beside the page at a time.
@@ -1088,6 +1131,11 @@ impl Splat {
                     let current = self.sessions.current();
                     self.timeline_page.open_run = self.run_fact.as_ref().map(|fact| fact.id);
                     self.timeline_page.dated = self.sessions.current_dated();
+                    self.timeline_page.places = self
+                        .lookup
+                        .index()
+                        .map(|index| index.places())
+                        .unwrap_or_default();
                     self.timeline_page.show(
                         ui,
                         &mut self.timeline,
@@ -1132,6 +1180,14 @@ impl Splat {
                     );
                 } else {
                     self.no_campaign(ui, "No campaign to prepare yet");
+                }
+            }
+            Page::World => {
+                if let Some(campaign) = &active {
+                    let index = self.lookup.index();
+                    self.world_page.show(ui, index.as_ref(), campaign);
+                } else {
+                    self.no_campaign(ui, "No campaign, so no world yet");
                 }
             }
             Page::Party => {
@@ -1277,6 +1333,11 @@ impl Splat {
         {
             self.notes_give_way();
             self.lookup.open_position(position);
+        }
+        self.follow_world(ctx);
+        if let Some(place) = self.timeline_page.open_place.take() {
+            self.notes_give_way();
+            self.lookup.open_id(place);
         }
         if std::mem::take(&mut self.campaigns.wants_encounters) {
             self.page = Page::Encounters;

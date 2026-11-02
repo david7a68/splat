@@ -559,6 +559,8 @@ enum Command {
     AddCreature(Arc<RunGroup>, Option<i64>),
     /// One amount on several targets, as one step of undo.
     Several(Vec<Command>),
+    /// A roll on a marked table in a note, on this run's dice, with its row in the log.
+    TableRoll(crate::roll_table::TableRoll),
 }
 /// A d20 for initiative, with the bonus and the roll mode. Returns the die and the total.
 fn roll_initiative(random: &mut Random, bonus: i64, mode: i8) -> Result<(i64, i64), String> {
@@ -919,6 +921,33 @@ impl Run {
         }
         Ok((names.join(", "), initiative))
     }
+    /// Roll on a table in a note. The run's log keeps the result, and its Undo takes it back.
+    pub(crate) fn roll_table(
+        &mut self,
+        roll: crate::roll_table::TableRoll,
+    ) -> Result<String, String> {
+        self.apply(Command::TableRoll(roll))?;
+        Ok(self.state.log.last().cloned().unwrap_or_default())
+    }
+    /// An NPC or a group joins the fight from outside the run page.
+    pub(crate) fn add_group(&mut self, group: Arc<RunGroup>, total: Option<i64>) {
+        if let Err(error) = self.apply(Command::AddGroup(group, total)) {
+            self.error = Some(error);
+        }
+    }
+    pub(crate) fn ended(&self) -> bool {
+        matches!(self.state.phase, Phase::Ended { .. })
+    }
+    /// The sides in this run, in the order they first appear.
+    pub(crate) fn side_names(&self) -> Vec<String> {
+        let mut sides = Vec::new();
+        for participant in &self.state.participants {
+            if !sides.contains(&participant.side) {
+                sides.push(participant.side.clone());
+            }
+        }
+        sides
+    }
     fn apply(&mut self, command: Command) -> Result<(), String> {
         if matches!(self.state.phase, Phase::Ended { .. }) {
             return Err("This encounter has ended. Undo the ending to continue.".into());
@@ -1116,6 +1145,7 @@ impl Run {
                 next.log.append(&mut lines);
                 last
             }
+            Command::TableRoll(roll) => roll.resolve(&mut next.random)?,
             other => Self::participant_command(&mut next, other)?,
         };
         next.log.push(label);
@@ -1457,6 +1487,7 @@ impl Run {
                 };
                 format!("{word} {} participants{saved}", commands.len())
             }
+            Command::TableRoll(roll) => format!("roll on {}", roll.key),
         }
     }
     fn undo_label(&self) -> String {
@@ -4565,6 +4596,56 @@ mod tests {
         run.apply(Command::RollNpcs(Grouping::Individual)).unwrap();
         assert_eq!(run.state.participants[0].initiative, Some(6));
     }
+    // ---- Notes beside a run ------------------------------------------------------------
+    #[test]
+    fn a_table_roll_keeps_its_row_in_the_log_and_undo_takes_it_back() {
+        let mut run = run();
+        let table = |typed| crate::roll_table::TableRoll {
+            key: "gifts".into(),
+            dice: "1d6".into(),
+            typed,
+            rows: vec![crate::roll_table::RollRow {
+                min: 1,
+                max: 6,
+                text: "A potion".into(),
+            }],
+        };
+        let before = run.state.log.len();
+        let line = run.roll_table(table(None)).unwrap();
+        assert!(
+            line.starts_with("gifts 1d6:") && line.ends_with("A potion"),
+            "{line}"
+        );
+        assert_eq!(run.state.log.len(), before + 1);
+        run.undo();
+        assert_eq!(run.state.log.len(), before);
+        // A player's own dice take no draw from the run's stream.
+        assert_eq!(
+            run.roll_table(table(Some(3))).unwrap(),
+            "gifts: 3, typed. A potion"
+        );
+    }
+
+    #[test]
+    fn an_npc_joins_the_fight_under_their_own_name_and_undo_removes_them() {
+        let mut run = run();
+        let before = run.state.participants.len();
+        let mut npc = creature();
+        npc.name = "Ashori Deepcut".into();
+        let group = crate::world::npc_group(&npc, &creature(), "enemies");
+        assert!(group.problem.is_none(), "{:?}", group.problem);
+        run.add_group(group, Some(11));
+        assert!(run.error.is_none(), "{:?}", run.error);
+        let added = run.state.participants.last().unwrap();
+        assert_eq!(added.name, "Ashori Deepcut");
+        assert_eq!(added.side, "enemies");
+        assert_eq!(added.initiative, Some(11));
+        assert_eq!(run.state.participants.len(), before + 1);
+        assert!(run.side_names().contains(&"enemies".to_owned()));
+        run.undo();
+        assert_eq!(run.state.participants.len(), before);
+    }
+
     // ---- Encounter groups ------------------------------------------------------------
     fn guard_group(name: &str, count: u64) -> Arc<RunGroup> {
         group_of(

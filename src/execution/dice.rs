@@ -60,6 +60,22 @@ impl Dice {
         Ok(Self { terms, constant })
     }
 
+    /// The lowest and the highest total this expression can roll.
+    pub fn range(&self) -> (i64, i64) {
+        let (mut low, mut high) = (self.constant, self.constant);
+        for &(sign, count, sides) in &self.terms {
+            let (count, sides) = (i64::from(count), i64::from(sides));
+            if sign > 0 {
+                low += count;
+                high += count * sides;
+            } else {
+                low -= count * sides;
+                high -= count;
+            }
+        }
+        (low, high)
+    }
+
     pub fn roll(&self, random: &mut Random, critical: bool) -> Result<Roll, String> {
         let mut dice = Vec::new();
         let mut total = self.constant;

@@ -333,6 +333,9 @@ pub(super) fn show(
             } else {
                 // An intro has no printed heading, so the reader adds none.
                 if section.title != "Overview" {
+                    if crate::markdown_view::wanted_heading(ui.ctx(), &section.title) {
+                        ui.scroll_to_cursor(Some(eframe::egui::Align::TOP));
+                    }
                     style::section_heading(ui, &section.title);
                 }
                 // A hand-written stat block's actions read as the book's do.
