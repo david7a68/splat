@@ -621,8 +621,9 @@ impl CampaignContent {
             .chain(closure.errors.iter())
             .collect();
         if !errors.is_empty() {
-            design::section(
+            design::keyed_section(
                 ui,
+                "campaign_content_issues",
                 format!(
                     "{} · affected uses unavailable",
                     design::count(errors.len(), "content issue", "content issues")

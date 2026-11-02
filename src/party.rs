@@ -28,6 +28,23 @@ impl Party {
         self.reader.loading()
     }
 
+    /// A read of the open sheet with this damage, as test builds cannot read a live one.
+    #[cfg(test)]
+    pub fn simulate_sync_read(&mut self, damage: i64) {
+        let id = self.reader.selected.clone().expect("a character is open");
+        let max_hp = self.reader.sheets[&id].stat("max_hp").expect("maximum HP");
+        self.combat.keep_without_connection();
+        self.combat
+            .simulate_read(id.parse().expect("a numeric ID"), max_hp, damage);
+    }
+
+    /// The HP this page would send: the number the DM has typed, so far.
+    #[cfg(test)]
+    pub fn sync_hp(&self) -> Option<i64> {
+        let removed = self.combat.values().get("hp")?["removedHitPoints"].as_i64()?;
+        Some(self.combat.max_hp()? - removed)
+    }
+
     pub fn sync(
         &mut self,
         ctx: &egui::Context,
@@ -305,7 +322,7 @@ impl Party {
             let title = Type::Strong
                 .rich(ui, format!("{} {}", state.icon, state.word))
                 .color(state.color);
-            design::section(ui, title, |ui| self.combat.show(ui, None));
+            design::keyed_section(ui, "party_sync", title, |ui| self.combat.show(ui, None));
         }
         let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) else {
             if !self.reader.loading() {

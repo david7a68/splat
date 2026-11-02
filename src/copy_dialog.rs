@@ -230,8 +230,9 @@ impl CopyDialog {
                 if plan.dependencies.is_empty() {
                     ui.label("No required content dependencies.");
                 } else {
-                    design::section(
+                    design::keyed_section(
                         ui,
+                        "copy_dependencies",
                         format!(
                             "Dependencies kept as references: {}",
                             plan.dependencies.len()

@@ -1120,118 +1120,126 @@ impl CombatSync {
         let labels = remote.labels.clone();
         let writable = remote.can_edit;
         let before = self.desired.clone();
-        ui.add_enabled_ui(writable, |ui| {
-            if let Some(hp) = self.desired.get_mut("hp") {
-                ui.horizontal_wrapped(|ui| {
-                    let mut current =
-                        (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0);
-                    ui.label(format!("HP / {max_hp}"));
-                    let response = ui.add(egui::DragValue::new(&mut current).range(0..=max_hp));
-                    crate::design::named(ui, &response, "Current HP on the sheet");
-                    if response.changed() {
-                        hp["removedHitPoints"] = (max_hp - current).into();
-                    }
-                    let mut temp = hp["temporaryHitPoints"].as_i64().unwrap_or(0);
-                    ui.label("Temporary HP");
-                    let response = ui.add(egui::DragValue::new(&mut temp).range(0..=1_000_000));
-                    crate::design::named(ui, &response, "Temporary HP on the sheet");
-                    if response.changed() {
-                        hp["temporaryHitPoints"] = temp.into();
-                    }
-                });
-            }
-            if let Some(death) = self.desired.get_mut("death") {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Death saves");
-                    for (field, label) in [("successCount", "Successes"), ("failCount", "Failures")]
-                    {
-                        let mut n = death[field].as_i64().unwrap_or(0);
-                        ui.label(label);
-                        let response = ui.add(egui::DragValue::new(&mut n).range(0..=3));
-                        crate::design::named(
-                            ui,
-                            &response,
-                            &format!("Death save {} on the sheet", label.to_lowercase()),
-                        );
-                        if response.changed() {
-                            death[field] = n.into();
-                        }
-                    }
-                });
-            }
-            crate::design::section(ui, "Sheet conditions", |ui| {
-                if let Some(Value::Object(conditions)) = self.desired.get_mut("conditions") {
+        // A read starting or a conflict coming adds rows above. egui counts rows into a field's
+        // id, so without a scope of its own that takes the field the DM is typing in away.
+        let values = egui::UiBuilder::new()
+            .id_salt(ui.id().with("sheet_values"))
+            .global_scope(true);
+        ui.scope_builder(values, |ui| {
+            ui.add_enabled_ui(writable, |ui| {
+                if let Some(hp) = self.desired.get_mut("hp") {
                     ui.horizontal_wrapped(|ui| {
-                        for (id, name) in CONDITIONS {
-                            let key = id.to_string();
-                            let mut present = conditions.contains_key(&key);
-                            if ui.checkbox(&mut present, name).changed() {
-                                if present {
-                                    conditions.insert(
-                                        key.clone(),
-                                        if id == 4 { 1.into() } else { Value::Null },
-                                    );
-                                } else {
-                                    conditions.remove(&key);
-                                }
-                            }
-                            if id == 4 && present {
-                                let mut level = conditions[&key].as_u64().unwrap_or(1);
-                                let response =
-                                    ui.add(egui::DragValue::new(&mut level).range(1..=6));
-                                crate::design::named(ui, &response, "Exhaustion level");
-                                if response.changed() {
-                                    conditions.insert(key, level.into());
-                                }
+                        let mut current =
+                            (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0);
+                        ui.label(format!("HP / {max_hp}"));
+                        let response = ui.add(egui::DragValue::new(&mut current).range(0..=max_hp));
+                        crate::design::named(ui, &response, "Current HP on the sheet");
+                        if response.changed() {
+                            hp["removedHitPoints"] = (max_hp - current).into();
+                        }
+                        let mut temp = hp["temporaryHitPoints"].as_i64().unwrap_or(0);
+                        ui.label("Temporary HP");
+                        let response = ui.add(egui::DragValue::new(&mut temp).range(0..=1_000_000));
+                        crate::design::named(ui, &response, "Temporary HP on the sheet");
+                        if response.changed() {
+                            hp["temporaryHitPoints"] = temp.into();
+                        }
+                    });
+                }
+                if let Some(death) = self.desired.get_mut("death") {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("Death saves");
+                        for (field, label) in
+                            [("successCount", "Successes"), ("failCount", "Failures")]
+                        {
+                            let mut n = death[field].as_i64().unwrap_or(0);
+                            ui.label(label);
+                            let response = ui.add(egui::DragValue::new(&mut n).range(0..=3));
+                            crate::design::named(
+                                ui,
+                                &response,
+                                &format!("Death save {} on the sheet", label.to_lowercase()),
+                            );
+                            if response.changed() {
+                                death[field] = n.into();
                             }
                         }
                     });
                 }
-            });
-            crate::design::section(ui, "Spell slots spent", |ui| {
-                for (key, label, levels) in
-                    [("slots", "Ordinary slots", 9), ("pact", "Pact slots", 5)]
-                {
-                    if let Some(slots) = self.desired.get_mut(key) {
-                        ui.label(label);
+                crate::design::section(ui, "Sheet conditions", |ui| {
+                    if let Some(Value::Object(conditions)) = self.desired.get_mut("conditions") {
                         ui.horizontal_wrapped(|ui| {
-                            for level in 1..=levels {
-                                let field = format!("level{level}");
-                                let mut used = slots[&field].as_i64().unwrap_or(0);
-                                ui.label(format!("L{level}"));
-                                let response =
-                                    ui.add(egui::DragValue::new(&mut used).range(0..=99));
-                                crate::design::named(
-                                    ui,
-                                    &response,
-                                    &format!("{label} spent at level {level}"),
-                                );
-                                if response.changed() {
-                                    slots[&field] = used.into();
+                            for (id, name) in CONDITIONS {
+                                let key = id.to_string();
+                                let mut present = conditions.contains_key(&key);
+                                if ui.checkbox(&mut present, name).changed() {
+                                    if present {
+                                        conditions.insert(
+                                            key.clone(),
+                                            if id == 4 { 1.into() } else { Value::Null },
+                                        );
+                                    } else {
+                                        conditions.remove(&key);
+                                    }
+                                }
+                                if id == 4 && present {
+                                    let mut level = conditions[&key].as_u64().unwrap_or(1);
+                                    let response =
+                                        ui.add(egui::DragValue::new(&mut level).range(1..=6));
+                                    crate::design::named(ui, &response, "Exhaustion level");
+                                    if response.changed() {
+                                        conditions.insert(key, level.into());
+                                    }
                                 }
                             }
                         });
                     }
-                }
-            });
-            crate::design::section(ui, "Limited uses spent", |ui| {
-                for (key, label) in labels {
-                    if let Some(resource) = self.desired.get_mut(&key) {
-                        ui.push_id(&key, |ui| {
+                });
+                crate::design::section(ui, "Spell slots spent", |ui| {
+                    for (key, label, levels) in
+                        [("slots", "Ordinary slots", 9), ("pact", "Pact slots", 5)]
+                    {
+                        if let Some(slots) = self.desired.get_mut(key) {
+                            ui.label(label);
                             ui.horizontal_wrapped(|ui| {
-                                ui.label(label);
-                                let mut used = resource["uses"].as_i64().unwrap_or(0);
-                                let response =
-                                    ui.add(egui::DragValue::new(&mut used).range(0..=1_000_000));
-                                crate::design::named(ui, &response, "Uses spent");
-                                if response.changed() {
-                                    resource["uses"] = used.into();
+                                for level in 1..=levels {
+                                    let field = format!("level{level}");
+                                    let mut used = slots[&field].as_i64().unwrap_or(0);
+                                    ui.label(format!("L{level}"));
+                                    let response =
+                                        ui.add(egui::DragValue::new(&mut used).range(0..=99));
+                                    crate::design::named(
+                                        ui,
+                                        &response,
+                                        &format!("{label} spent at level {level}"),
+                                    );
+                                    if response.changed() {
+                                        slots[&field] = used.into();
+                                    }
                                 }
                             });
-                        });
+                        }
                     }
-                }
-            });
+                });
+                crate::design::section(ui, "Limited uses spent", |ui| {
+                    for (key, label) in labels {
+                        if let Some(resource) = self.desired.get_mut(&key) {
+                            ui.push_id(&key, |ui| {
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.label(label);
+                                    let mut used = resource["uses"].as_i64().unwrap_or(0);
+                                    let response = ui
+                                        .add(egui::DragValue::new(&mut used).range(0..=1_000_000));
+                                    crate::design::named(ui, &response, "Uses spent");
+                                    if response.changed() {
+                                        resource["uses"] = used.into();
+                                    }
+                                });
+                            });
+                        }
+                    }
+                });
+            })
         });
         if self.desired != before {
             self.changed = Some(Instant::now());
@@ -1622,6 +1630,36 @@ mod tests {
         );
         assert!(!out.shapes.is_empty());
         assert_eq!(sync.desired, before);
+    }
+    /// The first digit makes the sync pending, and a read can start before the second. The DM
+    /// is still in the field, so the number stays whole.
+    #[test]
+    fn a_read_starting_keeps_the_field_the_dm_is_typing_in() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let remote = remote();
+        let mut sync = CombatSync::default();
+        sync.enabled = true;
+        sync.desired = remote.groups.clone();
+        sync.remote = Some(remote);
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(700.0, 600.0))
+            .build_ui_state(|ui, sync: &mut CombatSync| sync.show(ui, None), sync);
+        harness.get_by_label("Current HP on the sheet").click();
+        harness.run_steps(3);
+        harness.event(egui::Event::Text("2".to_owned()));
+        harness.run_steps(3);
+        assert_eq!(harness.state().desired["hp"]["removedHitPoints"], 28);
+        let (_keep_open, receiver) = mpsc::channel();
+        let sent = harness.state().desired.clone();
+        harness.state_mut().pending = Some(Pending { receiver, sent });
+        harness.run_steps(3);
+        harness.event(egui::Event::Text("1".to_owned()));
+        harness.run_steps(3);
+        assert_eq!(
+            harness.state().desired["hp"]["removedHitPoints"],
+            9,
+            "HP is 21"
+        );
     }
     /// While sync is stopped, neither choice can do what it says, so each is off with a reason.
     #[test]

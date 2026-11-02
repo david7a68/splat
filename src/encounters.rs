@@ -931,8 +931,9 @@ impl Encounters {
             return;
         };
         if !snapshot.issues.is_empty() {
-            design::section(
+            design::keyed_section(
                 ui,
+                "encounter_content_issues",
                 format!("Content issues ({})", snapshot.issues.len()),
                 |ui| {
                     for issue in &snapshot.issues {

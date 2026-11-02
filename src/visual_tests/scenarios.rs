@@ -3108,6 +3108,10 @@ pub mod signed_in {
     const MEMBER: &str = "Brannoch Vale";
     const SYNC_SECTION: &str = "Sync off";
     const SYNC_TOGGLE: &str = "Sync combat stats with D&D Beyond";
+    const SYNC_HP_FIELD: &str = "Current HP on the sheet";
+    const SYNCED_WORD: &str = "Synced";
+    const SHEET_HP: i64 = 58;
+    const SHEET_MAX_HP: i64 = 62;
     const STOPPED: &str = "Sync stopped when";
     const FIRST_READ: &str = "Reading…";
     const SYNC_PARTY: &str = "Sync party";
@@ -3199,6 +3203,35 @@ pub mod signed_in {
             d.visible_text(FIRST_READ),
             "The Party page's sync says what the run's row says",
         );
+        // F2-01: the panel's title is a state word, and a new word must not close it.
+        d.observe(
+            "F2-01",
+            d.has(SYNC_TOGGLE),
+            "The panel stays open when its word changes to Reading…",
+        );
+        d.app_mut()
+            .party
+            .simulate_sync_read(SHEET_MAX_HP - SHEET_HP);
+        d.settle();
+        if !d.has(SYNC_HP_FIELD) {
+            d.click_containing(SYNCED_WORD);
+        }
+        d.click(SYNC_HP_FIELD);
+        d.type_text("4");
+        d.type_text("5");
+        let open = d.has(SYNC_TOGGLE);
+        let typed = d.app_mut().party.sync_hp();
+        d.observe(
+            "F2-01",
+            open && typed == Some(45),
+            format!("Typing 45 with sync on: the panel stays open: {open}. The value is {typed:?}"),
+        );
+        d.state("party-sync-typed-hp", Sizes::Default);
+        // What goes out is the whole number, and the read-back confirms it.
+        d.harness_focus_nothing();
+        d.app_mut().party.simulate_sync_read(SHEET_MAX_HP - 45);
+        d.settle();
+        d.begin_task();
         go_library(d);
         let rail = d.visible_text("Party sync stopped");
         go_party(d);

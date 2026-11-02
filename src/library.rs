@@ -904,8 +904,9 @@ impl Library {
             return;
         };
         if !loaded.diagnostics.is_empty() {
-            design::section(
+            design::keyed_section(
                 ui,
+                "validation_messages",
                 format!("{} validation messages", loaded.diagnostics.len()),
                 |ui| {
                     egui::ScrollArea::vertical()

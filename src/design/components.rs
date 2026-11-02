@@ -1247,6 +1247,20 @@ pub fn section<R>(
         .show(ui, add)
 }
 
+/// A collapsing section whose title changes while it is open, as a count or a state word
+/// does. egui makes a section's id from its title, so without a key a new word closes it.
+pub fn keyed_section<R>(
+    ui: &mut Ui,
+    key: &str,
+    title: impl Into<egui::WidgetText>,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::CollapsingResponse<R> {
+    egui::CollapsingHeader::new(title)
+        .id_salt(key)
+        .icon(section_icon)
+        .show(ui, add)
+}
+
 /// A collapsing section for what matters least: technical details at the end of a page.
 pub fn quiet_section<R>(
     ui: &mut Ui,
