@@ -7,8 +7,8 @@
 use super::{
     driver::{DEFAULT, Driver, LARGE, SMALL, Sizes},
     fixture::{
-        CAMPAIGN, GROUP_GOBLINS, GROUP_LOST, GROUP_RIVALS, MODULE, QUIET_CAMPAIGN, RUN, RUN_12,
-        RUN_20, RUN_ARENA, UNLINKED_CAMPAIGN,
+        CAMPAIGN, GROUP_GOBLINS, GROUP_LOST, GROUP_RIVALS, MODULE, PAST_SESSION, QUIET_CAMPAIGN,
+        RUN, RUN_12, RUN_20, RUN_ARENA, RUN_OLD, RUN_PAST, UNLINKED_CAMPAIGN,
     },
     steps::*,
 };
@@ -634,7 +634,7 @@ pub mod encounter_build {
     pub fn run(d: &mut Driver<'_>) {
         // T5.3 measures the whole build, so it starts from the cold start.
         d.begin_task();
-        d.expect(SAVED_RUNS);
+        d.expect(READY_TO_RUN);
         d.state("encounter-list", Sizes::All);
         d.check_tab_order("encounters, list");
 
@@ -746,26 +746,26 @@ pub mod encounter_build {
         );
 
         d.click(BACK_TO_LIST);
-        d.expect(SAVED_RUNS);
+        d.expect(READY_TO_RUN);
         let nodes = d.nodes();
         let dated = nodes.iter().any(|node| {
             node.name.contains(RUN)
                 && node.name.contains("In progress")
                 && node.name.contains("Saved ")
         });
-        let grouped = nodes
+        let first = nodes
             .iter()
-            .position(|node| node.name == RUN.to_uppercase())
+            .position(|node| node.name == "In progress")
             .zip(
                 nodes
                     .iter()
-                    .position(|node| node.name.contains(RUN) && node.name.contains("Round")),
+                    .position(|node| node.name.contains(READY_TO_RUN)),
             )
-            .is_some_and(|(group, run)| group < run);
+            .is_some_and(|(unfinished, ready)| unfinished < ready);
         d.observe(
             "T4.4",
-            dated && grouped,
-            format!("Saved runs show when they were saved, and their status: {dated}. Grouped under their encounter: {grouped}"),
+            dated && first,
+            format!("Unfinished runs show their encounter, when they were saved, and their status: {dated}. They come first: {first}"),
         );
         d.state("saved-runs", Sizes::Default);
 
@@ -815,7 +815,7 @@ pub mod encounter_run {
     const ANCHOR_ROW: &str = "Ember Cultist";
 
     pub fn run(d: &mut Driver<'_>) {
-        d.expect(SAVED_RUNS);
+        d.expect(READY_TO_RUN);
         d.state("saved-runs", Sizes::Default);
         d.click_beside(RUN, RESUME);
         d.expect(&format!("{RUN_HEADING}{RUN}"));
@@ -2601,7 +2601,7 @@ pub mod run_restart {
         go_encounters(d);
         d.observe(
             "Restart",
-            d.has_containing(SAVED_RUNS) && !d.has_containing(PREVIOUS_CAMPAIGN),
+            d.has_containing(READY_TO_RUN) && !d.has_containing(PREVIOUS_CAMPAIGN),
             "After a restart into a run, Encounters lists the campaign's encounters",
         );
         d.state("encounters-after-restart", Sizes::Default);
@@ -3298,21 +3298,19 @@ pub mod nav_table {
     const ENCOUNTER: &str = "Shrine of Cinders";
 
     pub fn run(d: &mut Driver<'_>) {
-        // T4.4 with more than one group: each saved run under its own encounter.
+        // T4.4 with more than one unfinished run: each row names its encounter.
         let nodes = d.nodes();
-        let grouped = [RUN, RUN_12, RUN_20].iter().all(|run| {
-            let heading = nodes
-                .iter()
-                .position(|node| node.name == run.to_uppercase());
+        let named = [RUN, RUN_12, RUN_20].iter().all(|run| {
+            let name = nodes.iter().position(|node| node.name == *run);
             let row = nodes
                 .iter()
                 .position(|node| node.name.starts_with(&format!("{run} · ")));
-            matches!((heading, row), (Some(heading), Some(row)) if heading < row)
+            matches!((name, row), (Some(name), Some(row)) if name < row)
         });
         d.observe(
             "T4.4",
-            grouped,
-            "Three saved runs, each under its own encounter's heading",
+            named,
+            "Three unfinished runs, each with its encounter's name on its row",
         );
 
         // Open run first, because its strip moves every other page down.
@@ -4774,6 +4772,73 @@ pub mod encounter_groups {
         d.expect(FIRST_GOBLIN);
         d.state("group-added-in-setup", Sizes::Default);
         d.goal("add a group during setup");
+    }
+}
+
+pub mod encounter_history {
+    use super::*;
+    const DELETE_RUN: &str = "Delete the saved run of Bridge Ambush";
+    const UNDO_DELETE: &str = "Undo delete";
+    const OPEN_OLD: &str = "Open the run of Old Mill Raid";
+    const BACK: &str = "Back to this run";
+    const NO_SESSION: &str = "NO SESSION";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.expect(READY_TO_RUN);
+        d.expect(HISTORY);
+        d.observe(
+            "T4.6",
+            !d.has_label(RUN_PAST),
+            "An encounter whose run ended is not in Ready to run, and History starts closed",
+        );
+        d.state("encounters-with-history", Sizes::All);
+
+        d.click_starting(HISTORY);
+        let session = d.has_containing(&PAST_SESSION.to_uppercase());
+        d.observe(
+            "T4.6",
+            session && d.has(NO_SESSION) && d.has_label(RUN_PAST) && d.has_label(RUN_OLD),
+            format!("Ended runs sit under their session, or under No session: {session}"),
+        );
+        d.state("history-open", Sizes::All);
+        d.check_tab_order("encounters, history open");
+
+        // Undo is the guard on a delete, and the row comes back as it was.
+        d.click_starting(DELETE_RUN);
+        d.expect(UNDO_DELETE);
+        d.observe(
+            "T4.6",
+            !d.has_containing(DELETE_RUN),
+            "A deleted run leaves the list, and Undo delete is offered",
+        );
+        d.state("run-deleted", Sizes::Default);
+        d.click(UNDO_DELETE);
+        d.expect(DELETE_RUN);
+
+        // Reading an old run writes nothing to the story.
+        let before = d.app_mut().timeline.events.len();
+        d.click_starting(OPEN_OLD);
+        d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));
+        let after = d.app_mut().timeline.events.len();
+        d.observe(
+            "T4.6",
+            after == before,
+            "Opening an ended run with no event adds none",
+        );
+        d.state("ended-run-open", Sizes::Default);
+
+        go_encounters(d);
+        d.expect(BACK);
+        let nodes = d.nodes();
+        let open_first = nodes
+            .iter()
+            .position(|node| node.name == BACK)
+            .zip(nodes.iter().position(|node| node.name == RESUME))
+            .is_some_and(|(back, resume)| back < resume);
+        d.observe("T4.6", open_first, "The open run comes before the others");
+        d.state("open-ended-run-first", Sizes::Default);
+        d.click(BACK);
+        d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));
     }
 }
 

@@ -293,6 +293,8 @@ struct State {
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
+    /// The encounter this run came from. Saves from before this was kept have none.
+    source: Option<Uuid>,
     initiative: Initiative,
     storage: Option<Storage>,
     /// Each character's cached portrait, by D&D Beyond ID.
@@ -545,6 +547,7 @@ impl Run {
         Ok(Self {
             name,
             id: Uuid::new_v4(),
+            source: None,
             initiative: Initiative::default(),
             storage: None,
             portraits: BTreeMap::new(),
@@ -1841,6 +1844,8 @@ struct SavedRun {
     campaign: Uuid,
     id: Uuid,
     name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<Uuid>,
     initiative: Initiative,
     state: State,
     setup_details: String,
@@ -1891,6 +1896,10 @@ impl Run {
     pub fn needs_save(&self) -> bool {
         self.dirty
     }
+    /// Say which encounter this run came from. Call it before the first save.
+    pub fn came_from(&mut self, encounter: Uuid) {
+        self.source = Some(encounter);
+    }
     pub fn configure_storage(
         &mut self,
         campaign: Uuid,
@@ -1918,6 +1927,7 @@ impl Run {
             campaign: storage.campaign,
             id: self.id,
             name: self.name.clone(),
+            source: self.source,
             initiative: self.initiative.clone(),
             state: self.state.clone(),
             setup_details: self.setup_details.clone(),
@@ -2088,6 +2098,7 @@ impl Run {
         Ok(Self {
             id: saved.id,
             name: saved.name,
+            source: saved.source,
             initiative: saved.initiative,
             selected: match saved.state.phase {
                 Phase::Running => saved.state.order[saved.state.cursor],
@@ -2160,60 +2171,169 @@ impl Run {
             if path.extension().is_some_and(|e| e == "json") {
                 let modified = crate::hermetic::file_time(&path);
                 match Self::open(&path, campaign) {
-                    Ok(run) => {
-                        let (status, finished) = match run.state.phase {
-                            Phase::Setup => ("Preparing", false),
-                            Phase::Running => ("In progress", false),
-                            Phase::Ended { .. } => ("Ended", true),
-                        };
-                        // The turn it stopped on, so a DM can tell two saves apart at a glance.
-                        let turn = run
-                            .current()
-                            .filter(|_| !finished)
-                            .map(|i| format!(" · {}’s turn", run.state.participants[i].name))
-                            .unwrap_or_default();
-                        runs.push(SavedRunInfo {
-                            path,
-                            encounter: run.name.clone(),
-                            label: format!(
-                                "Round {} · {status}{turn}{}",
-                                run.state.round,
-                                modified.map_or_else(String::new, |at| format!(
-                                    " · Saved {}",
-                                    crate::party::fetch_age(
-                                        crate::hermetic::now().saturating_sub(at)
-                                    )
-                                )),
-                            ),
-                            finished,
-                            readable: true,
-                        });
-                    }
+                    Ok(run) => runs.push(run.info(path, modified)),
                     Err(_) => {
                         let name = path.file_name().unwrap_or_default().to_string_lossy();
                         runs.push(SavedRunInfo {
                             label: format!("Unreadable run: {name}"),
+                            id: None,
+                            source: None,
                             encounter: String::new(),
-                            finished: false,
-                            readable: false,
+                            standing: Standing::Unreadable,
+                            saved_at: modified,
+                            unsent: Vec::new(),
                             path,
                         });
                     }
                 }
             }
         }
-        runs.sort_by(|a, b| a.encounter.cmp(&b.encounter).then(a.label.cmp(&b.label)));
+        // Newest first. The names decide a tie, so that a list always comes out the same.
+        runs.sort_by(|a, b| {
+            b.saved_at
+                .cmp(&a.saved_at)
+                .then_with(|| a.encounter.cmp(&b.encounter))
+                .then_with(|| a.label.cmp(&b.label))
+                .then_with(|| a.path.cmp(&b.path))
+        });
         Ok(runs)
     }
+    /// This run as a row on the Encounters page, as it is now and not as its file has it.
+    pub fn live_info(&self) -> Option<SavedRunInfo> {
+        Some(self.info(self.path()?.to_path_buf(), None))
+    }
+    fn info(&self, path: PathBuf, saved_at: Option<u64>) -> SavedRunInfo {
+        let round = self.state.round;
+        let saved = saved_at.map_or_else(String::new, |at| {
+            format!(
+                " · Saved {}",
+                crate::party::fetch_age(crate::hermetic::now().saturating_sub(at))
+            )
+        });
+        let (standing, label) = match &self.state.phase {
+            Phase::Ended { outcome } => {
+                let outcome = Some(outcome.trim())
+                    .filter(|outcome| !outcome.is_empty())
+                    .unwrap_or("Ended");
+                (Standing::Ended, format!("{outcome} · Round {round}{saved}"))
+            }
+            phase => {
+                let status = if *phase == Phase::Setup {
+                    "Preparing"
+                } else {
+                    "In progress"
+                };
+                // The turn it stopped on, so a DM can tell two saves apart at a glance.
+                let turn = self
+                    .current()
+                    .map(|i| format!(" · {}’s turn", self.state.participants[i].name))
+                    .unwrap_or_default();
+                (
+                    Standing::Unfinished,
+                    format!("Round {round} · {status}{turn}{saved}"),
+                )
+            }
+        };
+        SavedRunInfo {
+            path,
+            id: Some(self.id),
+            source: self.source,
+            encounter: self.name.clone(),
+            label,
+            standing,
+            saved_at,
+            unsent: self.unsent_in_save(),
+        }
+    }
+    /// Who holds values that D&D Beyond did not confirm, in a run that keeps the party matched.
+    /// With its file gone, nothing else has these values.
+    fn unsent_in_save(&self) -> Vec<String> {
+        if !self.keep_party_synced {
+            return Vec::new();
+        }
+        self.state
+            .participants
+            .iter()
+            .filter(|p| remote_identity(p).is_some())
+            // As a first read would judge it. Before any match, a difference from the start
+            // is the DM's.
+            .filter(|p| match &p.started {
+                Some(started) if p.combat_values.is_empty() => {
+                    !shadow_differences(&SheetShadow::of(p), started).is_empty()
+                }
+                _ => {
+                    !p.combat_values.is_empty()
+                        && !groups_that_differ(p, &p.combat_values, p.max_hp).is_empty()
+                }
+            })
+            .map(|p| p.name.clone())
+            .collect()
+    }
+}
+
+/// Where a saved run stands, as the Encounters page sorts it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Standing {
+    Unfinished,
+    Ended,
+    /// The file is not a run this campaign can open. It can belong to another campaign that
+    /// shares the folder, so the page offers nothing that would change it.
+    Unreadable,
 }
 
 /// One saved run, as the Encounters page lists it.
 pub struct SavedRunInfo {
     pub path: PathBuf,
+    pub id: Option<Uuid>,
+    /// The encounter it came from, if the save says.
+    pub source: Option<Uuid>,
     pub encounter: String,
     pub label: String,
-    pub finished: bool,
-    pub readable: bool,
+    pub standing: Standing,
+    pub saved_at: Option<u64>,
+    /// Who holds values not sent to D&D Beyond.
+    pub unsent: Vec<String>,
+}
+
+/// A run file the DM deleted, kept in memory for one step of undo.
+pub struct DeletedRun {
+    path: PathBuf,
+    bytes: Vec<u8>,
+    saved_at: Option<std::time::SystemTime>,
+    pub encounter: String,
+    pub unsent: Vec<String>,
+}
+
+impl DeletedRun {
+    /// Remove the run's file.
+    pub fn delete(info: &SavedRunInfo) -> Result<Self, String> {
+        let bytes = fs::read(&info.path).map_err(|e| e.to_string())?;
+        let saved_at = fs::metadata(&info.path)
+            .and_then(|metadata| metadata.modified())
+            .ok();
+        fs::remove_file(&info.path).map_err(|e| e.to_string())?;
+        Ok(Self {
+            path: info.path.clone(),
+            bytes,
+            saved_at,
+            encounter: info.encounter.clone(),
+            unsent: info.unsent.clone(),
+        })
+    }
+    /// Put the file back as it was. A file that has since appeared there stays.
+    pub fn restore(&self) -> Result<(), String> {
+        let parent = self.path.parent().ok_or("Invalid run location")?;
+        let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+        temp.write_all(&self.bytes)
+            .and_then(|_| temp.as_file().sync_all())
+            .map_err(|e| e.to_string())?;
+        if let Some(at) = self.saved_at {
+            temp.as_file().set_modified(at).map_err(|e| e.to_string())?;
+        }
+        temp.persist_noclobber(&self.path)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 /// A UTC date and time, so two runs saved on one day can be told apart.
@@ -2380,6 +2500,26 @@ pub(crate) fn write_in_progress_run(
         run.apply(Command::Next)?;
     }
     run.configure_storage(campaign, directory, Initiative::default())
+}
+
+/// A run that has ended, for test scenes. It says what the timeline records about it.
+#[cfg(test)]
+pub(crate) fn write_ended_run(
+    campaign: Uuid,
+    directory: &Path,
+    name: &str,
+    source: Option<Uuid>,
+    outcome: &str,
+    participant: Participant,
+) -> Result<crate::timeline::RunFact, String> {
+    let mut run = Run::new(name.into(), vec![participant], format!("# {name}"))?;
+    run.state.random = Random::seeded(20_260_101);
+    run.source = source;
+    run.apply(Command::Initiative(0, Some(10)))?;
+    run.apply(Command::Begin)?;
+    run.apply(Command::End(outcome.into()))?;
+    run.configure_storage(campaign, directory, Initiative::default())?;
+    Ok(run.timeline_fact())
 }
 
 fn display(value: Option<i64>) -> String {
@@ -3004,6 +3144,96 @@ mod tests {
         assert_eq!(run.state.participants[0].hp, Some(max - 9));
         assert_eq!(run.syncs[&0].conflict_keys(), vec!["hp"]);
     }
+    #[test]
+    fn a_run_keeps_its_encounter_and_says_how_it_stands() {
+        let dir = tempfile::tempdir().unwrap();
+        let (campaign, encounter) = (Uuid::new_v4(), Uuid::new_v4());
+        let mut run = started_run_in(dir.path(), campaign);
+        run.came_from(encounter);
+        run.dirty = true;
+        run.save().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(saved[0].source, Some(encounter));
+        assert_eq!(saved[0].standing, Standing::Unfinished);
+        assert_eq!(saved[0].id, Some(run.id));
+        assert!(saved[0].label.contains("In progress"));
+
+        run.apply(Command::End("Party won".into())).unwrap();
+        run.save().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(saved[0].standing, Standing::Ended);
+        assert!(saved[0].label.starts_with("Party won · Round "));
+        assert_eq!(run.live_info().unwrap().standing, Standing::Ended);
+    }
+
+    /// With no connection, nothing was ever confirmed, so these values are only in this file.
+    #[test]
+    fn a_delete_knows_about_changes_that_never_reached_dnd_beyond() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut run = run();
+        linked(&mut run, 0, "1");
+        run.keep_party_synced();
+        for index in 0..3 {
+            run.apply(Command::Initiative(index, Some(10))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        let name = run.state.participants[0].name.clone();
+        assert!(run.live_info().unwrap().unsent.is_empty(), "nothing yet");
+
+        run.apply(Command::Damage(0, 1)).unwrap();
+        run.apply(Command::Damage(1, 1)).unwrap();
+        run.save().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(saved[0].unsent, vec![name], "only the linked participant");
+    }
+
+    /// Another campaign can share the folder, so its file is not this campaign's to change.
+    #[test]
+    fn a_file_this_campaign_cannot_open_is_unreadable() {
+        let dir = tempfile::tempdir().unwrap();
+        let other = Uuid::new_v4();
+        started_run_in(dir.path(), other);
+        let saved = Run::list(dir.path(), Uuid::new_v4()).unwrap();
+        assert_eq!(saved[0].standing, Standing::Unreadable);
+        assert_eq!(saved[0].id, None);
+    }
+
+    #[test]
+    fn a_deleted_run_comes_back_as_it_was() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let run = started_run_in(dir.path(), campaign);
+        let path = run.path().unwrap().to_path_buf();
+        let before = fs::read(&path).unwrap();
+        let time = fs::metadata(&path).unwrap().modified().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+
+        let deleted = DeletedRun::delete(&saved[0]).unwrap();
+        assert!(Run::list(dir.path(), campaign).unwrap().is_empty());
+
+        deleted.restore().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), time);
+        assert!(
+            deleted.restore().is_err(),
+            "a file now in its place stays as it is"
+        );
+    }
+
+    fn started_run_in(directory: &Path, campaign: Uuid) -> Run {
+        let mut run = run();
+        for index in 0..3 {
+            run.apply(Command::Initiative(index, Some(10))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.configure_storage(campaign, directory, Initiative::default())
+            .unwrap();
+        run
+    }
+
     /// Through the file, as a close and reopen does. Anything only in memory is gone.
     fn close_and_reopen(run: &mut Run, campaign: Uuid) -> Run {
         run.dirty = true;

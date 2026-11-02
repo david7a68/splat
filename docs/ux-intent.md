@@ -162,7 +162,7 @@ first turn, or the exact turn left off, fast. **Context:** boundary of desk and 
 - Saved runs and run settings are in collapsed sections of the builder page.
 - A resumed ended run cannot be reopened, because undo is not saved (`:261`, `:1119`).
 
-**Done well:** T4.1 to T4.5.
+**Done well:** T4.1 to T4.6.
 
 ### W5. Build an encounter
 **Trigger:** the DM plans the next session. **Goal:** a saved roster the DM trusts.
@@ -287,7 +287,7 @@ Recording records. It does not rule: a marker is a suggestion, and only the DM p
 **Done well:** T11.5 to T11.7.
 
 ### W13. Prepare arrivals, and add them to a fight
-**Trigger:** a rival team, a wave, or a released beast can arrive in any room. **Goal:** the group is ready once,
+**Trigger:** rival adventurers, reinforcements, or a released beast can arrive in any room. **Goal:** the group is ready once,
 and it joins the running fight in one step when it arrives, with its changes in plain view. **Context:** desk to
 prepare, table to add. **Frequency:** every fight that has arrivals.
 
@@ -322,7 +322,7 @@ visual form (sidebar or top bar).
 
 **Top-level**
 - **Run**: exists only while a run is open. Always first. It is a place, not a mode of a tab.
-- **Encounters**: templates and their saved runs. Reached first when a campaign is active.
+- **Encounters**: runs in progress, encounters ready to run, encounter groups, and a collapsed History of ended runs under their sessions. Reached first when a campaign is active.
 - **Sessions**: session notes, session templates, recordings and their processing.
 - **Timeline**: every encounter, rest, travel interval, day and major event, apart from any one session.
 - **Party**: sheets.
@@ -527,7 +527,8 @@ reading the code, not from a test run.
 | T4.1 | Cold start with a saved encounter to run setup in ≤ 3 | prep-to-table **new** | cost | 5 |
 | T4.2 | Cold start to the interrupted turn in ≤ 2, current participant selected | run-resume **new** | cost, state | 4; first row |
 | T4.3 | A player's initiative in ≤ 2. Rows do not move during entry | prep-to-table **new** | cost, state | 3; rows move |
-| T4.4 | Saved runs show date and status, and group by encounter | encounter-build | state | Fail |
+| T4.4 | Unfinished runs show their encounter, date and status, and come first | encounter-build | state | Fail |
+| T4.6 | An encounter leaves Ready when a run of it ends. Ended runs wait under their session in a collapsed History. Opening one adds nothing to the timeline | encounter-history | state | Fail |
 | T4.5 | Setup and live views differ clearly. Live has no setup controls | encounter-run | look | Partly |
 | T5.1 | Creature results show existing CR, HP, and AC | encounter-build | state | Fail |
 | T5.2 | Read a full stat block with the draft open in ≤ 2, without leaving the editor | encounter-build | cost | 5+ |
