@@ -382,7 +382,13 @@ the DM starts a run from a party-only encounter kept for this.
 locations but stays plain text. An event's detail panel links to the location when the text matches exactly one name or
 alias.
 
-**Not in this design:** relationship graphs, generators, per-player knowledge, and bulk import. People in the notes' tables
+**Generating an NPC.** Lookup has **Generate NPC**, which rolls a name and three attributes: look, manner and want. It
+writes nothing until **Save NPC**, which uses the same path as **New NPC** and adds the attributes as the note's text. The
+words come from the campaign's marked tables (`npc-name`, `npc-look`, `npc-manner`, `npc-want`), because only the
+campaign knows how its people are named. A part with no table uses a built-in list. Generating anything else, such as a
+location or an encounter, stays out of this design.
+
+**Not in this design:** relationship graphs, other generators, per-player knowledge, and bulk import. People in the notes' tables
 stay there until the DM wants a page for one, and search finds them.
 
 ## The campaign clock

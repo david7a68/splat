@@ -3576,6 +3576,26 @@ pub mod world {
         );
         d.state("world-heading-beside-run", Sizes::All);
 
+        d.click("Generate NPC");
+        d.expect("Save NPC");
+        d.observe(
+            "T14.7",
+            d.has_containing("Look: ")
+                && d.has_containing("Manner: ")
+                && d.has_containing("Want: "),
+            "The generator gives a name and three attributes, and writes nothing yet",
+        );
+        d.state("world-generated-npc", Sizes::All);
+        d.click("Reroll");
+        d.click("Save NPC");
+        d.settle();
+        d.observe(
+            "T14.7",
+            d.has("Add to run") && !d.has("Save NPC"),
+            "A saved NPC opens as a note, ready to join the fight",
+        );
+        d.state("world-generated-npc-saved", Sizes::Default);
+
         look_up_again(d, NPC);
         d.click("New NPC");
         d.settle();
