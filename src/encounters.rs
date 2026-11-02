@@ -337,6 +337,7 @@ fn roster_summary(setup: &Setup) -> String {
             .get("side")
             .and_then(Value::as_str)
             .unwrap_or(&slot.side)
+            .trim()
             == "party"
     };
     let party = setup.roster.iter().filter(side).count();
@@ -2390,6 +2391,9 @@ mod tests {
         slot_override(&mut d, 0, "{side: party}");
         d.save(&campaign, &[]).unwrap();
         assert_eq!(roster_summary(&d.setup), "1 party · 0 others · Changed");
+        slot_override(&mut d, 0, "{side: ' party '}");
+        assert_eq!(roster_summary(&d.setup), "1 party · 0 others · Changed");
+        slot_override(&mut d, 0, "{side: party}");
         let editor = Encounters {
             active: Some(campaign.clone()),
             draft: Some(Draft::open(dir.path(), &d.path).unwrap()),
