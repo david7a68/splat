@@ -248,6 +248,15 @@ impl Draft {
                 group_texts.push((index, text));
             }
         }
+        // Each was checked against what is saved, and these are saved together.
+        let mut names = BTreeSet::from([self.name.trim().to_ascii_lowercase()]);
+        for name in self.groups.iter().filter_map(GroupDraft::linkable_name) {
+            if !names.insert(name.to_ascii_lowercase()) {
+                return Err(format!(
+                    "Group {name}: a group for any encounter needs a name of its own. Choose another name."
+                ));
+            }
+        }
         // Create the manifest first so a new campaign keeps its module selections.
         let mut document = CampaignDocument::load(campaign)?;
         if document.baseline.is_none() {
@@ -1058,7 +1067,8 @@ impl Encounters {
     }
     /// A new group started in the plan was discarded there, and can come back.
     pub fn group_discarded_in_plan(&self) -> bool {
-        self.group_in_plan && self.group_draft.is_none() && self.group_undo_ready()
+        // The plan shows it again, so an encounter draft left open cannot hide it there.
+        self.group_in_plan && self.group_draft.is_none() && self.discarded_group.is_some()
     }
     pub fn undo_group_discard_in_plan(&mut self) {
         if self.group_discarded_in_plan() {

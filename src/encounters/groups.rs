@@ -145,6 +145,10 @@ impl GroupDraft {
     pub(super) fn path(&self) -> &str {
         &self.path
     }
+    /// Its name, when a plan could link it: it is for any encounter.
+    pub(super) fn linkable_name(&self) -> Option<&str> {
+        self.setup.encounter.is_none().then(|| self.name.trim())
+    }
     pub(super) fn belongs_to(&self, encounter: Uuid) -> bool {
         self.setup
             .encounter
@@ -1850,6 +1854,19 @@ mod tests {
     }
 
     #[test]
+    fn an_encounter_draft_left_open_does_not_hide_a_plan_groups_undo() {
+        let mut encounters = Encounters {
+            draft: Some(Draft::new()),
+            ..Encounters::default()
+        };
+        encounters.new_group_in_plan();
+        encounters.discarded_group = encounters.group_draft.take();
+        assert!(encounters.group_discarded_in_plan());
+        encounters.undo_group_discard_in_plan();
+        assert!(encounters.group_open_in_plan());
+    }
+
+    #[test]
     fn a_group_discarded_in_the_plan_can_come_back_there() {
         let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
@@ -2155,6 +2172,39 @@ mod tests {
         reopened.read_groups(dir.path(), &snapshot).unwrap();
         assert_eq!(reopened.groups.len(), 1);
         assert!(!reopened.dirty());
+    }
+
+    #[test]
+    fn groups_saved_together_cannot_both_take_one_name_for_any_encounter() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let mut draft = Draft::new();
+        let group = |name: &str| {
+            let mut group = GroupDraft::new();
+            group.name = name.into();
+            group.add(scout);
+            group
+        };
+        draft.groups = vec![group("Rivals"), group(" RIVALS ")];
+        let error = draft.save(&campaign, &[]).unwrap_err();
+        assert!(error.contains("needs a name of its own"), "{error}");
+        assert!(!dir.path().join(&draft.path).exists(), "nothing is written");
+        // Nor can one take the name of the encounter saved with it.
+        draft.name = "Ford".into();
+        draft.groups = vec![group("ford")];
+        let error = draft.save(&campaign, &[]).unwrap_err();
+        assert!(error.contains("needs a name of its own"), "{error}");
+        // Two that belong to the encounter can share one.
+        let own = |name: &str| {
+            let mut group = GroupDraft::for_encounter(draft.id);
+            group.name = name.into();
+            group.add(scout);
+            group
+        };
+        let both = vec![own("Rivals"), own("Rivals")];
+        draft.groups = both;
+        draft.save(&campaign, &[]).unwrap();
     }
 
     #[test]
