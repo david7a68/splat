@@ -333,7 +333,10 @@ impl Splat {
         if self.encounters.draft_dirty() {
             let name = self.encounters.draft_name().unwrap_or_default();
             items.push((
-                format!("Encounter \u{201c}{name}\u{201d} has unsaved changes."),
+                format!(
+                    "{} \u{201c}{name}\u{201d} has unsaved changes.",
+                    self.encounters.draft_kind()
+                ),
                 Page::Encounters,
             ));
         }
@@ -628,7 +631,7 @@ impl Splat {
         }];
         for (dirty, word) in [
             (self.library.dirty(), "Library draft"),
-            (self.encounters.draft_dirty(), "Encounter draft"),
+            (self.encounters.draft_dirty(), self.encounters.draft_word()),
             (self.campaign_content.dirty(), "Campaign draft"),
         ] {
             if dirty {

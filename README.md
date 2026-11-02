@@ -279,8 +279,8 @@ participant only. With a value off, the creature's starting state applies.
 The default sides, party and enemies, are hostile to each other.
 
 A roster slot can also build in changes to its creature: a display name, maximum HP,
-AC, initiative bonus, attack bonus, damage bonus, speed, side, starting conditions, and
-a note. Open them with the slot's **…** button. Each one appears under the slot with the
+AC, initiative bonus, attack bonus, damage bonus, speed, starting conditions, and
+a note. The slot's row sets its side, and a note can also override it. Open them with the slot's **Options** button. Each one appears under the slot with the
 value it replaces, and nothing is written back to the creature, a package or a campaign
 copy. An invalid change is refused with a message that names the slot. See
 [Overrides](docs/design/campaign-schema.md#overrides).

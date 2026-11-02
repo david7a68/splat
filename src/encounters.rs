@@ -337,7 +337,15 @@ fn roster_summary(setup: &Setup) -> String {
     };
     let party = setup.roster.iter().filter(side).count();
     let others = setup.roster.len() - party;
-    format!("{party} party · {others} others")
+    let changed = if setup.roster.iter().any(|slot| !slot.overrides.is_empty()) {
+        " · Changed"
+    } else {
+        ""
+    };
+    format!(
+        "{party} party · {}{changed}",
+        design::count(others, "other", "others")
+    )
 }
 struct Snapshot {
     catalogue: Catalogue,
@@ -593,6 +601,22 @@ impl Encounters {
             draft.add(id);
         }
     }
+    /// What the rail calls the open draft.
+    pub fn draft_word(&self) -> &'static str {
+        if self.group_draft.is_some() {
+            "Group draft"
+        } else {
+            "Encounter draft"
+        }
+    }
+    /// What a message calls the open draft.
+    pub fn draft_kind(&self) -> &'static str {
+        if self.group_draft.is_some() {
+            "Group"
+        } else {
+            "Encounter"
+        }
+    }
     pub fn draft_dirty(&self) -> bool {
         self.draft.as_ref().is_some_and(Draft::dirty)
             || self.group_draft.as_ref().is_some_and(GroupDraft::dirty)
@@ -829,7 +853,7 @@ impl Encounters {
             return false;
         };
         if let Some(snapshot) = &self.snapshot {
-            run.groups = snapshot.groups.clone();
+            run.groups = Some(snapshot.groups.clone());
         }
         if !run.show(ui) {
             return false;
@@ -1019,6 +1043,7 @@ impl Encounters {
         let two_columns = ui.available_width() >= 640.0;
         if empty {
             let mut create = false;
+            let mut create_group = false;
             design::empty_state(
                 ui,
                 icons::ENCOUNTERS,
@@ -1031,10 +1056,20 @@ impl Encounters {
                         .name("Create a first encounter")
                         .show(ui)
                         .clicked();
+                    create_group = Action::quiet("New group")
+                        .icon(icons::ADD)
+                        .blocked(group_blocked)
+                        .hint("A reusable set of creatures to add to a running encounter")
+                        .show(ui)
+                        .clicked();
                 },
             );
             if create {
                 self.draft = Some(Draft::new());
+                self.focus_name = true;
+            }
+            if create_group {
+                self.group_draft = Some(GroupDraft::new());
                 self.focus_name = true;
             }
             return;
@@ -1691,6 +1726,7 @@ impl Encounters {
                             slot.party_slot.as_deref().unwrap_or(&slot.key)
                         )
                     });
+                let name = groups::shown_name(&slot.overrides, name);
                 let detail = resolved
                     .and_then(|id| snapshot.creatures.iter().find(|c| c.id == id))
                     .map_or("", |c| c.detail.as_str());
@@ -1707,25 +1743,25 @@ impl Encounters {
                             duplicate = Some(i);
                         }
                         if i + 1 < count {
-                            if design::icon_button(ui, icons::DOWN, "Move down").clicked() {
+                            if design::icon_button(ui, icons::MOVE_DOWN, "Move down").clicked() {
                                 lower = Some(i);
                             }
                         } else {
                             ui.add_space(Density::Read.control());
                         }
                         if i > 0 {
-                            if design::icon_button(ui, icons::UP, "Move up").clicked() {
+                            if design::icon_button(ui, icons::MOVE_UP, "Move up").clicked() {
                                 raise = Some(i);
                             }
                         } else {
                             ui.add_space(Density::Read.control());
                         }
-                        if design::icon_button(
-                            ui,
-                            icons::EXPAND,
-                            "Changes, starting HP, temporary HP and initiative group",
-                        )
-                        .clicked()
+                        if Action::quiet("Options")
+                            .density(Density::Read)
+                            .name(groups::SLOT_OPTIONS)
+                            .selected(is_open)
+                            .show(ui)
+                            .clicked()
                         {
                             *expanded = if is_open {
                                 None
@@ -2334,7 +2370,7 @@ mod tests {
         d.add(id, false);
         slot_override(&mut d, 0, "{side: party}");
         d.save(&campaign, &[]).unwrap();
-        assert_eq!(roster_summary(&d.setup), "1 party · 0 others");
+        assert_eq!(roster_summary(&d.setup), "1 party · 0 others · Changed");
         let editor = Encounters {
             active: Some(campaign.clone()),
             draft: Some(Draft::open(dir.path(), &d.path).unwrap()),

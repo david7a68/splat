@@ -17,7 +17,7 @@ use crate::{
 use eframe::egui::{
     self, Align, Align2, Galley, Key, Layout, Modifiers, Rect, Stroke, StrokeKind, pos2, vec2,
 };
-use splat::content::overrides::{BY_HAND, Row};
+use splat::content::overrides::{BY_HAND, PRINTED, Row};
 use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
@@ -1600,7 +1600,6 @@ impl Run {
         let (hp, successes, failures) = (p.hp, p.successes, p.failures);
         let is_sheet = p.definition.fields.contains_key("splat_external");
         ui.add(egui::Label::new(Type::Title.rich(ui, &p.name).color(colors().text)).wrap());
-        changes_block(ui, p);
         if hp == Some(0) {
             self.death_saves(ui, index, successes, failures);
         }
@@ -1702,13 +1701,14 @@ impl Run {
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         ui.add_space(design::XS);
+        ui.label(Type::Heading.rich(ui, "Encounter groups").color(c.text));
         ui.add(
             egui::Label::new(
                 Type::Small
                     .rich(
                         ui,
                         format!(
-                            "{} A typed total applies to every member.",
+                            "Drag a name to the initiative list, or press Add. {} A typed total applies to every member.",
                             self.initiative.grouping.arrival_rule()
                         ),
                     )
@@ -1716,7 +1716,30 @@ impl Run {
             )
             .wrap(),
         );
-        let groups = self.groups.clone();
+        // The roll and where it placed them. Undo or a later step takes this away.
+        if let Some(line) = self
+            .state
+            .log
+            .last()
+            .filter(|line| line.starts_with(super::GROUP_ADDED))
+        {
+            design::message(ui, Tone::Success, line);
+        }
+        let Some(groups) = self.groups.clone() else {
+            ui.add_space(design::S);
+            ui.add(
+                egui::Label::new(
+                    Type::Body
+                        .rich(
+                            ui,
+                            "This campaign's groups have not loaded yet. If this stays, the Encounters page says why.",
+                        )
+                        .color(c.muted),
+                )
+                .wrap(),
+            );
+            return;
+        };
         if groups.is_empty() {
             ui.add_space(design::S);
             ui.add(
@@ -1779,7 +1802,16 @@ impl Run {
         ui.painter().text(
             grip.rect.right_center(),
             Align2::RIGHT_CENTER,
-            design::count(creatures as usize, "creature", "creatures"),
+            format!(
+                "{} · Total XP {}{}",
+                design::count(creatures as usize, "creature", "creatures"),
+                group.xp,
+                if group.xp_unknown.is_empty() {
+                    ""
+                } else {
+                    " or more"
+                }
+            ),
             Type::Small.font(ui),
             c.muted,
         );
@@ -1805,13 +1837,29 @@ impl Run {
                 .overrides
                 .resolve(&base)
                 .map_or_else(|_| base.name.clone(), |resolved| resolved.name);
-            let mut line = format!("{} × {shown}", member.count);
+            let font = Type::Small.font(ui);
+            let mut line = egui::text::LayoutJob::default();
+            let mut add = |text: String, color: egui::Color32| {
+                line.append(
+                    &text,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font.clone(),
+                        color,
+                        ..Default::default()
+                    },
+                );
+            };
+            add(format!("{} × {shown}", member.count), c.text);
             if !member.overrides.is_empty() {
-                line.push_str(&format!(" · {} Changed", icons::CHANGED));
+                add(
+                    format!(" · {} Changed", icons::CHANGED),
+                    c.participant.changed,
+                );
             }
-            ui.add(egui::Label::new(Type::Small.rich(ui, line).color(c.text)).wrap());
+            ui.add(egui::Label::new(line).wrap());
         }
-        let mut facts = vec![format!("Side: {}", group.side), format!("XP {}", group.xp)];
+        let mut facts = vec![format!("Side: {}", style::human_label(&group.side))];
         if !group.xp_unknown.is_empty() {
             facts.push(format!("XP not known for {}", group.xp_unknown.join(", ")));
         }
@@ -1827,17 +1875,31 @@ impl Run {
         let mut add = false;
         ui.horizontal(|ui| {
             let field = format!("Initiative total for {name}");
+            ui.label(Type::Small.rich(ui, "Total").color(c.muted));
             let text = self.group_totals.entry(group.id).or_default();
-            let response =
-                design::number_field(ui, &field, text, "Roll", 72.0, Density::Read.control());
+            // By id, because two groups can have one name.
+            let response = design::number_field_with_id(
+                ui,
+                design::focus_id(&field).with(group.id),
+                &field,
+                text,
+                "Roll",
+                72.0,
+                Density::Read.control(),
+            );
             let total = text.parse::<i64>().ok();
             let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-            let label = total.map_or_else(|| "Add and roll".to_owned(), |n| format!("Add at {n}"));
-            let blocked = group
-                .problem
-                .as_deref()
-                .or((total.is_none() && group.leader_bonus().is_none())
-                    .then_some("The first member has no initiative bonus. Type a total."));
+            // By side, a group can join its side's initiative with no roll.
+            let may_roll = self.initiative.grouping != Grouping::BySide;
+            let label = match total {
+                Some(total) => format!("Add at {total}"),
+                None if may_roll => "Add and roll".to_owned(),
+                None => "Add".to_owned(),
+            };
+            let blocked = group.problem.as_deref().or((total.is_none()
+                && may_roll
+                && group.leader_bonus().is_none())
+            .then_some("The first member has no initiative bonus. Type a total."));
             add = Action::secondary(&label)
                 .icon(icons::ADD)
                 .density(Density::Read)
@@ -1853,7 +1915,13 @@ impl Run {
 
     /// The same step for the button and for a drop: the total typed beside it, or a roll.
     pub(super) fn add_group_from_panel(&mut self, id: Uuid) {
-        let Some(group) = self.groups.iter().find(|group| group.id == id).cloned() else {
+        let Some(group) = self
+            .groups
+            .iter()
+            .flat_map(|groups| groups.iter())
+            .find(|group| group.id == id)
+            .cloned()
+        else {
             return;
         };
         let total = self
@@ -1985,6 +2053,7 @@ impl Run {
                 );
                 crate::art::portrait(ui, rect, Some(&path), &record.definition.splat_name, None);
             }
+            changes_block(ui, p, true);
             let freshness = crate::party::freshness(record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
             // While sync reads this sheet, the copy's age says nothing about these values.
@@ -2036,6 +2105,7 @@ impl Run {
             .id_salt(("run_reference", definition.id))
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                changes_block(ui, p, true);
                 let links: &dyn view::Links = match &self.content {
                     Some(index) => index.as_ref(),
                     None => &view::NoLinks,
@@ -2616,7 +2686,7 @@ impl Run {
                         .rich(ui, &self.state.participants[self.selected].name)
                         .color(colors().text),
                 );
-                changes_block(ui, &self.state.participants[self.selected]);
+                changes_block(ui, &self.state.participants[self.selected], false);
                 self.record_tab(ui, self.selected);
             }
             Panel::Log => self.log_tab(ui),
@@ -2922,7 +2992,7 @@ impl Run {
 /// The action names what it does, so its label cannot be read as a state.
 /// What an encounter or group changed on this creature: the value it replaced and the new
 /// one, each marked. It stays out in the open, above the stat block that keeps its own values.
-fn changes_block(ui: &mut egui::Ui, p: &Participant) {
+fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
     let c = colors();
     if let Some(added) = &p.added_from {
         ui.add(
@@ -2945,14 +3015,30 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant) {
             color: c.participant.changed,
         },
     );
-    change_rows(ui, &changes.overrides.rows(&changes.base));
+    let rows = changes.overrides.rows(&changes.base);
+    change_rows(ui, &rows);
+    let note = if above_stat_block {
+        Some(PRINTED)
+    } else {
+        rows.iter().any(|row| row.by_hand).then_some(BY_HAND)
+    };
+    if let Some(note) = note {
+        ui.add(egui::Label::new(Type::Small.rich(ui, note).color(c.muted)).wrap());
+    }
+    ui.add_space(design::S);
 }
 
 /// Each change, with the value it replaces. The editors and the run say it the same way.
 pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
     let c = colors();
-    let font = Type::Small.font(ui);
-    for row in rows {
+    // What the DM must do comes first, in larger type. The rest the run has done.
+    let (by_hand, applied): (Vec<&Row>, Vec<&Row>) = rows.iter().partition(|row| row.by_hand);
+    for row in by_hand.into_iter().chain(applied) {
+        let font = if row.by_hand {
+            Type::Body.font(ui)
+        } else {
+            Type::Small.font(ui)
+        };
         let mut job = egui::text::LayoutJob::default();
         let mut add = |text: &str, color: egui::Color32| {
             job.append(
@@ -2973,9 +3059,6 @@ pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
             add(" · add by hand", c.result.warning);
         }
         ui.add(egui::Label::new(job).wrap());
-    }
-    if rows.iter().any(|row| row.by_hand) {
-        ui.add(egui::Label::new(Type::Small.rich(ui, BY_HAND).color(c.muted)).wrap());
     }
 }
 
@@ -3231,14 +3314,19 @@ impl RowLayout {
         for condition in &p.conditions {
             add(condition, c.participant.condition);
         }
+        // A side of its own needs its word: a name and a number can look like another side's.
+        if !["party", "enemies"].contains(&p.side.as_str()) {
+            add(&style::human_label(&p.side), c.side.other);
+        }
         // A change is never hidden. What the run cannot apply is on the row, for the roll.
+        // A number stays with its word when the line wraps.
         if let Some(changes) = &p.changes {
             add(
-                &format!("{} Changed", icons::CHANGED),
+                &format!("{}\u{a0}Changed", icons::CHANGED),
                 c.participant.changed,
             );
             for bonus in changes.overrides.table_bonuses() {
-                add(&bonus, c.participant.changed);
+                add(&bonus.replace(' ', "\u{a0}"), c.participant.changed);
             }
         }
         let second_line = (!job.is_empty()).then(|| ui.fonts_mut(|fonts| fonts.layout_job(job)));

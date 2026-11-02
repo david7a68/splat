@@ -103,8 +103,8 @@
     "encounter-groups": {
       "T13.2: add a group to the running fight, rolling once": 1,
       "add a group during setup": 5,
-      "add groups by a total and by dragging": 5,
-      "make an encounter group": 11
+      "add groups by a total and by dragging": 10,
+      "make an encounter group": 14
     },
     "encounter-run": {
       "Roll once another way: roll NPC initiative another way": 2,
@@ -190,6 +190,9 @@
       "be in a run, with a participant selected": 2,
       "read the creature's details in the run": 1,
       "try a lookup with a draft open": 2
+    },
+    "run-no-groups": {
+      "see that a campaign has no groups": 2
     },
     "run-overrides": {
       "read a changed creature's card in a run": 2,

@@ -44,14 +44,14 @@ impl Grouping {
     pub fn arrival_rule(self) -> &'static str {
         match self {
             Self::Identical => {
-                "A group rolls once, with the first member's bonus, even with different creatures."
+                "A group rolls once, with the first member’s bonus, even with different creatures."
             }
             Self::Individual => "Each member of a group rolls alone, by the campaign's rule.",
             Self::BySide => {
                 "A group takes the initiative its side already has. A side with none rolls once."
             }
             Self::Explicit => {
-                "A group rolls once, with the first member's bonus, as its own initiative group."
+                "A group rolls once, with the first member’s bonus, as its own initiative group."
             }
         }
     }

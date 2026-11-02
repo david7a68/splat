@@ -156,7 +156,7 @@ pub const DARK: Colors = Colors {
     side: Side {
         party: rgb(0xCFC6B4),
         enemies: rgb(0xFA8F55),
-        other: rgb(0xB4C08F),
+        other: rgb(0xB8A9D4),
     },
     sync: Sync {
         off: FAINT,
