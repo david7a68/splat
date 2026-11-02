@@ -483,7 +483,6 @@ pub(super) fn list(
     blocked: Option<&'static str>,
 ) -> Option<String> {
     let mut open = None;
-    let known = |id: Uuid| snapshot.encounter_choices().any(|(known, _)| known == id);
     let any: Vec<_> = snapshot
         .groups
         .iter()
@@ -492,7 +491,7 @@ pub(super) fn list(
     let orphans: Vec<_> = snapshot
         .groups
         .iter()
-        .filter(|group| group.encounter.is_some_and(|id| !known(id)))
+        .filter(|group| group.encounter.is_some() && group.encounter_name.is_none())
         .collect();
     let owned = snapshot.groups.len() - any.len() - orphans.len();
     ui.label(
@@ -685,7 +684,7 @@ pub(super) fn of_encounter(
                                 egui::TextEdit::singleline(&mut group.name)
                                     .desired_width(ui.available_width() - 2.0 * design::S)
                                     .margin(egui::vec2(design::S, 4.0))
-                                    .font(Type::Strong.font(ui)),
+                                    .font(Type::Heading.font(ui)),
                             );
                             design::named(ui, &response, &format!("Group name: {}", group.name));
                             if focus_group.as_deref() == Some(path.as_str()) {
@@ -1386,15 +1385,16 @@ fn group_fields(
     }
     belongs_to(ui, draft, snapshot, open);
     ui.add_space(design::S);
-    let heading = if open.is_some() {
-        Type::Strong
+    // In a frame, the group's name is the heading.
+    let (heading, color) = if open.is_some() {
+        (Type::Small, colors().muted)
     } else {
-        Type::Heading
+        (Type::Heading, colors().text)
     };
     ui.label(
         heading
             .rich(ui, members_heading(draft, snapshot))
-            .color(colors().text),
+            .color(color),
     );
     if draft.setup.members.is_empty() {
         ui.label(

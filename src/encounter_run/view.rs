@@ -1771,8 +1771,7 @@ impl Run {
         design::rule(ui);
         let offered = super::OfferedGroups::of(&groups, self.source);
         // A campaign with only groups for any encounter has nothing to tell apart.
-        let labelled =
-            !offered.own.is_empty() || (self.source.is_none() && !offered.other.is_empty());
+        let labelled = !offered.own.is_empty() || !offered.other.is_empty();
         let mut add = None;
         egui::ScrollArea::vertical()
             .id_salt("run_groups")
@@ -1797,9 +1796,7 @@ impl Run {
                     };
                 section(self, ui, "For this encounter", &offered.own);
                 section(self, ui, "For any encounter", &offered.any);
-                if self.source.is_none() {
-                    section(self, ui, "For one encounter", &offered.other);
-                }
+                section(self, ui, "For one encounter", &offered.other);
             });
         if let Some(id) = add {
             self.add_group_from_panel(id);

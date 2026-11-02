@@ -4589,10 +4589,6 @@ pub mod encounter_groups {
     const RIVAL_NAME: &str = "Rival Captain";
     const TOTAL_FOR_RIVALS: &str = "Initiative total for Rival Team";
 
-    fn add_group(name: &str) -> String {
-        format!("Add {name} to the initiative list")
-    }
-
     pub fn run(d: &mut Driver<'_>) {
         d.expect(LIST_HEADING);
         d.state("groups-in-the-list", Sizes::All);
@@ -4854,10 +4850,6 @@ pub mod encounter_owned_groups {
     const FOR_ENCOUNTERS: &str = "Groups for encounters";
     const SAVE_ENCOUNTER: &str = "Save encounter";
 
-    fn add_group(name: &str) -> String {
-        format!("Add {name} to the initiative list")
-    }
-
     fn edit_group(name: &str) -> String {
         format!("Edit group {name}")
     }
@@ -4934,6 +4926,11 @@ pub mod encounter_owned_groups {
         d.state("creature-added-to-a-group", Sizes::Default);
         d.click(SAVE_ENCOUNTER);
         d.expect("Encounter saved.");
+        d.observe(
+            "T13.6",
+            d.in_view("1. Wolf"),
+            "After a save, the group being built is still in view",
+        );
         d.state("encounter-and-group-saved", Sizes::Default);
         d.goal("build a group in an encounter's editor");
         d.click("Back to encounters");

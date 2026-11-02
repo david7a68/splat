@@ -93,6 +93,8 @@ struct Draft {
     focus_group: Option<String>,
     /// A creature just went to the group the DM chose, so that group comes into view.
     reveal_group: bool,
+    /// The last save wrote a group, even if it then stopped, so the campaign needs a new read.
+    groups_written: bool,
 }
 impl Draft {
     fn new() -> Self {
@@ -115,6 +117,7 @@ impl Draft {
             add_to: None,
             focus_group: None,
             reveal_group: false,
+            groups_written: false,
         }
     }
     fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
@@ -141,6 +144,7 @@ impl Draft {
             add_to: None,
             focus_group: None,
             reveal_group: false,
+            groups_written: false,
         })
     }
     fn dirty(&self) -> bool {
@@ -254,6 +258,7 @@ impl Draft {
                     group.name()
                 )
             })?;
+            self.groups_written = true;
         }
         // A group the DM gave to another encounter is no longer this one's.
         let id = self.id;
@@ -888,12 +893,10 @@ impl Encounters {
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
-        let changed = |draft: &Draft| draft.groups.iter().filter(|g| g.dirty()).count();
-        let changed_before = changed(draft);
         let outcome = draft.save(active, modules);
-        // The list and an open run read groups from the snapshot. A save that stops part of the
-        // way has still written some, and one that wrote none needs no new read.
-        let groups_saved = changed(draft) != changed_before;
+        let groups_saved = std::mem::take(&mut draft.groups_written);
+        // The group being built stays in view, because it still takes what the search adds.
+        draft.reveal_group |= groups_saved;
         match outcome {
             Ok(()) => {
                 self.saved = true;
@@ -1855,29 +1858,30 @@ impl Encounters {
         party: &Party,
         linked: bool,
     ) -> bool {
-        ui.label(
-            Type::Heading
-                .rich(ui, format!("Roster ({})", draft.setup.roster.len()))
-                .color(colors().text),
-        );
-        if linked {
-            Self::sync_option(ui, draft, snapshot, party);
-        }
-        ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
-        // Without a link there is no sheet to sync with, whatever the note says.
-        let live = (linked && draft.setup.combat_sync).then_some(party);
-        if draft.setup.roster.is_empty() {
-            ui.add_space(design::S);
-            ui.label(
-                Type::Body
-                    .rich(ui, "Add the party and some creatures from the list.")
-                    .color(colors().muted),
-            );
-        }
+        // All of it scrolls, so that the settings give up their room to a group being built.
         egui::ScrollArea::vertical()
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                ui.label(
+                    Type::Heading
+                        .rich(ui, format!("Roster ({})", draft.setup.roster.len()))
+                        .color(colors().text),
+                );
+                if linked {
+                    Self::sync_option(ui, draft, snapshot, party);
+                }
+                ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
+                // Without a link there is no sheet to sync with, whatever the note says.
+                let live = (linked && draft.setup.combat_sync).then_some(party);
+                if draft.setup.roster.is_empty() {
+                    ui.add_space(design::S);
+                    ui.label(
+                        Type::Body
+                            .rich(ui, "Add the party and some creatures from the list.")
+                            .color(colors().muted),
+                    );
+                }
                 Self::roster(ui, draft, snapshot, focus_search, expanded, live);
                 groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
             })
