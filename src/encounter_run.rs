@@ -122,7 +122,7 @@ impl RunGroup {
 pub(crate) struct OfferedGroups {
     pub own: Vec<Arc<RunGroup>>,
     pub any: Vec<Arc<RunGroup>>,
-    /// Groups for other encounters. A run that knows its encounter does not offer these.
+    /// Groups for an encounter, when the run cannot say which encounter it is.
     pub other: Vec<Arc<RunGroup>>,
 }
 impl OfferedGroups {
@@ -132,7 +132,8 @@ impl OfferedGroups {
             match group.encounter {
                 None => offered.any.push(group.clone()),
                 owner if owner == encounter => offered.own.push(group.clone()),
-                Some(_) => offered.other.push(group.clone()),
+                Some(_) if encounter.is_none() => offered.other.push(group.clone()),
+                Some(_) => {}
             }
         }
         offered
@@ -4439,10 +4440,9 @@ mod tests {
         let offered = OfferedGroups::of(&groups, Some(arena));
         assert_eq!(names(&offered.own), ["Mine"]);
         assert_eq!(names(&offered.any), ["Free"]);
-        assert_eq!(
-            names(&offered.other),
-            ["Theirs"],
-            "not lost, but not offered"
+        assert!(
+            offered.other.is_empty(),
+            "another encounter's group is not offered"
         );
         // A save from before this cannot say which is its own, so it hides none.
         let offered = OfferedGroups::of(&groups, None);

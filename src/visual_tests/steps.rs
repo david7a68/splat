@@ -161,3 +161,8 @@ pub fn copy_open_entry_to_campaign(d: &mut Driver<'_>) {
     d.click(CREATE_COPY);
     d.expect("Saved: ");
 }
+
+/// The name of a group's button in the run's panel.
+pub fn add_group(name: &str) -> String {
+    format!("Add {name} to the initiative list")
+}
