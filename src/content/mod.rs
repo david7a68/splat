@@ -832,7 +832,9 @@ pub fn validate_all(entries: &[&Entry]) -> Report {
         "splat_forms",
         "splat_health",
         "splat_hit_dice",
+        "splat_dndbeyond_ids",
         "splat_id",
+        "splat_import_routes",
         "splat_initial",
         "splat_inventory_details",
         "splat_item",
@@ -889,6 +891,79 @@ fn unless_vanished<T>(result: std::io::Result<T>) -> Result<Option<T>, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error.to_string()),
     }
+}
+
+/// Replace only named top-level fields; all other bytes, comments and body stay intact.
+pub fn patch_fields(
+    text: &str,
+    changes: &[(&str, Option<serde_yaml_ng::Value>)],
+) -> Result<String, String> {
+    let prefix = if text.starts_with('\u{feff}') {
+        "\u{feff}"
+    } else {
+        ""
+    };
+    let raw = text.trim_start_matches('\u{feff}');
+    let newline = if raw.starts_with("---\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let start = format!("---{newline}");
+    let raw = raw.strip_prefix(&start).ok_or("Missing frontmatter")?;
+    let end = format!("{newline}---");
+    let index = raw.find(&end).ok_or("Missing frontmatter end")?;
+    let front = &raw[..index];
+    let value: serde_yaml_ng::Value = serde_yaml_ng::from_str(front).map_err(|e| e.to_string())?;
+    let map = value.as_mapping().ok_or("Frontmatter must be a mapping")?;
+    let lines: Vec<_> = front.split(newline).collect();
+    let mut remove = std::collections::BTreeSet::new();
+    for (key, _) in changes {
+        if map.contains_key(*key) {
+            let matches: Vec<_> = lines
+                .iter()
+                .enumerate()
+                .filter(|(_, line)| line.starts_with(&format!("{key}:")))
+                .map(|(i, _)| i)
+                .collect();
+            if matches.len() != 1 {
+                return Err(format!(
+                    "Cannot safely edit {key}. Use a plain, unquoted top-level field in Markdown first."
+                ));
+            }
+            let start = matches[0];
+            let mut stop = start + 1;
+            while stop < lines.len() {
+                let line = lines[stop];
+                if !line.is_empty() && !line.starts_with([' ', '\t', '-', '#']) {
+                    break;
+                }
+                // Keep comments and blank lines; removing a changed field's data is intentional.
+                if !line.trim().is_empty() && !line.trim_start().starts_with('#') {
+                    remove.insert(stop);
+                }
+                stop += 1;
+            }
+            remove.insert(start);
+        }
+    }
+    let mut output = format!("{prefix}{start}");
+    for (i, line) in lines.iter().enumerate() {
+        if !remove.contains(&i) {
+            output.push_str(line);
+            output.push_str(newline);
+        }
+    }
+    for (key, value) in changes {
+        if let Some(value) = value {
+            let mut field = serde_yaml_ng::Mapping::new();
+            field.insert((*key).into(), value.clone());
+            let yaml = serde_yaml_ng::to_string(&field).map_err(|e| e.to_string())?;
+            output.push_str(&yaml.replace('\n', newline));
+        }
+    }
+    output.push_str(raw[index + newline.len()..].as_ref());
+    Ok(output)
 }
 
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
