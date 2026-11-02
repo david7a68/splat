@@ -50,7 +50,7 @@ block the affected use even if the note parses.
 | effect | `splat_effect` | `splat_parameters` |
 | container | `splat_item` EntryRef | `splat_initial`, `splat_inventory_details`, marked inventory tables |
 | encounter | `splat_encounter` | All encounter fields defined in Campaign schema |
-| encounter_group | `splat_encounter_group` | `side`, ordered `members`, with their counts and overrides |
+| encounter_group | `splat_encounter_group` | `side`, optional `encounter`, ordered `members`, with their counts and overrides |
 | sequence | `splat_sequence` | Explicit encounter bindings, elapsed/rest steps |
 | rule | `splat_rule` | Source attribution and typed implementation parameters |
 | rule_group | `splat_rule_group` | Required/optional dependency metadata |

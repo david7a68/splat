@@ -75,6 +75,7 @@ impl Default for Setup {
     }
 }
 struct Draft {
+    id: Uuid,
     path: String,
     baseline: Option<String>,
     source: String,
@@ -82,6 +83,18 @@ struct Draft {
     setup: Setup,
     saved_name: String,
     saved_setup: Setup,
+    /// The groups that belong to this encounter. They are built here and saved with it.
+    groups: Vec<GroupDraft>,
+    /// Whether those groups have been read. A new encounter has none to read.
+    groups_read: bool,
+    /// The group that takes what the search adds, by its path. With none, the roster does.
+    add_to: Option<String>,
+    /// A group just made, whose name takes the keyboard.
+    focus_group: Option<String>,
+    /// A creature just went to the group the DM chose, so that group comes into view.
+    reveal_group: bool,
+    /// The last save wrote a group, even if it then stopped, so the campaign needs a new read.
+    groups_written: bool,
 }
 impl Draft {
     fn new() -> Self {
@@ -91,6 +104,7 @@ impl Draft {
             "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: New encounter\nsplat_encounter: {{}}\n---\n\n"
         );
         Self {
+            id,
             path: format!("Encounters/{id}.md"),
             baseline: None,
             source,
@@ -98,6 +112,12 @@ impl Draft {
             saved_name: name,
             setup: Setup::default(),
             saved_setup: Setup::default(),
+            groups: Vec::new(),
+            groups_read: true,
+            add_to: None,
+            focus_group: None,
+            reveal_group: false,
+            groups_written: false,
         }
     }
     fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
@@ -111,6 +131,7 @@ impl Draft {
                 format!("This encounter needs repair in Campaign → Campaign entries: {e}")
             })?;
         Ok(Self {
+            id: entry.id,
             path: path.into(),
             baseline: Some(text.clone()),
             source: text,
@@ -118,10 +139,46 @@ impl Draft {
             name: entry.name,
             saved_setup: setup.clone(),
             setup,
+            groups: Vec::new(),
+            groups_read: false,
+            add_to: None,
+            focus_group: None,
+            reveal_group: false,
+            groups_written: false,
         })
     }
     fn dirty(&self) -> bool {
-        self.baseline.is_none() || self.name != self.saved_name || self.setup != self.saved_setup
+        self.baseline.is_none()
+            || self.name != self.saved_name
+            || self.setup != self.saved_setup
+            || self.groups.iter().any(GroupDraft::dirty)
+    }
+    /// Read this encounter's own groups, once the campaign has been read.
+    fn read_groups(&mut self, root: &std::path::Path, snapshot: &Snapshot) -> Result<(), String> {
+        self.groups_read = true;
+        for group in snapshot
+            .groups
+            .iter()
+            .filter(|group| group.encounter == Some(self.id))
+        {
+            self.groups.push(GroupDraft::open(root, &group.path)?);
+        }
+        Ok(())
+    }
+    /// The group that takes what the search adds, if the DM chose one.
+    fn target_group(&mut self) -> Option<&mut GroupDraft> {
+        let path = self.add_to.as_deref()?;
+        self.groups.iter_mut().find(|group| group.path() == path)
+    }
+    /// Add what the search found, to the group the DM chose or to the roster.
+    fn add_chosen(&mut self, id: Uuid, party: bool) {
+        match self.target_group() {
+            Some(group) => {
+                group.add(id);
+                self.reveal_group = true;
+            }
+            None => self.add(id, party),
+        }
     }
     fn text(&self) -> Result<String, String> {
         patch_fields(
@@ -164,6 +221,19 @@ impl Draft {
         }) {
             return Err("Another note uses this encounter identity.".into());
         }
+        // Nothing is written unless the encounter and every changed group can be.
+        let mut group_texts = Vec::new();
+        for (index, group) in self.groups.iter().enumerate() {
+            if group.dirty() {
+                let text = group
+                    .checked(&snapshot, campaign, Some(self.id))
+                    .map_err(|e| match group.name().trim() {
+                        "" => e,
+                        name => format!("Group {name}: {e}"),
+                    })?;
+                group_texts.push((index, text));
+            }
+        }
         // Create the manifest first so a new campaign keeps its module selections.
         let mut document = CampaignDocument::load(campaign)?;
         if document.baseline.is_none() {
@@ -172,11 +242,27 @@ impl Draft {
         let path = note_path(&campaign.path, &self.path)?;
         fs::create_dir_all(path.parent().ok_or("Missing encounter folder")?)
             .map_err(|e| e.to_string())?;
-        write_note(&campaign.path, &self.path, self.baseline.as_deref(), &text)?;
+        // A change to a group alone leaves the encounter's note as it is.
+        if self.baseline.as_deref() != Some(text.as_str()) {
+            write_note(&campaign.path, &self.path, self.baseline.as_deref(), &text)?;
+        }
         self.source = text.clone();
         self.baseline = Some(text);
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
+        for (index, text) in group_texts {
+            let group = &mut self.groups[index];
+            group.write(campaign, &text).map_err(|e| {
+                format!(
+                    "The encounter saved, but group {} did not: {e}",
+                    group.name()
+                )
+            })?;
+            self.groups_written = true;
+        }
+        // A group the DM gave to another encounter is no longer this one's.
+        let id = self.id;
+        self.groups.retain(|group| group.belongs_to(id));
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), String> {
@@ -520,6 +606,12 @@ impl Snapshot {
             issues,
         })
     }
+    /// The encounters a group can belong to, in the list's order.
+    fn encounter_choices(&self) -> impl Iterator<Item = (Uuid, &str)> {
+        self.templates
+            .iter()
+            .map(|template| (template.id, template.name.as_str()))
+    }
 }
 #[derive(Default)]
 pub struct Encounters {
@@ -708,7 +800,7 @@ impl Encounters {
     /// Add a freshly copied creature to the open draft.
     pub fn add_to_draft(&mut self, id: Uuid) {
         if let Some(draft) = &mut self.draft {
-            draft.add(id, false);
+            draft.add_chosen(id, false);
         } else if let Some(draft) = &mut self.group_draft {
             draft.add(id);
         }
@@ -838,15 +930,19 @@ impl Encounters {
             if self.group_draft.is_some() {
                 self.save_group_draft(ctx, &active, campaigns.modules());
             } else {
-                self.save_draft(&active, campaigns.modules());
+                self.save_draft(ctx, &active, campaigns.modules());
             }
         }
     }
-    fn save_draft(&mut self, active: &Campaign, modules: &[Module]) {
+    fn save_draft(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
-        match draft.save(active, modules) {
+        let outcome = draft.save(active, modules);
+        let groups_saved = std::mem::take(&mut draft.groups_written);
+        // The group being built stays in view, because it still takes what the search adds.
+        draft.reveal_group |= groups_saved;
+        match outcome {
             Ok(()) => {
                 self.saved = true;
                 self.error = None;
@@ -867,6 +963,10 @@ impl Encounters {
                 }
             }
             Err(e) => self.error = Some(e),
+        }
+        if groups_saved {
+            self.refreshing = true;
+            self.start_load(ctx, active.clone(), modules.to_vec());
         }
     }
     fn start_run(
@@ -1517,12 +1617,20 @@ impl Encounters {
             return;
         }
         if save {
-            self.save_draft(active, campaigns.modules());
+            self.save_draft(ui.ctx(), active, campaigns.modules());
         }
         if run_it {
             self.open_run(active, campaigns.modules());
         }
         self.discard_undo(ui);
+        // After a load in progress, so that a group just saved is among them.
+        if self.pending.is_none()
+            && let (Some(snapshot), Some(draft)) = (&self.snapshot, self.draft.as_mut())
+            && !draft.groups_read
+            && let Err(e) = draft.read_groups(&active.path, snapshot)
+        {
+            self.error = Some(e);
+        }
         if let Some(e) = &self.error {
             design::message(ui, Tone::Error, e);
         }
@@ -1551,13 +1659,17 @@ impl Encounters {
         let expanded = &mut self.expanded;
         let linked = active.dndbeyond_campaign_id.is_some();
         if compact {
-            match pane {
+            let go_to_search = match pane {
                 EditorPane::Roster => {
-                    Self::roster_pane(ui, draft, snapshot, focus_search, expanded, party, linked);
+                    Self::roster_pane(ui, draft, snapshot, focus_search, expanded, party, linked)
                 }
                 EditorPane::Add => {
                     Self::add_pane(ui, draft, snapshot, search, focus_search, peek, false);
+                    false
                 }
+            };
+            if go_to_search {
+                self.editor_pane = EditorPane::Add;
             }
             return;
         }
@@ -1623,6 +1735,21 @@ impl Encounters {
             )
             .wrap(),
         );
+        groups::add_target(ui, draft, snapshot);
+        if draft.target_group().is_some() {
+            let chosen = Self::creature_search(
+                ui,
+                snapshot.creatures.iter().filter(|c| !c.linked),
+                search,
+                focus_search,
+                peek,
+                &|_| false,
+            );
+            if let Some((id, party)) = chosen {
+                draft.add_chosen(id, party);
+            }
+            return;
+        }
         // Who is still to come: a party member belongs on a roster once.
         let on_roster = |draft: &Draft, id: Uuid| {
             draft
@@ -1780,32 +1907,35 @@ impl Encounters {
         expanded: &mut Option<String>,
         party: &Party,
         linked: bool,
-    ) {
-        ui.label(
-            Type::Heading
-                .rich(ui, format!("Roster ({})", draft.setup.roster.len()))
-                .color(colors().text),
-        );
-        if linked {
-            Self::sync_option(ui, draft, snapshot, party);
-        }
-        ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
-        // Without a link there is no sheet to sync with, whatever the note says.
-        let live = (linked && draft.setup.combat_sync).then_some(party);
-        if draft.setup.roster.is_empty() {
-            ui.add_space(design::S);
-            ui.label(
-                Type::Body
-                    .rich(ui, "Add the party and some creatures from the list.")
-                    .color(colors().muted),
-            );
-        }
+    ) -> bool {
+        // All of it scrolls, so that the settings give up their room to a group being built.
         egui::ScrollArea::vertical()
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                ui.label(
+                    Type::Heading
+                        .rich(ui, format!("Roster ({})", draft.setup.roster.len()))
+                        .color(colors().text),
+                );
+                if linked {
+                    Self::sync_option(ui, draft, snapshot, party);
+                }
+                ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
+                // Without a link there is no sheet to sync with, whatever the note says.
+                let live = (linked && draft.setup.combat_sync).then_some(party);
+                if draft.setup.roster.is_empty() {
+                    ui.add_space(design::S);
+                    ui.label(
+                        Type::Body
+                            .rich(ui, "Add the party and some creatures from the list.")
+                            .color(colors().muted),
+                    );
+                }
                 Self::roster(ui, draft, snapshot, focus_search, expanded, live);
-            });
+                groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
+            })
+            .inner
     }
 
     /// Whether this encounter uses the party as D&D Beyond has it now. With it on, the DM sees
