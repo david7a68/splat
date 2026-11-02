@@ -2010,8 +2010,10 @@ impl Run {
         }
     }
 
-    fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
+    pub(super) fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
+        let mut in_health_field = None;
+        let mut take_back = false;
         egui::ScrollArea::vertical()
             .id_salt("run_record")
             .auto_shrink([false, false])
@@ -2022,12 +2024,42 @@ impl Run {
                 let mut max = p.max_hp;
                 design::group_label(ui, "Correct HP");
                 let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
+                // With the sheet's maximum in force, a number over it is the maximum, as in the
+                // sync panel. It must not leave an earlier digit in the run, to go to the sheet.
+                let highest = self
+                    .syncs
+                    .get(&index)
+                    .filter(|sync| sync.ready())
+                    .and_then(|sync| sync.max_hp())
+                    .unwrap_or(1_000_000);
+                let mut fields = [None, None];
                 ui.horizontal_wrapped(|ui| {
-                    optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
+                    fields[0] = optional_number(ui, "Current HP", &mut hp, 0..=highest);
                     design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
-                        optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                        fields[1] = optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
                     });
                 });
+                // Only Current HP reaches the sheet, and the digits of either make one step.
+                if let Some(sync) = self.syncs.get_mut(&index)
+                    && let Some(field) = &fields[0]
+                {
+                    sync.hold_for(field);
+                }
+                in_health_field = fields
+                    .iter()
+                    .flatten()
+                    .find(|field| field.has_focus() || field.dragged())
+                    .map(|field| field.id);
+                // Escape can close Lookup and bring this tab back, long after the DM left the
+                // field by another way. So only a field left in this frame counts.
+                take_back = sheet_decides
+                    && fields.iter().flatten().any(egui::Response::lost_focus)
+                    && crate::combat_sync::escape_pressed(ui.ctx());
+                if take_back {
+                    // Nothing typed goes out. A handler can have consumed Escape, and then egui
+                    // sets the field's text again as it is drawn.
+                    (hp, max) = (p.hp, p.max_hp);
+                }
                 if sheet_decides {
                     ui.add(
                         egui::Label::new(
@@ -2151,6 +2183,16 @@ impl Run {
                     });
                 }
             });
+        // A new field, or a return to one, is a new number.
+        let typed = self.typed_health.take();
+        if take_back && typed.as_ref().is_some_and(|typed| typed.step.is_some()) {
+            self.undo();
+        }
+        self.typed_health = in_health_field.map(|field| {
+            typed
+                .filter(|typed| typed.field == field)
+                .unwrap_or(crate::encounter_run::TypedHealth { field, step: None })
+        });
         if let Some(command) = command {
             self.run_command(command);
         }
@@ -3379,12 +3421,13 @@ fn paint_row(
     );
 }
 
+/// The field's response, if the number is known.
 fn optional_number(
     ui: &mut egui::Ui,
     label: &str,
     value: &mut Option<i64>,
     range: std::ops::RangeInclusive<i64>,
-) {
+) -> Option<egui::Response> {
     let mut known = value.is_some();
     if ui.checkbox(&mut known, label).changed() {
         *value = known.then(|| *range.start().max(&0));
@@ -3392,7 +3435,9 @@ fn optional_number(
     if let Some(n) = value {
         let response = ui.add(egui::DragValue::new(n).range(range));
         design::named(ui, &response, label);
+        Some(response)
     } else {
         ui.label(Type::Small.rich(ui, "Unknown").color(colors().muted));
+        None
     }
 }

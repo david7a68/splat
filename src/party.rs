@@ -21,6 +21,8 @@ pub struct Party {
     /// The DM asked to go where this campaign's D&D Beyond link is set.
     pub wants_link_page: bool,
     pub wants_settings: bool,
+    /// The member who opens when a typed number for the open sheet has gone.
+    opening: Option<String>,
 }
 impl Party {
     #[cfg(test)]
@@ -38,11 +40,34 @@ impl Party {
             .simulate_read(id.parse().expect("a numeric ID"), max_hp, damage);
     }
 
-    /// The HP this page would send: the number the DM has typed, so far.
+    /// The HP this page holds for the sheet. It has the DM's number from the first key, and
+    /// the number goes to the sheet after they leave the field.
     #[cfg(test)]
     pub fn sync_hp(&self) -> Option<i64> {
         let removed = self.combat.values().get("hp")?["removedHitPoints"].as_i64()?;
         Some(self.combat.max_hp()? - removed)
+    }
+
+    /// The DM is in one of this page's sync number fields, so no exchange starts.
+    #[cfg(test)]
+    pub fn sync_in_field(&self) -> bool {
+        self.combat.in_field()
+    }
+
+    #[cfg(test)]
+    pub fn sync_state(&self) -> crate::combat_sync::SyncState {
+        self.combat.state()
+    }
+
+    /// The member open now.
+    #[cfg(test)]
+    pub fn selected_member(&self) -> Option<&str> {
+        self.reader.selected.as_deref()
+    }
+
+    /// A number for this sheet has not reached D&D Beyond. Closing the app would lose it.
+    pub fn sync_edits_to_send(&self) -> bool {
+        self.combat.edits_to_send()
     }
 
     pub fn sync(
@@ -50,17 +75,88 @@ impl Party {
         ctx: &egui::Context,
         epoch: u64,
         campaign: Option<(uuid::Uuid, String, std::path::PathBuf)>,
-        connected: bool,
+        session: Option<&Session>,
         visible: bool,
     ) {
         self.epoch = epoch;
-        if !visible || !connected {
-            if self.combat.enabled {
-                self.sync_stopped = true;
+        self.combat.without_a_run();
+        if !visible || session.is_none() {
+            self.opening = None;
+            if !self.finish_sending(ctx, session) {
+                if self.combat.enabled {
+                    self.sync_stopped = true;
+                }
+                self.combat.stop();
             }
-            self.combat.stop();
         }
-        self.reader.sync(ctx, epoch, campaign, connected, visible);
+        self.reader
+            .sync(ctx, epoch, campaign, session.is_some(), visible);
+    }
+
+    /// The DM left the page with a number on its way. Sync stops when it has gone, or when a
+    /// conflict holds it. True while it is still going.
+    fn finish_sending(&mut self, ctx: &egui::Context, session: Option<&Session>) -> bool {
+        let (Some(session), Some(id)) = (session, self.reader.selected.clone()) else {
+            return false;
+        };
+        let Some(campaign) = self
+            .reader
+            .sheets
+            .get(&id)
+            .map(|record| record.source.campaign_id.clone())
+        else {
+            return false;
+        };
+        if self.combat.edits_to_send() {
+            self.combat
+                .tick(ctx, Some(session.clone()), self.epoch, &campaign, &id);
+        }
+        self.store_sync_read(&id);
+        self.combat.edits_to_send()
+    }
+
+    /// A member clicked with a number for the open sheet still to go. That sheet stays open
+    /// until the number has gone, so that it goes to the right character. If a conflict comes
+    /// instead, the sheet stays open to show it.
+    fn open_member(&mut self, clicked: Option<String>) {
+        if let Some(id) = clicked {
+            if self.reader.selected.as_ref() == Some(&id) {
+                self.opening = None;
+            } else if self.combat.edits_to_send() {
+                self.opening = Some(id);
+            } else {
+                self.opening = None;
+                self.reader.select(id);
+            }
+        } else if self.opening.is_some() && !self.combat.edits_to_send() {
+            let settled = self.combat.state() != crate::combat_sync::SyncState::Conflict
+                && self.combat.error.is_none();
+            if let Some(id) = self.opening.take().filter(|_| settled) {
+                self.reader.select(id);
+            }
+        }
+    }
+
+    /// Keep what a read of the open sheet brought.
+    fn store_sync_read(&mut self, id: &str) {
+        if !self.combat.updated {
+            return;
+        }
+        if let Some(record) = self.combat.record().cloned() {
+            if let Some(scope) = self.reader.local_scope()
+                && let Err(error) =
+                    crate::hermetic::character_cache().and_then(|cache| cache.save(scope, &record))
+            {
+                self.reader.warning = Some(error);
+            }
+            if let Some(path) = self.reader.campaign_path()
+                && let Err(error) = record.save_campaign_copy(path)
+            {
+                self.reader.warning = Some(error);
+            }
+            self.reader.sheets.insert(id.to_owned(), record);
+        }
+        self.combat.updated = false;
     }
     /// The Party page's copy of a character, for the run's side panel.
     pub fn sheet(&self, id: &str) -> Option<&EntitySnapshot> {
@@ -124,8 +220,17 @@ impl Party {
         let checked = self.reader.selected.as_ref().is_some_and(|id| {
             self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
         }) && self.reader.error.is_none();
+        let opening = self.opening.as_ref().map_or_else(String::new, |id| {
+            let name = self.reader.members.iter().find(|m| &m.id == id);
+            format!(
+                ", then opening {}",
+                name.map_or("them", |m| m.name.as_str())
+            )
+        });
         let (status_icon, status_word, status_color) = if session.is_none() {
             (icons::OFFLINE, "Not connected", c.connection.offline)
+        } else if !opening.is_empty() {
+            (icons::BUSY, "Sending to D&D Beyond", c.connection.busy)
         } else if self.reader.loading() {
             (icons::BUSY, "Refreshing", c.connection.busy)
         } else if self.combat.ready() {
@@ -157,7 +262,7 @@ impl Party {
                 ui,
                 Status {
                     icon: status_icon,
-                    word: &format!("{status_word}{age}"),
+                    word: &format!("{status_word}{opening}{age}"),
                     color: status_color,
                 },
             )
@@ -193,7 +298,8 @@ impl Party {
             return;
         }
         let list_width = (ui.available_width() * 0.42).clamp(330.0, 520.0);
-        let mut selected = self.reader.selected.clone();
+        let selected = self.reader.selected.clone();
+        let mut clicked = None;
         egui::SidePanel::left("party_members")
             .resizable(false)
             .exact_width(list_width)
@@ -215,17 +321,13 @@ impl Party {
                             let record = self.reader.sheets.get(&m.id);
                             if member_row(ui, m, record, selected.as_ref() == Some(&m.id)).clicked()
                             {
-                                selected = Some(m.id.clone());
+                                clicked = Some(m.id.clone());
                                 self.search.clear();
                             }
                         }
                     });
             });
-        if selected != self.reader.selected
-            && let Some(id) = selected
-        {
-            self.reader.select(id);
-        }
+        self.open_member(clicked);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: design::M as i8,
@@ -238,7 +340,7 @@ impl Party {
 
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
-        let Some(id) = &self.reader.selected else {
+        let Some(id) = self.reader.selected.clone() else {
             ui.label(
                 Type::Body
                     .rich(ui, "Select a character to read their sheet.")
@@ -246,6 +348,7 @@ impl Party {
             );
             return;
         };
+        let id = &id;
         if let Some(error) = self.reader.errors.get(id) {
             design::message(ui, Tone::Error, error);
         }
@@ -258,23 +361,7 @@ impl Party {
                 id,
             );
         }
-        if self.combat.updated {
-            if let Some(record) = self.combat.record().cloned() {
-                if let Some(scope) = self.reader.local_scope()
-                    && let Err(error) = crate::hermetic::character_cache()
-                        .and_then(|cache| cache.save(scope, &record))
-                {
-                    self.reader.warning = Some(error);
-                }
-                if let Some(path) = self.reader.campaign_path()
-                    && let Err(error) = record.save_campaign_copy(path)
-                {
-                    self.reader.warning = Some(error);
-                }
-                self.reader.sheets.insert(id.clone(), record);
-            }
-            self.combat.updated = false;
-        }
+        self.store_sync_read(id);
         if self.sync_stopped {
             if self.combat.enabled {
                 self.sync_stopped = false;

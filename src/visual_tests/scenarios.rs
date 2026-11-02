@@ -3299,6 +3299,333 @@ pub mod library_scope {
     }
 }
 
+/// F3-01 and F3-03: each way out of a sync number field keeps the number and ends the hold, in a
+/// run and on Party. Real clicks and keys on the whole app. Test builds have no worker, so each
+/// read is simulated, and no exchange can start: unit tests in `combat_sync.rs` and
+/// `encounter_run.rs` cover what goes out. Runs at 960x640, where Lookup and Notes hide the panel.
+pub mod typed_sync_number {
+    use super::*;
+    use crate::combat_sync::SyncState;
+    use crate::settings::Account;
+    const MEMBER: &str = "Brannoch Vale";
+    const OTHER: &str = "Iselle Marrowind";
+    const MAX_HP: i64 = 62;
+    const SHEET_HP: i64 = 58;
+    const PANEL_HP: &str = "Current HP on the sheet";
+    const RECORD: &str = "Record";
+    const LOG: &str = "Log";
+    const LOG_MARKED: &str = "Log, new message";
+    const SYNC_SECTION: &str = "Sync off";
+    const SYNC_TOGGLE: &str = "Sync combat stats with D&D Beyond";
+    const PARTY_STOPPED: &str = "Party sync stopped";
+    const OPENING: &str = "Sending to D&D Beyond, then opening Iselle Marrowind";
+    const USE_REMOTE: &str = "Use D&D Beyond values";
+    const CLOSE_NAMES: &str = "A number typed on Party has not reached D&D Beyond.";
+
+    fn type_in_field(d: &mut Driver<'_>, number: i64) {
+        d.click(PANEL_HP);
+        for digit in number.to_string().chars() {
+            d.type_text(&digit.to_string());
+        }
+    }
+
+    /// A matched sheet, and a number typed in this participant's panel.
+    fn typed_in_run(d: &mut Driver<'_>, number: i64) {
+        d.app_mut()
+            .encounters
+            .simulate_sync_state(MEMBER, SyncState::Matching);
+        d.settle();
+        type_in_field(d, number);
+    }
+
+    fn run_values(d: &mut Driver<'_>) -> (bool, Option<i64>) {
+        let sync = d.app_mut().encounters.sync_of(MEMBER);
+        let removed = sync.values()["hp"]["removedHitPoints"].as_i64();
+        (sync.in_field(), removed.map(|removed| MAX_HP - removed))
+    }
+
+    /// The hold is over, the sync has the number, and it has reached the run.
+    #[track_caller]
+    fn run_exit(d: &mut Driver<'_>, how: &str, number: i64) {
+        let (held, value) = run_values(d);
+        let row = d.row_hp(MEMBER);
+        d.observe(
+            "F3-01",
+            !held && value == Some(number) && row == Some(number),
+            format!(
+                "{how}: the number stays, {number}: the sync has {value:?}, the row has {row:?}. The hold ended: {}",
+                !held
+            ),
+        );
+    }
+
+    fn party_values(d: &mut Driver<'_>) -> (bool, Option<i64>) {
+        let party = &d.app_mut().party;
+        (party.sync_in_field(), party.sync_hp())
+    }
+
+    fn party_read(d: &mut Driver<'_>, hp: i64) {
+        d.app_mut().party.simulate_sync_read(MAX_HP - hp);
+        d.settle();
+    }
+
+    fn in_a_run(d: &mut Driver<'_>) {
+        resume_run_from_cold_start(d);
+        d.click_row(MEMBER);
+        d.click(RECORD);
+
+        // The sheet's own HP, with nothing typed: leaving changes nothing.
+        d.app_mut()
+            .encounters
+            .simulate_sync_state(MEMBER, SyncState::Matching);
+        d.settle();
+        d.click(PANEL_HP);
+        d.press(Key::Enter);
+        let (held, value) = run_values(d);
+        d.observe(
+            "F3-03",
+            !held && value == Some(SHEET_HP) && d.row_hp(MEMBER) == Some(SHEET_HP),
+            format!("In the field and out, with nothing typed: the value stays {value:?}"),
+        );
+
+        typed_in_run(d, 45);
+        let (held, value) = run_values(d);
+        let row = d.row_hp(MEMBER);
+        let word = d.row_words(MEMBER);
+        d.observe(
+            "F3-01",
+            held && value == Some(45) && row == Some(SHEET_HP) && word.contains("Sync pending"),
+            format!(
+                "In the field after two digits: held {held}, the sync has {value:?}, the row waits with {row:?}, and says {word}"
+            ),
+        );
+        d.press(Key::Enter);
+        run_exit(d, "Enter", 45);
+
+        typed_in_run(d, 44);
+        d.press(Key::Tab);
+        let (held, value) = run_values(d);
+        d.observe(
+            "F3-01",
+            held && value == Some(44),
+            format!(
+                "Tab: the number stays, {value:?}, and the DM is in the next number field: {held}"
+            ),
+        );
+        d.harness_focus_nothing();
+        d.settle();
+        run_exit(d, "Tab, then out of the fields", 44);
+
+        typed_in_run(d, 43);
+        let log = if d.has(LOG) { LOG } else { LOG_MARKED };
+        d.click(log);
+        run_exit(d, "A click on Log", 43);
+        d.click(RECORD);
+
+        typed_in_run(d, 42);
+        d.click_row(OTHER);
+        run_exit(d, "A click on another row", 42);
+        d.click_row(MEMBER);
+
+        typed_in_run(d, 41);
+        go_library(d);
+        let (held, value) = run_values(d);
+        d.observe(
+            "F3-01",
+            !held && value == Some(41),
+            format!("A click on the rail, away from the run: the sync has {value:?}, and the hold ended: {}", !held),
+        );
+        d.click(BACK_TO_RUN);
+        run_exit(d, "A click on the rail, then back", 41);
+
+        typed_in_run(d, 40);
+        d.press_ctrl(Key::K);
+        let hidden = !d.has(PANEL_HP);
+        d.observe(
+            "F3-01",
+            hidden,
+            format!("Ctrl+K at 960x640: Lookup hides the panel: {hidden}"),
+        );
+        run_exit(d, "Lookup, where it hides the panel", 40);
+        d.press_ctrl(Key::K);
+
+        typed_in_run(d, 39);
+        d.press_ctrl(Key::J);
+        let hidden = !d.has(PANEL_HP);
+        d.observe(
+            "F3-01",
+            hidden,
+            format!("Ctrl+J at 960x640: Notes hide the panel: {hidden}"),
+        );
+        run_exit(d, "Notes, where they hide the panel", 39);
+        d.press_ctrl(Key::J);
+        d.harness_focus_nothing();
+        d.settle();
+
+        typed_in_run(d, 38);
+        d.press(Key::Escape);
+        let (held, value) = run_values(d);
+        let row = d.row_hp(MEMBER);
+        d.observe(
+            "F3-04",
+            !held && value == Some(39) && row == Some(39),
+            format!("Escape: the value before the DM came in returns: the sync has {value:?}, the row has {row:?}"),
+        );
+    }
+
+    fn on_party(d: &mut Driver<'_>) {
+        d.click(CLOSE_RUN);
+        d.click("Close now");
+        go_party(d);
+        d.click_containing(MEMBER);
+        d.click_containing(SYNC_SECTION);
+        d.click(SYNC_TOGGLE);
+        party_read(d, SHEET_HP);
+
+        type_in_field(d, 45);
+        d.press(Key::Enter);
+        let (held, value) = party_values(d);
+        d.observe(
+            "F3-01",
+            !held && value == Some(45),
+            format!(
+                "Party, Enter: the number stays, {value:?}, and the hold ended: {}",
+                !held
+            ),
+        );
+        party_read(d, 45);
+
+        // Another member opens once the number has gone, so it goes to the right character.
+        type_in_field(d, 44);
+        let first = d.app_mut().party.selected_member().map(str::to_owned);
+        d.click_containing(OTHER);
+        let (held, value) = party_values(d);
+        let same = d.app_mut().party.selected_member().map(str::to_owned) == first;
+        let says = d.visible_text(OPENING);
+        d.observe(
+            "F3-01",
+            !held && value == Some(44) && same && says,
+            format!(
+                "Party, a click on another member: the number stays, {value:?}, the hold ended: {}, the sheet stays open till it has gone: {same}, and the page says so: {says}",
+                !held
+            ),
+        );
+        d.state("party-sending-then-opening", Sizes::Default);
+        party_read(d, 44);
+        let moved = d.app_mut().party.selected_member().map(str::to_owned) != first;
+        d.observe(
+            "F3-01",
+            moved && !d.visible_text(OPENING),
+            format!("The read-back confirms the number, and the other member opens: {moved}"),
+        );
+        d.click_containing(MEMBER);
+
+        // A conflict in that wait: the sheet stays open to show it.
+        party_read(d, 44);
+        type_in_field(d, 43);
+        d.click_containing(OTHER);
+        party_read(d, 30);
+        let same = d.app_mut().party.selected_member().map(str::to_owned) == first;
+        let state = d.app_mut().party.sync_state();
+        d.observe(
+            "F3-03",
+            same && state == SyncState::Conflict && !d.visible_text(OPENING),
+            format!(
+                "A changed read in that wait: the sheet stays open: {same}, and it asks: {state:?}"
+            ),
+        );
+        d.click(USE_REMOTE);
+        d.settle();
+
+        // Enter leaves a clean sync. The rail waits for a number on its way.
+        type_in_field(d, 42);
+        go_library(d);
+        let (held, value) = party_values(d);
+        let early = d.visible_text(PARTY_STOPPED);
+        d.observe(
+            "F3-01",
+            !held && value == Some(42) && !early,
+            format!(
+                "Party, a click on the rail: the number stays, {value:?}, the hold ended: {}, and sync runs on till it has gone: {}",
+                !held, !early
+            ),
+        );
+        party_read(d, 42);
+        let late = d.visible_text(PARTY_STOPPED);
+        d.observe(
+            "F3-01",
+            late,
+            format!("When the number has gone, sync stops, and the rail says so: {late}"),
+        );
+        go_party(d);
+        d.click("Dismiss this message");
+
+        // A changed sheet in that wait: it asks when the DM turns sync on again.
+        d.click(SYNC_TOGGLE);
+        party_read(d, 42);
+        type_in_field(d, 41);
+        go_library(d);
+        party_read(d, 30);
+        go_party(d);
+        let stopped = d.app_mut().party.sync_state();
+        d.click("Dismiss this message");
+        d.click(SYNC_TOGGLE);
+        party_read(d, 30);
+        let state = d.app_mut().party.sync_state();
+        let (_, value) = party_values(d);
+        d.observe(
+            "F3-03",
+            stopped == SyncState::Conflict && state == SyncState::Conflict && value == Some(41),
+            format!(
+                "Party, rail, then a changed sheet: stopped as {stopped:?}. Sync on again: {state:?}, and the number stands: {value:?}"
+            ),
+        );
+        d.click(USE_REMOTE);
+        d.settle();
+
+        type_in_field(d, 39);
+        d.press(Key::Escape);
+        let (held, value) = party_values(d);
+        d.observe(
+            "F3-04",
+            !held && value == Some(30),
+            format!(
+                "Party, Escape: the value returns: {value:?}, and the hold ended: {}",
+                !held
+            ),
+        );
+
+        // App close: the prompt names the number, its panel is off, and that ends the hold.
+        type_in_field(d, 37);
+        d.request_close();
+        let (held, value) = party_values(d);
+        let names = d.has_containing(CLOSE_NAMES);
+        d.observe(
+            "F3-01",
+            !held && value == Some(37) && names,
+            format!(
+                "App close from the field: the prompt names the number: {names}. The hold ended: {}. The number stays: {value:?}",
+                !held
+            ),
+        );
+        party_read(d, 37);
+        let gone = !d.has_containing(CLOSE_NAMES);
+        d.observe(
+            "F3-01",
+            gone,
+            format!("The number gone, the prompt has nothing to ask, and goes: {gone}"),
+        );
+    }
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.set_base((960.0, 640.0));
+        d.app_mut().settings.simulate(Account::Connected);
+        d.settle();
+        in_a_run(d);
+        on_party(d);
+    }
+}
+
 /// The signed-in path. A test session makes the rail, the page, Party and the import list
 /// share one state. No request leaves the process: see `crate::hermetic`.
 pub mod signed_in {
@@ -3448,31 +3775,37 @@ pub mod signed_in {
             .party
             .simulate_sync_read(SHEET_MAX_HP - SHEET_HP);
         d.settle();
-        if !d.has(SYNC_HP_FIELD) {
-            d.click_containing(SYNCED_WORD);
-        }
+        d.observe(
+            "F2-01",
+            d.has(SYNC_HP_FIELD) && d.visible_text(SYNCED_WORD),
+            "The panel stays open when its word changes to Synced",
+        );
         d.click(SYNC_HP_FIELD);
-        let before = d.app_mut().party.sync_hp();
         d.type_text("4");
         d.type_text("5");
         let open = d.has(SYNC_TOGGLE);
         let during = d.app_mut().party.sync_hp();
+        let held = d.app_mut().party.sync_in_field();
         d.observe(
             "F2-01",
-            open && during == before,
+            open && during == Some(45) && held,
             format!(
-                "Typing 45 with sync on: the panel stays open: {open}. Nothing can go out while \
-                 typing: the value stays {during:?}, from {before:?}"
+                "Typing 45 with sync on: the panel stays open: {open}. The number counts as it is \
+                 typed: {during:?}. Nothing can go out while the DM is in the field: {held}"
             ),
         );
         d.state("party-sync-typed-hp", Sizes::Default);
         // What goes out is the whole number, and the read-back confirms it.
         d.press(Key::Enter);
         let typed = d.app_mut().party.sync_hp();
+        let held = d.app_mut().party.sync_in_field();
         d.observe(
             "F2-01",
-            typed == Some(45),
-            format!("Enter sets the whole number: the value is {typed:?}"),
+            typed == Some(45) && !held,
+            format!(
+                "Enter leaves the field: the value is {typed:?}, and it can go: {}",
+                !held
+            ),
         );
         d.harness_focus_nothing();
         d.app_mut().party.simulate_sync_read(SHEET_MAX_HP - 45);

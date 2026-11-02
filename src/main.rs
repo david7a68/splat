@@ -346,6 +346,12 @@ impl Splat {
                 Page::Run,
             ));
         }
+        if self.party.sync_edits_to_send() {
+            items.push((
+                "A number typed on Party has not reached D&D Beyond.".to_owned(),
+                Page::Party,
+            ));
+        }
         let lost = self.encounters.lost_on_app_close_names();
         if !lost.is_empty() {
             items.push((
@@ -1233,6 +1239,7 @@ impl eframe::App for Splat {
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()
                 || self.encounters.pending_sync()
+                || self.party.sync_edits_to_send()
                 || self.sessions.recording()
                 || self.sessions.processing()
                 || self.sessions.busy_with_edit()
@@ -1327,7 +1334,7 @@ impl eframe::App for Splat {
                     .clone()
                     .map(|remote| (c.id, remote, c.path.clone()))
             }),
-            session.is_some(),
+            session.as_ref(),
             self.page == Page::Party,
         );
         self.encounters

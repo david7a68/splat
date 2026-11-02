@@ -261,7 +261,7 @@ Open **Party** to read the linked D&D Beyond party. Select a character
 and browse Overview, Actions, Spells, Gear, and Features. **Refresh party**
 gets the latest sheets. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
-with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
+with polling fallback. Nothing goes to D&D Beyond from this page unless you turn on its sync section. See [D&D Beyond sync](#dd-beyond-sync) and [viewer details and streaming findings](docs/character-viewer.md).
 
 ## Encounter builder
 
@@ -366,7 +366,7 @@ Saved runs do not automatically push old values. The session must have edit
 permission for the character.
 
 The row says `Reading…` until the first read, then `Synced`, `Sync pending`, `Conflict`, `Sync read-only` or `Sync error`.
-On **Party**, the sync section says the same words. In the sync panel, a typed number counts when you press Enter or leave the field, and only then can it go to the sheet. A value you recorded is not replaced without your say. If a session ends during a run, keep
+On **Party**, the sync section says the same words. A number in the sync panel or in `Correct HP` counts as you type it, and it goes to the sheet after you leave the field, by any way. Escape puts back the value from when you came in, and nothing goes out. While you stay in the field or drag it, Splat does not read that character's sheet or write to it. This has no time limit, as a limit would send part of a number, so leave the field when you are done. In a run, a number in the panel reaches the row when you leave the field, with one line in the Log. In `Correct HP`, one number is one Undo step. On **Party**, a click on another member opens them after the number has gone, and the sheet stays open if a conflict comes instead. If you leave Party, sync stops after the number has gone. If the sheet changed, it asks when you turn sync on again. A value you recorded is not replaced without your say. If a session ends during a run, keep
 recording: a row with a change that was not sent says `Not sent`, the others say `Sync stopped`, and
 closing the run tells you who has unsent changes. On a first read, by **Sync party** or after a
 restart, Splat compares each value with the last one D&D Beyond confirmed, or with what the participant

@@ -205,6 +205,8 @@ pub(crate) struct Run {
     focus_initiative: bool,
     /// A value reached the run with no step of its own, so Undo stops there.
     undo_stopped: bool,
+    /// The `Correct HP` field the DM is in, and the Undo step its digits so far have made.
+    typed_health: Option<TypedHealth>,
     setup_inputs: BTreeMap<usize, String>,
     /// The participant whose initiative the last step set, to merge keystrokes.
     last_initiative: Option<usize>,
@@ -293,6 +295,12 @@ const NOTICE_LEAST: &str = "Sheet update. Earlier Undo steps ended. See the Log.
 const NOTICE_IN_HEADER: &str = "Earlier Undo steps ended. See the Log.";
 const NOTICE_IN_HEADER_SHORT: &str = "Undo ended. See the Log.";
 #[derive(Clone)]
+/// One number typed in a `Correct HP` field is one Undo step, with one log line.
+struct TypedHealth {
+    field: egui::Id,
+    /// How many steps Undo had once the digits so far took theirs.
+    step: Option<usize>,
+}
 enum Command {
     RollNpcs,
     Npc(usize, bool),
@@ -387,6 +395,7 @@ impl Run {
             focus_initiative: false,
             recording_notice: None,
             undo_stopped: false,
+            typed_health: None,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
             hide_panel: false,
@@ -456,6 +465,7 @@ impl Run {
         if initiative_edit.is_some() && initiative_edit == self.last_initiative {
             self.undo();
         }
+        let typed_health = matches!(command, Command::Health(..)) && self.typed_health.is_some();
         let undo_label = self.describe(&command);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let follow_turn = matches!(command, Command::Begin | Command::Next);
@@ -612,6 +622,16 @@ impl Run {
         }
         self.history.push(std::mem::replace(&mut self.state, next));
         self.history_labels.push(undo_label);
+        if let Some(typed) = self.typed_health.as_mut().filter(|_| typed_health) {
+            // After an earlier digit of this number, the step that stands is the one before it.
+            if typed.step == Some(self.history.len() - 1) {
+                self.history.pop();
+                self.history_labels.pop();
+                let digit = self.state.log.len() - 2;
+                self.state.log.remove(digit);
+            }
+            typed.step = Some(self.history.len());
+        }
         self.last_initiative = initiative_edit;
         if follow_turn && let Some(current) = self.current() {
             self.selected = current;
@@ -1362,6 +1382,20 @@ impl Run {
             let Some((campaign, id)) = remote_identity(p) else {
                 continue;
             };
+            // Sync stopped with a number still in a panel field. It stays the DM's number.
+            if sync.take_typed_at_stop() {
+                let before = SheetShadow::of(p);
+                let maximum_before = p.max_hp;
+                apply_sheet_values(p, sync.values(), sync.max_hp());
+                let line = change_line(
+                    &p.name,
+                    &before,
+                    &SheetShadow::of(p),
+                    (maximum_before, p.max_hp),
+                );
+                from_panel.push((p.name.clone(), line));
+                changes.push(p.name.clone());
+            }
             if linked != Some(campaign.as_str()) {
                 sync.stop();
                 sync.error = Some(
@@ -1422,7 +1456,11 @@ impl Run {
             }
             if sync.ready() {
                 let maximum_before = p.max_hp;
-                apply_sheet_values(p, sync.values(), sync.max_hp());
+                // A number in a field waits here, so that it reaches the run whole, with one
+                // log line, or not at all if the DM leaves with Escape.
+                if !sync.in_field() {
+                    apply_sheet_values(p, sync.values(), sync.max_hp());
+                }
                 let after = SheetShadow::of(p);
                 // Anything that reached the run here took no step of its own. Undo would put
                 // the older value back and send it, so the steps before it end here.
@@ -1766,6 +1804,7 @@ impl Run {
             focus_initiative: false,
             recording_notice: None,
             undo_stopped: false,
+            typed_health: None,
             setup_inputs: BTreeMap::new(),
             last_initiative: None,
             hide_panel: false,
@@ -1951,6 +1990,10 @@ impl Run {
         let sync = self.syncs.get_mut(&index).expect("a running sync");
         sync.stop_simulating();
         sync.simulate_sheet(character, max_hp, &sheet);
+    }
+    /// This participant's sync, as it stands.
+    pub fn sync_of(&self, name: &str) -> &crate::combat_sync::CombatSync {
+        &self.syncs[&self.simulated_member(name).0]
     }
     pub fn stop_simulating_sync(&mut self) {
         self.syncs
@@ -2483,6 +2526,308 @@ mod tests {
     fn reconnect(run: &mut Run) {
         run.syncs.get_mut(&0).unwrap().start();
         connected_tick(run);
+    }
+    /// The Record tab of a synced row, driven as the app drives it: `tick_sync`, then the tab.
+    /// Every timer has run out on every frame, so a part value would go at once if it could.
+    struct TableRig {
+        run: Run,
+        /// The HP each exchange sent.
+        sent: Vec<serde_json::Value>,
+        /// False: another tab, the rail, or Lookup or Notes where they hide the panel.
+        panel: bool,
+        connected: bool,
+        /// Another handler takes Escape first, as a footer's second step does.
+        takes_escape: bool,
+    }
+    fn table_frame(ui: &mut egui::Ui, rig: &mut TableRig) {
+        let session = rig.connected.then(|| {
+            crate::auth::Session::for_test(
+                std::time::Duration::from_secs(3600),
+                std::time::Duration::from_secs(7200),
+            )
+        });
+        if rig.takes_escape {
+            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        }
+        rig.run.tick_sync(ui.ctx(), session, 1, Some("1"));
+        let sent = rig
+            .run
+            .syncs
+            .get_mut(&0)
+            .and_then(|sync| sync.hp_sent_at_once(ui.ctx()));
+        rig.sent.extend(sent);
+        if rig.panel {
+            rig.run.record_tab(ui, 0);
+        }
+    }
+    const TABLE_MAX: i64 = 60;
+    const TABLE_HP: i64 = 55;
+    /// A synced row with HP 55 of 60, as the sheet has it, and one step of the DM's to undo.
+    fn table() -> egui_kittest::Harness<'static, TableRig> {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        run.syncs.entry(0).or_default().start();
+        connected_tick(&mut run);
+        read_sheet(&mut run, TABLE_MAX, TABLE_MAX - TABLE_HP);
+        run.apply(Command::Note(1, "A step to undo".into()))
+            .unwrap();
+        run.notice = None;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(900.0, 1400.0))
+            .build_ui_state(
+                table_frame,
+                TableRig {
+                    run,
+                    sent: Vec::new(),
+                    panel: true,
+                    connected: true,
+                    takes_escape: false,
+                },
+            );
+        harness.run_steps(3);
+        harness
+    }
+    fn click_correct_hp(harness: &mut egui_kittest::Harness<'static, TableRig>) {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        harness
+            .get_all_by_label("Current HP")
+            .find(|node| node.accesskit_node().role() != egui::accesskit::Role::CheckBox)
+            .expect("the field")
+            .click();
+        harness.run_steps(3);
+    }
+    fn click_panel_hp(harness: &mut egui_kittest::Harness<'static, TableRig>) {
+        use egui_kittest::kittest::Queryable;
+        harness.get_by_label("Current HP on the sheet").click();
+        harness.run_steps(3);
+    }
+    fn type_45(harness: &mut egui_kittest::Harness<'static, TableRig>) {
+        for digit in ["4", "5"] {
+            harness.event(egui::Event::Text(digit.to_owned()));
+            harness.run_steps(3);
+        }
+    }
+    fn table_hp(harness: &egui_kittest::Harness<'static, TableRig>) -> Option<i64> {
+        harness.state().run.state.participants[0].hp
+    }
+    /// HP 45 of 60, as an exchange sends it.
+    fn sent_45() -> serde_json::Value {
+        serde_json::json!({"removedHitPoints": 15, "temporaryHitPoints": 0})
+    }
+    #[test]
+    fn correct_hp_on_a_synced_row_sends_no_part_value_and_is_one_undo_step() {
+        let mut harness = table();
+        let steps = harness.state().run.history.len();
+        let lines = harness.state().run.state.log.len();
+        click_correct_hp(&mut harness);
+        type_45(&mut harness);
+        let run = &harness.state().run;
+        assert_eq!(table_hp(&harness), Some(45));
+        assert!(harness.state().sent.is_empty(), "no part value goes out");
+        assert!(run.syncs[&0].in_field(), "the row's sync holds");
+        assert_eq!(
+            run.sync_word(0),
+            Some(SyncState::Pending),
+            "the row says so"
+        );
+        assert_eq!(run.history.len(), steps + 1, "one number is one step");
+        assert_eq!(run.state.log.len(), lines + 1, "with one log line");
+        assert!(
+            run.undo_label().contains("HP correction on"),
+            "the named Undo"
+        );
+
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(harness.state().sent, vec![sent_45()], "the whole number");
+        assert!(!harness.state().run.syncs[&0].in_field());
+
+        harness.state_mut().run.undo();
+        harness.run_steps(3);
+        assert_eq!(
+            table_hp(&harness),
+            Some(TABLE_HP),
+            "Undo takes the whole number"
+        );
+    }
+    #[test]
+    fn a_number_over_the_sheets_maximum_leaves_no_part_value() {
+        let mut harness = table();
+        click_correct_hp(&mut harness);
+        for digit in ["6", "5"] {
+            harness.event(egui::Event::Text(digit.to_owned()));
+            harness.run_steps(3);
+        }
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(table_hp(&harness), Some(TABLE_MAX));
+        assert_eq!(harness.state().sent.len(), 1);
+        assert_eq!(harness.state().sent[0]["removedHitPoints"], 0);
+    }
+    #[track_caller]
+    fn escape_takes_correct_hp_back(harness: &mut egui_kittest::Harness<'static, TableRig>) {
+        let steps = harness.state().run.history.len();
+        let lines = harness.state().run.state.log.len();
+        click_correct_hp(harness);
+        type_45(harness);
+        assert_eq!(harness.state().run.history.len(), steps + 1);
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(5);
+        let run = &harness.state().run;
+        assert_eq!(table_hp(harness), Some(TABLE_HP), "the value returns");
+        assert!(harness.state().sent.is_empty(), "nothing goes out");
+        assert!(!run.syncs[&0].in_field());
+        assert!(!run.syncs[&0].dirty());
+        assert_eq!(run.history.len(), steps, "the DM's own steps stay");
+        assert_eq!(
+            run.state.log.len(),
+            lines,
+            "no line for a number taken back"
+        );
+        assert!(run.notice.is_none());
+    }
+    #[test]
+    fn escape_takes_correct_hp_back_and_nothing_goes_out() {
+        escape_takes_correct_hp_back(&mut table());
+    }
+    #[test]
+    fn escape_takes_correct_hp_back_when_another_handler_takes_the_key() {
+        let mut harness = table();
+        harness.state_mut().takes_escape = true;
+        escape_takes_correct_hp_back(&mut harness);
+    }
+    /// On any row, one number is one step, and coming back to the field is a new number.
+    #[test]
+    fn digits_of_correct_hp_merge_only_within_one_visit_to_the_field() {
+        let mut harness = table();
+        harness.state_mut().run.syncs.clear();
+        let steps = harness.state().run.history.len();
+        for visit in 1..=2 {
+            click_correct_hp(&mut harness);
+            type_45(&mut harness);
+            harness.key_press(egui::Key::Enter);
+            harness.run_steps(3);
+            assert_eq!(harness.state().run.history.len(), steps + visit);
+        }
+    }
+    /// The panel's field: nothing reaches the run until the DM leaves, then one log line.
+    #[test]
+    fn a_number_in_the_sync_panel_reaches_the_run_whole_with_one_line() {
+        let mut harness = table();
+        let lines = harness.state().run.state.log.len();
+        click_panel_hp(&mut harness);
+        type_45(&mut harness);
+        let run = &harness.state().run;
+        assert_eq!(
+            table_hp(&harness),
+            Some(TABLE_HP),
+            "the row waits for the whole number"
+        );
+        assert_eq!(run.sync_word(0), Some(SyncState::Pending), "and says so");
+        assert_eq!(run.state.log.len(), lines);
+        assert!(
+            !run.history.is_empty(),
+            "Undo stands while the DM is in the field"
+        );
+        assert!(harness.state().sent.is_empty());
+
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        let run = &harness.state().run;
+        assert_eq!(table_hp(&harness), Some(45));
+        assert_eq!(run.state.log.len(), lines + 1, "one line for one number");
+        assert!(run.state.log.last().unwrap().contains("In Record"));
+        assert_eq!(harness.state().sent, vec![sent_45()]);
+    }
+    #[test]
+    fn escape_from_the_sync_panel_leaves_the_run_and_its_undo_alone() {
+        for takes_escape in [false, true] {
+            let mut harness = table();
+            harness.state_mut().takes_escape = takes_escape;
+            let lines = harness.state().run.state.log.len();
+            let steps = harness.state().run.history.len();
+            click_panel_hp(&mut harness);
+            type_45(&mut harness);
+            harness.key_press(egui::Key::Escape);
+            harness.run_steps(5);
+            let run = &harness.state().run;
+            assert_eq!(table_hp(&harness), Some(TABLE_HP));
+            assert_eq!(run.state.log.len(), lines);
+            assert_eq!(run.history.len(), steps);
+            assert!(harness.state().sent.is_empty());
+            assert_eq!(run.sync_word(0), Some(SyncState::Matching));
+        }
+    }
+    /// A click on another tab or on the rail, or Lookup or Notes where they hide the panel.
+    #[test]
+    fn a_number_stays_when_the_panel_goes_away() {
+        for field in [click_panel_hp, click_correct_hp] {
+            let mut harness = table();
+            field(&mut harness);
+            type_45(&mut harness);
+            harness.state_mut().panel = false;
+            harness.run_steps(3);
+            assert!(!harness.state().run.syncs[&0].in_field(), "the hold ends");
+            assert_eq!(table_hp(&harness), Some(45));
+            assert_eq!(harness.state().sent, vec![sent_45()]);
+        }
+    }
+    /// The DM left `Correct HP` for Lookup, which hid the panel. Escape closes Lookup, and the
+    /// panel is back in that same frame. That is not the DM taking the number back.
+    #[test]
+    fn escape_later_does_not_take_back_a_number_the_dm_left_by_another_way() {
+        let mut harness = table();
+        click_correct_hp(&mut harness);
+        type_45(&mut harness);
+        harness.state_mut().panel = false;
+        harness.run_steps(3);
+        harness.state_mut().panel = true;
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(3);
+        assert_eq!(table_hp(&harness), Some(45));
+        assert_eq!(harness.state().sent, vec![sent_45()]);
+    }
+    /// Stop sync and a session's end do not wait for the field, and the number stays the DM's.
+    #[test]
+    fn a_stop_or_a_session_end_during_a_hold_keeps_the_number_in_the_run() {
+        for field in [click_panel_hp, click_correct_hp] {
+            let mut harness = table();
+            field(&mut harness);
+            type_45(&mut harness);
+            harness.state_mut().run.syncs.get_mut(&0).unwrap().stop();
+            harness.run_steps(3);
+            let run = &harness.state().run;
+            assert_eq!(table_hp(&harness), Some(45));
+            assert_eq!(run.sync_word(0), Some(SyncState::NotSent));
+            assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 15);
+            assert!(run.close_block().is_none(), "a close does not wait for it");
+            assert!(harness.state().sent.is_empty());
+
+            let mut harness = table();
+            field(&mut harness);
+            type_45(&mut harness);
+            harness.state_mut().connected = false;
+            harness.run_steps(3);
+            let run = &harness.state().run;
+            assert_eq!(table_hp(&harness), Some(45));
+            assert_eq!(run.sync_word(0), Some(SyncState::NotSent));
+            assert!(!run.syncs[&0].in_field());
+            assert!(run.close_block().is_none());
+        }
+    }
+    /// A close with nothing typed is free. With a number typed it waits for the send, and a
+    /// click on the button is what ends the hold, so it cannot wait for a focus that stays.
+    #[test]
+    fn close_does_not_wait_on_a_hold_by_itself() {
+        let mut harness = table();
+        click_panel_hp(&mut harness);
+        assert!(harness.state().run.close_block().is_none());
+        type_45(&mut harness);
+        assert!(harness.state().run.close_block().is_some());
+        harness.state_mut().panel = false;
+        harness.run_steps(3);
+        assert!(harness.state().run.close_block().is_none());
     }
     #[test]
     fn a_change_made_during_a_stop_survives_reconnect_as_a_conflict() {

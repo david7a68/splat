@@ -39,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 30] = [
+const SCENARIOS: [(&str, Seed, Script); 31] = [
     (
         "library-browse",
         Seed::Empty,
@@ -145,6 +145,12 @@ const SCENARIOS: [(&str, Seed, Script); 30] = [
         "session-recording",
         Seed::Campaign,
         scenarios::session_recording::run,
+    ),
+    // Last, as a scenario's place in this list seeds its dice.
+    (
+        "typed-sync-number",
+        Seed::Campaign,
+        scenarios::typed_sync_number::run,
     ),
 ];
 
