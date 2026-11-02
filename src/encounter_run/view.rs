@@ -2727,7 +2727,7 @@ impl Run {
                         in_health_field = Some(field.id);
                     }
                     if let Some(sync) = self.syncs.get_mut(&index) {
-                        sync.hold_for(field);
+                        sync.note_outside_field(field);
                     }
                 }
                 if sheet_decides {
@@ -2803,8 +2803,8 @@ impl Run {
                     let b = ui.add(egui::DragValue::new(&mut failures).range(0..=3));
                     design::named(ui, &b, "Death save failures");
                     if let Some(sync) = self.syncs.get_mut(&index) {
-                        sync.hold_for(&a);
-                        sync.hold_for(&b);
+                        sync.note_outside_field(&a);
+                        sync.note_outside_field(&b);
                     }
                     if successes != p.successes || failures != p.failures {
                         command = Some(Command::DeathSaves(index, successes, failures));

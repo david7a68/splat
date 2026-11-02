@@ -3674,14 +3674,14 @@ pub mod typed_sync_number {
     /// The DM has left, the sync has the number, and so does the row.
     #[track_caller]
     fn run_exit(d: &mut Driver<'_>, how: &str, number: i64) {
-        let (held, value) = run_values(d);
+        let (in_field, value) = run_values(d);
         let row = d.row_hp(MEMBER);
         d.observe(
             "F3-01",
-            !held && value == Some(number) && row == Some(number),
+            !in_field && value == Some(number) && row == Some(number),
             format!(
                 "{how}: the number stays, {number}: the sync has {value:?}, the row has {row:?}. The DM has left the field: {}",
-                !held
+                !in_field
             ),
         );
     }
@@ -3708,22 +3708,22 @@ pub mod typed_sync_number {
         d.settle();
         d.click(PANEL_HP);
         d.press(Key::Enter);
-        let (held, value) = run_values(d);
+        let (in_field, value) = run_values(d);
         d.observe(
             "F3-03",
-            !held && value == Some(SHEET_HP) && d.row_hp(MEMBER) == Some(SHEET_HP),
+            !in_field && value == Some(SHEET_HP) && d.row_hp(MEMBER) == Some(SHEET_HP),
             format!("In the field and out, with nothing typed: the value stays {value:?}"),
         );
 
         typed_in_run(d, 45);
-        let (held, value) = run_values(d);
+        let (in_field, value) = run_values(d);
         let row = d.row_hp(MEMBER);
         let word = d.row_words(MEMBER);
         d.observe(
             "F3-01",
-            held && value == Some(45) && row == Some(45) && word.contains("Sync pending"),
+            in_field && value == Some(45) && row == Some(45) && word.contains("Sync pending"),
             format!(
-                "In the field after two digits: in the field {held}, the sync has {value:?}, the row has {row:?}, and says {word}"
+                "In the field after two digits: in the field {in_field}, the sync has {value:?}, the row has {row:?}, and says {word}"
             ),
         );
         d.state("run-in-a-number-field", Sizes::Default);
@@ -3732,12 +3732,12 @@ pub mod typed_sync_number {
 
         typed_in_run(d, 44);
         d.press(Key::Tab);
-        let (held, value) = run_values(d);
+        let (in_field, value) = run_values(d);
         d.observe(
             "F3-01",
-            held && value == Some(44),
+            in_field && value == Some(44),
             format!(
-                "Tab: the number stays, {value:?}, and the DM is in the next number field: {held}"
+                "Tab: the number stays, {value:?}, and the DM is in the next number field: {in_field}"
             ),
         );
         d.harness_focus_nothing();
@@ -3757,11 +3757,11 @@ pub mod typed_sync_number {
 
         typed_in_run(d, 41);
         go_library(d);
-        let (held, value) = run_values(d);
+        let (in_field, value) = run_values(d);
         d.observe(
             "F3-01",
-            !held && value == Some(41),
-            format!("A click on the rail, away from the run: the sync has {value:?}, and the DM has left the field: {}", !held),
+            !in_field && value == Some(41),
+            format!("A click on the rail, away from the run: the sync has {value:?}, and the DM has left the field: {}", !in_field),
         );
         d.click(BACK_TO_RUN);
         run_exit(d, "A click on the rail, then back", 41);
@@ -3794,7 +3794,7 @@ pub mod typed_sync_number {
         d.press(Key::Escape);
         run_exit(d, "Escape, which keeps what was typed", 38);
 
-        // Main's Escape also goes back to the current turn.
+        // Escape also goes back to the current turn.
         d.click_row(MEMBER);
         d.click(RECORD);
 
@@ -3823,20 +3823,20 @@ pub mod typed_sync_number {
         party_read(d, SHEET_HP);
 
         type_in_field(d, 45);
-        let (held, value) = party_values(d);
+        let (in_field, value) = party_values(d);
         d.observe(
             "F3-01",
-            held && value == Some(45),
-            format!("Party, in the field: the DM is in it: {held}, and the sync has {value:?}"),
+            in_field && value == Some(45),
+            format!("Party, in the field: the DM is in it: {in_field}, and the sync has {value:?}"),
         );
         d.press(Key::Enter);
-        let (held, value) = party_values(d);
+        let (in_field, value) = party_values(d);
         d.observe(
             "F3-01",
-            !held && value == Some(45),
+            !in_field && value == Some(45),
             format!(
                 "Party, Enter: the number stays, {value:?}, and the DM has left: {}",
-                !held
+                !in_field
             ),
         );
         party_read(d, 45);
@@ -3844,12 +3844,12 @@ pub mod typed_sync_number {
         // Sync runs on when the DM leaves this page, so the number can still go.
         type_in_field(d, 44);
         go_library(d);
-        let (held, value) = party_values(d);
+        let (in_field, value) = party_values(d);
         let rail = d.rail_words();
         d.observe(
             "F3-01",
-            !held && value == Some(44) && !rail.contains(RAIL_STOPPED),
-            format!("Party, a click on the rail: the number stays, {value:?}, the DM has left: {}, and sync runs on: {rail}", !held),
+            !in_field && value == Some(44) && !rail.contains(RAIL_STOPPED),
+            format!("Party, a click on the rail: the number stays, {value:?}, the DM has left: {}, and sync runs on: {rail}", !in_field),
         );
         party_read(d, 44);
         go_party(d);
@@ -3882,14 +3882,14 @@ pub mod typed_sync_number {
         // App close: the prompt names the number, and the page behind it is off.
         type_in_field(d, 37);
         d.request_close();
-        let (held, value) = party_values(d);
+        let (in_field, value) = party_values(d);
         let names = d.has_containing(CLOSE_NAMES);
         d.observe(
             "F4-03",
-            !held && value == Some(37) && names,
+            !in_field && value == Some(37) && names,
             format!(
                 "App close from the field: the prompt names the number: {names}. The DM has left the field: {}. The number stays: {value:?}",
-                !held
+                !in_field
             ),
         );
         party_read(d, 37);

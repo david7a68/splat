@@ -3619,10 +3619,8 @@ mod tests {
         linked(&mut run, 1, "12");
         let name = run.state.participants[0].name.clone();
         let (campaign, _) = remote_identity(&run.state.participants[0]).unwrap();
-        run.syncs.insert(
-            0,
-            CombatSync::simulated_state(SyncState::Pending, 11, 10, 0),
-        );
+        run.syncs
+            .insert(0, CombatSync::simulated_pending(11, 10, 0));
         run.stop_simulating_sync();
         assert!(run.close_block().is_some(), "on their way: wait for them");
 
@@ -3724,14 +3722,17 @@ mod tests {
     fn table() -> egui_kittest::Harness<'static, TableRig> {
         table_at(TABLE_HP)
     }
-    fn click_correct_hp(harness: &mut egui_kittest::Harness<'static, TableRig>) {
+    fn click_number(harness: &mut egui_kittest::Harness<'static, TableRig>, label: &str) {
         use egui_kittest::kittest::{NodeT, Queryable};
         harness
-            .get_all_by_label("Current HP")
+            .get_all_by_label(label)
             .find(|node| node.accesskit_node().role() == egui::accesskit::Role::SpinButton)
             .expect("the field")
             .click();
         harness.run_steps(3);
+    }
+    fn click_correct_hp(harness: &mut egui_kittest::Harness<'static, TableRig>) {
+        click_number(harness, "Current HP");
     }
     fn click_panel_hp(harness: &mut egui_kittest::Harness<'static, TableRig>) {
         use egui_kittest::kittest::Queryable;
@@ -3809,16 +3810,10 @@ mod tests {
     /// block above it goes.
     #[test]
     fn maximum_hp_keeps_its_focus_when_a_row_leaves_0_hp() {
-        use egui_kittest::kittest::{NodeT, Queryable};
         let mut harness = table_at(0);
         harness.state_mut().run.syncs.clear();
         harness.run_steps(3);
-        harness
-            .get_all_by_label("Maximum HP")
-            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::SpinButton)
-            .expect("the field")
-            .click();
-        harness.run_steps(3);
+        click_number(&mut harness, "Maximum HP");
         let field = harness.state().run.typed_health.as_ref().unwrap().field;
         harness.state_mut().run.state.participants[0].hp = Some(5);
         harness.run_steps(3);

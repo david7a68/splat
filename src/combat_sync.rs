@@ -446,11 +446,11 @@ const DIFFER_AFTER_READ: &str =
 
 /// A sheet with this damage and nothing else recorded. Test builds cannot read a live one.
 #[cfg(test)]
-fn simulated_sheet(character: u64, max_hp: i64, damage: i64, can_edit: bool) -> Remote {
+fn simulated_sheet(character: u64, max_hp: i64, damage: i64) -> Remote {
     Remote::from_raw(
         character,
         max_hp,
-        &json!({"id":character,"canEdit":can_edit,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
+        &json!({"id":character,"canEdit":true,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
     )
     .expect("simulated sheet")
 }
@@ -509,27 +509,17 @@ impl Drop for CombatSync {
     }
 }
 impl CombatSync {
-    /// A sync in a state test builds cannot read from a live sheet. It only shows that.
+    /// A sync with one more point of damage to send than the sheet has. Test builds cannot read
+    /// a live sheet.
     #[cfg(test)]
-    pub fn simulated_state(state: SyncState, character: u64, max_hp: i64, damage: i64) -> Self {
-        if state == SyncState::Conflict {
-            return Self::simulated_conflict(character, max_hp, damage);
-        }
+    pub fn simulated_pending(character: u64, max_hp: i64, damage: i64) -> Self {
+        let read = simulated_sheet(character, max_hp, damage);
         let mut sync = Self::default();
         sync.simulated = true;
-        sync.enabled = state != SyncState::Off;
-        if matches!(state, SyncState::FirstRead | SyncState::Off) {
-            return sync;
-        }
-        let read = simulated_sheet(character, max_hp, damage, state != SyncState::ReadOnly);
+        sync.enabled = true;
         sync.desired = read.groups.clone();
         sync.remote = Some(read);
-        if state == SyncState::Pending {
-            sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 1).into();
-        }
-        if state == SyncState::Error {
-            sync.error = Some("Could not read this character from D&D Beyond.".into());
-        }
+        sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 1).into();
         sync
     }
 
@@ -537,7 +527,7 @@ impl CombatSync {
     /// Test builds cannot read a live sheet, so a visual test shows the panel this way.
     #[cfg(test)]
     pub fn simulated_conflict(character: u64, max_hp: i64, damage: i64) -> Self {
-        let read = simulated_sheet(character, max_hp, damage, true);
+        let read = simulated_sheet(character, max_hp, damage);
         let mut sync = Self::default();
         sync.enabled = true;
         sync.simulated = true;
@@ -789,7 +779,7 @@ impl CombatSync {
         self.field.is_some()
     }
     /// A field outside this panel that reaches this sync, as `Correct HP` does.
-    pub fn hold_for(&mut self, response: &egui::Response) {
+    pub fn note_outside_field(&mut self, response: &egui::Response) {
         note_field(&mut self.field, response);
     }
     /// True while the DM stays in the field. egui ends a focus when the field is not drawn or
@@ -887,7 +877,6 @@ impl CombatSync {
     ) {
         // Test builds have no route to D&D Beyond. A signed-in test stays on its first read.
         if cfg!(test) {
-            let _ = (&session, epoch, campaign, id);
             self.in_number_field(ctx);
             return;
         }
@@ -1011,7 +1000,7 @@ impl CombatSync {
     /// A read from D&D Beyond, with the sheet's HP. Test builds have no route to a live one.
     #[cfg(test)]
     pub fn simulate_read(&mut self, character: u64, max_hp: i64, damage: i64) {
-        self.accept_read(simulated_sheet(character, max_hp, damage, true));
+        self.accept_read(simulated_sheet(character, max_hp, damage));
     }
     /// A read of a sheet given in full, in D&D Beyond's own fields.
     #[cfg(test)]
@@ -2063,7 +2052,7 @@ mod tests {
         harness.key_press(egui::Key::Escape);
         number_goes_out_after_the_delay(&mut harness);
     }
-    /// After the DM leaves, a read finds a changed sheet and a typed number: main's conflict.
+    /// After the DM leaves, a read finds a changed sheet and a typed number: a conflict.
     #[test]
     fn a_changed_sheet_after_leaving_with_a_typed_number_raises_the_conflict() {
         let mut harness = rig();
@@ -2223,7 +2212,7 @@ mod tests {
     /// and only then does the close say so.
     #[test]
     fn only_values_the_run_does_not_hold_are_lost_on_close() {
-        let mut sync = CombatSync::simulated_state(SyncState::Pending, 11, 10, 0);
+        let mut sync = CombatSync::simulated_pending(11, 10, 0);
         assert!(!sync.loses_on_close(), "HP is kept by the run");
         sync.simulate_slot_edit();
         assert!(sync.loses_on_close());

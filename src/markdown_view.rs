@@ -435,8 +435,6 @@ fn local_figure_links(markdown: &str, local: impl Fn(&str) -> bool) -> Cow<'_, s
 
 const TABLE_GAP: f32 = design::M;
 
-/// Fit columns to their text. Never narrower than a column's longest word, while
-/// there is room, so "Constitution" does not break in a side panel.
 /// A wide table in a narrow reader gives up its gaps too, so that it stays inside the reader.
 fn table_gap(available: f32, columns: usize) -> f32 {
     match columns.saturating_sub(1) {
@@ -445,6 +443,8 @@ fn table_gap(available: f32, columns: usize) -> f32 {
     }
 }
 
+/// Fit columns to their text. Never narrower than a column's longest word, while
+/// there is room, so "Constitution" does not break in a side panel.
 fn column_widths(
     ui: &egui::Ui,
     rows: &[Vec<String>],
