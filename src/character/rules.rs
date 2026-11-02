@@ -32,12 +32,12 @@ fn registry() -> &'static Registry {
             .expect("checked conversion registry")
     })
 }
-fn builtin() -> Result<&'static BTreeMap<String, Entry>, String> {
-    static BUILTIN: OnceLock<Result<BTreeMap<String, Entry>, String>> = OnceLock::new();
+fn builtin() -> Result<&'static BTreeMap<String, &'static Entry>, String> {
+    static BUILTIN: OnceLock<Result<BTreeMap<String, &'static Entry>, String>> = OnceLock::new();
     BUILTIN
         .get_or_init(|| {
             Ok(crate::content::definitions::entries()?
-                .into_iter()
+                .iter()
                 .filter_map(|e| e.key.clone().map(|k| (k, e)))
                 .collect())
         })
@@ -240,10 +240,9 @@ impl<'a> Rules<'a> {
         }
         let original = builtin()?
             .get(key)
-            .ok_or_else(|| format!("Missing converted rule {key}"))?
-            .clone();
-        let meta = crate::content::definitions::conversion(&original)?
-            .ok_or("Missing builtin coverage")?;
+            .ok_or_else(|| format!("Missing converted rule {key}"))?;
+        let meta =
+            crate::content::definitions::conversion(original)?.ok_or("Missing builtin coverage")?;
         if !meta.conversion_gaps.is_empty() {
             return Err(format!("Builtin rule still has conversion gaps: {key}"));
         }
@@ -251,7 +250,7 @@ impl<'a> Rules<'a> {
         self.identities.insert(key.into(), id);
         self.shared_engine_gaps.extend(meta.engine_gaps);
         // Keep the catalogue's identity and dependencies. Never publish an SRD copy.
-        for dependency in crate::content::required_references(&original)? {
+        for dependency in crate::content::required_references(original)? {
             let key = match dependency {
                 crate::content::Reference::Key(key) => Some(key),
                 crate::content::Reference::Id(id) => builtin()?
