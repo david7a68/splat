@@ -1342,14 +1342,40 @@ pub mod run_absent_player {
     const ROLL_NPCS: &str = "Roll NPC initiative";
     const BEGIN: &str = "Begin combat";
     const NO_INITIATIVE: &str = "No initiative";
+    const MIDDLE: &str = "Oren Thistlewick";
+    const LAST: &str = "Sable Harrowgate";
     const TURN_ORDER_FIRST: &str = "Kestrel Dunmoor";
 
     pub fn run(d: &mut Driver<'_>) {
         run_saved_encounter(d, ENCOUNTER);
         d.click(&format!("Absent: {PLAYER}"));
         d.click(ROLL_NPCS);
+        // The keyboard path skips the absent: after the roll, and after each Enter.
+        let field = |name: &str| format!("Initiative for {name}");
+        let after_roll = d.focused_name();
+        d.observe(
+            "Absent player",
+            after_roll.as_deref() == Some(field("Iselle Marrowind").as_str()),
+            format!("After the roll, the first present player's field has focus: {after_roll:?}"),
+        );
+        d.type_text(OTHERS[0].1);
+        d.press(Key::Enter);
+        d.type_text(OTHERS[1].1);
+        // One more absent, in the middle: Enter goes past that one too.
+        d.click(&format!("Absent: {MIDDLE}"));
+        d.click(&field(OTHERS[1].0));
+        d.press(Key::Enter);
+        let past_middle = d.focused_name();
+        d.observe(
+            "Absent player",
+            past_middle.as_deref() == Some(field(LAST).as_str()),
+            format!("Enter goes past an absent player in the middle: {past_middle:?}"),
+        );
+        d.click(&format!("Mark present: {MIDDLE}"));
         for (name, total) in OTHERS {
-            d.type_into(&format!("Initiative for {name}"), total);
+            if d.field_text(&field(name)).as_deref() != Some(total) {
+                d.type_into(&field(name), total);
+            }
         }
         d.state("ready-with-one-absent", Sizes::All);
         // The turn order follows the totals, with no place taken by the absent player.
@@ -2586,6 +2612,10 @@ pub mod run_roster_conflict {
     const STOP_SYNC: &str = "Stop party sync";
     const AMOUNT: &str = "Amount";
     const LOADED_ROW: &str = "Kestrel Dunmoor";
+    const ONE_MORE_LINE: &str = "Cinder Wolf 3";
+    const ONE_MORE_CONDITION: &str = "Prone";
+    const LONG_MESSAGE: &str =
+        "Brannoch Vale HP 58 → 54, Iselle Marrowind HP 27 → 18, Kestrel Dunmoor HP 11 → 8";
     const LOADED_CONDITIONS: [&str; 5] =
         ["Blinded", "Charmed", "Grappled", "Paralyzed", "Restrained"];
 
@@ -2625,10 +2655,31 @@ pub mod run_roster_conflict {
         for condition in LOADED_CONDITIONS {
             d.click(condition);
         }
-        // The first read's message stays until dismissed, and it is not what this measures.
-        if d.has("Dismiss this message") {
-            d.click("Dismiss this message");
-        }
+        // A message the DM has not dismissed takes one line here, so no row has to scroll.
+        d.app_mut().encounters.simulate_sheet_update(LONG_MESSAGE);
+        d.settle();
+        d.click_row(ONE_MORE_LINE);
+        d.click(CONDITIONS);
+        d.click(ONE_MORE_CONDITION);
+        d.state("message-on-one-line", Sizes::Default);
+        let nodes = d.nodes();
+        let cut: Vec<&&str> = run_large_roster::ROSTER_12
+            .iter()
+            .filter(|name| {
+                !nodes
+                    .iter()
+                    .any(|n| n.name.starts_with(&format!("{name},")) && n.fully_in_view())
+            })
+            .collect();
+        d.observe(
+            "T1.3",
+            cut.is_empty() && d.visible_text("Undo history was cleared. Hover here"),
+            format!(
+                "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
+            ),
+        );
+        d.click(ONE_MORE_CONDITION);
+        d.click_row(LOADED_ROW);
         let errored = LOADED_CONDITIONS.len() + 1;
         d.app_mut()
             .encounters
@@ -2647,7 +2698,7 @@ pub mod run_roster_conflict {
         d.observe(
             "T1.3",
             cut.is_empty() && d.in_view(AMOUNT) && d.in_view(APPLY_DAMAGE),
-            format!("At 960x640 with {errored} extra lines, rows not in full view: {cut:?}"),
+            format!("At 960x640 with {errored} extra lines and a message not dismissed, rows not in full view: {cut:?}"),
         );
         d.app_mut().encounters.simulate_run_error("");
         d.settle();

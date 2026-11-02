@@ -2605,6 +2605,78 @@ mod tests {
         }
     }
 
+    /// The words a built-in entry paints in the reader, in order.
+    fn reader_text(name: &str) -> String {
+        let loaded = load(None).unwrap();
+        let index = loaded
+            .notes
+            .iter()
+            .position(|note| note.name() == name)
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            ..Default::default()
+        };
+        library.open_entry(index);
+        let ctx = egui::Context::default();
+        let mut frame = || {
+            ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(390.0, 2400.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| library.editor(ui, "Definition"));
+                },
+            )
+        };
+        frame();
+        frame()
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn an_item_has_one_identity_line_with_its_attunement_before_the_rules() {
+        let text = reader_text("Dragon Orb");
+        assert!(!text.contains("Source classification"), "{text}");
+        assert!(!text.contains("wondrous item · artifact"), "{text}");
+        let identity = text.find("(Requires Attunement)").expect("the book's line");
+        assert!(
+            identity < text.find("An orb is an etched crystal").unwrap(),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_class_that_grants_its_features_links_to_them_and_its_spell_list() {
+        let text = reader_text("Wizard");
+        assert!(text.contains("Class features"), "{text}");
+        assert!(text.find("Arcane Recovery").unwrap() < text.find("Signature Spells").unwrap());
+        assert!(text.contains("Wizard Spell List"), "{text}");
+        assert!(text.contains("Wizard Progression"), "{text}");
+        // Tight rows in one case, as a spell's are, and each option on its own row.
+        assert!(text.contains("Primary ability\nIntelligence"), "{text}");
+        assert!(text.contains("Option A\n"), "{text}");
+        assert!(text.contains("Option B\n55 GP"), "{text}");
+    }
+
+    #[test]
+    fn a_subclass_lists_its_features() {
+        let text = reader_text("College of Lore");
+        assert!(text.contains("Subclass features"), "{text}");
+        assert!(text.contains("Cutting Words"), "{text}");
+    }
+
     #[test]
     fn class_reader_is_readable_and_opens_features() {
         let loaded = load(None).unwrap();
@@ -2655,7 +2727,8 @@ mod tests {
             .map(|text| text.galley.job.text.as_str())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(rendered.contains("Primary Ability: Strength"));
+        // A label and its value, as a spell's facts are: on one row, in one case.
+        assert!(rendered.contains("Primary ability\nStrength"), "{rendered}");
         assert!(rendered.contains("Starting equipment"));
         assert!(!rendered.contains("dnd2024:class_features/"));
         assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());

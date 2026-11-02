@@ -94,7 +94,7 @@ fn display_value(value: &serde_yaml_ng::Value) -> String {
     }
 }
 
-fn item_summary(ui: &mut egui::Ui, entry: &Entry) {
+fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
     let Some(item) = entry.fields.get("splat_item").and_then(|v| v.as_mapping()) else {
         return;
     };
@@ -104,6 +104,8 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry) {
         .collect::<Vec<_>>()
         .join(" · ")
         .replace('_', " ");
+    // One line: the book's own has attunement in it, and says what the fields say.
+    let identity = printed.map_or(identity, str::to_owned);
     if !identity.is_empty() {
         style::identity(ui, &identity);
     }
@@ -273,7 +275,18 @@ pub(super) fn show(
 ) {
     ui.add_space(crate::design::S);
     if let Some(entry) = entry {
-        item_summary(ui, entry);
+        let printed = sections
+            .iter()
+            .find(|section| section.title == "Source text")
+            .filter(|_| builtin)
+            .and_then(|section| {
+                source_facts(section.body)
+                    .0
+                    .into_iter()
+                    .find(|(label, _)| label == "Identity")
+                    .map(|(_, identity)| identity)
+            });
+        item_summary(ui, entry, printed.as_deref());
         preparation_summary(ui, entry, sections.iter().any(|s| s.title == "Source text"));
     }
     for section in sections {
@@ -299,11 +312,9 @@ pub(super) fn show(
                 let (mut facts, prose) = source_facts(section.body);
                 if let Some(index) = facts.iter().position(|(label, _)| label == "Identity") {
                     let identity = facts.remove(index).1;
+                    // An item's is already its identity line, above.
                     if !entry.is_some_and(|e| e.fields.contains_key("splat_item")) {
                         style::identity(ui, &identity);
-                    } else {
-                        // Preserve the source qualifier even when item metadata differs.
-                        style::detail(ui, "Source classification", &identity);
                     }
                 }
                 let (cards, details): (Vec<_>, Vec<_>) =

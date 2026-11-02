@@ -35,6 +35,10 @@ const GUTTER: f32 = design::M;
 const OVERFLOW_LINE: f32 = 22.0;
 /// Kept free under a list that fits, for a message of up to two lines.
 const MESSAGE_ROOM: f32 = 44.0;
+/// A message's height when the list needs the room.
+const MESSAGE_LINE: f32 = 28.0;
+/// What a message says in that one line.
+const NOTICE_SHORT: &str = "Undo history was cleared. Hover here, or see the Log.";
 const SCROLL_BAR: f32 = 12.0;
 /// A name-only row when the list has no other way to fit. Still a 24 px target and more.
 const TIGHT_ROW: f32 = 25.0;
@@ -452,16 +456,30 @@ impl Run {
                     // A message goes in the room under the list, so it moves no row while
                     // the DM's eye is on them, and stays until they dismiss it. A long one wraps.
                     let notice = self.notice.clone();
+                    let width = ui.available_width();
                     let notice_height = notice.as_ref().map_or(0.0, |notice| {
-                        let width = ui.available_width() - 32.0;
                         let font = Type::Small.font(ui);
                         ui.fonts_mut(|fonts| {
-                            fonts.layout(notice.clone(), font, egui::Color32::PLACEHOLDER, width)
+                            fonts.layout(
+                                notice.clone(),
+                                font,
+                                egui::Color32::PLACEHOLDER,
+                                width - 32.0,
+                            )
                         })
                         .size()
                         .y
                         .max(MESSAGE_ROOM)
                     });
+                    // A list that would have to scroll to make room gets it back: the message
+                    // keeps its point on one line, with the whole of it on hover and in the log.
+                    let tightest = self.tightest_roster(ui, width, room);
+                    let compact = notice.is_some() && tightest > room - notice_height;
+                    let notice_height = if compact { MESSAGE_LINE } else { notice_height };
+                    // With an error line up too, one more line would scroll even a compressed
+                    // list. The error comes first, and the message returns when it is dismissed.
+                    let notice = notice.filter(|_| tightest <= room - notice_height);
+                    let notice_height = if notice.is_some() { notice_height } else { 0.0 };
                     let list = room - notice_height;
                     ui.allocate_ui_with_layout(
                         vec2(ui.available_width(), list),
@@ -481,12 +499,20 @@ impl Run {
                                 let dismiss =
                                     design::icon_button(ui, icons::CLOSE, "Dismiss this message")
                                         .clicked();
-                                ui.add(
+                                let shown = if compact {
+                                    NOTICE_SHORT
+                                } else {
+                                    notice.as_str()
+                                };
+                                let response = ui.add(
                                     egui::Label::new(
-                                        Type::Small.rich(ui, notice).color(colors().result.warning),
+                                        Type::Small.rich(ui, shown).color(colors().result.warning),
                                     )
                                     .wrap(),
                                 );
+                                if compact {
+                                    response.on_hover_text(&notice);
+                                }
                                 if dismiss {
                                     self.notice = None;
                                 }
@@ -709,6 +735,16 @@ impl Run {
                 RowLayout::new(ui, width, p, self.sync_word(index), scale, fit, longest)
             })
             .collect()
+    }
+
+    /// The height of this list at its most compressed, in this room.
+    fn tightest_roster(&self, ui: &egui::Ui, width: f32, room: f32) -> f32 {
+        let count = self.state.order.len();
+        let scale = RunScale::fit(room, width, count);
+        self.roster_layouts(ui, width, scale, RowFit::Compressed)
+            .iter()
+            .map(|layout| layout.height(scale))
+            .sum()
     }
 
     /// `room` is what the list has now, and `lent` what a message under it has taken. A list
@@ -1935,7 +1971,7 @@ impl Run {
                 .state
                 .participants
                 .iter()
-                .position(|p| p.initiative.is_none());
+                .position(|p| p.initiative.is_none() && p.present);
         }
         let room = ui.available_height() - FOOTER_HEIGHT - design::M;
         ui.allocate_ui_with_layout(
@@ -2113,9 +2149,10 @@ impl Run {
         if enter {
             // The next row without a total, after this one, then from the top.
             let count = self.state.participants.len();
-            self.focus_field = (1..count)
-                .map(|step| (index + step) % count)
-                .find(|i| self.state.participants[*i].initiative.is_none());
+            self.focus_field = (1..count).map(|step| (index + step) % count).find(|i| {
+                let p = &self.state.participants[*i];
+                p.initiative.is_none() && p.present
+            });
         }
         if expanded {
             ui.horizontal(|ui| {
