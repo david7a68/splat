@@ -2344,6 +2344,7 @@ pub mod column_resize {
 
     const CHECK: &str = "Column resize";
     const MEMBER: &str = "Brannoch Vale";
+    const ENCOUNTER: &str = "Shrine of Cinders";
     /// Far past either end of what any column can reach.
     const FAR_LEFT: f32 = 1.0;
     const FAR_RIGHT: f32 = 1190.0;
@@ -2368,10 +2369,69 @@ pub mod column_resize {
         (a - b).abs() <= 1.0
     }
 
+    fn right_of(d: &Driver<'_>, name: &str) -> f32 {
+        d.place_of(name).map_or(0.0, |rect| rect.right())
+    }
+
+    /// What is beside a column reaches it, in a window with more room than it needs.
+    fn content_follows_the_panel(d: &mut Driver<'_>) {
+        let roster = right_of(d, NEXT_TURN);
+        let edge = roster + crate::design::M;
+        d.drag_column_edge(edge, edge + 300.0);
+        d.observe(
+            CHECK,
+            near(right_of(d, NEXT_TURN), roster + 300.0),
+            format!(
+                "The roster follows the run's panel from {roster} to {}",
+                right_of(d, NEXT_TURN)
+            ),
+        );
+    }
+
+    fn the_roster_follows_the_add_panel(d: &mut Driver<'_>) {
+        d.set_base(LARGE);
+        // An open run blocks editing an encounter.
+        close_run(d);
+        go_encounters(d);
+        open_saved_encounter(d, ENCOUNTER);
+        let edge = |d: &Driver<'_>| d.place_of(FIND_CREATURE).map_or(0.0, |r| r.left()) - S;
+        let start = edge(d);
+        d.drag_column_edge(start, start + 100.0);
+        let roster = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.ends_with("Remove") && node.in_view())
+            .map(|node| node.rect.right())
+            .fold(0.0, f32::max);
+        d.observe(
+            CHECK,
+            edge(d) - roster <= crate::design::XL,
+            format!("The roster reaches {roster}, beside a panel at {}", edge(d)),
+        );
+        d.state("roster-follows-add-panel", Sizes::All);
+    }
+
+    fn the_session_fills_its_column(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        new_session(d, "Room to spare");
+        let page = right_of(d, "New session");
+        d.observe(
+            CHECK,
+            (right_of(d, "Record this session") - page).abs() <= S,
+            format!(
+                "A session's actions reach the edge of its column: {} of {page}",
+                right_of(d, "Record this session")
+            ),
+        );
+        d.state("session-fills-its-column", Sizes::All);
+    }
+
     pub fn run(d: &mut Driver<'_>) {
-        d.set_base(DEFAULT);
+        d.set_base(LARGE);
         resume_run_from_cold_start(d);
-        let run_edge = DEFAULT.0 - crate::design::M - side_panel_width(DEFAULT.0);
+        content_follows_the_panel(d);
+        d.set_base(DEFAULT);
+        let run_edge = right_of(d, NEXT_TURN) + crate::design::M;
         d.drag_column_edge(run_edge, FAR_RIGHT);
         d.state("run-panel-narrow", Sizes::All);
         d.drag_column_edge(DEFAULT.0 - crate::design::M - PANEL_MIN_WIDTH, FAR_LEFT);
@@ -2437,6 +2497,9 @@ pub mod column_resize {
         d.expect(NEXT_TURN);
         d.click(NEXT_TURN);
         d.goal("resize the columns and go on working");
+        the_roster_follows_the_add_panel(d);
+        d.set_base(DEFAULT);
+        the_session_fills_its_column(d);
     }
 }
 

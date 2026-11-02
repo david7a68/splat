@@ -153,7 +153,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Empty state | `empty_state` | What this is, and the one next step |
 | Message | `message`, `Tone` | Inline. Never modal |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
-| Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS` |
+| Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2 entries` |

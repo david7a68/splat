@@ -2853,17 +2853,7 @@ impl Sessions {
                         .auto_shrink([false, false])
                         .show(ui, |ui| self.show_form(ui));
                 } else {
-                    // Words and their actions stay together in a wide window.
-                    let width = ui.available_width().min(EDITOR_WIDTH + design::XL);
-                    let height = ui.available_height();
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, height),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            ui.set_width(width);
-                            self.session_pane(ui, settings, book);
-                        },
-                    );
+                    self.session_pane(ui, settings, book);
                 }
             });
     }
