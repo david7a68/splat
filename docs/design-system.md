@@ -213,10 +213,11 @@ the panel, those words open the second line instead, so that a name is never cut
 - **Strip:** on other pages, a line with the turn, any conflict, `Back to run` and `Next turn`.
 - **Changed:** a creature with overrides has `Changed` on its second line, then any bonus the
   run cannot apply, such as `Attack +1`, because the DM needs it for the roll. Its card lists each
-  change above the stat block, as `Maximum HP: 33 → 43 (+10)`. What the run cannot apply also says
-  `add by hand`. The stat block keeps its printed text.
+  change at the top of the stat block's tab, so no tab moves, as `Maximum HP: 33 → 43 (+10)`. What
+  the run cannot apply comes first, in larger type, and says `add by hand`. A line then says that the
+  stat block below is as printed. A side of its own also has its word on the row.
 - **Groups:** a tab beside the stat block lists the campaign's encounter groups, with members,
-  count and XP. A group's name is a handle to drag onto the list, and the list takes an accent
+  count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
   outline while one is held. Each group also has a field for a total, blank to roll, and an `Add`
   button that the keyboard reaches. No step asks for confirmation, because Undo names the addition.
 

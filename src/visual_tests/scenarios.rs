@@ -7,8 +7,8 @@
 use super::{
     driver::{DEFAULT, Driver, LARGE, SMALL, Sizes},
     fixture::{
-        CAMPAIGN, GROUP_GOBLINS, GROUP_RIVALS, MODULE, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20,
-        RUN_ARENA, UNLINKED_CAMPAIGN,
+        CAMPAIGN, GROUP_GOBLINS, GROUP_LOST, GROUP_RIVALS, MODULE, QUIET_CAMPAIGN, RUN, RUN_12,
+        RUN_20, RUN_ARENA, UNLINKED_CAMPAIGN,
     },
     steps::*,
 };
@@ -4541,13 +4541,13 @@ pub mod session_recording {
 /// W13: prepare encounter groups, and add one to a run when it arrives.
 pub mod encounter_groups {
     use super::*;
-    const LIST_HEADING: &str = "Encounter groups (2)";
+    const LIST_HEADING: &str = "Encounter groups (4)";
     const GROUPS_TAB: &str = "Groups";
     const NEW_GROUP: &str = "New group";
     const SAVE_GROUP: &str = "Save group";
     const SAVED_NOTE: &str = "Group saved.";
     const FIND: &str = FIND_CREATURE;
-    const CHANGES: &str = "Changes to this creature";
+    const CHANGES: &str = "Overrides for Ember Cultist";
     const FIRST_GOBLIN: &str = "Goblin Warrior 1";
     const RIVAL_NAME: &str = "Rival Captain";
     const TOTAL_FOR_RIVALS: &str = "Initiative total for Rival Team";
@@ -4563,18 +4563,28 @@ pub mod encounter_groups {
 
         // An existing group: its changes are out in the open, with the values they replace.
         d.click(&format!("Edit group {GROUP_RIVALS}"));
-        d.expect("Members (2)");
+        d.expect("Members: 3 creatures · Total XP 600");
         d.state("group-editor", Sizes::All);
         d.observe(
             "T13.3",
-            d.has_containing("Maximum HP: 33 → 43 (+10)") && d.has_containing("Changed here only"),
+            d.has_containing("Maximum HP: 33 → 43 (+10)")
+                && d.has_containing("Overrides, here only"),
             "The group editor shows each change with its base value, marked as changed",
         );
-        d.click_first(CHANGES);
+        d.click(CHANGES);
         d.expect("Maximum HP: how it changes");
         d.state("group-member-changes", Sizes::All);
         d.check_tab_order("group editor, changes open");
-        d.click_first(CHANGES);
+        d.click(CHANGES);
+        d.click("Back to encounters");
+
+        // A group that cannot be added says why, in the editor, and its change says why.
+        d.click(&format!("Edit group {GROUP_LOST}"));
+        d.expect("Unavailable creature");
+        d.state("group-unavailable-creature", Sizes::Default);
+        d.click("Overrides for Cinder Wolf");
+        d.expect("would become -28");
+        d.state("group-invalid-change", Sizes::Default);
         d.click("Back to encounters");
 
         // A new group cannot be saved empty, and it says so.
@@ -4591,7 +4601,7 @@ pub mod encounter_groups {
         d.state("group-saved", Sizes::Default);
         d.goal("make an encounter group");
         d.click("Back to encounters");
-        d.expect("Encounter groups (3)");
+        d.expect("Encounter groups (5)");
 
         // At the table: the panel, with members and XP.
         resume_run(d, RUN);
@@ -4601,8 +4611,18 @@ pub mod encounter_groups {
         d.check_tab_order("run, group panel");
         d.observe(
             "T13.1",
-            d.has_containing("3 × Goblin Warrior") && d.has_containing("XP 150"),
+            d.has_containing("3 × Goblin Warrior") && d.visible_text("3 creatures · Total XP 150"),
             "The panel lists each group's members and total XP",
+        );
+        d.observe(
+            "T13.1",
+            d.has_containing("XP not known for Captain Varra") && d.has_containing("Member 1:"),
+            "XP that is not known says so, and a group that cannot be added says why",
+        );
+        d.observe(
+            "T13.1",
+            d.is_disabled(&add_group(GROUP_LOST)),
+            "A group that cannot be added has no working Add button",
         );
         d.begin_task();
         d.click(&add_group(GROUP_GOBLINS));
@@ -4618,6 +4638,7 @@ pub mod encounter_groups {
 
         // A typed total, as players give one.
         d.type_into(TOTAL_FOR_RIVALS, "14");
+        d.state("group-total-typed", Sizes::Default);
         d.click(&add_group(GROUP_RIVALS));
         d.expect(RIVAL_NAME);
         d.observe(
@@ -4628,16 +4649,30 @@ pub mod encounter_groups {
             "A typed total places the group, with no roll",
         );
         d.state("group-added-with-a-total", Sizes::Default);
+        d.observe(
+            "T13.2",
+            d.has_containing("Encounter group Rival Team added"),
+            "The panel says who arrived, and at what total, until the next step",
+        );
+
+        // The card of a creature that arrived: where it came from, and its changes.
+        d.click_row(RIVAL_NAME);
+        d.click("Stat block");
+        d.expect("Arrived with Rival Team");
+        d.state("card-of-an-added-member", Sizes::Default);
+        d.click(GROUPS_TAB);
 
         // The same group again, by dragging it onto the initiative list.
         let list = roster_places(d)
             .first()
             .map(|(_, rect)| *rect)
             .expect("run rows");
-        d.drag_onto(
+        d.drag_hold(
             &format!("Drag {GROUP_GOBLINS} to the initiative list"),
             list,
         );
+        d.state("group-held-over-the-list", Sizes::Default);
+        d.drag_release(list);
         d.expect(FIRST_GOBLIN);
         d.observe(
             "T13.4",
@@ -4663,7 +4698,7 @@ pub mod encounter_groups {
 pub mod run_overrides {
     use super::*;
     const RIVAL: &str = "Rival Captain";
-    const FIRST_SLOT: &str = "6. Ember Cultist";
+    const FIRST_SLOT: &str = "6. Rival Captain";
     const BASE_AND_CHANGED: &str = "Maximum HP: 33 → 43 (+10)";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -4672,7 +4707,8 @@ pub mod run_overrides {
         d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
         d.click_row(RIVAL);
         d.state("overridden-participant", Sizes::AllAndHiDpi);
-        let row = d.row_words(RIVAL);
+        // A number stays with its word on the row, by a space that does not wrap.
+        let row = d.row_words(RIVAL).replace('\u{a0}', " ");
         d.observe(
             "T13.3",
             row.contains("Changed") && row.contains("Attack +1") && row.contains("Damage +1"),
@@ -4692,8 +4728,12 @@ pub mod run_overrides {
         open_saved_encounter(d, RUN_ARENA);
         d.expect(FIRST_SLOT);
         d.state("slot-with-changes", Sizes::All);
-        d.click("Changes, starting HP, temporary HP and initiative group");
-        d.state("slot-changes-open", Sizes::Default);
+        d.click_beside(
+            FIRST_SLOT,
+            "Options: starting HP, temporary HP, initiative group and overrides",
+        );
+        d.expect("Maximum HP: how it changes");
+        d.state("slot-changes-open", Sizes::All);
         d.click("Back to encounters");
 
         // A new run takes them when it starts.
@@ -4706,5 +4746,18 @@ pub mod run_overrides {
             "A new run starts with the slot's changes, and its setup row says so",
         );
         d.goal("start a run with a changed creature");
+    }
+}
+
+/// W13: a campaign with no groups says what to do, in the run.
+pub mod run_no_groups {
+    use super::*;
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN);
+        d.click("Groups");
+        d.expect("No encounter groups yet");
+        d.state("no-groups", Sizes::Default);
+        d.goal("see that a campaign has no groups");
     }
 }

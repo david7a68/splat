@@ -32,6 +32,8 @@ pub const RUN_20: &str = "Siege of Emberfall";
 pub const RUN_ARENA: &str = "Arena Final";
 pub const GROUP_RIVALS: &str = "Rival Team";
 pub const GROUP_GOBLINS: &str = "Goblin Wave";
+pub const GROUP_LOST: &str = "Lost Patrol";
+pub const GROUP_WATCH: &str = "Watch Detail";
 
 /// What settings the app starts with.
 #[derive(Clone, Copy, PartialEq)]
@@ -414,7 +416,7 @@ fn write_groups(
     module: &Path,
     party: &[EntitySnapshot],
 ) -> Result<(), String> {
-    const RIVAL_CHANGES: &str = "{name: Rival Captain, max_hp: {add: 10}, armor_class: {set: 15}, attack_bonus: {add: 1}, damage_bonus: {add: 1}, conditions: [Blessed], note: Gained a seal in the last round}";
+    const RIVAL_CHANGES: &str = "{name: Rival Captain, max_hp: {add: 10}, armor_class: {set: 15}, attack_bonus: {add: 1}, damage_bonus: {add: 1}, speed: {set: 40}, conditions: [Blessed], note: Gained a seal in the last round}";
     let root = &campaign.path;
     write_note(
         root,
@@ -432,6 +434,27 @@ fn write_groups(
         &format!(
             "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_GOBLINS}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n    count: 3\n---\n",
             stable_id("visual:group:goblins"),
+        ),
+    )?;
+    // A group that cannot be added: a creature gone, and a change this one cannot take.
+    write_note(
+        root,
+        &format!("Encounter Groups/{GROUP_LOST}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_LOST}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {}}}\n  - creature: {{id: {}}}\n    overrides: {{max_hp: {{add: -50}}}}\n---\n",
+            stable_id("visual:group:lost"),
+            stable_id("visual:group:lost:creature"),
+            module_entry_id("cinder_wolf"),
+        ),
+    )?;
+    // A creature whose text gives no XP, which must not count as none.
+    write_note(
+        root,
+        &format!("Encounter Groups/{GROUP_WATCH}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_WATCH}\nsplat_encounter_group:\n  side: party\n  members:\n  - creature: {{id: {}}}\n---\n",
+            stable_id("visual:group:watch"),
+            stable_id("visual:note:varra"),
         ),
     )?;
     let heroes: String = party

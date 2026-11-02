@@ -651,9 +651,22 @@ pub fn number_field(
     width: f32,
     height: f32,
 ) -> Response {
+    number_field_with_id(ui, focus_id(name), name, text, hint, width, height)
+}
+
+/// For a field whose name another field can share, as two things with one name do.
+pub fn number_field_with_id(
+    ui: &mut Ui,
+    id: Id,
+    name: &str,
+    text: &mut String,
+    hint: &str,
+    width: f32,
+    height: f32,
+) -> Response {
     let response = ui.add(
         egui::TextEdit::singleline(text)
-            .id(focus_id(name))
+            .id(id)
             .desired_width(width - 2.0 * S)
             .min_size(vec2(width, height))
             // The caret stands a little clear of the first digit.

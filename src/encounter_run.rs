@@ -368,8 +368,9 @@ pub(crate) struct Run {
     focus_outcome: bool,
     /// The file changed under this run. Saving stops until the DM chooses what to keep.
     disk_conflict: bool,
-    /// The campaign's encounter groups, as they read from disk. A run does not save these.
-    pub groups: Arc<Vec<Arc<RunGroup>>>,
+    /// The campaign's encounter groups, as they read from disk, once they have been read. A
+    /// run does not save these.
+    pub groups: Option<Arc<Vec<Arc<RunGroup>>>>,
     /// The total typed beside each group in the panel, until it is used.
     group_totals: BTreeMap<Uuid, String>,
 }
@@ -384,6 +385,8 @@ enum Panel {
     Groups,
     Keys,
 }
+/// How an added group's log line starts. The group panel shows that line while it is the last.
+const GROUP_ADDED: &str = "Encounter group ";
 /// What a saved run may hold. A larger one does not open again.
 const MAX_PARTICIPANTS: usize = 2000;
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
@@ -470,6 +473,8 @@ fn number_added(existing: &[Participant], added: &mut [Participant]) {
     for p in added.iter() {
         counts.entry(p.name.clone()).or_default().1 += 1;
     }
+    let mut used: std::collections::BTreeSet<String> =
+        existing.iter().map(|p| p.name.clone()).collect();
     for p in added.iter_mut() {
         let base = p.name.clone();
         let taken = existing
@@ -478,9 +483,19 @@ fn number_added(existing: &[Participant], added: &mut [Participant]) {
             .max();
         let (given, total) = counts.get_mut(&base).expect("counted above");
         *given += 1;
-        if taken.is_some() || *total > 1 {
-            p.name = format!("{base} {}", taken.unwrap_or(0) + *given);
+        let mut number = taken.unwrap_or(0).saturating_add(*given);
+        let mut name = if taken.is_some() || *total > 1 {
+            format!("{base} {number}")
+        } else {
+            base.clone()
+        };
+        // A name can look like another's number, and a field's id comes from a name.
+        while used.contains(&name) && number < u64::MAX {
+            number += 1;
+            name = format!("{base} {number}");
         }
+        used.insert(name.clone());
+        p.name = name;
     }
 }
 impl Run {
@@ -572,7 +587,7 @@ impl Run {
             setup_expanded: None,
             focus_field: None,
             focus_first_missing: true,
-            groups: Arc::new(Vec::new()),
+            groups: None,
             group_totals: BTreeMap::new(),
         })
     }
@@ -703,7 +718,7 @@ impl Run {
             Self::sort_initiative(state);
         }
         Ok(format!(
-            "Encounter group {} added: {}. {initiative}.",
+            "{GROUP_ADDED}{} added: {}. {initiative}.",
             group.name,
             names.join(", ")
         ))
@@ -2050,7 +2065,7 @@ impl Run {
             setup_expanded: None,
             focus_field: None,
             focus_first_missing: true,
-            groups: Arc::new(Vec::new()),
+            groups: None,
             group_totals: BTreeMap::new(),
         })
     }
@@ -3724,6 +3739,43 @@ mod tests {
         assert_eq!(run.state.participants[5].hp, Some(20), "its own HP");
     }
     #[test]
+    fn names_in_one_addition_never_match_each_other_and_huge_numbers_do_not_overflow() {
+        let mut run = run();
+        run.apply(Command::AddGroup(
+            group_of(
+                "Clash",
+                "enemies",
+                vec![
+                    (creature(), 2, changed("{name: Rival}")),
+                    (creature(), 1, changed("{name: Rival 2}")),
+                ],
+            ),
+            Some(3),
+        ))
+        .unwrap();
+        let added = names(&run, 3..6);
+        let unique: std::collections::BTreeSet<_> = added.iter().collect();
+        assert_eq!(unique.len(), 3, "{added:?}");
+        run.apply(Command::AddGroup(
+            group_of(
+                "Huge",
+                "enemies",
+                vec![(creature(), 2, changed("{name: X 18446744073709551615}"))],
+            ),
+            Some(3),
+        ))
+        .unwrap();
+        run.apply(Command::AddGroup(
+            group_of(
+                "After",
+                "enemies",
+                vec![(creature(), 1, changed("{name: X}"))],
+            ),
+            Some(3),
+        ))
+        .unwrap();
+    }
+    #[test]
     fn numbers_go_on_from_names_already_in_the_fight_and_a_lone_name_stays_plain() {
         let mut run = Run::new(
             "One".into(),
@@ -4242,7 +4294,7 @@ mod tests {
     fn the_run_card_and_panel_show_changes_and_groups_in_every_phase() {
         let ctx = egui::Context::default();
         let mut run = run();
-        run.groups = Arc::new(vec![mixed_group(), guard_group("Wave", 2)]);
+        run.groups = Some(Arc::new(vec![mixed_group(), guard_group("Wave", 2)]));
         run.apply(Command::AddGroup(
             group_of(
                 "Rivals",
@@ -4291,7 +4343,7 @@ mod tests {
         begin(&mut run);
         let wave = guard_group("Wave", 1);
         let id = wave.id;
-        run.groups = Arc::new(vec![wave]);
+        run.groups = Some(Arc::new(vec![wave]));
         run.group_totals.insert(id, "13".into());
         run.add_group_from_panel(id);
         assert_eq!(run.state.participants[3].initiative, Some(13));

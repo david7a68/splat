@@ -17,7 +17,7 @@ use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
     Entry,
     encounter_group::{EncounterGroup, MAX_COUNT},
-    overrides::{Base, Change, Overrides},
+    overrides::{BY_HAND, Base, Change, MAX_NAME, Overrides},
 };
 use std::{fs, sync::Arc};
 use uuid::Uuid;
@@ -27,6 +27,9 @@ const DEFAULT_SIDE: &str = "enemies";
 const SIDE_FIELD: &str = "Default side";
 const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
+/// The name of a roster slot's button, for the form it opens.
+pub(super) const SLOT_OPTIONS: &str =
+    "Options: starting HP, temporary HP, initiative group and overrides";
 
 fn one() -> u64 {
     1
@@ -59,9 +62,14 @@ pub(super) struct GroupDraft {
 
 /// The note with this text after its frontmatter. The frontmatter stays as it is.
 fn with_notes(text: &str, notes: &str) -> Result<String, String> {
-    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let end = format!("{newline}---");
+    // The frontmatter's own line ending. A body can have another one.
     let start = text.find("---").ok_or("Missing frontmatter")? + 3;
+    let newline = if text[start..].starts_with("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let end = format!("{newline}---");
     let close = text[start..].find(&end).ok_or("Missing frontmatter end")? + start + end.len();
     let notes = notes.trim().replace('\n', newline);
     Ok(format!(
@@ -194,9 +202,15 @@ impl GroupDraft {
             }
             let named = |error: String| format!("{what} ({}): {error}", creature.name);
             let overrides = Overrides::parse(&member.overrides).map_err(&named)?;
-            overrides
+            let resolved = overrides
                 .resolve_for(&snapshot.catalogue.entries[&id].entry, &self.setup.side)
                 .map_err(&named)?;
+            if resolved.max_hp.is_none() {
+                return Err(named(
+                    "this creature has no maximum HP, so a run cannot add it. Give it a max_hp override."
+                        .into(),
+                ));
+            }
         }
         Ok(())
     }
@@ -231,25 +245,45 @@ impl GroupDraft {
 
 /// What an entry's text says it is worth. Nothing is invented when it says nothing.
 fn creature_xp(entry: &Entry) -> Option<u64> {
-    let in_field = entry
+    entry
         .fields
         .get("splat_creature")
         .and_then(|creature| creature.get("cr_text"))
-        .and_then(Value::as_str);
-    let in_body = || {
-        entry
-            .body
-            .lines()
-            .find(|line| line.trim_start().starts_with("CR "))
+        .and_then(Value::as_str)
+        .and_then(xp_in_text)
+        .or_else(|| {
+            entry
+                .body
+                .lines()
+                .find(|line| line.trim_start().starts_with("CR "))
+                .and_then(xp_in_text)
+        })
+}
+
+/// Both forms the sources use: `XP 450`, and `450 XP`.
+fn xp_in_text(text: &str) -> Option<u64> {
+    let number = |digits: Vec<char>| -> Option<u64> {
+        let digits: String = digits.into_iter().filter(char::is_ascii_digit).collect();
+        digits.parse().ok()
     };
-    let text = in_field.or_else(in_body)?;
-    let (_, after) = text.split_once("XP ")?;
-    let digits: String = after
-        .chars()
-        .take_while(|c| c.is_ascii_digit() || *c == ',')
-        .filter(char::is_ascii_digit)
-        .collect();
-    digits.parse().ok()
+    let in_number = |c: &char| c.is_ascii_digit() || *c == ',';
+    if let Some((_, after)) = text.split_once("XP ")
+        && let Some(xp) = number(after.chars().take_while(in_number).collect())
+    {
+        return Some(xp);
+    }
+    let (before, _) = text.split_once(" XP")?;
+    let mut digits: Vec<char> = before.chars().rev().take_while(in_number).collect();
+    digits.reverse();
+    number(digits)
+}
+
+/// A creature's name in an editor: the one it will have. Its changes say which entry it is.
+pub(super) fn shown_name(block: &Mapping, name: String) -> String {
+    Overrides::parse(block)
+        .ok()
+        .and_then(|overrides| overrides.name)
+        .map_or(name, |changed| changed.trim().to_owned())
 }
 
 /// The campaign's groups, each with its members resolved and any reason it cannot be added.
@@ -266,7 +300,7 @@ pub(super) fn load(
             let group = EncounterGroup::of(&e.entry).ok()?;
             let mut members = Vec::new();
             let mut problem = None;
-            let (mut xp, mut xp_unknown) = (0, Vec::new());
+            let (mut xp, mut xp_unknown) = (0_u64, Vec::new());
             for (index, member) in group.members.iter().enumerate() {
                 let what = format!("Member {}", index + 1);
                 let Some((id, creature)) = catalogue
@@ -297,7 +331,7 @@ pub(super) fn load(
                     problem.get_or_insert(issue);
                 }
                 match creature_xp(entry) {
-                    Some(each) => xp += each * member.count,
+                    Some(each) => xp = u64::saturating_add(xp, each.saturating_mul(member.count)),
                     None => xp_unknown.push(entry.name.clone()),
                 }
                 members.push(GroupMember {
@@ -370,6 +404,13 @@ pub(super) fn list(
                     if !group.xp_unknown.is_empty() {
                         summary.push_str(" or more");
                     }
+                    if group
+                        .members
+                        .iter()
+                        .any(|member| !member.overrides.is_empty())
+                    {
+                        summary.push_str(" · Changed");
+                    }
                     ui.add(
                         egui::Label::new(Type::Small.rich(ui, summary).color(colors().muted))
                             .truncate(),
@@ -411,11 +452,17 @@ pub(super) fn show_changes(ui: &mut egui::Ui, block: &Mapping, entry: &Entry, si
                 ui,
                 Status {
                     icon: icons::CHANGED,
-                    word: "Changed here only",
+                    word: "Overrides, here only",
                     color: colors().participant.changed,
                 },
             );
-            change_rows(ui, &overrides.rows(&Base::of(entry, side)));
+            let rows = overrides.rows(&Base::of(entry, side));
+            change_rows(ui, &rows);
+            if rows.iter().any(|row| row.by_hand) {
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, BY_HAND).color(colors().muted)).wrap(),
+                );
+            }
         }
         Err(error) => {
             design::message(ui, Tone::Error, &error);
@@ -515,8 +562,9 @@ fn text_row(ui: &mut egui::Ui, label: &str, value: &mut Option<String>, hint: &s
     });
 }
 
-/// The whole list of changes this slot or member can build in. `sides` holds what a roster
-/// slot can choose from. A group can arrive anywhere, so its members can name any side.
+/// The whole list of changes this slot or member can build in. `sides` is for a roster slot,
+/// whose row already sets its side, so this offers a side only when a note has given one, to
+/// change or clear it. A group can arrive anywhere, so its members can name any side.
 pub(super) fn overrides_form(
     ui: &mut egui::Ui,
     block: &mut Mapping,
@@ -538,8 +586,19 @@ pub(super) fn overrides_form(
     let before = overrides.clone();
     let linked = entry.fields.contains_key("splat_external");
     ui.add_space(design::XS);
-    design::group_label(ui, "Changes, for this encounter or group only");
+    design::group_label(
+        ui,
+        if sides.is_some() {
+            "Overrides, for this encounter only"
+        } else {
+            "Overrides, for this group only"
+        },
+    );
     text_row(ui, "Display name", &mut overrides.name, &entry.name);
+    overrides.name = overrides
+        .name
+        .take()
+        .map(|name| name.chars().take(MAX_NAME).collect());
     if !linked {
         change_row(
             ui,
@@ -582,6 +641,7 @@ pub(super) fn overrides_form(
         -1000..=1000,
     );
     match sides {
+        Some(_) if overrides.side.is_none() => {}
         Some(sides) => {
             ui.horizontal(|ui| {
                 let (rect, _) = ui.allocate_exact_size(
@@ -591,7 +651,7 @@ pub(super) fn overrides_form(
                 ui.painter().text(
                     rect.left_center(),
                     egui::Align2::LEFT_CENTER,
-                    "Side",
+                    "Side, over the row's",
                     Type::Small.font(ui),
                     colors().muted,
                 );
@@ -708,14 +768,17 @@ impl Encounters {
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let (mut back, mut save, mut discard) = (false, false, false);
-        ui.horizontal(|ui| {
-            back = Action::quiet("Encounters")
+        // The title and its actions need more room than the panes do.
+        let two_rows = ui.available_width() < 1040.0;
+        let title = |ui: &mut egui::Ui, back: &mut bool, draft: &mut GroupDraft| {
+            *back = Action::quiet("Encounters")
                 .icon(icons::BACK)
                 .name("Back to encounters")
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)
                 .clicked();
-            let width = (ui.available_width() - 150.0).clamp(120.0, 360.0);
+            let room = if two_rows { 150.0 } else { 450.0 };
+            let width = (ui.available_width() - room).clamp(120.0, 360.0);
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft.name)
                     .id(design::focus_id(NAME_FIELD))
@@ -736,10 +799,10 @@ impl Encounters {
                 (icons::OK, "No changes", colors().muted)
             };
             design::status(ui, Status { icon, word, color });
-        });
-        ui.horizontal(|ui| {
+        };
+        let actions = |ui: &mut egui::Ui, save: &mut bool, discard: &mut bool| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                save = if dirty {
+                *save = if dirty {
                     Action::primary("Save group")
                 } else {
                     Action::secondary("Save group")
@@ -750,10 +813,19 @@ impl Encounters {
                 .clicked();
                 ui.add_space(design::XL);
                 if dirty {
-                    discard = Action::destructive("Discard changes").show(ui).clicked();
+                    *discard = Action::destructive("Discard changes").show(ui).clicked();
                 }
             });
-        });
+        };
+        if two_rows {
+            ui.horizontal(|ui| title(ui, &mut back, draft));
+            ui.horizontal(|ui| actions(ui, &mut save, &mut discard));
+        } else {
+            ui.horizontal(|ui| {
+                title(ui, &mut back, draft);
+                actions(ui, &mut save, &mut discard);
+            });
+        }
         design::rule(ui);
         if back {
             self.group_draft = None;
@@ -789,7 +861,8 @@ impl Encounters {
         };
         let mut pane = self.editor_pane;
         if compact {
-            let members = format!("Members ({})", draft.setup.members.len());
+            let count: u64 = draft.setup.members.iter().map(|member| member.count).sum();
+            let members = format!("Members ({count})");
             design::segmented(
                 ui,
                 &mut pane,
@@ -854,7 +927,7 @@ fn add_pane(
             Type::Small
                 .rich(
                     ui,
-                    "From this campaign and the packages it uses. Party members join on the roster.",
+                    "From this campaign and the packages it uses. Party members go on an encounter’s roster.",
                 )
                 .color(colors().muted),
         )
@@ -895,7 +968,7 @@ fn members_pane(
             ui.add_space(design::S);
             ui.label(
                 Type::Heading
-                    .rich(ui, format!("Members ({})", draft.setup.members.len()))
+                    .rich(ui, members_heading(draft, snapshot))
                     .color(colors().text),
             );
             if draft.setup.members.is_empty() {
@@ -911,11 +984,34 @@ fn members_pane(
             let response = ui.add(
                 egui::TextEdit::multiline(&mut draft.notes)
                     .desired_rows(4)
-                    .desired_width(f32::INFINITY)
+                    .desired_width(ui.available_width() - design::M)
                     .hint_text("When they arrive, what they want. Markdown is fine."),
             );
             design::named(ui, &response, NOTES_FIELD);
         });
+}
+
+/// How many creatures will arrive, and what they are worth, as the list and the panel say it.
+fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
+    let (mut count, mut xp, mut unknown) = (0_u64, 0_u64, false);
+    for member in &draft.setup.members {
+        count = count.saturating_add(member.count);
+        let each = snapshot
+            .catalogue
+            .resolve_ref(&member.creature)
+            .ok()
+            .and_then(|id| snapshot.catalogue.entries.get(&id))
+            .and_then(|e| creature_xp(&e.entry));
+        match each {
+            Some(each) => xp = xp.saturating_add(each.saturating_mul(member.count)),
+            None => unknown = true,
+        }
+    }
+    format!(
+        "Members: {} · Total XP {xp}{}",
+        design::count(count as usize, "creature", "creatures"),
+        if unknown { " or more" } else { "" }
+    )
 }
 
 fn members(
@@ -936,9 +1032,11 @@ fn members(
                 .and_then(|id| snapshot.catalogue.entries.get(&id))
                 .map(|e| &e.entry);
             let name = entry.map_or_else(
-                || format!("Unavailable creature: {}", member.creature.label()),
+                || "Unavailable creature".to_owned(),
                 |entry| entry.name.clone(),
             );
+            let button = format!("Overrides for {name}");
+            let name = shown_name(&member.overrides, name);
             let detail = entry
                 .and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.id))
                 .map_or("", |creature| creature.detail.as_str());
@@ -952,20 +1050,25 @@ fn members(
                         remove = Some(index);
                     }
                     if index + 1 < total {
-                        if design::icon_button(ui, icons::DOWN, "Move down").clicked() {
+                        if design::icon_button(ui, icons::MOVE_DOWN, "Move down").clicked() {
                             lower = Some(index);
                         }
                     } else {
                         ui.add_space(Density::Read.control());
                     }
                     if index > 0 {
-                        if design::icon_button(ui, icons::UP, "Move up").clicked() {
+                        if design::icon_button(ui, icons::MOVE_UP, "Move up").clicked() {
                             raise = Some(index);
                         }
                     } else {
                         ui.add_space(Density::Read.control());
                     }
-                    if design::icon_button(ui, icons::EXPAND, "Changes to this creature").clicked()
+                    if Action::quiet("Overrides")
+                        .density(Density::Read)
+                        .name(&button)
+                        .selected(is_open)
+                        .show(ui)
+                        .clicked()
                     {
                         *expanded = if is_open { None } else { Some(key.clone()) };
                     }
@@ -973,6 +1076,7 @@ fn members(
                     let count =
                         ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT));
                     design::named(ui, &count, &format!("How many of {name}"));
+                    ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                         ui.spacing_mut().item_spacing.y = 0.0;
                         ui.add(
@@ -994,6 +1098,16 @@ fn members(
                     });
                 });
             });
+            if entry.is_none() {
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, member.creature.label())
+                            .color(colors().muted),
+                    )
+                    .wrap(),
+                );
+            }
             if let Some(entry) = entry {
                 show_changes(ui, &member.overrides, entry, &side);
                 if is_open {
@@ -1183,5 +1297,50 @@ mod tests {
         );
         assert_eq!(creature_xp(&entry("{}", "CR 3 (XP 700; PB +2)")), Some(700));
         assert_eq!(creature_xp(&entry("{}", "No such line.")), None);
+        assert_eq!(
+            creature_xp(&entry("{cr_text: '2 (450 XP; PB +2)'}", "")),
+            Some(450),
+            "the form four built-in creatures use"
+        );
+        assert_eq!(
+            creature_xp(&entry("{cr_text: '2'}", "CR 2 (XP 450; PB +2)")),
+            Some(450),
+            "a field that has none does not hide the body's"
+        );
+        assert_eq!(
+            creature_xp(&entry("{cr_text: '0 (XP 0; PB +2)'}", "")),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn notes_go_after_a_frontmatter_whose_line_endings_differ_from_its_body() {
+        let text = with_notes("---\nsplat_name: x\n---\n\nold\r\n---\r\nolder\r\n", "new").unwrap();
+        assert_eq!(text, "---\nsplat_name: x\n---\n\nnew\n");
+        let text = with_notes("---\r\nsplat_name: x\r\n---\r\n\r\nold\r\n", "a\nb").unwrap();
+        assert_eq!(text, "---\r\nsplat_name: x\r\n---\r\n\r\na\r\nb\r\n");
+    }
+
+    #[test]
+    fn a_creature_no_run_could_add_is_refused_when_the_group_is_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = Uuid::new_v4();
+        write_note(
+            dir.path(),
+            "Blank.md",
+            None,
+            &format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Blank\nsplat_creature: {{}}\n---\n"),
+        )
+        .unwrap();
+        let mut draft = GroupDraft::new();
+        draft.add(id);
+        let error = draft.save(&campaign, &[]).unwrap_err();
+        assert!(
+            error.contains("Member 1 (Blank)") && error.contains("no maximum HP"),
+            "{error}"
+        );
+        draft.setup.members[0].overrides = serde_yaml_ng::from_str("{max_hp: {set: 9}}").unwrap();
+        draft.save(&campaign, &[]).unwrap();
     }
 }

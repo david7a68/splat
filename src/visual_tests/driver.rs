@@ -546,8 +546,8 @@ impl<'a> Driver<'a> {
         self.film_result("Drag a column's edge");
     }
 
-    /// Press on a control by its accessible name, carry it to a place, and let go.
-    pub fn drag_onto(&mut self, name: &str, target: egui::Rect) {
+    /// Press on a control by its accessible name, and carry it to a place. It stays held.
+    pub fn drag_hold(&mut self, name: &str, target: egui::Rect) {
         let rect = self.aim(&format!("drag handle {name:?}"), |node| {
             node.name == name && Self::is_control(node)
         });
@@ -567,8 +567,12 @@ impl<'a> Driver<'a> {
                 .hover_at(from + (to - from) * (step as f32 / 4.0));
             self.harness.step();
         }
+    }
+
+    /// Let go of what `drag_hold` holds, over this place.
+    pub fn drag_release(&mut self, target: egui::Rect) {
         self.harness.event(egui::Event::PointerButton {
-            pos: to,
+            pos: target.center(),
             button: egui::PointerButton::Primary,
             pressed: false,
             modifiers: egui::Modifiers::NONE,
@@ -577,7 +581,7 @@ impl<'a> Driver<'a> {
         self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();
-        self.film_result(&format!("Dropped: {name}"));
+        self.film_result("Dropped");
     }
 
     fn is_control(node: &Found) -> bool {

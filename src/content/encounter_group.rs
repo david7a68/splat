@@ -1,7 +1,8 @@
 //! `splat_kind: encounter_group`: a reusable, named list of creatures that a DM adds to a
 //! running encounter when they arrive. This reads the note. A run decides what it does.
-use super::{Entry, Reference, overrides::Overrides, references};
+use super::{Entry, Reference, overrides::Overrides, resource_key};
 use serde_yaml_ng::{Mapping, Value};
+use uuid::Uuid;
 
 /// A group is a fixed list for one table, so a typing mistake cannot flood a run.
 pub const MAX_COUNT: u64 = 100;
@@ -32,6 +33,33 @@ fn only_fields(map: &Mapping, allowed: &[&str], what: &str) -> Result<(), String
     Ok(())
 }
 
+/// One reference, in the form a roster slot holds it, so that the editor can read any note
+/// that this accepts.
+fn creature(what: &str, value: &Value) -> Result<Reference, String> {
+    let map = value
+        .as_mapping()
+        .ok_or_else(|| format!("{what} needs one creature reference."))?;
+    only_fields(map, &["id", "key", "link"], what)?;
+    if map.get("link").is_some_and(|link| !link.is_string()) {
+        return Err(format!("{what}: a link must be text."));
+    }
+    let invalid = || format!("{what} needs exactly one valid id or key.");
+    match (map.get("id"), map.get("key")) {
+        (Some(id), None) => id
+            .as_str()
+            .and_then(|id| Uuid::parse_str(id).ok())
+            .filter(|id| !id.is_nil())
+            .map(Reference::Id)
+            .ok_or_else(invalid),
+        (None, Some(key)) => key
+            .as_str()
+            .filter(|key| resource_key(key))
+            .map(|key| Reference::Key(key.to_owned()))
+            .ok_or_else(invalid),
+        _ => Err(invalid()),
+    }
+}
+
 fn member(number: usize, value: &Value) -> Result<Member, String> {
     let what = format!("Member {number}");
     let map = value
@@ -41,11 +69,7 @@ fn member(number: usize, value: &Value) -> Result<Member, String> {
     let reference = map
         .get("creature")
         .ok_or_else(|| format!("{what} needs a creature."))?;
-    let mut found = Vec::new();
-    references(reference, &mut found).map_err(|e| format!("{what}: {e}"))?;
-    if found.len() != 1 {
-        return Err(format!("{what} needs one creature reference."));
-    }
+    let creature = creature(&what, reference)?;
     let count = match map.get("count") {
         None => 1,
         Some(count) => count
@@ -63,7 +87,7 @@ fn member(number: usize, value: &Value) -> Result<Member, String> {
         .map_err(|e| format!("{what}: {e}"))?,
     };
     Ok(Member {
-        creature: found.remove(0),
+        creature,
         count,
         overrides,
     })
@@ -169,6 +193,18 @@ mod tests {
             (
                 format!("{{side: enemies, extra: 1, members: [{{creature: {{id: {id}}}}}]}}"),
                 "unknown field",
+            ),
+            (
+                format!("{{side: enemies, members: [{{creature: [{{id: {id}}}]}}]}}"),
+                "one creature reference",
+            ),
+            (
+                format!("{{side: enemies, members: [{{creature: {{wrap: {{id: {id}}}}}}}]}}"),
+                "unknown field",
+            ),
+            (
+                format!("{{side: enemies, members: [{{creature: {{key: {id}}}}}]}}"),
+                "valid id or key",
             ),
         ] {
             let error = note(&group).unwrap_err();

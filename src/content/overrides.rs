@@ -23,10 +23,13 @@ const FIELDS: [&str; 10] = [
 const MAX_HP: i64 = 1_000_000;
 /// The run's own limit for a bonus, and a bound for the other small numbers.
 const MAX_STAT: i64 = 1000;
-const MAX_NAME: usize = 120;
+pub const MAX_NAME: usize = 120;
 
 /// Why the card shows these beside the stat block, and not in it.
-pub const BY_HAND: &str = "A stat block keeps its printed text. Add marked changes yourself: the run does not change attacks or speed.";
+pub const BY_HAND: &str = "Attacks and speed are printed stat block text, so a run shows these changes and cannot apply them.";
+/// What a card says above a stat block, which keeps its printed numbers.
+pub const PRINTED: &str =
+    "The stat block below is as printed. Its numbers do not include these changes.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -171,7 +174,7 @@ fn change(
             Ok(Some(Change::Set(amount)))
         }
         Some("add") => {
-            if amount == 0 || amount.abs() > limit {
+            if amount == 0 || !(-limit..=limit).contains(&amount) {
                 return Err(format!(
                     "{field}: add must not be zero, and at most {limit} either way."
                 ));
@@ -439,7 +442,7 @@ impl Overrides {
         if !self.conditions.is_empty() {
             rows.push(Row {
                 label: "Starting conditions",
-                base: "None added".into(),
+                base: "None".into(),
                 changed: self.conditions.join(", "),
                 by_hand: false,
             });
