@@ -22,7 +22,7 @@
       "run-restart": 6,
       "run-roster-conflict": 2,
       "run-sync-conflict": 6,
-      "run-sync-states": 5,
+      "run-sync-states": 4,
       "signed-in": 8
     },
     "no-overlap/egui-chrome": {
@@ -50,7 +50,7 @@
       "run-restart": 6,
       "run-roster-conflict": 2,
       "run-sync-conflict": 6,
-      "run-sync-states": 5,
+      "run-sync-states": 4,
       "signed-in": 8
     }
   },

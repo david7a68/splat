@@ -447,8 +447,11 @@ impl Encounters {
 
     /// A read of this participant's sheet, holding its last matched values.
     #[cfg(test)]
-    pub fn simulate_read(&mut self, name: &str) {
-        self.run.as_mut().expect("an open run").simulate_read(name);
+    pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
+        self.run
+            .as_mut()
+            .expect("an open run")
+            .simulate_read(name, more_damage);
     }
 
     /// Running syncs react to the session from now on, as real ones do.

@@ -732,7 +732,17 @@ impl Run {
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
             self.history_labels.pop();
+            // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
+            let confirmed: Vec<_> = self
+                .state
+                .participants
+                .iter_mut()
+                .map(|p| std::mem::take(&mut p.combat_values))
+                .collect();
             self.state = previous;
+            for (p, values) in self.state.participants.iter_mut().zip(confirmed) {
+                p.combat_values = values;
+            }
             self.dirty = true;
             self.error = None;
             self.last_initiative = None;
@@ -899,6 +909,22 @@ impl Run {
             .any(crate::combat_sync::CombatSync::unconfirmed)
     }
     /// Who has changes a lost session left unsent.
+    /// How many participants have a conflict to settle.
+    pub(crate) fn conflict_count(&self) -> usize {
+        self.syncs
+            .values()
+            .filter(|sync| sync.state() == crate::combat_sync::SyncState::Conflict)
+            .count()
+    }
+    /// Whose unsent values a close would lose: those the run does not hold itself.
+    pub(crate) fn unsent_only_here_names(&self) -> Vec<String> {
+        self.syncs
+            .iter()
+            .filter(|(_, sync)| sync.unsent_only_here())
+            .filter_map(|(index, _)| self.state.participants.get(*index))
+            .map(|p| p.name.clone())
+            .collect()
+    }
     pub(crate) fn stranded_names(&self) -> Vec<String> {
         self.sync_names(crate::combat_sync::CombatSync::stranded)
     }
@@ -1028,13 +1054,48 @@ fn groups_that_differ(
     shadow_differences(&SheetShadow::of(p), &SheetShadow::of(&shown))
 }
 
-/// Which groups hold different values in these two. Only conditions the sheet knows count.
+/// What changed for this participant, from what to what.
+fn change_line(name: &str, before: &SheetShadow, after: &SheetShadow) -> String {
+    let mut parts = Vec::new();
+    if before.hp != after.hp {
+        parts.push(format!("HP {} → {}", display(before.hp), display(after.hp)));
+    }
+    if before.temp != after.temp {
+        parts.push(format!("temp HP {} → {}", before.temp, after.temp));
+    }
+    if (before.successes, before.failures) != (after.successes, after.failures) {
+        parts.push(format!(
+            "death saves {} and {} → {} and {}",
+            before.successes, before.failures, after.successes, after.failures
+        ));
+    }
+    let official = |shadow: &SheetShadow| -> Vec<String> {
+        shadow
+            .conditions
+            .iter()
+            .filter(|c| recognized_condition(c).is_some())
+            .cloned()
+            .collect()
+    };
+    let same = |a: &str, b: &str| recognized_condition(a) == recognized_condition(b);
+    let (old, new) = (official(before), official(after));
+    for gone in old.iter().filter(|c| !new.iter().any(|n| same(c, n))) {
+        parts.push(format!("{gone} removed"));
+    }
+    for added in new.iter().filter(|c| !old.iter().any(|o| same(c, o))) {
+        parts.push(format!("{added} added"));
+    }
+    format!("{name} {}", parts.join(", "))
+}
+
+/// Which groups hold different values in these two. Only conditions the sheet knows count, by
+/// what they are: `poisoned` and `Poisoned` are one condition.
 fn shadow_differences(now: &SheetShadow, then: &SheetShadow) -> Vec<SheetGroup> {
     let sorted = |conditions: &[String]| {
         let mut conditions: Vec<String> = conditions
             .iter()
-            .filter(|c| recognized_condition(c).is_some())
-            .cloned()
+            .filter_map(|c| recognized_condition(c))
+            .map(|(id, level)| format!("{id}:{level}"))
             .collect();
         conditions.sort();
         conditions
@@ -1087,18 +1148,21 @@ fn local_group(
 /// A first read. A value the DM recorded is never replaced without their say: where the run
 /// differs from the last value D&D Beyond confirmed, or from where it began if there is none,
 /// and the sheet differs too, they choose with the usual conflict controls. With no change,
-/// the sheet's values stand. A run from before starting values were kept has nothing to compare
-/// with, so every difference asks.
-fn hold_local_changes(p: &Participant, sync: &mut crate::combat_sync::CombatSync) {
-    let matched = sync
-        .take_matched()
-        .filter(|matched| !matched.is_empty())
-        .or_else(|| (!p.combat_values.is_empty()).then(|| p.combat_values.clone()));
-    let changed = match (matched, &p.started) {
-        (Some(matched), _) => groups_that_differ(p, &matched, p.max_hp),
-        (None, Some(started)) => shadow_differences(&SheetShadow::of(p), started),
-        (None, None) => vec![SheetGroup::Hp, SheetGroup::Death, SheetGroup::Conditions],
+/// the sheet's values stand.
+fn hold_local_changes(p: &mut Participant, sync: &mut crate::combat_sync::CombatSync) {
+    let matched = sync.take_matched().filter(|matched| !matched.is_empty());
+    let saved = (!p.combat_values.is_empty()).then(|| p.combat_values.clone());
+    let changed = match (matched, saved, &p.started) {
+        (Some(matched), ..) => groups_that_differ(p, &matched, p.max_hp),
+        (None, Some(saved), Some(_)) => groups_that_differ(p, &saved, p.max_hp),
+        (None, None, Some(started)) => shadow_differences(&SheetShadow::of(p), started),
+        // A save from before starting values were kept. Its match can hold unsent values, so
+        // nothing there shows what the DM changed. Every difference asks, this once.
+        (None, _, None) => vec![SheetGroup::Hp, SheetGroup::Death, SheetGroup::Conditions],
     };
+    if p.started.is_none() {
+        p.started = Some(SheetShadow::of(p));
+    }
     let sheet = sync.values().clone();
     let max = sync.max_hp();
     for group in groups_that_differ(p, &sheet, max) {
@@ -1155,9 +1219,8 @@ impl Run {
         }
         let mut identities = std::collections::BTreeSet::new();
         let mut changes = Vec::new();
-        let mut external_change = false;
-        let mut first_read_change = false;
-        let mut first_read_lines = Vec::new();
+        let mut from_sheet = Vec::new();
+        let mut from_panel = Vec::new();
         for (index, sync) in &mut self.syncs {
             let p = &mut self.state.participants[*index];
             let Some((campaign, id)) = remote_identity(p) else {
@@ -1224,27 +1287,21 @@ impl Run {
             if sync.ready() {
                 apply_sheet_values(p, sync.values(), sync.max_hp());
                 let after = SheetShadow::of(p);
-                if sync.updated && before != after {
-                    if first_read {
-                        first_read_change = true;
+                // Anything that reached the run here took no step of its own. Undo would put
+                // the older value back and send it, so the steps before it end here.
+                let changed = !shadow_differences(&before, &after).is_empty();
+                if changed {
+                    let line = change_line(&p.name, &before, &after);
+                    if sync.updated || first_read {
+                        from_sheet.push(line);
                     } else {
-                        external_change = true;
+                        from_panel.push(line);
                     }
-                }
-                if before.hp != after.hp {
-                    first_read_lines.push(format!(
-                        "{} HP {} → {}",
-                        p.name,
-                        display(before.hp),
-                        display(after.hp)
-                    ));
-                } else if before != after {
-                    first_read_lines.push(format!("{} other values", p.name));
                 }
                 // Only what D&D Beyond has confirmed. Saving unsent values here would make
                 // them look matched after a close, and the next read would replace them.
                 let confirmed = sync.confirmed().cloned().unwrap_or_default();
-                if before != after || p.combat_values != confirmed {
+                if changed || p.combat_values != confirmed {
                     p.combat_values = confirmed;
                     changes.push(p.name.clone());
                 }
@@ -1255,14 +1312,8 @@ impl Run {
             }
         }
         if !changes.is_empty() {
-            self.state.log.push(format!(
-                "Combat sheet values updated: {}. See sync status for confirmation or conflicts.",
-                changes.join(", ")
-            ));
-            if external_change {
-                self.note_sheet_update(&changes);
-            } else if first_read_change {
-                self.note_first_read(&first_read_lines);
+            if !from_sheet.is_empty() || !from_panel.is_empty() {
+                self.note_sync_changes(&from_sheet, &from_panel);
             }
             self.dirty = true;
             if self.storage.is_some()
@@ -1274,24 +1325,26 @@ impl Run {
     }
 }
 impl Run {
-    /// A first read put the sheet's values on the run. The sheet need not have changed.
-    fn note_first_read(&mut self, lines: &[String]) {
+    /// Values reached the run with no step of their own: earlier steps can no longer be undone
+    /// safely. The log and the notice say what changed, from what to what.
+    fn note_sync_changes(&mut self, from_sheet: &[String], from_panel: &[String]) {
         self.history.clear();
         self.history_labels.clear();
-        let what = lines.join("; ");
-        self.state.log.push(format!("From D&D Beyond: {what}."));
-        self.notice = Some(format!(
-            "From D&D Beyond: {what}. Undo history was cleared."
-        ));
+        let mut what = Vec::new();
+        if !from_sheet.is_empty() {
+            what.push(format!("From D&D Beyond: {}.", from_sheet.join("; ")));
+        }
+        if !from_panel.is_empty() {
+            what.push(format!("In the sync panel: {}.", from_panel.join("; ")));
+        }
+        let what = what.join(" ");
+        self.state.log.push(what.clone());
+        self.notice = Some(format!("{what} Undo history was cleared."));
     }
-    /// A sheet changed outside Splat, so earlier steps can no longer be undone safely.
-    pub(crate) fn note_sheet_update(&mut self, names: &[String]) {
-        self.history.clear();
-        self.history_labels.clear();
-        self.notice = Some(format!(
-            "{} changed on D&D Beyond. Undo history was cleared.",
-            names.join(", ")
-        ));
+    /// A sheet changed outside Splat, with these words for what changed.
+    #[cfg(test)]
+    pub(crate) fn note_sheet_update(&mut self, lines: &[String]) {
+        self.note_sync_changes(lines, &[]);
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -1661,7 +1714,7 @@ impl Run {
     }
     /// A read of this sheet with the damage it had at the last match. Test builds have no
     /// live sheet, so this goes through the same comparison that a live read does.
-    pub fn simulate_read(&mut self, name: &str) {
+    pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
         let (index, participant) = self
             .state
             .participants
@@ -1678,7 +1731,11 @@ impl Run {
             .unwrap_or(0);
         let sync = self.syncs.get_mut(&index).expect("a running sync");
         sync.stop_simulating();
-        sync.simulate_read(character.parse().expect("numeric ID"), max_hp, damage);
+        sync.simulate_read(
+            character.parse().expect("numeric ID"),
+            max_hp,
+            damage + more_damage,
+        );
     }
     pub fn stop_simulating_sync(&mut self) {
         self.syncs
@@ -2409,10 +2466,10 @@ mod tests {
                 .contains(&"hp".to_owned())
         );
     }
-    /// The one path left: an older save holds unsent values as its match. It cannot be told
-    /// from a confirmed one, so the sheet stands, and the notice and the log name the values.
+    /// An older save can hold unsent values as its match. A missing `started` says the save is
+    /// that old, so every difference asks, and only this once.
     #[test]
-    fn an_older_save_whose_match_equals_the_run_names_what_the_read_replaced() {
+    fn an_older_save_whose_match_equals_the_run_asks_once() {
         let dir = tempfile::tempdir().unwrap();
         let mut run = run();
         begin(&mut run);
@@ -2420,6 +2477,7 @@ mod tests {
         let max = run.state.participants[0].max_hp.unwrap();
         let campaign = stored(&mut run, dir.path());
         run.apply(Command::Damage(0, 4)).unwrap();
+        run.apply(Command::Condition(0, "Prone".into())).unwrap();
         run.save().unwrap();
         let path = run.path().unwrap().to_path_buf();
         let unsent = serde_json::json!({
@@ -2427,14 +2485,266 @@ mod tests {
         });
         as_older_save(&path, Some(unsent));
         let mut reopened = Run::open(&path, campaign).unwrap();
+        let hp = reopened.state.participants[0].hp;
         first_sync(&mut reopened, max, 0);
-        assert_eq!(reopened.state.participants[0].hp, Some(max));
-        assert!(reopened.syncs[&0].conflict_keys().is_empty());
-        let notice = reopened.notice.clone().unwrap();
+        assert_eq!(reopened.state.participants[0].hp, hp);
+        let conflicts = reopened.syncs[&0].conflict_keys();
+        assert!(conflicts.contains(&"hp".to_owned()));
+        assert!(conflicts.contains(&"conditions".to_owned()));
         assert!(
-            notice.contains(&format!("HP {} → {max}", max - 4)),
+            reopened.state.participants[0].started.is_some(),
+            "it asks only once"
+        );
+    }
+    /// A conflict the DM has settled by taking the sheet's value.
+    fn settled_with_the_sheet(max: i64) -> Run {
+        let (mut run, _, _) = matched_with_sheet(5);
+        offline_tick(&mut run);
+        run.apply(Command::Damage(0, 4)).unwrap();
+        run.apply(Command::Next).unwrap();
+        offline_tick(&mut run);
+        reconnect(&mut run);
+        read_sheet(&mut run, max, 2);
+        assert_eq!(run.state.participants[0].hp, Some(max - 9));
+        assert!(
+            !run.history.is_empty(),
+            "the conflict keeps the steps before it"
+        );
+        run.syncs.get_mut(&0).unwrap().use_remote("hp");
+        connected_tick(&mut run);
+        run
+    }
+    #[test]
+    fn undo_cannot_bring_back_a_value_after_a_conflict_is_settled() {
+        let max = matched_with_sheet(5).2;
+        let mut run = settled_with_the_sheet(max);
+        assert_eq!(run.state.participants[0].hp, Some(max - 2));
+        // Nothing to take back under another name, and the notice says what happened.
+        assert!(run.history.is_empty());
+        assert_eq!(run.undo_label(), "Undo");
+        let notice = run.notice.clone().unwrap();
+        let change = format!("HP {} → {}", max - 9, max - 2);
+        assert!(notice.contains(&change), "{notice}");
+        assert!(notice.contains("From D&D Beyond"), "{notice}");
+        assert!(run.state.log.iter().any(|line| line.contains(&change)));
+        // Undo does nothing, so nothing older reaches the sheet.
+        run.undo();
+        connected_tick(&mut run);
+        assert_eq!(run.state.participants[0].hp, Some(max - 2));
+        assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 2);
+        assert!(!run.syncs[&0].dirty(), "nothing older goes to D&D Beyond");
+    }
+    #[test]
+    fn an_edit_in_the_sync_panel_ends_the_steps_before_it_and_says_so() {
+        let (mut run, _, max) = matched_with_sheet(5);
+        run.apply(Command::Next).unwrap();
+        connected_tick(&mut run);
+        assert!(!run.history.is_empty());
+        let edit = serde_json::json!({"removedHitPoints": 8, "temporaryHitPoints": 0});
+        run.syncs.get_mut(&0).unwrap().set_group("hp", edit);
+        connected_tick(&mut run);
+        assert_eq!(run.state.participants[0].hp, Some(max - 8));
+        assert!(run.history.is_empty());
+        let notice = run.notice.clone().unwrap();
+        assert!(notice.contains("In the sync panel"), "{notice}");
+        assert!(
+            notice.contains(&format!("HP {} → {}", max - 5, max - 8)),
             "{notice}"
         );
+        run.undo();
+        connected_tick(&mut run);
+        assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 8);
+    }
+    #[test]
+    fn a_named_step_undoes_as_before_with_sync_on() {
+        let (mut run, _, max) = matched_with_sheet(5);
+        run.apply(Command::Damage(0, 4)).unwrap();
+        connected_tick(&mut run);
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: 4 damage to {}", run.state.participants[0].name)
+        );
+        // The conditions come back in the sheet's order, which is no change.
+        run.apply(Command::Condition(0, "prone".into())).unwrap();
+        run.apply(Command::Condition(0, "Blinded".into())).unwrap();
+        connected_tick(&mut run);
+        connected_tick(&mut run);
+        assert!(!run.history.is_empty(), "the DM's own steps stay");
+        run.undo();
+        run.undo();
+        run.undo();
+        connected_tick(&mut run);
+        // Named, chosen by the DM, and sent as an ordinary edit.
+        assert_eq!(run.state.participants[0].hp, Some(max - 5));
+        assert_eq!(run.syncs[&0].values()["hp"]["removedHitPoints"], 5);
+    }
+    #[test]
+    fn undo_after_a_stop_keeps_what_the_sheet_confirmed() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut run, _, max) = matched_with_sheet(5);
+        let campaign = stored(&mut run, dir.path());
+        run.apply(Command::Damage(0, 4)).unwrap();
+        connected_tick(&mut run);
+        read_sheet(&mut run, max, 9);
+        assert_eq!(
+            run.state.participants[0].combat_values["hp"]["removedHitPoints"],
+            9
+        );
+        run.syncs.get_mut(&0).unwrap().stop();
+        connected_tick(&mut run);
+        // Undo takes the step back from the run. The sheet still holds 9.
+        run.undo();
+        assert_eq!(run.state.participants[0].hp, Some(max - 5));
+        assert_eq!(
+            run.state.participants[0].combat_values["hp"]["removedHitPoints"],
+            9
+        );
+        let mut reopened = close_and_reopen(&mut run, campaign);
+        first_sync(&mut reopened, max, 9);
+        assert_eq!(reopened.state.participants[0].hp, Some(max - 5));
+        assert!(
+            reopened.syncs[&0]
+                .conflict_keys()
+                .contains(&"hp".to_owned())
+        );
+    }
+    /// A sheet given in full. Poisoned is id 11, Prone is id 12, in D&D Beyond's own fields.
+    fn sheet(damage: i64, conditions: &[u64]) -> serde_json::Value {
+        serde_json::json!({
+            "id": 11, "canEdit": true, "removedHitPoints": damage, "temporaryHitPoints": 0,
+            "deathSaves": {"successCount": 0, "failCount": 0},
+            "conditions": conditions.iter().map(|id| serde_json::json!({"id": id})).collect::<Vec<_>>(),
+            "spellSlots": [{"level": 1, "used": 1}],
+        })
+    }
+    fn read_full_sheet(run: &mut Run, max: i64, sheet: &serde_json::Value) {
+        run.syncs
+            .get_mut(&0)
+            .unwrap()
+            .simulate_sheet(11, max, sheet);
+        connected_tick(run);
+    }
+    fn matched_with_conditions(conditions: &[u64]) -> (Run, i64) {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        let max = run.state.participants[0].max_hp.unwrap();
+        run.syncs.entry(0).or_default().start();
+        connected_tick(&mut run);
+        read_full_sheet(&mut run, max, &sheet(5, conditions));
+        run.notice = None;
+        (run, max)
+    }
+    #[test]
+    fn a_condition_recorded_while_stopped_survives_a_close_as_a_conflict() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut run, max) = matched_with_conditions(&[]);
+        let campaign = stored(&mut run, dir.path());
+        offline_tick(&mut run);
+        run.apply(Command::Condition(0, "Prone".into())).unwrap();
+        offline_tick(&mut run);
+        assert!(!run.stranded_names().is_empty());
+        let mut reopened = close_and_reopen(&mut run, campaign);
+        reopened.syncs.entry(0).or_default().start();
+        connected_tick(&mut reopened);
+        read_full_sheet(&mut reopened, max, &sheet(5, &[]));
+        assert!(
+            reopened.state.participants[0]
+                .conditions
+                .iter()
+                .any(|c| c == "Prone")
+        );
+        assert!(
+            reopened.syncs[&0]
+                .conflict_keys()
+                .contains(&"conditions".to_owned())
+        );
+    }
+    #[test]
+    fn a_condition_recorded_before_the_first_read_is_kept_as_a_conflict() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        let max = run.state.participants[0].max_hp.unwrap();
+        run.apply(Command::Condition(0, "Prone".into())).unwrap();
+        run.syncs.entry(0).or_default().start();
+        connected_tick(&mut run);
+        read_full_sheet(&mut run, max, &sheet(0, &[]));
+        assert!(
+            run.state.participants[0]
+                .conditions
+                .iter()
+                .any(|c| c == "Prone")
+        );
+        assert!(
+            run.syncs[&0]
+                .conflict_keys()
+                .contains(&"conditions".to_owned())
+        );
+    }
+    #[test]
+    fn removing_a_condition_the_sheet_holds_is_kept_too() {
+        let (mut run, max) = matched_with_conditions(&[11]);
+        let held = run.state.participants[0]
+            .conditions
+            .iter()
+            .position(|c| c == "Poisoned")
+            .unwrap();
+        run.syncs.get_mut(&0).unwrap().stop();
+        connected_tick(&mut run);
+        run.apply(Command::RemoveCondition(0, held)).unwrap();
+        connected_tick(&mut run);
+        reconnect(&mut run);
+        read_full_sheet(&mut run, max, &sheet(5, &[11]));
+        assert!(
+            !run.state.participants[0]
+                .conditions
+                .iter()
+                .any(|c| c == "Poisoned")
+        );
+        assert!(
+            run.syncs[&0]
+                .conflict_keys()
+                .contains(&"conditions".to_owned())
+        );
+    }
+    #[test]
+    fn a_sheet_update_names_conditions_and_temp_hp_from_what_to_what() {
+        let (mut run, max) = matched_with_conditions(&[11]);
+        let mut update = sheet(5, &[12]);
+        update["temporaryHitPoints"] = 4.into();
+        read_full_sheet(&mut run, max, &update);
+        let notice = run.notice.clone().unwrap();
+        assert!(notice.contains("Poisoned removed"), "{notice}");
+        assert!(notice.contains("Prone added"), "{notice}");
+        assert!(notice.contains("temp HP 0 → 4"), "{notice}");
+        assert!(
+            run.state
+                .log
+                .iter()
+                .any(|line| line.contains("Prone added"))
+        );
+    }
+    #[test]
+    fn a_spell_slot_not_sent_asks_after_a_restart_of_sync_and_a_close_says_it_is_lost() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut run, max) = matched_with_conditions(&[]);
+        let name = run.state.participants[0].name.clone();
+        let campaign = stored(&mut run, dir.path());
+        let mut slots = run.syncs[&0].values()["slots"].clone();
+        slots["level1"] = 2.into();
+        run.syncs.get_mut(&0).unwrap().set_group("slots", slots);
+        offline_tick(&mut run);
+        // A close would lose it, and the dialog says so.
+        assert_eq!(run.unsent_only_here_names(), vec![name]);
+        // Within the session it is not dropped: the next first read asks.
+        reconnect(&mut run);
+        read_full_sheet(&mut run, max, &sheet(5, &[]));
+        assert_eq!(run.syncs[&0].conflict_keys(), vec!["slots"]);
+        assert_eq!(run.syncs[&0].values()["slots"]["level1"], 2);
+        // A reopened run has no such value, and no claim is made for it.
+        let reopened = close_and_reopen(&mut run, campaign);
+        assert!(reopened.unsent_only_here_names().is_empty());
     }
     #[test]
     fn the_existing_controls_settle_a_reconnect_conflict() {

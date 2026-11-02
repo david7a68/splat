@@ -375,6 +375,9 @@ impl Settings {
                 design::named(ui, &response, "Paste session cookie");
             });
             ui.checkbox(&mut self.remember, "Remember session in desktop keyring");
+            if self.cookie_input.trim().is_empty() {
+                small(ui, "Paste your session cookie to connect.");
+            }
             if design::Action::primary("Connect")
                 .blocked_if(
                     self.cookie_input.trim().is_empty(),

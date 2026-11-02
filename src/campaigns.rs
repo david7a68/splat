@@ -677,11 +677,19 @@ impl Campaigns {
                 ui.label(format!("{name} · D&D Beyond ID {id}"));
             }
             design::text_field(ui, "Campaign name", &mut self.name, None, None);
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Max), |ui| {
-                ui.vertical(|ui| {
-                    ui.set_max_width((ui.available_width() - 112.0).max(120.0));
-                    design::text_field(ui, "Folder", &mut self.path, None, None);
-                });
+            // The button sits on the field's line, and ends where the fields above end.
+            let room = ui.available_width();
+            let field = ui
+                .vertical(|ui| {
+                    ui.set_max_width((room - BROWSE_WIDTH).max(120.0));
+                    design::text_field(ui, "Folder", &mut self.path, None, None)
+                })
+                .inner;
+            let browse = egui::Rect::from_min_size(
+                egui::pos2(field.rect.right() + design::S, field.rect.top()),
+                egui::vec2(BROWSE_WIDTH, field.rect.height()),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(browse), |ui| {
                 if Action::secondary("Browse…")
                     .density(Density::Read)
                     .show(ui)
@@ -712,12 +720,23 @@ impl Campaigns {
                     self.clear_form();
                 }
             });
+            // What it is waiting for, without a hover.
+            if self.name.trim().is_empty() || self.path.trim().is_empty() {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "Enter a campaign name and a folder.")
+                        .color(colors().muted),
+                );
+            }
             if let Some(error) = &self.error {
                 design::message(ui, Tone::Error, error);
             }
         });
     }
 }
+
+/// The Browse button and the gap before it, beside the folder field.
+const BROWSE_WIDTH: f32 = 92.0;
 
 /// By number, because a link can be stored with other formatting. An ID that is not a number
 /// links to nothing, and neither does a campaign with no link.

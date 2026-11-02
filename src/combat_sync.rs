@@ -435,6 +435,8 @@ pub enum SyncState {
 }
 
 const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings, then select Sync party. Splat reads the sheet first, and asks before it replaces a value you changed.";
+/// Groups the run holds as its own values, so a saved run keeps them.
+const KEPT_BY_THE_RUN: [&str; 3] = ["hp", "death", "conditions"];
 const DIFFER_AFTER_READ: &str =
     "Splat and D&D Beyond differ, and you changed this while sync was off. Choose which to keep.";
 
@@ -467,6 +469,9 @@ pub struct CombatSync {
     /// The last sheet values read before this sync was started again. What the run changed
     /// since then is the DM's own, and the next first read must not replace it unasked.
     matched: Option<Groups>,
+    /// Unsent values the run does not hold itself, such as spell slots. They last until the
+    /// next first read, where a difference asks. They are not in a saved run.
+    unsent: Groups,
     /// A first read arrived, and the run has not compared it with its values yet.
     first_read: bool,
     /// Never talks to D&D Beyond. It only shows the state it was given.
@@ -564,6 +569,24 @@ impl CombatSync {
     pub fn stopped_after_read(&self) -> bool {
         !self.enabled && self.remote.is_some()
     }
+    /// Sync is off, and values only this sync holds have not gone. A close loses them.
+    pub fn unsent_only_here(&self) -> bool {
+        !self.enabled && !self.only_here().is_empty()
+    }
+    fn only_here(&self) -> Groups {
+        self.desired
+            .iter()
+            .filter(|(key, value)| {
+                !KEPT_BY_THE_RUN.contains(&key.as_str())
+                    && self.remote.as_ref().and_then(|r| r.groups.get(*key)) != Some(*value)
+            })
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect()
+    }
+    fn keep_unsent(&mut self) {
+        let unsent = self.only_here();
+        self.unsent.extend(unsent);
+    }
     /// What D&D Beyond last confirmed.
     pub fn confirmed(&self) -> Option<&Groups> {
         self.remote.as_ref().map(|remote| &remote.groups)
@@ -606,6 +629,7 @@ impl CombatSync {
     /// Turn sync on. It reads the sheet before it writes anything.
     pub fn start(&mut self) {
         self.enabled = true;
+        self.keep_unsent();
         if let Some(remote) = self.remote.take() {
             self.matched = Some(remote.groups);
         }
@@ -772,6 +796,8 @@ impl CombatSync {
     /// how the next read can tell the DM's changes from the sheet's.
     fn enter_scope(&mut self, scope: (u64, String, String)) {
         let enabled = self.enabled;
+        self.keep_unsent();
+        let unsent = std::mem::take(&mut self.unsent);
         let matched = self
             .remote
             .take()
@@ -782,6 +808,7 @@ impl CombatSync {
         self.enabled = enabled;
         self.scope = Some(scope);
         self.matched = matched;
+        self.unsent = unsent;
     }
     /// True once for each first read, for the run to compare with its own values.
     pub fn take_first_read(&mut self) -> bool {
@@ -800,6 +827,7 @@ impl CombatSync {
         self.desired.insert(key.into(), local);
     }
     pub fn use_remote(&mut self, key: &str) {
+        self.updated = true;
         if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(key)) {
             self.desired.insert(key.to_owned(), value.clone());
         } else {
@@ -816,6 +844,19 @@ impl CombatSync {
     #[cfg(test)]
     pub fn simulate_read(&mut self, character: u64, max_hp: i64, damage: i64) {
         let remote = simulated_sheet(character, max_hp, damage, true);
+        let sent = self.desired.clone();
+        self.accept(
+            Outcome {
+                remote,
+                blocked: BTreeMap::new(),
+            },
+            &sent,
+        );
+    }
+    /// A read of a sheet given in full, in D&D Beyond's own fields.
+    #[cfg(test)]
+    pub fn simulate_sheet(&mut self, character: u64, max_hp: i64, sheet: &Value) {
+        let remote = Remote::from_raw(character, max_hp, sheet).expect("simulated sheet");
         let sent = self.desired.clone();
         self.accept(
             Outcome {
@@ -875,6 +916,14 @@ impl CombatSync {
             }
         }
         self.blocked.extend(outcome.blocked);
+        // Back from a stop: an unsent value the sheet does not have is the DM's to settle.
+        for (key, value) in std::mem::take(&mut self.unsent) {
+            if outcome.remote.groups.contains_key(&key)
+                && outcome.remote.groups.get(&key) != Some(&value)
+            {
+                self.hold_conflict(&key, value);
+            }
+        }
         self.remote = Some(outcome.remote);
         self.error = None;
         self.updated = true;

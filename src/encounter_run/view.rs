@@ -470,20 +470,26 @@ impl Run {
                         },
                     );
                     if let Some(notice) = notice {
-                        ui.horizontal(|ui| {
-                            let dismiss =
-                                design::icon_button(ui, icons::CLOSE, "Dismiss this message")
-                                    .clicked();
-                            ui.add(
-                                egui::Label::new(
-                                    Type::Small.rich(ui, notice).color(colors().result.warning),
-                                )
-                                .wrap(),
-                            );
-                            if dismiss {
-                                self.notice = None;
-                            }
-                        });
+                        // All the height the list gave up, so the dock stays where it was.
+                        ui.allocate_ui_with_layout(
+                            vec2(ui.available_width(), notice_height),
+                            Layout::left_to_right(Align::TOP),
+                            |ui| {
+                                ui.set_min_height(notice_height);
+                                let dismiss =
+                                    design::icon_button(ui, icons::CLOSE, "Dismiss this message")
+                                        .clicked();
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small.rich(ui, notice).color(colors().result.warning),
+                                    )
+                                    .wrap(),
+                                );
+                                if dismiss {
+                                    self.notice = None;
+                                }
+                            },
+                        );
                     }
                     self.dock(ui);
                     closed = self.live_footer(ui);
@@ -1267,6 +1273,7 @@ impl Run {
         let mut keep = ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
         let mut close = false;
         let block = self.close_block();
+        let lost = self.unsent_only_here_names();
         design::dialog(ui.ctx(), "close_run_with_loss", "Close this run?", |ui| {
             if cannot_save {
                 ui.add(
@@ -1279,8 +1286,17 @@ impl Run {
             if !stranded.is_empty() {
                 ui.add(
                     egui::Label::new(format!(
-                        "Changes for {} were not sent to D&D Beyond. Nothing is lost: the saved run keeps them, and asks you to choose when you next sync.",
+                        "Changes for {} were not sent to D&D Beyond. The saved run keeps their HP, death saves and conditions, and asks you to choose when you next sync. Undo stops here.",
                         stranded.join(", "),
+                    ))
+                    .wrap(),
+                );
+            }
+            if !lost.is_empty() {
+                ui.add(
+                    egui::Label::new(format!(
+                        "Spell slots and limited uses not sent for {} are lost.",
+                        lost.join(", "),
                     ))
                     .wrap(),
                 );
@@ -1290,7 +1306,7 @@ impl Run {
                 keep |= Action::primary("Keep running").show(ui).clicked();
                 ui.add_space(design::L);
                 // Red only when something is lost.
-                let action = if cannot_save {
+                let action = if cannot_save || !lost.is_empty() {
                     Action::destructive("Close anyway")
                 } else {
                     Action::secondary("Close anyway")
@@ -1951,7 +1967,8 @@ impl Run {
         let mut command = None;
         let p = &self.state.participants[index];
         let detail = format!(
-            "{} · HP {}/{} · AC {}",
+            "{}{} · HP {}/{} · AC {}",
+            if p.present { "" } else { "Absent · " },
             p.side,
             display(p.hp),
             display(p.max_hp),
@@ -1971,7 +1988,15 @@ impl Run {
         let mut enter = false;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = design::XS;
-            let actions = 72.0 + 76.0 + 28.0 + 78.0 + 4.0 * design::XS;
+            // A word when the row has room for the longer one, so nothing moves when it changes.
+            // In a narrow pane the mark alone, and the row's second line says it.
+            let presence_room = ui.available_width() >= 620.0;
+            let presence_slot = if presence_room {
+                124.0
+            } else {
+                Density::Read.control()
+            };
+            let actions = 72.0 + 76.0 + 28.0 + presence_slot + 4.0 * design::XS;
             let name_width = (ui.available_width() - actions).max(110.0);
             let response = ui
                 .allocate_ui(vec2(name_width, row), |ui| {
@@ -2014,16 +2039,31 @@ impl Run {
                 command = Some(Command::RollInitiative(index));
             }
             let (word, hint) = presence_action(present);
-            if Action::quiet(word)
-                .plain()
-                .icon(icons::ABSENT)
-                .density(Density::Scan)
-                .name(&format!("{word}: {name}"))
-                .hint(hint)
-                .selected(!present)
-                .show(ui)
-                .clicked()
-            {
+            let accessible = format!("{word}: {name}");
+            let pressed = if presence_room {
+                ui.allocate_ui_with_layout(
+                    vec2(presence_slot, Density::Scan.control()),
+                    Layout::left_to_right(Align::Center),
+                    |ui| {
+                        ui.set_min_width(presence_slot);
+                        Action::quiet(word)
+                            .plain()
+                            .icon(icons::ABSENT)
+                            .density(Density::Scan)
+                            .name(&accessible)
+                            .hint(hint)
+                            .selected(!present)
+                            .show(ui)
+                            .clicked()
+                    },
+                )
+                .inner
+            } else {
+                design::icon_button(ui, icons::ABSENT, &accessible)
+                    .on_hover_text(hint)
+                    .clicked()
+            };
+            if pressed {
                 command = Some(Command::Presence(index, !present));
             }
             if design::icon_button(
@@ -2181,25 +2221,35 @@ impl Run {
                             );
                             if !self.initiative.roster_ties && (up || down) {
                                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    if down
-                                        && design::icon_button(
+                                    // Two fixed places, so that a second click on an arrow
+                                    // cannot land on the other one and take back the first.
+                                    let slot =
+                                        vec2(Density::Read.control(), Density::Read.control());
+                                    if down {
+                                        if design::icon_button(
                                             ui,
                                             icons::DOWN,
                                             &format!("Move {} after the tied participant", p.name),
                                         )
                                         .clicked()
-                                    {
-                                        command = Some(Command::Move(position, position + 1));
+                                        {
+                                            command = Some(Command::Move(position, position + 1));
+                                        }
+                                    } else {
+                                        ui.allocate_space(slot);
                                     }
-                                    if up
-                                        && design::icon_button(
+                                    if up {
+                                        if design::icon_button(
                                             ui,
                                             icons::UP,
                                             &format!("Move {} before the tied participant", p.name),
                                         )
                                         .clicked()
-                                    {
-                                        command = Some(Command::Move(position, position - 1));
+                                        {
+                                            command = Some(Command::Move(position, position - 1));
+                                        }
+                                    } else {
+                                        ui.allocate_space(slot);
                                     }
                                     ui.label(Type::Small.rich(ui, "Tie").color(c.document.unsaved));
                                 });
@@ -2274,7 +2324,16 @@ impl Run {
         self.error_line(ui);
         // Close run is this view's main action, so the reason it is off is not left to a hover.
         if let Some(reason) = self.close_block() {
-            ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(c.muted)).wrap());
+            let conflicts = self.conflict_count();
+            let text = if conflicts > 0 {
+                format!(
+                    "{} to settle. {reason}",
+                    design::count(conflicts, "conflict", "conflicts")
+                )
+            } else {
+                reason.to_owned()
+            };
+            ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
         }
         if self.closing {
             ui.horizontal(|ui| {
@@ -2287,18 +2346,30 @@ impl Run {
             .exact_width(width)
             .frame(side_frame())
             .show_inside(ui, |ui| {
-                // Several conflicts can be long, and the log must keep some room.
-                let room = ui.available_height() * 0.6;
+                // With choices to make, they have the column, and the log waits behind a
+                // heading. Never a pair of choices cut by a second scroll.
+                let choosing = self.conflict_count() > 0;
+                let room = if choosing {
+                    ui.available_height() - Density::Read.control() - design::M
+                } else {
+                    ui.available_height() * 0.6
+                };
                 egui::ScrollArea::vertical()
                     .id_salt("run_ended_sync")
                     .max_height(room)
                     .auto_shrink([false, true])
-                    .show(ui, |ui| self.sync_block(ui));
-                if !self.setup_details.is_empty() {
-                    design::section(ui, "Notes", |ui| self.notes_tab(ui));
+                    .show(ui, |ui| {
+                        self.sync_block(ui);
+                        if !self.setup_details.is_empty() {
+                            design::section(ui, "Notes", |ui| self.notes_tab(ui));
+                        }
+                    });
+                if choosing {
+                    design::section(ui, "Combat log", |ui| self.log_tab(ui));
+                } else {
+                    design::group_label(ui, "Combat log");
+                    self.log_tab(ui);
                 }
-                design::group_label(ui, "Combat log");
-                self.log_tab(ui);
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new())

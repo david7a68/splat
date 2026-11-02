@@ -309,6 +309,14 @@ impl<'a> Driver<'a> {
         }
     }
 
+    /// Where a control is, by its exact name.
+    pub fn place_of(&self, name: &str) -> Option<egui::Rect> {
+        self.nodes()
+            .into_iter()
+            .find(|node| node.name == name)
+            .map(|node| node.rect)
+    }
+
     /// What the rail paints. It has its own words, whatever the page says.
     pub fn rail_words(&self) -> String {
         let window = self.harness.ctx.content_rect();

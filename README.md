@@ -315,11 +315,13 @@ restart, Splat compares each value with the last one D&D Beyond confirmed, or wi
 began the run with if there is none. A value you changed stays in the run, and if the sheet differs
 that is a conflict, settled from the panel: use the sheet's value, or keep yours and send it. An open
 conflict is found again after a close, an app close or a crash. A value you did not change takes
-the sheet's, and the notice and the log name the old and new HP.
+the sheet's.
 
-Saved runs from earlier versions can hold unsent values as their last match. These look unchanged, so
-the sheet's value stands on the first read, with the notice and the log naming what was replaced. A
-run saved by this version does not do this. Its new `started` field is optional, and earlier saves load.
+A save from an earlier version can hold unsent values as its last match, so on its first read every
+difference asks, once. Its new `started` field is optional, and earlier saves load. Spell slots and
+limited uses are not in the saved run: an unsent one asks at the next first read in the same session,
+and closing says it will be lost. Undo stops wherever a value reached the run from the sheet or the
+sync panel, and the notice and the log say what changed, from what to what.
 
 Sync covers current and temporary HP, death saves, official conditions,
 ordinary and pact spell slots spent, and supported action/spell limited uses.

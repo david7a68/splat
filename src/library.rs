@@ -545,6 +545,8 @@ pub struct Library {
     discarded: Option<(Option<Uuid>, String, String)>,
     /// A save was refused because the file changed. The draft waits for the DM's choice.
     disk_change: Option<DiskChange>,
+    /// The note on screen was saved, and has not changed since.
+    just_saved: bool,
     overwrite_disk: bool,
     scope: Scope,
     load_key: Option<LoadKey>,
@@ -1674,6 +1676,7 @@ impl Library {
         }
         let editable = note.owner.editable();
         let conflict = self.disk_change.is_some();
+        self.just_saved &= !dirty && self.source;
         let mut save = overwrite
             || (dirty
                 && editable
@@ -1697,6 +1700,13 @@ impl Library {
                 icon: icons::DRAFT,
                 word: "Unsaved",
                 color: d.unsaved,
+            }
+        } else if self.just_saved {
+            // In the status slot beside Save, so that saving moves nothing.
+            Status {
+                icon: icons::OK,
+                word: "Saved",
+                color: d.saved,
             }
         } else if self.source && !matches!(note.owner, Owner::Builtin) {
             Status {
@@ -1823,20 +1833,14 @@ impl Library {
                 },
             );
             ui.horizontal_wrapped(|ui| {
-                if Action::primary("Overwrite with my draft")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    self.overwrite_disk = true;
-                }
                 if change.text.is_some() {
                     let word = if change.show {
                         "Hide disk version"
                     } else {
                         "Show disk version"
                     };
-                    if Action::secondary(word)
+                    // The safe look comes first, and overwriting says what it is.
+                    if Action::primary(word)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
@@ -1845,6 +1849,13 @@ impl Library {
                     }
                 }
                 ui.add_space(design::XL);
+                if Action::destructive("Overwrite with my draft")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.overwrite_disk = true;
+                }
                 reload_from_disk = Action::destructive("Reload and lose my draft")
                     .density(Density::Read)
                     .show(ui)
@@ -1968,7 +1979,7 @@ impl Library {
                     l.invalidate();
                     self.matches = None;
                     self.scope_counts = None;
-                    self.message = Some("Saved: entry changes.".into());
+                    self.just_saved = true;
                     self.content_changed = Some(root);
                     let entries: Vec<_> = l.notes.iter().filter_map(|n| n.entry.clone()).collect();
                     let r = content::validate(&entries);

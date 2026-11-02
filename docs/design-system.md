@@ -160,7 +160,7 @@ control still has an accessible name and a tooltip.
 `Discard` is one press and one step of undo, not a dialog: `Draft discarded` with `Undo
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
 there is something to discard. A file that changed on disk stops saving and asks: the run
-offers `Keep this run` and `Save as a new run`, and a Library note offers `Overwrite with my
+offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
 draft`, `Show disk version` and `Reload and lose my draft`. These messages cannot be dismissed.
 
 ## The Reader

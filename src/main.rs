@@ -292,7 +292,7 @@ impl Splat {
         if !names.is_empty() {
             items.push((
                 format!(
-                    "D&D Beyond has not confirmed changes to {}. The saved run keeps them, and asks you to choose when you next sync.",
+                    "D&D Beyond has not confirmed changes to {}. The saved run keeps HP, death saves and conditions, and asks you to choose when you next sync. Unsent spell slots and limited uses are lost.",
                     names.join(", ")
                 ),
                 Page::Run,
@@ -320,7 +320,7 @@ impl Splat {
                 "Sync has not finished",
                 "Return to run",
                 "Close anyway",
-                "Return, and wait for sync or resolve the conflict. Or close: nothing is lost.",
+                "Return, and wait for sync or resolve the conflict. Or close, and lose what is named above.",
             )
         } else {
             (
@@ -683,18 +683,25 @@ impl Splat {
                                 ui.spacing_mut().item_spacing.x = design::XL;
                                 let column = egui::vec2(width, 0.0);
                                 let layout = egui::Layout::top_down(egui::Align::Min);
-                                ui.allocate_ui_with_layout(column, layout, |ui| {
-                                    // Both ways, so the second column starts in one place.
-                                    ui.set_width(width);
-                                    ui.spacing_mut().item_spacing.x = 8.0;
-                                    account(ui, &mut self.settings);
-                                });
-                                ui.allocate_ui_with_layout(column, layout, |ui| {
-                                    ui.set_width(width);
-                                    ui.spacing_mut().item_spacing.x = 8.0;
-                                    list(ui, &mut self.campaigns, &mut self.dndbeyond);
-                                });
+                                // A first campaign needs no account, so that path comes first.
+                                let list_first = self.campaigns.all().is_empty();
+                                for place in 0..2 {
+                                    ui.allocate_ui_with_layout(column, layout, |ui| {
+                                        // Both ways, so the second column starts in one place.
+                                        ui.set_width(width);
+                                        ui.spacing_mut().item_spacing.x = 8.0;
+                                        if (place == 0) == list_first {
+                                            list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                                        } else {
+                                            account(ui, &mut self.settings);
+                                        }
+                                    });
+                                }
                             });
+                        } else if self.campaigns.all().is_empty() {
+                            list(ui, &mut self.campaigns, &mut self.dndbeyond);
+                            ui.add_space(design::L);
+                            account(ui, &mut self.settings);
                         } else {
                             account(ui, &mut self.settings);
                             ui.add_space(design::L);

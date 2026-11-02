@@ -482,10 +482,27 @@ impl CampaignContent {
                                     Selection::All => total,
                                     Selection::Selected { entries } => entries.len(),
                                 });
-                            let partial = existing.is_some_and(|i| {
-                                matches!(&document.selections[i].selection,
+                            // What the campaign's other choices pull in is ticked too.
+                            let required =
+                                existing.map_or(0, |i| match &document.selections[i].selection {
+                                    Selection::All => 0,
+                                    Selection::Selected { entries } => module
+                                        .entries
+                                        .iter()
+                                        .filter(|id| {
+                                            catalogue.selectable(**id)
+                                                && closure.required.contains_key(id)
+                                                && !entries.iter().any(|e| {
+                                                    catalogue.resolve_ref(e).ok() == Some(**id)
+                                                })
+                                        })
+                                        .count(),
+                                });
+                            let partial = count + required < total
+                                && existing.is_some_and(|i| {
+                                    matches!(&document.selections[i].selection,
                                     Selection::Selected { entries } if !entries.is_empty())
-                            });
+                                });
                             let mut enabled = count > 0;
                             ui.push_id(module.id, |ui| {
                                 ui.horizontal(|ui| {
@@ -518,16 +535,23 @@ impl CampaignContent {
                                         Density::Glance.row() + design::XS,
                                         self.module == Some(module.id),
                                         &module.name,
-                                        &format!(
-                                            "{} · {total} entries",
-                                            if partial {
-                                                format!("{count} selected")
-                                            } else if enabled {
-                                                "All".into()
-                                            } else {
-                                                "None".into()
-                                            },
-                                        ),
+                                        &if required > 0 {
+                                            format!(
+                                                "{} of {total} · {required} required",
+                                                count + required
+                                            )
+                                        } else {
+                                            format!(
+                                                "{} · {total} entries",
+                                                if partial {
+                                                    format!("{count} selected")
+                                                } else if enabled {
+                                                    "All".into()
+                                                } else {
+                                                    "None".into()
+                                                },
+                                            )
+                                        },
                                     )
                                     .clicked()
                                     {
