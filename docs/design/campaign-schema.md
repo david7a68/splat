@@ -178,6 +178,7 @@ splat_kind: encounter_group
 splat_name: Rival Team
 splat_encounter_group:
   side: rivals
+  encounter: {id: 7c2f4e10-3a55-4d0e-9d39-0f1c6a7b8e21} # optional
   members:
   - creature: {key: "dnd2024:creatures/goblin_warrior"}
     count: 3
@@ -185,9 +186,15 @@ splat_encounter_group:
     overrides: {name: Rival Captain, max_hp: {add: 10}}
 ```
 
-`side` is required. Because a group can arrive in any encounter and a run keeps no
-hostility table, it can be any name, and a side the run has not seen uses the "other"
-mark. `members` is an ordered, non-empty list. `count` defaults to 1, up to 100. A
+`side` is required. Because a run keeps no hostility table, it can be any name, and a
+side the run has not seen uses the "other" mark. `encounter` is optional. With it, the
+group belongs to that encounter, a note of the same campaign named by `id` (a `link` can
+sit beside it), and only runs of that encounter offer it. Without it, a run of any
+encounter offers it. A run saves the identity of the encounter it started from. A run
+saved before this has none, so it lists every group and says who each is for. An
+`encounter` that does not resolve, or that is not an encounter, is reported as a content issue. The group
+stays on the Encounters page, runs of that encounter can still add it, and its editor
+asks for another owner before it saves. `members` is an ordered, non-empty list. `count` defaults to 1, up to 100. A
 reference follows the same dependency rules as a roster's, so it can reach a creature
 in any enabled package. An empty group, an unknown field, or an invalid override stops
 the note from parsing, with the reason. A reference that does not resolve is reported

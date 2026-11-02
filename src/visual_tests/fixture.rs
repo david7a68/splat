@@ -37,6 +37,9 @@ pub const GROUP_RIVALS: &str = "Rival Team";
 pub const GROUP_GOBLINS: &str = "Goblin Wave";
 pub const GROUP_LOST: &str = "Lost Patrol";
 pub const GROUP_WATCH: &str = "Watch Detail";
+pub const GROUP_SHRINE: &str = "Shrine Reserve";
+pub const GROUP_ARENA: &str = "Arena Beasts";
+pub const GROUP_ORPHAN: &str = "Cellar Rats";
 
 /// What settings the app starts with.
 #[derive(Clone, Copy, PartialEq)]
@@ -52,6 +55,8 @@ pub enum Seed {
     Groups,
     /// `Campaign`, plus ended runs: one on the timeline under a session, one with no event.
     History,
+    /// `Groups`, plus groups that belong to an encounter, and one whose encounter is gone.
+    OwnedGroups,
 }
 
 #[derive(Clone)]
@@ -122,11 +127,14 @@ fn seed_campaigns(
         write_run(&active, &module.path, &party, RUN_12, &[(5, 15), (2, 7)])?;
         write_run(&active, &module.path, &party, RUN_20, &[(12, 15), (3, 7)])?;
     }
-    if seed == Seed::Groups {
+    if matches!(seed, Seed::Groups | Seed::OwnedGroups) {
         write_groups(&active, &module.path, &party)?;
     }
     if seed == Seed::History {
         write_history(&active, &module.path)?;
+    }
+    if seed == Seed::OwnedGroups {
+        write_owned_groups(&active.path)?;
     }
 
     let data = UserData {
@@ -412,6 +420,37 @@ fn write_encounters(root: &Path, party: &[EntitySnapshot]) -> Result<(), String>
                 "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster:\n{heroes}{}  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n---\n\n{note}\n",
                 stable_id(&format!("visual:encounter:{name}")),
                 enemies.concat(),
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+/// Groups that belong to one encounter, and one whose encounter this campaign no longer has.
+fn write_owned_groups(root: &Path) -> Result<(), String> {
+    for (name, encounter, creature) in [
+        (
+            GROUP_SHRINE,
+            stable_id("visual:encounter:Shrine of Cinders"),
+            "{key: 'dnd2024:creatures/goblin_warrior'}".to_owned(),
+        ),
+        (
+            GROUP_ARENA,
+            stable_id("visual:encounter:arena"),
+            format!("{{id: {}}}", module_entry_id("cinder_wolf")),
+        ),
+        (
+            GROUP_ORPHAN,
+            stable_id("visual:encounter:gone"),
+            format!("{{id: {}}}", module_entry_id("cinder_wolf")),
+        ),
+    ] {
+        write_note(
+            root,
+            &format!("Encounter Groups/{name}.md"),
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {name}\nsplat_encounter_group:\n  side: enemies\n  encounter: {{id: {encounter}}}\n  members:\n  - creature: {creature}\n    count: 2\n---\n",
+                stable_id(&format!("visual:group:{name}")),
             ),
         )?;
     }

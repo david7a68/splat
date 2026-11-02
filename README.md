@@ -333,7 +333,16 @@ running encounter when it arrives. It is a note with `splat_kind: encounter_grou
 notes as its text. **New group** on Encounters opens its editor, which searches creatures as the
 encounter editor does. Any creature from this campaign or a package it uses can be a member, and
 each member can carry the same changes as a roster slot. An empty group or an unavailable
-creature is refused with a message. See [the schema](docs/design/campaign-schema.md#encounter-groups).
+creature is refused with a message.
+
+**Belongs to** chooses who the group is for. With **Any encounter**, a run of any encounter offers
+it. With one encounter, only runs of that encounter offer it, and the Encounters page keeps it in a
+closed **Groups for encounters** section.
+
+The encounter editor has a frame for each of its own groups, with its name, side, members and notes.
+**New group for this encounter** starts one there, before or after the encounter is saved. **Add to**,
+above the search, chooses whether the search adds to the roster or to a group. **Save encounter**
+saves the encounter and its groups together, and writes nothing if any of them cannot be saved. See [the schema](docs/design/campaign-schema.md#encounter-groups).
 
 ### Running an encounter as DM
 
@@ -374,8 +383,8 @@ such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log.
 **Arrivals** adds what joins a fight after it starts. To add one creature, find it in the campaign,
 or type a new name and its HP to make one up. A value you type replaces the creature's own for this
 fight, and the card shows the change. A creature you make up stays in this run, and has no note.
-Below that, the panel lists the campaign's encounter groups, with their members and total XP. Groups
-that tonight's plan links come first. Drag a group's
+Below that, the panel lists this encounter's own groups, then the groups tonight's plan links, then
+the other groups for any encounter, with their members and total XP. Drag a group's
 name onto the initiative list, or press its **Add** button. Type a total beside it to use that for every
 member, as players give theirs. Otherwise the campaign's rule decides: one shared roll with the first
 member's bonus (identical NPCs, or the encounter's initiative groups), a roll for each member

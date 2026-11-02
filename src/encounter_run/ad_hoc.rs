@@ -186,6 +186,8 @@ impl AdHoc {
             xp_unknown: Vec::new(),
             unavailable: 0,
             problem: None,
+            encounter: None,
+            encounter_name: None,
         })
     }
 }

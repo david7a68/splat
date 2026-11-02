@@ -40,7 +40,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 38] = [
+const SCENARIOS: [(&str, Seed, Script); 39] = [
     (
         "library-browse",
         Seed::Empty,
@@ -156,6 +156,11 @@ const SCENARIOS: [(&str, Seed, Script); 38] = [
         "encounter-groups",
         Seed::Groups,
         scenarios::encounter_groups::run,
+    ),
+    (
+        "encounter-owned-groups",
+        Seed::OwnedGroups,
+        scenarios::encounter_owned_groups::run,
     ),
     ("run-overrides", Seed::Groups, scenarios::run_overrides::run),
     (

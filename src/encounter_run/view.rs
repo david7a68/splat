@@ -2071,18 +2071,27 @@ impl Run {
             .wrap(),
         );
         design::rule(ui);
+        let offered = super::OfferedGroups::of(&groups, self.source);
         let in_plan = |group: &Arc<super::RunGroup>| {
             self.planned
                 .iter()
                 .any(|name| name.eq_ignore_ascii_case(&group.name))
         };
-        let (planned, others): (Vec<_>, Vec<_>) = groups.iter().partition(|group| in_plan(group));
+        let (planned, any): (Vec<_>, Vec<_>) = offered.any.iter().cloned().partition(in_plan);
+        // A campaign with only groups for any encounter, none of them planned, has nothing to
+        // tell apart.
+        let labelled = !offered.own.is_empty() || !planned.is_empty() || !offered.other.is_empty();
         let mut add = None;
-        for (heading, list) in [("In tonight's plan", &planned), ("Other groups", &others)] {
-            if !planned.is_empty() && !list.is_empty() {
+        for (heading, list) in [
+            ("For this encounter", offered.own.as_slice()),
+            ("In tonight's plan", planned.as_slice()),
+            ("For any encounter", any.as_slice()),
+            ("For one encounter", offered.other.as_slice()),
+        ] {
+            if labelled && !list.is_empty() {
                 design::group_label(ui, heading);
             }
-            for group in list.iter() {
+            for group in list {
                 ui.push_id(group.id, |ui| {
                     if self.group_row(ui, group) {
                         add = Some(group.id);
@@ -2229,6 +2238,13 @@ impl Run {
             );
         }
         let mut facts = vec![format!("Side: {}", style::human_label(&group.side))];
+        // Only a run that does not know its encounter lists a group for another one.
+        if group.encounter.is_some() && group.encounter != self.source {
+            facts.push(match &group.encounter_name {
+                Some(name) => format!("For {name}"),
+                None => "For an encounter this campaign no longer has".to_owned(),
+            });
+        }
         if !group.xp_unknown.is_empty() {
             facts.push(format!("XP not known for {}", group.xp_unknown.join(", ")));
         }

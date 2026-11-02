@@ -2,12 +2,13 @@
   "violations": {
     "accessible-name/egui-chrome": {
       "campaign-content": 66,
-      "column-resize": 96,
+      "column-resize": 97,
       "dialogs": 37,
       "empty": 18,
-      "encounter-build": 47,
-      "encounter-groups": 69,
+      "encounter-build": 49,
+      "encounter-groups": 70,
       "encounter-history": 10,
+      "encounter-owned-groups": 58,
       "encounter-run": 52,
       "gallery": 20,
       "library-author": 60,
@@ -44,6 +45,7 @@
     },
     "no-overlap/egui-chrome": {
       "dialogs": 4,
+      "encounter-owned-groups": 4,
       "encounter-run": 4,
       "library-author": 2,
       "library-scope": 5,
@@ -51,12 +53,13 @@
     },
     "target-size/egui-chrome": {
       "campaign-content": 66,
-      "column-resize": 96,
+      "column-resize": 97,
       "dialogs": 36,
       "empty": 18,
-      "encounter-build": 47,
-      "encounter-groups": 69,
+      "encounter-build": 49,
+      "encounter-groups": 70,
       "encounter-history": 10,
+      "encounter-owned-groups": 57,
       "encounter-run": 51,
       "gallery": 20,
       "library-author": 59,
@@ -119,6 +122,10 @@
       "add a group during setup": 5,
       "add groups by a total and by dragging": 13,
       "make an encounter group": 14
+    },
+    "encounter-owned-groups": {
+      "T13.5: add this encounter's own group": 1,
+      "build a group in an encounter's editor": 7
     },
     "encounter-run": {
       "Roll once another way: roll NPC initiative another way": 2,

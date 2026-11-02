@@ -89,6 +89,10 @@ pub(crate) struct RunGroup {
     pub path: String,
     pub name: String,
     pub side: String,
+    /// The one encounter this group is for. With none, it is for any encounter.
+    pub encounter: Option<Uuid>,
+    /// That encounter's name, while this campaign still has it.
+    pub encounter_name: Option<String>,
     pub members: Vec<GroupMember>,
     pub notes: String,
     /// What this group's creatures are worth. Overrides do not change it.
@@ -133,6 +137,28 @@ impl RunGroup {
             .iter()
             .map(|member| member.count)
             .fold(self.unavailable, u64::saturating_add)
+    }
+}
+/// A campaign's groups, as one run sorts them.
+#[derive(Debug, Default)]
+pub(crate) struct OfferedGroups {
+    pub own: Vec<Arc<RunGroup>>,
+    pub any: Vec<Arc<RunGroup>>,
+    /// Groups for an encounter, when the run cannot say which encounter it is.
+    pub other: Vec<Arc<RunGroup>>,
+}
+impl OfferedGroups {
+    pub(crate) fn of(groups: &[Arc<RunGroup>], encounter: Option<Uuid>) -> Self {
+        let mut offered = Self::default();
+        for group in groups {
+            match group.encounter {
+                None => offered.any.push(group.clone()),
+                owner if owner == encounter => offered.own.push(group.clone()),
+                Some(_) if encounter.is_none() => offered.other.push(group.clone()),
+                Some(_) => {}
+            }
+        }
+        offered
     }
 }
 #[cfg(test)]
@@ -4553,6 +4579,8 @@ mod tests {
             path: format!("{name}.md"),
             name: name.into(),
             side: side.into(),
+            encounter: None,
+            encounter_name: None,
             members: members
                 .into_iter()
                 .map(|(entry, count, overrides)| GroupMember {
@@ -5053,6 +5081,63 @@ mod tests {
         assert_eq!(again.state.participants[3].name, "Captain");
         assert_eq!(again.current(), reopened.current());
     }
+    #[test]
+    fn a_run_offers_its_encounters_groups_and_those_for_any_encounter() {
+        let (arena, other) = (Uuid::new_v4(), Uuid::new_v4());
+        let owned = |name: &str, owner: Uuid| {
+            let mut group = (*guard_group(name, 1)).clone();
+            group.encounter = Some(owner);
+            Arc::new(group)
+        };
+        let groups = [
+            guard_group("Free", 1),
+            owned("Mine", arena),
+            owned("Theirs", other),
+        ];
+        let names =
+            |list: &[Arc<RunGroup>]| list.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+        let offered = OfferedGroups::of(&groups, Some(arena));
+        assert_eq!(names(&offered.own), ["Mine"]);
+        assert_eq!(names(&offered.any), ["Free"]);
+        assert!(
+            offered.other.is_empty(),
+            "another encounter's group is not offered"
+        );
+        // A save from before this cannot say which is its own, so it hides none.
+        let offered = OfferedGroups::of(&groups, None);
+        assert!(offered.own.is_empty());
+        assert_eq!(names(&offered.any), ["Free"]);
+        assert_eq!(names(&offered.other), ["Mine", "Theirs"]);
+    }
+
+    #[test]
+    fn a_saved_run_keeps_its_encounter_and_an_older_save_has_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let encounter = Uuid::new_v4();
+        let participant = Participant::new(
+            "guard".into(),
+            "enemies".into(),
+            creature(),
+            &Mapping::new(),
+            true,
+        )
+        .unwrap();
+        let mut run = Run::new("Arena".into(), vec![participant], String::new()).unwrap();
+        run.came_from(encounter);
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        run.autosave();
+        let path = run.storage.as_ref().unwrap().path.clone();
+        assert_eq!(Run::open(&path, campaign).unwrap().source, Some(encounter));
+
+        let mut saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        saved.as_object_mut().unwrap().remove("source");
+        fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
+        assert_eq!(Run::open(&path, campaign).unwrap().source, None);
+    }
+
     fn mixed_group() -> Arc<RunGroup> {
         group_of(
             "Mixed",

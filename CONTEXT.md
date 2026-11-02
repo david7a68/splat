@@ -140,9 +140,10 @@ of their creature type or membership in a campaign's party.
 
 **Encounter group**:
 A reusable, named list of creatures with counts, a default side, and notes, owned by
-a campaign. The DM adds it to a running encounter when it arrives. Each addition
-creates new participants. It is not a side, which sorts participants within one
-encounter; not a roster, which one encounter owns; not a rule group, which enables
+a campaign. It is for any encounter, or it belongs to one encounter, and then only runs
+of that encounter offer it. The DM adds it to a running encounter when it arrives. Each
+addition creates new participants. It is not a side, which sorts participants within one
+encounter; not a roster, whose participants one encounter always starts with; not a rule group, which enables
 rules together; and not an initiative group, which shares a turn order position.
 _Avoid_: Team, wave, spawn group
 

@@ -287,8 +287,9 @@ Recording records. It does not rule: a marker is a suggestion, and only the DM p
 **Done well:** T11.5 to T11.7.
 
 ### W13. Prepare arrivals, and add them to a fight
-**Trigger:** rival adventurers, reinforcements, or a released beast can arrive in any room. **Goal:** the group is ready once,
-and it joins the running fight in one step when it arrives, with its changes in plain view. **Context:** desk to
+**Trigger:** rival adventurers, reinforcements, or a released beast can arrive in any room, or in the one room they
+were prepared for. **Goal:** the group is ready once, is offered only where it belongs, and it joins the running fight
+in one step when it arrives, with its changes in plain view. **Context:** desk to
 prepare, table to add. **Frequency:** every fight that has arrivals.
 
 An encounter group is added by the DM. Splat records it. It does not decide that the group arrives. A change
@@ -298,7 +299,7 @@ add by hand.
 A creature can also arrive with nothing prepared. The DM finds it in the campaign, or names it and types its
 HP, and it follows the same initiative rules as a group. A creature made up this way stays in that one run.
 
-**Done well:** T13.1 to T13.5, T14.6.
+**Done well:** T13.1 to T13.7, T14.6.
 
 ### W14. Run the evening from one page
 **Trigger:** the DM sits down at the table, or a fight ends. **Goal:** the next thing to do is on the page already: the
@@ -575,7 +576,9 @@ reading the code, not from a test run.
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |
 | T13.4 | Dragging a group onto the initiative list adds every member | encounter-groups | state | New |
-| T13.5 | One creature, made up or found, joins the running fight from the Arrivals panel. A made-up creature says what it needs, and copies get numbered names | run-add-creature | cost, state | New |
+| T13.5 | A run offers its encounter's groups and those for any encounter, and adds its own in ≤ 1, in setup and in combat. The Encounters page keeps an encounter's own groups in a closed section | encounter-owned-groups | cost, state | New |
+| T13.6 | An encounter's editor shows each of its groups in a frame of its own, and builds a new one there, with no other page. It saves with the encounter | encounter-owned-groups | state | New |
+| T13.7 | One creature, made up or found, joins the running fight from the Arrivals panel. A made-up creature says what it needs, and copies get numbered names | run-add-creature | cost, state | New |
 | T12.1 | A planned fight starts from the session in 1, and Close run comes back there in 1. The plan is words in the note | session-plan | cost, state | New |
 | T12.2 | A new run starts each player from the last fight of the session, says so, and goes back to the sheets in 1. A long rest the DM marks starts everyone at full | session-plan | cost, state | New |
 | T12.3 | One amount on several targets, with half for those who saved, in 2 once chosen, and one step of undo | session-plan | cost, state | New |
