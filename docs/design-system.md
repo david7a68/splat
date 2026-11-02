@@ -219,8 +219,8 @@ the panel, those words open the second line instead, so that a name is never cut
   stat block below is as printed. The list scrolls with the stat block, and each participant keeps
   its own place in it. A side of its own also has its word on a live row. In setup, a row gives
   the side when it has room, and Record gives it always.
-- **Groups:** a tab beside the stat block lists the campaign's encounter groups, with members,
-  count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
+- **Groups:** a tab beside the stat block lists the encounter's own groups, then the groups for any
+  encounter, with members, count and total XP. A last line names the groups for other encounters. A group's name is a handle to drag onto the list, and the list takes an accent
   outline while one is held. Each group also has a field for a total, blank to roll, and an `Add`
   button that the keyboard reaches. No step asks for confirmation, because Undo names the addition.
 

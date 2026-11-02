@@ -314,7 +314,11 @@ running encounter when it arrives. It is a note with `splat_kind: encounter_grou
 notes as its text. **New group** on Encounters opens its editor, which searches creatures as the
 encounter editor does. Any creature from this campaign or a package it uses can be a member, and
 each member can carry the same changes as a roster slot. An empty group or an unavailable
-creature is refused with a message. See [the schema](docs/design/campaign-schema.md#encounter-groups).
+creature is refused with a message.
+
+**Belongs to** chooses who the group is for. With **Any encounter**, a run of any encounter offers
+it. With one encounter, only runs of that encounter offer it. An encounter's editor lists its own
+groups, and **New group for this encounter** starts one. See [the schema](docs/design/campaign-schema.md#encounter-groups).
 
 ### Running an encounter as DM
 
@@ -349,7 +353,8 @@ such as `2d6 + 3`.
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
 
-**Groups** lists the campaign's encounter groups, with their members and total XP. Drag a group's
+**Groups** lists this encounter's own groups and the groups for any encounter, with their members and
+total XP, and it names the groups that belong to other encounters. Drag a group's
 name onto the initiative list, or press its **Add** button. Type a total beside it to use that for every
 member, as players give theirs. Otherwise the campaign's rule decides: one shared roll with the first
 member's bonus (identical NPCs, or the encounter's initiative groups), a roll for each member
