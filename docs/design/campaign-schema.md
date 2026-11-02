@@ -107,6 +107,12 @@ An encounter's optional `combat_sync` defaults to true. With it true, linked par
 from their D&D Beyond sheets and the run stays matched with them. With it false, they start from
 their saved copies and `initial`, and the run sends nothing.
 
+An encounter's optional `repeatable` defaults to false. An encounter leaves the Encounters page's
+Ready to run list when a run of it ends, and goes on from History. With `repeatable` true, it stays
+ready, for a fight that can happen more than once. A saved run records the `splat_id` of its
+encounter. A save from before this has none, and matches only an encounter that alone has its name.
+Retirement follows the runs in the run folder: with another folder, an encounter is ready again.
+
 Roster is an ordered array of `{key, creature: EntryRef | party_slot: key,
 side, controller, initial?, overrides?, initial_presence?, initiative_group?, health_policy?}`. Exactly one
 source is present. `initial_presence` defaults active; pending phase arrivals

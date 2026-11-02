@@ -200,6 +200,11 @@ participants retain their HP, resources, inventory, and ongoing effects.
 One playthrough or simulation of an encounter, with its own participants,
 current HP, spent resources, and active effects.
 
+**Retired encounter**:
+An encounter template with an ended run, unless it is marked repeatable. It is not a state in its
+note. It leaves the ready list and stays reachable from its ended runs in History.
+_Avoid_: Archived
+
 **Completion condition**:
 An objective or state that ends an encounter automatically when satisfied.
 An encounter can also be ended manually.

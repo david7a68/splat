@@ -377,7 +377,7 @@ pub(super) fn list(
                 Type::Body
                     .rich(
                         ui,
-                        "No groups yet. Prepare a team or a wave with New group, then add it to a running encounter when it arrives.",
+                        "No groups yet. Prepare a set of creatures with New group, then add it to a running encounter when it arrives.",
                     )
                     .color(colors().muted),
             )
@@ -1181,6 +1181,10 @@ fn members(
             }
             design::rule(ui);
         });
+    }
+    // An open form is keyed by place. Left open, it would now edit another member.
+    if remove.or(raise).or(lower).is_some() {
+        *expanded = None;
     }
     if let Some(index) = remove {
         draft.setup.members.remove(index);

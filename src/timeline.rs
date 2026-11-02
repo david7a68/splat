@@ -687,6 +687,22 @@ impl Book {
         self.removed = removed;
     }
 
+    /// The open run's facts changed, from `before`. A run that was already over when it opened
+    /// is being read. It adds nothing to the story, whichever session is now current.
+    pub fn record_change(
+        &mut self,
+        before: Option<&RunFact>,
+        fact: &RunFact,
+        session: Option<Uuid>,
+    ) {
+        let opened = before.is_none_or(|before| before.id != fact.id);
+        let known = self.events.iter().any(|event| event.run == Some(fact.id));
+        if opened && !known && matches!(fact.state, RunState::Ended(_)) {
+            return;
+        }
+        self.record_run(fact, session);
+    }
+
     fn apply_run(&mut self, fact: &RunFact, session: Option<Uuid>) {
         if self.unreadable.is_some() {
             return;
@@ -781,6 +797,25 @@ mod tests {
             round: 3,
             state,
         }
+    }
+
+    #[test]
+    fn reading_an_ended_run_adds_nothing_to_the_story() {
+        let mut book = Book::default();
+        let ended = fact(RunState::Ended("Party won".into()));
+        book.record_change(None, &ended, Some(Uuid::new_v4()));
+        assert!(book.events.is_empty(), "it was over when it opened");
+
+        // A run that ends while open is the story.
+        let running = fact(RunState::Running);
+        book.record_change(None, &running, None);
+        assert_eq!(book.events.len(), 1);
+        book.record_change(Some(&running), &ended, None);
+        assert!(book.events[0].result.starts_with("Party won"));
+
+        // Opened again, it keeps its event up to date.
+        book.record_change(None, &ended, None);
+        assert_eq!(book.events.len(), 1);
     }
 
     #[test]

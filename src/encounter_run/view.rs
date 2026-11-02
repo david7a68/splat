@@ -1806,14 +1806,7 @@ impl Run {
                 format!("Drag {name} to the initiative list"),
             )
         });
-        ui.painter().text(
-            grip.rect.left_center(),
-            Align2::LEFT_CENTER,
-            format!("{} {name}", icons::DRAG),
-            Type::Strong.font(ui),
-            c.text,
-        );
-        ui.painter().text(
+        let totals = ui.painter().text(
             grip.rect.right_center(),
             Align2::RIGHT_CENTER,
             format!(
@@ -1829,7 +1822,29 @@ impl Run {
             Type::Small.font(ui),
             c.muted,
         );
+        // A long name stops short of the totals, and its row shows it whole on hover.
+        let title = egui::WidgetText::from(
+            Type::Strong
+                .rich(ui, format!("{} {name}", icons::DRAG))
+                .color(c.text),
+        )
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Truncate),
+            (totals.left() - grip.rect.left() - design::S).max(0.0),
+            Type::Strong.font(ui),
+        );
+        let cut = title.elided;
+        ui.painter().galley(
+            pos2(
+                grip.rect.left(),
+                grip.rect.center().y - title.size().y / 2.0,
+            ),
+            title,
+            c.text,
+        );
         let grip = grip.on_hover_cursor(egui::CursorIcon::Grab);
+        let grip = if cut { grip.on_hover_text(name) } else { grip };
         grip.dnd_set_drag_payload(GroupDrag(group.id));
         if grip.dragged() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);

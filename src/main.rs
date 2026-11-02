@@ -1005,7 +1005,16 @@ impl Splat {
             Page::Encounters => {
                 if active.is_some() {
                     self.encounters.save_shortcut(ui.ctx(), &self.campaigns);
-                    self.encounters.show(ui, &self.campaigns, &self.party);
+                    let sessions = self.sessions.links();
+                    self.encounters.show(
+                        ui,
+                        &self.campaigns,
+                        &self.party,
+                        &encounters::Story {
+                            events: &self.timeline.events,
+                            sessions: &sessions,
+                        },
+                    );
                     if self.encounters.saved {
                         self.encounters.saved = false;
                         if let Some(campaign) = &active {
@@ -1261,7 +1270,8 @@ impl eframe::App for Splat {
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
             if let Some(fact) = &fact {
-                self.timeline.record_run(fact, self.sessions.current());
+                self.timeline
+                    .record_change(self.run_fact.as_ref(), fact, self.sessions.current());
             }
             self.run_fact = fact;
         }
