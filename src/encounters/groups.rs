@@ -25,6 +25,11 @@ use uuid::Uuid;
 const FOLDER: &str = "Encounter Groups";
 const DEFAULT_SIDE: &str = "enemies";
 const SIDE_FIELD: &str = "Default side";
+const BELONGS_TO: &str = "Belongs to";
+const ANY_ENCOUNTER: &str = "Any encounter";
+const MISSING_ENCOUNTER: &str = "An encounter this campaign no longer has";
+/// Why an encounter's editor cannot leave for one of its groups yet.
+pub(super) const SAVE_ENCOUNTER_FIRST: &str = "Save this encounter first.";
 const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
 /// The name of a roster slot's button, for the form it opens.
@@ -46,6 +51,8 @@ struct MemberDraft {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct GroupSetup {
     side: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    encounter: Option<EntryRef>,
     members: Vec<MemberDraft>,
 }
 pub(super) struct GroupDraft {
@@ -84,6 +91,7 @@ impl GroupDraft {
         let name = "New group".to_owned();
         let setup = GroupSetup {
             side: DEFAULT_SIDE.into(),
+            encounter: None,
             members: Vec::new(),
         };
         Self {
@@ -99,6 +107,12 @@ impl GroupDraft {
             notes: String::new(),
             saved_notes: String::new(),
         }
+    }
+    /// A new group that belongs to this encounter. Saving it is what makes it so.
+    pub(super) fn for_encounter(encounter: Uuid) -> Self {
+        let mut draft = Self::new();
+        draft.setup.encounter = Some(EntryRef::id(encounter));
+        draft
     }
     pub(super) fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
         let text = fs::read_to_string(note_path(root, path)?).map_err(|e| e.to_string())?;
@@ -177,6 +191,17 @@ impl GroupDraft {
         }
         if self.setup.members.is_empty() {
             return Err("This group is empty. Add at least one creature.".into());
+        }
+        if self
+            .setup
+            .encounter
+            .as_ref()
+            .and_then(|reference| reference.id)
+            .is_some_and(|id| !snapshot.encounter_choices().any(|(known, _)| known == id))
+        {
+            return Err(format!(
+                "This campaign no longer has the encounter this group belongs to. Under {BELONGS_TO}, choose another, or {ANY_ENCOUNTER}."
+            ));
         }
         for (index, member) in self.setup.members.iter().enumerate() {
             let what = format!("Member {}", index + 1);
@@ -345,6 +370,14 @@ pub(super) fn load(
                 path: e.entry.path.clone(),
                 name: e.entry.name.clone(),
                 side: group.side,
+                encounter: group.encounter,
+                encounter_name: group
+                    .encounter
+                    .and_then(|id| catalogue.entries.get(&id))
+                    .filter(|owner| {
+                        owner.private && owner.owner == campaign && owner.entry.kind == "encounter"
+                    })
+                    .map(|owner| owner.entry.name.clone()),
                 members,
                 notes: e.entry.body.trim().to_owned(),
                 xp,
@@ -358,7 +391,63 @@ pub(super) fn load(
     groups
 }
 
-/// The Encounters page's list. Returns the group the DM chose to edit.
+/// One group in a list, with its button. Returns true when the DM chooses to edit it.
+fn list_row(ui: &mut egui::Ui, group: &RunGroup, blocked: Option<&'static str>) -> bool {
+    let mut open = false;
+    ui.push_id(group.id, |ui| {
+        ui.horizontal(|ui| {
+            ui.set_min_height(Density::Scan.row() + design::S);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.set_max_width((ui.available_width() - 80.0).max(100.0));
+                ui.add(
+                    egui::Label::new(Type::Strong.rich(ui, &group.name).color(colors().text))
+                        .truncate(),
+                );
+                let mut summary = format!(
+                    "{} · {} · XP {}",
+                    design::count(group.creature_count() as usize, "creature", "creatures"),
+                    design::reader::human_label(&group.side),
+                    group.xp
+                );
+                if !group.xp_unknown.is_empty() || group.unavailable > 0 {
+                    summary.push_str(" or more");
+                }
+                if group
+                    .members
+                    .iter()
+                    .any(|member| !member.overrides.is_empty())
+                {
+                    summary.push_str(" · Changed");
+                }
+                ui.add(
+                    egui::Label::new(Type::Small.rich(ui, summary).color(colors().muted))
+                        .truncate(),
+                );
+                if let Some(problem) = &group.problem {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small.rich(ui, problem).color(colors().result.warning),
+                        )
+                        .wrap(),
+                    );
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                open = Action::quiet("Edit")
+                    .density(Density::Read)
+                    .name(&format!("Edit group {}", group.name))
+                    .blocked(blocked)
+                    .show(ui)
+                    .clicked();
+            });
+        });
+    });
+    open
+}
+
+/// The Encounters page's list: the groups for any encounter, then each encounter's own. Returns
+/// the group the DM chose to edit.
 pub(super) fn list(
     ui: &mut egui::Ui,
     snapshot: &Snapshot,
@@ -384,61 +473,149 @@ pub(super) fn list(
             .wrap(),
         );
     }
-    for group in snapshot.groups.iter() {
-        ui.push_id(group.id, |ui| {
-            ui.horizontal(|ui| {
-                ui.set_min_height(Density::Scan.row() + design::S);
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    ui.set_max_width((ui.available_width() - 80.0).max(100.0));
-                    ui.add(
-                        egui::Label::new(Type::Strong.rich(ui, &group.name).color(colors().text))
-                            .truncate(),
-                    );
-                    let mut summary = format!(
-                        "{} · {} · XP {}",
-                        design::count(group.creature_count() as usize, "creature", "creatures"),
-                        design::reader::human_label(&group.side),
-                        group.xp
-                    );
-                    if !group.xp_unknown.is_empty() || group.unavailable > 0 {
-                        summary.push_str(" or more");
-                    }
-                    if group
-                        .members
-                        .iter()
-                        .any(|member| !member.overrides.is_empty())
-                    {
-                        summary.push_str(" · Changed");
-                    }
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, summary).color(colors().muted))
-                            .truncate(),
-                    );
-                    if let Some(problem) = &group.problem {
-                        ui.add(
-                            egui::Label::new(
-                                Type::Small.rich(ui, problem).color(colors().result.warning),
-                            )
-                            .wrap(),
-                        );
-                    }
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if Action::quiet("Edit")
-                        .density(Density::Read)
-                        .name(&format!("Edit group {}", group.name))
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked()
-                    {
-                        open = Some(group.path.clone());
-                    }
-                });
-            });
+    // A campaign with only groups for any encounter has nothing to tell apart.
+    let labelled = snapshot
+        .groups
+        .iter()
+        .any(|group| group.encounter.is_some());
+    let mut section = |ui: &mut egui::Ui, label: &str, belongs: &dyn Fn(&RunGroup) -> bool| {
+        let mut shown = snapshot
+            .groups
+            .iter()
+            .filter(|group| belongs(group))
+            .peekable();
+        if labelled && shown.peek().is_some() {
+            ui.add_space(design::XS);
+            design::group_label(ui, label);
+        }
+        for group in shown {
+            if list_row(ui, group, blocked) {
+                open = Some(group.path.clone());
+            }
+        }
+    };
+    section(ui, ANY_ENCOUNTER, &|group| group.encounter.is_none());
+    for (id, name) in snapshot.encounter_choices() {
+        section(ui, &format!("For {name}"), &|group| {
+            group.encounter == Some(id)
         });
     }
+    section(ui, MISSING_ENCOUNTER, &|group| {
+        group
+            .encounter
+            .is_some_and(|id| !snapshot.encounter_choices().any(|(known, _)| known == id))
+    });
     open
+}
+
+/// What an encounter's editor asks for from its list of groups.
+pub(super) enum GroupRequest {
+    New(Uuid),
+    Edit(String),
+}
+
+/// The groups that belong to an encounter, in its editor.
+pub(super) fn of_encounter(
+    ui: &mut egui::Ui,
+    snapshot: &Snapshot,
+    encounter: Uuid,
+    blocked: Option<&'static str>,
+) -> Option<GroupRequest> {
+    let mut request = None;
+    let own: Vec<_> = snapshot
+        .groups
+        .iter()
+        .filter(|group| group.encounter == Some(encounter))
+        .collect();
+    ui.add_space(design::M);
+    ui.label(
+        Type::Heading
+            .rich(ui, format!("Groups for this encounter ({})", own.len()))
+            .color(colors().text),
+    );
+    ui.add(
+        egui::Label::new(
+            Type::Small
+                .rich(
+                    ui,
+                    "A run of this encounter offers these, and the groups for any encounter. They arrive when you add them.",
+                )
+                .color(colors().muted),
+        )
+        .wrap(),
+    );
+    for group in own {
+        if list_row(ui, group, blocked) {
+            request = Some(GroupRequest::Edit(group.path.clone()));
+        }
+    }
+    if Action::quiet("New group for this encounter")
+        .icon(icons::ADD)
+        .density(Density::Read)
+        .blocked(blocked)
+        .show(ui)
+        .clicked()
+    {
+        request = Some(GroupRequest::New(encounter));
+    }
+    request
+}
+
+/// Who a group is for, in its editor.
+fn belongs_to(ui: &mut egui::Ui, draft: &mut GroupDraft, snapshot: &Snapshot) {
+    let current = draft
+        .setup
+        .encounter
+        .as_ref()
+        .and_then(|reference| reference.id);
+    let shown = current.map_or(ANY_ENCOUNTER, |id| {
+        snapshot
+            .encounter_choices()
+            .find(|(known, _)| *known == id)
+            .map_or(MISSING_ENCOUNTER, |(_, name)| name)
+    });
+    ui.horizontal(|ui| {
+        ui.label(Type::Small.rich(ui, BELONGS_TO).color(colors().muted));
+        let combo = egui::ComboBox::from_id_salt("group_encounter")
+            .icon(design::combo_icon)
+            .width(240.0)
+            .truncate()
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_label(current.is_none(), ANY_ENCOUNTER)
+                    .clicked()
+                {
+                    draft.setup.encounter = None;
+                }
+                for (id, name) in snapshot.encounter_choices() {
+                    // The same choice again keeps a link that the note gives.
+                    if ui.selectable_label(current == Some(id), name).clicked()
+                        && current != Some(id)
+                    {
+                        draft.setup.encounter = Some(EntryRef::id(id));
+                    }
+                }
+            });
+        design::named(ui, &combo.response, &format!("{BELONGS_TO}: {shown}"));
+    });
+    ui.add(
+        egui::Label::new(
+            Type::Small
+                .rich(
+                    ui,
+                    match current {
+                        None => "A run of any encounter offers this group.",
+                        Some(_) if shown == MISSING_ENCOUNTER => {
+                            "Choose another before you save. Only a run of the missing encounter offers this group."
+                        }
+                        Some(_) => "Only runs of this encounter offer this group.",
+                    },
+                )
+                .color(colors().muted),
+        )
+        .wrap(),
+    );
 }
 
 /// The line under a creature's name in an editor, with the values this block gives it.
@@ -806,6 +983,27 @@ impl Encounters {
         }
     }
 
+    /// Leave an encounter's editor for a group. It has no changes, so nothing is lost.
+    pub(super) fn open_group_request(&mut self, request: Option<GroupRequest>, active: &Campaign) {
+        let draft = match request {
+            None => return,
+            Some(GroupRequest::New(encounter)) => {
+                self.focus_name = true;
+                Ok(GroupDraft::for_encounter(encounter))
+            }
+            Some(GroupRequest::Edit(path)) => GroupDraft::open(&active.path, &path),
+        };
+        match draft {
+            Ok(draft) => {
+                self.draft = None;
+                self.group_draft = Some(draft);
+                self.error = None;
+                self.message = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
     pub(super) fn group_editor_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -1015,6 +1213,8 @@ fn members_pane(
                     .rich(ui, "Party, enemies, or any other name, such as rivals.")
                     .color(colors().muted),
             );
+            ui.add_space(design::S);
+            belongs_to(ui, draft, snapshot);
             ui.add_space(design::S);
             ui.label(
                 Type::Heading
@@ -1339,6 +1539,109 @@ mod tests {
         let problem = snapshot.groups[0].problem.clone().unwrap();
         assert!(problem.contains("Unavailable creature"), "{problem}");
         assert!(snapshot.issues.iter().any(|issue| issue.contains("Stray")));
+    }
+
+    fn encounter(root: &std::path::Path, name: &str) -> Uuid {
+        let id = Uuid::new_v4();
+        write_note(
+            root,
+            &format!("{name}.md"),
+            None,
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {name}\nsplat_encounter:\n  roster: []\n  sides: {{}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 1, resolution_events: 1}}\n---\n"
+            ),
+        )
+        .unwrap();
+        id
+    }
+
+    #[test]
+    fn a_group_can_belong_to_an_encounter_and_go_back_to_any() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let arena = encounter(dir.path(), "Arena");
+        let mut draft = GroupDraft::for_encounter(arena);
+        draft.add(scout);
+        draft.save(&campaign, &[]).unwrap();
+        let text = fs::read_to_string(dir.path().join(&draft.path)).unwrap();
+        assert!(text.contains(&arena.to_string()), "{text}");
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        assert_eq!(snapshot.groups[0].encounter, Some(arena));
+        assert_eq!(snapshot.groups[0].encounter_name.as_deref(), Some("Arena"));
+        assert!(snapshot.issues.is_empty(), "{:?}", snapshot.issues);
+        assert_eq!(snapshot.encounter_choices().next(), Some((arena, "Arena")));
+
+        let mut reopened = GroupDraft::open(dir.path(), &draft.path).unwrap();
+        assert_eq!(reopened.setup.encounter, Some(EntryRef::id(arena)));
+        assert!(!reopened.dirty());
+        reopened.setup.encounter = None;
+        assert!(reopened.dirty(), "a change of owner needs saving");
+        reopened.save(&campaign, &[]).unwrap();
+        let text = fs::read_to_string(dir.path().join(&draft.path)).unwrap();
+        assert!(
+            !text.contains("encounter:"),
+            "no field for any encounter: {text}"
+        );
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        assert_eq!(snapshot.groups[0].encounter, None);
+        assert_eq!(snapshot.groups[0].encounter_name, None);
+    }
+
+    #[test]
+    fn a_group_whose_encounter_is_gone_stays_usable_and_says_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let arena = encounter(dir.path(), "Arena");
+        let mut draft = GroupDraft::for_encounter(arena);
+        draft.add(scout);
+        draft.save(&campaign, &[]).unwrap();
+        fs::remove_file(dir.path().join("Arena.md")).unwrap();
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let group = &snapshot.groups[0];
+        assert_eq!(group.encounter, Some(arena), "a run of it still offers it");
+        assert_eq!(group.encounter_name, None);
+        assert!(group.problem.is_none(), "{:?}", group.problem);
+        assert!(
+            snapshot
+                .issues
+                .iter()
+                .any(|issue| issue.contains(&draft.name)),
+            "{:?}",
+            snapshot.issues
+        );
+
+        // The editor will not write the same broken reference again, and says what to do.
+        let mut reopened = GroupDraft::open(dir.path(), &draft.path).unwrap();
+        reopened.name = "Renamed".into();
+        let error = reopened.save(&campaign, &[]).unwrap_err();
+        assert!(error.contains(BELONGS_TO), "{error}");
+        reopened.setup.encounter = None;
+        reopened.save(&campaign, &[]).unwrap();
+    }
+
+    #[test]
+    fn a_link_in_the_note_stays_when_the_owner_does_not_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let scout = creature(dir.path(), "Scout");
+        let arena = encounter(dir.path(), "Arena");
+        write_note(
+            dir.path(),
+            "Linked.md",
+            None,
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: Linked\nsplat_encounter_group:\n  side: enemies\n  encounter: {{id: {arena}, link: '[[Arena]]'}}\n  members:\n  - creature: {{id: {scout}}}\n---\n",
+                Uuid::new_v4()
+            ),
+        )
+        .unwrap();
+        let mut draft = GroupDraft::open(dir.path(), "Linked.md").unwrap();
+        draft.name = "Renamed".into();
+        draft.save(&campaign, &[]).unwrap();
+        let text = fs::read_to_string(dir.path().join("Linked.md")).unwrap();
+        assert!(text.contains("[[Arena]]"), "{text}");
     }
 
     #[test]

@@ -287,15 +287,16 @@ Recording records. It does not rule: a marker is a suggestion, and only the DM p
 **Done well:** T11.5 to T11.7.
 
 ### W13. Prepare arrivals, and add them to a fight
-**Trigger:** rival adventurers, reinforcements, or a released beast can arrive in any room. **Goal:** the group is ready once,
-and it joins the running fight in one step when it arrives, with its changes in plain view. **Context:** desk to
+**Trigger:** rival adventurers, reinforcements, or a released beast can arrive in any room, or in the one room they
+were prepared for. **Goal:** the group is ready once, is offered only where it belongs, and it joins the running fight
+in one step when it arrives, with its changes in plain view. **Context:** desk to
 prepare, table to add. **Frequency:** every fight that has arrivals.
 
 An encounter group is added by the DM. Splat records it. It does not decide that the group arrives. A change
 to a creature is never hidden: the editor and the card show the old value, the new value, and what the DM must
 add by hand.
 
-**Done well:** T13.1 to T13.4.
+**Done well:** T13.1 to T13.5.
 
 ## 3. Information architecture
 
@@ -564,6 +565,7 @@ reading the code, not from a test run.
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |
 | T13.4 | Dragging a group onto the initiative list adds every member | encounter-groups | state | New |
+| T13.5 | A run offers its encounter's groups and those for any encounter, names the rest, and adds its own in ≤ 1 | encounter-owned-groups | cost, state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

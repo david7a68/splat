@@ -638,6 +638,14 @@ pub fn validate_all(entries: &[&Entry]) -> Report {
                     );
                 }
             }
+            if let Some(owner) = group.encounter
+                && resolve(&Reference::Id(owner)).is_some_and(|entry| entry.kind != "encounter")
+            {
+                error(
+                    &e.path,
+                    format!("A group's encounter {owner} must reference an encounter entry"),
+                );
+            }
         }
         if let Some(character) = field(&e.fields, "splat_character") {
             match serde_yaml_ng::from_value::<character::Sheet>(character.clone()) {

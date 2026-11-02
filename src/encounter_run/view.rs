@@ -1769,18 +1769,55 @@ impl Run {
             design::message(ui, Tone::Success, &shown);
         }
         design::rule(ui);
+        let offered = super::OfferedGroups::of(&groups, self.source);
+        // A campaign with only groups for any encounter has nothing to tell apart.
+        let labelled = !offered.own.is_empty() || !offered.other.is_empty();
         let mut add = None;
         egui::ScrollArea::vertical()
             .id_salt("run_groups")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                for group in groups.iter() {
-                    ui.push_id(group.id, |ui| {
-                        if self.group_row(ui, group) {
-                            add = Some(group.id);
-                        }
-                    });
-                    design::rule(ui);
+                let mut section = |run: &mut Self,
+                                   ui: &mut egui::Ui,
+                                   label: &str,
+                                   shown: &[Arc<super::RunGroup>]| {
+                    if labelled && !shown.is_empty() {
+                        design::group_label(ui, label);
+                    }
+                    for group in shown {
+                        ui.push_id(group.id, |ui| {
+                            if run.group_row(ui, group) {
+                                add = Some(group.id);
+                            }
+                        });
+                        design::rule(ui);
+                    }
+                };
+                section(self, ui, "For this encounter", &offered.own);
+                section(self, ui, "For any encounter", &offered.any);
+                if self.source.is_none() {
+                    section(self, ui, "For one encounter", &offered.other);
+                } else if !offered.other.is_empty() {
+                    ui.add_space(design::XS);
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "For other encounters, so not offered here: {}. To add one, choose Any encounter under Belongs to in its editor.",
+                                        offered
+                                            .other
+                                            .iter()
+                                            .map(|group| group.name.as_str())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                                    ),
+                                )
+                                .color(c.muted),
+                        )
+                        .wrap(),
+                    );
                 }
             });
         if let Some(id) = add {
@@ -1913,6 +1950,13 @@ impl Run {
             );
         }
         let mut facts = vec![format!("Side: {}", style::human_label(&group.side))];
+        // Only a run that does not know its encounter lists a group for another one.
+        if group.encounter.is_some() && group.encounter != self.source {
+            facts.push(match &group.encounter_name {
+                Some(name) => format!("For {name}"),
+                None => "For an encounter this campaign no longer has".to_owned(),
+            });
+        }
         if !group.xp_unknown.is_empty() {
             facts.push(format!("XP not known for {}", group.xp_unknown.join(", ")));
         }

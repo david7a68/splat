@@ -17,6 +17,8 @@ pub struct Member {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EncounterGroup {
     pub side: String,
+    /// The one encounter this group is for. With none, a run of any encounter offers it.
+    pub encounter: Option<Uuid>,
     pub members: Vec<Member>,
 }
 
@@ -60,6 +62,22 @@ fn creature(what: &str, value: &Value) -> Result<Reference, String> {
     }
 }
 
+/// By id alone, because an encounter a group can belong to is a note of its own campaign, and
+/// a package key names something a campaign can only use.
+fn encounter(value: &Value) -> Result<Uuid, String> {
+    const INVALID: &str = "This group's encounter needs one valid id.";
+    let map = value.as_mapping().ok_or(INVALID)?;
+    only_fields(map, &["id", "link"], "This group's encounter")?;
+    if map.get("link").is_some_and(|link| !link.is_string()) {
+        return Err("This group's encounter: a link must be text.".into());
+    }
+    map.get("id")
+        .and_then(Value::as_str)
+        .and_then(|id| Uuid::parse_str(id).ok())
+        .filter(|id| !id.is_nil())
+        .ok_or_else(|| INVALID.to_owned())
+}
+
 fn member(number: usize, value: &Value) -> Result<Member, String> {
     let what = format!("Member {number}");
     let map = value
@@ -98,7 +116,7 @@ impl EncounterGroup {
         let map = value
             .as_mapping()
             .ok_or("splat_encounter_group must be a mapping")?;
-        only_fields(map, &["side", "members"], "This group")?;
+        only_fields(map, &["side", "encounter", "members"], "This group")?;
         let side = map
             .get("side")
             .and_then(Value::as_str)
@@ -111,6 +129,7 @@ impl EncounterGroup {
             .ok_or("This group is empty. Add at least one creature.")?;
         Ok(Self {
             side: side.trim().to_owned(),
+            encounter: map.get("encounter").map(encounter).transpose()?,
             members: members
                 .iter()
                 .enumerate()
@@ -157,6 +176,74 @@ mod tests {
         assert_eq!(group.members[1].creature, Reference::Id(id));
         assert!(!group.members[1].overrides.is_empty());
         assert!(entry.body.contains("east gate"));
+        assert_eq!(group.encounter, None, "for any encounter, unless it says");
+    }
+
+    #[test]
+    fn a_group_can_belong_to_one_encounter_by_its_id() {
+        let (creature, owner) = (Uuid::new_v4(), Uuid::new_v4());
+        let entry = note(&format!(
+            "{{side: enemies, encounter: {{id: {owner}, link: '[[Arena]]'}}, members: [{{creature: {{id: {creature}}}}}]}}"
+        ))
+        .unwrap();
+        assert_eq!(EncounterGroup::of(&entry).unwrap().encounter, Some(owner));
+        for (encounter, words) in [
+            (
+                "{key: 'dnd2024:encounters/arena'}".to_owned(),
+                "unknown field",
+            ),
+            ("{}".to_owned(), "one valid id"),
+            ("arena".to_owned(), "one valid id"),
+            (format!("{{id: {}}}", Uuid::nil()), "one valid id"),
+            (format!("{{id: {owner}, link: 3}}"), "link must be text"),
+            (format!("{{id: {owner}, side: a}}"), "unknown field"),
+        ] {
+            let error = note(&format!(
+                "{{side: enemies, encounter: {encounter}, members: [{{creature: {{id: {creature}}}}}]}}"
+            ))
+            .unwrap_err();
+            assert!(error.contains(words), "{encounter}: {error}");
+        }
+    }
+
+    #[test]
+    fn a_group_for_a_missing_or_wrong_encounter_is_reported_by_validation() {
+        let (creature, owner) = (Uuid::new_v4(), Uuid::new_v4());
+        let group = note(&format!(
+            "{{side: enemies, encounter: {{id: {owner}}}, members: [{{creature: {{id: {creature}}}}}]}}"
+        ))
+        .unwrap();
+        let wrote = |id: Uuid, kind: &str, field: &str| {
+            Entry::parse(
+                "other.md",
+                &format!(
+                    "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: {kind}\nsplat_name: Other\n{field}\n---\n"
+                ),
+            )
+            .unwrap()
+        };
+        let monster = wrote(creature, "creature", "splat_creature: {}\nsplat_stats: {}");
+        let says = |entries: &[Entry], words: &str| {
+            super::super::validate(entries)
+                .errors
+                .iter()
+                .any(|e| e.message.contains(words))
+        };
+        assert!(says(
+            &[group.clone(), monster.clone()],
+            "Unresolved reference"
+        ));
+        let spell = wrote(owner, "spell", "splat_spell: {}");
+        assert!(says(
+            &[group.clone(), monster.clone(), spell],
+            "must reference an encounter"
+        ));
+        let arena = wrote(
+            owner,
+            "encounter",
+            "splat_encounter: {roster: [], sides: {}, assumptions: [], completion: {mode: manual}, limits: {rounds: 1, resolution_events: 1}}",
+        );
+        assert!(!says(&[group, monster, arena], "encounter"));
     }
 
     #[test]

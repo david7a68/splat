@@ -7,8 +7,9 @@
 use super::{
     driver::{DEFAULT, Driver, LARGE, SMALL, Sizes},
     fixture::{
-        CAMPAIGN, GROUP_GOBLINS, GROUP_LOST, GROUP_RIVALS, MODULE, PAST_SESSION, QUIET_CAMPAIGN,
-        RUN, RUN_12, RUN_20, RUN_ARENA, RUN_OLD, RUN_PAST, UNLINKED_CAMPAIGN,
+        CAMPAIGN, GROUP_ARENA, GROUP_GOBLINS, GROUP_LOST, GROUP_ORPHAN, GROUP_RIVALS, GROUP_SHRINE,
+        GROUP_WATCH, MODULE, PAST_SESSION, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20, RUN_ARENA, RUN_OLD,
+        RUN_PAST, UNLINKED_CAMPAIGN,
     },
     steps::*,
 };
@@ -4839,6 +4840,112 @@ pub mod encounter_history {
         d.state("open-ended-run-first", Sizes::Default);
         d.click(BACK);
         d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));
+    }
+}
+
+/// W13: groups for one encounter beside groups for any encounter.
+pub mod encounter_owned_groups {
+    use super::*;
+    const SHRINE: &str = "Shrine of Cinders";
+    const GROUPS_TAB: &str = "Groups";
+    const BELONGS_DROPDOWN: usize = 1;
+    const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
+    const NEW_NAME: &str = "Ash Hounds";
+
+    fn add_group(name: &str) -> String {
+        format!("Add {name} to the initiative list")
+    }
+
+    pub fn run(d: &mut Driver<'_>) {
+        // The page sorts them by who they are for.
+        d.expect("Encounter groups (7)");
+        d.state("groups-by-encounter", Sizes::All);
+        d.check_tab_order("encounters, with groups by encounter");
+        d.observe(
+            "T13.5",
+            d.has_containing("FOR SHRINE OF CINDERS")
+                && d.has_containing("FOR ARENA FINAL")
+                && d.has_containing("ANY ENCOUNTER")
+                && d.has_containing("NO LONGER HAS"),
+            "The list says who each group is for, and which encounter is gone",
+        );
+
+        // A group whose encounter is gone says so in its editor.
+        d.click(&format!("Edit group {GROUP_ORPHAN}"));
+        d.expect("An encounter this campaign no longer has");
+        d.state("group-whose-encounter-is-gone", Sizes::Default);
+        d.click("Back to encounters");
+
+        // An encounter's editor lists its own, and starts a new one.
+        open_saved_encounter(d, SHRINE);
+        d.expect("Groups for this encounter (1)");
+        d.state("encounter-with-its-groups", Sizes::All);
+        d.begin_task();
+        d.click(NEW_FOR_ENCOUNTER);
+        d.type_text(NEW_NAME);
+        d.observe(
+            "T13.5",
+            d.has_containing(SHRINE) && d.has_containing("Only runs of this encounter"),
+            "A group started from an encounter already belongs to it",
+        );
+        d.type_into(FIND_CREATURE, "wolf");
+        d.click_beside("Wolf", ADD);
+        d.click("Save group");
+        d.expect("Group saved.");
+        d.state("group-for-an-encounter-saved", Sizes::Default);
+        d.goal("make a group for one encounter");
+        d.click("Back to encounters");
+        d.expect("Encounter groups (8)");
+
+        // A group can change hands, in its editor.
+        d.click(&format!("Edit group {GROUP_WATCH}"));
+        d.expect("A run of any encounter offers this group.");
+        d.open_combo_at(BELONGS_DROPDOWN);
+        d.state("belongs-to-open", Sizes::Default);
+        d.click(RUN_ARENA);
+        d.expect("Only runs of this encounter offer this group.");
+        d.click("Save group");
+        d.expect("Group saved.");
+        d.click("Back to encounters");
+
+        // At the table: its own first, those for any encounter, and a word on the rest.
+        run_saved_encounter(d, SHRINE);
+        d.click(GROUPS_TAB);
+        d.expect(&add_group(GROUP_SHRINE));
+        d.state("group-panel-for-one-encounter", Sizes::All);
+        d.check_tab_order("run, groups for one encounter");
+        d.observe(
+            "T13.5",
+            d.has(&add_group(NEW_NAME))
+                && d.has(&add_group(GROUP_GOBLINS))
+                && !d.has(&add_group(GROUP_ARENA))
+                && !d.has(&add_group(GROUP_ORPHAN))
+                && !d.has(&add_group(GROUP_WATCH)),
+            "A run offers its encounter's groups and those for any encounter, and no others",
+        );
+        d.observe(
+            "T13.5",
+            d.has_containing("not offered here")
+                && d.has_containing(GROUP_ARENA)
+                && d.has_containing(GROUP_ORPHAN),
+            "The panel names the groups it does not offer, and says how to add one",
+        );
+        d.begin_task();
+        d.click(&add_group(GROUP_SHRINE));
+        d.expect("Goblin Warrior 1");
+        d.goal_within("T13.5", "add this encounter's own group", 1);
+        close_run(d);
+
+        // A save from before this cannot say which encounter it is, so it hides nothing.
+        resume_run(d, RUN);
+        d.click(GROUPS_TAB);
+        d.expect(&add_group(GROUP_GOBLINS));
+        d.state("group-panel-of-an-older-save", Sizes::Default);
+        d.observe(
+            "T13.5",
+            d.has(&add_group(GROUP_ARENA)) && d.has_containing("For Arena Final"),
+            "A run from an older save lists every group, and says who each is for",
+        );
     }
 }
 

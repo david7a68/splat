@@ -494,6 +494,12 @@ impl Snapshot {
             issues,
         })
     }
+    /// The encounters a group can belong to, in the list's order.
+    fn encounter_choices(&self) -> impl Iterator<Item = (Uuid, &str)> {
+        self.templates
+            .iter()
+            .map(|template| (template.id, template.name.as_str()))
+    }
 }
 #[derive(Default)]
 pub struct Encounters {
@@ -1505,14 +1511,16 @@ impl Encounters {
         let expanded = &mut self.expanded;
         let linked = active.dndbeyond_campaign_id.is_some();
         if compact {
-            match pane {
+            let request = match pane {
                 EditorPane::Roster => {
-                    Self::roster_pane(ui, draft, snapshot, focus_search, expanded, party, linked);
+                    Self::roster_pane(ui, draft, snapshot, focus_search, expanded, party, linked)
                 }
                 EditorPane::Add => {
                     Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
+                    None
                 }
-            }
+            };
+            self.open_group_request(request, active);
             return;
         }
         // In a wide window the roster keeps a name near its controls, and the two panes
@@ -1535,6 +1543,7 @@ impl Encounters {
         .show_inside(ui, |ui| {
             Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
         });
+        let mut request = None;
         egui::CentralPanel::default()
             // The panel's drag handle lies on this edge, so the roster stops short of it.
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -1548,8 +1557,10 @@ impl Encounters {
                 if !design::column_dragged(ui.ctx(), ADD_PANE) {
                     ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
                 }
-                Self::roster_pane(ui, draft, snapshot, focus_search, expanded, party, linked);
+                request =
+                    Self::roster_pane(ui, draft, snapshot, focus_search, expanded, party, linked);
             });
+        self.open_group_request(request, active);
     }
 
     fn add_pane(
@@ -1730,7 +1741,7 @@ impl Encounters {
         expanded: &mut Option<String>,
         party: &Party,
         linked: bool,
-    ) {
+    ) -> Option<groups::GroupRequest> {
         ui.label(
             Type::Heading
                 .rich(ui, format!("Roster ({})", draft.setup.roster.len()))
@@ -1750,12 +1761,20 @@ impl Encounters {
                     .color(colors().muted),
             );
         }
+        let blocked = draft.dirty().then_some(groups::SAVE_ENCOUNTER_FIRST);
+        let id = snapshot
+            .templates
+            .iter()
+            .find(|template| template.path == draft.path)
+            .map(|template| template.id);
         egui::ScrollArea::vertical()
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 Self::roster(ui, draft, snapshot, focus_search, expanded, live);
-            });
+                id.and_then(|id| groups::of_encounter(ui, snapshot, id, blocked))
+            })
+            .inner
     }
 
     /// Whether this encounter uses the party as D&D Beyond has it now. With it on, the DM sees
