@@ -3,7 +3,7 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, MAX_FROM_SHEET, NOBODY_PRESENT, NOTICE_IN_HEADER, NOTICE_IN_HEADER_SHORT,
-    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, display, mode_label,
+    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, TypedHealth, display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -2024,13 +2024,11 @@ impl Run {
                 let mut hp = p.hp;
                 let mut max = p.max_hp;
                 design::group_label(ui, "Correct HP");
-                let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
+                let ready_sync = self.syncs.get(&index).filter(|sync| sync.ready());
+                let sheet_decides = ready_sync.is_some();
                 // With the sheet's maximum in force, a number over it is the maximum, as in the
                 // sync panel. It must not leave an earlier digit in the run, to go to the sheet.
-                let highest = self
-                    .syncs
-                    .get(&index)
-                    .filter(|sync| sync.ready())
+                let highest = ready_sync
                     .and_then(|sync| sync.max_hp())
                     .unwrap_or(1_000_000);
                 let mut fields = [None, None];
@@ -2192,7 +2190,7 @@ impl Run {
         self.typed_health = in_health_field.map(|field| {
             typed
                 .filter(|typed| typed.field == field)
-                .unwrap_or(crate::encounter_run::TypedHealth { field, step: None })
+                .unwrap_or(TypedHealth { field, step: None })
         });
         if let Some(command) = command {
             self.run_command(command);

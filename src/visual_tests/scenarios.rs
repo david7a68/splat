@@ -3318,9 +3318,9 @@ pub mod library_scope {
     }
 }
 
-/// F3-01 and F3-03: each way out of a sync number field keeps the number and ends the hold, in a
-/// run and on Party. Real clicks and keys on the whole app. Test builds have no worker, so each
-/// read is simulated, and no exchange can start: unit tests in `combat_sync.rs` and
+/// F3-01, F3-03 and F3-04: each way out of a sync number field ends the hold, in a run and on
+/// Party. Each keeps the number, apart from Escape, which puts the old value back. Real clicks and
+/// keys on the whole app. Test builds have no worker, so each read is simulated, and no exchange can start: unit tests in `combat_sync.rs` and
 /// `encounter_run.rs` cover what goes out. Runs at 960x640, where Lookup and Notes hide the panel.
 pub mod typed_sync_number {
     use super::*;
@@ -3520,10 +3520,10 @@ pub mod typed_sync_number {
 
         // Another member opens once the number has gone, so it goes to the right character.
         type_in_field(d, 44);
-        let first = d.app_mut().party.selected_member().map(str::to_owned);
+        let first = d.app_mut().party.selected_member();
         d.click_containing(OTHER);
         let (held, value) = party_values(d);
-        let same = d.app_mut().party.selected_member().map(str::to_owned) == first;
+        let same = d.app_mut().party.selected_member() == first;
         let says = d.visible_text(OPENING);
         d.observe(
             "F3-01",
@@ -3535,7 +3535,7 @@ pub mod typed_sync_number {
         );
         d.state("party-sending-then-opening", Sizes::Default);
         party_read(d, 44);
-        let moved = d.app_mut().party.selected_member().map(str::to_owned) != first;
+        let moved = d.app_mut().party.selected_member() != first;
         d.observe(
             "F3-01",
             moved && !d.visible_text(OPENING),
@@ -3548,7 +3548,7 @@ pub mod typed_sync_number {
         type_in_field(d, 43);
         d.click_containing(OTHER);
         party_read(d, 30);
-        let same = d.app_mut().party.selected_member().map(str::to_owned) == first;
+        let same = d.app_mut().party.selected_member() == first;
         let state = d.app_mut().party.sync_state();
         d.observe(
             "F3-03",

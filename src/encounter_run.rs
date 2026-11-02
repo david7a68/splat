@@ -294,7 +294,6 @@ const NOTICE_LEAST: &str = "Sheet update. Earlier Undo steps ended. See the Log.
 /// Said on the header's line when the list has no room for the notice at all.
 const NOTICE_IN_HEADER: &str = "Earlier Undo steps ended. See the Log.";
 const NOTICE_IN_HEADER_SHORT: &str = "Undo ended. See the Log.";
-#[derive(Clone)]
 /// One number typed in a `Correct HP` field is one Undo step, with one log line.
 struct TypedHealth {
     field: egui::Id,
@@ -465,7 +464,7 @@ impl Run {
         if initiative_edit.is_some() && initiative_edit == self.last_initiative {
             self.undo();
         }
-        let typed_health = matches!(command, Command::Health(..)) && self.typed_health.is_some();
+        let health_command = matches!(command, Command::Health(..));
         let undo_label = self.describe(&command);
         // Work on a copy so failed commands cannot partly change the run or dice stream.
         let follow_turn = matches!(command, Command::Begin | Command::Next);
@@ -622,7 +621,7 @@ impl Run {
         }
         self.history.push(std::mem::replace(&mut self.state, next));
         self.history_labels.push(undo_label);
-        if let Some(typed) = self.typed_health.as_mut().filter(|_| typed_health) {
+        if health_command && let Some(typed) = self.typed_health.as_mut() {
             // After an earlier digit of this number, the step that stands is the one before it.
             if typed.step == Some(self.history.len() - 1) {
                 self.history.pop();

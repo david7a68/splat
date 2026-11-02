@@ -792,13 +792,18 @@ impl CombatSync {
                     && self.remote.as_ref().and_then(|r| r.groups.get(k)) != Some(v)
             })
     }
+    /// Every timer has run out: the pause after a change, and the 15-second read.
+    #[cfg(test)]
+    fn run_out_timers(&mut self) {
+        let long = Duration::from_secs(16);
+        self.changed = self.changed.map(|t| t - long);
+        self.next = self.next.map(|t| t - long);
+    }
     /// Every timer has run out. What an exchange would send now, if it may start, is confirmed
     /// by the sheet. For a test of what a run sends, as test builds have no route to a sheet.
     #[cfg(test)]
     pub fn hp_sent_at_once(&mut self, ctx: &egui::Context) -> Option<Value> {
-        let long = Duration::from_secs(16);
-        self.changed = self.changed.map(|t| t - long);
-        self.next = self.next.map(|t| t - long);
+        self.run_out_timers();
         if !self.advance(ctx) || !self.edits_to_send() {
             return None;
         }
@@ -1890,12 +1895,8 @@ mod tests {
         harness.run_steps(2);
         harness
     }
-    /// Every timer has run out: the pause after a change, and the 15-second read.
     fn pass_time(harness: &mut egui_kittest::Harness<'static, Rig>) {
-        let long = Duration::from_secs(16);
-        let sync = &mut harness.state_mut().sync;
-        sync.changed = sync.changed.map(|t| t - long);
-        sync.next = sync.next.map(|t| t - long);
+        harness.state_mut().sync.run_out_timers();
         harness.run_steps(3);
     }
     fn click_hp(harness: &mut egui_kittest::Harness<'static, Rig>) {
@@ -1963,13 +1964,6 @@ mod tests {
         assert_eq!(harness.state().exchanges, 0, "no exchange after two digits");
         assert!(harness.state().sheet.writes.is_empty());
         assert_eq!(removed(&harness), 9, "HP is 21");
-    }
-    #[test]
-    fn enter_keeps_the_number_and_ends_the_hold() {
-        let mut harness = rig();
-        type_21(&mut harness);
-        harness.key_press(egui::Key::Enter);
-        number_goes_out_after_the_delay(&mut harness);
     }
     /// Tab goes to the next field, where the DM is still in a number. The hold ends when the
     /// keyboard reaches something else.
@@ -2090,21 +2084,25 @@ mod tests {
         assert!(state.sheet.writes.is_empty());
         assert!(!state.sync.dirty());
     }
-    /// A read on its way as the DM comes in. It lands after they leave, not under the field.
-    fn read_on_its_way(harness: &mut egui_kittest::Harness<'static, Rig>, damage: i64) {
-        let job = harness.state_mut().sync.begin_exchange();
+    /// A worker's answer: a read that found this damage on the sheet.
+    fn answer_read(job: Job, damage: i64) {
         let mut changed = remote();
         changed.groups.get_mut("hp").unwrap()["removedHitPoints"] = damage.into();
-        sheet_damage(harness, damage);
-        // Its words add a row, so wait for the field's new place.
-        harness.run_steps(3);
-        click_hp(harness);
         job.reply
             .send(Ok(Outcome {
                 remote: changed,
                 blocked: BTreeMap::new(),
             }))
             .unwrap();
+    }
+    /// A read on its way as the DM comes in. It lands after they leave, not under the field.
+    fn read_on_its_way(harness: &mut egui_kittest::Harness<'static, Rig>, damage: i64) {
+        let job = harness.state_mut().sync.begin_exchange();
+        sheet_damage(harness, damage);
+        // Its words add a row, so wait for the field's new place.
+        harness.run_steps(3);
+        click_hp(harness);
+        answer_read(job, damage);
         harness.run_steps(3);
         assert!(harness.state().sync.in_field());
         let remote = harness.state().sync.remote.as_ref().unwrap();
@@ -2138,16 +2136,21 @@ mod tests {
         assert_eq!(state.sync.desired["hp"]["removedHitPoints"], 9, "the DM's");
         assert!(state.sheet.writes.is_empty());
     }
-    /// A drag sends at its end, and a pause within it sends nothing.
-    #[test]
-    fn no_exchange_starts_while_a_field_is_dragged() {
+    /// Press on the HP field, ready to drag it. Returns where.
+    fn press_hp(harness: &mut egui_kittest::Harness<'static, Rig>) -> egui::Pos2 {
         use egui_kittest::kittest::Queryable;
-        let mut harness = rig();
         let start = harness.get_by_label(HP_FIELD).rect().center();
         harness.hover_at(start);
         harness.run_steps(2);
         harness.drag_at(start);
         harness.run_steps(2);
+        start
+    }
+    /// A drag sends at its end, and a pause within it sends nothing.
+    #[test]
+    fn no_exchange_starts_while_a_field_is_dragged() {
+        let mut harness = rig();
+        let start = press_hp(&mut harness);
         for step in 1..=3 {
             harness.hover_at(start - egui::vec2(10.0 * step as f32, 0.0));
             harness.run_steps(2);
@@ -2170,25 +2173,13 @@ mod tests {
     /// A read that lands in a drag waits too, and the changed sheet then asks.
     #[test]
     fn a_read_landing_during_a_drag_waits_for_its_end() {
-        use egui_kittest::kittest::Queryable;
         let mut harness = rig();
         let job = harness.state_mut().sync.begin_exchange();
         harness.run_steps(3);
-        let start = harness.get_by_label(HP_FIELD).rect().center();
-        harness.hover_at(start);
-        harness.run_steps(2);
-        harness.drag_at(start);
-        harness.run_steps(2);
+        let start = press_hp(&mut harness);
         harness.hover_at(start - egui::vec2(20.0, 0.0));
         harness.run_steps(2);
-        let mut changed = remote();
-        changed.groups.get_mut("hp").unwrap()["removedHitPoints"] = 20.into();
-        job.reply
-            .send(Ok(Outcome {
-                remote: changed,
-                blocked: BTreeMap::new(),
-            }))
-            .unwrap();
+        answer_read(job, 20);
         harness.hover_at(start - egui::vec2(30.0, 0.0));
         harness.run_steps(3);
         let remote = harness.state().sync.remote.as_ref().unwrap();

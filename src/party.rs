@@ -61,8 +61,8 @@ impl Party {
 
     /// The member open now.
     #[cfg(test)]
-    pub fn selected_member(&self) -> Option<&str> {
-        self.reader.selected.as_deref()
+    pub fn selected_member(&self) -> Option<String> {
+        self.reader.selected.clone()
     }
 
     /// A number for this sheet has not reached D&D Beyond. Closing the app would lose it.
@@ -229,7 +229,7 @@ impl Party {
         });
         let (status_icon, status_word, status_color) = if session.is_none() {
             (icons::OFFLINE, "Not connected", c.connection.offline)
-        } else if !opening.is_empty() {
+        } else if self.opening.is_some() {
             (icons::BUSY, "Sending to D&D Beyond", c.connection.busy)
         } else if self.reader.loading() {
             (icons::BUSY, "Refreshing", c.connection.busy)
