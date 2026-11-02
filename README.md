@@ -324,7 +324,8 @@ Saving a template does not execute rules or start a combat run.
 ### Encounter groups
 
 A session's plan can assemble a group in place: choose **Group**, then **New group**. The note stays
-beside the editor, and the saved group is linked in the plan. **Edit** on its row opens it again.
+beside the editor, and the saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **Arrivals**, which goes to that
+panel in the run.
 
 An encounter group is a reusable, named set of creatures that you prepare once and add to a
 running encounter when it arrives. It is a note with `splat_kind: encounter_group`, saved under

@@ -265,6 +265,8 @@ pub struct Sessions {
     pub wants_fight: Option<String>,
     pub wants_new_fight: bool,
     pub wants_new_group: bool,
+    /// The open fight's Arrivals panel, for a planned group that has come.
+    pub wants_arrivals: bool,
     /// The path of a group to edit in the plan.
     pub wants_group: Option<String>,
     group_search: String,
@@ -2631,7 +2633,18 @@ impl Sessions {
                                 }
                             },
                             |ui| {
-                                if Action::quiet("Edit")
+                                // With a fight open, what a group needs next is to arrive.
+                                if plan.open_run.is_some() {
+                                    if Action::secondary("Arrivals")
+                                        .icon(icons::GROUP)
+                                        .name(&format!("Go to Arrivals for {}", group.name))
+                                        .density(Density::Read)
+                                        .show(ui)
+                                        .clicked()
+                                    {
+                                        self.wants_arrivals = true;
+                                    }
+                                } else if Action::quiet("Edit")
                                     .name(&format!("Edit group {}", group.name))
                                     .density(Density::Read)
                                     .blocked(plan.group_blocked)

@@ -920,6 +920,12 @@ impl Encounters {
         }
     }
     /// A new encounter from a session's plan. It joins the plan, and back leads there.
+    /// The open run's panel for what joins the fight.
+    pub fn show_arrivals(&mut self) {
+        if let Some(run) = &mut self.run {
+            run.show_arrivals();
+        }
+    }
     /// Assemble a group where the plan is, with the session's note still beside it.
     pub fn new_group_in_plan(&mut self) {
         self.group_draft = Some(GroupDraft::new());

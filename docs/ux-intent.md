@@ -590,7 +590,7 @@ reading the code, not from a test run.
 | T14.3 | Exhaustion is one level with a control, and each step replaces the last | session-plan | state | New |
 | T14.4 | A fight planned a second time can start a second time | session-plan | state | New |
 | T14.5 | After a restart, Close run goes to the page the run began on, in the session the DM chose | session-plan | state | New |
-| T14.6 | A group is assembled in the session's plan, with the note beside it. It is linked in the plan when saved, and comes first in the run's Arrivals panel | session-plan-groups | cost, state | New |
+| T14.6 | A group is assembled in the session's plan, with the note beside it. It is linked in the plan when saved, and comes first in the run's Arrivals panel. With a fight open, its row goes to that panel in 1 | session-plan-groups | cost, state | New |
 | T14.1 | An interrupted run says Resume, and can be deleted with one step of undo. Ended runs are in the history | session-plan | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |

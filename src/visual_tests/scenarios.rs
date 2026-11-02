@@ -4956,6 +4956,11 @@ pub mod run_add_creature {
         d.type_into(FIELD, "wolf");
         d.expect("Choose Wolf");
         d.state("arrivals-found", Sizes::Default);
+        d.observe(
+            "T13.5",
+            d.has("Add Wolf to the initiative list"),
+            "The button says which creature the words typed will add",
+        );
         d.click("Choose Wolf");
         d.type_into("New creature count", "2");
         d.state("arrivals-found-chosen", Sizes::Default);
@@ -5022,6 +5027,21 @@ pub mod session_plan_groups {
             "T14.6",
             d.has("OTHER GROUPS"),
             "The groups in tonight's plan come first in the run's panel",
+        );
+
+        // From the plan, with the fight open: one press to where the group can arrive.
+        d.click("Stat block");
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+        let route = format!("Go to Arrivals for {GROUP_RIVALS}");
+        d.expect(&route);
+        d.state("plan-groups-fight-open", Sizes::All);
+        d.click(&route);
+        d.expect("IN TONIGHT'S PLAN");
+        d.observe(
+            "T14.6",
+            d.has(&format!("Add {GROUP_RIVALS} to the initiative list")),
+            "With a fight open, a planned group's row goes to the Arrivals panel in one press",
         );
     }
 }

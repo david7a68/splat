@@ -1309,6 +1309,10 @@ impl Splat {
         if let Some((old, new)) = self.encounters.renamed_in_plan.take() {
             self.sessions.rename_in_plan(&old, &new);
         }
+        if std::mem::take(&mut self.sessions.wants_arrivals) {
+            self.encounters.show_arrivals();
+            self.page = Page::Run;
+        }
         if std::mem::take(&mut self.sessions.wants_new_group) {
             self.encounters.new_group_in_plan();
         }

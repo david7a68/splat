@@ -15,6 +15,7 @@ use std::sync::Arc;
 const FIELD: &str = "Find or name a creature";
 const DEFAULT_SIDE: &str = "enemies";
 const MATCHES_SHOWN: usize = 5;
+const BUTTON_NAME: usize = 24;
 const MAX_HP: i64 = 1_000_000;
 const MAX_AC: i64 = 1000;
 
@@ -217,6 +218,12 @@ fn short_field(
 }
 
 impl Run {
+    /// The panel for what joins the fight, in place of whatever was open beside the list.
+    pub(crate) fn show_arrivals(&mut self) {
+        self.panel = super::Panel::Groups;
+        self.close_lookup = true;
+    }
+
     /// The sides this run already has, so that a new creature joins one and not a misspelling.
     fn sides_to_join(&self) -> Vec<String> {
         let mut sides = vec![DEFAULT_SIDE.to_owned()];
@@ -273,8 +280,9 @@ impl Run {
             }
             let matches = matches_for(&known, &typed);
             for creature in matches.iter().take(MATCHES_SHOWN) {
+                // The whole name typed is already the one the button adds.
                 let row = ui
-                    .selectable_label(false, &creature.entry.name)
+                    .selectable_label(creature.lower == typed, &creature.entry.name)
                     .on_hover_text(&creature.detail);
                 design::named(ui, &row, &format!("Choose {}", creature.entry.name));
                 if row.clicked() {
@@ -362,14 +370,16 @@ impl Run {
         let checked = self.ad_hoc.check(&known);
         let total = self.ad_hoc.total();
         let may_roll = !self.joins_side(self.ad_hoc.side());
-        let label = match total {
-            Some(total) => format!("Add at {total}"),
-            None if may_roll => "Add and roll".to_owned(),
-            None => "Add".to_owned(),
-        };
         let name = checked
             .as_ref()
             .map_or_else(|_| "this creature".to_owned(), |it| it.name.clone());
+        // Says what it adds. A long name stays in the accessible name, whole.
+        let short: String = name.chars().take(BUTTON_NAME).collect();
+        let label = match total {
+            Some(total) => format!("Add {short} at {total}"),
+            None if may_roll => format!("Add {short} and roll"),
+            None => format!("Add {short}"),
+        };
         let ended = matches!(self.state.phase, Phase::Ended { .. });
         let no_bonus =
             total.is_none() && may_roll && checked.as_ref().is_ok_and(|it| it.bonus.is_none());
