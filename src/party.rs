@@ -83,7 +83,11 @@ impl Party {
                 "Link this campaign to D&D Beyond to see its party",
                 "Choose its D&D Beyond campaign under Campaign, Link and folder. The rest of Splat works without a link.",
                 |ui| {
-                    if Action::primary("Link this campaign").show(ui).clicked() {
+                    // Linking needs a session, so that comes first.
+                    if session.is_none() {
+                        self.wants_settings |=
+                            Action::primary("Connect D&D Beyond").show(ui).clicked();
+                    } else if Action::primary("Link this campaign").show(ui).clicked() {
                         open_link = true;
                     }
                 },
@@ -103,6 +107,12 @@ impl Party {
             (icons::OFFLINE, "Not connected", c.connection.offline)
         } else if self.reader.loading() {
             (icons::BUSY, "Refreshing", c.connection.busy)
+        } else if self.combat.ready() {
+            (
+                icons::ONLINE,
+                "Connected · Sync reads this sheet",
+                c.connection.connected,
+            )
         } else if !checked {
             (icons::ONLINE, "Connected · Cached sheet", c.connection.busy)
         } else if self.reader.stream_open {
@@ -119,6 +129,7 @@ impl Party {
                 crate::design::spinner(ui);
             }
             let age = cached
+                .filter(|_| !self.combat.ready())
                 .map(|record| format!(" · Fetched {}", record_age(record)))
                 .unwrap_or_default();
             design::status(
@@ -251,15 +262,43 @@ impl Party {
                 ui.horizontal(|ui| {
                     dismiss =
                         design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                    design::message(ui, Tone::Warning, SYNC_STOPPED);
+                    let why = if session.is_some() {
+                        SYNC_STOPPED_LEFT
+                    } else {
+                        SYNC_STOPPED_SESSION
+                    };
+                    design::message(ui, Tone::Warning, why);
                 });
                 if dismiss {
                     self.sync_stopped = false;
                 }
             }
         }
+        if let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) {
+            ui.horizontal(|ui| {
+                ui.label(
+                    Type::Display
+                        .rich(ui, &record.definition.splat_name)
+                        .color(c.text),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if design::link(ui, "D&D Beyond ↗").clicked() {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+                            "https://www.dndbeyond.com/characters/{id}"
+                        )));
+                    }
+                });
+            });
+            ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
+        }
         if session.is_some() {
-            design::section(ui, "Combat sync", |ui| self.combat.show(ui));
+            // Under the name, and it says its state while closed.
+            let state = if self.combat.enabled {
+                format!("{} Combat sync · On", icons::ONLINE)
+            } else {
+                format!("{} Combat sync · Off", icons::SYNC_OFF)
+            };
+            design::section(ui, state, |ui| self.combat.show(ui));
         }
         let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) else {
             if !self.reader.loading() {
@@ -271,21 +310,6 @@ impl Party {
             }
             return;
         };
-        ui.horizontal(|ui| {
-            ui.label(
-                Type::Display
-                    .rich(ui, &record.definition.splat_name)
-                    .color(c.text),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if design::link(ui, "D&D Beyond ↗").clicked() {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
-                        "https://www.dndbeyond.com/characters/{id}"
-                    )));
-                }
-            });
-        });
-        ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
         let before = self.page;
         design::segmented(
             ui,
@@ -362,7 +386,8 @@ pub struct LiveValues {
 const ENTRY_ROW: f32 = 40.0;
 /// Sync on this page stops when the DM leaves it or the connection ends. The word stays
 /// until they have seen it.
-const SYNC_STOPPED: &str = "Combat sync stopped when you left this page or lost the connection. Changes made since then did not reach D&D Beyond. Turn it on again below.";
+const SYNC_STOPPED_LEFT: &str = "Combat sync stopped when you left this page. Changes made since then did not reach D&D Beyond. Turn it on again below.";
+const SYNC_STOPPED_SESSION: &str = "Combat sync stopped when the session ended. Changes made since then did not reach D&D Beyond. Connect in Settings, then turn it on again below.";
 
 /// How old a sheet is, as a status with words.
 pub struct Freshness {
@@ -570,7 +595,7 @@ fn member_row(
             painter.text(
                 egui::pos2(left - design::XS, line),
                 egui::Align2::RIGHT_CENTER,
-                format!("{} +{temp}", icons::TEMP_HP),
+                design::temp_hp_text(temp),
                 Type::Numeral.font(ui),
                 c.hp.temp,
             );

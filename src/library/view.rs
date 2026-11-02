@@ -117,6 +117,11 @@ pub(crate) fn show(
     origin: &Origin<'_>,
     links: &dyn Links,
 ) -> Option<usize> {
+    let reading = entry.and_then(|entry| entry.reading().ok().flatten());
+    let sections = presentation::reading_sections(body, name);
+    let styled = entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));
+    let reading = reading.as_ref();
+    let builtin = origin.builtin;
     let room = ui.available_width();
     // A wide window's margin holds what is rarely wanted, so the prose keeps its measure and
     // the page has no dead space.
@@ -127,23 +132,23 @@ pub(crate) fn show(
             let measure = design::READER_MEASURE;
             ui.allocate_ui_with_layout(vec2(measure, 0.0), layout, |ui| {
                 ui.set_max_width(measure);
-                open_link = content(ui, name, entry, body, origin.builtin, links);
+                open_link = content(ui, entry, reading, &sections, styled, builtin, links);
             });
             ui.add_space(design::XL);
             let width = ui.available_width().min(REFERENCE_MAX);
             ui.allocate_ui_with_layout(vec2(width, 0.0), layout, |ui| {
                 ui.set_max_width(width);
-                reference(ui, name, entry, body, origin);
+                reference(ui, entry, &sections, styled.is_some(), origin);
             });
         });
         return open_link;
     }
     // Rules text keeps its measure in a wide side panel too.
     style::measure(ui, |ui| {
-        let open_link = content(ui, name, entry, body, origin.builtin, links);
+        let open_link = content(ui, entry, reading, &sections, styled, builtin, links);
         ui.add_space(design::L);
         design::rule(ui);
-        reference(ui, name, entry, body, origin);
+        reference(ui, entry, &sections, styled.is_some(), origin);
         open_link
     })
 }
@@ -153,25 +158,23 @@ const REFERENCE_MAX: f32 = 360.0;
 /// The reader's measure, its gap and the margin at their widest.
 pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERENCE_MAX;
 
-/// What the entry says.
+/// What the entry says. `styled` is the entry when it reads as a styled stat block.
 fn content(
     ui: &mut egui::Ui,
-    name: &str,
     entry: Option<&Entry>,
-    body: &str,
+    reading: Option<&Reading>,
+    sections: &[presentation::ReadingSection<'_>],
+    styled: Option<&Entry>,
     builtin: bool,
     links: &dyn Links,
 ) -> Option<usize> {
     let mut open_link = None;
-    let reading = entry.and_then(|entry| entry.reading().ok().flatten());
-    let sections = presentation::reading_sections(body, name);
-    let styled = entry.filter(|entry| creature::supports(entry, &sections));
-    if let Some(reading) = &reading {
+    if let Some(reading) = reading {
         open_link = reading_view(ui, reading, links);
     }
-    if let Some(entry) = styled.filter(|_| reading.is_none()) {
+    if let Some(entry) = styled {
         let references = creature::spell_references(entry);
-        creature::show(ui, entry, &sections, |ui, paragraph| {
+        creature::show(ui, entry, sections, |ui, paragraph| {
             open_link = open_link.or(spell_links(ui, &references, paragraph, links));
         });
     } else {
@@ -179,9 +182,9 @@ fn content(
         if let Some(entry) = entry.filter(|entry| reading.is_none() && creature::has_stats(entry)) {
             creature::stat_head(ui, entry);
         }
-        reader::show(ui, entry, &sections, builtin, reading.is_some());
+        reader::show(ui, entry, sections, builtin, reading.is_some());
     }
-    if let Some(entry) = entry.filter(|entry| class::supports(entry)) {
+    if let Some(entry) = entry.filter(|entry| class::lists_features(entry)) {
         open_link = open_link.or(class::show_features(ui, entry, links));
     }
     open_link
@@ -190,19 +193,16 @@ fn content(
 /// What is rarely wanted: where the entry comes from, and how it is built.
 fn reference(
     ui: &mut egui::Ui,
-    name: &str,
     entry: Option<&Entry>,
-    body: &str,
+    sections: &[presentation::ReadingSection<'_>],
+    styled: bool,
     origin: &Origin<'_>,
 ) {
-    let reading = entry.and_then(|entry| entry.reading().ok().flatten());
-    let sections = presentation::reading_sections(body, name);
-    let styled = entry.filter(|entry| creature::supports(entry, &sections));
     let technical: Vec<_> = sections
         .iter()
         .filter(|section| section.body.contains("<!-- splat:"))
         .collect();
-    if (styled.is_none() || reading.is_some()) && !technical.is_empty() {
+    if !styled && !technical.is_empty() {
         ui.add_space(design::M);
         design::quiet_section(ui, "Technical details", |ui| {
             for section in technical {

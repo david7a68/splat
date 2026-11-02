@@ -212,6 +212,37 @@ struct Creature {
 const ROSTER_MAX_WIDTH: f32 = 860.0;
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
 const RESULT_ROW: f32 = 40.0;
+/// A result's stats, each in its own place, so that they can be compared down the list. The
+/// first place holds a party copy's word, which has no challenge rating.
+fn detail_columns(ui: &mut egui::Ui, detail: &str) {
+    const COLUMNS: [(&str, f32); 3] = [("CR ", 66.0), ("HP ", 46.0), ("AC ", 38.0)];
+    let parts: Vec<&str> = detail.split(" · ").collect();
+    let other = parts
+        .iter()
+        .find(|part| !COLUMNS.iter().any(|(prefix, _)| part.starts_with(prefix)));
+    // A row of plain words: it sits close under its name, not at a control's height.
+    ui.spacing_mut().interact_size.y = 0.0;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        for (prefix, width) in COLUMNS {
+            let part = parts
+                .iter()
+                .find(|part| part.starts_with(prefix))
+                .or(other.filter(|_| prefix == COLUMNS[0].0));
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, Type::Small.line()),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.set_min_width(width);
+                    if let Some(part) = part {
+                        ui.label(Type::Small.rich(ui, *part).color(colors().muted));
+                    }
+                },
+            );
+        }
+    });
+}
+
 fn creature_detail(entry: &Entry, party: bool) -> String {
     let stat = |name: &str| {
         entry
@@ -226,7 +257,15 @@ fn creature_detail(entry: &Entry, party: bool) -> String {
         .get("splat_creature")
         .and_then(|creature| creature.get("cr_text"))
         .and_then(Value::as_str)
-        .and_then(|text| text.split_whitespace().next());
+        .and_then(|text| text.split_whitespace().next())
+        // A creature with no field has it on the line the stat block shows.
+        .or_else(|| {
+            entry
+                .body
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("CR "))
+                .and_then(|text| text.split_whitespace().next())
+        });
     let mut parts = Vec::new();
     if party {
         parts.push("Party copy".to_owned());
@@ -347,15 +386,14 @@ pub struct Encounters {
     discarded_options: Option<crate::encounter_settings::Options>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
-    /// A run just opened, so the shell goes to the Run page.
+    /// A run just opened, or the DM asked to go back to it from its row in the list, so the
+    /// shell goes to the Run page.
     pub go_to_run: bool,
     /// A creature to read beside the draft, in Lookup.
     pub peek: Option<Uuid>,
     focus_name: bool,
     focus_search: bool,
     editor_pane: EditorPane,
-    /// The DM asked to go back to the open run, from its row in the list.
-    pub wants_run: bool,
     expanded: Option<String>,
 }
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -405,6 +443,15 @@ impl Encounters {
             .as_mut()
             .expect("an open run")
             .simulate_rename(name, to);
+    }
+
+    /// A read of this participant's sheet, holding its last matched damage plus `more_damage`.
+    #[cfg(test)]
+    pub fn simulate_read(&mut self, name: &str, more_damage: i64) {
+        self.run
+            .as_mut()
+            .expect("an open run")
+            .simulate_read(name, more_damage);
     }
 
     /// Running syncs react to the session from now on, as real ones do.
@@ -1033,7 +1080,7 @@ impl Encounters {
                     template_list(ui, &mut open_path, &mut run_path);
                 }
             });
-        self.wants_run |= back_to_run.get();
+        self.go_to_run |= back_to_run.get();
         if let Some(path) = resume {
             match crate::encounter_run::Run::open(&path, active.id) {
                 Ok(run) => {
@@ -1114,15 +1161,6 @@ impl Encounters {
                         color: colors().document.unsaved,
                     },
                 );
-            } else if saved_note.is_none() {
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::OK,
-                        word: "No changes",
-                        color: colors().muted,
-                    },
-                );
             } else if let Some(note) = &saved_note {
                 // Beside the name, so that saving does not move the roster.
                 design::status(
@@ -1131,6 +1169,15 @@ impl Encounters {
                         icon: icons::OK,
                         word: note,
                         color: colors().document.saved,
+                    },
+                );
+            } else {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::OK,
+                        word: "No changes",
+                        color: colors().muted,
                     },
                 );
             }
@@ -1393,19 +1440,14 @@ impl Encounters {
                             // The name is what the eye looks for, so it comes first.
                             ui.vertical(|ui| {
                                 ui.spacing_mut().item_spacing.y = 0.0;
-                                ui.set_max_width((ui.available_width() - 112.0).max(80.0));
+                                ui.set_max_width((ui.available_width() - 150.0).max(80.0));
                                 ui.add(
                                     egui::Label::new(
                                         Type::Body.rich(ui, &c.name).color(colors().text),
                                     )
                                     .truncate(),
                                 );
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, &c.detail).color(colors().muted),
-                                    )
-                                    .truncate(),
-                                );
+                                detail_columns(ui, &c.detail);
                             });
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),

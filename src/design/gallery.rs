@@ -220,6 +220,15 @@ pub fn components(ui: &mut egui::Ui) {
             max,
             temp,
         );
+        if temp > 0 {
+            ui.painter().text(
+                rect.left_top() + egui::vec2(200.0, 12.0),
+                egui::Align2::LEFT_CENTER,
+                temp_hp_text(temp),
+                Type::Numeral.font(ui),
+                colors().hp.temp,
+            );
+        }
     }
     ui.horizontal(|ui| {
         stat_tile(ui, "Armor class", "15");

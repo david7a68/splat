@@ -2,7 +2,8 @@
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
-    Command, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run, display, mode_label,
+    Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run, display,
+    mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -32,6 +33,12 @@ const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 const GUTTER: f32 = design::M;
 /// Room for the note under a long roster, past the scroll area's clip margin.
 const OVERFLOW_LINE: f32 = 22.0;
+/// Kept free under a list that fits, for a message of up to two lines.
+const MESSAGE_ROOM: f32 = 44.0;
+/// A message's height when the list needs the room.
+const MESSAGE_LINE: f32 = 28.0;
+/// What a message says in that one line.
+const NOTICE_SHORT: &str = "Undo history was cleared. Hover here, or see the Log.";
 const SCROLL_BAR: f32 = 12.0;
 /// A name-only row when the list has no other way to fit. Still a 24 px target and more.
 const TIGHT_ROW: f32 = 25.0;
@@ -39,6 +46,23 @@ const TIGHT_ROW: f32 = 25.0;
 const NAME_ROOM: f32 = 11.0;
 /// A panel this wide shows the reference and a tab side by side.
 const PANEL_TWO_COLUMNS: f32 = 820.0;
+
+/// What sync needs from the DM, on the line above the roster.
+struct SyncAlert {
+    text: String,
+    /// For when `text` does not fit beside a long Undo.
+    short: String,
+    color: egui::Color32,
+}
+impl SyncAlert {
+    fn new(icon: &str, text: &str, short: &str, color: egui::Color32) -> Self {
+        Self {
+            text: format!("{icon} {text}"),
+            short: format!("{icon} {short}"),
+            color,
+        }
+    }
+}
 
 pub(super) fn sync_status(state: SyncState) -> Status<'static> {
     let s = colors().sync;
@@ -72,6 +96,11 @@ pub(super) fn sync_status(state: SyncState) -> Status<'static> {
             icon: icons::READ_ONLY,
             word: "Sync read-only",
             color: s.read_only,
+        },
+        SyncState::NotSent => Status {
+            icon: icons::WARN,
+            word: "Not sent",
+            color: colors().result.warning,
         },
         SyncState::Stopped => Status {
             icon: icons::OFFLINE,
@@ -164,7 +193,6 @@ impl Run {
         match self.apply(command) {
             Err(error) => self.error = Some(error),
             Ok(()) => {
-                self.notice = None;
                 self.condition.clear();
                 self.note.clear();
                 // Beside a panel, every step gives the keyboard back, or words typed next
@@ -349,7 +377,9 @@ impl Run {
         };
         action.blocked_if(
             self.history.is_empty(),
-            if self.reopened {
+            if self.undo_stopped {
+                "Undo stopped when a value came from D&D Beyond or the sync panel. See the log."
+            } else if self.reopened {
                 "Undo does not survive a restart. Later steps can be undone."
             } else {
                 "Nothing to undo yet."
@@ -395,21 +425,22 @@ impl Run {
         ui.add_space(design::XS);
         let mut outcome = None;
         ui.horizontal(|ui| {
-            if Action::primary("Keep this run")
-                .density(Density::Read)
-                .hint("Replace the file on disk with this run")
-                .show(ui)
-                .clicked()
-            {
-                outcome = Some(self.keep_this_run());
-            }
-            if Action::secondary("Save as a new run")
+            // The action that loses nothing is the filled one.
+            if Action::primary("Save as a new run")
                 .density(Density::Read)
                 .hint("Keep the changed file as it is, and save this run beside it")
                 .show(ui)
                 .clicked()
             {
                 outcome = Some(self.save_as_new_run());
+            }
+            if Action::destructive("Replace the file with this run")
+                .density(Density::Read)
+                .hint("The changes in the file on disk are lost")
+                .show(ui)
+                .clicked()
+            {
+                outcome = Some(self.keep_this_run());
             }
         });
         if let Some(Err(error)) = outcome {
@@ -457,14 +488,73 @@ impl Run {
                     self.live_header(ui, scale);
                     self.error_line(ui);
                     let room = ui.available_height() - DOCK_HEIGHT - FOOTER_HEIGHT;
+                    // A message goes in the room under the list, so it moves no row while
+                    // the DM's eye is on them, and stays until they dismiss it. A long one wraps.
+                    let notice = self.notice.clone();
+                    let width = ui.available_width();
+                    let notice_height = notice.as_ref().map_or(0.0, |notice| {
+                        let font = Type::Small.font(ui);
+                        ui.fonts_mut(|fonts| {
+                            fonts.layout(
+                                notice.clone(),
+                                font,
+                                egui::Color32::PLACEHOLDER,
+                                width - 32.0,
+                            )
+                        })
+                        .size()
+                        .y
+                        .max(MESSAGE_ROOM)
+                    });
+                    // A list that would have to scroll to make room gets it back: the message
+                    // keeps its point on one line, with the whole of it on hover and in the log.
+                    let tightest = self.tightest_roster(ui, width, room);
+                    let compact = notice.is_some() && tightest > room - notice_height;
+                    let notice_height = if compact { MESSAGE_LINE } else { notice_height };
+                    // With an error line up too, one more line would scroll even a compressed
+                    // list. The error comes first, and the message returns when it is dismissed.
+                    let notice = notice.filter(|_| tightest <= room - notice_height);
+                    let notice_height = if notice.is_some() { notice_height } else { 0.0 };
+                    let list = room - notice_height;
                     ui.allocate_ui_with_layout(
-                        vec2(ui.available_width(), room),
+                        vec2(ui.available_width(), list),
                         Layout::top_down(Align::LEFT),
                         |ui| {
-                            ui.set_min_height(room);
-                            self.roster(ui, room);
+                            ui.set_min_height(list);
+                            self.roster(ui, list, notice_height);
                         },
                     );
+                    if let Some(notice) = notice {
+                        // All the height the list gave up, so the dock stays where it was.
+                        ui.allocate_ui_with_layout(
+                            vec2(ui.available_width(), notice_height),
+                            Layout::left_to_right(Align::TOP),
+                            |ui| {
+                                ui.set_min_height(notice_height);
+                                let dismiss =
+                                    design::icon_button(ui, icons::CLOSE, "Dismiss this message")
+                                        .clicked();
+                                let shown = if compact {
+                                    NOTICE_SHORT
+                                } else {
+                                    notice.as_str()
+                                };
+                                let response = ui.add(
+                                    egui::Label::new(
+                                        Type::Small.rich(ui, shown).color(colors().result.warning),
+                                    )
+                                    .wrap(),
+                                );
+                                if compact {
+                                    response.on_hover_text(&notice);
+                                }
+                                if dismiss {
+                                    self.notice = None;
+                                    self.return_focus = self.lookup_open;
+                                }
+                            },
+                        );
+                    }
                     self.dock(ui);
                     closed = self.live_footer(ui);
                 });
@@ -476,13 +566,10 @@ impl Run {
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
     fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) {
         let c = colors();
-        let current = self.current();
-        let name = current.map_or_else(String::new, |i| self.state.participants[i].name.clone());
-        let next_up = self
-            .next_up()
-            .map(|i| self.state.participants[i].name.clone());
+        let strip = self.strip();
+        let name = strip.current.as_deref().unwrap_or_default();
         let mut next_turn = false;
-        let nobody_present = self.strip().nobody_present;
+        let nobody_present = !self.state.participants.iter().any(|p| p.present);
         // As large as the largest HP, in the row's own face: nothing outweighs the header.
         let turn_size = scale.hp;
         let height = header_height(scale);
@@ -511,24 +598,31 @@ impl Run {
                         &format!("Run · {} · Round {}", self.name, self.state.round),
                     );
                     ui.add_space(design::S);
-                    // The first answer on the screen. It gives up size, then a word, before
-                    // it gives up a letter of the name.
+                    // The first answer on the screen, and larger than any row's name. It gives
+                    // up a little size, then the later words of a long name. The row, the panel
+                    // and the dock's hover have the whole name.
                     let room = ui.available_width() - 1.0;
-                    let full = format!("{name}’s turn");
-                    let width = |text: &str, size: f32| {
-                        design::number_width(ui, text, &Type::Name.sized(ui, size))
+                    let suffix = "’s turn";
+                    let full = format!("{name}{suffix}");
+                    let least = (scale.name + 1.0).min(turn_size);
+                    let font = Type::Name.sized(ui, turn_size);
+                    let fit = |text: &str| {
+                        let width = design::number_width(ui, text, &font);
+                        (turn_size * room / width).min(turn_size)
                     };
-                    let least = Type::Name.font(ui).size.min(turn_size);
-                    let fit =
-                        |text: &str| (turn_size * room / width(text, turn_size)).min(turn_size);
-                    let (text, size) = if fit(&full) >= least {
-                        (full.clone(), fit(&full))
-                    } else if fit(&name) >= least {
-                        (name.clone(), fit(&name))
+                    let full_size = fit(&full);
+                    let (text, size) = if full_size >= least {
+                        (full, full_size)
                     } else {
-                        // The row, the panel and the dock's hover have the whole name.
-                        let font = Type::Name.sized(ui, least);
-                        (design::words_that_fit(ui, &name, &font, room), least)
+                        let words = design::words_that_fit(
+                            ui,
+                            name,
+                            &font,
+                            room - design::number_width(ui, suffix, &font),
+                        );
+                        let short = format!("{words}{suffix}");
+                        let size = fit(&short).max(least);
+                        (short, size)
                     };
                     ui.add(
                         egui::Label::new(
@@ -546,38 +640,51 @@ impl Run {
         // Undo has this line's first claim, so it can always name the action in full.
         let undo_label = self.undo_label();
         let mut undo = false;
-        let mut dismiss = false;
-        let strip = self.strip();
         // What sync needs from the DM. These stay until the cause is gone. A stopped sync
         // comes first, because nothing else can be resolved without a connection.
+        let kept = match strip.unsent.as_slice() {
+            [] => None,
+            [name] => Some(format!("{name}: kept in Splat, not sent")),
+            names => Some(format!(
+                "{} kept in Splat, not sent",
+                design::count(names.len(), "change", "changes")
+            )),
+        };
         let sync_alert = if strip.sync_stopped {
-            Some((
-                format!("{} Sync stopped: connect in Settings", icons::OFFLINE),
-                format!("{} Sync stopped", icons::OFFLINE),
-                c.result.error,
-            ))
+            Some(match &kept {
+                None => SyncAlert::new(
+                    icons::OFFLINE,
+                    "Sync stopped: connect in Settings",
+                    "Sync stopped",
+                    c.result.error,
+                ),
+                Some(kept) => SyncAlert::new(
+                    icons::OFFLINE,
+                    &format!("Session ended. {kept}"),
+                    kept,
+                    c.result.error,
+                ),
+            })
         } else if let Some(name) = &strip.conflict {
-            Some((
-                format!("{} Sync conflict: {name}", icons::WARN),
-                format!("{} Conflict: {name}", icons::WARN),
+            Some(SyncAlert::new(
+                icons::WARN,
+                &format!("Sync conflict: {name}"),
+                &format!("Conflict: {name}"),
                 c.sync.conflict,
             ))
+        } else if let Some(kept) = &kept {
+            Some(SyncAlert::new(icons::WARN, kept, kept, c.result.warning))
         } else {
             strip.sync_error.as_ref().map(|name| {
-                (
-                    format!("{} Sync error: {name}", icons::ERROR),
-                    format!("{} Error: {name}", icons::ERROR),
+                SyncAlert::new(
+                    icons::ERROR,
+                    &format!("Sync error: {name}"),
+                    &format!("Error: {name}"),
                     c.result.error,
                 )
             })
         };
         let mut review_conflict = false;
-        // A notice too long for this line takes its own, below, in full.
-        let notice_font = Type::Small.font(ui);
-        let undo_room = design::number_width(ui, &undo_label, &Type::Strong.font(ui)) + 72.0;
-        let notice_fits = self.notice.as_ref().is_none_or(|notice| {
-            design::number_width(ui, notice, &notice_font) + undo_room + 32.0 < ui.available_width()
-        });
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), 28.0),
             Layout::right_to_left(Align::Center),
@@ -593,7 +700,7 @@ impl Run {
                     .show(ui)
                     .clicked();
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    if let Some((text, short, color)) = &sync_alert {
+                    if let Some(SyncAlert { text, short, color }) = &sync_alert {
                         // Notes hide the panel with the conflict's controls, so one word leads there.
                         let review = self.hide_panel && strip.conflict.is_some();
                         let link = if review {
@@ -619,10 +726,6 @@ impl Run {
                             < ui.available_width();
                         let words = if fits { notice } else { "Recording silence" };
                         ui.label(Type::Small.rich(ui, words).color(c.result.warning));
-                    } else if let Some(notice) = self.notice.as_ref().filter(|_| notice_fits) {
-                        dismiss =
-                            design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                        ui.label(Type::Small.rich(ui, notice).color(c.result.warning));
                     } else if nobody_present {
                         // Its first sentence, beside a long Undo. Next turn's hover has the rest.
                         let first = NOBODY_PRESENT
@@ -630,7 +733,7 @@ impl Run {
                             .next()
                             .unwrap_or_default();
                         ui.label(Type::Small.rich(ui, first).color(c.result.warning));
-                    } else if let Some(next) = &next_up {
+                    } else if let Some(next) = &strip.next {
                         let text = format!("Next: {next}");
                         let role = if design::number_width(ui, &text, &Type::Body.font(ui))
                             < ui.available_width()
@@ -648,24 +751,7 @@ impl Run {
             },
         );
         ui.add_space(2.0);
-        // A conflict outranks a notice, and a long notice has no room above.
-        if let Some(notice) = self
-            .notice
-            .as_ref()
-            .filter(|_| sync_alert.is_some() || self.recording_notice.is_some() || !notice_fits)
-        {
-            ui.horizontal(|ui| {
-                dismiss = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, notice).color(c.result.warning)).wrap(),
-                );
-            });
-        }
         design::rule(ui);
-        if dismiss {
-            self.notice = None;
-            self.return_focus = self.lookup_open;
-        }
         if review_conflict {
             self.review_conflict();
         }
@@ -682,7 +768,7 @@ impl Run {
     pub(super) fn sync_word(&self, index: usize) -> Option<SyncState> {
         self.syncs
             .get(&index)
-            .filter(|sync| sync.enabled || sync.error.is_some())
+            .filter(|sync| sync.enabled || sync.error.is_some() || sync.stranded())
             .map(crate::combat_sync::CombatSync::state)
     }
 
@@ -709,11 +795,22 @@ impl Run {
             .collect()
     }
 
-    fn roster(&mut self, ui: &mut egui::Ui, room: f32) {
+    /// The height of this list at its most compressed, in this room.
+    fn tightest_roster(&self, ui: &egui::Ui, width: f32, room: f32) -> f32 {
+        let scale = RunScale::fit(room, width, self.state.order.len());
+        self.roster_layouts(ui, width, scale, RowFit::Compressed)
+            .iter()
+            .map(|layout| layout.height(scale))
+            .sum()
+    }
+
+    /// `room` is what the list has now, and `lent` what a message under it has taken. A list
+    /// that fits leaves that much free at all times, so a message moves none of its rows.
+    fn roster(&mut self, ui: &mut egui::Ui, room: f32, lent: f32) {
         let current = self.current();
         let next_up = self.next_up();
         let count = self.state.order.len();
-        let mut scale = RunScale::fit(room, ui.available_width(), count);
+        let mut scale = RunScale::fit(room + lent, ui.available_width(), count);
         let width = ui.available_width();
         let total = |layouts: &[RowLayout], scale: RunScale| -> f32 {
             layouts.iter().map(|l| l.height(scale)).sum()
@@ -722,7 +819,9 @@ impl Run {
         let natural = total(&layouts, scale);
         if natural <= room {
             // Spare room goes to the rows, so a short list leaves no gap under it.
-            let share = (room - natural - 2.0).max(0.0) / count.max(1) as f32;
+            // Never more than the list has now, or the rows overflow it and compress.
+            let spare = (room + lent - MESSAGE_ROOM).min(room) - natural - 2.0;
+            let share = spare.max(0.0) / count.max(1) as f32;
             scale.row += share.min(scale.row * 0.4);
         } else {
             layouts = self.roster_layouts(ui, width, scale, RowFit::Compressed);
@@ -832,32 +931,19 @@ impl Run {
                     self.state.participants[i].max_hp,
                 )
             };
+            let syncs_in = |wanted: SyncState| {
+                count(&|i| {
+                    self.syncs
+                        .get(&i)
+                        .is_some_and(|sync| sync.state() == wanted)
+                })
+            };
             let mut text = format!("{} {word}", rows.len());
             for (n, label) in [
-                (
-                    count(&|i| {
-                        self.syncs
-                            .get(&i)
-                            .is_some_and(|sync| sync.state() == SyncState::Conflict)
-                    }),
-                    "Conflict",
-                ),
-                (
-                    count(&|i| {
-                        self.syncs
-                            .get(&i)
-                            .is_some_and(|sync| sync.state() == SyncState::Stopped)
-                    }),
-                    "Sync stopped",
-                ),
-                (
-                    count(&|i| {
-                        self.syncs
-                            .get(&i)
-                            .is_some_and(|sync| sync.state() == SyncState::Error)
-                    }),
-                    "Sync error",
-                ),
+                (syncs_in(SyncState::Conflict), "Conflict"),
+                (syncs_in(SyncState::Stopped), "Sync stopped"),
+                (syncs_in(SyncState::NotSent), "Not sent"),
+                (syncs_in(SyncState::Error), "Sync error"),
                 (count(&|i| state(i) == design::HpState::Zero), "0 HP"),
                 (
                     count(&|i| state(i) == design::HpState::Bloodied),
@@ -1228,11 +1314,19 @@ impl Run {
             }
             // Five actions share the narrowest row. None of them may lose a letter.
             ui.spacing_mut().item_spacing.x = 0.0;
-            if Action::quiet("Close run")
-                .density(Density::Read)
-                .blocked(self.close_block())
-                .show(ui)
-                .clicked()
+            // Off while sync has work to finish, and the label says so without a hover.
+            let blocked = self.close_block();
+            let wide = ui.available_width() >= 520.0;
+            if Action::quiet(match (blocked.is_some(), wide) {
+                (false, _) => "Close run",
+                (true, true) => "Close after sync",
+                (true, false) => "Sync first",
+            })
+            .name("Close run")
+            .density(Density::Read)
+            .blocked(blocked)
+            .show(ui)
+            .clicked()
             {
                 self.closing = true;
             }
@@ -1296,24 +1390,10 @@ impl Run {
     fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
         let cannot_save = self.strip().not_saved;
         let stranded = self.stranded_names();
-        let note = if cannot_save {
-            "Closing loses unsaved changes.".to_owned()
-        } else if !stranded.is_empty() {
-            // Short: it shares the footer with both buttons at the minimum size.
-            match stranded.as_slice() {
-                [name] => format!("Not sent: {name}."),
-                [name, others @ ..] => format!("Not sent: {name} and {} more.", others.len()),
-                [] => unreachable!("not empty"),
-            }
-        } else {
-            note.to_owned()
-        };
-        let color = if cannot_save || !stranded.is_empty() {
-            colors().result.error
-        } else {
-            colors().muted
-        };
-        ui.label(Type::Small.rich(ui, note).color(color));
+        if cannot_save || !stranded.is_empty() {
+            return self.close_with_loss(ui, cannot_save, &stranded);
+        }
+        ui.label(Type::Small.rich(ui, note).color(colors().muted));
         if Action::quiet("Keep running")
             .density(Density::Read)
             .show(ui)
@@ -1322,22 +1402,68 @@ impl Run {
             self.closing = false;
             self.return_focus = self.lookup_open;
         }
-        if cannot_save {
-            return Action::destructive("Close anyway")
-                .density(Density::Read)
-                .blocked(self.close_block())
-                .show(ui)
-                .clicked();
-        }
-        Action::destructive(if stranded.is_empty() {
-            "Close now"
-        } else {
-            "Close anyway"
-        })
-        .density(Density::Read)
-        .show(ui)
-        .clicked()
+        Action::destructive("Close now")
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
             && self.close_run()
+    }
+
+    /// Something would be lost, so the question gets the whole screen and says what. Like
+    /// closing the app, the safe answer is the filled one.
+    fn close_with_loss(&mut self, ui: &egui::Ui, cannot_save: bool, stranded: &[String]) -> bool {
+        let mut keep = ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
+        let mut close = false;
+        let block = self.close_block();
+        let lost = self.unsent_only_here_names();
+        design::dialog(ui.ctx(), "close_run_with_loss", "Close this run?", |ui| {
+            if cannot_save {
+                ui.add(
+                    egui::Label::new(
+                        "This run could not be saved. Closing loses unsaved changes: everything since its last save.",
+                    )
+                    .wrap(),
+                );
+            }
+            if !stranded.is_empty() {
+                ui.add(
+                    egui::Label::new(format!(
+                        "Changes for {} were not sent to D&D Beyond. The saved run keeps their HP, death saves and conditions, and asks you to choose when you next sync. Undo stops here.",
+                        stranded.join(", "),
+                    ))
+                    .wrap(),
+                );
+            }
+            if !lost.is_empty() {
+                ui.add(
+                    egui::Label::new(format!(
+                        "Spell slots and limited uses not sent for {} are lost.",
+                        lost.join(", "),
+                    ))
+                    .wrap(),
+                );
+            }
+            ui.add_space(design::S);
+            ui.horizontal(|ui| {
+                keep |= Action::primary("Keep running").show(ui).clicked();
+                ui.add_space(design::L);
+                // Red only when something is lost.
+                let action = if cannot_save || !lost.is_empty() {
+                    Action::destructive("Close anyway")
+                } else {
+                    Action::secondary("Close anyway")
+                };
+                close = action.blocked(block).show(ui).clicked();
+            });
+        });
+        if keep {
+            self.closing = false;
+        }
+        if !close {
+            return false;
+        }
+        // A run that cannot save closes without saving. One that can, saves first.
+        cannot_save || self.close_run()
     }
 
     pub(super) fn close_run(&mut self) -> bool {
@@ -1372,7 +1498,7 @@ impl Run {
             } else {
                 "Sync party"
             })
-            .hint("Read and update every linked character on D&D Beyond")
+            .hint("Read every linked character's sheet. A value you changed stays, and you choose.")
             .blocked_if(
                 !self.connected && !self.simulate_connection,
                 "Connect to D&D Beyond in Settings to sync.",
@@ -1645,14 +1771,21 @@ impl Run {
             } else {
                 format!("{} · HP from this run", freshness.word)
             };
-            design::status(
-                ui,
-                Status {
-                    icon: freshness.icon,
-                    word: &word,
-                    color: freshness.color,
-                },
-            );
+            // Beside an open conflict, green words would say the opposite of what matters.
+            if !self
+                .syncs
+                .get(&index)
+                .is_some_and(|sync| sync.state() == SyncState::Conflict)
+            {
+                design::status(
+                    ui,
+                    Status {
+                        icon: freshness.icon,
+                        word: &word,
+                        color: freshness.color,
+                    },
+                );
+            }
             design::segmented(ui, &mut self.sheet_page, &SHEET_PAGES);
             let page = self.sheet_page;
             egui::ScrollArea::vertical()
@@ -1714,10 +1847,21 @@ impl Run {
                 let mut hp = p.hp;
                 let mut max = p.max_hp;
                 design::group_label(ui, "Correct HP");
+                let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
                 ui.horizontal_wrapped(|ui| {
                     optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
-                    optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                    design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
+                        optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
+                    });
                 });
+                if sheet_decides {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small.rich(ui, MAX_FROM_SHEET).color(colors().muted),
+                        )
+                        .wrap(),
+                    );
+                }
                 if hp != p.hp || max != p.max_hp {
                     command = Some(Command::Health(index, hp, max));
                 }
@@ -1727,6 +1871,44 @@ impl Run {
                     if bonus != p.initiative_bonus {
                         command = Some(Command::Bonus(index, bonus));
                     }
+                } else if p.initiative.is_none() {
+                    // Absent at the start, so no roll was asked for. The DM says when it is.
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    "No initiative yet: last in the order until you set it. The current turn stays.",
+                                )
+                                .color(colors().result.warning),
+                        )
+                        .wrap(),
+                    );
+                    let field = format!("Initiative for {}", p.name);
+                    let text = self.setup_inputs.entry(index).or_default();
+                    let total = text.trim().parse::<i64>().ok();
+                    ui.horizontal(|ui| {
+                        let response = design::number_field(
+                            ui,
+                            &field,
+                            text,
+                            "Init",
+                            72.0,
+                            Density::Read.control(),
+                        );
+                        let enter = response.lost_focus()
+                            && ui.input(|i| i.key_pressed(Key::Enter));
+                        let pressed = Action::secondary("Set initiative")
+                            .density(Density::Read)
+                            .blocked_if(total.is_none(), "Type a total first.")
+                            .show(ui)
+                            .clicked();
+                        if (pressed || enter)
+                            && let Some(total) = total
+                        {
+                            command = Some(Command::Initiative(index, Some(total)));
+                        }
+                    });
                 } else {
                     ui.label(
                         Type::Small
@@ -1854,7 +2036,7 @@ impl Run {
             .state
             .participants
             .iter()
-            .filter(|p| p.initiative.is_none())
+            .filter(|p| p.initiative.is_none() && p.present)
             .count();
         let missing_hp = self
             .state
@@ -1936,7 +2118,7 @@ impl Run {
                 .state
                 .participants
                 .iter()
-                .position(|p| p.initiative.is_none());
+                .position(|p| p.initiative.is_none() && p.present);
         }
         let room = ui.available_height() - FOOTER_HEIGHT - design::M;
         ui.allocate_ui_with_layout(
@@ -2010,7 +2192,8 @@ impl Run {
         let mut command = None;
         let p = &self.state.participants[index];
         let detail = format!(
-            "{} · HP {}/{} · AC {}",
+            "{}{} · HP {}/{} · AC {}",
+            if p.present { "" } else { "Absent · " },
             p.side,
             display(p.hp),
             display(p.max_hp),
@@ -2030,7 +2213,15 @@ impl Run {
         let mut enter = false;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = design::XS;
-            let actions = 72.0 + 76.0 + 28.0 + 78.0 + 4.0 * design::XS;
+            // A word when the row has room for the longer one, so nothing moves when it changes.
+            // In a narrow pane the mark alone, and the row's second line says it.
+            let presence_room = ui.available_width() >= 620.0;
+            let presence_slot = if presence_room {
+                124.0
+            } else {
+                Density::Read.control()
+            };
+            let actions = 72.0 + 76.0 + 28.0 + presence_slot + 4.0 * design::XS;
             let name_width = (ui.available_width() - actions).max(110.0);
             let response = ui
                 .allocate_ui(vec2(name_width, row), |ui| {
@@ -2082,16 +2273,31 @@ impl Run {
                 command = Some(Command::RollInitiative(index));
             }
             let (word, hint) = presence_action(present);
-            if Action::quiet(word)
-                .plain()
-                .icon(icons::ABSENT)
-                .density(Density::Scan)
-                .name(&format!("{word}: {name}"))
-                .hint(hint)
-                .selected(!present)
-                .show(ui)
-                .clicked()
-            {
+            let accessible = format!("{word}: {name}");
+            let pressed = if presence_room {
+                ui.allocate_ui_with_layout(
+                    vec2(presence_slot, Density::Scan.control()),
+                    Layout::left_to_right(Align::Center),
+                    |ui| {
+                        ui.set_min_width(presence_slot);
+                        Action::quiet(word)
+                            .plain()
+                            .icon(icons::ABSENT)
+                            .density(Density::Scan)
+                            .name(&accessible)
+                            .hint(hint)
+                            .selected(!present)
+                            .show(ui)
+                            .clicked()
+                    },
+                )
+                .inner
+            } else {
+                design::icon_button(ui, icons::ABSENT, &accessible)
+                    .on_hover_text(hint)
+                    .clicked()
+            };
+            if pressed {
                 command = Some(Command::Presence(index, !present));
             }
             if design::icon_button(
@@ -2108,9 +2314,10 @@ impl Run {
         if enter {
             // The next row without a total, after this one, then from the top.
             let count = self.state.participants.len();
-            self.focus_field = (1..count)
-                .map(|step| (index + step) % count)
-                .find(|i| self.state.participants[*i].initiative.is_none());
+            self.focus_field = (1..count).map(|step| (index + step) % count).find(|i| {
+                let p = &self.state.participants[*i];
+                p.initiative.is_none() && p.present
+            });
             if self.focus_field.is_none() {
                 self.return_focus = self.lookup_open;
             }
@@ -2273,25 +2480,34 @@ impl Run {
                             );
                             if !self.initiative.roster_ties && (up || down) {
                                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    if down
-                                        && design::icon_button(
+                                    // Two fixed places, so that a second click on an arrow
+                                    // cannot land on the other one and take back the first.
+                                    let slot = egui::Vec2::splat(Density::Read.control());
+                                    if down {
+                                        if design::icon_button(
                                             ui,
                                             icons::DOWN,
                                             &format!("Move {} after the tied participant", p.name),
                                         )
                                         .clicked()
-                                    {
-                                        command = Some(Command::Move(position, position + 1));
+                                        {
+                                            command = Some(Command::Move(position, position + 1));
+                                        }
+                                    } else {
+                                        ui.allocate_space(slot);
                                     }
-                                    if up
-                                        && design::icon_button(
+                                    if up {
+                                        if design::icon_button(
                                             ui,
                                             icons::UP,
                                             &format!("Move {} before the tied participant", p.name),
                                         )
                                         .clicked()
-                                    {
-                                        command = Some(Command::Move(position, position - 1));
+                                        {
+                                            command = Some(Command::Move(position, position - 1));
+                                        }
+                                    } else {
+                                        ui.allocate_space(slot);
                                     }
                                     ui.label(Type::Small.rich(ui, "Tie").color(c.document.unsaved));
                                 });
@@ -2367,7 +2583,16 @@ impl Run {
         self.error_line(ui);
         // Close run is this view's main action, so the reason it is off is not left to a hover.
         if let Some(reason) = self.close_block() {
-            ui.add(egui::Label::new(Type::Small.rich(ui, reason).color(c.muted)).wrap());
+            let conflicts = self.conflict_count();
+            let text = if conflicts > 0 {
+                format!(
+                    "{} to settle. {reason}",
+                    design::count(conflicts, "conflict", "conflicts")
+                )
+            } else {
+                reason.to_owned()
+            };
+            ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
         }
         if self.closing {
             ui.horizontal(|ui| {
@@ -2382,18 +2607,30 @@ impl Run {
                 .exact_width(width)
                 .frame(side_frame())
                 .show_inside(ui, |ui| {
-                    // Several conflicts can be long, and the log must keep some room.
-                    let room = ui.available_height() * 0.6;
+                    // With choices to make, they have the column, and the log waits behind a
+                    // heading. Never a pair of choices cut by a second scroll.
+                    let choosing = self.conflict_count() > 0;
+                    let room = if choosing {
+                        ui.available_height() - Density::Read.control() - design::M
+                    } else {
+                        ui.available_height() * 0.6
+                    };
                     egui::ScrollArea::vertical()
                         .id_salt("run_ended_sync")
                         .max_height(room)
                         .auto_shrink([false, true])
-                        .show(ui, |ui| self.sync_block(ui));
-                    if !self.setup_details.is_empty() {
-                        design::section(ui, "Prep", |ui| self.notes_tab(ui));
+                        .show(ui, |ui| {
+                            self.sync_block(ui);
+                            if !self.setup_details.is_empty() {
+                                design::section(ui, "Prep", |ui| self.notes_tab(ui));
+                            }
+                        });
+                    if choosing {
+                        design::section(ui, "Combat log", |ui| self.log_tab(ui));
+                    } else {
+                        design::group_label(ui, "Combat log");
+                        self.log_tab(ui);
                     }
-                    design::group_label(ui, "Combat log");
-                    self.log_tab(ui);
                 });
         }
         egui::CentralPanel::default()
@@ -2515,26 +2752,15 @@ enum RowFit {
     Compressed,
 }
 
-impl RowFit {
-    /// A compressed row's bar starts later, still under the digits, so its second line has
-    /// the width that the turn word took and a condition does not wrap again.
-    fn bar_inset(self) -> f32 {
-        match self {
-            RowFit::Natural => 0.0,
-            RowFit::Compressed => 8.0,
-        }
-    }
-}
-
 /// The height that makes these rows, none shorter than it is now, fill `room`, up to `cap`.
-/// Rows taller than that keep their own height. None if the rows already fill `room`.
+/// Rows taller than that keep their own height. Zero if the rows already fill `room`.
 fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
     let mut sorted = heights.to_vec();
     sorted.sort_by(f32::total_cmp);
     let mut rest = room;
     let mut left = sorted.len();
     for &height in sorted.iter().rev() {
-        if left == 0 || height <= rest / left as f32 {
+        if height <= rest / left as f32 {
             break;
         }
         rest -= height;
@@ -2557,6 +2783,7 @@ struct RowLayout {
     /// A name-only row in a list that needs the height.
     tight: bool,
     fit: RowFit,
+    bar_inset: f32,
     /// The compressed list's shared row height, once any spare room is shared out.
     even: f32,
     initiative_right: f32,
@@ -2564,18 +2791,6 @@ struct RowLayout {
     ac_right: f32,
     temp_right: f32,
     hp_right: f32,
-}
-
-/// The current-row bar, the gap after it, and room for the word `TURN` at this size.
-fn initiative_width(scale: RunScale, fit: RowFit) -> f32 {
-    let word = scale.mark * 3.2;
-    6.0 + design::XS
-        + match fit {
-            RowFit::Natural => word,
-            // The word sits on the number's line, so that a row's height never depends on
-            // whose turn it is.
-            RowFit::Compressed => word + scale.stat,
-        }
 }
 
 fn header_height(scale: RunScale) -> f32 {
@@ -2594,11 +2809,21 @@ impl RowLayout {
     ) -> Self {
         let c = colors();
         // Fixed columns from the left of the numbers. A name stays near its HP.
-        let initiative_right = initiative_width(scale, fit);
-        let gap = if fit == RowFit::Compressed { 6.0 } else { 12.0 };
+        // The smallest scale has one set of columns, compressed or not, so that a list that
+        // starts to compress does not move its names sideways.
+        let narrow = fit == RowFit::Compressed || scale.row <= design::RUN_COMPACT.row;
+        // The current-row bar, the gap after it, and room for the word `TURN` at this size. In
+        // narrow columns the word can sit on the number's line, so that a row's height never
+        // depends on whose turn it is.
+        let word = scale.mark * 3.2;
+        let initiative_right = 6.0 + design::XS + if narrow { word + scale.stat } else { word };
+        let gap = if narrow { 6.0 } else { 12.0 };
+        // Its bar starts later, still under the digits, so its second line has the width that
+        // the turn word took and a condition does not wrap again.
+        let bar_inset = if narrow { 8.0 } else { 0.0 };
         let name_left = initiative_right + gap + scale.name * 0.7;
         let hp_width = scale.hp * 1.9 + scale.hp_max * 2.0 + 4.0;
-        let state_width = (scale.mark * 7.0).clamp(84.0, 110.0);
+        let state_width = (scale.mark * 8.5).clamp(84.0, 118.0);
         let temp_width = scale.stat * 2.6 + 12.0;
         let ac_width = scale.stat * 1.5 + 22.0;
         let numbers = name_left + ac_width + temp_width + hp_width + design::S;
@@ -2612,8 +2837,11 @@ impl RowLayout {
 
         let mut job = egui::text::LayoutJob::default();
         // The line wraps before the HP column, so that it never runs over the HP bar.
-        job.wrap.max_width = (temp_right + fit.bar_inset() - name_left).max(1.0);
-        let font = Type::Body.sized(ui, scale.condition);
+        job.wrap.max_width = (temp_right + bar_inset - name_left).max(1.0);
+        // With HP in what a DM looks for: as strong as the state words, and stronger than AC.
+        // The compact scale keeps body weight, so a wrapped line costs no row its place.
+        let role = if narrow { Type::Body } else { Type::Strong };
+        let font = role.sized(ui, scale.condition);
         let mut first = true;
         let mut add = |text: &str, color: egui::Color32| {
             if !first {
@@ -2650,6 +2878,9 @@ impl RowLayout {
         if !p.present {
             add(&format!("{} Absent", icons::ABSENT), c.muted);
         }
+        if p.present && p.initiative.is_none() {
+            add("No initiative", c.result.warning);
+        }
         if p.concentration {
             add(
                 &format!("{} Conc", icons::CONCENTRATING),
@@ -2675,6 +2906,7 @@ impl RowLayout {
         Self {
             name,
             even: 0.0,
+            bar_inset,
             second_line,
             inline_state,
             tight,
@@ -2785,7 +3017,8 @@ fn paint_row(
         painter,
         initiative_right,
         line_y,
-        &display(p.initiative),
+        &p.initiative
+            .map_or_else(|| "—".to_owned(), |n| n.to_string()),
         &numeral,
         if current { c.turn.current } else { c.muted },
     );
@@ -2830,7 +3063,7 @@ fn paint_row(
         line_y,
         &display(p.armor_class),
         &numeral,
-        text,
+        if p.present { c.muted } else { text },
     );
     painter.text(
         pos2(left - 4.0, line_y + 1.0),
@@ -2871,10 +3104,7 @@ fn paint_row(
     // Close under the digits, and clear of the hairline.
     let bar_top = (line_y + scale.hp * 0.5 + 3.0).min(rect.bottom() - bar_height - 1.0);
     let bar = Rect::from_min_max(
-        pos2(
-            x + layout.temp_right + layout.fit.bar_inset() + 4.0,
-            bar_top,
-        ),
+        pos2(x + layout.temp_right + layout.bar_inset + 4.0, bar_top),
         pos2(hp_right, bar_top + bar_height),
     );
     design::hp_bar(painter, bar, p.hp, p.max_hp, p.temporary_hp);

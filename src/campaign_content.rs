@@ -192,77 +192,95 @@ impl CampaignContent {
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let mut repaired = false;
         for (path, baseline, draft) in &mut self.repairs {
-            design::section(ui, format!("Repair invalid note: {path}"), |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(220.0)
-                    .id_salt(("repair", path.as_str()))
-                    .show(ui, |ui| {
-                        let response = ui.add(
-                            egui::TextEdit::multiline(draft)
-                                .font(egui::TextStyle::Monospace)
-                                .desired_width(f32::INFINITY),
-                        );
-                        design::named(ui, &response, "Note text");
-                    });
-                ui.horizontal(|ui| {
-                    if Action::secondary("Save repaired note")
-                        .density(Density::Read)
-                        .blocked_if(draft == baseline, "No changes to save.")
-                        .show(ui)
-                        .clicked()
-                        || (draft != baseline
-                            && ui.input_mut(|i| {
-                                i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
-                            }))
-                    {
-                        let result = Entry::parse(path, draft).and_then(|entry| {
-                            if entry.kind == "package"
-                                || (entry.kind == "campaign" && entry.id != active.id)
-                            {
-                                return Err(
-                                    "Keep campaign ownership consistent with settings.".into()
-                                );
-                            }
-                            write_note(&active.path, path, Some(baseline), draft)
+            design::section(
+                ui,
+                format!("{} Repair invalid note: {path}", icons::ERROR),
+                |ui| {
+                    // What is wrong comes first, and stays true as the DM edits.
+                    if let Err(problem) = Entry::parse(path, draft) {
+                        design::message(ui, Tone::Error, &problem);
+                    }
+                    egui::ScrollArea::vertical()
+                        .max_height(220.0)
+                        .id_salt(("repair", path.as_str()))
+                        .show(ui, |ui| {
+                            let response = ui.add(
+                                egui::TextEdit::multiline(draft)
+                                    .font(egui::TextStyle::Monospace)
+                                    .desired_width(f32::INFINITY),
+                            );
+                            design::named(ui, &response, "Note text");
                         });
-                        match result {
-                            Ok(_) => {
-                                *baseline = draft.clone();
-                                repaired = true;
+                    ui.horizontal(|ui| {
+                        if Action::secondary("Save repaired note")
+                            .density(Density::Read)
+                            .blocked_if(
+                                draft == baseline,
+                                "Edit the note to fix the problem above first.",
+                            )
+                            .show(ui)
+                            .clicked()
+                            || (draft != baseline
+                                && ui.input_mut(|i| {
+                                    i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
+                                }))
+                        {
+                            let result = Entry::parse(path, draft).and_then(|entry| {
+                                if entry.kind == "package"
+                                    || (entry.kind == "campaign" && entry.id != active.id)
+                                {
+                                    return Err(
+                                        "Keep campaign ownership consistent with settings.".into(),
+                                    );
+                                }
+                                write_note(&active.path, path, Some(baseline), draft)
+                            });
+                            match result {
+                                Ok(_) => {
+                                    *baseline = draft.clone();
+                                    repaired = true;
+                                }
+                                Err(e) => self.error = Some(e),
                             }
-                            Err(e) => self.error = Some(e),
                         }
-                    }
-                    ui.add_space(design::XL);
-                    if draft != baseline
-                        && Action::destructive("Discard repair draft")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    {
-                        self.discarded_repair = Some((path.clone(), draft.clone()));
-                        *draft = baseline.clone();
-                    }
-                    if draft != baseline
-                        && self
-                            .discarded_repair
-                            .as_ref()
-                            .is_some_and(|(p, _)| p == path)
-                    {
-                        self.discarded_repair = None;
-                    }
-                    if let Some((_, text)) =
-                        self.discarded_repair.as_ref().filter(|(p, _)| p == path)
-                        && Action::secondary("Undo discard")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                    {
-                        *draft = text.clone();
-                        self.discarded_repair = None;
-                    }
-                });
-            });
+                        ui.add_space(design::XL);
+                        if draft != baseline
+                            && Action::destructive("Discard repair draft")
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                        {
+                            self.discarded_repair = Some((path.clone(), draft.clone()));
+                            *draft = baseline.clone();
+                        }
+                        if draft != baseline
+                            && self
+                                .discarded_repair
+                                .as_ref()
+                                .is_some_and(|(p, _)| p == path)
+                        {
+                            self.discarded_repair = None;
+                        }
+                        if let Some((_, text)) =
+                            self.discarded_repair.as_ref().filter(|(p, _)| p == path)
+                        {
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, "Draft discarded.")
+                                    .color(colors().muted),
+                            );
+                            if Action::secondary("Undo discard")
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                            {
+                                *draft = text.clone();
+                                self.discarded_repair = None;
+                            }
+                        }
+                    });
+                },
+            );
         }
         if repaired && !self.dirty() {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -289,6 +307,9 @@ impl CampaignContent {
                 .blocked(repair.or((!dirty).then_some("No changes to save.")))
                 .show(ui)
                 .clicked();
+            if !dirty && repair.is_none() {
+                ui.label(Type::Small.rich(ui, "No changes").color(c.document.clean));
+            }
             if pressed || save_key {
                 match document.save() {
                     Ok(()) => {
@@ -313,15 +334,17 @@ impl CampaignContent {
                         self.saved_selections.clone(),
                     ));
                 }
-            } else if self.discarded_selections.is_some()
-                && Action::secondary("Undo discard")
+            } else if self.discarded_selections.is_some() {
+                ui.label(Type::Small.rich(ui, "Selections discarded.").color(c.muted));
+                if Action::secondary("Undo discard")
                     .density(Density::Read)
                     .hint("Bring back the selection changes you discarded")
                     .show(ui)
                     .clicked()
-                && let Some(selections) = self.discarded_selections.take()
-            {
-                document.selections = selections;
+                    && let Some(selections) = self.discarded_selections.take()
+                {
+                    document.selections = selections;
+                }
             }
             if !self.repairs.is_empty() {
                 ui.label(
@@ -459,10 +482,27 @@ impl CampaignContent {
                                     Selection::All => total,
                                     Selection::Selected { entries } => entries.len(),
                                 });
-                            let partial = existing.is_some_and(|i| {
-                                matches!(&document.selections[i].selection,
+                            // What the campaign's other choices pull in is ticked too.
+                            let required =
+                                existing.map_or(0, |i| match &document.selections[i].selection {
+                                    Selection::All => 0,
+                                    Selection::Selected { entries } => module
+                                        .entries
+                                        .iter()
+                                        .filter(|id| {
+                                            catalogue.selectable(**id)
+                                                && closure.required.contains_key(id)
+                                                && !entries.iter().any(|e| {
+                                                    catalogue.resolve_ref(e).ok() == Some(**id)
+                                                })
+                                        })
+                                        .count(),
+                                });
+                            let partial = count + required < total
+                                && existing.is_some_and(|i| {
+                                    matches!(&document.selections[i].selection,
                                     Selection::Selected { entries } if !entries.is_empty())
-                            });
+                                });
                             let mut enabled = count > 0;
                             ui.push_id(module.id, |ui| {
                                 ui.horizontal(|ui| {
@@ -495,16 +535,23 @@ impl CampaignContent {
                                         Density::Glance.row() + design::XS,
                                         self.module == Some(module.id),
                                         &module.name,
-                                        &format!(
-                                            "{} · {total} entries",
-                                            if partial {
-                                                format!("{count} selected")
-                                            } else if enabled {
-                                                "All".into()
-                                            } else {
-                                                "None".into()
-                                            },
-                                        ),
+                                        &if required > 0 {
+                                            format!(
+                                                "{} of {total} · {required} required",
+                                                count + required
+                                            )
+                                        } else {
+                                            format!(
+                                                "{} · {total} entries",
+                                                if partial {
+                                                    format!("{count} selected")
+                                                } else if enabled {
+                                                    "All".into()
+                                                } else {
+                                                    "None".into()
+                                                },
+                                            )
+                                        },
                                     )
                                     .clicked()
                                     {
@@ -610,6 +657,19 @@ impl CampaignContent {
                 }
                 design::rule(ui);
                 if listing == Listing::Required {
+                    // Whose it is: this list covers the whole campaign, not the package above it.
+                    let owner = |id: &uuid::Uuid| {
+                        let e = &catalogue.entries[id];
+                        if e.private {
+                            "Campaign".to_owned()
+                        } else {
+                            catalogue
+                                .modules
+                                .iter()
+                                .find(|m| m.id == e.owner)
+                                .map_or_else(|| "Package".to_owned(), |m| m.name.clone())
+                        }
+                    };
                     // By name, with the kind: two entries can share a name, and an ID order means nothing.
                     let mut required: Vec<_> = closure.required.iter().collect();
                     required.sort_by_key(|(id, _)| {
@@ -639,14 +699,17 @@ impl CampaignContent {
                                             .rich(
                                                 ui,
                                                 format!(
-                                                    "{} · {} — required by {}",
+                                                    "{} · {} · {} — required by {}",
                                                     entry.name,
-                                                    entry.kind.replace('_', " "),
-                                                    reasons
-                                                        .iter()
-                                                        .cloned()
-                                                        .collect::<Vec<_>>()
-                                                        .join(", ")
+                                                    crate::design::reader::human_label(&entry.kind),
+                                                    owner(id),
+                                                    match reasons.iter().collect::<Vec<_>>().as_slice() {
+                                                        [only] => (*only).clone(),
+                                                        [first, rest @ ..] => {
+                                                            format!("{first} and {} more", rest.len())
+                                                        }
+                                                        [] => String::new(),
+                                                    }
                                                 ),
                                             )
                                             .color(c.text),

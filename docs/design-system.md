@@ -37,7 +37,7 @@ Fonts are in `assets/fonts/` with their licences. All are OFL. egui 0.33 rasteri
 | egui's monospace | Markdown editor | Source text only. `Type::Mono` |
 
 Atkinson Hyperlegible was the first choice. Its digits are proportional and its zero is
-slashed, and painting each digit in a fixed cell left wide gaps (review H-4). So the font
+slashed, and painting each digit in a fixed cell left wide gaps. So the font
 changed, and no fixed cells are left. `design::number` right-aligns ordinary text, and
 HP and initiative hold their place because the font's digits have one width.
 
@@ -161,7 +161,7 @@ control still has an accessible name and a tooltip.
 `Discard` is one press and one step of undo, not a dialog: `Draft discarded` with `Undo
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
 there is something to discard. A file that changed on disk stops saving and asks: the run
-offers `Keep this run` and `Save as a new run`, and a Library note offers `Overwrite with my
+offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
 draft`, `Show disk version` and `Reload and lose my draft`. These messages cannot be dismissed.
 
 ## The Reader

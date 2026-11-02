@@ -247,6 +247,76 @@ impl<'a> Driver<'a> {
             .contains(text)
     }
 
+    /// What is painted from this label down, in its column and to its right.
+    pub fn painted_from_label(&self, name: &str) -> String {
+        self.nodes()
+            .into_iter()
+            .find(|node| node.name == name && node.role == Role::Label)
+            .map_or_else(String::new, |label| {
+                let window = self.harness.ctx.content_rect();
+                self.painted_in(egui::Rect::from_min_max(label.rect.min, window.max))
+            })
+    }
+
+    /// What the run's header paints: between the rail and `Next turn`, on its line.
+    pub fn header_rect(&self) -> egui::Rect {
+        let next = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Next turn")
+            .expect("the run's header");
+        egui::Rect::from_min_max(
+            egui::pos2(self.harness.ctx.content_rect().left() + 136.0, 0.0),
+            egui::pos2(next.rect.min.x, next.rect.max.y),
+        )
+    }
+
+    /// The size of the painted text in this rect that holds these words.
+    pub fn painted_size(&self, rect: egui::Rect, words: &str) -> Option<f32> {
+        let mut found = None;
+        self.each_painted_text(|text, _| {
+            if rect.contains(text.visual_bounding_rect().center())
+                && text.galley.job.text.contains(words)
+            {
+                found = text
+                    .galley
+                    .job
+                    .sections
+                    .first()
+                    .map(|s| s.format.font_id.size);
+            }
+        });
+        found
+    }
+
+    /// Each text painted now, with the clip of the pane it is in.
+    fn each_painted_text(&self, mut visit: impl FnMut(&egui::epaint::TextShape, egui::Rect)) {
+        fn walk(
+            shape: &egui::Shape,
+            clip: egui::Rect,
+            visit: &mut impl FnMut(&egui::epaint::TextShape, egui::Rect),
+        ) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes.iter().for_each(|shape| walk(shape, clip, visit));
+                }
+                egui::Shape::Text(text) => visit(text, clip),
+                _ => {}
+            }
+        }
+        for clipped in &self.harness.output().shapes {
+            walk(&clipped.shape, clipped.clip_rect, &mut visit);
+        }
+    }
+
+    /// Where a control is, by its exact name.
+    pub fn place_of(&self, name: &str) -> Option<egui::Rect> {
+        self.nodes()
+            .into_iter()
+            .find(|node| node.name == name)
+            .map(|node| node.rect)
+    }
+
     /// What the rail paints. It has its own words, whatever the page says.
     pub fn rail_words(&self) -> String {
         let window = self.harness.ctx.content_rect();
@@ -516,29 +586,16 @@ impl<'a> Driver<'a> {
     /// Every text painted inside this rect and whole: not cut to an ellipsis, and not
     /// outside the clip of the pane it is in. This is what a person can read there.
     pub fn painted_in(&self, rect: egui::Rect) -> String {
-        fn search(shape: &egui::Shape, clip: egui::Rect, rect: egui::Rect, out: &mut Vec<String>) {
-            match shape {
-                egui::Shape::Vec(shapes) => {
-                    shapes
-                        .iter()
-                        .for_each(|shape| search(shape, clip, rect, out));
-                }
-                egui::Shape::Text(text) => {
-                    let bounds = text.visual_bounding_rect();
-                    if rect.contains(bounds.center())
-                        && !text.galley.elided
-                        && clip.expand(1.0).contains_rect(bounds)
-                    {
-                        out.push(text.galley.job.text.clone());
-                    }
-                }
-                _ => {}
-            }
-        }
         let mut out = Vec::new();
-        for clipped in &self.harness.output().shapes {
-            search(&clipped.shape, clipped.clip_rect, rect, &mut out);
-        }
+        self.each_painted_text(|text, clip| {
+            let bounds = text.visual_bounding_rect();
+            if rect.contains(bounds.center())
+                && !text.galley.elided
+                && clip.expand(1.0).contains_rect(bounds)
+            {
+                out.push(text.galley.job.text.clone());
+            }
+        });
         out.join(" ")
     }
 
@@ -626,6 +683,11 @@ impl<'a> Driver<'a> {
 
     /// Every disabled control here that gives no reason when the pointer rests on it.
     pub fn disabled_without_reason(&mut self) -> Vec<String> {
+        self.disabled_without_reason_except(&[])
+    }
+
+    /// A dialog turns off what is behind it, and that says nothing about what is in it.
+    pub fn disabled_without_reason_except(&mut self, behind: &[String]) -> Vec<String> {
         let names: Vec<(String, egui::Rect)> = self
             .nodes()
             .into_iter()
@@ -633,7 +695,11 @@ impl<'a> Driver<'a> {
                 node.disabled
                     && node.fully_in_view()
                     && !node.name.is_empty()
-                    && matches!(node.role, Role::Button | Role::ComboBox | Role::TextInput)
+                    && !behind.contains(&node.name)
+                    && matches!(
+                        node.role,
+                        Role::Button | Role::ComboBox | Role::TextInput | Role::CheckBox
+                    )
             })
             .map(|node| (node.name, node.shown))
             .collect();
@@ -645,11 +711,10 @@ impl<'a> Driver<'a> {
             self.harness.run_steps(6);
             // A reason is words, not any new thing on screen. Three is the shortest.
             let after = self.painted_in(window);
-            let added = after.split_whitespace().count()
-                - before
-                    .split_whitespace()
-                    .count()
-                    .min(after.split_whitespace().count());
+            let added = after
+                .split_whitespace()
+                .count()
+                .saturating_sub(before.split_whitespace().count());
             if added < 3 {
                 silent.push(name);
             }

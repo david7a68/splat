@@ -19,6 +19,8 @@ pub struct Campaigns {
     confirm_remove: Option<Uuid>,
     /// The campaign just added, and where to go next.
     added: Option<String>,
+    /// The DM asked to go on to Encounters, from that message.
+    pub wants_encounters: bool,
 }
 
 /// The rail's campaign selector, with a name on two lines.
@@ -37,6 +39,7 @@ impl Default for Campaigns {
             remote: None,
             confirm_remove: None,
             added: None,
+            wants_encounters: false,
         };
         match Store::user() {
             Ok(store) => {
@@ -112,12 +115,7 @@ impl Campaigns {
         let adding = self.editing.is_none();
         self.persist(data)?;
         self.clear_form();
-        self.added = adding.then(|| {
-            format!(
-                "Added {}. Next: build an encounter in Encounters.",
-                campaign.name
-            )
-        });
+        self.added = adding.then(|| format!("Added {}.", campaign.name));
         Ok(())
     }
 
@@ -184,6 +182,7 @@ impl Campaigns {
             remote: None,
             confirm_remove: None,
             added: None,
+            wants_encounters: false,
         }
     }
 
@@ -292,14 +291,16 @@ impl Campaigns {
         self.persist(data)
     }
 
+    /// Any campaign in the list, active or not, already links to this one.
+    pub fn is_added(&self, remote_id: &str) -> bool {
+        self.data.campaigns.iter().any(|c| links_to(c, remote_id))
+    }
+
     pub fn linked_elsewhere(&self, remote_id: &str) -> bool {
-        self.data.campaigns.iter().any(|c| {
-            Some(c.id) != self.data.active_campaign_id
-                && c.dndbeyond_campaign_id
-                    .as_deref()
-                    .and_then(|id| id.parse::<u64>().ok())
-                    == remote_id.parse::<u64>().ok()
-        })
+        self.data
+            .campaigns
+            .iter()
+            .any(|c| Some(c.id) != self.data.active_campaign_id && links_to(c, remote_id))
     }
 
     fn clear_form(&mut self) {
@@ -508,8 +509,18 @@ impl Campaigns {
     ) {
         let c = colors();
         self.remove_dialog(ui.ctx());
-        if let Some(added) = &self.added {
-            design::message(ui, Tone::Success, added);
+        if let Some(added) = self.added.clone() {
+            ui.horizontal(|ui| {
+                design::message(ui, Tone::Success, &added);
+                if Action::primary("Build an encounter")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.wants_encounters = true;
+                    self.added = None;
+                }
+            });
         }
         ui.horizontal(|ui| {
             ui.label(Type::Heading.rich(ui, "Campaigns").color(c.text));
@@ -666,11 +677,19 @@ impl Campaigns {
                 ui.label(format!("{name} · D&D Beyond ID {id}"));
             }
             design::text_field(ui, "Campaign name", &mut self.name, None, None);
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Max), |ui| {
-                ui.vertical(|ui| {
-                    ui.set_max_width((ui.available_width() - 112.0).max(120.0));
-                    design::text_field(ui, "Folder", &mut self.path, None, None);
-                });
+            // The button sits on the field's line, and ends where the fields above end.
+            let room = ui.available_width();
+            let field = ui
+                .vertical(|ui| {
+                    ui.set_max_width((room - BROWSE_WIDTH).max(120.0));
+                    design::text_field(ui, "Folder", &mut self.path, None, None)
+                })
+                .inner;
+            let browse = egui::Rect::from_min_size(
+                egui::pos2(field.rect.right() + design::S, field.rect.top()),
+                egui::vec2(BROWSE_WIDTH, field.rect.height()),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(browse), |ui| {
                 if Action::secondary("Browse…")
                     .density(Density::Read)
                     .show(ui)
@@ -701,11 +720,35 @@ impl Campaigns {
                     self.clear_form();
                 }
             });
+            // What it is waiting for, without a hover.
+            if self.name.trim().is_empty() || self.path.trim().is_empty() {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "Enter a campaign name and a folder.")
+                        .color(colors().muted),
+                );
+            }
             if let Some(error) = &self.error {
                 design::message(ui, Tone::Error, error);
             }
         });
     }
+}
+
+/// The Browse button and the gap before it, beside the folder field.
+const BROWSE_WIDTH: f32 = 92.0;
+
+/// By number, because a link can be stored with other formatting. An ID that is not a number
+/// links to nothing, and neither does a campaign with no link.
+fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
+    let Ok(remote) = remote_id.parse::<u64>() else {
+        return false;
+    };
+    campaign
+        .dndbeyond_campaign_id
+        .as_deref()
+        .and_then(|id| id.parse::<u64>().ok())
+        == Some(remote)
 }
 
 #[cfg(test)]
@@ -769,11 +812,15 @@ mod tests {
             remote: None,
             confirm_remove: None,
             added: None,
+            wants_encounters: false,
         };
         campaigns.select(Some(first));
         campaigns.link(Some("12".into())).unwrap();
         campaigns.select(Some(second));
         assert!(campaigns.linked_elsewhere("12"));
+        // Not a number: it links to nothing, even with a campaign that has no link.
+        assert!(!campaigns.linked_elsewhere("not-a-number"));
+        assert!(!campaigns.is_added("not-a-number"));
         assert!(campaigns.link(Some("12".into())).is_err());
         assert!(
             campaigns

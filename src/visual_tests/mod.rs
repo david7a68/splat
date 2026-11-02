@@ -39,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 29] = [
+const SCENARIOS: [(&str, Seed, Script); 30] = [
     (
         "library-browse",
         Seed::Empty,
@@ -125,6 +125,11 @@ const SCENARIOS: [(&str, Seed, Script); 29] = [
         "run-edge-states",
         Seed::Campaign,
         scenarios::run_edge_states::run,
+    ),
+    (
+        "run-absent-player",
+        Seed::Campaign,
+        scenarios::run_absent_player::run,
     ),
     (
         "run-long-names",
@@ -234,12 +239,12 @@ fn output_directory() -> (PathBuf, bool) {
     )
 }
 
-/// Only files this suite writes. The folder can be one the caller chose.
 /// A partial run replaces only its own captures.
 fn is_selected(scenario: &str) -> bool {
     selected().iter().any(|(name, ..)| *name == scenario)
 }
 
+/// Only files this suite writes. The folder can be one the caller chose.
 fn clear_old_captures(directory: &Path) {
     let names = [
         "ergonomics.json",
@@ -274,7 +279,7 @@ fn clear_old_captures(directory: &Path) {
             .and_then(|n| n.to_str())
             .unwrap_or_default();
         if path.extension().is_some_and(|e| e == "mp4") && is_selected(stem) {
-            fs::remove_file(file.path()).expect("clear old video");
+            fs::remove_file(&path).expect("clear old video");
         }
     }
 }

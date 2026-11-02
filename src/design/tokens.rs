@@ -153,7 +153,7 @@ pub const DARK: Colors = Colors {
     },
     side: Side {
         party: rgb(0xCFC6B4),
-        enemies: rgb(0xE8926F),
+        enemies: rgb(0xFA8F55),
         other: rgb(0xB4C08F),
     },
     sync: Sync {
@@ -175,7 +175,7 @@ pub const DARK: Colors = Colors {
         unsaved: SAND,
         saved: GREEN,
         invalid: RED,
-        external: ROSE,
+        external: SAND,
         read_only: MUTED,
     },
     result: ResultTones {
@@ -268,7 +268,7 @@ pub const RUN_REGULAR: RunScale = RunScale {
     hp: 24.0,
     hp_max: 15.0,
     stat: 16.0,
-    condition: 14.0,
+    condition: 15.0,
     mark: 13.0,
     max_width: 640.0,
 };
@@ -599,6 +599,8 @@ mod tests {
             ("enemies, damaged", c.side.enemies, c.hp.damaged),
             ("bloodied, conflict", c.hp.bloodied, c.sync.conflict),
             ("enemies, conflict", c.side.enemies, c.sync.conflict),
+            ("enemies, bloodied", c.side.enemies, c.hp.bloodied),
+            ("enemies, error", c.side.enemies, c.result.error),
             ("side, condition", c.side.enemies, c.participant.condition),
             ("temp, healthy", c.hp.temp, c.hp.healthy),
         ] {

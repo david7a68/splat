@@ -351,6 +351,25 @@ state, and a conflict shows on the row and the strip without stopping the table.
 Saved runs do not automatically push old values. The session must have edit
 permission for the character.
 
+A value you recorded is not replaced without your say. If a session ends during a run, keep
+recording: a row with a change that was not sent says `Not sent`, the others say `Sync stopped`, and
+closing the run tells you who has unsent changes. On a first read, by **Sync party** or after a
+restart, Splat compares each value with the last one D&D Beyond confirmed, or with what the participant
+began the run with if there is none. A value you changed stays in the run, and if the sheet differs
+that is a conflict, settled from the panel: use the sheet's value, or keep yours and send it. An open
+conflict is found again after a close, an app close or a crash. A value you did not change takes
+the sheet's.
+
+While sync reads a sheet, that sheet decides Maximum HP, and the field says so. Stop sync to change it
+in the run. A maximum set while sync was off stays until the next first read, where the notice and the
+log say what it became. A message from sync stays under the list until you dismiss it.
+
+A save from an earlier version can hold unsent values as its last match, so on its first read every
+difference asks, once. Its new `started` field is optional, and earlier saves load. Spell slots and
+limited uses are not in the saved run: an unsent one asks at the next first read in the same session,
+and closing says it will be lost. Undo stops wherever a value reached the run from the sheet or the
+sync panel, and the notice and the log say what changed, from what to what.
+
 Sync covers current and temporary HP, death saves, official conditions,
 ordinary and pact spell slots spent, and supported action/spell limited uses.
 Concentration, custom effects, inventory charges, initiative, and notes stay local.
@@ -360,7 +379,8 @@ visible and offer a choice of local or remote values. Unconfirmed changes are no
 retried without review. The service has no verified atomic compare-and-set API,
 so another client can still change values between a read and a write.
 
-Incoming health or condition changes clear the run's undo history, and a message says so. Wait for sync
+Health or condition values taken from the sheet clear the run's undo history, and a message says so. In a small
+window with a full roster, the list can leave no room for that message, so only the Log records the change. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
 queued work but cannot recall a request already sent. Party sync stops when you leave its
 page, and the sidebar says so; run sync remains active while that run is open.
