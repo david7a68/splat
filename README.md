@@ -336,7 +336,8 @@ visible and offer a choice of local or remote values. Unconfirmed changes are no
 retried without review. The service has no verified atomic compare-and-set API,
 so another client can still change values between a read and a write.
 
-Health or condition values taken from the sheet clear the run's undo history, and a message says so. Wait for sync
+Health or condition values taken from the sheet clear the run's undo history, and a message says so. In a small
+window with a full roster, the list can leave no room for that message, so only the Log records the change. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
 queued work but cannot recall a request already sent. Party sync stops when you leave its
 page, and the sidebar says so; run sync remains active while that run is open.

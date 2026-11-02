@@ -2619,6 +2619,19 @@ pub mod run_roster_conflict {
     const LOADED_CONDITIONS: [&str; 5] =
         ["Blinded", "Charmed", "Grappled", "Paralyzed", "Restrained"];
 
+    /// The rows of the 12 that are not in full view.
+    fn rows_cut(d: &Driver<'_>) -> Vec<&'static str> {
+        let nodes = d.nodes();
+        run_large_roster::ROSTER_12
+            .into_iter()
+            .filter(|name| {
+                !nodes
+                    .iter()
+                    .any(|n| n.name.starts_with(&format!("{name},")) && n.fully_in_view())
+            })
+            .collect()
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN_12);
         d.app_mut()
@@ -2662,15 +2675,7 @@ pub mod run_roster_conflict {
         d.click(CONDITIONS);
         d.click(ONE_MORE_CONDITION);
         d.state("message-on-one-line", Sizes::Default);
-        let nodes = d.nodes();
-        let cut: Vec<&&str> = run_large_roster::ROSTER_12
-            .iter()
-            .filter(|name| {
-                !nodes
-                    .iter()
-                    .any(|n| n.name.starts_with(&format!("{name},")) && n.fully_in_view())
-            })
-            .collect();
+        let cut = rows_cut(d);
         d.observe(
             "T1.3",
             cut.is_empty() && d.visible_text("Undo history was cleared. Hover here"),
@@ -2686,15 +2691,7 @@ pub mod run_roster_conflict {
             .simulate_run_error("The reference for Ember Cultist could not be read.");
         d.settle();
         d.state("loaded-roster-of-12", Sizes::Default);
-        let nodes = d.nodes();
-        let cut: Vec<&&str> = run_large_roster::ROSTER_12
-            .iter()
-            .filter(|name| {
-                !nodes
-                    .iter()
-                    .any(|n| n.name.starts_with(&format!("{name},")) && n.fully_in_view())
-            })
-            .collect();
+        let cut = rows_cut(d);
         d.observe(
             "T1.3",
             cut.is_empty() && d.in_view(AMOUNT) && d.in_view(APPLY_DAMAGE),

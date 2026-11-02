@@ -739,8 +739,7 @@ impl Run {
 
     /// The height of this list at its most compressed, in this room.
     fn tightest_roster(&self, ui: &egui::Ui, width: f32, room: f32) -> f32 {
-        let count = self.state.order.len();
-        let scale = RunScale::fit(room, width, count);
+        let scale = RunScale::fit(room, width, self.state.order.len());
         self.roster_layouts(ui, width, scale, RowFit::Compressed)
             .iter()
             .map(|layout| layout.height(scale))

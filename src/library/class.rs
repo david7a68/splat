@@ -4,13 +4,21 @@ use crate::design::{self, Type, colors, reader as style};
 use eframe::egui;
 use splat::content::{Entry, Reference};
 
-pub(super) fn supports(entry: &Entry) -> bool {
+fn category(entry: &Entry) -> Option<&str> {
     entry
         .fields
         .get("splat_rule_group")
         .and_then(|group| group.get("category"))
         .and_then(|value| value.as_str())
-        == Some("class")
+}
+
+pub(super) fn supports(entry: &Entry) -> bool {
+    category(entry) == Some("class")
+}
+
+/// A class or a subclass grants features.
+pub(super) fn lists_features(entry: &Entry) -> bool {
+    matches!(category(entry), Some("class" | "subclass"))
 }
 
 /// Only recognize the imported core-traits block. Authored text and any trailing
@@ -70,16 +78,18 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
         } else {
             // Short enough to share the row with the value, as a spell's labels do.
             let label = match label {
-                "Saving Throw" => "Saving throws".to_owned(),
-                "Skill Proficiencies" => "Skills".to_owned(),
-                "Weapon Proficiencies" => "Weapons".to_owned(),
-                "Tool Proficiencies" => "Tools".to_owned(),
-                other => sentence_case(other),
+                "Primary Ability" => "Primary ability",
+                "Hit Point Die" => "Hit point die",
+                "Saving Throw" => "Saving throws",
+                "Skill Proficiencies" => "Skills",
+                "Weapon Proficiencies" => "Weapons",
+                "Tool Proficiencies" => "Tools",
+                "Armor Training" => "Armor training",
+                other => other,
             };
-            facts.push((label, value));
+            facts.push((label.to_owned(), value));
         }
     }
-    // The same rows as a spell's facts.
     style::facts(ui, &facts);
     if let Some(value) = equipment {
         ui.add_space(design::S);
@@ -115,24 +125,6 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     true
 }
 
-fn sentence_case(label: &str) -> String {
-    let lower = label.to_lowercase();
-    let mut chars = lower.chars();
-    chars.next().map_or_else(String::new, |first| {
-        first.to_uppercase().chain(chars).collect()
-    })
-}
-
-/// A class or a subclass grants features.
-pub(super) fn lists_features(entry: &Entry) -> bool {
-    let category = entry
-        .fields
-        .get("splat_rule_group")
-        .and_then(|group| group.get("category"))
-        .and_then(|value| value.as_str());
-    matches!(category, Some("class" | "subclass"))
-}
-
 struct Feature {
     level: Option<u32>,
     name: String,
@@ -161,22 +153,19 @@ fn features(entry: &Entry, links: &dyn Links) -> Vec<Feature> {
     let mut seen = std::collections::BTreeSet::new();
     for member in members.chain(granted) {
         let key = member.get("key").and_then(|v| v.as_str());
-        let id_text = member.get("id").and_then(|v| v.as_str());
-        if !seen.insert(key.or(id_text).map(str::to_owned)) {
+        let id = member.get("id").and_then(|v| v.as_str());
+        let reference = key.or(id);
+        if !seen.insert(reference) {
             continue;
         }
-        let id = member.get("id").and_then(|v| v.as_str());
-        let id = id.and_then(|id| uuid::Uuid::parse_str(id).ok());
         let target = key
             .map(|key| Reference::Key(key.to_owned()))
-            .or(id.map(Reference::Id))
+            .or(id
+                .and_then(|id| uuid::Uuid::parse_str(id).ok())
+                .map(Reference::Id))
             .and_then(|reference| links.find(&reference));
         let name = target.as_ref().map_or_else(
-            || {
-                key.or_else(|| member.get("id").and_then(|value| value.as_str()))
-                    .unwrap_or("Unresolved feature")
-                    .to_owned()
-            },
+            || reference.unwrap_or("Unresolved feature").to_owned(),
             |(_, name)| name.clone(),
         );
         let (level, name) = name
@@ -222,9 +211,6 @@ fn related(entry: &Entry, links: &dyn Links) -> Vec<(usize, String)> {
 pub(super) fn show_features(ui: &mut egui::Ui, entry: &Entry, links: &dyn Links) -> Option<usize> {
     let features = features(entry, links);
     let related = related(entry, links);
-    if features.is_empty() && related.is_empty() {
-        return None;
-    }
     let mut selected = None;
     if !related.is_empty() {
         ui.add_space(design::M);
