@@ -3452,17 +3452,28 @@ pub mod signed_in {
             d.click_containing(SYNCED_WORD);
         }
         d.click(SYNC_HP_FIELD);
+        let before = d.app_mut().party.sync_hp();
         d.type_text("4");
         d.type_text("5");
         let open = d.has(SYNC_TOGGLE);
-        let typed = d.app_mut().party.sync_hp();
+        let during = d.app_mut().party.sync_hp();
         d.observe(
             "F2-01",
-            open && typed == Some(45),
-            format!("Typing 45 with sync on: the panel stays open: {open}. The value is {typed:?}"),
+            open && during == before,
+            format!(
+                "Typing 45 with sync on: the panel stays open: {open}. Nothing can go out while \
+                 typing: the value stays {during:?}, from {before:?}"
+            ),
         );
         d.state("party-sync-typed-hp", Sizes::Default);
         // What goes out is the whole number, and the read-back confirms it.
+        d.press(Key::Enter);
+        let typed = d.app_mut().party.sync_hp();
+        d.observe(
+            "F2-01",
+            typed == Some(45),
+            format!("Enter sets the whole number: the value is {typed:?}"),
+        );
         d.harness_focus_nothing();
         d.app_mut().party.simulate_sync_read(SHEET_MAX_HP - 45);
         d.settle();

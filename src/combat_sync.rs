@@ -1145,14 +1145,24 @@ impl CombatSync {
                         let mut current =
                             (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0);
                         ui.label(format!("HP / {max_hp}"));
-                        let response = ui.add(egui::DragValue::new(&mut current).range(0..=max_hp));
+                        // A typed number counts when the DM leaves the field. A pause after
+                        // one digit must not send that digit to a player's sheet.
+                        let response = ui.add(
+                            egui::DragValue::new(&mut current)
+                                .range(0..=max_hp)
+                                .update_while_editing(false),
+                        );
                         crate::design::named(ui, &response, "Current HP on the sheet");
                         if response.changed() {
                             hp["removedHitPoints"] = (max_hp - current).into();
                         }
                         let mut temp = hp["temporaryHitPoints"].as_i64().unwrap_or(0);
                         ui.label("Temporary HP");
-                        let response = ui.add(egui::DragValue::new(&mut temp).range(0..=1_000_000));
+                        let response = ui.add(
+                            egui::DragValue::new(&mut temp)
+                                .range(0..=1_000_000)
+                                .update_while_editing(false),
+                        );
                         crate::design::named(ui, &response, "Temporary HP on the sheet");
                         if response.changed() {
                             hp["temporaryHitPoints"] = temp.into();
@@ -1219,8 +1229,11 @@ impl CombatSync {
                                     let field = format!("level{level}");
                                     let mut used = slots[&field].as_i64().unwrap_or(0);
                                     ui.label(format!("L{level}"));
-                                    let response =
-                                        ui.add(egui::DragValue::new(&mut used).range(0..=99));
+                                    let response = ui.add(
+                                        egui::DragValue::new(&mut used)
+                                            .range(0..=99)
+                                            .update_while_editing(false),
+                                    );
                                     crate::design::named(
                                         ui,
                                         &response,
@@ -1241,8 +1254,11 @@ impl CombatSync {
                                 ui.horizontal_wrapped(|ui| {
                                     ui.label(label);
                                     let mut used = resource["uses"].as_i64().unwrap_or(0);
-                                    let response = ui
-                                        .add(egui::DragValue::new(&mut used).range(0..=1_000_000));
+                                    let response = ui.add(
+                                        egui::DragValue::new(&mut used)
+                                            .range(0..=1_000_000)
+                                            .update_while_editing(false),
+                                    );
                                     crate::design::named(ui, &response, "Uses spent");
                                     if response.changed() {
                                         resource["uses"] = used.into();
@@ -1657,16 +1673,23 @@ mod tests {
         let mut harness = Harness::builder()
             .with_size(egui::vec2(700.0, 600.0))
             .build_ui_state(|ui, sync: &mut CombatSync| sync.show(ui, None), sync);
+        let before = harness.state().desired["hp"]["removedHitPoints"].clone();
         harness.get_by_label("Current HP on the sheet").click();
         harness.run_steps(3);
         harness.event(egui::Event::Text("2".to_owned()));
         harness.run_steps(3);
-        assert_eq!(harness.state().desired["hp"]["removedHitPoints"], 28);
+        assert_eq!(
+            harness.state().desired["hp"]["removedHitPoints"],
+            before,
+            "one digit is not a value to send"
+        );
         let (_keep_open, receiver) = mpsc::channel();
         let sent = harness.state().desired.clone();
         harness.state_mut().pending = Some(Pending { receiver, sent });
         harness.run_steps(3);
         harness.event(egui::Event::Text("1".to_owned()));
+        harness.run_steps(3);
+        harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
         assert_eq!(
             harness.state().desired["hp"]["removedHitPoints"],

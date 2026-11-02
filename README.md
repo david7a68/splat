@@ -366,7 +366,7 @@ Saved runs do not automatically push old values. The session must have edit
 permission for the character.
 
 The row says `Reading…` until the first read, then `Synced`, `Sync pending`, `Conflict`, `Sync read-only` or `Sync error`.
-On **Party**, the sync section says the same words. A value you recorded is not replaced without your say. If a session ends during a run, keep
+On **Party**, the sync section says the same words. In the sync panel, a typed number counts when you press Enter or leave the field, and only then can it go to the sheet. A value you recorded is not replaced without your say. If a session ends during a run, keep
 recording: a row with a change that was not sent says `Not sent`, the others say `Sync stopped`, and
 closing the run tells you who has unsent changes. On a first read, by **Sync party** or after a
 restart, Splat compares each value with the last one D&D Beyond confirmed, or with what the participant
