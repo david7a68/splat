@@ -118,6 +118,8 @@ impl Note {
 #[derive(Default)]
 struct Loaded {
     notes: Vec<Note>,
+    /// Problems that kept content from loading. The notes cannot show these again.
+    load_errors: Vec<String>,
     diagnostics: Vec<String>,
     /// What the active campaign can use: its selections and what they require.
     uses: Option<std::collections::HashSet<Uuid>>,
@@ -125,6 +127,31 @@ struct Loaded {
     counts: std::sync::OnceLock<Vec<(Section, usize)>>,
 }
 impl Loaded {
+    /// Checks all the loaded content as one, so that a reference can resolve to built-in
+    /// content or to another package. The check of one package alone cannot see those.
+    fn refresh_diagnostics(&mut self) {
+        let entries: Vec<_> = self
+            .notes
+            .iter()
+            .filter_map(|n| n.entry.as_ref())
+            // The SRD pages have no notes in the Library, but entries can refer to them.
+            .chain(content::builtin::entries())
+            .collect();
+        let report = content::validate_all(&entries);
+        let checks = report.errors.into_iter().chain(report.warnings);
+        self.diagnostics = self
+            .load_errors
+            .iter()
+            .cloned()
+            .chain(checks.map(|d| format!("{}: {}", d.path, d.message)))
+            .chain(
+                self.notes
+                    .iter()
+                    .filter_map(|n| n.error.as_ref().map(|e| format!("{}: {e}", n.path))),
+            )
+            .collect();
+    }
+
     fn in_scope(&self, note: &Note, scope: Scope) -> bool {
         match scope {
             Scope::All => true,
@@ -428,7 +455,6 @@ pub(crate) fn write_note(
 
 fn load(module: Option<&Module>) -> Result<Loaded, String> {
     let mut notes = Vec::new();
-    let mut diagnostics = Vec::new();
     if let Some(module) = module {
         let path = module.path.canonicalize().map_err(|e| e.to_string())?;
         let (entries, errors) = content::read_directory(&path)?;
@@ -439,14 +465,6 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                     .into(),
             );
         }
-        let report = content::validate(&entries);
-        diagnostics.extend(
-            report
-                .errors
-                .into_iter()
-                .chain(report.warnings)
-                .map(|d| format!("{}: {}", d.path, d.message)),
-        );
         for entry in entries {
             let text = fs::read_to_string(note_path(&module.path, &entry.path)?)
                 .map_err(|e| e.to_string())?;
@@ -461,7 +479,6 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
         for error in errors {
             let text = fs::read_to_string(note_path(&module.path, &error.path)?)
                 .map_err(|e| e.to_string())?;
-            diagnostics.push(format!("{}: {}", error.path, error.message));
             notes.push(Note {
                 path: error.path,
                 text,
@@ -487,7 +504,6 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     notes.sort_by_cached_key(|n| natural_key(n.name()));
     Ok(Loaded {
         notes,
-        diagnostics,
         ..Default::default()
     })
 }
@@ -497,14 +513,13 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
     let mut all = load(None)?;
     for module in modules {
         if let Err(error) = splat::content::art::ArtIndex::default().add_package(&module.path) {
-            all.diagnostics.push(format!("{}: {error}", module.name));
+            all.load_errors.push(format!("{}: {error}", module.name));
         }
         match load(Some(module)) {
             Ok(package) => {
                 all.notes.extend(package.notes);
-                all.diagnostics.extend(package.diagnostics);
             }
-            Err(error) => all.diagnostics.push(format!("{}: {error}", module.name)),
+            Err(error) => all.load_errors.push(format!("{}: {error}", module.name)),
         }
     }
     if let Some(campaign) = campaign {
@@ -534,7 +549,7 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
                     });
                 }
             }
-            Err(error) => all.diagnostics.push(format!("{}: {error}", campaign.name)),
+            Err(error) => all.load_errors.push(format!("{}: {error}", campaign.name)),
         }
         // If the selections cannot be read, say so and show everything rather than nothing.
         match CampaignDocument::load(campaign)
@@ -551,10 +566,11 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
                         .collect(),
                 );
             }
-            Err(error) => all.diagnostics.push(format!("{}: {error}", campaign.name)),
+            Err(error) => all.load_errors.push(format!("{}: {error}", campaign.name)),
         }
     }
     all.notes.sort_by_cached_key(|n| natural_key(n.name()));
+    all.refresh_diagnostics();
     Ok(all)
 }
 
@@ -950,7 +966,7 @@ impl Library {
                         });
                     ui.label(
                         Type::Small
-                            .rich(ui, "A reference to another package can stay unresolved in a check of one package.")
+                            .rich(ui, "An unresolved reference can mean that the package it needs is not registered.")
                             .color(colors().muted),
                     );
                 },
@@ -2027,19 +2043,7 @@ impl Library {
                     self.scope_counts = None;
                     self.just_saved = true;
                     self.content_changed = Some(root);
-                    let entries: Vec<_> = l.notes.iter().filter_map(|n| n.entry.clone()).collect();
-                    let r = content::validate(&entries);
-                    l.diagnostics = r
-                        .errors
-                        .into_iter()
-                        .chain(r.warnings)
-                        .map(|d| format!("{}: {}", d.path, d.message))
-                        .collect();
-                    l.diagnostics.extend(
-                        l.notes
-                            .iter()
-                            .filter_map(|n| n.error.as_ref().map(|e| format!("{}: {e}", n.path))),
-                    );
+                    l.refresh_diagnostics();
                     self.error = None;
                 }
                 Err(e) if e == NOTE_CHANGED => {
@@ -3013,6 +3017,59 @@ mod tests {
         let loaded = load(Some(&m)).unwrap();
         assert_eq!(loaded.notes.len(), 2);
         assert!(loaded.notes.iter().any(|n| n.error.is_some()));
-        assert!(!loaded.diagnostics.is_empty());
+        let loaded = load_all(std::slice::from_ref(&m), None).unwrap();
+        assert!(
+            loaded
+                .diagnostics
+                .iter()
+                .any(|d| d.starts_with("Broken.md"))
+        );
+    }
+
+    /// Writes a package whose one item needs `needs`.
+    fn package_needing(root: &Path, name: &str, namespace: &str, needs: &str) -> Module {
+        let module = create_module(&root.join(name), name, namespace).unwrap();
+        let note = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: item\nsplat_key: {namespace}:items/own\n\
+             splat_name: Own\nsplat_item: {{category: gear}}\nsplat_requires:\n  - key: {needs}\n---\n",
+            Uuid::new_v4()
+        );
+        fs::write(module.path.join("Own.md"), note).unwrap();
+        module
+    }
+
+    #[test]
+    fn references_resolve_across_the_whole_library() {
+        let temp = tempfile::tempdir().unwrap();
+        let modules = [
+            // One reference to built-in content, and one to the other package.
+            package_needing(temp.path(), "First", "first", "dnd2024:equipment/battleaxe"),
+            package_needing(temp.path(), "Second", "second", "first:items/own"),
+        ];
+        let mut loaded = load_all(&modules, None).unwrap();
+        assert_eq!(loaded.diagnostics, Vec::<String>::new());
+        // A save checks again, and that check must agree with the first.
+        loaded.refresh_diagnostics();
+        assert_eq!(loaded.diagnostics, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_reference_to_nothing_is_still_reported() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = package_needing(temp.path(), "First", "first", "missing:items/gone");
+        let loaded = load_all(&[module], None).unwrap();
+        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
+        assert!(loaded.diagnostics[0].contains("missing:items/gone"));
+    }
+
+    #[test]
+    fn a_save_keeps_the_problems_that_kept_content_from_loading() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut module = package_needing(temp.path(), "First", "first", "first:items/own");
+        module.path = temp.path().join("deleted");
+        let mut loaded = load_all(&[module], None).unwrap();
+        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
+        loaded.refresh_diagnostics();
+        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
     }
 }

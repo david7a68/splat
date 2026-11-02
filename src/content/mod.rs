@@ -529,6 +529,11 @@ pub fn required_references(entry: &Entry) -> Result<Vec<Reference>, String> {
 }
 
 pub fn validate(entries: &[Entry]) -> Report {
+    validate_all(&entries.iter().collect::<Vec<_>>())
+}
+
+/// [`validate`] for entries that are not held in one slice, such as the Library's notes.
+pub fn validate_all(entries: &[&Entry]) -> Report {
     let mut report = Report {
         entries: entries.len(),
         reference_only: entries.iter().filter(|e| e.kind == "reference").count(),
@@ -543,7 +548,7 @@ pub fn validate(entries: &[Entry]) -> Report {
             message,
         })
     };
-    for e in entries {
+    for &e in entries {
         if ids.insert(e.id, e).is_some() {
             error(&e.path, format!("Duplicate UUID {}", e.id))
         }
@@ -567,7 +572,7 @@ pub fn validate(entries: &[Entry]) -> Report {
         Reference::Id(id) => ids.get(id).copied(),
         Reference::Key(k) => keys.get(k).copied(),
     };
-    for e in entries {
+    for &e in entries {
         let mut refs = Vec::new();
         let mut required_fields: Mapping = e
             .fields
@@ -817,6 +822,7 @@ pub fn validate(entries: &[Entry]) -> Report {
         "splat_rule",
         "splat_rule_choices",
         "splat_rule_group",
+        "splat_run_settings",
         "splat_schema",
         "splat_seed",
         "splat_senses",
