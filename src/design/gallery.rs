@@ -85,6 +85,7 @@ pub fn tokens(ui: &mut egui::Ui) {
             ("absent", c.participant.absent),
             ("concentrating", c.participant.concentrating),
             ("condition", c.participant.condition),
+            ("changed", c.participant.changed),
         ],
     );
     swatches(

@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use serde_yaml_ng::Mapping;
 use splat::{
     character::{Cache, EntitySnapshot, stable_id},
-    content::Entry,
+    content::{Entry, overrides::Overrides},
 };
 use std::{
     fs,
@@ -29,6 +29,9 @@ pub const MODULE: &str = "Ashen Marches";
 pub const RUN: &str = "Bridge Ambush";
 pub const RUN_12: &str = "Border Skirmish";
 pub const RUN_20: &str = "Siege of Emberfall";
+pub const RUN_ARENA: &str = "Arena Final";
+pub const GROUP_RIVALS: &str = "Rival Team";
+pub const GROUP_GOBLINS: &str = "Goblin Wave";
 
 /// What settings the app starts with.
 #[derive(Clone, Copy, PartialEq)]
@@ -40,6 +43,8 @@ pub enum Seed {
     Campaign,
     /// `Campaign`, plus saved runs with rosters of 12 and 20.
     LargeRosters,
+    /// `Campaign`, plus two encounter groups, and an encounter and a run with overrides.
+    Groups,
 }
 
 #[derive(Clone)]
@@ -109,6 +114,9 @@ fn seed_campaigns(
     if seed == Seed::LargeRosters {
         write_run(&active, &module.path, &party, RUN_12, &[(5, 15), (2, 7)])?;
         write_run(&active, &module.path, &party, RUN_20, &[(12, 15), (3, 7)])?;
+    }
+    if seed == Seed::Groups {
+        write_groups(&active, &module.path, &party)?;
     }
 
     let data = UserData {
@@ -398,6 +406,92 @@ fn write_encounters(root: &Path, party: &[EntitySnapshot]) -> Result<(), String>
         )?;
     }
     Ok(())
+}
+
+/// Two groups, and the same changes built in to an encounter's slot and to a run in progress.
+fn write_groups(
+    campaign: &Campaign,
+    module: &Path,
+    party: &[EntitySnapshot],
+) -> Result<(), String> {
+    const RIVAL_CHANGES: &str = "{name: Rival Captain, max_hp: {add: 10}, armor_class: {set: 15}, attack_bonus: {add: 1}, damage_bonus: {add: 1}, conditions: [Blessed], note: Gained a seal in the last round}";
+    let root = &campaign.path;
+    write_note(
+        root,
+        &format!("Encounter Groups/{GROUP_RIVALS}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_RIVALS}\nsplat_encounter_group:\n  side: rivals\n  members:\n  - creature: {{id: {}}}\n    count: 1\n    overrides: {RIVAL_CHANGES}\n  - creature: {{id: {}}}\n    count: 2\n---\n\nThey come through the east gate at the horn.\n",
+            stable_id("visual:group:rivals"),
+            module_entry_id("ember_cultist"),
+            module_entry_id("cinder_wolf"),
+        ),
+    )?;
+    write_note(
+        root,
+        &format!("Encounter Groups/{GROUP_GOBLINS}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_GOBLINS}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n    count: 3\n---\n",
+            stable_id("visual:group:goblins"),
+        ),
+    )?;
+    let heroes: String = party
+        .iter()
+        .map(|hero| {
+            slot(
+                &format!("actor_hero_{}", hero.source.character_id),
+                hero.definition.splat_id,
+                "party",
+                "player",
+            )
+        })
+        .collect();
+    let rival = slot(
+        "actor_rival",
+        module_entry_id("ember_cultist"),
+        "enemies",
+        "gm",
+    );
+    write_note(
+        root,
+        &format!("Encounters/{RUN_ARENA}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: {RUN_ARENA}\nsplat_encounter:\n  roster:\n{heroes}{rival}    overrides: {RIVAL_CHANGES}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n---\n\nThe last fight of the season.\n",
+            stable_id("visual:encounter:arena"),
+        ),
+    )?;
+    let mut participants = Vec::new();
+    for (index, hero) in party.iter().enumerate() {
+        participants.push((
+            Participant::new(
+                format!("actor_hero_{}", hero.source.character_id),
+                "party".into(),
+                hero.entry()?,
+                &Mapping::new(),
+                true,
+            )?,
+            18 - index as i64 * 2,
+        ));
+    }
+    let file = "Creatures/Ember Cultist.md";
+    let text = fs::read_to_string(module.join(file)).map_err(|e| e.to_string())?;
+    let changes: Mapping = serde_yaml_ng::from_str(RIVAL_CHANGES).map_err(|e| e.to_string())?;
+    participants.push((
+        Participant::with_overrides(
+            "actor_rival".into(),
+            "enemies".into(),
+            Entry::parse(file, &text)?,
+            &Mapping::new(),
+            &Overrides::parse(&changes)?,
+            true,
+        )?,
+        15,
+    ));
+    write_in_progress_run(
+        campaign.id,
+        &root.join("Encounter Runs"),
+        RUN_ARENA,
+        participants,
+    )
 }
 
 /// A run with the whole party, and `(count, initiative)` wolves then cultists.

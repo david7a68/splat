@@ -12,6 +12,8 @@ pub mod builtin;
 pub mod character;
 pub mod contracts;
 pub mod definitions;
+pub mod encounter_group;
+pub mod overrides;
 mod reading;
 pub use reading::Reading;
 mod markdown;
@@ -45,7 +47,7 @@ pub struct InventoryRow {
     pub container: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Reference {
     Id(Uuid),
     Key(String),
@@ -149,6 +151,7 @@ impl Entry {
             "effect",
             "container",
             "encounter",
+            "encounter_group",
             "sequence",
             "rule",
             "rule_group",
@@ -207,6 +210,7 @@ impl Entry {
             "spell" => Some("splat_spell"),
             "effect" => Some("splat_effect"),
             "encounter" => Some("splat_encounter"),
+            "encounter_group" => Some("splat_encounter_group"),
             "sequence" => Some("splat_sequence"),
             "rule" => Some("splat_rule"),
             "rule_group" => Some("splat_rule_group"),
@@ -224,6 +228,25 @@ impl Entry {
                 }
             } else if !value.is_mapping() {
                 return Err(format!("{name} must be a mapping"));
+            }
+        }
+        if self.kind == "encounter_group" {
+            encounter_group::EncounterGroup::of(self)?;
+        }
+        if self.kind == "encounter"
+            && let Some(roster) = field(&self.fields, "splat_encounter")
+                .and_then(|encounter| encounter.get("roster"))
+                .and_then(Value::as_sequence)
+        {
+            for slot in roster {
+                let Some(block) = slot.get("overrides") else {
+                    continue;
+                };
+                let key = slot.get("key").and_then(Value::as_str).unwrap_or("A slot");
+                let block = block
+                    .as_mapping()
+                    .ok_or_else(|| format!("{key}: overrides must be a mapping."))?;
+                overrides::Overrides::parse(block).map_err(|e| format!("{key}: {e}"))?;
             }
         }
         if self.kind == "reference" {
@@ -603,6 +626,18 @@ pub fn validate_all(entries: &[&Entry]) -> Report {
                 error(&e.path, format!("Unresolved reference {r:?}"))
             }
         }
+        if e.kind == "encounter_group"
+            && let Ok(group) = encounter_group::EncounterGroup::of(e)
+        {
+            for member in &group.members {
+                if resolve(&member.creature).is_some_and(|entry| entry.kind != "creature") {
+                    error(
+                        &e.path,
+                        format!("{} must reference a creature entry", member.creature),
+                    );
+                }
+            }
+        }
         if let Some(character) = field(&e.fields, "splat_character") {
             match serde_yaml_ng::from_value::<character::Sheet>(character.clone()) {
                 Ok(sheet) => {
@@ -793,6 +828,7 @@ pub fn validate_all(entries: &[&Entry]) -> Report {
         "splat_external",
         "splat_effects",
         "splat_encounter",
+        "splat_encounter_group",
         "splat_forms",
         "splat_health",
         "splat_hit_dice",

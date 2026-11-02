@@ -6,7 +6,10 @@
 //! says what the user does and a rename changes one line.
 use super::{
     driver::{DEFAULT, Driver, LARGE, SMALL, Sizes},
-    fixture::{CAMPAIGN, MODULE, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20, UNLINKED_CAMPAIGN},
+    fixture::{
+        CAMPAIGN, GROUP_GOBLINS, GROUP_RIVALS, MODULE, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20,
+        RUN_ARENA, UNLINKED_CAMPAIGN,
+    },
     steps::*,
 };
 use eframe::egui::{self, Key, Pos2, pos2};
@@ -4532,5 +4535,176 @@ pub mod session_recording {
             "A note whose file went keeps its words, saved under a new identity",
         );
         d.goal("record a session and process it");
+    }
+}
+
+/// W13: prepare encounter groups, and add one to a run when it arrives.
+pub mod encounter_groups {
+    use super::*;
+    const LIST_HEADING: &str = "Encounter groups (2)";
+    const GROUPS_TAB: &str = "Groups";
+    const NEW_GROUP: &str = "New group";
+    const SAVE_GROUP: &str = "Save group";
+    const SAVED_NOTE: &str = "Group saved.";
+    const FIND: &str = FIND_CREATURE;
+    const CHANGES: &str = "Changes to this creature";
+    const FIRST_GOBLIN: &str = "Goblin Warrior 1";
+    const RIVAL_NAME: &str = "Rival Captain";
+    const TOTAL_FOR_RIVALS: &str = "Initiative total for Rival Team";
+
+    fn add_group(name: &str) -> String {
+        format!("Add {name} to the initiative list")
+    }
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.expect(LIST_HEADING);
+        d.state("groups-in-the-list", Sizes::All);
+        d.check_tab_order("encounters, with groups");
+
+        // An existing group: its changes are out in the open, with the values they replace.
+        d.click(&format!("Edit group {GROUP_RIVALS}"));
+        d.expect("Members (2)");
+        d.state("group-editor", Sizes::All);
+        d.observe(
+            "T13.3",
+            d.has_containing("Maximum HP: 33 → 43 (+10)") && d.has_containing("Changed here only"),
+            "The group editor shows each change with its base value, marked as changed",
+        );
+        d.click_first(CHANGES);
+        d.expect("Maximum HP: how it changes");
+        d.state("group-member-changes", Sizes::All);
+        d.check_tab_order("group editor, changes open");
+        d.click_first(CHANGES);
+        d.click("Back to encounters");
+
+        // A new group cannot be saved empty, and it says so.
+        d.click(NEW_GROUP);
+        d.type_text("Ash Pack");
+        d.click(SAVE_GROUP);
+        d.expect("This group is empty");
+        d.state("group-rejected-empty", Sizes::Default);
+        d.type_into(FIND, "wolf");
+        d.state("group-find-creature", Sizes::Default);
+        d.click_beside("Wolf", ADD);
+        d.click(SAVE_GROUP);
+        d.expect(SAVED_NOTE);
+        d.state("group-saved", Sizes::Default);
+        d.goal("make an encounter group");
+        d.click("Back to encounters");
+        d.expect("Encounter groups (3)");
+
+        // At the table: the panel, with members and XP.
+        resume_run(d, RUN);
+        d.click(GROUPS_TAB);
+        d.expect(&add_group(GROUP_GOBLINS));
+        d.state("group-panel", Sizes::AllAndHiDpi);
+        d.check_tab_order("run, group panel");
+        d.observe(
+            "T13.1",
+            d.has_containing("3 × Goblin Warrior") && d.has_containing("XP 150"),
+            "The panel lists each group's members and total XP",
+        );
+        d.begin_task();
+        d.click(&add_group(GROUP_GOBLINS));
+        d.expect(FIRST_GOBLIN);
+        d.state("group-added-by-rolling", Sizes::All);
+        d.goal_within("T13.2", "add a group to the running fight, rolling once", 1);
+
+        // Undo names it, and takes the whole group back.
+        d.expect("Undo: add Goblin Wave");
+        d.click_containing("Undo: add Goblin Wave");
+        let gone = !d.has_containing(FIRST_GOBLIN);
+        d.observe("T13.2", gone, "Undo removes every member of an added group");
+
+        // A typed total, as players give one.
+        d.type_into(TOTAL_FOR_RIVALS, "14");
+        d.click(&add_group(GROUP_RIVALS));
+        d.expect(RIVAL_NAME);
+        d.observe(
+            "T13.2",
+            d.nodes()
+                .iter()
+                .any(|node| node.name.contains(RIVAL_NAME) && node.name.contains("Initiative 14")),
+            "A typed total places the group, with no roll",
+        );
+        d.state("group-added-with-a-total", Sizes::Default);
+
+        // The same group again, by dragging it onto the initiative list.
+        let list = roster_places(d)
+            .first()
+            .map(|(_, rect)| *rect)
+            .expect("run rows");
+        d.drag_onto(
+            &format!("Drag {GROUP_GOBLINS} to the initiative list"),
+            list,
+        );
+        d.expect(FIRST_GOBLIN);
+        d.observe(
+            "T13.4",
+            d.has_containing(FIRST_GOBLIN) && d.has_containing("Goblin Warrior 3"),
+            "Dragging a group onto the initiative list adds all its members",
+        );
+        d.state("group-added-by-dragging", Sizes::Default);
+        d.goal("add groups by a total and by dragging");
+
+        // Setup has the same panel.
+        close_run(d);
+        run_saved_encounter(d, "Shrine of Cinders");
+        d.click(GROUPS_TAB);
+        d.state("group-panel-in-setup", Sizes::Default);
+        d.click(&add_group(GROUP_GOBLINS));
+        d.expect(FIRST_GOBLIN);
+        d.state("group-added-in-setup", Sizes::Default);
+        d.goal("add a group during setup");
+    }
+}
+
+/// W13: changes built in to one creature, never hidden, in the editor and on the card.
+pub mod run_overrides {
+    use super::*;
+    const RIVAL: &str = "Rival Captain";
+    const FIRST_SLOT: &str = "6. Ember Cultist";
+    const BASE_AND_CHANGED: &str = "Maximum HP: 33 → 43 (+10)";
+
+    pub fn run(d: &mut Driver<'_>) {
+        // The card has both values, and marks what the run cannot apply.
+        d.click_beside(RUN_ARENA, RESUME);
+        d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
+        d.click_row(RIVAL);
+        d.state("overridden-participant", Sizes::AllAndHiDpi);
+        let row = d.row_words(RIVAL);
+        d.observe(
+            "T13.3",
+            row.contains("Changed") && row.contains("Attack +1") && row.contains("Damage +1"),
+            format!("The row marks a change and carries its bonuses: {row}"),
+        );
+        d.observe(
+            "T13.3",
+            d.has_containing(BASE_AND_CHANGED)
+                && d.has_containing("Attack bonus: As printed → +1 on each attack · add by hand")
+                && d.has_containing("Changed for this encounter"),
+            "The card shows the base and changed values, and says what to add by hand",
+        );
+        d.goal("read a changed creature's card in a run");
+        close_run(d);
+
+        // The editor names the creature, and each change under it.
+        open_saved_encounter(d, RUN_ARENA);
+        d.expect(FIRST_SLOT);
+        d.state("slot-with-changes", Sizes::All);
+        d.click("Changes, starting HP, temporary HP and initiative group");
+        d.state("slot-changes-open", Sizes::Default);
+        d.click("Back to encounters");
+
+        // A new run takes them when it starts.
+        run_saved_encounter(d, RUN_ARENA);
+        d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
+        d.state("setup-with-a-changed-row", Sizes::Default);
+        d.observe(
+            "T13.3",
+            d.has_containing("Changed · HP 43/43 · AC 15"),
+            "A new run starts with the slot's changes, and its setup row says so",
+        );
+        d.goal("start a run with a changed creature");
     }
 }

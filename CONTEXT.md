@@ -138,6 +138,22 @@ including participants that enter during a later phase.
 A group of participants assigned to the same side of an encounter, independently
 of their creature type or membership in a campaign's party.
 
+**Encounter group**:
+A reusable, named list of creatures with counts, a default side, and notes, owned by
+a campaign. The DM adds it to a running encounter when it arrives. Each addition
+creates new participants. It is not a side, which sorts participants within one
+encounter; not a roster, which one encounter owns; not a rule group, which enables
+rules together; and not an initiative group, which shares a turn order position.
+_Avoid_: Team, wave, spawn group
+
+**Override**:
+An explicit change an encounter roster slot or encounter group member builds in to
+one creature, such as a custom name or extra HP. It belongs to that slot or member,
+is applied when the participant is created, and is always shown beside the value it
+replaces. It never changes the creature's entry. To change a creature everywhere,
+use a campaign copy.
+_Avoid_: Variant, scaling
+
 **Encounter phase**:
 A part of an encounter governed by triggers that can cause participants to enter
 or leave combat. Phases have independent triggers and can overlap.

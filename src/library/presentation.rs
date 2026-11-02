@@ -54,7 +54,7 @@ impl Section {
             }
             "glossary" => Self::Glossary,
             "rule" | "rule_group" | "effect" | "table" => Self::Rules,
-            "encounter" | "sequence" | "strategy" | "seed" => Self::Encounters,
+            "encounter" | "encounter_group" | "sequence" | "strategy" | "seed" => Self::Encounters,
             _ => Self::Other,
         }
     }

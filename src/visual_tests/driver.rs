@@ -546,6 +546,40 @@ impl<'a> Driver<'a> {
         self.film_result("Drag a column's edge");
     }
 
+    /// Press on a control by its accessible name, carry it to a place, and let go.
+    pub fn drag_onto(&mut self, name: &str, target: egui::Rect) {
+        let rect = self.aim(&format!("drag handle {name:?}"), |node| {
+            node.name == name && Self::is_control(node)
+        });
+        let (from, to) = (rect.center(), target.center());
+        self.film_aim(rect, &format!("Drag: {name}"));
+        self.harness.hover_at(from);
+        self.harness.step();
+        self.harness.event(egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        self.harness.step();
+        for step in 1..=4 {
+            self.harness
+                .hover_at(from + (to - from) * (step as f32 / 4.0));
+            self.harness.step();
+        }
+        self.harness.event(egui::Event::PointerButton {
+            pos: to,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        self.settle();
+        self.film_result(&format!("Dropped: {name}"));
+    }
+
     fn is_control(node: &Found) -> bool {
         !node.disabled && !matches!(node.role, Role::Label | Role::TextRun)
     }

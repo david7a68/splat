@@ -707,7 +707,7 @@ pub fn search_field(
 pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, value: &mut T, options: &[(T, &str)]) -> bool {
     let mut changed = false;
     let c = colors();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         for (option, label) in options {
             let selected = *value == *option;

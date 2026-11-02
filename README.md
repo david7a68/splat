@@ -275,8 +275,15 @@ Use **Add party**, or search the campaign's available creatures. Each result sho
 the CR, HP and AC it has, and **Read** opens its stat block in Lookup, beside the draft.
 Add or duplicate a creature for each participant, assign its side, and use the arrows
 to change roster order. Optional starting HP and temporary HP apply to that
-participant only. With an override off, the creature's starting state applies.
+participant only. With a value off, the creature's starting state applies.
 The default sides, party and enemies, are hostile to each other.
+
+A roster slot can also build in changes to its creature: a display name, maximum HP,
+AC, initiative bonus, attack bonus, damage bonus, speed, side, starting conditions, and
+a note. Open them with the slot's **…** button. Each one appears under the slot with the
+value it replaces, and nothing is written back to the creature, a package or a campaign
+copy. An invalid change is refused with a message that names the slot. See
+[Overrides](docs/design/campaign-schema.md#overrides).
 
 **Save encounter** writes a Markdown template under `Encounters/` in the campaign
 folder. Select a saved encounter to reopen it. Names can change without changing
@@ -291,6 +298,16 @@ editor saves direct creature references in campaign-local templates. Shared
 `party_slot` bindings still need the Markdown editor. Phases, assumptions,
 completion rules, and advanced starting state also remain Markdown fields.
 Saving a template does not execute rules or start a combat run.
+
+### Encounter groups
+
+An encounter group is a reusable, named set of creatures that you prepare once and add to a
+running encounter when it arrives. It is a note with `splat_kind: encounter_group`, saved under
+`Encounter Groups/` in the campaign folder, with its members and counts, a default side, and your
+notes as its text. **New group** on Encounters opens its editor, which searches creatures as the
+encounter editor does. Any creature from this campaign or a package it uses can be a member, and
+each member can carry the same changes as a roster slot. An empty group or an unavailable
+creature is refused with a message. See [the schema](docs/design/campaign-schema.md#encounter-groups).
 
 ### Running an encounter as DM
 
@@ -309,7 +326,7 @@ Participants at zero HP stay in turn order until you mark them absent.
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
 **Temp HP** are beside it. **Conditions** lists the official conditions, one click
 each. The side panel holds the stat block or sheet, **Record** (HP corrections, death
-saves, notes, sync), **Log**, and encounter **Notes**. A spell named in a stat block opens
+saves, notes, sync), **Log**, encounter **Notes**, and **Groups**. A spell named in a stat block opens
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
 phases, and completion conditions. **Log** has a dice control that accepts expressions
@@ -324,6 +341,22 @@ such as `2d6 + 3`.
 | `A` | Focus the amount |
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
+
+**Groups** lists the campaign's encounter groups, with their members and total XP. Drag a group's
+name onto the initiative list, or press its **Add** button. Type a total beside it to use that for every
+member, as players give theirs. Otherwise the campaign's rule decides: one shared roll with the first
+member's bonus (identical NPCs, or the encounter's initiative groups), a roll for each member
+(individually), or the initiative its side already has (one group per side). This works in setup and in
+combat, and the same group can be added again. Each member is a new participant at full HP, with its
+own key and numbered name. In combat the group takes its place on that total and the current turn stays
+current. It joins the saved run and the log, and **Undo** takes back the whole group until later
+steps stand in the way.
+
+The row and card of a creature with changes say `Changed`, and the card lists each base and changed
+value. The run applies name, maximum HP, AC, initiative bonus, side and conditions. Attacks and speed
+are stat block text, so their changes stay on the card, and attack and damage bonuses also stay on
+the row, for you to add. These changes are saved with the run, so editing the file later does not
+change it.
 
 The combat log records changes. **Undo** names the last action and restores up to 100
 prior actions, including turn changes, dice rolls, and manual endings in the current session.
@@ -346,9 +379,10 @@ is kept for the current session only. Changing the folder does not move old runs
 The same settings select how the campaign rolls NPC initiative: in groups of
 identical NPCs (the D&D default), individually, in one group per side, or in the
 encounter's initiative groups. **Roll NPC initiative** in run setup uses that
-choice and leaves player totals alone. The arrow beside it uses another choice for
+choice and leaves player totals alone. An encounter group added during setup stays
+one roll under the identical-NPC rule, and joins neither its like nor another addition. The arrow beside it uses another choice for
 one roll, and the campaign's choice stays the default. An arrow choice for the
-encounter's groups shows only when an NPC has a group. Side and encounter groups
+encounter's initiative groups shows only when an NPC has a group. Side and initiative groups
 use the first NPC in roster order for their bonus and roll mode. Normal, advantage, and disadvantage rolls are
 available; use disadvantage for surprise. Ties use the campaign's roster-order
 setting or the DM/player ordering controls. NPC status can be changed before

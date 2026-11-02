@@ -26,6 +26,7 @@ pub struct Participant {
     pub absent: Color32,
     pub concentrating: Color32,
     pub condition: Color32,
+    pub changed: Color32,
 }
 #[derive(Clone, Copy)]
 pub struct Side {
@@ -150,6 +151,7 @@ pub const DARK: Colors = Colors {
         absent: FAINT,
         concentrating: rgb(0x7CCBEA),
         condition: rgb(0xDCCBA9),
+        changed: rgb(0xE3AFC0),
     },
     side: Side {
         party: rgb(0xCFC6B4),
@@ -504,6 +506,7 @@ mod tests {
             ("participant.absent", c.participant.absent),
             ("participant.concentrating", c.participant.concentrating),
             ("participant.condition", c.participant.condition),
+            ("participant.changed", c.participant.changed),
             ("side.party", c.side.party),
             ("side.enemies", c.side.enemies),
             ("side.other", c.side.other),

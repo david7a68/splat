@@ -39,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 31] = [
+const SCENARIOS: [(&str, Seed, Script); 33] = [
     (
         "library-browse",
         Seed::Empty,
@@ -151,6 +151,12 @@ const SCENARIOS: [(&str, Seed, Script); 31] = [
         Seed::Campaign,
         scenarios::session_recording::run,
     ),
+    (
+        "encounter-groups",
+        Seed::Groups,
+        scenarios::encounter_groups::run,
+    ),
+    ("run-overrides", Seed::Groups, scenarios::run_overrides::run),
 ];
 
 impl crate::Splat {
