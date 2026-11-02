@@ -1,8 +1,8 @@
 # Imported character content
 
 Imported characters are ordinary schema-1 creature entries. Matching SRD items,
-spells, and features use the shared catalogue's canonical UUID references. Only
-non-SRD, different-edition, or unmatched definitions remain campaign-owned. The catalogue,
+spells, and features use the shared catalogue's canonical UUID references. Other
+definitions follow their [import route](#routes-and-the-campaign-package). The catalogue,
 content editor, dependency traversal, and encounter roster use the same reader
 as authored content. Structural validity does not grant simulation support.
 
@@ -75,14 +75,72 @@ Spell entries contain level, school, components/material text, concentration,
 ritual, duration, casting-time amount/unit, range and readable description. A
 referenced spell does not imply that its action is implemented.
 
-Generated dependency identities are scoped to the character and source definition.
-This avoids conflicting versions of a shared provider item across independently
-refreshed characters. Repeated instances of the same definition within a sheet
-share a definition but retain separate inventory row/instance identities.
-Local definitions live under `Characters/D&D Beyond/Definitions/<character UUID>/`.
-Matching SRD definitions are not emitted there. Item rows keep their separate
-instance identities, quantities, equipment, and attunement while sharing one
-catalogue definition; spell bindings keep character-specific casting details.
+Characters share one definition when their source definitions generate the same note.
+A different version of a provider item is a different definition, so independently
+refreshed characters cannot conflict. Repeated instances of the same definition within
+a sheet share a definition but retain separate inventory row/instance identities.
+Matching SRD definitions are not routed. Item rows keep their separate instance
+identities, quantities, equipment, and attunement while sharing one definition; spell
+bindings keep character-specific casting details.
+
+## Routes and the campaign package
+
+`Campaign Package/Package.md` is a package manifest in the campaign's folder. Its
+`splat_import_routes` records where each definition lives. Definitions with no package note
+live under `Campaign Package/{Items,Spells,Rules}/`. The catalogue lists this package, and its
+entries are private to the campaign.
+
+A package note says which D&D Beyond definitions it holds:
+
+```yaml
+splat_dndbeyond_ids:
+- feature:8429477
+- action:5119104
+```
+
+The IDs are `feature:ID`, `action:ID`, `item:KEY`, and `spell:ID`, the same identities as the
+[conversion registry](character-rule-conversion.md). A species note can list every trait it
+holds. An ID says where a definition's text lives. It does not prove what the rule does:
+rule data stays in the registry, pinned to the source text. So a note with many traits takes
+only the IDs. A note that holds one item or spell also takes that definition's rule data and
+missing facts in its frontmatter. Its existing values and words stay, and each save adds them
+again if a regenerated package lost them.
+
+A definition with no route takes one when a sheet is saved:
+
+1. One selected note in an enabled package lists its ID: the route goes to that note.
+2. Otherwise, or if it already has a note in the former `Definitions/<character UUID>/` folder,
+   the route goes to the campaign package. The former folder's notes retire as other former
+   copies do. Characters share a campaign package note when their definitions generate the same
+   note.
+
+A route never changes during a save. **Package reconciliation** (`campaign_package::check`)
+compares the routes with the enabled packages when a campaign opens, when selections are
+saved, when Campaign > Packages reloads, and every five minutes. The sidebar shows how many
+changes wait in Campaign > Packages. For a definition that no note lists, the check suggests a
+note by its words: the source text of an item or spell must end with them, and a rule's words
+must be in the character's species note, or in exactly one other note. Words never move
+anything by themselves. `campaign_package::apply` carries out the ticked changes:
+
+- **To a package**: the note gets the ID, the route changes, and each sheet saves again. A
+  campaign package note goes to an archive once a move leaves no sheet using it.
+- **Back to the campaign package**: the route changes, and each sheet saves again. The package
+  note keeps its ID and data, because other campaigns can use them. Another package that lists
+  the ID stays a choice, so the check offers it.
+- **Remove**: no entry refers to the definition. The route goes, and any note goes to an archive.
+
+Nothing leaves until every sheet has saved, so a failed apply can run again. A note that Splat
+cannot read blocks removals, because it may use anything. A package whose manifest is not the one
+registered takes no routes or writes, and a route's note takes no writes while the campaign does
+not select it. A partial selection counts the entries that its chosen entries require. One save
+at a time reads and replaces the manifest, within the app.
+
+To map a definition that the check cannot suggest, add its ID to the right note by hand. An ID on
+two notes is blocked until one note has it.
+
+A move is blocked, with its reason shown, when the campaign package's note has edits or
+personal notes, when a note that Splat does not generate refers to it, or when a sheet that
+uses it has no saved D&D Beyond data.
 
 ## Coverage and publication
 
@@ -103,8 +161,8 @@ replacement. Dependencies publish before the creature, with atomic replacement
 per file. Personal notes survive refresh, and edited generated content blocks the
 whole character's publication. A disk failure or an editor racing the writes can
 still leave some updated dependencies; this is not a multi-file transaction.
-Old unreferenced non-SRD definitions remain as historical content. The importer
-retires former SRD copies and matched item/spell wrappers by saving their exact
+The importer retires the former per-character definitions, SRD copies, and matched
+item/spell wrappers by saving their exact
 bytes as `.md.splat-archive` files, which the content reader does not index.
 It keeps copies with personal annotations or references from other current
 campaign entries at their original paths, including dependencies of retained
@@ -125,8 +183,8 @@ fetching source data. Existing creature UUIDs and note paths stay unchanged.
 
 The generated page puts spells and equipment before the longer feature reference.
 Descriptions retain paragraph and list breaks. Shared spell links open the official
-SRD PDF at the source page; local spell links point to their generated definition
-files. The structured spell bindings still use canonical catalogue UUIDs.
+SRD PDF at the source page; other spell links point to the note that holds the
+definition. The structured spell bindings still use canonical catalogue UUIDs.
 
 The Splat content reader displays named imported inventory tables without the
 storage keys and UUID columns. Those columns remain in Markdown source because

@@ -587,6 +587,7 @@ impl Splat {
                 }
             }
             let recording = self.sessions.recording_detail();
+            let review = self.campaign_content.review_detail();
             for (page, icon) in [
                 (Page::Encounters, icons::ENCOUNTERS),
                 (Page::Sessions, icons::SESSIONS),
@@ -596,7 +597,11 @@ impl Splat {
                 (Page::Campaign, icons::CAMPAIGN),
             ] {
                 let current = self.visible_page() == Some(page);
-                let detail = recording.as_deref().filter(|_| page == Page::Sessions);
+                let detail = match page {
+                    Page::Sessions => recording.as_deref(),
+                    Page::Campaign => review.as_deref(),
+                    _ => None,
+                };
                 if design::nav_item(ui, icon, page.name(), detail, current).clicked() {
                     self.page = page;
                 }
@@ -1360,6 +1365,7 @@ impl eframe::App for Splat {
         if !self.started {
             self.start(ctx);
         }
+        self.campaign_content.tick(ctx, &self.campaigns);
         if ctx.input(|i| i.viewport().close_requested()) {
             // An edit in its pause before saving is saved now, not reported as a loss.
             self.sessions.flush();

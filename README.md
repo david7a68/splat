@@ -223,6 +223,13 @@ references under **Source and identifiers**. Raw definitions stay under collapse
 **Technical details**. Classes show separate traits, equipment choices, and
 feature links in level order. Display changes do not alter saved content.
 
+A D&D Beyond definition goes to the enabled package note that lists its ID in
+`splat_dndbeyond_ids`. Other definitions go to the campaign's **Campaign Package** folder. A
+definition keeps its place until you approve a move: **Campaign → Packages** lists what can move
+when packages are added or removed, suggests notes with the same words, and adds the ID when you
+apply a change. The sidebar shows how many changes wait. See
+[Imported character content](docs/design/character-content.md).
+
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
 manifest, or enter a name, namespace (for example `my_homebrew`), and a new absolute
 folder path to create a package. The parent folder must already exist. Package

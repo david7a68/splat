@@ -400,6 +400,24 @@ shared content. It does not need to belong to a package.
 Make campaign-owned content available in a shared package. The user chooses
 whether to create a shared copy or move the existing entry into the package.
 
+**Campaign package**:
+The package that holds a campaign's imported definitions when no enabled package
+note lists their D&D Beyond ID. It stays in the campaign's folder and is private to that campaign.
+_Avoid_: Campaign-owned entry, which the DM creates or copies.
+
+**D&D Beyond ID**:
+The provider's identity for a definition, such as `feature:8429477`. A package note
+lists the definitions it holds in `splat_dndbeyond_ids`. One note can list many.
+
+**Import route**:
+The recorded place of one imported source definition: a note in an enabled
+package, or the campaign package. A route stands until the DM approves a change.
+
+**Package reconciliation**:
+The check of import routes against the packages that a campaign enables. It lists
+definitions that can move to a package, must return to the campaign package, or no
+longer have a use. Nothing moves until the DM applies the change.
+
 **Conversion gap**:
 A source rule that still needs a complete typed definition or an explicit
 interpretation. Extracting its numbers or keeping its prose does not close it.

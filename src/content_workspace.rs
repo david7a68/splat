@@ -5,6 +5,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::Value;
+use splat::character::campaign_package;
+pub use splat::content::patch_fields;
 use splat::content::{self, Entry, Reference};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -20,6 +22,62 @@ pub fn builtin_manifest() -> Entry {
         std::str::from_utf8(bytes).expect("UTF-8 manifest"),
     )
     .expect("valid manifest")
+}
+
+/// Where an import can route definitions for the campaign in this folder. A campaign that cannot
+/// be read has no enabled packages, so its definitions go to the campaign package, and the check
+/// offers their move once it can read the campaign again.
+pub fn destinations(root: &Path, modules: &[Module]) -> campaign_package::Destinations {
+    let document = CampaignDocument::discover(root)
+        .ok()
+        .flatten()
+        .and_then(|campaign| CampaignDocument::load(&campaign).ok());
+    let Some(document) = document else {
+        return Default::default();
+    };
+    // A partial selection also enables what its entries require. A sheet's own references do not
+    // count, or a note the DM deselected would stay selected by the sheet that uses it.
+    let partial = document
+        .selections
+        .iter()
+        .any(|selection| matches!(selection.selection, Selection::Selected { .. }));
+    let enabled: Option<Vec<Reference>> = partial
+        .then(|| Catalogue::load(modules, None).ok())
+        .flatten()
+        .map(|catalogue| {
+            let closure = catalogue.closure(&document.selections, document.campaign.id);
+            closure
+                .direct
+                .iter()
+                .chain(closure.required.keys())
+                .map(|id| Reference::Id(*id))
+                .collect()
+        });
+    let packages = document
+        .selections
+        .iter()
+        .filter_map(|selection| {
+            let module = modules
+                .iter()
+                .find(|m| Some(m.id) == selection.package.id)?;
+            let only = match &selection.selection {
+                Selection::All => None,
+                Selection::Selected { entries } => Some(enabled.clone().unwrap_or_else(|| {
+                    entries
+                        .iter()
+                        .filter_map(|entry| entry.reference().ok())
+                        .collect()
+                })),
+            };
+            Some(campaign_package::EnabledPackage {
+                id: module.id,
+                name: module.name.clone(),
+                path: module.path.clone(),
+                only,
+            })
+        })
+        .collect();
+    campaign_package::Destinations::new(document.campaign.id, packages)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -71,6 +129,8 @@ pub struct ModuleIndex {
     pub id: Uuid,
     pub name: String,
     pub entries: Vec<Uuid>,
+    /// The campaign package. It serves one campaign, so nothing can select it.
+    pub private: bool,
 }
 pub struct IndexedEntry {
     pub entry: Entry,
@@ -193,6 +253,7 @@ impl Catalogue {
             id: builtin_id,
             name: "D&D 2024 · SRD 5.2.1".into(),
             entries: ids,
+            private: false,
         });
         for module in modules {
             let read = content::read_directory(&module.path);
@@ -244,6 +305,7 @@ impl Catalogue {
                 id: module.id,
                 name,
                 entries: ids,
+                private: false,
             });
         }
         if let Some(campaign) = campaign {
@@ -253,8 +315,13 @@ impl Catalogue {
                     .into_iter()
                     .map(|e| format!("{}: {}", e.path, e.message)),
             );
+            let manifest = entries
+                .iter()
+                .find(|entry| campaign_package::is_manifest(entry))
+                .map(|entry| (entry.id, entry.name.clone()));
+            let mut package_entries = Vec::new();
             for entry in entries {
-                if entry.kind == "package" {
+                if entry.kind == "package" && !campaign_package::is_manifest(&entry) {
                     return Err("A campaign cannot contain a shared package manifest.".into());
                 }
                 if entry.kind == "campaign" && entry.id != campaign.id {
@@ -278,7 +345,21 @@ impl Catalogue {
                         fs::read_to_string(&path).map_err(|e| e.to_string())?,
                     ),
                 );
-                result.insert(entry, campaign.id, true)?;
+                // The campaign package is private to this campaign, like its other notes.
+                let package = manifest
+                    .as_ref()
+                    .filter(|_| campaign_package::in_folder(&entry.path))
+                    .map(|(id, _)| *id);
+                package_entries.extend(package.map(|_| entry.id));
+                result.insert(entry, package.unwrap_or(campaign.id), true)?;
+            }
+            if let Some((id, name)) = manifest {
+                result.modules.push(ModuleIndex {
+                    id,
+                    name,
+                    entries: package_entries,
+                    private: true,
+                });
             }
         }
         Ok(result)
@@ -439,82 +520,15 @@ pub struct Closure {
     pub errors: Vec<String>,
 }
 
-/// Replace only named top-level fields; all other bytes, comments and body stay intact.
-pub fn patch_fields(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, String> {
-    let prefix = if text.starts_with('\u{feff}') {
-        "\u{feff}"
-    } else {
-        ""
-    };
-    let raw = text.trim_start_matches('\u{feff}');
-    let newline = if raw.starts_with("---\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
-    let start = format!("---{newline}");
-    let raw = raw.strip_prefix(&start).ok_or("Missing frontmatter")?;
-    let end = format!("{newline}---");
-    let index = raw.find(&end).ok_or("Missing frontmatter end")?;
-    let front = &raw[..index];
-    let value: Value = serde_yaml_ng::from_str(front).map_err(|e| e.to_string())?;
-    let map = value.as_mapping().ok_or("Frontmatter must be a mapping")?;
-    let lines: Vec<_> = front.split(newline).collect();
-    let mut remove = BTreeSet::new();
-    for (key, _) in changes {
-        if map.contains_key(*key) {
-            let matches: Vec<_> = lines
-                .iter()
-                .enumerate()
-                .filter(|(_, line)| line.starts_with(&format!("{key}:")))
-                .map(|(i, _)| i)
-                .collect();
-            if matches.len() != 1 {
-                return Err(format!(
-                    "Cannot safely edit {key}. Use a plain, unquoted top-level field in Markdown first."
-                ));
-            }
-            let start = matches[0];
-            let mut stop = start + 1;
-            while stop < lines.len() {
-                let line = lines[stop];
-                if !line.is_empty() && !line.starts_with([' ', '\t', '-', '#']) {
-                    break;
-                }
-                // Keep comments and blank lines; removing a changed field's data is intentional.
-                if !line.trim().is_empty() && !line.trim_start().starts_with('#') {
-                    remove.insert(stop);
-                }
-                stop += 1;
-            }
-            remove.insert(start);
-        }
-    }
-    let mut output = format!("{prefix}{start}");
-    for (i, line) in lines.iter().enumerate() {
-        if !remove.contains(&i) {
-            output.push_str(line);
-            output.push_str(newline);
-        }
-    }
-    for (key, value) in changes {
-        if let Some(value) = value {
-            let mut field = serde_yaml_ng::Mapping::new();
-            field.insert((*key).into(), value.clone());
-            let yaml = serde_yaml_ng::to_string(&field).map_err(|e| e.to_string())?;
-            output.push_str(&yaml.replace('\n', newline));
-        }
-    }
-    output.push_str(raw[index + newline.len()..].as_ref());
-    Ok(output)
-}
-
 fn campaign_manifest(root: &Path) -> Result<Option<Entry>, String> {
     let (entries, errors) = content::read_directory(root)?;
     if !errors.is_empty() && !entries.iter().any(|e| e.kind == "campaign") {
         return Err("Repair invalid notes before creating a campaign manifest.".into());
     }
-    if entries.iter().any(|e| e.kind == "package") {
+    if entries
+        .iter()
+        .any(|e| e.kind == "package" && !campaign_package::is_manifest(e))
+    {
         return Err("A campaign folder cannot contain a package manifest.".into());
     }
     let mut manifests = entries.into_iter().filter(|e| e.kind == "campaign");
@@ -727,6 +741,7 @@ pub fn check_destination(root: &Path, id: Uuid, private: bool) -> Result<(), Str
     let manifests: Vec<_> = entries
         .iter()
         .filter(|e| ["package", "campaign"].contains(&e.kind.as_str()))
+        .filter(|e| !campaign_package::is_manifest(e))
         .collect();
     if private && manifests.is_empty() {
         return Ok(());
@@ -958,6 +973,7 @@ mod tests {
             id: owner,
             name: "Module".into(),
             entries: vec![creature_id, dep_id, optional_id],
+            private: false,
         });
         let selection = vec![PackageSelection {
             package: EntryRef::id(owner),
@@ -1344,5 +1360,84 @@ mod tests {
         // With nothing beside the package to name it, the namespace still identifies it.
         fs::remove_dir_all(neighbour).unwrap();
         assert_eq!(issues(), ["Package not found: phb", lost]);
+    }
+
+    #[test]
+    fn the_campaign_package_is_private_and_listed_with_the_packages() {
+        let root = tempfile::tempdir().unwrap();
+        let id = Uuid::new_v4();
+        let package = campaign_package::package_id(id);
+        let folder = root.path().join("Campaign Package/Rules");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(
+            root.path().join("Campaign.md"),
+            format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: campaign\nsplat_name: Test\nsplat_namespace: test_campaign\n---\n"),
+        )
+        .unwrap();
+        fs::write(
+            root.path().join("Campaign Package/Package.md"),
+            format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: Campaign Package\nsplat_namespace: test_campaign_package\n---\n"),
+        )
+        .unwrap();
+        let rule = Uuid::new_v4();
+        fs::write(
+            folder.join("Rule.md"),
+            format!("---\nsplat_schema: 1\nsplat_id: {rule}\nsplat_kind: rule\nsplat_name: Rule\nsplat_rule: {{}}\n---\n"),
+        )
+        .unwrap();
+        let discovered = CampaignDocument::discover(root.path()).unwrap().unwrap();
+        assert_eq!(discovered.id, id);
+        let catalogue = Catalogue::load(&[], Some(&discovered)).unwrap();
+        assert!(catalogue.errors.is_empty(), "{:?}", catalogue.errors);
+        let entry = &catalogue.entries[&rule];
+        assert!(entry.private);
+        assert_eq!(entry.owner, package);
+        assert_eq!(catalogue.package_name(package), "Campaign Package");
+    }
+
+    #[test]
+    fn a_partial_selection_can_route_to_what_its_entries_require() {
+        let root = tempfile::tempdir().unwrap();
+        let (campaign_root, folder) = (root.path().join("campaign"), root.path().join("package"));
+        fs::create_dir_all(&campaign_root).unwrap();
+        fs::create_dir_all(&folder).unwrap();
+        let (package, chosen, needed, other) = (
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+        );
+        fs::write(
+            folder.join("Package.md"),
+            format!("---\nsplat_schema: 1\nsplat_id: {package}\nsplat_kind: package\nsplat_name: P\nsplat_namespace: p\n---\n"),
+        )
+        .unwrap();
+        let item = |id: Uuid, name: &str, extra: &str| {
+            fs::write(
+                folder.join(format!("{name}.md")),
+                format!("---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: item\nsplat_name: {name}\nsplat_item:\n  category: gear\n{extra}---\n"),
+            )
+            .unwrap();
+        };
+        item(
+            chosen,
+            "Chosen",
+            &format!("splat_requires:\n- id: {needed}\n"),
+        );
+        item(needed, "Needed", "splat_dndbeyond_ids:\n- item:needed\n");
+        item(other, "Other", "splat_dndbeyond_ids:\n- item:other\n");
+        fs::write(
+            campaign_root.join("Campaign.md"),
+            format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: campaign\nsplat_name: C\nsplat_namespace: c\nsplat_packages:\n- package:\n    id: {package}\n  selection:\n    mode: selected\n    entries:\n    - id: {chosen}\n---\n", Uuid::new_v4()),
+        )
+        .unwrap();
+        let modules = [Module {
+            id: package,
+            name: "P".into(),
+            path: folder,
+        }];
+        let destinations = destinations(&campaign_root, &modules);
+        assert!(destinations.lists("item:needed"));
+        assert!(!destinations.lists("item:other"));
     }
 }

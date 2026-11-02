@@ -148,10 +148,10 @@ fn fingerprint(source: &Value) -> String {
         Sha256::digest(serde_json::to_vec(&selected).expect("JSON source"))
     )
 }
-fn coverage(fields: &Value) -> Result<Import, String> {
+pub(super) fn coverage(fields: &Value) -> Result<Import, String> {
     serde_json::from_value(fields["splat_import"].clone()).map_err(|e| e.to_string())
 }
-fn put_coverage(fields: &mut Value, mut report: Import) -> Result<(), String> {
+pub(super) fn put_coverage(fields: &mut Value, mut report: Import) -> Result<(), String> {
     report.version = 2;
     report.engine_gaps.sort();
     report.engine_gaps.dedup();
@@ -174,6 +174,13 @@ fn empty_report() -> Import {
         rule_fingerprint: None,
     }
 }
+pub(super) fn rendered(fields: Value, body: &str) -> Result<String, String> {
+    Ok(format!(
+        "---\n{}---\n\n{}\n",
+        serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?,
+        body.trim_start_matches('\n').trim_end_matches('\n'),
+    ))
+}
 fn note(path: String, fields: Value, body: &str) -> Result<ContentNote, String> {
     Ok(ContentNote {
         relative_path: path,
@@ -181,6 +188,7 @@ fn note(path: String, fields: Value, body: &str) -> Result<ContentNote, String> 
             "---\n{}---\n\n{body}\n",
             serde_yaml_ng::to_string(&fields).map_err(|e| e.to_string())?
         ),
+        sources: Vec::new(),
     })
 }
 struct Rules<'a> {
@@ -315,6 +323,9 @@ impl<'a> Rules<'a> {
         let canonical = format!("dndbeyond:rules/{}", spec.mechanic);
         if let Some(id) = self.identities.get(&canonical).copied() {
             self.identities.insert(identity.into(), id);
+            if let Some(note) = self.notes.get_mut(&id) {
+                note.sources.push(identity.into());
+            }
             return Ok(Some(id));
         }
         let id = reference_id(self.record, "rule", &canonical);
@@ -336,6 +347,9 @@ impl<'a> Rules<'a> {
                 ),
             )?,
         );
+        if let Some(note) = self.notes.get_mut(&id) {
+            note.sources.push(identity.into());
+        }
         Ok(Some(id))
     }
 }
@@ -350,7 +364,7 @@ fn feature_key(d: &Value) -> String {
         .simple()
     )
 }
-fn source_id(v: &Value) -> String {
+pub(super) fn source_id(v: &Value) -> String {
     v.as_str()
         .map(str::to_owned)
         .or_else(|| v.as_u64().map(|n| n.to_string()))
@@ -393,7 +407,9 @@ pub(super) fn complete(
         if let Some((identity, source)) = source {
             rules.apply(&identity, source, &mut fields)?;
         }
+        let sources = std::mem::take(&mut original.sources);
         *original = note(original.relative_path.clone(), fields, &entry.body)?;
+        original.sources = sources;
     }
     let entry = Entry::parse(&creature.relative_path, &creature.markdown)?;
     for reference in crate::content::required_references(&entry)? {
