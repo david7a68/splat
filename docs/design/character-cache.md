@@ -118,10 +118,15 @@ gaps. Full provider responses remain only in the private JSON cache. See the
 publication behavior.
 
 Each file has a checksum for generated content and a Personal notes section.
-Refreshes preserve everything after the checksum. Edits to generated content or
-unmanaged files block replacement and produce a visible warning; move the edited
-file aside to resume updates. Writes use a temporary file and atomic replacement,
-with a check for edits before replacement. External editors can still race the
+Refreshes preserve everything after the checksum. A file that fails its checksum, or an
+unmanaged file, blocks replacement and produces a visible warning. A file that only
+changed during a save is not a conflict: the save reads it again. This covers two Splat
+writers at the same time. To resume updates, move the edited file aside or use
+**Force read** on the warning. Force read fetches the character again, keeps each edited
+file's exact bytes in an archive, and then replaces it. Personal notes carry over when
+the checksum line is still readable. Files without edits do not change their personal
+notes, and nothing is written until every check passes. Writes use a temporary file
+and atomic replacement, with a check for edits before replacement. External editors can still race the
 final rename. Campaign/account cancellation uses the same gate as cache writes.
 Removed party members' files remain as historical copies, with their fetch time;
 only the current roster appears in the viewer. These files update when records

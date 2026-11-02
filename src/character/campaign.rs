@@ -4,13 +4,75 @@ use crate::content::{Entry, Reference};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
-    fs,
-    io::Write,
+    fmt, fs,
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
 };
 const MARKER: &str = "\n<!-- splat-generated-sha256:";
 const PERSONAL_NOTES: &str =
     "\n## Personal notes\n\nThis section is kept when the sheet refreshes.\n";
+/// A file that changes during a save sends the save back to read it again. Another Splat writer
+/// is the usual cause, and it finishes in moments.
+const ATTEMPTS: usize = 8;
+
+/// Why a campaign copy was not saved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CampaignCopyError {
+    /// A note fails its checksum, so it has local edits. `overwrite_campaign_copy` can replace
+    /// them. A file that only changed during the save is not a conflict.
+    Conflict(PathBuf),
+    Failed(String),
+}
+impl fmt::Display for CampaignCopyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Conflict(path) => write!(
+                f,
+                "Campaign character copy has local edits; kept unchanged: {}. Move it aside to resume generated updates.",
+                path.display()
+            ),
+            Self::Failed(message) => f.write_str(message),
+        }
+    }
+}
+impl std::error::Error for CampaignCopyError {}
+impl From<String> for CampaignCopyError {
+    fn from(message: String) -> Self {
+        Self::Failed(message)
+    }
+}
+impl From<&str> for CampaignCopyError {
+    fn from(message: &str) -> Self {
+        Self::Failed(message.to_owned())
+    }
+}
+impl From<CampaignCopyError> for String {
+    fn from(error: CampaignCopyError) -> Self {
+        error.to_string()
+    }
+}
+
+/// What a save does with a note that has local edits.
+#[derive(Clone, Copy, PartialEq)]
+enum OnEdits {
+    Stop,
+    Archive,
+}
+/// A note to publish. `edited` means its current bytes go to an archive first.
+struct Note {
+    path: PathBuf,
+    previous: Option<String>,
+    text: String,
+    edited: bool,
+}
+/// A former copy, which has no new version.
+struct Former {
+    path: PathBuf,
+    text: String,
+    edited: bool,
+    /// Other entries need it, so it stays, and its edits become its generated content.
+    keep: bool,
+}
 
 impl EntitySnapshot {
     pub fn campaign_path(&self, campaign: &Path) -> PathBuf {
@@ -19,95 +81,123 @@ impl EntitySnapshot {
             .join("D&D Beyond")
             .join(format!("{}.md", self.definition.splat_id))
     }
-    pub fn save_campaign_copy(&self, campaign: &Path) -> Result<PathBuf, String> {
+    pub fn save_campaign_copy(&self, campaign: &Path) -> Result<PathBuf, CampaignCopyError> {
+        self.publish(campaign, OnEdits::Stop)?;
+        Ok(self.campaign_path(campaign))
+    }
+    /// Saves this copy over local edits, with the same checks and order as any save. The bytes
+    /// it replaces go to an archive, and readable personal notes carry over. Returns the
+    /// archives that hold edits.
+    pub fn overwrite_campaign_copy(
+        &self,
+        campaign: &Path,
+    ) -> Result<Vec<PathBuf>, CampaignCopyError> {
+        self.publish(campaign, OnEdits::Archive)
+    }
+    fn publish(
+        &self,
+        campaign: &Path,
+        on_edits: OnEdits,
+    ) -> Result<Vec<PathBuf>, CampaignCopyError> {
         self.validate()?;
         if !campaign.is_absolute() || !campaign.is_dir() {
             return Err("Campaign folder is unavailable; character copy was not saved.".into());
         }
+        let mut archived = Vec::new();
+        for _ in 0..ATTEMPTS {
+            if self.publish_once(campaign, on_edits, &mut archived)? {
+                return Ok(archived);
+            }
+        }
+        Err("A campaign character copy kept changing during the save. The next refresh tries again.".into())
+    }
+    /// False means that a file changed during this attempt, so nothing it read still holds.
+    fn publish_once(
+        &self,
+        campaign: &Path,
+        on_edits: OnEdits,
+        archived: &mut Vec<PathBuf>,
+    ) -> Result<bool, CampaignCopyError> {
         let root = campaign.join("Characters").join("D&D Beyond");
         let mut staged = Vec::new();
         for note in self.content_notes()? {
             let path = root.join(note.relative_path);
             let previous = match fs::read_to_string(&path) {
                 Ok(text) => Some(text),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-                Err(_) => return Err(format!("Could not read campaign copy: {}", path.display())),
-            };
-            let notes = if let Some(text) = &previous {
-                let (generated, tail) = text.rsplit_once(MARKER).ok_or_else(|| conflict(&path))?;
-                let (hash, notes) = tail.split_once(" -->\n").ok_or_else(|| conflict(&path))?;
-                if hash != format!("{:x}", Sha256::digest(generated.as_bytes())) {
-                    return Err(conflict(&path));
+                Err(e) if e.kind() == ErrorKind::NotFound => None,
+                Err(_) => {
+                    return Err(format!("Could not read campaign copy: {}", path.display()).into());
                 }
-                notes
-            } else {
-                PERSONAL_NOTES
             };
-            let hash = format!("{:x}", Sha256::digest(note.markdown.as_bytes()));
-            let text = format!("{}{MARKER}{hash} -->\n{notes}", note.markdown);
-            staged.push((path, previous, text));
+            let copy = previous.as_deref().map(parts);
+            let edited = copy.as_ref().is_some_and(|copy| !copy.intact);
+            if edited && on_edits == OnEdits::Stop {
+                return Err(conflict(&path));
+            }
+            let notes = copy.map_or(PERSONAL_NOTES, |copy| copy.notes);
+            let text = stamped(&note.markdown, notes);
+            staged.push(Note {
+                path,
+                previous,
+                text,
+                edited,
+            });
         }
         let planned = staged
             .iter()
-            .map(|(path, _, text)| Entry::parse(&path.to_string_lossy(), text))
+            .map(|note| Entry::parse(&note.path.to_string_lossy(), &note.text))
             .collect::<Result<Vec<_>, _>>()?;
-        let retired = retire_plan(self, campaign, &root, &planned)?;
+        let formers = retire_plan(self, campaign, &root, &staged, &planned, on_edits)?;
         // Dependencies precede the creature. A filesystem failure may leave updated dependencies,
         // but never a new creature whose dependency files have not yet been published.
-        for (path, previous, text) in staged {
+        for note in staged {
             // Rewriting the same words costs an fsync per note, and changes the file's time.
-            // A file that moved since it was read is still a conflict.
-            if previous.as_ref() == Some(&text) {
-                if fs::read_to_string(&path).ok() != previous {
-                    return Err(conflict(&path));
+            if note.previous.as_ref() == Some(&note.text) {
+                if fs::read_to_string(&note.path).ok() != note.previous {
+                    return Ok(false);
                 }
                 continue;
             }
-            let parent = path.parent().ok_or("Invalid campaign copy path")?;
-            fs::create_dir_all(parent)
-                .map_err(|_| "Could not create campaign character folder.")?;
-            let mut temp = tempfile::NamedTempFile::new_in(parent)
-                .map_err(|_| "Could not stage campaign copy.")?;
-            temp.write_all(text.as_bytes())
-                .and_then(|_| temp.as_file().sync_all())
-                .map_err(|_| "Could not write campaign copy.")?;
-            if previous.is_some() {
-                if fs::read_to_string(&path).ok() != previous {
-                    return Err(conflict(&path));
+            let temp = stage(&note.path, note.text.as_bytes())?;
+            if let Some(previous) = &note.previous {
+                if fs::read_to_string(&note.path).ok().as_ref() != Some(previous) {
+                    return Ok(false);
                 }
-                temp.persist(&path)
+                if note.edited {
+                    report(archived, archive_copy(&note.path, previous)?);
+                }
+                temp.persist(&note.path)
                     .map_err(|_| "Could not replace campaign copy.")?;
             } else {
-                temp.persist_noclobber(&path).map_err(|_| conflict(&path))?;
+                match temp.persist_noclobber(&note.path) {
+                    Ok(_) => {}
+                    Err(e) if e.error.kind() == ErrorKind::AlreadyExists => return Ok(false),
+                    Err(_) => return Err("Could not save campaign copy.".into()),
+                }
             }
         }
         // Only retire after the new creature has been published. Each archive preserves all bytes.
-        for (path, previous) in retired {
-            if fs::read_to_string(&path).ok().as_ref() != Some(&previous) {
-                return Err(conflict(&path));
+        for former in formers {
+            if fs::read_to_string(&former.path).ok().as_ref() != Some(&former.text) {
+                return Ok(false);
             }
-            let archive = path.with_extension("md.splat-archive");
-            // Do not overwrite an earlier archive if the source has drifted or been recreated.
-            if archive.exists() {
-                if fs::read_to_string(&archive).ok().as_ref() != Some(&previous) {
-                    return Err(conflict(&archive));
-                }
-            } else {
-                let mut temp =
-                    tempfile::NamedTempFile::new_in(path.parent().ok_or("Invalid archive path")?)
-                        .map_err(|e| e.to_string())?;
-                temp.write_all(previous.as_bytes())
-                    .and_then(|_| temp.as_file().sync_all())
-                    .map_err(|e| e.to_string())?;
-                temp.persist_noclobber(&archive)
-                    .map_err(|e| e.to_string())?;
+            if former.keep {
+                let copy = parts(&former.text);
+                stage(&former.path, stamped(copy.generated, copy.notes).as_bytes())?
+                    .persist(&former.path)
+                    .map_err(|_| "Could not replace campaign copy.")?;
+                continue;
             }
-            if fs::read_to_string(&path).ok().as_ref() != Some(&previous) {
-                return Err(conflict(&path));
+            let archive = archive_copy(&former.path, &former.text)?;
+            if former.edited {
+                report(archived, archive);
             }
-            fs::remove_file(&path).map_err(|e| e.to_string())?;
+            if fs::read_to_string(&former.path).ok().as_ref() != Some(&former.text) {
+                return Ok(false);
+            }
+            fs::remove_file(&former.path).map_err(|e| e.to_string())?;
         }
-        Ok(self.campaign_path(campaign))
+        Ok(true)
     }
 }
 
@@ -115,48 +205,104 @@ fn retire_plan(
     record: &EntitySnapshot,
     campaign: &Path,
     root: &Path,
+    staged: &[Note],
     planned: &[Entry],
-) -> Result<Vec<(PathBuf, String)>, String> {
+    on_edits: OnEdits,
+) -> Result<Vec<Former>, CampaignCopyError> {
+    let mut formers = Vec::new();
     let mut candidates = BTreeMap::new();
     for relative in super::rules::retired_shared_paths(record)? {
         let path = root.join(relative);
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e.to_string()),
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.to_string().into()),
         };
-        let (generated, tail) = text.rsplit_once(MARKER).ok_or_else(|| conflict(&path))?;
-        let (hash, personal) = tail.split_once(" -->\n").ok_or_else(|| conflict(&path))?;
-        if hash != format!("{:x}", Sha256::digest(generated.as_bytes())) {
+        let copy = parts(&text);
+        let edited = !copy.intact;
+        if edited && on_edits == OnEdits::Stop {
             return Err(conflict(&path));
         }
+        // Publishing replaces a note at this path, and archives its edits.
+        if edited && staged.iter().any(|note| note.path == path) {
+            continue;
+        }
+        let annotated = copy.notes != PERSONAL_NOTES;
         // Keep annotated notes available at their original Markdown paths.
-        if personal != PERSONAL_NOTES {
+        if annotated && !edited {
             continue;
         }
-        let entry = Entry::parse(&path.to_string_lossy(), &text)?;
+        let entry = match Entry::parse(&path.to_string_lossy(), &text) {
+            Ok(entry) => entry,
+            // No entry can need words that no longer parse.
+            Err(_) if edited => {
+                formers.push(Former {
+                    path,
+                    text,
+                    edited,
+                    keep: false,
+                });
+                continue;
+            }
+            Err(e) => return Err(e.into()),
+        };
         if planned.iter().any(|e| e.id == entry.id) {
+            if edited {
+                formers.push(Former {
+                    path,
+                    text,
+                    edited,
+                    keep: false,
+                });
+            }
             continue;
         }
-        let archive = path.with_extension("md.splat-archive");
-        if archive.exists() && fs::read_to_string(&archive).ok().as_ref() != Some(&text) {
-            return Err(conflict(&archive));
+        if annotated {
+            formers.push(Former {
+                path,
+                text,
+                edited,
+                keep: true,
+            });
+            continue;
+        }
+        if on_edits == OnEdits::Stop {
+            let archive = path.with_extension("md.splat-archive");
+            if archive.exists() && fs::read_to_string(&archive).ok().as_ref() != Some(&text) {
+                return Err(conflict(&archive));
+            }
         }
         candidates.insert(entry.id, (path, text, entry));
     }
     if candidates.is_empty() {
-        return Ok(Vec::new());
+        return Ok(formers);
     }
+    // These files leave during this save, so what they say does not stop it or keep anything.
+    let leaving: BTreeSet<PathBuf> = staged
+        .iter()
+        .filter(|note| note.edited)
+        .map(|note| note.path.clone())
+        .chain(formers.iter().map(|former| former.path.clone()))
+        .collect();
     let (existing, errors) = crate::content::read_directory(campaign)?;
+    let errors: Vec<_> = errors
+        .into_iter()
+        .filter(|error| !leaving.contains(&campaign.join(&error.path)))
+        .collect();
     if !errors.is_empty() {
         return Err(format!(
             "Could not check references before retiring imported SRD copies: {errors:?}"
-        ));
+        )
+        .into());
     }
     let overwritten: BTreeSet<_> = planned.iter().map(|e| e.id).collect();
     let mut queue: Vec<_> = existing
         .iter()
-        .filter(|e| !candidates.contains_key(&e.id) && !overwritten.contains(&e.id))
+        .filter(|e| {
+            !candidates.contains_key(&e.id)
+                && !overwritten.contains(&e.id)
+                && !leaving.contains(&campaign.join(&e.path))
+        })
         .chain(planned)
         .collect();
     let mut retained = BTreeSet::new();
@@ -170,17 +316,94 @@ fn retire_plan(
             }
         }
     }
-    Ok(candidates
-        .into_iter()
-        .filter(|(id, _)| !retained.contains(id))
-        .map(|(_, (path, text, _))| (path, text))
-        .collect())
+    for (id, (path, text, _)) in candidates {
+        let edited = !parts(&text).intact;
+        let needed = retained.contains(&id);
+        // A needed copy without edits stays as it is.
+        if !needed || edited {
+            formers.push(Former {
+                path,
+                text,
+                edited,
+                keep: needed,
+            });
+        }
+    }
+    Ok(formers)
 }
-fn conflict(path: &Path) -> String {
-    format!(
-        "Campaign character copy has local edits; kept unchanged: {}. Move it aside to resume generated updates.",
-        path.display()
-    )
+fn conflict(path: &Path) -> CampaignCopyError {
+    CampaignCopyError::Conflict(path.to_path_buf())
+}
+/// A note's generated words and personal notes, and whether its checksum holds. A note with no
+/// readable checksum is all generated words, with the first personal notes.
+struct Parts<'a> {
+    generated: &'a str,
+    notes: &'a str,
+    intact: bool,
+}
+fn parts(text: &str) -> Parts<'_> {
+    if let Some((generated, tail)) = text.rsplit_once(MARKER)
+        && let Some((hash, notes)) = tail.split_once(" -->\n")
+    {
+        return Parts {
+            generated,
+            notes,
+            intact: hash == checksum(generated),
+        };
+    }
+    Parts {
+        generated: text,
+        notes: PERSONAL_NOTES,
+        intact: false,
+    }
+}
+fn checksum(generated: &str) -> String {
+    format!("{:x}", Sha256::digest(generated.as_bytes()))
+}
+fn stamped(generated: &str, notes: &str) -> String {
+    format!("{generated}{MARKER}{} -->\n{notes}", checksum(generated))
+}
+/// A temporary file beside `path`, holding `bytes` on disk, ready to persist.
+fn stage(path: &Path, bytes: &[u8]) -> Result<tempfile::NamedTempFile, CampaignCopyError> {
+    let parent = path.parent().ok_or("Invalid campaign copy path")?;
+    fs::create_dir_all(parent).map_err(|_| "Could not create campaign character folder.")?;
+    let mut temp =
+        tempfile::NamedTempFile::new_in(parent).map_err(|_| "Could not stage campaign copy.")?;
+    temp.write_all(bytes)
+        .and_then(|_| temp.as_file().sync_all())
+        .map_err(|_| "Could not write campaign copy.")?;
+    Ok(temp)
+}
+/// Keeps `text` in the first archive name that holds it or is unused, and never overwrites an
+/// archive. These names do not end in `.md`, so the content reader skips them.
+fn archive_copy(path: &Path, text: &str) -> Result<PathBuf, CampaignCopyError> {
+    let base = path.with_extension("md.splat-archive");
+    let mut temp = None;
+    for archive in std::iter::once(base.clone())
+        .chain((1u32..).map(|n| PathBuf::from(format!("{}.{n}", base.display()))))
+    {
+        match fs::read(&archive) {
+            Ok(bytes) if bytes == text.as_bytes() => return Ok(archive),
+            Ok(_) => continue,
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
+            Err(e) => return Err(e.to_string().into()),
+        }
+        let staged = match temp.take() {
+            Some(staged) => staged,
+            None => stage(path, text.as_bytes())?,
+        };
+        match staged.persist_noclobber(&archive) {
+            Ok(_) => return Ok(archive),
+            Err(e) if e.error.kind() == ErrorKind::AlreadyExists => temp = Some(e.file),
+            Err(e) => return Err(e.to_string().into()),
+        }
+    }
+    Err("Could not choose an archive name.".into())
+}
+fn report(archived: &mut Vec<PathBuf>, archive: PathBuf) {
+    if !archived.contains(&archive) {
+        archived.push(archive);
+    }
 }
 
 #[cfg(test)]
@@ -207,6 +430,14 @@ mod tests {
         fs::write(&path, &text).unwrap();
         (path, text, id)
     }
+    fn dependency_path(record: &EntitySnapshot, campaign: &Path) -> PathBuf {
+        campaign
+            .join("Characters/D&D Beyond")
+            .join(record.content_notes().unwrap().remove(0).relative_path)
+    }
+    fn custom_entry_requiring(campaign: &Path, id: uuid::Uuid) {
+        fs::write(campaign.join("Custom.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_name: Custom rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_requires:\n- id: {id}\n---\n", uuid::Uuid::new_v4())).unwrap();
+    }
     #[test]
     fn retires_only_unreferenced_unannotated_copies_and_preserves_all_bytes() {
         let root = tempfile::tempdir().unwrap();
@@ -220,7 +451,7 @@ mod tests {
         );
         let (referenced, original, id) =
             old_copy(&record, root.path(), "dnd2024:spells/shield", "");
-        fs::write(root.path().join("Custom.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_name: Custom rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_requires:\n- id: {id}\n---\n", uuid::Uuid::new_v4())).unwrap();
+        custom_entry_requiring(root.path(), id);
         record.save_campaign_copy(root.path()).unwrap();
         assert!(!retire.exists());
         assert_eq!(
@@ -245,6 +476,231 @@ mod tests {
         let inode = fs::metadata(&creature).unwrap().ino();
         record.save_campaign_copy(root.path()).unwrap();
         assert_eq!(fs::metadata(&creature).unwrap().ino(), inode);
+    }
+    #[test]
+    fn overwrite_replaces_edits_archives_them_and_leaves_other_notes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut record = super::super::tests::sample();
+        let creature = record.save_campaign_copy(root.path()).unwrap();
+        let dependency = dependency_path(&record, root.path());
+        let annotated = fs::read_to_string(&dependency).unwrap() + "My own notes.\n";
+        fs::write(&dependency, &annotated).unwrap();
+        fs::write(&creature, "An unmanaged local note").unwrap();
+        record.definition.splat_name = "New name".into();
+
+        assert_eq!(
+            record.save_campaign_copy(root.path()),
+            Err(CampaignCopyError::Conflict(creature.clone()))
+        );
+        let archive = creature.with_extension("md.splat-archive");
+        assert_eq!(
+            record.overwrite_campaign_copy(root.path()).unwrap(),
+            std::slice::from_ref(&archive)
+        );
+
+        let replaced = fs::read_to_string(&creature).unwrap();
+        assert!(replaced.contains("New name"));
+        assert!(replaced.ends_with(PERSONAL_NOTES));
+        assert_eq!(
+            fs::read_to_string(&archive).unwrap(),
+            "An unmanaged local note"
+        );
+        assert!(
+            fs::read_to_string(&dependency)
+                .unwrap()
+                .ends_with("My own notes.\n")
+        );
+        assert!(
+            !dependency.with_extension("md.splat-archive").exists(),
+            "A note without edits has nothing to archive"
+        );
+        // The next ordinary refresh has nothing left to object to.
+        record.save_campaign_copy(root.path()).unwrap();
+    }
+    #[test]
+    fn overwrite_carries_readable_personal_notes_over() {
+        let root = tempfile::tempdir().unwrap();
+        let record = super::super::tests::sample();
+        let creature = record.save_campaign_copy(root.path()).unwrap();
+        let original = fs::read_to_string(&creature).unwrap();
+        let edited = format!("---\nEdited: yes\n{}My own notes.\n", &original[4..]);
+        fs::write(&creature, &edited).unwrap();
+
+        record.overwrite_campaign_copy(root.path()).unwrap();
+
+        let replaced = fs::read_to_string(&creature).unwrap();
+        assert_eq!(replaced, original.clone() + "My own notes.\n");
+        assert_eq!(
+            fs::read_to_string(creature.with_extension("md.splat-archive")).unwrap(),
+            edited
+        );
+    }
+    #[test]
+    fn overwrite_clears_every_conflict_in_the_bundle_and_reports_each_archive() {
+        let root = tempfile::tempdir().unwrap();
+        let record = super::super::tests::sample();
+        record.save_campaign_copy(root.path()).unwrap();
+        let notes = record.content_notes().unwrap();
+        for note in &notes {
+            let path = root
+                .path()
+                .join("Characters/D&D Beyond")
+                .join(&note.relative_path);
+            fs::write(path, "Edited note").unwrap();
+        }
+        let archived = record.overwrite_campaign_copy(root.path()).unwrap();
+        assert_eq!(archived.len(), notes.len());
+        for note in &notes {
+            let path = root
+                .path()
+                .join("Characters/D&D Beyond")
+                .join(&note.relative_path);
+            assert!(
+                fs::read_to_string(path)
+                    .unwrap()
+                    .starts_with(&note.markdown)
+            );
+        }
+        record.save_campaign_copy(root.path()).unwrap();
+    }
+    #[test]
+    fn overwrite_that_fails_its_checks_changes_nothing() {
+        let root = tempfile::tempdir().unwrap();
+        let mut record = super::super::tests::sample();
+        let creature = record.save_campaign_copy(root.path()).unwrap();
+        let dependency = dependency_path(&record, root.path());
+        fs::remove_file(&dependency).unwrap();
+        fs::write(&creature, "My edited creature").unwrap();
+        // A retired copy needs a reference check, and this other note stops that check.
+        old_copy(&record, root.path(), "dnd2024:spells/fire_bolt", "");
+        fs::write(
+            root.path().join("Broken.md"),
+            "---\nsplat_schema: 1\nsplat_id: nope\n---\n",
+        )
+        .unwrap();
+        record.definition.splat_name = "New name".into();
+
+        assert!(matches!(
+            record.overwrite_campaign_copy(root.path()),
+            Err(CampaignCopyError::Failed(_))
+        ));
+
+        assert_eq!(fs::read_to_string(&creature).unwrap(), "My edited creature");
+        assert!(!creature.with_extension("md.splat-archive").exists());
+        assert!(!dependency.exists());
+    }
+    #[test]
+    fn overwrite_gets_past_an_edited_note_that_no_longer_parses() {
+        let root = tempfile::tempdir().unwrap();
+        let record = super::super::tests::sample();
+        let creature = record.save_campaign_copy(root.path()).unwrap();
+        // Frontmatter that the reader tries to parse, and cannot.
+        fs::write(&creature, "---\nsplat_schema: 1\nsplat_id: nope\n---\n").unwrap();
+        // A retired copy makes the save read the whole campaign.
+        let (retired, _, _) = old_copy(&record, root.path(), "dnd2024:spells/fire_bolt", "");
+        record.overwrite_campaign_copy(root.path()).unwrap();
+        assert!(!retired.exists());
+        record.save_campaign_copy(root.path()).unwrap();
+    }
+    #[test]
+    fn overwrite_archives_edited_former_copies_and_keeps_older_archives() {
+        let root = tempfile::tempdir().unwrap();
+        let record = super::super::tests::sample();
+        let (edited, old, _) = old_copy(&record, root.path(), "dnd2024:spells/fire_bolt", "");
+        let changed = old.replace("Old generated content.", "User rule changes.");
+        fs::write(&edited, &changed).unwrap();
+        let (blocked, blocked_text, _) =
+            old_copy(&record, root.path(), "dnd2024:spells/acid_splash", "");
+        let older = blocked.with_extension("md.splat-archive");
+        fs::write(&older, "An older archive").unwrap();
+
+        let archived = record.overwrite_campaign_copy(root.path()).unwrap();
+
+        assert_eq!(archived, [edited.with_extension("md.splat-archive")]);
+        assert!(!edited.exists());
+        assert_eq!(fs::read_to_string(&archived[0]).unwrap(), changed);
+        assert!(!blocked.exists());
+        assert_eq!(fs::read_to_string(&older).unwrap(), "An older archive");
+        let next = format!("{}.1", older.display());
+        assert_eq!(fs::read_to_string(next).unwrap(), blocked_text);
+        let (_, errors) = crate::content::read_directory(root.path()).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+    #[test]
+    fn overwrite_keeps_an_edited_former_copy_that_another_entry_needs() {
+        let root = tempfile::tempdir().unwrap();
+        let record = super::super::tests::sample();
+        let (needed, old, id) = old_copy(&record, root.path(), "dnd2024:spells/shield", "");
+        fs::write(
+            &needed,
+            old.replace("Old generated content.", "User rule changes."),
+        )
+        .unwrap();
+        custom_entry_requiring(root.path(), id);
+
+        assert!(
+            record
+                .overwrite_campaign_copy(root.path())
+                .unwrap()
+                .is_empty()
+        );
+
+        assert!(
+            fs::read_to_string(&needed)
+                .unwrap()
+                .contains("User rule changes.")
+        );
+        // Its edits are its content now, so they no longer stop a save.
+        record.save_campaign_copy(root.path()).unwrap();
+    }
+    #[test]
+    fn a_second_overwrite_of_the_same_edits_adds_no_archive() {
+        let root = tempfile::tempdir().unwrap();
+        let record = super::super::tests::sample();
+        let creature = record.save_campaign_copy(root.path()).unwrap();
+        fs::write(&creature, "Edited").unwrap();
+        record.overwrite_campaign_copy(root.path()).unwrap();
+        fs::write(&creature, "Edited").unwrap();
+        let archived = record.overwrite_campaign_copy(root.path()).unwrap();
+        assert_eq!(archived, [creature.with_extension("md.splat-archive")]);
+        assert!(!PathBuf::from(format!("{}.1", archived[0].display())).exists());
+    }
+    /// Sync and a refresh can save one character at the same time. Neither is a local edit.
+    #[test]
+    fn splats_own_concurrent_saves_are_not_conflicts_and_keep_personal_notes() {
+        let root = tempfile::tempdir().unwrap();
+        let mut one = super::super::tests::sample();
+        let creature = one.save_campaign_copy(root.path()).unwrap();
+        let annotated = fs::read_to_string(&creature).unwrap() + "My personal notes.\n";
+        fs::write(&creature, annotated).unwrap();
+        let mut two = one.clone();
+        one.initial.temporary_hp = 1;
+        two.initial.temporary_hp = 2;
+        let start = |record: EntitySnapshot, force: bool, campaign: PathBuf| {
+            std::thread::spawn(move || {
+                (0..40)
+                    .filter(|_| {
+                        let saved = if force {
+                            record.overwrite_campaign_copy(&campaign).map(|_| ())
+                        } else {
+                            record.save_campaign_copy(&campaign).map(|_| ())
+                        };
+                        matches!(saved, Err(CampaignCopyError::Conflict(_)))
+                    })
+                    .count()
+            })
+        };
+        for force in [false, true] {
+            let first = start(one.clone(), force, root.path().to_path_buf());
+            let second = start(two.clone(), false, root.path().to_path_buf());
+            assert_eq!(first.join().unwrap() + second.join().unwrap(), 0);
+        }
+        assert!(
+            fs::read_to_string(&creature)
+                .unwrap()
+                .ends_with("My personal notes.\n")
+        );
+        assert!(!creature.with_extension("md.splat-archive").exists());
     }
     #[test]
     fn edited_retired_copy_blocks_publication_before_any_file_changes() {

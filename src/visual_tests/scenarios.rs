@@ -536,7 +536,56 @@ pub mod party {
         d.expect(NOT_LINKED);
         d.state("campaign-not-linked", Sizes::All);
         d.goal("see a campaign with no link");
+
+        // A note edited outside Splat stops its save. Force read needs a session, then replaces
+        // the note and keeps the edited version in an archive.
+        let copies = d.root.join("campaigns/emberfall/Characters/D&D Beyond");
+        let note = std::fs::read_dir(&copies)
+            .expect("list character copies")
+            .map(|file| file.expect("read character copy").path())
+            .find(|path| path.is_file() && path.extension().is_some_and(|x| x == "md"))
+            .expect("a character copy");
+        std::fs::write(&note, EDITED_NOTE).expect("edit the copy on disk");
+        switch_campaign(d, CAMPAIGN);
+        d.expect(CONNECT_FIRST);
+        d.observe(
+            "Force read needs a session",
+            !d.has(FORCE_READ) && std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
+            "Signed out, the warning says to connect, and the edited note stays",
+        );
+        d.state("copy-has-local-edits-signed-out", Sizes::Default);
+
+        d.app_mut()
+            .settings
+            .simulate(crate::settings::Account::Connected);
+        d.settle();
+        d.expect(FORCE_READ);
+        d.state("copy-has-local-edits", Sizes::Default);
+        d.click(FORCE_READ);
+        d.settle();
+        d.expect(REPLACED);
+        d.state("force-read-replaced", Sizes::Default);
+        let archive = note.with_extension("md.splat-archive");
+        d.observe(
+            "Force read replaces and keeps",
+            std::fs::read_to_string(&note).is_ok_and(|t| t != EDITED_NOTE && t.starts_with("---"))
+                && std::fs::read_to_string(&archive).is_ok_and(|t| t == EDITED_NOTE)
+                && !d.has(FORCE_READ),
+            "The note holds the sheet, the archive holds the edited words, and the warning is gone",
+        );
+        d.click(DISMISS);
+        d.settle();
+        d.observe(
+            "Force read report dismisses",
+            !d.has_containing(REPLACED),
+            "Dismiss removes the report of where the edits went",
+        );
     }
+    const FORCE_READ: &str = "Force read";
+    const CONNECT_FIRST: &str = "Connect to D&D Beyond in Settings to use it.";
+    const REPLACED: &str = "Force read replaced local edits";
+    const DISMISS: &str = "Dismiss";
+    const EDITED_NOTE: &str = "My own words";
 }
 
 /// W5: build an encounter from a cold start, then inspect a saved one.

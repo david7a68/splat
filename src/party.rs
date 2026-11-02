@@ -2,7 +2,7 @@
 use crate::{
     auth::Session,
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
-    party_sync::Reader,
+    party_sync::{Reader, Stored},
 };
 use eframe::egui;
 use serde_json::Value;
@@ -149,9 +149,7 @@ impl Party {
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
         }
-        if let Some(e) = &self.reader.warning {
-            design::message(ui, Tone::Warning, &format!("Local storage: {e}"));
-        }
+        self.storage_notices(ui, session.is_some());
         ui.ctx().request_repaint_after(Duration::from_secs(1));
         if self.reader.members.is_empty() {
             if self.reader.loaded {
@@ -215,9 +213,64 @@ impl Party {
             .show_inside(ui, |ui| self.sheet_view(ui, session));
     }
 
+    /// Local storage warnings, campaign notes with local edits and the way to replace them, and
+    /// where replaced edits went. Force read needs no confirmation, because the edits stay in
+    /// an archive. A read that failed for a character who is not selected says so here, because
+    /// its sheet is not on the page.
+    fn storage_notices(&mut self, ui: &mut egui::Ui, connected: bool) {
+        // One failing disk can say the same words for each character.
+        let warnings: std::collections::BTreeSet<_> = self.reader.warnings.values().collect();
+        for warning in warnings {
+            design::message(ui, Tone::Warning, &format!("Local storage: {warning}"));
+        }
+        if !self.reader.archived.is_empty() {
+            let paths = self
+                .reader
+                .archived
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let words = format!("Force read replaced local edits. Your versions: {paths}");
+            if design::message_with_action(ui, Tone::Success, &words, "Dismiss") {
+                self.reader.archived.clear();
+            }
+        }
+        let Some(first) = self.reader.conflicts.values().next() else {
+            return;
+        };
+        let first = splat::character::CampaignCopyError::Conflict(first.clone());
+        let mut words = format!("Local storage: {first}");
+        let others = self.reader.conflicts.len() - 1;
+        if others > 0 {
+            words += &format!(
+                " {} also have local edits.",
+                design::count(others, "other character", "other characters")
+            );
+        }
+        words += " Force read replaces edited notes with the D&D Beyond sheet and keeps your versions in archive files.";
+        if self.reader.force_waiting() {
+            words += " Force read is waiting for D&D Beyond.";
+            design::message(ui, Tone::Warning, &words);
+        } else if !connected {
+            words += " Connect to D&D Beyond in Settings to use it.";
+            design::message(ui, Tone::Warning, &words);
+        } else if design::message_with_action(ui, Tone::Warning, &words, "Force read") {
+            self.reader.force_read();
+        }
+        for id in self.reader.conflicts.keys() {
+            if self.reader.selected.as_ref() != Some(id)
+                && let Some(error) = self.reader.errors.get(id)
+            {
+                let name = self.reader.member_name(id);
+                design::message(ui, Tone::Error, &format!("{name}: {error}"));
+            }
+        }
+    }
+
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
-        let Some(id) = &self.reader.selected else {
+        let Some(id) = &self.reader.selected.clone() else {
             ui.label(
                 Type::Body
                     .rich(ui, "Select a character to read their sheet.")
@@ -239,17 +292,13 @@ impl Party {
         }
         if self.combat.updated {
             if let Some(record) = self.combat.record().cloned() {
-                if let Some(scope) = self.reader.local_scope()
-                    && let Err(error) = crate::hermetic::character_cache()
+                if let Some(scope) = self.reader.local_scope() {
+                    let saved = crate::hermetic::character_cache()
                         .and_then(|cache| cache.save(scope, &record))
-                {
-                    self.reader.warning = Some(error);
+                        .map(|_| ());
+                    self.reader.stored(Stored::Sheet(id.clone()), saved);
                 }
-                if let Some(path) = self.reader.campaign_path()
-                    && let Err(error) = record.save_campaign_copy(path)
-                {
-                    self.reader.warning = Some(error);
-                }
+                self.reader.save_campaign_copy(id, &record);
                 self.reader.sheets.insert(id.clone(), record);
             }
             self.combat.updated = false;

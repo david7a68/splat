@@ -111,6 +111,11 @@ campaign entries at their original paths, including dependencies of retained
 copies. Edited generated content or conflicting archives block publication.
 All retirement checks run before writes; archives are created only after the
 replacement creature has been saved. This migration never edits shared SRD files.
+**Force read** uses the same checks and order. It archives each edited note before it
+replaces that note. It archives an edited former copy, unless another entry needs that
+copy or the copy has personal notes. Such a copy stays, and its edits become its
+generated content. A conflicting archive never changes: the new bytes take the next
+unused name, `.md.splat-archive.1` and so on.
 
 Loading an old private cache automatically creates the new content on its next
 publication. The offline export example also performs this migration without
