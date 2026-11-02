@@ -353,6 +353,9 @@ pub(crate) struct Run {
     also: BTreeSet<usize>,
     /// The targets that take half of a damage amount, for a save.
     halved: BTreeSet<usize>,
+    /// How many steps the DM has taken or taken back since this opened. A sheet's change is
+    /// not one, and neither is opening a run to read it. Never saved.
+    dm_steps: usize,
     /// Never saved.
     carried: Option<CarriedHp>,
     last_roll: Option<LastRoll>,
@@ -622,6 +625,7 @@ impl Run {
             selected: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
+            dm_steps: 0,
             carried: None,
             last_roll: None,
             amount: String::new(),
@@ -1046,6 +1050,7 @@ impl Run {
             self.history.remove(0);
             self.history_labels.remove(0);
         }
+        self.dm_steps += 1;
         self.history.push(std::mem::replace(&mut self.state, next));
         self.history_labels.push(undo_label);
         self.last_initiative = initiative_edit;
@@ -1240,6 +1245,7 @@ impl Run {
     }
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
+            self.dm_steps += 1;
             self.history_labels.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
             let confirmed: Vec<_> = self
@@ -1448,7 +1454,7 @@ impl Run {
                 Phase::Running => crate::timeline::RunState::Running,
                 Phase::Ended { outcome } => crate::timeline::RunState::Ended(outcome.clone()),
             },
-            steps: self.state.log.len(),
+            steps: self.dm_steps,
         }
     }
     /// The strip's Next turn, usable from any page.
@@ -2275,6 +2281,7 @@ impl Run {
             history_labels: Vec::new(),
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
+            dm_steps: 0,
             carried: None,
             last_roll: None,
             amount: String::new(),
@@ -4087,6 +4094,23 @@ mod tests {
         assert_eq!(run.state.order, order);
         assert!(run.apply(Command::Initiative(other, None)).is_err());
     }
+    #[test]
+    fn only_the_dm_moves_a_run_on_the_timeline() {
+        let mut run = run();
+        begin(&mut run);
+        let fact = run.timeline_fact();
+        // A sheet's change reaches the log with no step of the DM's.
+        run.state
+            .log
+            .push("Kestrel: HP changed on D&D Beyond.".into());
+        assert_eq!(run.timeline_fact(), fact);
+        run.apply(Command::Damage(0, 1)).unwrap();
+        let hit = run.timeline_fact();
+        assert!(hit.played_since(&fact));
+        run.undo();
+        assert!(run.timeline_fact().played_since(&hit));
+    }
+
     #[test]
     fn a_setup_with_nothing_done_is_untouched_until_sync_changes_it() {
         let mut run = run();

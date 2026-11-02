@@ -197,8 +197,16 @@ pub struct RunFact {
     pub name: String,
     pub round: u64,
     pub state: RunState,
-    /// How many things the log holds. A new one means someone played this run.
+    /// How many steps the DM has taken since this run opened. It only grows while it stays open.
     pub steps: usize,
+}
+
+impl RunFact {
+    /// Whether the DM played this run after `old`. A run just opened has only been opened,
+    /// even when it opens over its own older copy.
+    pub fn played_since(&self, old: &RunFact) -> bool {
+        self.id == old.id && self.steps > old.steps
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -744,7 +752,8 @@ impl Book {
     /// so does the DM's undo, because a new round is not an edit.
     /// What a run says now. `played` means it changed while open, and it was not only opened.
     pub fn record_run(&mut self, fact: &RunFact, session: Option<Uuid>, played: bool) {
-        let removed = self.removed.take();
+        // It stays in place for this, because what comes next must follow its order.
+        let removed = self.removed.clone();
         self.apply_run(fact, session, played);
         self.removed = removed;
     }
@@ -753,6 +762,7 @@ impl Book {
     pub fn next_order(&self) -> u64 {
         self.events
             .iter()
+            .chain(self.removed.iter().map(|(_, event, _)| event))
             .map(|event| event.played_order)
             .max()
             .unwrap_or(0)
@@ -807,7 +817,8 @@ impl Book {
                     if moved {
                         event.continued_in = session;
                     }
-                    if event.played_order + 1 != next {
+                    // Zero is from a file older than this order, and is never the latest.
+                    if event.played_order == 0 || event.played_order + 1 != next {
                         event.played_order = next;
                         self.touch();
                     } else if moved {
@@ -1098,6 +1109,72 @@ mod tests {
         event.played_order = next;
         let state = party_state(&book.events, session);
         assert!(state.rested && state.fights.is_empty());
+    }
+
+    #[test]
+    fn a_run_opened_over_its_own_older_copy_was_not_played() {
+        let before = RunFact {
+            steps: 4,
+            ..fact(RunState::Running)
+        };
+        let opened = RunFact {
+            steps: 0,
+            ..fact(RunState::Running)
+        };
+        assert!(!opened.played_since(&before));
+        let hit = RunFact {
+            steps: 1,
+            ..fact(RunState::Running)
+        };
+        assert!(hit.played_since(&opened));
+        let other = RunFact {
+            id: Uuid::from_u128(8),
+            ..hit.clone()
+        };
+        assert!(!other.played_since(&opened));
+    }
+
+    #[test]
+    fn a_fight_resumed_from_an_older_file_is_still_the_latest_word() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut book = book(temp.path());
+        let session = Some(Uuid::new_v4());
+        let mut bridge = fact(RunState::Running);
+        book.record_run(&bridge, session, true);
+        let shrine = RunFact {
+            id: Uuid::from_u128(8),
+            ..fact(RunState::Running)
+        };
+        book.record_run(&shrine, session, true);
+        // As a file written before fights had an order.
+        book.events
+            .iter_mut()
+            .for_each(|event| event.played_order = 0);
+        bridge.steps += 1;
+        book.record_run(&bridge, session, true);
+        let fights = party_state(&book.events, session).fights;
+        assert_eq!(fights.last().map(|fight| fight.0), Some(bridge.id));
+    }
+
+    #[test]
+    fn a_rest_put_back_stays_before_what_was_played_since() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut book = book(temp.path());
+        let session = Some(Uuid::new_v4());
+        let mut bridge = fact(RunState::Running);
+        book.record_run(&bridge, session, true);
+        let rest = book.add(Kind::LongRest, session);
+        let next = book.next_order();
+        let event = book.event_mut(&rest).unwrap();
+        event.restores = true;
+        event.played_order = next;
+        book.remove(&rest);
+        bridge.steps += 1;
+        book.record_run(&bridge, session, true);
+        assert_eq!(book.undo_remove(), Some(rest));
+        let state = party_state(&book.events, session);
+        assert!(state.rested);
+        assert_eq!(state.fights.len(), 1, "the fight came after the rest");
     }
 
     #[test]
