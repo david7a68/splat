@@ -4980,6 +4980,9 @@ pub mod session_plan_groups {
     use super::*;
 
     pub fn run(d: &mut Driver<'_>) {
+        // The Library has been read before the group exists, so it must read again after.
+        go_library(d);
+        d.expect(SEARCH_LIBRARY);
         d.click(NAV_SESSIONS);
         new_session(d, "The Crossing");
         show_plan(d);
@@ -5006,6 +5009,16 @@ pub mod session_plan_groups {
             d.has_containing("2 creatures") && !d.has("Back to the plan"),
             "A group saved from the plan is linked in it, with what it holds",
         );
+        go_library(d);
+        d.type_into(SEARCH_LIBRARY, "Ash Pack");
+        d.expect("Ash Pack");
+        d.observe(
+            "T14.6",
+            d.in_view_containing("Ash Pack"),
+            "A group saved from the plan is in the Library at once",
+        );
+        d.click(NAV_SESSIONS);
+        show_plan(d);
 
         d.click("Add a group");
         d.click(&format!("Plan {GROUP_RIVALS}"));
@@ -5042,6 +5055,34 @@ pub mod session_plan_groups {
             "T14.6",
             d.has(&format!("Add {GROUP_RIVALS} to the initiative list")),
             "With a fight open, a planned group's row goes to the Arrivals panel in one press",
+        );
+
+        // A group belongs to the plan it began in, whichever note is on screen when it is saved.
+        d.click(NAV_SESSIONS);
+        d.click("New session");
+        d.type_into("Session title", "The Ford");
+        d.click("Create session");
+        d.expect("Session 2: The Ford");
+        show_plan(d);
+        d.click("Add a group");
+        d.click("New group");
+        d.expect("Back to the plan");
+        d.type_text("Border Watch");
+        d.type_into(FIND_CREATURE, "wolf");
+        d.click_beside_exact("Wolf", ADD);
+        d.click_starting("Session 1: The Crossing");
+        d.expect("Go to it");
+        d.state("plan-group-in-another-session", Sizes::Default);
+        let stays_out = !d.has("Save group");
+        d.click("Go to it");
+        d.click("Save group");
+        d.expect("Go to Arrivals for Border Watch");
+        d.click_starting("Session 1: The Crossing");
+        d.expect(&format!("Go to Arrivals for {GROUP_RIVALS}"));
+        d.observe(
+            "T14.6",
+            stays_out && !d.has("Go to Arrivals for Border Watch"),
+            "A group is linked in the plan it began in, with another note open on the way",
         );
     }
 }

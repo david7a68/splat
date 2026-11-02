@@ -1057,6 +1057,7 @@ impl Splat {
                     let blocked = self.encounters.plan_blocked();
                     let group_blocked = self.encounters.plan_group_blocked();
                     let group_open = self.encounters.group_open_in_plan();
+                    let group_discarded = self.encounters.group_discarded_in_plan();
                     let run_directory = self.encounters.run_directory(campaign);
                     let (encounters, campaigns) = (&mut self.encounters, &self.campaigns);
                     let mut group_editor = |ui: &mut egui::Ui| {
@@ -1067,6 +1068,7 @@ impl Splat {
                         groups: &groups,
                         group_blocked,
                         group_open,
+                        group_discarded,
                         group_editor: std::cell::RefCell::new(&mut group_editor),
                         blocked,
                         run_directory,
@@ -1074,12 +1076,6 @@ impl Splat {
                     };
                     self.sessions
                         .show(ui, &self.processing, &mut self.timeline, &plan);
-                    // A group saved from the plan is new content, as on the Encounters page.
-                    if self.encounters.saved {
-                        self.encounters.saved = false;
-                        self.campaign_content.refresh_destination(&campaign.path);
-                        self.lookup.refresh();
-                    }
                 } else {
                     self.no_campaign(ui, "No campaign to keep notes for yet");
                 }
@@ -1132,13 +1128,6 @@ impl Splat {
                             sessions: &sessions,
                         },
                     );
-                    if self.encounters.saved {
-                        self.encounters.saved = false;
-                        if let Some(campaign) = &active {
-                            self.campaign_content.refresh_destination(&campaign.path);
-                            self.lookup.refresh();
-                        }
-                    }
                 } else {
                     self.no_campaign(ui, "No campaign to prepare yet");
                 }
@@ -1306,8 +1295,11 @@ impl Splat {
         if let Some(name) = self.encounters.saved_for_plan.take() {
             self.sessions.add_to_plan(&name);
         }
-        if let Some((old, new)) = self.encounters.renamed_in_plan.take() {
-            self.sessions.rename_in_plan(&old, &new);
+        if let Some((old, new)) = self.encounters.renamed_group.take() {
+            self.sessions.rename_links(&old, &new);
+        }
+        if std::mem::take(&mut self.sessions.wants_group_undo) {
+            self.encounters.undo_group_discard_in_plan();
         }
         if std::mem::take(&mut self.sessions.wants_arrivals) {
             self.encounters.show_arrivals();

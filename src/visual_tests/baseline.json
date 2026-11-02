@@ -34,7 +34,7 @@
       "run-sync-states": 21,
       "session-notes": 137,
       "session-plan": 106,
-      "session-plan-groups": 45,
+      "session-plan-groups": 47,
       "session-recording": 106,
       "settings": 17,
       "signed-in": 38
@@ -83,7 +83,7 @@
       "run-sync-states": 21,
       "session-notes": 137,
       "session-plan": 106,
-      "session-plan-groups": 45,
+      "session-plan-groups": 47,
       "session-recording": 105,
       "settings": 17,
       "signed-in": 38
@@ -252,7 +252,7 @@
       "roll dice beside the stat block": 3
     },
     "session-plan-groups": {
-      "assemble a group in the session's plan": 14
+      "assemble a group in the session's plan": 15
     },
     "session-recording": {
       "record a session and process it": 77

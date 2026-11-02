@@ -716,8 +716,8 @@ pub struct Encounters {
     /// A new encounter joins the session's plan when it is first saved.
     plan_on_save: bool,
     pub saved_for_plan: Option<String>,
-    /// A group's old and new name, after an edit from the plan that links it.
-    pub renamed_in_plan: Option<(String, String)>,
+    /// A group's old and new name, for the notes that link it.
+    pub renamed_group: Option<(String, String)>,
     /// The names linked in tonight's plan, for an open run.
     pub planned_groups: Vec<String>,
     /// The open group draft goes back to the session's plan when it is saved.
@@ -929,7 +929,9 @@ impl Encounters {
     /// Assemble a group where the plan is, with the session's note still beside it.
     pub fn new_group_in_plan(&mut self) {
         self.group_draft = Some(GroupDraft::new());
+        self.discarded_group = None;
         self.group_in_plan = true;
+        self.search.clear();
         self.focus_name = true;
         self.editor_pane = EditorPane::Add;
         self.expanded = None;
@@ -941,6 +943,7 @@ impl Encounters {
         match GroupDraft::open(&active.path, path) {
             Ok(draft) => {
                 self.group_draft = Some(draft);
+                self.discarded_group = None;
                 self.group_in_plan = true;
                 self.editor_pane = EditorPane::Roster;
                 self.expanded = None;
@@ -956,6 +959,17 @@ impl Encounters {
     }
     pub fn group_open_in_plan(&self) -> bool {
         self.group_in_plan && self.group_draft.is_some()
+    }
+    /// A new group started in the plan was discarded there, and can come back.
+    pub fn group_discarded_in_plan(&self) -> bool {
+        self.group_in_plan && self.group_draft.is_none() && self.group_undo_ready()
+    }
+    pub fn undo_group_discard_in_plan(&mut self) {
+        if self.group_discarded_in_plan() {
+            self.group_draft = self.discarded_group.take();
+            self.message = None;
+            self.error = None;
+        }
     }
     /// The group editor, as a part of the session's page.
     pub fn group_in_plan_view(
@@ -1595,6 +1609,8 @@ impl Encounters {
             self.message = None;
         }
         if self.group_draft.is_some() {
+            // Taken up on this page, it is this page's. Its save stays here, and links nothing.
+            self.group_in_plan = false;
             self.group_editor_view(ui, &active, campaigns, false);
             if self.peek.is_some() {
                 self.editor_pane = EditorPane::Add;

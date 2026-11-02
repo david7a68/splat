@@ -749,14 +749,42 @@ pub fn insert_in_plan(body: &mut String, words: &str) {
     body.push_str(&rest);
 }
 
-/// The links to a thing that has a new name. Returns whether any changed.
+/// The links to a thing that has a new name, whatever their case. Returns whether any changed.
 pub fn rename_links(body: &mut String, old: &str, new: &str) -> bool {
-    let renamed = body
-        .replace(&format!("[[{old}]]"), &format!("[[{new}]]"))
-        .replace(&format!("[[{old}|"), &format!("[[{new}|"));
-    let changed = renamed != *body;
+    let mut renamed = String::with_capacity(body.len());
+    let mut rest = body.as_str();
+    let mut changed = false;
+    while let Some(start) = rest.find("[[") {
+        let (before, after) = rest.split_at(start + 2);
+        renamed.push_str(before);
+        rest = after;
+        let Some(end) = after.find(['|', ']']) else {
+            break;
+        };
+        let (name, tail) = after.split_at(end);
+        if name.trim().eq_ignore_ascii_case(old)
+            && (tail.starts_with('|') || tail.starts_with("]]"))
+        {
+            renamed.push_str(new);
+            rest = tail;
+            changed = true;
+        }
+    }
+    renamed.push_str(rest);
     *body = renamed;
     changed
+}
+
+/// The same for a note that is not open. Its frontmatter and its other words stay as they are.
+pub fn rename_links_in_file(path: &Path, old: &str, new: &str) -> Result<bool, String> {
+    let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let (front, body) = split_note(&text).unwrap_or(("", &text));
+    let mut renamed = body.to_owned();
+    if !rename_links(&mut renamed, old, new) {
+        return Ok(false);
+    }
+    replace_file(path, &format!("{front}{renamed}"))?;
+    Ok(true)
 }
 
 /// A long text, divided at its time headings, so that each part can be read alone.
@@ -999,6 +1027,30 @@ mod tests {
             "- [[Cinder Pack]]\n- [[Cinder Pack|the pack]]\nAsh Pack is not a link.\n- [[Ash Packs]]\n"
         );
         assert!(!rename_links(&mut body, "Ash Pack", "Other"));
+    }
+
+    #[test]
+    fn a_new_name_follows_a_link_of_any_case_and_a_link_left_open_stays() {
+        let mut body = "- [[ash pack]]\n- [[ASH PACK|them]]\n[[Ash Pack".to_owned();
+        assert!(rename_links(&mut body, "Ash Pack", "Cinder Pack"));
+        assert_eq!(
+            body,
+            "- [[Cinder Pack]]\n- [[Cinder Pack|them]]\n[[Ash Pack"
+        );
+    }
+
+    #[test]
+    fn a_note_not_open_keeps_its_frontmatter_and_its_words_through_a_rename() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Session 1.md");
+        let text = "---\nsession_title: '[[Ash Pack]]'\n---\n\nWords.\n- [[Ash Pack]]\n";
+        fs::write(&path, text).unwrap();
+        assert!(rename_links_in_file(&path, "Ash Pack", "Cinder Pack").unwrap());
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "---\nsession_title: '[[Ash Pack]]'\n---\n\nWords.\n- [[Cinder Pack]]\n"
+        );
+        assert!(!rename_links_in_file(&path, "Ash Pack", "Other").unwrap());
     }
 
     fn new_note<'a>(number: u32, title: &'a str, template: &'a str) -> NewNote<'a> {

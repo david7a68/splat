@@ -5,8 +5,8 @@ use super::{
     create_template, delete_recording, each_linked_name, folder as session_folder, folder_setting,
     fresh_line_in_note, insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings,
     list_templates, nested_in_note, new_recording_path, parts_of, plain_links, recording_title,
-    rename_links, save_folder, section_text, unreadable_notes, update_details,
-    without_empty_sections, without_own_heading,
+    rename_links, rename_links_in_file, save_folder, section_text, unreadable_notes,
+    update_details, without_empty_sections, without_own_heading,
 };
 use crate::{
     credentials::{self, KeySlot},
@@ -85,6 +85,8 @@ pub struct Plan<'a> {
     pub group_blocked: Option<&'a str>,
     /// A group being assembled takes the plan's place, beside the note.
     pub group_open: bool,
+    /// A new group started in the plan was discarded there.
+    pub group_discarded: bool,
     pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
     /// Why no fight can start now.
     pub blocked: Option<&'a str>,
@@ -265,6 +267,11 @@ pub struct Sessions {
     pub wants_fight: Option<String>,
     pub wants_new_fight: bool,
     pub wants_new_group: bool,
+    pub wants_group_undo: bool,
+    /// The session whose plan a group is being assembled in. It is the one that gets the link.
+    group_session: Option<Uuid>,
+    /// Notes that kept a group's old name, because they could not be written.
+    rename_problem: Option<String>,
     /// The open fight's Arrivals panel, for a planned group that has come.
     pub wants_arrivals: bool,
     /// The path of a group to edit in the plan.
@@ -2215,16 +2222,36 @@ impl Sessions {
             .insert(session, timeline::referenced_ids(&draft.body));
     }
 
-    /// A saved group has a new name. The plan's link to it follows.
-    pub fn rename_in_plan(&mut self, old: &str, new: &str) {
-        let (Some(draft), Some(session)) = (&mut self.draft, self.selected) else {
-            return;
-        };
-        if rename_links(&mut draft.body, old, new) {
+    /// A saved group has a new name. Every note's link to it follows, so that no plan loses it.
+    pub fn rename_links(&mut self, old: &str, new: &str) {
+        if let (Some(draft), Some(session)) = (&mut self.draft, self.selected)
+            && rename_links(&mut draft.body, old, new)
+        {
             draft.edited();
             self.mentions
                 .insert(session, timeline::referenced_ids(&draft.body));
         }
+        if let Some((_, names)) = &mut self.tonight_links {
+            for name in names
+                .iter_mut()
+                .filter(|name| name.eq_ignore_ascii_case(old))
+            {
+                new.clone_into(name);
+            }
+        }
+        let kept: Vec<String> = self
+            .notes
+            .iter()
+            .filter(|note| Some(note.id) != self.selected)
+            .filter(|note| rename_links_in_file(&note.path, old, new).is_err())
+            .map(Note::label)
+            .collect();
+        self.rename_problem = (!kept.is_empty()).then(|| {
+            format!(
+                "{} could not be changed, and still links {old}. Change the link to {new}.",
+                kept.join(", ")
+            )
+        });
     }
 
     /// The names tonight's note links, for the run. The note on screen gives its words not yet
@@ -2354,13 +2381,31 @@ impl Sessions {
     /// The session as a list, top to bottom: what happened, then what is still to come. It
     /// replaces a walk between Encounters, Timeline and the note.
     fn plan_pane(&mut self, ui: &mut egui::Ui, book: &mut Book, plan: &Plan<'_>) {
-        if plan.group_open {
+        let session = self.selected;
+        let here = self.group_session == session;
+        if plan.group_open && here {
             (plan.group_editor.borrow_mut())(ui);
             return;
         }
         let c = colors();
-        let session = self.selected;
         problems(ui, book);
+        if plan.group_open {
+            let label = self
+                .notes
+                .iter()
+                .find(|note| Some(note.id) == self.group_session)
+                .map_or_else(|| "another session".to_owned(), Note::label);
+            let words = format!("A group is being assembled in the plan of {label}.");
+            if design::message_with_action(ui, Tone::Info, &words, "Go to it") {
+                self.select(self.group_session);
+            }
+        }
+        if plan.group_discarded && here && design::draft_discarded(ui) {
+            self.wants_group_undo = true;
+        }
+        if let Some(problem) = &self.rename_problem {
+            design::message(ui, Tone::Warning, problem);
+        }
         if let Some(words) = self.not_being_played("These go to") {
             design::message(ui, Tone::Warning, &words);
         } else if self.reading_note
@@ -2433,6 +2478,13 @@ impl Sessions {
         // A group is not played, so it stays in the plan however often it arrives.
         let planned_groups: Vec<_> = linked_names(&body)
             .iter()
+            // A link means one thing. A fight of that name is the older meaning of it.
+            .filter(|name| {
+                !plan
+                    .fights
+                    .iter()
+                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
+            })
             .filter_map(|name| {
                 plan.groups
                     .iter()
@@ -2631,6 +2683,20 @@ impl Sessions {
                                 if let Some(problem) = &group.problem {
                                     wrapped_words(ui, Type::Small, problem, c.result.warning);
                                 }
+                                if plan
+                                    .groups
+                                    .iter()
+                                    .filter(|other| other.name.eq_ignore_ascii_case(&group.name))
+                                    .count()
+                                    > 1
+                                {
+                                    wrapped_words(
+                                        ui,
+                                        Type::Small,
+                                        "More than one group has this name, and this link opens the first. Rename the others.",
+                                        c.result.warning,
+                                    );
+                                }
                             },
                             |ui| {
                                 // With a fight open, what a group needs next is to arrive.
@@ -2652,6 +2718,7 @@ impl Sessions {
                                     .clicked()
                                 {
                                     self.wants_group = Some(group.path.clone());
+                                    self.group_session = self.selected;
                                 }
                             },
                         );
@@ -2777,7 +2844,10 @@ impl Sessions {
             &mut self.group_search,
             &mut self.focus_group_search,
         ) {
-            Some(MenuChoice::New) => self.wants_new_group = true,
+            Some(MenuChoice::New) => {
+                self.wants_new_group = true;
+                self.group_session = self.selected;
+            }
             Some(MenuChoice::Named(name)) => self.add_to_plan(&name),
             None => {}
         }
@@ -3573,7 +3643,10 @@ impl Sessions {
         if writing && let Some(words) = self.not_being_played("You are writing in") {
             design::message(ui, Tone::Warning, &words);
         }
-        self.last_time_block(ui, book);
+        // A group being assembled needs the height, and last time can wait for it.
+        if !(plan.group_open && self.group_session == self.selected) {
+            self.last_time_block(ui, book);
+        }
         let recordings = format!("Recordings ({})", self.recordings.len());
         let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM;
         // In a wide page, the note is on the plan's tab, so there is no second one to choose.
