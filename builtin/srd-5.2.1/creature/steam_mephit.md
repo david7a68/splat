@@ -22,27 +22,18 @@ Skills Stealth +2\
 Immunities Fire, Poison; Exhaustion, Poisoned\
 Senses Darkvision 60 ft.; Passive Perception 10\
 Languages Primordial (Aquan, Ignan)\
-CR 1/4 (XP 50; PB +2)\
+CR 1/4 (XP 50; PB +2)
 
 ### Traits
 
-Blurred Form. Attack rolls against the mephit are made\
-with Disadvantage unless the mephit has the Incapaci-\
-tated condition.\
-Death Burst. The mephit explodes when it dies. Dex-\
-terity Saving Throw: DC 10, each creature in a 5-foot\
-Emanation originating from the mephit. Failure: 5 (2d4)\
-Fire damage. Success: Half damage.\
+Blurred Form. Attack rolls against the mephit are made with Disadvantage unless the mephit has the Incapacitated condition.
+
+Death Burst. The mephit explodes when it dies. Dexterity Saving Throw: DC 10, each creature in a 5-foot Emanation originating from the mephit. Failure: 5 (2d4) Fire damage. Success: Half damage.
 
 ### Actions
 
-Claw. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4)\
-Slashing damage plus 2 (1d4) Fire damage.\
-Steam Breath (Recharge 6). Constitution Saving Throw:\
-DC 10, each creature in a 15-foot Cone. Failure: 5 (2d4)\
-Fire damage, and the target’s Speed decreases by 10\
-feet until the end of the mephit’s next turn. Success:\
-Half damage only. Failure or Success: Being underwater\
-doesn’t grant Resistance to this Fire damage.\
+Claw. Melee Attack Roll: +2, reach 5 ft. Hit: 2 (1d4) Slashing damage plus 2 (1d4) Fire damage.
+
+Steam Breath (Recharge 6). Constitution Saving Throw: DC 10, each creature in a 15-foot Cone. Failure: 5 (2d4) Fire damage, and the target’s Speed decreases by 10 feet until the end of the mephit’s next turn. Success: Half damage only. Failure or Success: Being underwater doesn’t grant Resistance to this Fire damage.
 
 Original layout: [[../pages/308|page 308]].

@@ -11,10 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [188],
 
 <!-- SRD page 188 -->
 
-A skill is an area of specialization associated with\
-an ability check. If you have proficiency in a skill,\
-you can add your Proficiency Bonus when you make\
-an ability check associated with that skill. See also\
-“Playing the Game” (“Proficiency”).\
+A skill is an area of specialization associated with an ability check. If you have proficiency in a skill, you can add your Proficiency Bonus when you make an ability check associated with that skill. See also “Playing the Game” (“Proficiency”).
 
 Original layout: [[../pages/188|page 188]].

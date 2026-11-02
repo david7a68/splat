@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 89 -->
 
-Here are definitions of the properties in the Proper-\
-ties column of the Weapons table.\
+Here are definitions of the properties in the Properties column of the Weapons table.
 
 ## Rule
 

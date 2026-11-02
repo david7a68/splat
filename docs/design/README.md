@@ -9,11 +9,13 @@ The candidate schema for the agreed scope is complete and ready for review.
 The design is committed. A [read-only verifier and SRD source import](../srd-import.md)
 now exercise part of the format. A [bounded execution proof](../execution-proof.md) now runs converted SRD mechanics.
 The [whole-SRD catalogue](../srd-definitions.md) now contains typed rule specifications with explicit engine gaps.
+The [character check](character-rule-conversion.md#character-check) compares D&D Beyond characters with the SRD class rules.
 The content editor, campaign content loader, and basic encounter roster editor are implemented.
-The encounter editor saves local templates with direct creature references and HP overrides;
+The encounter editor saves local templates with direct creature references, starting HP and overrides, and a DM can prepare encounter groups to add during a run;
 manual DM runs now save independent state, initiative, HP, conditions, and a combat log
 in the configurable campaign run folder. Campaign-selected NPC initiative is implemented.
-Optional bidirectional combat sync is available in Party and linked run participants.
+Bidirectional combat sync runs in the background from the D&D Beyond connection, in Party and for
+linked run participants. An encounter can turn it off with `combat_sync: false`.
 Shared party bindings, automatic combat resolution, and the full simulator remain later work.
 
 Read these current contracts in order:
@@ -47,7 +49,8 @@ block the affected use even if the note parses.
 | spell | `splat_spell`, `splat_actions` | `splat_parameters`, local effects/rolls/resources as declared |
 | effect | `splat_effect` | `splat_parameters` |
 | container | `splat_item` EntryRef | `splat_initial`, `splat_inventory_details`, marked inventory tables |
-| encounter | `splat_encounter` | All encounter groups defined in Campaign schema |
+| encounter | `splat_encounter` | All encounter fields defined in Campaign schema |
+| encounter_group | `splat_encounter_group` | `side`, ordered `members`, with their counts and overrides |
 | sequence | `splat_sequence` | Explicit encounter bindings, elapsed/rest steps |
 | rule | `splat_rule` | Source attribution and typed implementation parameters |
 | rule_group | `splat_rule_group` | Required/optional dependency metadata |

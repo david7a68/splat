@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 49 -->
 
-You gain another Fighting Style feat of your choice.\
+You gain another Fighting Style feat of your choice.
 
 ## Rule
 

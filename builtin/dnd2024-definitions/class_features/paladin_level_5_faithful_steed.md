@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 55 -->
 
-You can call on the aid of an otherworldly steed. You\
-always have the Find Steed spell prepared.\
-You can also cast the spell once without expend-\
-ing a spell slot, and you regain the ability to do so\
-when you finish a Long Rest.\
+You can call on the aid of an otherworldly steed. You always have the Find Steed spell prepared.
+
+You can also cast the spell once without expending a spell slot, and you regain the ability to do so when you finish a Long Rest.
 
 ## Rule
 

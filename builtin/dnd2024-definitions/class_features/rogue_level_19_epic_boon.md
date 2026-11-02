@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 63 -->
 
-You gain an Epic Boon feat (see “Feats”) or another\
-feat of your choice for which you qualify. Boon of the\
-Night Spirit is recommended.\
+You gain an Epic Boon feat (see “Feats”) or another feat of your choice for which you qualify. Boon of the Night Spirit is recommended.
 
 ## Rule
 

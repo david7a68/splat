@@ -138,6 +138,22 @@ including participants that enter during a later phase.
 A group of participants assigned to the same side of an encounter, independently
 of their creature type or membership in a campaign's party.
 
+**Encounter group**:
+A reusable, named list of creatures with counts, a default side, and notes, owned by
+a campaign. The DM adds it to a running encounter when it arrives. Each addition
+creates new participants. It is not a side, which sorts participants within one
+encounter; not a roster, which one encounter owns; not a rule group, which enables
+rules together; and not an initiative group, which shares a turn order position.
+_Avoid_: Team, wave, spawn group
+
+**Override**:
+An explicit change an encounter roster slot or encounter group member builds in to
+one creature, such as a custom name or extra HP. It belongs to that slot or member,
+is applied when the participant is created, and is always shown beside the value it
+replaces. It never changes the creature's entry. To change a creature everywhere,
+use a campaign copy.
+_Avoid_: Variant, scaling
+
 **Encounter phase**:
 A part of an encounter governed by triggers that can cause participants to enter
 or leave combat. Phases have independent triggers and can overlap.
@@ -184,6 +200,11 @@ participants retain their HP, resources, inventory, and ongoing effects.
 One playthrough or simulation of an encounter, with its own participants,
 current HP, spent resources, and active effects.
 
+**Retired encounter**:
+An encounter template with an ended run, unless it is marked repeatable. It is not a state in its
+note. It leaves the ready list and stays reachable from its ended runs in History.
+_Avoid_: Archived
+
 **Completion condition**:
 An objective or state that ends an encounter automatically when satisfied.
 An encounter can also be ended manually.
@@ -224,6 +245,10 @@ fallback when initiative does not decide their order.
 **Simulation strategy**:
 The policy that selects a participant's combat choices during simulation.
 The applicable rules determine which choices are allowed and their outcomes.
+
+**Combat sync**:
+The background exchange of a linked character's HP, death saves, conditions, spell slots and limited
+uses with D&D Beyond. It runs from the time Splat connects. An encounter can turn it off for its run.
 
 **Controller**:
 The person or strategy that makes a participant's permitted choices. A control
@@ -372,12 +397,40 @@ shared content. It does not need to belong to a package.
 Make campaign-owned content available in a shared package. The user chooses
 whether to create a shared copy or move the existing entry into the package.
 
+**Campaign package**:
+The package that holds a campaign's imported definitions when no enabled package
+note lists their D&D Beyond ID. It stays in the campaign's folder and is private to that campaign.
+_Avoid_: Campaign-owned entry, which the DM creates or copies.
+
+**D&D Beyond ID**:
+The provider's identity for a definition, such as `feature:8429477`. A package note
+lists the definitions it holds in `splat_dndbeyond_ids`. One note can list many.
+
+**Import route**:
+The recorded place of one imported source definition: a note in an enabled
+package, or the campaign package. A route stands until the DM approves a change.
+
+**Package reconciliation**:
+The check of import routes against the packages that a campaign enables. It lists
+definitions that can move to a package, must return to the campaign package, or no
+longer have a use. Nothing moves until the DM applies the change.
+
 **Conversion gap**:
 A source rule that still needs a complete typed definition or an explicit
 interpretation. Extracting its numbers or keeping its prose does not close it.
 
 **Engine gap**:
-A specified rule contract for which the engine has no implementation.
+A specified rule contract for which the engine has no implementation. The list of
+implemented contracts is in Rust code, so content cannot close a gap by itself.
+
+**Character check**:
+A comparison of a D&D Beyond character with what the SRD rules give for its classes,
+levels and choices. It reports differences and changes nothing: D&D Beyond stays the
+source of truth.
+
+**Class link**:
+A reviewed, source-pinned match between a D&D Beyond class and an SRD class. A class
+with no link is not compared, because a name alone does not prove the edition.
 
 **Execution profile**:
 A bounded, executable view of a definition, with explicit limits on the rules

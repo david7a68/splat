@@ -76,6 +76,12 @@ introduces a second authoritative inventory table.
 A `roster-index` records the most recently fetched membership; removed members
 remain on disk but no longer appear when that roster is loaded offline.
 
+The portrait a player chose on D&D Beyond is kept next to the record, as a square
+PNG named `<character-id>-<hash of its address>.png`. A sheet update downloads it once,
+without the session, and only from D&D Beyond's own hosts. A new portrait replaces the old
+one. If there is no portrait, Party shows the first letter of the character's name. A
+failed download shows a warning, and the sheet still updates.
+
 Writes use a private temporary file, flush, and atomic replacement. Invalid or
 unsupported existing records are retained and reported. Credentials remain in
 the keyring and memory, never in these records. Cached characters can be viewed
@@ -118,10 +124,15 @@ gaps. Full provider responses remain only in the private JSON cache. See the
 publication behavior.
 
 Each file has a checksum for generated content and a Personal notes section.
-Refreshes preserve everything after the checksum. Edits to generated content or
-unmanaged files block replacement and produce a visible warning; move the edited
-file aside to resume updates. Writes use a temporary file and atomic replacement,
-with a check for edits before replacement. External editors can still race the
+Refreshes preserve everything after the checksum. A file that fails its checksum, or an
+unmanaged file, blocks replacement and produces a visible warning. A file that only
+changed during a save is not a conflict: the save reads it again. This covers two Splat
+writers at the same time. To resume updates, move the edited file aside or use
+**Force read** on the warning. Force read fetches the character again, keeps each edited
+file's exact bytes in an archive, and then replaces it. Personal notes carry over when
+the checksum line is still readable. Files without edits do not change their personal
+notes, and nothing is written until every check passes. Writes use a temporary file
+and atomic replacement, with a check for edits before replacement. External editors can still race the
 final rename. Campaign/account cancellation uses the same gate as cache writes.
 Removed party members' files remain as historical copies, with their fetch time;
 only the current roster appears in the viewer. These files update when records

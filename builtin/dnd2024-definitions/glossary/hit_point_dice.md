@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 183 -->
 
-Hit Point Dice, or Hit Dice for short, help determine\
-a player character’s Hit Point maximum, as ex-\
-plained in “Character Creation.” Most monsters also\
-have Hit Dice. A creature can spend Hit Dice during\
-a Short Rest to regain Hit Points. See also “Short\
-Rest.”\
+Hit Point Dice, or Hit Dice for short, help determine a player character’s Hit Point maximum, as explained in “Character Creation.” Most monsters also have Hit Dice. A creature can spend Hit Dice during a Short Rest to regain Hit Points. See also “Short Rest.”
 
 Original layout: [[../../srd-5.2.1/pages/183|page 183]].
 

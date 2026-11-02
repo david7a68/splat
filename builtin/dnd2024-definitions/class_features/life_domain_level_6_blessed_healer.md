@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 40 -->
 
-The healing spells you cast on others heal you as\
-well. Immediately after you cast a spell with a spell\
-slot that restores Hit Points to one or more crea-\
-tures other than yourself, you regain Hit Points\
-equal to 2 plus the spell slot’s level.\
+The healing spells you cast on others heal you as well. Immediately after you cast a spell with a spell slot that restores Hit Points to one or more creatures other than yourself, you regain Hit Points equal to 2 plus the spell slot’s level.
 
 ## Rule
 

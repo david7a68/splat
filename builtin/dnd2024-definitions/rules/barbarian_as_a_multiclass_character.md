@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 28 -->
 
-•  Gain the following traits from the Core Barbarian\
-Traits table: Hit Point Die, proficiency with Mar-\
-tial weapons, and training with Shields.\
-•  Gain the Barbarian’s level 1 features, which are\
-listed in the Barbarian Features table.\
+•  Gain the following traits from the Core Barbarian Traits table: Hit Point Die, proficiency with Martial weapons, and training with Shields.
+
+•  Gain the Barbarian’s level 1 features, which are listed in the Barbarian Features table.
 
 ## Rule
 

@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 62 -->
 
-You picked up various languages in the commu-\
-nities where you plied your roguish talents. You\
-know Thieves’ Cant and one other language of your\
-choice, which you choose from the language tables\
-in “Character Creation.”\
+You picked up various languages in the communities where you plied your roguish talents. You know Thieves’ Cant and one other language of your choice, which you choose from the language tables in “Character Creation.”
 
 ## Rule
 

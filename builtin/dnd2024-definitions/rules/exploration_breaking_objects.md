@@ -18,21 +18,11 @@ splat_sources:
 
 <!-- SRD page 12 -->
 
-As an action, you can automatically break or oth-\
-erwise destroy a fragile, nonmagical object, such\
-as a glass container or a piece of paper. If you try to\
-damage something more resilient, the GM might use\
-the rules on breaking objects in “Rules Glossary.”\
-MarcHinG ordEr\
-The adventurers should establish a marching order\
-while they travel, whether indoors or outdoors. A\
-marching order makes it easier to determine which\
-characters are affected by traps, which ones can spot\
-hidden enemies, and which ones are the closest to\
-those enemies if a fight breaks out. You can change\
-your marching order outside combat and record the\
-order any way you like: write it down, for example,\
-or arrange miniatures to show it.\
+As an action, you can automatically break or otherwise destroy a fragile, nonmagical object, such as a glass container or a piece of paper. If you try to damage something more resilient, the GM might use the rules on breaking objects in “Rules Glossary.”
+
+### Marching Order
+
+The adventurers should establish a marching order while they travel, whether indoors or outdoors. A marching order makes it easier to determine which characters are affected by traps, which ones can spot hidden enemies, and which ones are the closest to those enemies if a fight breaks out. You can change your marching order outside combat and record the order any way you like: write it down, for example, or arrange miniatures to show it.
 
 ## Rule
 

@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 234 -->
 
-Wondrous Item, Uncommon (Requires Attunement by\
-a Spellcaster)\
-While this pearl is on your person, you can take a\
-Magic action to regain one expended spell slot of\
-level 3 or lower. Once you use the pearl, it can’t be\
-used again until the next dawn.\
+Wondrous Item, Uncommon (Requires Attunement by a Spellcaster)
+
+While this pearl is on your person, you can take a Magic action to regain one expended spell slot of level 3 or lower. Once you use the pearl, it can’t be used again until the next dawn.
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 

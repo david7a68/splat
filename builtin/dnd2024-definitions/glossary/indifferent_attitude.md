@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 184 -->
 
-An Indifferent creature has no desire to help or hin-\
-der you. Indifferent is the default attitude of a mon-\
-ster. See also “Influence.”\
+An Indifferent creature has no desire to help or hinder you. Indifferent is the default attitude of a monster. See also “Influence.”
 
 Original layout: [[../../srd-5.2.1/pages/184|page 184]].
 

@@ -5,7 +5,8 @@ Built with Rust and egui (eframe). The design system is in [docs/design-system.m
 The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Sessions**, **Timeline**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry and opens
 beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
-state, and the app reopens on the last page or the open run. Simulation is later work.
+state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
+change its width. The app keeps that width after a restart. Simulation is later work.
 
 ## Development
 
@@ -73,7 +74,7 @@ search and related views but is not a complete indexing or filesystem exclusion.
 Build artifacts stay in the code repository's ignored `target/` directory.
 
 Keep D&D Beyond session cookies and tokens outside Git. Authentication is available
-in Settings; character sheets with optional combat sync are available in **Party**. Characters now have persistent local copies in the shared creature schema.
+in Settings; character sheets with combat sync are available in **Party**. Characters now have persistent local copies in the shared creature schema.
 The encounter builder uses these local character copies. Manual DM runs are available. Automatic combat resolution and simulation integration remain later work.
 
 ## D&D Beyond connection
@@ -207,6 +208,13 @@ references under **Source and identifiers**. Raw definitions stay under collapse
 **Technical details**. Classes show separate traits, equipment choices, and
 feature links in level order. Display changes do not alter saved content.
 
+A D&D Beyond definition goes to the enabled package note that lists its ID in
+`splat_dndbeyond_ids`. Other definitions go to the campaign's **Campaign Package** folder. A
+definition keeps its place until you approve a move: **Campaign → Packages** lists what can move
+when packages are added or removed, suggests notes with the same words, and adds the ID when you
+apply a change. The sidebar shows how many changes wait. See
+[Imported character content](docs/design/character-content.md).
+
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
 manifest, or choose an empty or new folder, a name and a namespace (for example `my_homebrew`) to
 create a package. The folder that holds a new one must already exist. A folder with anything in it
@@ -263,6 +271,11 @@ gets the latest sheets. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
+If you edit a generated campaign note, Splat keeps your edit and stops updating that character's notes. To
+get updates again, move the note aside or use **Force read** on the warning. Force read reads the sheet again and
+replaces each note that has edits. Your version stays beside the note in a `.splat-archive` file, and the page lists
+those files. Personal notes carry over when Splat can still find them.
+
 ## Encounter builder
 
 Open **Encounters**, select **New encounter**, and type a name.
@@ -270,8 +283,15 @@ Use **Add party**, or search the campaign's available creatures. Each result sho
 the CR, HP and AC it has, and **Read** opens its stat block in Lookup, beside the draft.
 Add or duplicate a creature for each participant, assign its side, and use the arrows
 to change roster order. Optional starting HP and temporary HP apply to that
-participant only. With an override off, the creature's starting state applies.
+participant only. With a value off, the creature's starting state applies.
 The default sides, party and enemies, are hostile to each other.
+
+A roster slot can also build in changes to its creature: a display name, maximum HP,
+AC, initiative bonus, attack bonus, damage bonus, speed, starting conditions, and
+a note. The slot's row sets its side, and a note can also override it. Open them with the slot's **Edit** button. Each one appears under the slot with the
+value it replaces, and nothing is written back to the creature, a package or a campaign
+copy. An invalid change is refused with a message that names the slot. See
+[Overrides](docs/design/campaign-schema.md#overrides).
 
 **Save encounter** writes a Markdown template under `Encounters/` in the campaign
 folder. Select a saved encounter to reopen it. Names can change without changing
@@ -286,6 +306,16 @@ editor saves direct creature references in campaign-local templates. Shared
 `party_slot` bindings still need the Markdown editor. Phases, assumptions,
 completion rules, and advanced starting state also remain Markdown fields.
 Saving a template does not execute rules or start a combat run.
+
+### Encounter groups
+
+An encounter group is a reusable, named set of creatures that you prepare once and add to a
+running encounter when it arrives. It is a note with `splat_kind: encounter_group`, saved under
+`Encounter Groups/` in the campaign folder, with its members and counts, a default side, and your
+notes as its text. **New group** on Encounters opens its editor, which searches creatures as the
+encounter editor does. Any creature from this campaign or a package it uses can be a member, and
+each member can carry the same changes as a roster slot. An empty group or an unavailable
+creature is refused with a message. See [the schema](docs/design/campaign-schema.md#encounter-groups).
 
 ### Running an encounter as DM
 
@@ -312,7 +342,7 @@ a build older than this behaviour; the file is not changed, and it opens again i
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
 **Temp HP** are beside it. **Conditions** lists the official conditions, one click
 each. The side panel holds the stat block or sheet, **Record** (HP corrections, death
-saves, notes, sync), **Log**, and encounter **Notes**. A spell named in a stat block opens
+saves, notes, sync), **Log**, encounter **Notes**, and **Groups**. A spell named in a stat block opens
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
 phases, and completion conditions. **Log** has a dice control that accepts expressions
@@ -327,6 +357,21 @@ such as `2d6 + 3`.
 | `A` | Focus the amount |
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
+
+**Groups** lists the campaign's encounter groups, with their members and total XP. Drag a group's
+name onto the initiative list, or press its **Add** button. Type a total beside it to use that for every
+member, as players give theirs. Otherwise the campaign's rule decides: one shared roll with the first
+member's bonus (identical NPCs, or the encounter's initiative groups), a roll for each member
+(individually), or the initiative its side already has (one group per side). This works in setup and in
+combat, and the same group can be added again. Each member is a new participant at full HP, with its
+own key and numbered name. In combat the group takes its place on that total and the current turn stays
+current. It joins the saved run and the log, and **Undo** takes back the whole group until later
+steps stand in the way.
+
+The row and card of a creature with changes say `Changed`, and the card lists each base and changed
+value. The run applies name, maximum HP, AC, initiative bonus, side and conditions. Attacks and speed
+are stat block text, so their changes stay on the card and on the row during combat, for you to add. These changes are saved with the run, so editing the file later does not
+change it.
 
 The combat log records changes. **Undo** names the last action, or says why there is none, and restores up to 100
 prior actions, including turn changes, dice rolls, and manual endings in the current session. It is in the header
@@ -347,11 +392,14 @@ edits. If the file changed, saving stops until you choose **Keep this run** or *
 run**. Other failed saves keep the current run in memory and show an error. Undo history
 is kept for the current session only. Changing the folder does not move old runs.
 
-The same settings select the campaign initiative rule. **Roll NPC initiative**
-uses that rule and leaves player totals alone. Choices are identical NPC groups
-(the D&D default), individual NPCs, one group per side, or explicit encounter
-initiative groups. Side and explicit groups use the first NPC in roster order
-for their bonus and roll mode. Normal, advantage, and disadvantage rolls are
+The same settings select how the campaign rolls NPC initiative: in groups of
+identical NPCs (the D&D default), individually, in one group per side, or in the
+encounter's initiative groups. **Roll NPC initiative** in run setup uses that
+choice and leaves player totals alone. An encounter group added during setup stays
+one roll under the identical-NPC rule, and joins neither its like nor another addition. The arrow beside it uses another choice for
+one roll, and the campaign's choice stays the default. An arrow choice for the
+encounter's initiative groups shows only when an NPC has a group. Side and initiative groups
+use the first NPC in roster order for their bonus and roll mode. Normal, advantage, and disadvantage rolls are
 available; use disadvantage for surprise. Ties use the campaign's roster-order
 setting or the DM/player ordering controls. NPC status can be changed before
 combat begins. Run folder settings use `splat_run_storage.directory`; initiative
@@ -359,16 +407,40 @@ is a campaign-local rule selected through `splat_rule_choices`.
 
 ### D&D Beyond sync
 
-In a DM run, **Sync party** turns sync on
-for every linked player, and **Record** has the panel for one. Each synced row shows its
-state, and a conflict shows on the row and the strip without stopping the table. Each connection first reads the live sheet.
-Saved runs do not automatically push old values. The session must have edit
-permission for the character.
+Combat sync starts when Splat connects to D&D Beyond and the active campaign is linked. It then
+runs in the background on every page. Splat reads the party's sheets when the campaign's event stream
+reports a change, and reads each sheet about once a minute. Party's panel can turn off its own sync of
+the selected character. The background reads continue.
+
+An encounter has the option **Sync party with D&D Beyond**, on by default. It shows only in a linked
+campaign, in the roster of the encounter editor. With the option on:
+
+- The roster shows what the party has now: HP, temporary HP, AC, conditions and spell slots for each
+  row, and the party's total, so that you can plan the encounter around them.
+- The party starts the run with the values on their sheets. Starting HP overrides for those rows wait,
+  unused, in case you turn the option off.
+- The run starts sync by itself, and **your changes to HP, death saves and conditions go to the
+  player's sheet on D&D Beyond** with no other step.
+
+With the option off, the party starts from their saved copies and the starting values you set, and
+nothing in that encounter reaches D&D Beyond unless you select **Sync party** in the run. Use it for a flashback, a training fight, or a test of an
+idea. The note records `combat_sync: false`, and a note without it has sync on.
+
+**Sync party** in a run starts or stops sync for every linked player, and **Record** has the panel for
+one. A stop lasts for that run, and the run saves it. A run saved before this option does not start by
+itself. A finished run does not sync, so a resumed one keeps its results.
+
+If D&D Beyond reports that this session cannot edit a character, the row says `Sync read-only`. Your
+changes for that character stay in the run and nothing is sent. Changes on the sheet still come in, and
+if you both changed a value, you choose which to keep. Each synced row shows its state, and a conflict shows on the row and the strip without stopping
+the table. Each connection first reads the live sheet. Saved runs do not automatically push old values.
+The session must have edit permission for the character.
 
 The row says `Reading…` until the first read, then `Synced`, `Sync pending`, `Conflict`, `Sync read-only` or `Sync error`.
 On **Party**, the sync section says the same words. A value you recorded is not replaced without your say. If a session ends during a run, keep
 recording: a row with a change that was not sent says `Not sent`, the others say `Sync stopped`, and
-closing the run tells you who has unsent changes. On a first read, by **Sync party** or after a
+closing the run tells you who has unsent changes. When you connect again, sync starts again by itself
+if **Sync party** was on. On a first read, by **Sync party**, after a reconnect or after a
 restart, Splat compares each value with the last one D&D Beyond confirmed, or with what the participant
 began the run with if there is none. A value you changed stays in the run, and if the sheet differs
 that is a conflict, settled from the panel: use the sheet's value, or keep yours and send it. An open
@@ -401,8 +473,9 @@ sync alert, or with the next row scrolled out of view, that line is kept, so the
 The `Log` has the whole message. Accepted limit: while Lookup or Notes takes the panel's place, that tab is away. Behind an
 alert, `See the Log` shows beside it if it fits. If not, the mark waits until Lookup or Notes closes. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
-queued work but cannot recall a request already sent. Party sync stops when you leave its
-page, and the sidebar says so; run sync remains active while that run is open.
+queued work but cannot recall a request already sent. A change made on Party is still sent after you
+leave its page. Party sync stops only when the connection ends, and the sidebar says so until it starts
+again. Run sync remains active while that run is open, until the encounter ends.
 
 Transport and conflict handling are tested with simulated responses. Live writes
 have not been verified with an authenticated D&D Beyond character. Endpoint

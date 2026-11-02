@@ -18,22 +18,9 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-A curse might manifest during an adventure when\
-a creature’s violation of a taboo warrants supernat-\
-ural punishment, such as breaking a vow, defiling a\
-tomb, or murdering an innocent. Such a curse can\
-have any effects you design, or it might be a custom-\
-ized version of another type of curse discussed in\
-this section.\
-A creature affected by such a curse should know\
-why they’re being punished and be able to learn\
-how to end their curse, likely by symbolically\
-righting the wrong they committed. How a spell\
-like Remove Curse affects a curse that’s part of your\
-adventure is up to you—the spell might merely sup-\
-press the effects of the curse for a time. Regardless,\
-narrative curses should feel like rare, potent magic\
-rooted in the lore of your campaign.\
+A curse might manifest during an adventure when a creature’s violation of a taboo warrants supernatural punishment, such as breaking a vow, defiling a tomb, or murdering an innocent. Such a curse can have any effects you design, or it might be a customized version of another type of curse discussed in this section.
+
+A creature affected by such a curse should know why they’re being punished and be able to learn how to end their curse, likely by symbolically righting the wrong they committed. How a spell like Remove Curse affects a curse that’s part of your adventure is up to you—the spell might merely suppress the effects of the curse for a time. Regardless, narrative curses should feel like rare, potent magic rooted in the lore of your campaign.
 
 ## Rule
 

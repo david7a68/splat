@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 52 -->
 
-When you roll Initiative and don’t use Uncanny Me-\
-tabolism, you regain expended Focus Points until\
-you have 4 if you have 3 or fewer.\
+When you roll Initiative and don’t use Uncanny Metabolism, you regain expended Focus Points until you have 4 if you have 3 or fewer.
 
 ## Rule
 

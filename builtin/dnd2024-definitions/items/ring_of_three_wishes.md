@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 239 -->
 
-Ring, Legendary\
-While wearing this ring, you can expend 1 of its 3\
-charges to cast Wish from it. The ring becomes non-\
-magical when you use the last charge.\
+Ring, Legendary
+
+While wearing this ring, you can expend 1 of its 3 charges to cast Wish from it. The ring becomes nonmagical when you use the last charge.
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]].
 

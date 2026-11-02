@@ -11,10 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [182],
 
 <!-- SRD page 182 -->
 
-A variety of effects allow a creature to fly. While fly-\
-ing, you fall if you have the Incapacitated or Prone\
-condition or your Fly Speed is reduced to 0. You can\
-stay aloft in those circumstances if you can hover.\
-See also “Falling” and “Fly Speed.”\
+A variety of effects allow a creature to fly. While flying, you fall if you have the Incapacitated or Prone condition or your Fly Speed is reduced to 0. You can stay aloft in those circumstances if you can hover. See also “Falling” and “Fly Speed.”
 
 Original layout: [[../pages/182|page 182]].

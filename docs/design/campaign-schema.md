@@ -103,13 +103,121 @@ by these field definitions.
 `splat_encounter` contains `roster`, `sides`, `assumptions`, `completion`, `limits`,
 and optional `phases`, `containers`, `objects`, and `strategies`.
 
+An encounter's optional `combat_sync` defaults to true. With it true, linked party members start
+from their D&D Beyond sheets and the run stays matched with them. With it false, they start from
+their saved copies and `initial`, and the run sends nothing.
+
+An encounter's optional `repeatable` defaults to false. An encounter leaves the Encounters page's
+Ready to run list when a run of it ends, and goes on from History. With `repeatable` true, it stays
+ready, for a fight that can happen more than once. A saved run records the `splat_id` of its
+encounter. A save from before this has none, and matches only an encounter that alone has its name.
+Retirement follows the runs in the run folder: with another folder, an encounter is ready again.
+
 Roster is an ordered array of `{key, creature: EntryRef | party_slot: key,
-side, controller, initial?, initial_presence?, initiative_group?, health_policy?}`. Exactly one
+side, controller, initial?, overrides?, initial_presence?, initiative_group?, health_policy?}`. Exactly one
 source is present. `initial_presence` defaults active; pending phase arrivals
 use absent. Repeating a definition means another slot/actor. A `party_slot: all`
 expansion assigns stable compound placement addresses using member UUIDs, in
-party order. Initial overrides only set state allowed by State schema; no hidden
-inline stat-block overrides. Use a campaign copy for changed mechanics.
+party order. `initial` only sets state allowed by State schema. To change a
+creature everywhere, use a campaign copy. To change it in one place, use
+`overrides`, which are never hidden.
+
+### Overrides
+
+A roster slot or an encounter group member can carry `overrides`, a mapping that is
+small, closed and validated. Every field is optional, and a slot with none behaves
+as if this section did not exist.
+
+| Field | Form | The run |
+| --- | --- | --- |
+| `name` | One line of text | Replaces the display name. Duplicates are numbered from it |
+| `max_hp` | `{set: n}` or `{add: n}` | Applies. The result must be from 1 to 1,000,000 |
+| `armor_class` | `{set: n}` or `{add: n}` | Applies. The result must be from 0 to 1000 |
+| `initiative_bonus` | `{set: n}` or `{add: n}` | Applies. The result must be from -1000 to 1000 |
+| `attack_bonus` | `{add: n}` | Cannot apply: attacks are stat block text. Shown on the card and on a live row |
+| `damage_bonus` | `{add: n}` | Cannot apply, for the same reason. Shown on the card and on a live row |
+| `speed` | `{set: n}` or `{add: n}` | Cannot apply to text. Shown on the card and on a live row. The result must be from 0 to 1000 |
+| `side` | Text | Replaces the side. In a roster, it must be a side of that encounter. The editor sets a slot's side on its row, so this field is for a note, and the form shows it only when a note has given one |
+| `conditions` | List of names | Added to the starting conditions. One already there is not added twice. A name repeated in this list is an error |
+| `note` | Text | Shown on the card |
+
+```yaml
+overrides:
+  name: Rival Captain
+  max_hp: {add: 10}
+  attack_bonus: {add: 1}
+  damage_bonus: {add: 1}
+```
+
+An unknown field, a wrong form, `add: 0`, or a result out of range is an error that
+names the slot, or the group's member by number. A stat with no base value accepts
+`set` only. Overrides are applied once, when a participant is created. They are saved
+with the run, beside the values they replaced, so a later edit of the encounter or
+group file does not change that run. They are never written to the creature entry, a
+package, or a campaign copy. The editor and the run's card show each base value and
+changed value, marked as changed, and a row says `Changed`.
+
+With a `max_hp` override, the participant starts at the new maximum, unless the slot's
+`initial.hp` gives its HP. That value must not be above the new maximum. `initial` and
+`overrides` can be on one slot. `initial.conditions` replaces the creature's starting
+conditions, and `overrides.conditions` adds to the result. A roster slot's `side` is
+what the card shows as the base when `overrides.side` is present. D&D Beyond sets a
+linked character's maximum HP and conditions during sync, so those two overrides are
+errors on a linked character. An override does not change XP, and a creature with a
+mechanical override no longer counts as identical to its plain copies for initiative.
+A group is a fixed list: there is no automatic scaling and there are no level variants.
+
+### Encounter groups
+
+An encounter group is `splat_kind: encounter_group`, a campaign-owned Markdown note.
+Its body is the group's notes. Encounter groups are not sides, rosters, rule groups, or
+initiative groups (`CONTEXT.md`). The app writes them under `Encounter Groups/`.
+
+```yaml
+splat_kind: encounter_group
+splat_name: Rival Team
+splat_encounter_group:
+  side: rivals
+  members:
+  - creature: {key: "dnd2024:creatures/goblin_warrior"}
+    count: 3
+  - creature: {id: 1b671a64-40d5-491e-99b0-da01ff1f3341}
+    overrides: {name: Rival Captain, max_hp: {add: 10}}
+```
+
+`side` is required. Because a group can arrive in any encounter and a run keeps no
+hostility table, it can be any name, and a side the run has not seen uses the "other"
+mark. `members` is an ordered, non-empty list. `count` defaults to 1, up to 100. A
+reference follows the same dependency rules as a roster's, so it can reach a creature
+in any enabled package. An empty group, an unknown field, or an invalid override stops
+the note from parsing, with the reason. A reference that does not resolve is reported
+as a content issue, and the group says why it cannot be added. A linked D&D Beyond
+character cannot be a member, because one sheet cannot be two participants.
+
+Adding a group to a run is one step of the run. It works during setup and during combat,
+and the same group can be added again. Each addition creates new participants with fresh
+keys, separate HP, and full HP on the group's side. They keep any temporary HP and
+conditions from the creature's `splat_initial`. Names already in the fight do not change:
+new duplicates continue from the highest number. A creature with no maximum HP needs a
+`max_hp` override, and a run cannot grow past the 2,000 participants a save can hold. A
+step that fails leaves the run and its dice as they were. Undo is linear and lasts one
+session, so it removes a group only by stepping back through later steps. After that,
+mark its members absent.
+
+A typed total applies to every member under any rule. Otherwise the campaign's initiative
+grouping decides:
+
+| Grouping | Adding the group | A later NPC roll in setup |
+| --- | --- | --- |
+| `identical` | One shared roll, even for different creatures | The addition stays one roll. It joins neither its like nor another addition |
+| `individual` | Each member rolls alone | Each rolls alone |
+| `by_side` | Takes the initiative an NPC on its side has. A side with none rolls once | One roll for each side |
+| `explicit` | One shared roll, as its own initiative group | Its own initiative group |
+
+A shared roll uses the first member's bonus, as other groups do. In combat, the group
+takes its place on that total. A tie goes after those already on it. The current turn stays
+current. A place after the current turn acts this round, and a place before it waits for the
+next round.
 
 Sides map keys to `{hostile_to: [side_key,...]}`. Treat hostility as directed;
 if both sides are hostile, both declare it. Same-side participants are allies
@@ -151,8 +259,8 @@ Manual is an explicit strategy mode; unattended trials reject required manual
 choices, including interpreted readied spells. Strategy choice never creates
 a legal action that the creature lacks.
 
-Campaign initiative rule parameters contain `grouping: individual|by_side|
-explicit`, `within_group: roster|controller`, and `tie: core_rule|roster`.
+Campaign initiative rule parameters contain `grouping: identical|individual|
+by_side|explicit`, `within_group: roster|controller`, and `tie: core_rule|roster`.
 These are selected rule parameters, not claims that every variant is official.
 The D&D default follows the source rule for identical monsters and player/GM
 tie choices; alternatives such as all enemies together are explicit campaign
@@ -270,6 +378,13 @@ operations. Include only enabled/required entries relevant to that run. Exclude
 file paths, filenames, prose, navigation links, sourcebook prose, labels,
 ordinary Obsidian tags, retrieval timestamps and credentials. Mechanically used
 tags under Splat fields are included. Display renames must not change mechanics.
+
+A roster slot's `overrides` are part of its projection, in whole. This is a stated exception
+to excluding labels and prose: `name` and `note` count too, so any changed override changes
+the fingerprint. A slot with no overrides adds nothing, so its digest stays as it was and the
+format name does not change. `content::overrides::roster_fingerprint` computes this roster
+component. No seed writer exists yet, so nothing calls it at runtime. An encounter group added
+by hand is not a seed input, because manual encounters cannot be regenerated from a seed alone.
 
 Normalize finite decimal measurements to exact reduced rationals in canonical
 units (kg, l, feet, seconds), preserving unknown as a typed unknown rather than

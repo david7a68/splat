@@ -18,17 +18,9 @@ splat_sources:
 
 <!-- SRD page 24 -->
 
-The GM decides whether your character starts with\
-more than the standard equipment for a level 1\
-character, possibly even one or more magic items.\
-The Starting Equipment at Higher Levels table is a\
-guide for the GM.\
-Also, check with your GM about what equipment\
-is available for you to buy with your starting money.\
-For example, the firearms described in “Equipment”\
-are too expensive for level 1 characters, but they\
-might be available for purchase if your GM allows\
-them.\
+The GM decides whether your character starts with more than the standard equipment for a level 1 character, possibly even one or more magic items. The Starting Equipment at Higher Levels table is a guide for the GM.
+
+Also, check with your GM about what equipment is available for you to buy with your starting money. For example, the firearms described in “Equipment” are too expensive for level 1 characters, but they might be available for purchase if your GM allows them.
 
 ## Rule
 

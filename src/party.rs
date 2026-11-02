@@ -1,8 +1,8 @@
-//! Character viewer with optional combat synchronization.
+//! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
 use crate::{
     auth::Session,
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
-    party_sync::Reader,
+    party_sync::{Reader, Stored},
 };
 use eframe::egui;
 use serde_json::Value;
@@ -16,7 +16,16 @@ pub struct Party {
     combat: crate::combat_sync::CombatSync,
     epoch: u64,
     content_entry: Option<(String, Result<splat::content::Entry, String>)>,
-    /// Sync was on when the DM left this page, so it stopped. The rail says so.
+    /// Compared once for each content version, because this page redraws every frame.
+    character_review: Option<Result<splat::character::check::Review, String>>,
+    connected: bool,
+    /// The campaign that `sync_turned_off` is about.
+    campaign: Option<uuid::Uuid>,
+    /// A read finished with new characters, so their copies are on disk for whoever lists the party.
+    pub new_copies: bool,
+    /// The DM turned combat sync off here. It stays off until they turn it on.
+    sync_turned_off: bool,
+    /// Sync was on when the connection ended, so it stopped. The rail says so.
     pub sync_stopped: bool,
     /// The DM asked to go where this campaign's D&D Beyond link is set.
     pub wants_link_page: bool,
@@ -45,23 +54,99 @@ impl Party {
         Some(self.combat.max_hp()? - removed)
     }
 
+    /// Keeps every sheet current, whichever page is showing. The shell calls this every frame.
     pub fn sync(
         &mut self,
         ctx: &egui::Context,
         epoch: u64,
         campaign: Option<(uuid::Uuid, String, std::path::PathBuf)>,
-        connected: bool,
+        session: Option<Session>,
         visible: bool,
     ) {
         self.epoch = epoch;
-        if !visible || !connected {
+        self.connected = session.is_some();
+        let local = campaign.as_ref().map(|(id, _, _)| *id);
+        if local != self.campaign {
+            self.campaign = local;
+            self.sync_turned_off = false;
+        }
+        if !self.connected {
             if self.combat.enabled {
                 self.sync_stopped = true;
             }
             self.combat.stop();
         }
-        self.reader.sync(ctx, epoch, campaign, connected, visible);
+        let wake = self.connected && campaign.is_some();
+        self.reader.sync(ctx, epoch, campaign, self.connected);
+        self.reader.on_page = visible;
+        self.reader.tick(session.clone(), ctx);
+        self.tick_combat(ctx, session, visible);
+        if !self.reader.loading() && std::mem::take(&mut self.reader.new_copy) {
+            self.new_copies = true;
+        }
+        if wake {
+            ctx.request_repaint_after(Duration::from_secs(1));
+        }
     }
+
+    /// Combat sync for the selected character. Away from this page the reader keeps the sheet
+    /// current, so this runs only to finish what the DM changed here.
+    fn tick_combat(&mut self, ctx: &egui::Context, session: Option<Session>, visible: bool) {
+        self.combat.keep_all_unsent();
+        let Some((id, campaign)) = self.reader.selected.clone().and_then(|id| {
+            let campaign = self.reader.sheets.get(&id)?.source.campaign_id.clone();
+            Some((id, campaign))
+        }) else {
+            self.combat.stop();
+            return;
+        };
+        if session.is_some() && !self.combat.enabled && !self.sync_turned_off {
+            self.combat.start();
+        }
+        if self.combat.enabled {
+            self.sync_stopped = false;
+        }
+        if visible || self.combat.busy() || self.combat.dirty() {
+            self.combat.tick(ctx, session, self.epoch, &campaign, &id);
+        }
+        if self.combat.updated {
+            if let Some(record) = self.combat.record().cloned() {
+                // Each read gets here on the frame's thread. With the same sheet, only its age
+                // changes, and that is not worth a write to disk.
+                let same = self
+                    .reader
+                    .sheets
+                    .get(&id)
+                    .is_some_and(|old| old.source.content_hash == record.source.content_hash);
+                if !same {
+                    if let Some(scope) = self.reader.local_scope() {
+                        let saved = crate::hermetic::character_cache()
+                            .and_then(|cache| cache.save(scope, &record))
+                            .map(|_| ());
+                        self.reader.stored(Stored::Sheet(id.clone()), saved);
+                    }
+                    self.reader.save_campaign_copy(&id, &record);
+                }
+                self.reader.sheets.insert(id, record);
+            }
+            self.combat.updated = false;
+        }
+    }
+
+    /// Combat sync on this page found a conflict. The rail says so, wherever the DM is.
+    pub fn sync_conflict(&self) -> bool {
+        self.combat.enabled && self.combat.state() == crate::combat_sync::SyncState::Conflict
+    }
+
+    /// A change made on this page has not reached D&D Beyond.
+    pub fn unconfirmed(&self) -> bool {
+        self.combat.unconfirmed()
+    }
+
+    pub fn connected(&self) -> bool {
+        self.connected
+    }
+
     /// The Party page's copy of a character, for the run's side panel.
     pub fn sheet(&self, id: &str) -> Option<&EntitySnapshot> {
         self.reader.sheets.get(id)
@@ -69,7 +154,6 @@ impl Party {
 
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let c = colors();
-        self.reader.tick(session.clone(), ui.ctx());
         let can_refresh = if session.is_none() {
             Some("Connect to D&D Beyond in Settings to refresh.")
         } else if !linked {
@@ -170,9 +254,7 @@ impl Party {
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
         }
-        if let Some(e) = &self.reader.warning {
-            design::message(ui, Tone::Warning, &format!("Local storage: {e}"));
-        }
+        self.storage_notices(ui, session.is_some());
         ui.ctx().request_repaint_after(Duration::from_secs(1));
         if self.reader.members.is_empty() {
             if self.reader.loaded {
@@ -192,11 +274,11 @@ impl Party {
             }
             return;
         }
-        let list_width = (ui.available_width() * 0.42).clamp(330.0, 520.0);
+        // Each row gives its portrait this much, and keeps the same room for its text.
+        let portrait_room = ROW_PORTRAIT + 2.0 * design::S;
+        let list_width = (ui.available_width() * 0.42 + portrait_room).clamp(384.0, 574.0);
         let mut selected = self.reader.selected.clone();
-        egui::SidePanel::left("party_members")
-            .resizable(false)
-            .exact_width(list_width)
+        design::Column::left("party_members", list_width, 384.0..=694.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
                 right: design::M as i8,
@@ -213,7 +295,9 @@ impl Party {
                         ui.spacing_mut().item_spacing.y = 0.0;
                         for m in &self.reader.members {
                             let record = self.reader.sheets.get(&m.id);
-                            if member_row(ui, m, record, selected.as_ref() == Some(&m.id)).clicked()
+                            let portrait = self.portrait(record);
+                            let is_selected = selected.as_ref() == Some(&m.id);
+                            if member_row(ui, m, record, portrait.as_deref(), is_selected).clicked()
                             {
                                 selected = Some(m.id.clone());
                                 self.search.clear();
@@ -236,9 +320,68 @@ impl Party {
             .show_inside(ui, |ui| self.sheet_view(ui, session));
     }
 
+    /// Local storage warnings, campaign notes with local edits and the way to replace them, and
+    /// where replaced edits went. Force read needs no confirmation, because the edits stay in
+    /// an archive. A read that failed for a character who is not selected says so here, because
+    /// its sheet is not on the page.
+    fn storage_notices(&mut self, ui: &mut egui::Ui, connected: bool) {
+        // One failing disk can say the same words for each character.
+        let warnings: std::collections::BTreeSet<_> = self.reader.warnings.values().collect();
+        for warning in warnings {
+            design::message(ui, Tone::Warning, &format!("Local storage: {warning}"));
+        }
+        if !self.reader.archived.is_empty() {
+            let paths = self
+                .reader
+                .archived
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let words = format!("Force read replaced local edits. Your versions: {paths}");
+            if design::message_with_action(ui, Tone::Success, &words, "Dismiss") {
+                self.reader.archived.clear();
+            }
+        }
+        let Some(first) = self.reader.conflicts.values().next() else {
+            return;
+        };
+        let first = splat::character::CampaignCopyError::Conflict(first.clone());
+        let mut words = format!("Local storage: {first}");
+        let others = self.reader.conflicts.len() - 1;
+        if others > 0 {
+            words += &format!(
+                " {} also have local edits.",
+                design::count(others, "other character", "other characters")
+            );
+        }
+        words += " Force read replaces edited notes with the D&D Beyond sheet and keeps your versions in archive files.";
+        if self.reader.force_waiting() {
+            words += " Force read is waiting for D&D Beyond.";
+            design::message(ui, Tone::Warning, &words);
+        } else if !connected {
+            words += " Connect to D&D Beyond in Settings to use it.";
+            design::message(ui, Tone::Warning, &words);
+        } else if design::message_with_action(ui, Tone::Warning, &words, "Force read") {
+            self.reader.force_read();
+        }
+        for id in self.reader.conflicts.keys() {
+            if self.reader.selected.as_ref() != Some(id)
+                && let Some(error) = self.reader.errors.get(id)
+            {
+                let name = self.reader.member_name(id);
+                design::message(ui, Tone::Error, &format!("{name}: {error}"));
+            }
+        }
+    }
+
+    fn portrait(&self, record: Option<&EntitySnapshot>) -> Option<std::path::PathBuf> {
+        crate::party_sync::portrait_path(self.reader.local_scope()?, record?)
+    }
+
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
-        let Some(id) = &self.reader.selected else {
+        let Some(id) = &self.reader.selected.clone() else {
             ui.label(
                 Type::Body
                     .rich(ui, "Select a character to read their sheet.")
@@ -249,58 +392,30 @@ impl Party {
         if let Some(error) = self.reader.errors.get(id) {
             design::message(ui, Tone::Error, error);
         }
-        if let Some(record) = self.reader.sheets.get(id) {
-            self.combat.tick(
-                ui.ctx(),
-                session.clone(),
-                self.epoch,
-                &record.source.campaign_id,
-                id,
-            );
-        }
-        if self.combat.updated {
-            if let Some(record) = self.combat.record().cloned() {
-                if let Some(scope) = self.reader.local_scope()
-                    && let Err(error) = crate::hermetic::character_cache()
-                        .and_then(|cache| cache.save(scope, &record))
-                {
-                    self.reader.warning = Some(error);
-                }
-                if let Some(path) = self.reader.campaign_path()
-                    && let Err(error) = record.save_campaign_copy(path)
-                {
-                    self.reader.warning = Some(error);
-                }
-                self.reader.sheets.insert(id.clone(), record);
-            }
-            self.combat.updated = false;
-        }
         if self.sync_stopped {
-            if self.combat.enabled {
-                self.sync_stopped = false;
-            } else {
-                let mut dismiss = false;
-                ui.horizontal_top(|ui| {
-                    let width = ui.available_width() - 36.0;
-                    let why = if session.is_some() {
-                        SYNC_STOPPED_LEFT
-                    } else {
-                        SYNC_STOPPED_SESSION
-                    };
-                    ui.scope(|ui| {
-                        ui.set_max_width(width);
-                        design::message(ui, Tone::Warning, why);
-                    });
-                    dismiss =
-                        design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+            let mut dismiss = false;
+            ui.horizontal_top(|ui| {
+                let width = ui.available_width() - 36.0;
+                ui.scope(|ui| {
+                    ui.set_max_width(width);
+                    design::message(ui, Tone::Warning, SYNC_STOPPED);
                 });
-                if dismiss {
-                    self.sync_stopped = false;
-                }
+                dismiss = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
+            });
+            if dismiss {
+                self.sync_stopped = false;
             }
         }
-        if let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) {
+        if let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) {
+            let portrait = self.portrait(Some(record));
             ui.horizontal(|ui| {
+                if let Some(path) = &portrait {
+                    let (rect, _) = ui.allocate_exact_size(
+                        egui::Vec2::splat(SHEET_PORTRAIT),
+                        egui::Sense::empty(),
+                    );
+                    crate::art::portrait(ui, rect, Some(path), &record.definition.splat_name, None);
+                }
                 ui.label(
                     Type::Display
                         .rich(ui, &record.definition.splat_name)
@@ -317,14 +432,23 @@ impl Party {
             ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
         }
         if session.is_some() {
-            // Under the name, and it says its state while closed, in the run's own words.
+            // Under the name, and it says its state while closed, in the run's own words. The
+            // key keeps it open when the word changes.
             let state = crate::encounter_run::sync_status(self.combat.state());
-            let title = Type::Strong
-                .rich(ui, format!("{} {}", state.icon, state.word))
-                .color(state.color);
+            let on_off = if self.combat.enabled { "On" } else { "Off" };
+            let words = if self.combat.state() == crate::combat_sync::SyncState::Off {
+                format!("{} Combat sync · {on_off}", state.icon)
+            } else {
+                format!("{} Combat sync · {on_off} · {}", state.icon, state.word)
+            };
+            let title = Type::Strong.rich(ui, words).color(state.color);
+            let was = self.combat.enabled;
             design::keyed_section(ui, "party_sync", title, |ui| self.combat.show(ui, None));
+            if was != self.combat.enabled {
+                self.sync_turned_off = !self.combat.enabled;
+            }
         }
-        let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) else {
+        let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
             if !self.reader.loading() {
                 ui.label(
                     Type::Body
@@ -375,7 +499,12 @@ impl Party {
                 .as_ref()
                 .is_none_or(|(hash, _)| hash != &record.source.content_hash)
         {
-            self.content_entry = Some((record.source.content_hash.clone(), record.entry()));
+            let entry = record.entry();
+            self.character_review = entry
+                .as_ref()
+                .ok()
+                .map(|entry| splat::character::check::review(record, entry));
+            self.content_entry = Some((record.source.content_hash.clone(), entry));
         }
         egui::ScrollArea::vertical()
             .id_salt((id, self.page))
@@ -389,12 +518,24 @@ impl Party {
                             ui,
                             record,
                             self.content_entry.as_ref().map(|(_, entry)| entry),
+                            self.character_review.as_ref(),
                             self.reader.campaign_path(),
                             self.reader.local_scope(),
                         );
                     });
                 }
             });
+    }
+}
+
+/// The later of two reads of a sheet. Off this page combat sync is idle, so the reader can be ahead.
+fn newer<'a>(
+    a: Option<&'a EntitySnapshot>,
+    b: Option<&'a EntitySnapshot>,
+) -> Option<&'a EntitySnapshot> {
+    match (a, b) {
+        (Some(a), Some(b)) if b.source.fetched_at > a.source.fetched_at => Some(b),
+        _ => a.or(b),
     }
 }
 
@@ -408,10 +549,101 @@ pub struct LiveValues {
 
 /// One entry on a sheet page: its name and its facts.
 const ENTRY_ROW: f32 = 40.0;
-/// Sync on this page stops when the DM leaves it or the connection ends. The word stays
-/// until they have seen it.
-const SYNC_STOPPED_LEFT: &str = "Sync stopped when you left this page. Changes made since then did not reach D&D Beyond. Turn it on again below.";
-const SYNC_STOPPED_SESSION: &str = "Sync stopped when the session ended. Changes made since then did not reach D&D Beyond. Connect in Settings, then turn it on again below.";
+/// Sync stops only when the connection ends, and starts again when it comes back.
+const SYNC_STOPPED: &str = "Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again.";
+
+/// What a sheet says a character has left, for a DM who plans an encounter around it.
+#[derive(Default)]
+pub struct SheetNow {
+    hp: i64,
+    max_hp: i64,
+    temporary_hp: i64,
+    armor_class: Option<i64>,
+    conditions: Vec<String>,
+    /// By level. Ordinary and pact slots each have a line.
+    slots: Vec<SlotsLeft>,
+}
+struct SlotsLeft {
+    level: i64,
+    left: i64,
+    max: i64,
+}
+impl SheetNow {
+    pub fn of(record: &EntitySnapshot) -> Self {
+        let mut slots: Vec<_> = record
+            .definition
+            .splat_resources
+            .iter()
+            .filter(|(_, pool)| pool.kind.as_deref() == Some("spell_slot"))
+            .map(|(key, pool)| SlotsLeft {
+                level: pool.level.unwrap_or(0),
+                left: *record.initial.resources.get(key).unwrap_or(&pool.max),
+                max: pool.max,
+            })
+            .collect();
+        slots.sort_unstable_by_key(|slot| (slot.level, slot.left, slot.max));
+        Self {
+            hp: record.initial.hp,
+            max_hp: record.stat("max_hp").unwrap_or(record.initial.hp),
+            temporary_hp: record.initial.temporary_hp,
+            armor_class: record.stat("armor_class"),
+            conditions: record
+                .initial
+                .conditions
+                .iter()
+                .filter_map(|condition| condition["name"].as_str().map(str::to_owned))
+                .collect(),
+            slots,
+        }
+    }
+    /// One row of the roster. A word goes with the number, so that it is not only a number.
+    pub fn line(&self) -> String {
+        let mut parts = vec![format!("HP {}/{}", self.hp, self.max_hp)];
+        match design::hp_state(Some(self.hp), Some(self.max_hp)) {
+            design::HpState::Zero => parts.push("0 HP".to_owned()),
+            design::HpState::Bloodied => parts.push("Bloodied".to_owned()),
+            _ => {}
+        }
+        if self.temporary_hp > 0 {
+            parts.push(format!("Temp {}", self.temporary_hp));
+        }
+        if let Some(ac) = self.armor_class {
+            parts.push(format!("AC {ac}"));
+        }
+        parts.extend(self.conditions.iter().cloned());
+        if !self.slots.is_empty() {
+            let slots: Vec<_> = self
+                .slots
+                .iter()
+                .map(|slot| format!("L{} {}/{}", slot.level, slot.left, slot.max))
+                .collect();
+            parts.push(format!("Slots {}", slots.join(", ")));
+        }
+        parts.join(" · ")
+    }
+}
+
+/// The party together, as the roster has it. With no sheet to go on, there is no line.
+pub fn party_line(sheets: &[&EntitySnapshot], connected: bool) -> Option<String> {
+    let oldest = sheets
+        .iter()
+        .min_by_key(|record| record.source.fetched_at)?;
+    let now: Vec<SheetNow> = sheets.iter().map(|record| SheetNow::of(record)).collect();
+    let mut parts = vec![format!(
+        "Party now: HP {}/{}",
+        now.iter().map(|sheet| sheet.hp).sum::<i64>(),
+        now.iter().map(|sheet| sheet.max_hp).sum::<i64>(),
+    )];
+    let slots = now.iter().flat_map(|sheet| &sheet.slots);
+    let (left, max) = slots.fold((0, 0), |(left, max), slot| {
+        (left + slot.left, max + slot.max)
+    });
+    if max > 0 {
+        parts.push(format!("Slots {left}/{max}"));
+    }
+    parts.push(freshness(oldest, connected).word);
+    Some(parts.join(" · "))
+}
 
 /// How old a sheet is, as a status with words.
 pub struct Freshness {
@@ -460,6 +692,8 @@ fn class_line(record: &EntitySnapshot) -> String {
 const AC_WIDTH: f32 = 34.0;
 const HP_WIDTH: f32 = 112.0;
 const MEMBER_ROW: f32 = 54.0;
+const ROW_PORTRAIT: f32 = 38.0;
+pub const SHEET_PORTRAIT: f32 = 56.0;
 
 fn member_header(ui: &mut egui::Ui) {
     let c = colors();
@@ -495,6 +729,7 @@ fn member_row(
     ui: &mut egui::Ui,
     member: &crate::party_sync::Member,
     record: Option<&EntitySnapshot>,
+    portrait: Option<&std::path::Path>,
     selected: bool,
 ) -> egui::Response {
     let c = colors();
@@ -544,15 +779,20 @@ fn member_row(
         let painter = ui.painter();
         let hp_right = rect.right() - design::S;
         let line = rect.top() + 18.0;
-        let room = rect.width() - HP_WIDTH - AC_WIDTH - 2.0 * design::S;
-        let title = design::one_line(ui, &member.name, Type::Name.font(ui), c.text, room);
-        painter.galley(
-            egui::pos2(rect.left() + design::S, line - 10.0),
-            title,
-            c.text,
+        let picture = egui::Rect::from_center_size(
+            egui::pos2(
+                rect.left() + design::S + ROW_PORTRAIT / 2.0,
+                rect.center().y,
+            ),
+            egui::Vec2::splat(ROW_PORTRAIT),
         );
+        crate::art::portrait(ui, picture, portrait, &member.name, None);
+        let text_left = picture.right() + design::S;
+        let room = hp_right - HP_WIDTH - AC_WIDTH - design::S - text_left;
+        let title = design::one_line(ui, &member.name, Type::Name.font(ui), c.text, room);
+        painter.galley(egui::pos2(text_left, line - 10.0), title, c.text);
         let mut job = egui::text::LayoutJob::default();
-        job.wrap.max_width = rect.width() - HP_WIDTH - design::M;
+        job.wrap.max_width = rect.right() - HP_WIDTH - design::M - text_left;
         job.wrap.max_rows = 1;
         let small = Type::Small.font(ui);
         job.append(
@@ -593,11 +833,7 @@ fn member_row(
             );
         }
         let second = ui.fonts_mut(|fonts| fonts.layout_job(job));
-        painter.galley(
-            egui::pos2(rect.left() + design::S, rect.bottom() - 22.0),
-            second,
-            c.muted,
-        );
+        painter.galley(egui::pos2(text_left, rect.bottom() - 22.0), second, c.muted);
         design::number(
             painter,
             hp_right - HP_WIDTH,
@@ -642,6 +878,7 @@ fn source_and_parity(
     ui: &mut egui::Ui,
     record: &EntitySnapshot,
     content_entry: Option<&Result<splat::content::Entry, String>>,
+    character_review: Option<&Result<splat::character::check::Review, String>>,
     campaign_path: Option<&std::path::Path>,
     local_scope: Option<uuid::Uuid>,
 ) {
@@ -661,6 +898,9 @@ fn source_and_parity(
     }
     if let Some(Ok(entry)) = content_entry {
         campaign_option_status(ui, entry);
+        if let Some(review) = character_review {
+            character_check(ui, review);
+        }
         small(
             ui,
             format!(
@@ -690,7 +930,15 @@ fn source_and_parity(
                 format!(
                     "{} not yet converted; {} cannot yet run.",
                     design::count(list("gaps").len(), "rule", "rules"),
-                    design::count(list("engine_gaps").len(), "rule", "rules"),
+                    design::count(
+                        list("engine_gaps")
+                            .iter()
+                            .filter_map(serde_yaml_ng::Value::as_str)
+                            .filter(|gap| !splat::content::adapters::is_implemented(gap))
+                            .count(),
+                        "rule",
+                        "rules",
+                    ),
                 ),
             );
             for (title, key) in [
@@ -780,6 +1028,40 @@ pub fn sheet_page(
         details(ui, record, page, search);
     }
 }
+
+/// Compare the sheet with the SRD rules. D&D Beyond stays the source of truth.
+fn character_check(ui: &mut egui::Ui, review: &Result<splat::character::check::Review, String>) {
+    use splat::character::check::FindingKind;
+    design::section(ui, "Character check", |ui| match review {
+        Ok(review) => {
+            ui.add(
+                egui::Label::new(if review.matched.is_empty() {
+                    "Nothing could be compared with the SRD rules.".to_owned()
+                } else {
+                    format!("Matches the SRD rules: {}.", review.matched.join(", "))
+                })
+                .wrap(),
+            );
+            for (kind, title) in [
+                (FindingKind::Differs, "Differs from the SRD rules"),
+                (FindingKind::MissingChoice, "Missing choices"),
+                (FindingKind::InvalidChoice, "Choices the rules do not allow"),
+                (FindingKind::NotChecked, "Not compared"),
+            ] {
+                if review.count(kind) > 0 {
+                    ui.label(egui::RichText::new(title).strong());
+                    for finding in review.findings.iter().filter(|f| f.kind == kind) {
+                        ui.add(egui::Label::new(&finding.message).wrap());
+                    }
+                }
+            }
+        }
+        Err(message) => {
+            ui.add(egui::Label::new(format!("The check could not run: {message}")).wrap());
+        }
+    });
+}
+
 fn campaign_option_status(ui: &mut egui::Ui, entry: &splat::content::Entry) {
     use splat::content::character::{CampaignOptionState, Sheet};
     let Some(value) = entry.fields.get("splat_character") else {
@@ -1443,5 +1725,81 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                 ui.add_space(design::XS);
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod sheet_now_tests {
+    use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line};
+    use serde_json::json;
+    fn wizard(fetched: u64) -> EntitySnapshot {
+        let abilities: Vec<_> = ["str", "dex", "con", "int", "wis", "cha"]
+            .iter()
+            .map(|name| json!({"name": name, "score": 14, "modifier": 2, "save": 4}))
+            .collect();
+        let skills: Vec<_> = [
+            "Athletics", "Acrobatics", "Sleight of Hand", "Stealth", "Arcana", "History",
+            "Investigation", "Nature", "Religion", "Animal Handling", "Insight", "Medicine",
+            "Perception", "Survival", "Deception", "Intimidation", "Performance", "Persuasion",
+        ]
+        .iter()
+        .map(|name| json!({"name": name, "modifier": 5, "isProficient": true, "isExpert": false, "isHalfProficient": false, "isAdvantage": false, "isDisadvantage": false}))
+        .collect();
+        EntitySnapshot::from_beyond(
+            json!({"id": 123, "name": "Example", "campaign": {"id": 456}, "race": {"sizeId": 3, "creatureTypeId": 11}, "classes": [{"id": 8, "level": 1, "hitDiceUsed": 0, "definition": {"name": "Wizard", "spellRules": {"levelSpellSlots": [[], [2]]}}}], "spellSlots": [{"level": 1, "used": 1}], "notes": {"otherNotes": ""}}),
+            json!({"characterId": 123, "name": "Example", "campaign": {"id": 456}, "level": 1, "armorClass": 19, "proficiencyBonus": 2, "initiativeBonus": 7, "passivePerception": 15, "passiveInsight": 12, "passiveInvestigation": 13, "abilities": abilities, "skills": skills, "hitPointInfo": {"maximum": 25, "current": 17, "temp": 4}, "deathSaveInfo": {"successCount": 0, "failCount": 0}, "speeds": [{"name": "Walking", "distance": 40}], "race": {"name": "Goblin"}, "classes": [], "attacks": [], "castingInfo": {"saveDcs": []}, "conditions": [{"name": "Poisoned"}], "inspiration": false}),
+            "456",
+            "123",
+            fetched,
+            fetched,
+        )
+        .unwrap()
+    }
+    #[test]
+    fn a_sheet_says_what_is_left_and_the_party_line_adds_it_up() {
+        let record = wizard(10);
+        assert_eq!(
+            SheetNow::of(&record).line(),
+            "HP 17/25 · Temp 4 · AC 19 · Poisoned · Slots L1 1/2"
+        );
+        let older = wizard(5);
+        let line = party_line(&[&record, &older], false).unwrap();
+        assert!(
+            line.starts_with("Party now: HP 34/50 · Slots 2/4 · Not connected"),
+            "{line}"
+        );
+        assert_eq!(party_line(&[], true), None);
+    }
+    #[test]
+    fn one_line_says_what_a_character_has_left() {
+        let sheet = SheetNow {
+            hp: 9,
+            max_hp: 38,
+            temporary_hp: 5,
+            armor_class: Some(16),
+            conditions: vec!["Poisoned".into()],
+            slots: vec![
+                SlotsLeft {
+                    level: 1,
+                    left: 2,
+                    max: 4,
+                },
+                SlotsLeft {
+                    level: 2,
+                    left: 0,
+                    max: 3,
+                },
+            ],
+        };
+        assert_eq!(
+            sheet.line(),
+            "HP 9/38 · Bloodied · Temp 5 · AC 16 · Poisoned · Slots L1 2/4, L2 0/3"
+        );
+        let whole = SheetNow {
+            hp: 38,
+            max_hp: 38,
+            ..SheetNow::default()
+        };
+        assert_eq!(whole.line(), "HP 38/38");
     }
 }

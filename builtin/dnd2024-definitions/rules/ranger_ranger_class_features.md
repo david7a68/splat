@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 57 -->
 
-As a Ranger, you gain the following class features\
-when you reach the specified Ranger levels. These\
-features are listed in the Ranger Features table.\
+As a Ranger, you gain the following class features when you reach the specified Ranger levels. These features are listed in the Ranger Features table.
 
 ## Rule
 

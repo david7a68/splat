@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-A Quiver holds up to 20 Arrows.\
+A Quiver holds up to 20 Arrows.
 
 ## Item
 

@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 102 -->
 
-You can be attuned to no more than three magic\
-items at a time. Any attempt to attune to a fourth\
-item fails; you must end your Attunement to an item\
-first. Additionally, you can’t attune to more than\
-one copy of an item. For example, you can’t attune to\
-more than one Ring of Protection at a time.\
+You can be attuned to no more than three magic items at a time. Any attempt to attune to a fourth item fails; you must end your Attunement to an item first. Additionally, you can’t attune to more than one copy of an item. For example, you can’t attune to more than one Ring of Protection at a time.
 
 ## Rule
 

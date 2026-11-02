@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 74 -->
 
-Prerequisite: Level 2+ Warlock\
-You can cast Jump on yourself without expending a\
-spell slot.\
+Prerequisite: Level 2+ Warlock
+
+You can cast Jump on yourself without expending a spell slot.
 
 ## Rule
 

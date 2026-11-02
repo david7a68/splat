@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 20 -->
 
-Your background and class both provide starting\
-equipment. Any coins that you gain at this step\
-can be immediately spent on equipment from\
-“Equipment.”\
-Record your chosen equipment on your character\
-sheet. Equipment is described in “Equipment,” but\
-for now you can just write it all down and look up\
-the specifics in “Equipment” later. Note any coins\
-you have left after purchasing your equipment.\
+Your background and class both provide starting equipment. Any coins that you gain at this step can be immediately spent on equipment from “Equipment.”
+
+Record your chosen equipment on your character sheet. Equipment is described in “Equipment,” but for now you can just write it all down and look up the specifics in “Equipment” later. Note any coins you have left after purchasing your equipment.
 
 ## Rule
 

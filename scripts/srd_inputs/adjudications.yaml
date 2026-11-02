@@ -2,8 +2,8 @@ format: 1
 cases:
 - key: dnd2024:creatures/young_white_dragon
   subject: intelligence_save
-  status: resolved_project_ruling
-  base_save_total: 2
+  status: resolved_printing_correction
+  base_save_total: -2
   calculation: supplied_total_before_additional_modifiers
   source_token: '2'
   source_pages:

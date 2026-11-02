@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 15 -->
 
-A melee attack allows you to attack a target within\
-your reach. A melee attack typically uses a hand-\
-held weapon or an Unarmed Strike. Many monsters\
-make melee attacks with claws, teeth, or other body\
-parts. A few spells also involve melee attacks.\
+A melee attack allows you to attack a target within your reach. A melee attack typically uses a handheld weapon or an Unarmed Strike. Many monsters make melee attacks with claws, teeth, or other body parts. A few spells also involve melee attacks.
 
 ## Rule
 

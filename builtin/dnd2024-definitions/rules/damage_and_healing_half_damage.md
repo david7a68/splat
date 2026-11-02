@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 16 -->
 
-Many saving throw effects deal half damage (round\
-down) to a target when the target succeeds on the\
-saving throw. The halved damage is equal to half\
-the damage that would be dealt on a failed save.\
+Many saving throw effects deal half damage (round down) to a target when the target succeeds on the saving throw. The halved damage is equal to half the damage that would be dealt on a failed save.
 
 ## Rule
 

@@ -29,17 +29,15 @@ Skills Stealth +6\
 Gear Daggers (3)\
 Senses Darkvision 60 ft.; Passive Perception 9\
 Languages Common, Goblin\
-CR 1/8 (XP 25; PB +2)\
+CR 1/8 (XP 25; PB +2)
 
 ### Actions
 
-Dagger. Melee or Ranged Attack Roll: +4, reach 5 ft. or\
-range 20/60 ft. Hit: 4 (1d4 + 2) Piercing damage.\
+Dagger. Melee or Ranged Attack Roll: +4, reach 5 ft. or range 20/60 ft. Hit: 4 (1d4 + 2) Piercing damage.
 
 ### Bonus Actions
 
-Nimble Escape. The goblin takes the Disengage or\
-Hide action.\
+Nimble Escape. The goblin takes the Disengage or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/290|page 290]].
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 18 -->
 
-Some spells and other effects confer Temporary Hit\
-Points, which are a buffer against losing actual Hit\
-Points, as explained below.\
+Some spells and other effects confer Temporary Hit Points, which are a buffer against losing actual Hit Points, as explained below.
 
 ## Rule
 

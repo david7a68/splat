@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 29 -->
 
-While you aren’t wearing any armor, your base Ar-\
-mor Class equals 10 plus your Dexterity and Consti-\
-tution modifiers. You can use a Shield and still gain\
-this benefit.\
+While you aren’t wearing any armor, your base Armor Class equals 10 plus your Dexterity and Constitution modifiers. You can use a Shield and still gain this benefit.
 
 ## Rule
 

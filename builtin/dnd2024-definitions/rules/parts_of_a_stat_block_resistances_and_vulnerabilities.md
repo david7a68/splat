@@ -18,25 +18,17 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-These entries list a monster’s Resistances and Vul-\
-nerabilities, if any. See “Playing the Game” for more\
-information.\
-Running a MonsteR\
-To ensure a monster acts in accordance with its\
-Challenge Rating, follow these rules during combat:\
-Special Abilities. If the monster has a special abil-\
-ity that deals a lot of damage but has a limited\
-number of uses, such as a recharging breath\
-weapon or a spell it can cast only once per day,\
-have it use that special ability as quickly and as\
-often as possible.\
-Multiattack. If the monster has Multiattack, have\
-it use Multiattack on any of its turns in which\
-it’s not using one of its more powerful abilities.\
-Bonus Actions, Reactions, Legendary Actions. If\
-the monster has Bonus Actions, Reactions, or\
-Legendary Actions in its stat block, make sure it\
-uses them as often as it can.\
+These entries list a monster’s Resistances and Vulnerabilities, if any. See “Playing the Game” for more information.
+
+### Running A Monster
+
+To ensure a monster acts in accordance with its Challenge Rating, follow these rules during combat:
+
+Special Abilities. If the monster has a special ability that deals a lot of damage but has a limited number of uses, such as a recharging breath weapon or a spell it can cast only once per day, have it use that special ability as quickly and as often as possible.
+
+Multiattack. If the monster has Multiattack, have it use Multiattack on any of its turns in which it’s not using one of its more powerful abilities.
+
+Bonus Actions, Reactions, Legendary Actions. If the monster has Bonus Actions, Reactions, or Legendary Actions in its stat block, make sure it uses them as often as it can.
 
 ## Rule
 

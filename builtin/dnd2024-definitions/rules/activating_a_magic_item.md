@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 206 -->
 
-It usually takes a Magic action to activate a magic\
-item. The item’s user might also need to do some-\
-thing special. The description of each item category\
-or individual item details how an item is activated.\
-Certain items use the following rules for their\
-activation.\
+It usually takes a Magic action to activate a magic item. The item’s user might also need to do something special. The description of each item category or individual item details how an item is activated. Certain items use the following rules for their activation.
 
 ## Rule
 

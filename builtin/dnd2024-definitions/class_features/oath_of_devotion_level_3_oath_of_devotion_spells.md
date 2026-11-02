@@ -18,19 +18,17 @@ splat_sources:
 
 <!-- SRD page 56 -->
 
-The magic of your oath ensures you always have\
-certain spells ready; when you reach a Paladin level\
-specified in the Oath of Devotion Spells table, you\
-thereafter always have the listed spells prepared.\
-Oath of Devotion Spells\
-Paladin Level Spells\
-3 Protection from Evil and Good,\
-Shield of Faith\
-5 Aid, Zone of Truth\
-9 Beacon of Hope, Dispel Magic\
-13 Freedom of Movement,\
-Guardian of Faith\
-17 Commune, Flame Strike\
+The magic of your oath ensures you always have certain spells ready; when you reach a Paladin level specified in the Oath of Devotion Spells table, you thereafter always have the listed spells prepared.
+
+**Oath of Devotion Spells**
+
+| Paladin Level | Spells |
+| --- | --- |
+| 3 | Protection from Evil and Good, Shield of Faith |
+| 5 | Aid, Zone of Truth |
+| 9 | Beacon of Hope, Dispel Magic |
+| 13 | Freedom of Movement, Guardian of Faith |
+| 17 | Commune, Flame Strike |
 
 ## Rule
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-A Bedroll sleeps one Small or Medium creature.\
-While in a Bedroll, you automatically succeed on\
-saving throws against extreme cold (see “Gameplay\
-Toolbox”).\
+A Bedroll sleeps one Small or Medium creature. While in a Bedroll, you automatically succeed on saving throws against extreme cold (see “Gameplay Toolbox”).
 
 ## Item
 

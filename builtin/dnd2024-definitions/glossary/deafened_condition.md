@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 181 -->
 
-While you have the Deafened condition, you experi-\
-ence the following effect.\
-Can’t Hear. You can’t hear and automatically fail\
-any ability check that requires hearing.\
+While you have the Deafened condition, you experience the following effect.
+
+Can’t Hear. You can’t hear and automatically fail any ability check that requires hearing.
 
 Original layout: [[../../srd-5.2.1/pages/181|page 181]].
 

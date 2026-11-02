@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 179 -->
 
-While you’re crawling, each foot of movement costs\
-1 extra foot (2 extra feet in Difficult Terrain). See\
-also “Speed.”\
+While you’re crawling, each foot of movement costs 1 extra foot (2 extra feet in Difficult Terrain). See also “Speed.”
 
 Original layout: [[../../srd-5.2.1/pages/179|page 179]].
 

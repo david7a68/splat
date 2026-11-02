@@ -18,20 +18,11 @@ splat_sources:
 
 <!-- SRD page 9 -->
 
-A character gains proficiency with various weapons\
-and tools from their class and background. There\
-are two categories of equipment proficiency:\
-Weapons. Anyone can wield a weapon, but profi-\
-ciency makes you better at wielding it. If you have\
-proficiency with a weapon, you add your Profi-\
-ciency Bonus to attack rolls you make with it.\
-Tools. If you have proficiency with a tool, you can\
-add your Proficiency Bonus to any ability check\
-you make that uses the tool. If you have profi-\
-ciency in the skill that’s also used with that check,\
-you have Advantage on the check too. This means\
-you can benefit from both skill proficiency and\
-tool proficiency on the same ability check.\
+A character gains proficiency with various weapons and tools from their class and background. There are two categories of equipment proficiency:
+
+Weapons. Anyone can wield a weapon, but proficiency makes you better at wielding it. If you have proficiency with a weapon, you add your Proficiency Bonus to attack rolls you make with it.
+
+Tools. If you have proficiency with a tool, you can add your Proficiency Bonus to any ability check you make that uses the tool. If you have proficiency in the skill that’s also used with that check, you have Advantage on the check too. This means you can benefit from both skill proficiency and tool proficiency on the same ability check.
 
 ## Rule
 

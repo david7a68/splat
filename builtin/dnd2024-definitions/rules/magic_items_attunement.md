@@ -18,15 +18,7 @@ splat_sources:
 
 <!-- SRD page 102 -->
 
-Some magic items require a creature to form a\
-bond—called Attunement—with them before the\
-creature can use an item’s magical properties. With-\
-out becoming attuned to an item that requires At-\
-tunement, you gain only its nonmagical benefits un-\
-less its description states otherwise. For example, a\
-magic Shield that requires Attunement provides the\
-benefits of a normal Shield if you aren’t attuned to\
-it, but none of its magical properties.\
+Some magic items require a creature to form a bond—called Attunement—with them before the creature can use an item’s magical properties. Without becoming attuned to an item that requires Attunement, you gain only its nonmagical benefits unless its description states otherwise. For example, a magic Shield that requires Attunement provides the benefits of a normal Shield if you aren’t attuned to it, but none of its magical properties.
 
 ## Rule
 

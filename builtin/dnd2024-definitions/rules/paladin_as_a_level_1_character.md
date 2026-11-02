@@ -18,33 +18,9 @@ splat_sources:
 
 <!-- SRD page 53 -->
 
-•  Gain all the traits in the Core Paladin Traits table.\
-Paladin Features\
-Proficiency\
-Level Bonus Class Features\
-1 +2 Lay On Hands, Spellcasting,\
-Weapon Mastery\
-2 +2 Fighting Style, Paladin’s Smite\
-3 +2 Channel Divinity, Paladin Subclass\
-4 +2 Ability Score Improvement\
-5 +3 Extra Attack, Faithful Steed\
-6 +3 Aura of Protection\
-7 +3 Subclass feature\
-8 +3 Ability Score Improvement\
-9 +4 Abjure Foes\
-10 +4 Aura of Courage\
-11 +4 Radiant Strikes\
-12 +4 Ability Score Improvement\
-13 +5 —\
-14 +5 Restoring Touch\
-15 +5 Subclass feature\
-16 +5 Ability Score Improvement\
-17 +6 —\
-18 +6 Aura Expansion\
-19 +6 Epic Boon\
-20 +6 Subclass feature\
-•  Gain the Paladin’s level 1 features, which are\
-listed in the Paladin Features table.\
+•  Gain all the traits in the Core Paladin Traits table.
+
+•  Gain the Paladin’s level 1 features, which are listed in the Paladin Features table.
 
 ## Rule
 

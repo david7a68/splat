@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 63 -->
 
-You gain the Ability Score Improvement feat (see\
-“Feats”) or another feat of your choice for which you\
-qualify. You gain this feature again at Rogue levels\
-8, 10, 12, and 16.\
+You gain the Ability Score Improvement feat (see “Feats”) or another feat of your choice for which you qualify. You gain this feature again at Rogue levels 8, 10, 12, and 16.
 
 ## Rule
 

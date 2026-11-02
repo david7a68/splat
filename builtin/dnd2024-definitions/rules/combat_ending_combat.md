@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 14 -->
 
-Combat ends when one side or the other is defeated,\
-which can mean the creatures are killed or knocked\
-out or have surrendered or fled. Combat can also\
-end when both sides agree to end it.\
+Combat ends when one side or the other is defeated, which can mean the creatures are killed or knocked out or have surrendered or fled. Combat can also end when both sides agree to end it.
 
 ## Rule
 

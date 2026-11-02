@@ -11,15 +11,12 @@ splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [173], "e
 
 <!-- SRD page 173 -->
 
-Level 3 Transmutation (Druid, Ranger, Sorcerer,\
-Wizard)\
+Level 3 Transmutation (Druid, Ranger, Sorcerer, Wizard)\
 Casting Time: Action or Ritual\
 Range: 30 feet\
 Components: V, S, M (a short reed)\
-Duration: 24 hours\
-This spell grants up to ten willing creatures of your\
-choice within range the ability to breathe under-\
-water until the spell ends. Affected creatures also\
-retain their normal mode of respiration.\
+Duration: 24 hours
+
+This spell grants up to ten willing creatures of your choice within range the ability to breathe underwater until the spell ends. Affected creatures also retain their normal mode of respiration.
 
 Original layout: [[../pages/173|page 173]].

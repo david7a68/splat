@@ -39,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 31] = [
+const SCENARIOS: [(&str, Seed, Script); 36] = [
     (
         "library-browse",
         Seed::Empty,
@@ -105,6 +105,11 @@ const SCENARIOS: [(&str, Seed, Script); 31] = [
     ("gallery", Seed::Empty, scenarios::gallery::run),
     ("run-restart", Seed::Campaign, scenarios::run_restart::run),
     (
+        "column-resize",
+        Seed::Campaign,
+        scenarios::column_resize::run,
+    ),
+    (
         "library-scope",
         Seed::Campaign,
         scenarios::library_scope::run,
@@ -145,6 +150,22 @@ const SCENARIOS: [(&str, Seed, Script); 31] = [
         "session-recording",
         Seed::Campaign,
         scenarios::session_recording::run,
+    ),
+    (
+        "encounter-groups",
+        Seed::Groups,
+        scenarios::encounter_groups::run,
+    ),
+    ("run-overrides", Seed::Groups, scenarios::run_overrides::run),
+    (
+        "encounter-history",
+        Seed::History,
+        scenarios::encounter_history::run,
+    ),
+    (
+        "run-no-groups",
+        Seed::Campaign,
+        scenarios::run_no_groups::run,
     ),
     // Last, as a scenario's place in this list seeds its dice.
     (

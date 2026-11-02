@@ -11,10 +11,10 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [235
 
 <!-- SRD page 235 -->
 
-Potion, Rare\
-When you drink this potion, you gain the effect of\
-the Clairvoyance spell (no Concentration required).\
-An eyeball bobs in this potion’s yellowish liquid\
-but vanishes when the potion is opened.\
+Potion, Rare
+
+When you drink this potion, you gain the effect of the Clairvoyance spell (no Concentration required).
+
+An eyeball bobs in this potion’s yellowish liquid but vanishes when the potion is opened.
 
 Original layout: [[../pages/235|page 235]].

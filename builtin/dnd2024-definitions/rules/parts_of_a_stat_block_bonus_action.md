@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 257 -->
 
-If a monster has Bonus Action options, they are\
-listed in this section. See “Playing the Game” for de-\
-tails on Bonus Actions.\
+If a monster has Bonus Action options, they are listed in this section. See “Playing the Game” for details on Bonus Actions.
 
 ## Rule
 

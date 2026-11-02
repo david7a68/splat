@@ -11,14 +11,10 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [248
 
 <!-- SRD page 248 -->
 
-Weapon (Glaive, Greatsword, Longsword, or Scimitar),\
-Very Rare (Requires Attunement)\
-When you attack an object with this magic weapon\
-and hit, maximize your weapon damage dice\
-against the target.\
-When you attack a creature with this weapon\
-and roll a 20 on the d20 for the attack roll, that tar-\
-get takes an extra 14 Slashing damage and gains\
-1 Exhaustion level.\
+Weapon (Glaive, Greatsword, Longsword, or Scimitar), Very Rare (Requires Attunement)
+
+When you attack an object with this magic weapon and hit, maximize your weapon damage dice against the target.
+
+When you attack a creature with this weapon and roll a 20 on the d20 for the attack roll, that target takes an extra 14 Slashing damage and gains 1 Exhaustion level.
 
 Original layout: [[../pages/248|page 248]].

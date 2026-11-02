@@ -18,20 +18,17 @@ splat_sources:
 
 <!-- SRD page 192 -->
 
-Choose three abilities that seem appropriate for the\
-background:\
-Strength or Dexterity. These abilities are ideal for\
-a background involving physical exertion.\
-Constitution. This ability is ideal for a background\
-that involves endurance or long hours of activity.\
+Choose three abilities that seem appropriate for the background:
+
+Strength or Dexterity. These abilities are ideal for a background involving physical exertion.
+
+Constitution. This ability is ideal for a background that involves endurance or long hours of activity.
 
 <!-- SRD page 193 -->
 
-Intelligence or Wisdom. One or both abilities are\
-ideal for a background that focuses on cerebral or\
-spiritual matters.\
-Charisma. This ability is ideal for a background\
-that involves performance or social interaction.\
+Intelligence or Wisdom. One or both abilities are ideal for a background that focuses on cerebral or spiritual matters.
+
+Charisma. This ability is ideal for a background that involves performance or social interaction.
 
 ## Rule
 

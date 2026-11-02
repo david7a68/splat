@@ -18,21 +18,43 @@ splat_sources:
 
 <!-- SRD page 53 -->
 
-Core Paladin Traits\
-Primary Ability Strength and Charisma\
-Hit Point Die D10 per Paladin level\
-Saving Throw Wisdom and Charisma\
-Proficiencies\
-Skill Proficiencies Choose 2: Athletics, Insight,\
-Intimidation, Medicine,\
-Persuasion, or Religion\
-Weapon Proficiencies Simple and Martial weapons\
-Armor Training Light, Medium, and Heavy ar-\
-mor and Shields\
-Starting Equipment Choose A or B: (A) Chain Mail,\
-Shield, Longsword, 6 Javelins,\
-Holy Symbol, Priest’s Pack,\
-and 9 GP; or (B) 150 GP\
+**Core Paladin Traits**
+
+|  |  |
+| --- | --- |
+| Primary Ability | Strength and Charisma |
+| Hit Point Die | D10 per Paladin level |
+| Saving Throw | Wisdom and Charisma |
+| Proficiencies |  |
+| Skill Proficiencies | Choose 2: Athletics, Insight, Intimidation, Medicine, Persuasion, or Religion |
+| Weapon Proficiencies | Simple and Martial weapons |
+| Armor Training | Light, Medium, and Heavy armor and Shields |
+| Starting Equipment | Choose A or B: (A) Chain Mail, Shield, Longsword, 6 Javelins, Holy Symbol, Priest’s Pack, and 9 GP; or (B) 150 GP |
+
+**Paladin Features**
+
+| Level | Proficiency Bonus | Class Features | Channel Divinity | Prepared Spells | Level 1 Slots | Level 2 Slots | Level 3 Slots | Level 4 Slots | Level 5 Slots |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | +2 | Lay On Hands, Spellcasting, Weapon Mastery | — | 2 | 2 | — | — | — | — |
+| 2 | +2 | Fighting Style, Paladin’s Smite | — | 3 | 2 | — | — | — | — |
+| 3 | +2 | Channel Divinity, Paladin Subclass | 2 | 4 | 3 | — | — | — | — |
+| 4 | +2 | Ability Score Improvement | 2 | 5 | 3 | — | — | — | — |
+| 5 | +3 | Extra Attack, Faithful Steed | 2 | 6 | 4 | 2 | — | — | — |
+| 6 | +3 | Aura of Protection | 2 | 6 | 4 | 2 | — | — | — |
+| 7 | +3 | Subclass feature | 2 | 7 | 4 | 3 | — | — | — |
+| 8 | +3 | Ability Score Improvement | 2 | 7 | 4 | 3 | — | — | — |
+| 9 | +4 | Abjure Foes | 2 | 9 | 4 | 3 | 2 | — | — |
+| 10 | +4 | Aura of Courage | 2 | 9 | 4 | 3 | 2 | — | — |
+| 11 | +4 | Radiant Strikes | 3 | 10 | 4 | 3 | 3 | — | — |
+| 12 | +4 | Ability Score Improvement | 3 | 10 | 4 | 3 | 3 | — | — |
+| 13 | +5 | — | 3 | 11 | 4 | 3 | 3 | 1 | — |
+| 14 | +5 | Restoring Touch | 3 | 11 | 4 | 3 | 3 | 1 | — |
+| 15 | +5 | Subclass feature | 3 | 12 | 4 | 3 | 3 | 2 | — |
+| 16 | +5 | Ability Score Improvement | 3 | 12 | 4 | 3 | 3 | 2 | — |
+| 17 | +6 | — | 3 | 14 | 4 | 3 | 3 | 3 | 1 |
+| 18 | +6 | Aura Expansion | 3 | 14 | 4 | 3 | 3 | 3 | 1 |
+| 19 | +6 | Epic Boon | 3 | 15 | 4 | 3 | 3 | 3 | 2 |
+| 20 | +6 | Subclass feature | 3 | 15 | 4 | 3 | 3 | 3 | 2 |
 
 ## Rule group
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-Rations consist of travel-ready food, including jerky,\
-dried fruit, hardtack, and nuts. See “Malnutrition”\
-in “Rules Glossary” for the risks of not eating.\
+Rations consist of travel-ready food, including jerky, dried fruit, hardtack, and nuts. See “Malnutrition” in “Rules Glossary” for the risks of not eating.
 
 ## Item
 

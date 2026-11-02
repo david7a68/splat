@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-You pay for the best and might have a staff that sup-\
-ports your lifestyle. Others notice your wealth and\
-might encourage you to share it, either legally or\
-otherwise.\
+You pay for the best and might have a staff that supports your lifestyle. Others notice your wealth and might encourage you to share it, either legally or otherwise.
 
 ## Rule
 

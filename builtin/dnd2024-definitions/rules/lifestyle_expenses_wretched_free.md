@@ -18,17 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-You survive via chance and charity. You’re often\
-exposed to natural dangers as a result of sleeping\
-outside.\
-AC HP Damage Threshold Cost\
-13 300 — 40,000 GP\
-15 500 20 30,000 GP\
-15 100 10 3,000 GP\
-15 300 15 10,000 GP\
-11 50 — 50 GP\
-15 300 15 10,000 GP\
-15 500 20 25,000 GP\
+You survive via chance and charity. You’re often exposed to natural dangers as a result of sleeping outside.
 
 ## Rule
 

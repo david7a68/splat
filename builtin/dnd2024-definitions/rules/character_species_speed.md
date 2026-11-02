@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 84 -->
 
-Your character’s species determines the character’s\
-Speed.\
+Your character’s species determines the character’s Speed.
 
 ## Rule
 

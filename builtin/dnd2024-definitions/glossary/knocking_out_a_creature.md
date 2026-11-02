@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 184 -->
 
-When you would reduce a creature to 0 Hit Points\
-with a melee attack, you can instead reduce the\
-creature to 1 Hit Point. The creature then has the\
-Unconscious condition and starts a Short Rest.\
-The creature remains Unconscious until it regains\
-any Hit Points or until someone uses an action to\
-administer first aid to it, which requires a success-\
-ful DC 10 Wisdom (Medicine) check.\
+When you would reduce a creature to 0 Hit Points with a melee attack, you can instead reduce the creature to 1 Hit Point. The creature then has the Unconscious condition and starts a Short Rest.
+
+The creature remains Unconscious until it regains any Hit Points or until someone uses an action to administer first aid to it, which requires a successful DC 10 Wisdom (Medicine) check.
 
 Original layout: [[../../srd-5.2.1/pages/184|page 184]].
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 76 -->
 
-Choose one damage type, other than Force, when-\
-ever you finish a Short or Long Rest. You have Resis-\
-tance to that damage type until you choose a differ-\
-ent one with this feature.\
+Choose one damage type, other than Force, whenever you finish a Short or Long Rest. You have Resistance to that damage type until you choose a different one with this feature.
 
 ## Rule
 

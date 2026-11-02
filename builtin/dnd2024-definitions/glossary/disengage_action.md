@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 181 -->
 
-If you take the Disengage action, your movement\
-doesn’t provoke Opportunity Attacks for the rest of\
-the current turn.\
+If you take the Disengage action, your movement doesn’t provoke Opportunity Attacks for the rest of the current turn.
 
 Original layout: [[../../srd-5.2.1/pages/181|page 181]].
 

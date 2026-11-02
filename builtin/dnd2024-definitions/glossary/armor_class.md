@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 177 -->
 
-An Armor Class (AC) is the target number for an\
-attack roll. AC represents how difficult it is to hit a\
-target.\
-Your base AC calculation is 10 plus your Dexterity\
-modifier. If a rule gives you another base AC calcula-\
-tion, you choose which calculation to use; you can’t\
-use more than one. See also “Attack Roll.”\
+An Armor Class (AC) is the target number for an attack roll. AC represents how difficult it is to hit a target.
+
+Your base AC calculation is 10 plus your Dexterity modifier. If a rule gives you another base AC calculation, you choose which calculation to use; you can’t use more than one. See also “Attack Roll.”
 
 Original layout: [[../../srd-5.2.1/pages/177|page 177]].
 

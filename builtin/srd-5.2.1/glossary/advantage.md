@@ -11,10 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [176],
 
 <!-- SRD page 176 -->
 
-If you have Advantage on a D20 Test, roll two d20s,\
-and use the higher roll. A roll can’t be affected by\
-more than one Advantage, and Advantage and Dis-\
-advantage on the same roll cancel each other. See\
-also “Playing the Game” (“D20 Tests”).\
+If you have Advantage on a D20 Test, roll two d20s, and use the higher roll. A roll can’t be affected by more than one Advantage, and Advantage and Disadvantage on the same roll cancel each other. See also “Playing the Game” (“D20 Tests”).
 
 Original layout: [[../pages/176|page 176]].

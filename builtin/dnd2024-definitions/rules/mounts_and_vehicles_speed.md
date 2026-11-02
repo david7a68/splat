@@ -18,28 +18,21 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-A ship sailing against a strong wind moves at half\
-speed. In a dead calm (no wind), waterborne ships\
-can’t move under sail and must be rowed. Keelboats\
-and Rowboats are used on lakes and rivers. If going\
-downstream, add the speed of the current (typically\
-3 miles per hour) to the speed of the vehicle. These\
-vehicles can’t be rowed against any significant cur-\
-rent, but they can be pulled upstream by draft an-\
-imals on the shores. A Rowboat can be carried and\
-weighs 100 pounds.\
+A ship sailing against a strong wind moves at half speed. In a dead calm (no wind), waterborne ships can’t move under sail and must be rowed. Keelboats and Rowboats are used on lakes and rivers. If going downstream, add the speed of the current (typically 3 miles per hour) to the speed of the vehicle. These vehicles can’t be rowed against any significant current, but they can be pulled upstream by draft animals on the shores. A Rowboat can be carried and weighs 100 pounds.
 
 <!-- SRD page 101 -->
 
-Airborne and Waterborne Vehicles\
-Ship Speed Crew Passengers Cargo (Tons)\
-Airship 8 mph 10 20 1\
-Galley 4 mph 80 — 150\
-Keelboat 1 mph 1 6 1/2\
-Longship 3 mph 40 150 10\
-Rowboat 1½ mph 1 3 —\
-Sailing Ship 2 mph 20 20 100\
-Warship 2½ mph 60 60 200\
+**Airborne and Waterborne Vehicles**
+
+| Ship | Speed | Crew | Passengers | Cargo (Tons) | AC | HP | Damage Threshold | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Airship | 8 mph | 10 | 20 | 1 | 13 | 300 | — | 40,000 GP |
+| Galley | 4 mph | 80 | — | 150 | 15 | 500 | 20 | 30,000 GP |
+| Keelboat | 1 mph | 1 | 6 | 1/2 | 15 | 100 | 10 | 3,000 GP |
+| Longship | 3 mph | 40 | 150 | 10 | 15 | 300 | 15 | 10,000 GP |
+| Rowboat | 1½ mph | 1 | 3 | — | 11 | 50 | — | 50 GP |
+| Sailing Ship | 2 mph | 20 | 20 | 100 | 15 | 300 | 15 | 10,000 GP |
+| Warship | 2½ mph | 60 | 60 | 200 | 15 | 500 | 20 | 25,000 GP |
 
 ## Rule
 

@@ -506,6 +506,39 @@ pub fn action_width(ui: &Ui, label: &str, key: bool) -> f32 {
     number_width(ui, label, &Type::Strong.font(ui)) + 2.0 * M + icon_width + key_width
 }
 
+/// An action with a default, and a caret beside it that opens a menu of the other ways
+/// to do it. A click in the menu closes it. The response is the action's own.
+pub fn split_action(
+    ui: &mut Ui,
+    action: Action<'_>,
+    menu_name: &str,
+    menu: impl FnOnce(&mut Ui),
+) -> Response {
+    let caret = Action {
+        height: action.height,
+        blocked: action.blocked,
+        ..Action::secondary(icons::DOWN)
+            .name(menu_name)
+            .hint(menu_name)
+    };
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = HAIRLINE_WIDTH;
+        // The caret stays on the right in either direction of layout.
+        let (response, caret) = if ui.layout().prefer_right_to_left() {
+            let caret = caret.show(ui);
+            (action.show(ui), caret)
+        } else {
+            let response = action.show(ui);
+            (response, caret.show(ui))
+        };
+        egui::Popup::menu(&caret)
+            .align(egui::RectAlign::BOTTOM_END)
+            .show(menu);
+        response
+    })
+    .inner
+}
+
 /// A square button with one icon. The word is the accessible name and the tooltip.
 pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
     let (rect, response) =
@@ -694,9 +727,22 @@ pub fn number_field(
     width: f32,
     height: f32,
 ) -> Response {
+    number_field_with_id(ui, focus_id(name), name, text, hint, width, height)
+}
+
+/// For a field whose name another field can share, as two things with one name do.
+pub fn number_field_with_id(
+    ui: &mut Ui,
+    id: Id,
+    name: &str,
+    text: &mut String,
+    hint: &str,
+    width: f32,
+    height: f32,
+) -> Response {
     let response = ui.add(
         egui::TextEdit::singleline(text)
-            .id(focus_id(name))
+            .id(id)
             .desired_width(width - 2.0 * S)
             .min_size(vec2(width, height))
             // The caret stands a little clear of the first digit.
@@ -770,7 +816,7 @@ pub fn segmented_named<T: PartialEq + Copy>(
 ) -> bool {
     let mut changed = false;
     let c = colors();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         for (option, label, name) in options {
             let selected = *value == *option;
@@ -1260,6 +1306,25 @@ pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&m
         .inner
 }
 
+/// An image at full size, within the window. Returns true when the DM closes it, by a click
+/// or Escape.
+pub fn image_viewer(ctx: &egui::Context, name: &str, uri: &str) -> bool {
+    let viewport = ctx.content_rect();
+    let response = egui::Modal::new(Id::new("image_viewer"))
+        .backdrop_color(Color32::from_black_alpha(200))
+        .frame(egui::Frame::new())
+        .show(ctx, |ui| {
+            let image = egui::Image::from_uri(uri)
+                .fit_to_original_size(1.0)
+                .max_size(viewport.size() - vec2(XXL * 2.0, XXL * 2.0))
+                .sense(Sense::click());
+            let response = ui.add(image).on_hover_text(name);
+            response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, name));
+            response.clicked()
+        });
+    response.should_close() || response.inner
+}
+
 /// The width of a panel beside a page: Lookup, or the run's side panel.
 pub fn side_panel_width(available: f32) -> f32 {
     (available * 0.36).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
@@ -1318,7 +1383,7 @@ pub fn section<R>(
 /// does. egui makes a section's id from its title, so without a key a new word closes it.
 pub fn keyed_section<R>(
     ui: &mut Ui,
-    key: &str,
+    key: impl std::hash::Hash,
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {

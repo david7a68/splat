@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 16 -->
 
-Injury and death are frequent threats, as detailed in\
-the following rules.\
+Injury and death are frequent threats, as detailed in the following rules.
 
 ## Rule
 

@@ -1,3 +1,4 @@
+mod art;
 pub mod auth;
 mod campaign_content;
 mod campaigns;
@@ -13,6 +14,7 @@ mod encounters;
 mod hermetic;
 mod library;
 mod lookup;
+mod markdown_source;
 mod markdown_view;
 mod party;
 mod party_stream;
@@ -42,6 +44,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| {
             design::theme::install(&cc.egui_ctx);
+            art::install(&cc.egui_ctx);
             Ok(Box::<Splat>::default())
         }),
     )
@@ -76,6 +79,7 @@ struct Splat {
     run_fact: Option<timeline::RunFact>,
     /// New events and runs go to a session dated before today.
     old_session: bool,
+    art: art::Loader,
     ui_store: ui_state::Store,
     tab_direction: Option<egui::FocusDirection>,
     step_past: Option<(egui::Id, egui::FocusDirection)>,
@@ -110,6 +114,7 @@ impl Default for Splat {
             processing: Default::default(),
             run_fact: None,
             old_session: false,
+            art: Default::default(),
             ui_store: ui_state::Store::user(),
             tab_direction: None,
             step_past: None,
@@ -189,10 +194,11 @@ enum SettingsTab {
 impl Splat {
     /// Open where the DM left off: the open run, then the last page. The first time,
     /// Encounters if a campaign is active, otherwise the Library, which needs none.
-    fn start(&mut self) {
+    fn start(&mut self, ctx: &egui::Context) {
         self.started = true;
         self.settings_list_first = self.campaigns.all().is_empty();
         let saved = self.ui_store.load();
+        design::restore_column_widths(ctx, saved.column_widths);
         let active = self.campaigns.active_campaign();
         self.page =
             saved
@@ -212,9 +218,14 @@ impl Splat {
         }
     }
 
-    fn remember(&mut self) {
+    fn remember(&mut self, ctx: &egui::Context) {
+        // A drag writes the file once, when it ends, and not on each frame of it.
+        if ctx.input(|i| i.pointer.any_down()) {
+            return;
+        }
         let active = self.campaigns.active_campaign();
         let state = ui_state::UiState {
+            column_widths: design::column_widths(ctx),
             page: Some(self.page.name().to_owned()).filter(|_| self.page != Page::Run),
             open_run: self.encounters.run().and_then(|run| {
                 Some(ui_state::OpenRun {
@@ -326,7 +337,10 @@ impl Splat {
         if self.encounters.draft_dirty() {
             let name = self.encounters.draft_name().unwrap_or_default();
             items.push((
-                format!("Encounter \u{201c}{name}\u{201d} has unsaved changes."),
+                format!(
+                    "{} \u{201c}{name}\u{201d} has unsaved changes.",
+                    self.encounters.draft_kind()
+                ),
                 Page::Encounters,
             ));
         }
@@ -354,6 +368,12 @@ impl Splat {
                     lost.join(", ")
                 ),
                 Page::Run,
+            ));
+        }
+        if self.party.unconfirmed() {
+            items.push((
+                "D&D Beyond has not confirmed a change made on the Party page.".to_owned(),
+                Page::Party,
             ));
         }
         if let Some(name) = self.encounters.run_not_saved() {
@@ -466,136 +486,144 @@ impl Splat {
             design::RAIL_WIDTH
         };
         let page = self.visible_page();
-        egui::SidePanel::left("navigation")
-            .resizable(false)
-            .exact_width(rail)
-            .frame(
-                egui::Frame::new()
-                    .fill(c.rail)
-                    .inner_margin(egui::Margin::same(design::S as i8)),
-            )
-            .show(ctx, |ui| {
-                if self.copy_dialog.is_some() || self.confirm_close {
-                    ui.disable();
-                }
-                ui.spacing_mut().item_spacing.y = 2.0;
-                ui.label(Type::Title.rich(ui, "Splat").color(c.text));
-                ui.add_space(design::XS);
-                let blocked = self.blocked_switch();
-                ui.add_enabled_ui(blocked.is_none(), |ui| {
-                    ui.spacing_mut().interact_size.y = Density::Read.control();
-                    self.campaigns.selector(ui, blocked);
+        design::Column::left(
+            "navigation",
+            rail,
+            design::RAIL_WIDTH..=design::RAIL_DRAG_MAX_WIDTH,
+        )
+        .page_keeps(design::RAIL_LEAVES_WINDOW)
+        .frame(
+            egui::Frame::new()
+                .fill(c.rail)
+                .inner_margin(egui::Margin::same(design::S as i8)),
+        )
+        .show(ctx, |ui| {
+            if self.copy_dialog.is_some() || self.confirm_close {
+                ui.disable();
+            }
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.label(Type::Title.rich(ui, "Splat").color(c.text));
+            ui.add_space(design::XS);
+            let blocked = self.blocked_switch();
+            ui.add_enabled_ui(blocked.is_none(), |ui| {
+                ui.spacing_mut().interact_size.y = Density::Read.control();
+                self.campaigns.selector(ui, blocked);
+            });
+            ui.add_space(design::S);
+            if self.encounters.has_run() {
+                let strip = self.encounters.run().map(|run| run.strip());
+                let detail = strip.as_ref().map(|strip| {
+                    if strip.running {
+                        format!("Round {}", strip.round)
+                    } else if strip.ended {
+                        "Ended".to_owned()
+                    } else {
+                        "Setup".to_owned()
+                    }
                 });
-                ui.add_space(design::S);
-                if self.encounters.has_run() {
-                    let strip = self.encounters.run().map(|run| run.strip());
-                    let detail = strip.as_ref().map(|strip| {
-                        if strip.running {
-                            format!("Round {}", strip.round)
-                        } else if strip.ended {
-                            "Ended".to_owned()
-                        } else {
-                            "Setup".to_owned()
-                        }
-                    });
-                    if design::nav_item(
-                        ui,
-                        icons::RUN,
-                        Page::Run.name(),
-                        detail.as_deref(),
-                        page == Some(Page::Run),
-                    )
-                    .clicked()
-                    {
-                        self.page = Page::Run;
-                    }
-                }
-                let recording = self.sessions.recording_detail();
-                for (page, icon) in [
-                    (Page::Encounters, icons::ENCOUNTERS),
-                    (Page::Sessions, icons::SESSIONS),
-                    (Page::Timeline, icons::TIMELINE),
-                    (Page::Party, icons::PARTY),
-                    (Page::Library, icons::LIBRARY),
-                    (Page::Campaign, icons::CAMPAIGN),
-                ] {
-                    let current = self.visible_page() == Some(page);
-                    let detail = recording.as_deref().filter(|_| page == Page::Sessions);
-                    if design::nav_item(ui, icon, page.name(), detail, current).clicked() {
-                        self.page = page;
-                    }
-                }
-                // Push the rest down in tree order, so Tab still follows reading order.
-                let statuses = self.statuses(connection);
-                let status_height = statuses.len() as f32 * (Type::Small.line() + 2.0);
-                let lost = usize::from(self.sessions.busy_with_edit())
-                    + usize::from(self.timeline.not_saved());
-                let bottom = 3.0 * (Density::Scan.control() + 2.0)
-                    + status_height
-                    + lost as f32 * (Density::Read.control() + 2.0)
-                    + design::S;
-                ui.add_space((ui.available_height() - bottom).max(0.0));
-                for state in statuses {
-                    design::status(ui, state);
-                }
-                // Words that could not be saved lead to where the DM can choose.
-                for (lost, word, target) in [
-                    (
-                        self.sessions.busy_with_edit(),
-                        "Notes not saved",
-                        Page::Sessions,
-                    ),
-                    (
-                        self.timeline.not_saved(),
-                        "Timeline not saved",
-                        Page::Timeline,
-                    ),
-                ] {
-                    if lost
-                        && design::status_link(
-                            ui,
-                            Status {
-                                icon: icons::ERROR,
-                                word,
-                                color: colors().document.invalid,
-                            },
-                        )
-                        .clicked()
-                    {
-                        self.page = target;
-                    }
-                }
-                ui.add_space(design::XS);
-                if design::nav_toggle(ui, icons::SEARCH, "Lookup", "Ctrl+K", self.lookup.open)
-                    .on_hover_text("Search everything, beside this page (Ctrl+K)")
-                    .clicked()
-                {
-                    self.toggle_lookup();
-                }
-                if design::nav_toggle(
-                    ui,
-                    icons::DRAFT,
-                    "Notes",
-                    "Ctrl+J",
-                    self.sessions.notes_open && self.page != Page::Sessions,
-                )
-                .on_hover_text("This session's notes, beside this page (Ctrl+J)")
-                .clicked()
-                {
-                    self.toggle_notes();
-                }
                 if design::nav_item(
                     ui,
-                    icons::SETTINGS,
-                    Page::Settings.name(),
-                    None,
-                    page == Some(Page::Settings),
+                    icons::RUN,
+                    Page::Run.name(),
+                    detail.as_deref(),
+                    page == Some(Page::Run),
                 )
                 .clicked()
                 {
-                    self.page = Page::Settings;
+                    self.page = Page::Run;
                 }
-            });
+            }
+            let recording = self.sessions.recording_detail();
+            let review = self.campaign_content.review_detail();
+            for (page, icon) in [
+                (Page::Encounters, icons::ENCOUNTERS),
+                (Page::Sessions, icons::SESSIONS),
+                (Page::Timeline, icons::TIMELINE),
+                (Page::Party, icons::PARTY),
+                (Page::Library, icons::LIBRARY),
+                (Page::Campaign, icons::CAMPAIGN),
+            ] {
+                let current = self.visible_page() == Some(page);
+                let detail = match page {
+                    Page::Sessions => recording.as_deref(),
+                    Page::Campaign => review.as_deref(),
+                    _ => None,
+                };
+                if design::nav_item(ui, icon, page.name(), detail, current).clicked() {
+                    self.page = page;
+                }
+            }
+            // Push the rest down in tree order, so Tab still follows reading order.
+            let statuses = self.statuses(connection);
+            let status_height = statuses.len() as f32 * (Type::Small.line() + 2.0);
+            let lost = usize::from(self.sessions.busy_with_edit())
+                + usize::from(self.timeline.not_saved());
+            let bottom = 3.0 * (Density::Scan.control() + 2.0)
+                + status_height
+                + lost as f32 * (Density::Read.control() + 2.0)
+                + design::S;
+            ui.add_space((ui.available_height() - bottom).max(0.0));
+            for state in statuses {
+                design::status(ui, state);
+            }
+            // Words that could not be saved lead to where the DM can choose.
+            for (lost, word, target) in [
+                (
+                    self.sessions.busy_with_edit(),
+                    "Notes not saved",
+                    Page::Sessions,
+                ),
+                (
+                    self.timeline.not_saved(),
+                    "Timeline not saved",
+                    Page::Timeline,
+                ),
+            ] {
+                if lost
+                    && design::status_link(
+                        ui,
+                        Status {
+                            icon: icons::ERROR,
+                            word,
+                            color: colors().document.invalid,
+                        },
+                    )
+                    .clicked()
+                {
+                    self.page = target;
+                }
+            }
+            ui.add_space(design::XS);
+            if design::nav_toggle(ui, icons::SEARCH, "Lookup", "Ctrl+K", self.lookup.open)
+                .on_hover_text("Search everything, beside this page (Ctrl+K)")
+                .clicked()
+            {
+                self.toggle_lookup();
+            }
+            if design::nav_toggle(
+                ui,
+                icons::DRAFT,
+                "Notes",
+                "Ctrl+J",
+                self.sessions.notes_open && self.page != Page::Sessions,
+            )
+            .on_hover_text("This session's notes, beside this page (Ctrl+J)")
+            .clicked()
+            {
+                self.toggle_notes();
+            }
+            if design::nav_item(
+                ui,
+                icons::SETTINGS,
+                Page::Settings.name(),
+                None,
+                page == Some(Page::Settings),
+            )
+            .clicked()
+            {
+                self.page = Page::Settings;
+            }
+        });
     }
 
     /// One panel beside the page at a time.
@@ -642,7 +670,7 @@ impl Splat {
         }];
         for (dirty, word) in [
             (self.library.dirty(), "Library draft"),
-            (self.encounters.draft_dirty(), "Encounter draft"),
+            (self.encounters.draft_dirty(), self.encounters.draft_word()),
             (self.campaign_content.dirty(), "Campaign draft"),
         ] {
             if dirty {
@@ -697,7 +725,12 @@ impl Splat {
             });
         }
         // A run files itself under this session, and the run's own page has no room to say so.
-        if self.run_fact.is_some() && self.old_session {
+        // A run that is over files nothing more.
+        let filing = self
+            .run_fact
+            .as_ref()
+            .is_some_and(|fact| !matches!(fact.state, timeline::RunState::Ended(_)));
+        if filing && self.old_session {
             statuses.push(Status {
                 icon: icons::WARN,
                 word: "Old session",
@@ -709,6 +742,13 @@ impl Splat {
                 icon: icons::SYNC_OFF,
                 word: "Party sync stopped",
                 color: c.sync.pending,
+            });
+        }
+        if self.party.sync_conflict() {
+            statuses.push(Status {
+                icon: icons::WARN,
+                word: "Party sync conflict",
+                color: c.sync.conflict,
             });
         }
         statuses
@@ -1002,7 +1042,16 @@ impl Splat {
             Page::Encounters => {
                 if active.is_some() {
                     self.encounters.save_shortcut(ui.ctx(), &self.campaigns);
-                    self.encounters.show(ui, &self.campaigns);
+                    let sessions = self.sessions.links();
+                    self.encounters.show(
+                        ui,
+                        &self.campaigns,
+                        &self.party,
+                        &encounters::Story {
+                            events: &self.timeline.events,
+                            sessions: &sessions,
+                        },
+                    );
                     if self.encounters.saved {
                         self.encounters.saved = false;
                         if let Some(campaign) = &active {
@@ -1223,8 +1272,9 @@ impl Splat {
 impl eframe::App for Splat {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         if !self.started {
-            self.start();
+            self.start(ctx);
         }
+        self.campaign_content.tick(ctx, &self.campaigns);
         if ctx.input(|i| i.viewport().close_requested()) {
             // An edit in its pause before saving is saved now, not reported as a loss.
             self.sessions.flush();
@@ -1233,6 +1283,7 @@ impl eframe::App for Splat {
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()
                 || self.encounters.pending_sync()
+                || self.party.unconfirmed()
                 || self.sessions.recording()
                 || self.sessions.processing()
                 || self.sessions.busy_with_edit()
@@ -1252,6 +1303,8 @@ impl eframe::App for Splat {
         self.dndbeyond.begin_frame();
         self.dndbeyond
             .poll(ctx, epoch, session.is_some(), &mut self.campaigns);
+        self.art.poll(ctx, self.campaigns.modules());
+        art::show_viewer(ctx);
         self.lookup.poll(ctx, &self.campaigns);
         self.encounters.poll(ctx, &self.campaigns);
         self.lookup.library_draft = self.library.dirty();
@@ -1263,7 +1316,8 @@ impl eframe::App for Splat {
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
             if let Some(fact) = &fact {
-                self.timeline.record_run(fact, self.sessions.current());
+                self.timeline
+                    .record_change(self.run_fact.as_ref(), fact, self.sessions.current());
             }
             self.run_fact = fact;
         }
@@ -1277,6 +1331,7 @@ impl eframe::App for Splat {
         });
         let modal = self.copy_dialog.is_some()
             || self.confirm_close
+            || art::viewer_open(ctx)
             || ctx.memory(|memory| memory.top_modal_layer()).is_some();
         if !modal {
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
@@ -1327,9 +1382,15 @@ impl eframe::App for Splat {
                     .clone()
                     .map(|remote| (c.id, remote, c.path.clone()))
             }),
-            session.is_some(),
+            session.clone(),
             self.page == Page::Party,
         );
+        if std::mem::take(&mut self.party.new_copies)
+            && let Some(campaign) = &active
+        {
+            self.encounters
+                .refresh_content(ctx, &self.campaigns, &campaign.path);
+        }
         self.encounters
             .tick_sync(ctx, session, epoch, active.as_ref());
         self.sessions.on_page = self.page == Page::Sessions;
@@ -1393,6 +1454,6 @@ impl eframe::App for Splat {
             }
         }
         self.skip_unnamed_focus(ctx);
-        self.remember();
+        self.remember(ctx);
     }
 }

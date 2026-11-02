@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [186],
 
 <!-- SRD page 186 -->
 
-While you have the Poisoned condition, you experi-\
-ence the following effect.\
-Ability Checks and Attacks Affected. You have\
-Disadvantage on attack rolls and ability checks.\
+While you have the Poisoned condition, you experience the following effect.
+
+Ability Checks and Attacks Affected. You have Disadvantage on attack rolls and ability checks.
 
 Original layout: [[../pages/186|page 186]].

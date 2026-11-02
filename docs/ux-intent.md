@@ -162,7 +162,7 @@ first turn, or the exact turn left off, fast. **Context:** boundary of desk and 
 - Saved runs and run settings are in collapsed sections of the builder page.
 - A resumed ended run cannot be reopened, because undo is not saved (`:261`, `:1119`).
 
-**Done well:** T4.1 to T4.5.
+**Done well:** T4.1 to T4.6.
 
 ### W5. Build an encounter
 **Trigger:** the DM plans the next session. **Goal:** a saved roster the DM trusts.
@@ -215,8 +215,6 @@ it is. **Context:** desk and table. **Frequency:** weekly at the desk, sometimes
 **Friction:**
 - Member cards show name, level, and class only (`src/party.rs:120-127`). To compare
   AC or HP, open each sheet.
-- Leaving Party stops its sync with no notice (`src/main.rs:197`, `src/party.rs:31-33`).
-  Run sync continues, so the two behave differently.
 - `Source & parity` holds technical data at the same level as `Overview` (`:245-252`).
 - New characters do not reach the builder until `Reload` (`README.md:196-197`).
 
@@ -288,6 +286,17 @@ Recording records. It does not rule: a marker is a suggestion, and only the DM p
 
 **Done well:** T11.5 to T11.7.
 
+### W13. Prepare arrivals, and add them to a fight
+**Trigger:** rival adventurers, reinforcements, or a released beast can arrive in any room. **Goal:** the group is ready once,
+and it joins the running fight in one step when it arrives, with its changes in plain view. **Context:** desk to
+prepare, table to add. **Frequency:** every fight that has arrivals.
+
+An encounter group is added by the DM. Splat records it. It does not decide that the group arrives. A change
+to a creature is never hidden: the editor and the card show the old value, the new value, and what the DM must
+add by hand.
+
+**Done well:** T13.1 to T13.4.
+
 ## 3. Information architecture
 
 ### Current model
@@ -313,7 +322,7 @@ visual form (sidebar or top bar).
 
 **Top-level**
 - **Run**: exists only while a run is open. Always first. It is a place, not a mode of a tab.
-- **Encounters**: templates and their saved runs. Reached first when a campaign is active.
+- **Encounters**: runs in progress, encounters ready to run, encounter groups, and a collapsed History of ended runs under their sessions. Reached first when a campaign is active.
 - **Sessions**: session notes, session templates, recordings and their processing.
 - **Timeline**: every encounter, rest, travel interval, day and major event, apart from any one session.
 - **Party**: sheets.
@@ -352,6 +361,7 @@ entry, sync conflicts (the table must not stop), lookup, errors, confirmation me
 | Encounter draft | Yes, **and through a data refresh** | Warn on close | Lost on `Reload` |
 | Party: member, page, filter | Yes | Member | Navigation yes |
 | Active campaign | Yes | Yes | Yes |
+| Column widths the DM dragged | Yes | Yes | Yes |
 
 ## 4. Per-screen intent
 
@@ -363,7 +373,9 @@ These describe need, not layout. Screens can merge or split.
 | **Run: setup** | Is everyone ready to start? | `Begin combat` | Missing initiative or HP; initiative order; ties | Roll mode, NPC flag, initiative rule in use | Scanning | Missing HP; missing bonus (`Roll` off); no NPCs; tie order locked by rule; absent at start |
 | **Run: ended** | What happened? | Close; undo ending if still possible | Outcome, end reason, final round, final HP | Log | Scanning | Undo available or not; controls read-only |
 | **Encounters** | What can I run, and what is in progress? | Start or resume a run | Runs in progress with date; templates; roster summary | Run history, new encounter | Scanning | No campaign; loading; load error; no encounters; unreadable run; content issues |
-| **Encounter editor** | Is this roster what I want? | Add participant, save | Roster with side and key stats; creature results with CR, HP, AC | Overrides, initiative group, reorder, notes | Scanning | New; dirty; saved; validation error; external change; unavailable creature; party-slot binding; needs repair; no party copies; no search results |
+| **Encounter editor** | Is this roster what I want? | Add participant, save | Roster with side and key stats, and each change with its base value; creature results with CR, HP, AC | Overrides, initiative group, reorder, notes | Scanning | New; dirty; saved; validation error; external change; unavailable creature; party-slot binding; needs repair; no party copies; no search results |
+| **Group editor** | Is this set of creatures what I want to add? | Add creature, save | Members with counts, and each change with its base value; default side; notes | Overrides, reorder | Scanning | New; dirty; saved; empty; unavailable creature; invalid change |
+| **Run: groups** | Who can arrive now, and what do they add? | Add, or drag to the list | Each group's name, members, count, XP | Notes, a typed total | Scanning | No groups; a group that cannot be added, with its reason; XP not known 
 | **Library: browse/read** | What does this say? | Search, read | Title, type, summary, body; related links | Engine support, source, technical details | Reading | Loading; load error; no results; empty section; invalid note; read-only; unavailable link; validation messages |
 | **Library: author** | Is my entry correct and saved? | `Save` | Editor text; parse and validation errors; save state | `Copy to…`, `Discard changes`, `New entry`, packages | Reading | Clean; dirty; saved; invalid note; duplicate identity; external change; name clash; built-in read-only |
 | **Lookup** (new) | What does this say, right now? | Type, read | Result name, type; entry text | Open in Library | Glanceable to reading | No results; loading first time; draft elsewhere does not block |
@@ -403,7 +415,8 @@ you sure?" on damage or `Next turn` is rejected. Confirmation is only for work t
 comfortable line spacing, a clear heading scale, and no competing controls. Every entry uses one
 reader everywhere, including the run. Stat lines and tables keep alignment. Source, identifiers,
 and engine support stay collapsed. *Dispute:* a reader that fills a wide window, or a dense "power
-user" reader, is rejected. Dense layouts are for lists, not for rules prose.
+user" reader, is rejected. Dense layouts are for lists, not for rules prose. A session's own notes
+and transcripts are the exception: they follow their column, at the width the DM chooses.
 
 **6. Show what is unsure.** Stale, offline, local-only, unsaved, conflicting, read-only, and
 unsupported states are always visible where the DM looks, as words or icons as well as colour.
@@ -514,20 +527,22 @@ reading the code, not from a test run.
 | T4.1 | Cold start with a saved encounter to run setup in ≤ 3 | prep-to-table **new** | cost | 5 |
 | T4.2 | Cold start to the interrupted turn in ≤ 2, current participant selected | run-resume **new** | cost, state | 4; first row |
 | T4.3 | A player's initiative in ≤ 2. Rows do not move during entry | prep-to-table **new** | cost, state | 3; rows move |
-| T4.4 | Saved runs show date and status, and group by encounter | encounter-build | state | Fail |
+| T4.4 | Unfinished runs show their encounter, date and status, and come first | encounter-build | state | Fail |
+| T4.6 | An encounter leaves Ready when a run of it ends. Ended runs wait under their session in a collapsed History. Opening one adds nothing to the timeline | encounter-history | state | Fail |
 | T4.5 | Setup and live views differ clearly. Live has no setup controls | encounter-run | look | Partly |
 | T5.1 | Creature results show existing CR, HP, and AC | encounter-build | state | Fail |
 | T5.2 | Read a full stat block with the draft open in ≤ 2, without leaving the editor | encounter-build | cost | 5+ |
 | T5.3 | Roster of 4 party, 2 + 1 monsters saved in ≤ 10 | encounter-build | cost | About 14 |
 | T5.4 | Creature results stay smooth at about 340 rows | encounter-build | state | Not virtualised |
 | T5.5 | Edit `Run folder` with no draft, click every enabled button: no panic | encounter-build | state | Panic expected |
+| T5.6 | With sync on, the roster shows what the party has now. With it off, the roster says nothing reaches D&D Beyond | encounter-build | state | Fail |
 | T6.1 | Prose line length ≤ 75 characters at 1200x800 and 1920x1080; reader usable at 960x640 | library-browse | view, look | 760 px cap |
 | T6.2 | Back after a link returns to the prior entry and scroll in 1 | library-browse | cost, state | Fail |
 | T6.3 | List scroll at 2,065 rows stays at or below today's median | library-browse | state | 2.3 ms debug |
 | T6.4 | One reader: same entry looks the same in Library, Lookup, and run | library-browse | look | Fail |
 | T7.1 | Open a participant's sheet from the run in ≤ 1, roster still visible | party-from-run **new** | cost, view | 4; hidden |
 | T7.2 | Freshness text is visible on every sheet state | party | state | Pass |
-| T7.3 | Leaving Party with sync on tells the DM what stopped | party | state | Fail |
+| T7.3 | Sync is on with no click, and leaving Party does not stop it. Only a lost connection does, and the rail says so | party | state | Fail |
 | T8.1 | Copy a Library entry to the campaign, then add it to an unsaved encounter draft, with no manual reload and no draft loss | library-to-encounter **new** | state, cost | Blocked, about 19 |
 | T8.2 | Read another entry while a draft is open | library-author | state | Fail |
 | T8.3 | Failed save (invalid note, external change, name clash) keeps the draft and states the fix | library-author | state | Pass |
@@ -545,6 +560,10 @@ reading the code, not from a test run.
 | T11.6 | Process states what is missing, and where audio and words go, before anything is sent. A failure stays in view on every page | session-recording | state | New |
 | T11.7 | A marker reaches the timeline only when the DM adds it. What the second pass changed can be read | session-recording | state | New |
 | T11.8 | A note during a run in ≤ 2, beside the roster, in the session being played | session-notes | cost, view | New |
+| T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
+| T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
+| T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |
+| T13.4 | Dragging a group onto the initiative list adds every member | encounter-groups | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

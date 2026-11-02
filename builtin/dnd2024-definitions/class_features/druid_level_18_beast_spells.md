@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 43 -->
 
-While using Wild Shape, you can cast spells in Beast\
-form, except for any spell that has a Material com-\
-ponent with a cost specified or that consumes its\
-Material component.\
+While using Wild Shape, you can cast spells in Beast form, except for any spell that has a Material component with a cost specified or that consumes its Material component.
 
 ## Rule
 

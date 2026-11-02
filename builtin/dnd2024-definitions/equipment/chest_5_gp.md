@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 97 -->
 
-A Chest holds up to 12 cubic feet of contents.\
+A Chest holds up to 12 cubic feet of contents.
 
 ## Item
 

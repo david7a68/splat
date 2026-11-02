@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 41 -->
 
-•  Gain the following traits from the Core Druid\
-Traits table: Hit Point Die and training with Light\
-armor and Shields.\
-•  Gain the Druid’s level 1 features, which are listed\
-in the Druid Features table. See the multiclassing\
-rules in “Character Creation” to determine your\
-available spell slots.\
+•  Gain the following traits from the Core Druid Traits table: Hit Point Die and training with Light armor and Shields.
+
+•  Gain the Druid’s level 1 features, which are listed in the Druid Features table. See the multiclassing rules in “Character Creation” to determine your available spell slots.
 
 ## Rule
 

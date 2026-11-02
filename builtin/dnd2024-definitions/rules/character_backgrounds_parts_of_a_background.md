@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-A background includes the following parts.\
+A background includes the following parts.
 
 ## Rule
 

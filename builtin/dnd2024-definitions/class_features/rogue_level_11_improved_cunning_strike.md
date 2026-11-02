@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 63 -->
 
-You can use up to two Cunning Strike effects when\
-you deal Sneak Attack damage, paying the die cost\
-for each effect.\
+You can use up to two Cunning Strike effects when you deal Sneak Attack damage, paying the die cost for each effect.
 
 ## Rule
 

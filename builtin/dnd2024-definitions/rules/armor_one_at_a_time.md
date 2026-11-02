@@ -18,22 +18,7 @@ splat_sources:
 
 <!-- SRD page 92 -->
 
-A creature can wear only one suit of armor at a time\
-and wield only one Shield at a time.\
-Strength Stealth Weight Cost\
-— Disadvantage 8 lb. 5 GP\
-— — 10 lb. 10 GP\
-— — 13 lb. 45 GP\
-— — 12 lb. 10 GP\
-— — 20 lb. 50 GP\
-— Disadvantage 45 lb. 50 GP\
-— — 20 lb. 400 GP\
-— Disadvantage 40 lb. 750 GP\
-— Disadvantage 40 lb. 30 GP\
-Str 13 Disadvantage 55 lb. 75 GP\
-Str 15 Disadvantage 60 lb. 200 GP\
-Str 15 Disadvantage 65 lb. 1,500 GP\
-— — 6 lb. 10 GP\
+A creature can wear only one suit of armor at a time and wield only one Shield at a time.
 
 ## Rule
 

@@ -55,7 +55,7 @@ class DefinitionTests(unittest.TestCase):
         self.assertIn('immediately after hitting',spell['casting_time'])
         self.assertEqual(spell['duration'],'1 minute')
 
-    def test_variable_hit_points_and_supplied_unsigned_save(self):
+    def test_variable_hit_points_and_corrected_save(self):
         _,body=load_note(SOURCE/'creature/animated_object.md')
         fields=creature_fields(body)
         self.assertNotIn('max_hp',fields['splat_stats'])
@@ -63,7 +63,7 @@ class DefinitionTests(unittest.TestCase):
         fields=creature_fields(body)
         self.assertEqual(fields['splat_stats']['max_hp']['value'],123)
         self.assertEqual(fields['splat_stats']['intelligence']['value'],6)
-        self.assertEqual(fields['splat_stats']['save_intelligence'],{'value':2})
+        self.assertEqual(fields['splat_stats']['save_intelligence'],{'value':-2})
         self.assertNotIn('ambiguous_saves',fields['splat_creature'])
 
     def test_weapon_and_armor_tables_preserve_special_cases(self):
@@ -211,7 +211,8 @@ class MappedTableTests(unittest.TestCase):
         self.assertIn('| Variant | Quantity | Storage | Weight | Cost |',ammo)
         self.assertIn('1½ lb',ammo)
         self.assertNotIn('##### Storage',ammo)
-        self.assertNotIn('| Type | Amount | Storage | Weight | Cost |',ammo)
+        self.assertIn('| Type | Amount | Storage | Weight | Cost |',ammo)
+        self.assertNotIn('table below',ammo)
         mage=(OUTPUT/'creatures/mage.md').read_text()
         self.assertIn('| Spell | Frequency |',mage)
         self.assertIn('"dnd2024:spells/fireball"',mage)

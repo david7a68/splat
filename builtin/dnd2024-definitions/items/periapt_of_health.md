@@ -18,13 +18,11 @@ splat_sources:
 
 <!-- SRD page 234 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While wearing this pendant, you can take a Magic\
-action to regain 2d4 + 2 Hit Points. Once used, this\
-property can’t be used again until the next dawn.\
-In addition, you have Advantage on saving throws\
-to avoid or end the Poisoned condition while you\
-wear this pendant.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While wearing this pendant, you can take a Magic action to regain 2d4 + 2 Hit Points. Once used, this property can’t be used again until the next dawn.
+
+In addition, you have Advantage on saving throws to avoid or end the Poisoned condition while you wear this pendant.
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 

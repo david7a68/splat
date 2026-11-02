@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 55 -->
 
-Your Aura of Protection is now a 30-foot Emanation.\
+Your Aura of Protection is now a 30-foot Emanation.
 
 ## Rule
 

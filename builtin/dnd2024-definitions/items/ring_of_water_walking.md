@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 239 -->
 
-Ring, Uncommon\
-While wearing this ring, you cast Water Walk from\
-it, targeting only yourself.\
+Ring, Uncommon
+
+While wearing this ring, you cast Water Walk from it, targeting only yourself.
 
 Original layout: [[../../srd-5.2.1/pages/239|page 239]].
 

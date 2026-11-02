@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 40 -->
 
-When a spell you cast with a spell slot restores Hit\
-Points to a creature, that creature regains addi-\
-tional Hit Points on the turn you cast the spell. The\
-additional Hit Points equal 2 plus the spell slot’s\
-level.\
+When a spell you cast with a spell slot restores Hit Points to a creature, that creature regains additional Hit Points on the turn you cast the spell. The additional Hit Points equal 2 plus the spell slot’s level.
 
 ## Rule
 

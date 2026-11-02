@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-A Barrel holds up to 40 gallons of liquid or up to 4\
-cubic feet of dry goods.\
+A Barrel holds up to 40 gallons of liquid or up to 4 cubic feet of dry goods.
 
 ## Item
 

@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-You spend frugally for your necessities.\
+You spend frugally for your necessities.
 
 ## Rule
 

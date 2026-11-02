@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 98 -->
 
-A Ladder is 10 feet tall. You must climb to move up\
-or down it.\
+A Ladder is 10 feet tall. You must climb to move up or down it.
 
 ## Item
 

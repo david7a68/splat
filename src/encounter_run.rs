@@ -5,16 +5,24 @@ use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use splat::{
-    content::Entry,
+    content::{
+        Entry,
+        overrides::{Base, Overrides, Resolved, condition_names, same_condition},
+    },
     execution::dice::{Dice, Random},
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
 };
 use uuid::Uuid;
+pub(crate) use view::change_rows;
 pub(crate) use view::sync_status;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -47,26 +55,102 @@ pub(crate) struct Participant {
     /// difference from these is the DM's. Older saves do not have it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     started: Option<SheetShadow>,
+    /// What the encounter or group changed, with the values they replaced. It is frozen here,
+    /// so a later edit of the encounter file does not change this run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changes: Option<Changes>,
+    /// The encounter group this participant arrived in, during the run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_from: Option<AddedFrom>,
 }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub(crate) struct Changes {
+    pub base: Base,
+    pub overrides: Overrides,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub(crate) struct AddedFrom {
+    pub group: String,
+    /// One addition. The same group added twice is two of these, each with its own roll.
+    pub instance: String,
+}
+/// One line of an encounter group, as a run adds it.
+#[derive(Clone, Debug)]
+pub(crate) struct GroupMember {
+    pub entry: Arc<Entry>,
+    pub count: u64,
+    pub overrides: Overrides,
+}
+/// A campaign's encounter group, ready to add. Its members are resolved when it loads.
+#[derive(Clone, Debug)]
+pub(crate) struct RunGroup {
+    pub id: Uuid,
+    pub path: String,
+    pub name: String,
+    pub side: String,
+    pub members: Vec<GroupMember>,
+    pub notes: String,
+    /// What this group's creatures are worth. Overrides do not change it.
+    pub xp: u64,
+    /// The creatures with no XP in their entry, so that the total is not read as complete.
+    pub xp_unknown: Vec<String>,
+    /// How many creatures the note names that this campaign cannot find.
+    pub unavailable: u64,
+    /// Every reason this group cannot be added now.
+    pub problem: Option<String>,
+}
+impl RunGroup {
+    /// The first member's bonus decides a shared roll, as it does for any initiative group.
+    pub(crate) fn leader(&self) -> Option<Resolved> {
+        let member = self.members.first()?;
+        let base = Base::of(&member.entry, &self.side);
+        member.overrides.resolve(&base).ok()
+    }
+    /// Every creature the note names, whether or not it can be found now.
+    pub(crate) fn creature_count(&self) -> u64 {
+        self.members
+            .iter()
+            .map(|member| member.count)
+            .fold(self.unavailable, u64::saturating_add)
+    }
+}
+#[cfg(test)]
 fn stat(entry: &Entry, name: &str) -> Option<i64> {
     let stat = entry.fields.get("splat_stats")?.get(name)?;
     stat.get("value").and_then(Value::as_i64)
 }
 impl Participant {
+    #[cfg(test)]
     pub fn new(
         key: String,
         side: String,
         entry: Entry,
-        overrides: &Mapping,
+        starting: &Mapping,
         present: bool,
     ) -> Result<Self, String> {
+        Self::with_overrides(key, side, entry, starting, &Overrides::default(), present)
+    }
+    /// `starting` is the slot's own starting state. A changed maximum starts the creature at
+    /// that maximum, unless `starting` gives its HP. That value must then fit.
+    pub fn with_overrides(
+        key: String,
+        side: String,
+        entry: Entry,
+        starting: &Mapping,
+        overrides: &Overrides,
+        present: bool,
+    ) -> Result<Self, String> {
+        let mut base = Base::of(&entry, &side);
+        let resolved = overrides
+            .resolve_for(&entry, &side)
+            .map_err(|error| format!("{key} ({}): {error}", entry.name))?;
         let mut initial = entry
             .fields
             .get("splat_initial")
             .and_then(Value::as_mapping)
             .cloned()
             .unwrap_or_default();
-        initial.extend(overrides.clone());
+        initial.extend(starting.clone());
         let number = |field: &str| -> Result<Option<i64>, String> {
             initial
                 .get(field)
@@ -77,29 +161,31 @@ impl Participant {
                 })
                 .transpose()
         };
-        let max_hp = stat(&entry, "max_hp").filter(|n| *n > 0);
-        let hp = number("hp")?.or(max_hp);
+        let max_hp = resolved.max_hp;
+        let hp = if overrides.max_hp.is_some() && !starting.contains_key("hp") {
+            max_hp
+        } else {
+            number("hp")?.or(max_hp)
+        };
+        if overrides.max_hp.is_some()
+            && let (Some(hp), Some(max)) = (hp, max_hp)
+            && hp > max
+        {
+            return Err(format!(
+                "{key}: starting HP {hp} is above the changed maximum of {max}."
+            ));
+        }
         let temporary_hp = number("temporary_hp")?.unwrap_or(0);
-        let conditions: Vec<String> = initial
+        let mut conditions: Vec<String> = initial
             .get("conditions")
-            .and_then(Value::as_sequence)
-            .map(|items| {
-                items
-                    .iter()
-                    .map(|v| {
-                        v.as_str()
-                            .or_else(|| v.get("name").and_then(Value::as_str))
-                            .map(str::to_owned)
-                            .unwrap_or_else(|| {
-                                serde_yaml_ng::to_string(v)
-                                    .unwrap_or_default()
-                                    .trim()
-                                    .to_owned()
-                            })
-                    })
-                    .collect()
-            })
+            .map(condition_names)
             .unwrap_or_default();
+        base.conditions = conditions.clone();
+        for condition in &overrides.conditions {
+            if !conditions.iter().any(|c| same_condition(c, condition)) {
+                conditions.push(condition.clone());
+            }
+        }
         let counter = |name: &str| {
             initial
                 .get("death_saves")
@@ -113,13 +199,13 @@ impl Participant {
             initiative_group: None,
             initiative_mode: 0,
             key,
-            name: entry.name.clone(),
-            side,
+            name: resolved.name,
+            side: resolved.side,
             max_hp,
             hp,
             temporary_hp,
-            armor_class: stat(&entry, "armor_class"),
-            initiative_bonus: stat(&entry, "initiative"),
+            armor_class: resolved.armor_class,
+            initiative_bonus: resolved.initiative_bonus,
             initiative: None,
             present,
             conditions: conditions.clone(),
@@ -135,9 +221,51 @@ impl Participant {
                 failures: counter("failures"),
                 conditions,
             }),
+            changes: (!overrides.is_empty()).then(|| Changes {
+                base,
+                overrides: overrides.clone(),
+            }),
+            added_from: None,
             definition: Arc::new(entry),
             initial,
         })
+    }
+    /// One creature of an encounter group: at full HP, on the group's side unless it says
+    /// otherwise. A run needs known HP once combat begins, so a creature with none is refused.
+    fn group_member(
+        key: String,
+        group: &RunGroup,
+        member: &GroupMember,
+        instance: &str,
+    ) -> Result<Self, String> {
+        member
+            .overrides
+            .resolve_for(&member.entry, &group.side)
+            .map_err(|error| format!("{} ({}): {error}", group.name, member.entry.name))?;
+        let mut participant = Self::with_overrides(
+            key,
+            group.side.clone(),
+            (*member.entry).clone(),
+            &Mapping::new(),
+            &member.overrides,
+            true,
+        )?;
+        let max = participant.max_hp.ok_or_else(|| {
+            format!(
+                "{}: {} has no maximum HP. Set it in this member's overrides.",
+                group.name, member.entry.name
+            )
+        })?;
+        participant.hp = Some(max);
+        if let Some(started) = &mut participant.started {
+            started.hp = Some(max);
+        }
+        participant.initiative_group = Some(instance.to_owned());
+        participant.added_from = Some(AddedFrom {
+            group: group.name.clone(),
+            instance: instance.to_owned(),
+        });
+        Ok(participant)
     }
     fn health_known(&self) -> bool {
         matches!((self.hp, self.max_hp), (Some(hp), Some(max)) if max > 0 && hp >= 0 && hp <= max)
@@ -166,8 +294,13 @@ struct State {
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
+    /// The encounter this run came from. Saves from before this was kept have none.
+    source: Option<Uuid>,
     initiative: Initiative,
     storage: Option<Storage>,
+    /// Each character's cached portrait, by D&D Beyond ID.
+    portraits: BTreeMap<String, Option<PathBuf>>,
+    portraits_read: Option<Instant>,
     dirty: bool,
     state: State,
     history: Vec<State>,
@@ -191,6 +324,8 @@ pub(crate) struct Run {
     focus_amount: bool,
     roster_height: f32,
     sync_to_restore: Vec<String>,
+    /// Sync starts by itself for each linked player, and again after a connection comes back.
+    keep_party_synced: bool,
     connected: bool,
     /// Test builds have no session. This lets the party-sync control be exercised.
     simulate_connection: bool,
@@ -238,6 +373,11 @@ pub(crate) struct Run {
     focus_outcome: bool,
     /// The file changed under this run. Saving stops until the DM chooses what to keep.
     disk_conflict: bool,
+    /// The campaign's encounter groups, as they read from disk, once they have been read. A
+    /// run does not save these.
+    pub groups: Option<Arc<Vec<Arc<RunGroup>>>>,
+    /// The total typed beside each group in the panel, until it is used.
+    group_totals: BTreeMap<Uuid, String>,
 }
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Panel {
@@ -247,8 +387,15 @@ enum Panel {
     Record,
     Log,
     Encounter,
+    Groups,
     Keys,
 }
+/// How an added group's log line starts. The group panel shows that line while it is the last.
+const GROUP_ADDED: &str = "Encounter group ";
+/// What the group panel says of an addition before it points to the Log.
+const GROUP_LINE_LIMIT: usize = 200;
+/// What a saved run may hold. A larger one does not open again.
+const MAX_PARTICIPANTS: usize = 2000;
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
 const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
@@ -294,7 +441,7 @@ const NOTICE_IN_HEADER: &str = "Earlier Undo steps ended. See the Log.";
 const NOTICE_IN_HEADER_SHORT: &str = "Undo ended. See the Log.";
 #[derive(Clone)]
 enum Command {
-    RollNpcs,
+    RollNpcs(Grouping),
     Npc(usize, bool),
     RollMode(usize, i8),
     Begin,
@@ -315,6 +462,67 @@ enum Command {
     DeathSaves(usize, u8, u8),
     Note(usize, String),
     Roll(String),
+    /// Add every member of an encounter group, on this total, or by rolling.
+    AddGroup(Arc<RunGroup>, Option<i64>),
+}
+/// A d20 for initiative, with the bonus and the roll mode. Returns the die and the total.
+fn roll_initiative(random: &mut Random, bonus: i64, mode: i8) -> Result<(i64, i64), String> {
+    let first = i64::from(random.die(20)?);
+    let die = if mode == 0 {
+        first
+    } else {
+        let second = i64::from(random.die(20)?);
+        if mode > 0 {
+            first.max(second)
+        } else {
+            first.min(second)
+        }
+    };
+    Ok((die, die.checked_add(bonus).ok_or("Initiative overflow.")?))
+}
+/// The number in a name that is this base name, counting a plain name as the first.
+fn number_in_name(name: &str, base: &str) -> Option<u64> {
+    if name == base {
+        return Some(1);
+    }
+    // A number this large is part of the name. Nothing can count on from it.
+    name.strip_prefix(base)?
+        .strip_prefix(' ')?
+        .parse()
+        .ok()
+        .filter(|number: &u64| *number < 1 << 53)
+}
+/// Numbered names, as the run gives duplicates when it starts. Names already in the fight
+/// stay as the table knows them, so new creatures go on from the highest number.
+fn number_added(existing: &[Participant], added: &mut [Participant]) {
+    let mut counts: BTreeMap<String, (u64, u64)> = BTreeMap::new();
+    for p in added.iter() {
+        counts.entry(p.name.clone()).or_default().1 += 1;
+    }
+    let mut used: std::collections::BTreeSet<String> =
+        existing.iter().map(|p| p.name.clone()).collect();
+    for p in added.iter_mut() {
+        let base = p.name.clone();
+        let taken = existing
+            .iter()
+            .filter_map(|other| number_in_name(&other.name, &base))
+            .max();
+        let (given, total) = counts.get_mut(&base).expect("counted above");
+        *given += 1;
+        let mut number = taken.unwrap_or(0).saturating_add(*given);
+        let mut name = if taken.is_some() || *total > 1 {
+            format!("{base} {number}")
+        } else {
+            base.clone()
+        };
+        // A name can look like another's number, and a field's id comes from a name.
+        while used.contains(&name) && number < u64::MAX {
+            number += 1;
+            name = format!("{base} {number}");
+        }
+        used.insert(name.clone());
+        p.name = name;
+    }
 }
 impl Run {
     pub fn new(
@@ -329,12 +537,27 @@ impl Run {
         for p in &participants {
             *counts.entry(p.name.clone()).or_insert(0) += 1;
         }
+        // A name that is already unique stays. A number never lands on one, because a field's
+        // id comes from a name, and an override can name a creature `Goblin 2`.
+        let mut used: std::collections::BTreeSet<String> = counts
+            .iter()
+            .filter(|(_, count)| **count == 1)
+            .map(|(name, _)| name.clone())
+            .collect();
         let mut seen = BTreeMap::new();
         for p in &mut participants {
-            let count = seen.entry(p.name.clone()).or_insert(0);
-            *count += 1;
             if counts[&p.name] > 1 {
-                p.name = format!("{} {}", p.name, count);
+                let count = seen.entry(p.name.clone()).or_insert(0);
+                let mut name;
+                loop {
+                    *count += 1;
+                    name = format!("{} {}", p.name, count);
+                    if !used.contains(&name) {
+                        break;
+                    }
+                }
+                used.insert(name.clone());
+                p.name = name;
             }
         }
         let seed = u64::from_le_bytes(
@@ -345,8 +568,11 @@ impl Run {
         Ok(Self {
             name,
             id: Uuid::new_v4(),
+            source: None,
             initiative: Initiative::default(),
             storage: None,
+            portraits: BTreeMap::new(),
+            portraits_read: None,
             dirty: true,
             state: State {
                 order: (0..participants.len()).collect(),
@@ -378,6 +604,7 @@ impl Run {
             focus_amount: false,
             roster_height: 0.0,
             sync_to_restore: Vec::new(),
+            keep_party_synced: false,
             connected: false,
             simulate_connection: false,
             scroll_to_selected: false,
@@ -406,6 +633,8 @@ impl Run {
             setup_expanded: None,
             focus_field: None,
             focus_first_missing: true,
+            groups: None,
+            group_totals: BTreeMap::new(),
         })
     }
     fn current(&self) -> Option<usize> {
@@ -432,6 +661,113 @@ impl Run {
         if let Some(cursor) = state.order.iter().position(|i| *i == current) {
             state.cursor = cursor;
         }
+    }
+    /// The initiative of each new participant, and the words the log uses for it. They are
+    /// new, so none of them is in `state` yet.
+    fn group_initiative(
+        state: &mut State,
+        added: &mut [Participant],
+        total: Option<i64>,
+        grouping: Grouping,
+    ) -> Result<String, String> {
+        if let Some(total) = total {
+            added.iter_mut().for_each(|p| p.initiative = Some(total));
+            return Ok(format!("Initiative {total}, entered by the DM"));
+        }
+        fn roll(random: &mut Random, p: &Participant) -> Result<(i64, i64, i64), String> {
+            let bonus = p.initiative_bonus.ok_or_else(|| {
+                format!("{} has no initiative bonus. Type a total instead.", p.name)
+            })?;
+            let (die, total) = roll_initiative(random, bonus, p.initiative_mode)?;
+            Ok((die, bonus, total))
+        }
+        let mut words = Vec::new();
+        match grouping {
+            Grouping::Identical | Grouping::Explicit => {
+                let (die, bonus, total) = roll(&mut state.random, &added[0])?;
+                added.iter_mut().for_each(|p| p.initiative = Some(total));
+                words.push(format!("Shared roll {die} {bonus:+} = {total}"));
+            }
+            Grouping::Individual => {
+                for p in added.iter_mut() {
+                    let (die, bonus, total) = roll(&mut state.random, p)?;
+                    p.initiative = Some(total);
+                    words.push(format!("{}: {die} {bonus:+} = {total}", p.name));
+                }
+            }
+            Grouping::BySide => {
+                let mut sides: BTreeMap<String, i64> = BTreeMap::new();
+                for p in added.iter_mut() {
+                    if !sides.contains_key(&p.side) {
+                        let held = state
+                            .participants
+                            .iter()
+                            .filter(|other| other.npc && other.side == p.side)
+                            .find_map(|other| other.initiative);
+                        let total = match held {
+                            Some(total) => {
+                                words.push(format!("Joins {} at {total}", p.side));
+                                total
+                            }
+                            None => {
+                                let (die, bonus, total) = roll(&mut state.random, p)?;
+                                words.push(format!("{} rolled {die} {bonus:+} = {total}", p.side));
+                                total
+                            }
+                        };
+                        sides.insert(p.side.clone(), total);
+                    }
+                    p.initiative = sides.get(&p.side).copied();
+                }
+            }
+        }
+        Ok(words.join("; "))
+    }
+    fn join_group(
+        state: &mut State,
+        group: &RunGroup,
+        total: Option<i64>,
+        grouping: Grouping,
+    ) -> Result<String, String> {
+        if let Some(problem) = &group.problem {
+            return Err(format!("{}: {problem}", group.name));
+        }
+        let instance = format!("group_{}", crate::hermetic::new_uuid().simple());
+        let mut added = Vec::new();
+        for member in &group.members {
+            for _ in 0..member.count {
+                let key = format!("{instance}_{}", added.len() + 1);
+                added.push(Participant::group_member(key, group, member, &instance)?);
+            }
+        }
+        if added.is_empty() {
+            return Err(format!("{} has no members.", group.name));
+        }
+        if state.participants.len() + added.len() > MAX_PARTICIPANTS {
+            return Err(format!(
+                "A run can hold {MAX_PARTICIPANTS} participants, and {} would pass that.",
+                group.name
+            ));
+        }
+        number_added(&state.participants, &mut added);
+        let initiative = Self::group_initiative(state, &mut added, total, grouping)?;
+        let names: Vec<_> = added.iter().map(|p| p.name.clone()).collect();
+        let first = state.participants.len();
+        state.participants.extend(added);
+        for index in first..state.participants.len() {
+            state.order.push(index);
+            if state.phase == Phase::Running {
+                Self::take_place_in_order(state, index);
+            }
+        }
+        if state.phase == Phase::Setup {
+            Self::sort_initiative(state);
+        }
+        Ok(format!(
+            "{GROUP_ADDED}{} added: {}. {initiative}.",
+            group.name,
+            names.join(", ")
+        ))
     }
     fn apply(&mut self, command: Command) -> Result<(), String> {
         if matches!(self.state.phase, Phase::Ended { .. }) {
@@ -461,20 +797,28 @@ impl Run {
         let follow_turn = matches!(command, Command::Begin | Command::Next);
         let mut next = self.state.clone();
         let label = match command {
-            Command::RollNpcs => {
+            Command::RollNpcs(grouping) => {
                 if next.phase != Phase::Setup {
                     return Err("Initiative is fixed during combat.".into());
                 }
                 let mut groups: BTreeMap<String, Vec<usize>> = BTreeMap::new();
                 let mut group_order = Vec::new();
                 for (i, p) in next.participants.iter().enumerate().filter(|(_, p)| p.npc) {
-                    let key = match self.initiative.grouping {
-                        Grouping::Identical => format!(
-                            "{}:{}:{}",
-                            p.definition.id,
-                            p.initiative_bonus.map_or(String::new(), |v| v.to_string()),
-                            p.initiative_mode
-                        ),
+                    let key = match grouping {
+                        // An encounter group that arrived together stays one roll. It joins
+                        // neither its like outside the group, nor another addition of itself.
+                        Grouping::Identical => match &p.added_from {
+                            Some(added) => added.instance.clone(),
+                            None => format!(
+                                "{}:{}:{}:{}",
+                                p.definition.id,
+                                p.initiative_bonus.map_or(String::new(), |v| v.to_string()),
+                                p.initiative_mode,
+                                p.changes
+                                    .as_ref()
+                                    .map_or_else(String::new, |c| c.overrides.mechanics())
+                            ),
+                        },
                         Grouping::Individual => p.key.clone(),
                         Grouping::BySide => p.side.clone(),
                         Grouping::Explicit => {
@@ -496,18 +840,8 @@ impl Run {
                     let bonus = leader
                         .initiative_bonus
                         .ok_or_else(|| format!("Set an initiative bonus for {}.", leader.name))?;
-                    let first = i64::from(next.random.die(20)?);
-                    let die = if leader.initiative_mode == 0 {
-                        first
-                    } else {
-                        let second = i64::from(next.random.die(20)?);
-                        if leader.initiative_mode > 0 {
-                            first.max(second)
-                        } else {
-                            first.min(second)
-                        }
-                    };
-                    let total = die.checked_add(bonus).ok_or("Initiative overflow.")?;
+                    let (die, total) =
+                        roll_initiative(&mut next.random, bonus, leader.initiative_mode)?;
                     let names: Vec<_> = members
                         .iter()
                         .map(|i| next.participants[*i].name.clone())
@@ -523,7 +857,7 @@ impl Run {
                 Self::sort_initiative(&mut next);
                 format!(
                     "NPC initiative — {}. {}",
-                    self.initiative.grouping.label(),
+                    grouping.label(),
                     results.join("; ")
                 )
             }
@@ -602,6 +936,9 @@ impl Run {
             Command::Roll(expression) => {
                 let roll = Dice::parse(&expression)?.roll(&mut next.random, false)?;
                 format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total)
+            }
+            Command::AddGroup(group, total) => {
+                Self::join_group(&mut next, &group, total, self.initiative.grouping)?
             }
             other => Self::participant_command(&mut next, other)?,
         };
@@ -732,18 +1069,7 @@ impl Run {
                 let bonus = p
                     .initiative_bonus
                     .ok_or("Set an initiative bonus or enter a total.")?;
-                let first = i64::from(state.random.die(20)?);
-                let die = if p.initiative_mode == 0 {
-                    first
-                } else {
-                    let second = i64::from(state.random.die(20)?);
-                    if p.initiative_mode > 0 {
-                        first.max(second)
-                    } else {
-                        first.min(second)
-                    }
-                };
-                let total = die.checked_add(bonus).ok_or("Initiative overflow.")?;
+                let (die, total) = roll_initiative(&mut state.random, bonus, p.initiative_mode)?;
                 p.initiative = Some(total);
                 format!("Initiative: {die} + {bonus} = {total}.")
             }
@@ -826,10 +1152,41 @@ impl Run {
             for (p, values) in self.state.participants.iter_mut().zip(confirmed) {
                 p.combat_values = values;
             }
+            self.forget_removed_participants();
             self.dirty = true;
             self.error = None;
             self.last_initiative = None;
         }
+    }
+    /// Undo can take away an encounter group, and these all hold a participant's place.
+    fn forget_removed_participants(&mut self) {
+        let count = self.state.participants.len();
+        if self.selected >= count {
+            self.selected = self.current().unwrap_or(0);
+        }
+        self.syncs.retain(|index, _| *index < count);
+        self.sync_shadows.retain(|index, _| *index < count);
+        self.setup_inputs.retain(|index, _| *index < count);
+        for place in [
+            &mut self.sheet_for,
+            &mut self.setup_expanded,
+            &mut self.focus_field,
+        ] {
+            *place = place.filter(|index| *index < count);
+        }
+    }
+    /// The rules a single NPC roll can use. Initiative groups need a group to be different
+    /// from individual rolls.
+    fn roll_choices(&self) -> Vec<Grouping> {
+        let has_group = self
+            .state
+            .participants
+            .iter()
+            .any(|p| p.npc && p.initiative_group.is_some());
+        Grouping::ALL
+            .into_iter()
+            .filter(|mode| *mode != Grouping::Explicit || has_group)
+            .collect()
     }
     /// The words a named Undo uses for this command.
     fn describe(&self, command: &Command) -> String {
@@ -840,7 +1197,7 @@ impl Run {
                 .map_or("a participant", |p| p.name.as_str())
         };
         match command {
-            Command::RollNpcs => "NPC initiative roll".into(),
+            Command::RollNpcs(_) => "NPC initiative roll".into(),
             Command::Npc(i, _) => format!("NPC control on {}", name(i)),
             Command::RollMode(i, _) => format!("roll mode on {}", name(i)),
             Command::Begin => "begin combat".into(),
@@ -879,6 +1236,7 @@ impl Run {
             Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
             Command::Note(i, _) => format!("note on {}", name(i)),
             Command::Roll(expression) => format!("{expression} roll"),
+            Command::AddGroup(group, _) => format!("add {}", group.name),
         }
     }
     /// What Undo would do, or, with no step to take back, why there is none. The words are
@@ -1067,6 +1425,32 @@ impl Run {
     pub fn restore_sync(&mut self, keys: &[String]) {
         self.sync_to_restore = keys.to_vec();
     }
+    /// The encounter asks for the party to stay synced, or the DM asked for it in this run.
+    pub fn keep_party_synced(&mut self) {
+        self.keep_party_synced = true;
+        self.dirty = true;
+    }
+    /// A linked player with no sync starts one, and one the lost connection stopped starts
+    /// again. A sync the DM stopped for one player stays stopped. Each first read asks before it
+    /// replaces a value the DM changed.
+    fn start_party_sync(&mut self, linked: Option<&str>) {
+        for index in self.linked_participants() {
+            let in_campaign = remote_identity(&self.state.participants[index])
+                .is_some_and(|(campaign, _)| linked == Some(campaign.as_str()));
+            if in_campaign && self.syncs.get(&index).is_none_or(|s| s.session_lost()) {
+                self.syncs.entry(index).or_default().start();
+            }
+        }
+    }
+    /// Players whose sync the DM stopped. A reopened run must not start these again.
+    fn stopped_players(&self) -> Vec<String> {
+        self.syncs
+            .iter()
+            .filter(|(_, sync)| !sync.enabled && !sync.session_lost() && sync.error.is_none())
+            .filter_map(|(index, _)| self.state.participants.get(*index))
+            .map(|p| p.key.clone())
+            .collect()
+    }
     fn resume_restored_sync(&mut self) {
         let keys = std::mem::take(&mut self.sync_to_restore);
         for index in self.linked_participants() {
@@ -1103,6 +1487,9 @@ impl SheetShadow {
         }
     }
 }
+/// How often an open run looks for portraits that have arrived.
+const PORTRAIT_REREAD: Duration = Duration::from_secs(30);
+
 fn remote_identity(p: &Participant) -> Option<(String, String)> {
     let external = p.definition.fields.get("splat_external")?;
     if external.get("provider").and_then(Value::as_str) != Some("dndbeyond") {
@@ -1284,6 +1671,9 @@ fn local_group(
 /// the sheet's values stand.
 fn hold_local_changes(p: &mut Participant, sync: &mut crate::combat_sync::CombatSync) {
     let matched = sync.take_matched().filter(|matched| !matched.is_empty());
+    let last_read = matched
+        .clone()
+        .or_else(|| Some(p.combat_values.clone()).filter(|values| !values.is_empty()));
     let changed = match (matched, &p.started) {
         (Some(matched), _) => groups_that_differ(p, &matched, p.max_hp),
         (None, Some(started)) if p.combat_values.is_empty() => {
@@ -1307,7 +1697,15 @@ fn hold_local_changes(p: &mut Participant, sync: &mut crate::combat_sync::Combat
                 .and_then(|t| local_group(p, group, t, max))
                 .filter(|local| sheet.get(group.key()) != Some(local))
         {
-            sync.hold_conflict(group.key(), local);
+            // Only the run changed, and the sheet cannot be sent to: there is nothing to settle.
+            let sheet_same = last_read
+                .as_ref()
+                .is_some_and(|read| read.get(group.key()) == sheet.get(group.key()));
+            if sync.read_only() && sheet_same {
+                sync.note_while_stopped(group.key(), local);
+            } else {
+                sync.hold_conflict(group.key(), local);
+            }
         }
     }
 }
@@ -1352,6 +1750,17 @@ impl Run {
         }
         if self.connected && !self.sync_to_restore.is_empty() {
             self.resume_restored_sync();
+        }
+        if matches!(self.state.phase, Phase::Ended { .. }) {
+            // What the run recorded is its result. A later change to a sheet is not part of it.
+            // A sync with work to finish stays until it is done, and one in error stays to say why.
+            self.syncs.retain(|_, sync| {
+                !sync.enabled
+                    || sync.unconfirmed()
+                    || sync.state() == crate::combat_sync::SyncState::Error
+            });
+        } else if self.connected && self.keep_party_synced {
+            self.start_party_sync(linked);
         }
         let mut identities = std::collections::BTreeSet::new();
         let mut changes = Vec::new();
@@ -1518,9 +1927,16 @@ struct SavedRun {
     campaign: Uuid,
     id: Uuid,
     name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<Uuid>,
     initiative: Initiative,
     state: State,
     setup_details: String,
+    /// Saves from before this choice load with it off. The DM can start sync from the run.
+    #[serde(default)]
+    keep_party_synced: bool,
+    #[serde(default)]
+    stopped_players: Vec<String>,
 }
 struct Storage {
     path: PathBuf,
@@ -1528,8 +1944,44 @@ struct Storage {
     baseline: Option<Vec<u8>>,
 }
 impl Run {
+    fn refresh_portraits(&mut self) {
+        if self
+            .portraits_read
+            .is_some_and(|read| read.elapsed() < PORTRAIT_REREAD)
+        {
+            return;
+        }
+        self.portraits_read = Some(Instant::now());
+        let Some(campaign) = self.storage.as_ref().map(|storage| storage.campaign) else {
+            return;
+        };
+        let Ok(cache) = crate::hermetic::character_cache() else {
+            return;
+        };
+        self.portraits = self
+            .state
+            .participants
+            .iter()
+            .filter_map(remote_identity)
+            .map(|(remote, id)| {
+                let portrait = cache.find_portrait(campaign, &remote, &id);
+                (id, portrait)
+            })
+            .collect();
+    }
+    /// The picture for a participant's row: a character's portrait, or a creature's art.
+    fn row_art(&self, ctx: &egui::Context, p: &Participant) -> Option<PathBuf> {
+        match remote_identity(p) {
+            Some((_, id)) => self.portraits.get(&id).cloned().flatten(),
+            None => crate::art::entry_art(ctx, &p.definition),
+        }
+    }
     pub fn needs_save(&self) -> bool {
         self.dirty
+    }
+    /// Say which encounter this run came from. Call it before the first save.
+    pub fn came_from(&mut self, encounter: Uuid) {
+        self.source = Some(encounter);
     }
     pub fn configure_storage(
         &mut self,
@@ -1546,6 +1998,7 @@ impl Run {
         self.save()
     }
     pub fn save(&mut self) -> Result<(), String> {
+        let stopped_players = self.stopped_players();
         let Some(storage) = &mut self.storage else {
             return Err("This run has no save location.".into());
         };
@@ -1557,9 +2010,12 @@ impl Run {
             campaign: storage.campaign,
             id: self.id,
             name: self.name.clone(),
+            source: self.source,
             initiative: self.initiative.clone(),
             state: self.state.clone(),
             setup_details: self.setup_details.clone(),
+            keep_party_synced: self.keep_party_synced,
+            stopped_players,
         };
         let bytes = serde_json::to_vec_pretty(&saved).map_err(|e| e.to_string())?;
         let parent = storage.path.parent().ok_or("Invalid run location")?;
@@ -1709,7 +2165,7 @@ impl Run {
         let count = state.participants.len();
         let order: std::collections::BTreeSet<_> = state.order.iter().copied().collect();
         if count == 0
-            || count > 2000
+            || count > MAX_PARTICIPANTS
             || state.order.len() != count
             || order != (0..count).collect()
             || state.cursor >= count
@@ -1724,9 +2180,18 @@ impl Run {
         {
             return Err("Saved run state is invalid; its file has not been changed.".into());
         }
+        let syncs = saved
+            .state
+            .participants
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| saved.stopped_players.contains(&p.key))
+            .map(|(index, _)| (index, crate::combat_sync::CombatSync::default()))
+            .collect();
         Ok(Self {
             id: saved.id,
             name: saved.name,
+            source: saved.source,
             initiative: saved.initiative,
             selected: match saved.state.phase {
                 Phase::Running => saved.state.order[saved.state.cursor],
@@ -1739,6 +2204,8 @@ impl Run {
                 campaign,
                 baseline: Some(bytes),
             }),
+            portraits: BTreeMap::new(),
+            portraits_read: None,
             dirty: false,
             history: Vec::new(),
             history_labels: Vec::new(),
@@ -1749,7 +2216,7 @@ impl Run {
             outcome: "Undecided".into(),
             error: None,
             confirm_close: false,
-            syncs: BTreeMap::new(),
+            syncs,
             sync_shadows: BTreeMap::new(),
             panel: Panel::default(),
             closing: false,
@@ -1757,6 +2224,7 @@ impl Run {
             focus_amount: true,
             roster_height: 0.0,
             sync_to_restore: Vec::new(),
+            keep_party_synced: saved.keep_party_synced,
             connected: false,
             simulate_connection: false,
             scroll_to_selected: true,
@@ -1785,6 +2253,8 @@ impl Run {
             setup_expanded: None,
             focus_field: None,
             focus_first_missing: true,
+            groups: None,
+            group_totals: BTreeMap::new(),
         })
     }
     pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, String> {
@@ -1797,62 +2267,171 @@ impl Run {
             if path.extension().is_some_and(|e| e == "json") {
                 let modified = crate::hermetic::file_time(&path);
                 match Self::open(&path, campaign) {
-                    Ok(run) => {
-                        let (status, finished) = match run.state.phase {
-                            Phase::Setup => ("Preparing", false),
-                            Phase::Running => ("In progress", false),
-                            Phase::Ended { .. } => ("Ended", true),
-                        };
-                        // The turn it stopped on, so a DM can tell two saves apart at a glance.
-                        let turn = run
-                            .current()
-                            .filter(|_| !finished)
-                            .map(|i| format!(" · {}’s turn", run.state.participants[i].name))
-                            .unwrap_or_default();
-                        runs.push(SavedRunInfo {
-                            path,
-                            encounter: run.name.clone(),
-                            label: format!(
-                                "Round {} · {status}{turn}{}",
-                                run.state.round,
-                                modified.map_or_else(String::new, |at| format!(
-                                    " · Saved\u{a0}{}",
-                                    // The phrase stays on one line when the label wraps.
-                                    crate::party::fetch_age(
-                                        crate::hermetic::now().saturating_sub(at)
-                                    )
-                                    .replace(' ', "\u{a0}")
-                                )),
-                            ),
-                            finished,
-                            readable: true,
-                        });
-                    }
+                    Ok(run) => runs.push(run.info(path, modified)),
                     Err(_) => {
                         let name = path.file_name().unwrap_or_default().to_string_lossy();
                         runs.push(SavedRunInfo {
                             label: format!("Unreadable run: {name}"),
+                            id: None,
+                            source: None,
                             encounter: String::new(),
-                            finished: false,
-                            readable: false,
+                            standing: Standing::Unreadable,
+                            saved_at: modified,
+                            unsent: Vec::new(),
                             path,
                         });
                     }
                 }
             }
         }
-        runs.sort_by(|a, b| a.encounter.cmp(&b.encounter).then(a.label.cmp(&b.label)));
+        // Newest first. The names decide a tie, so that a list always comes out the same.
+        runs.sort_by(|a, b| {
+            b.saved_at
+                .cmp(&a.saved_at)
+                .then_with(|| a.encounter.cmp(&b.encounter))
+                .then_with(|| a.label.cmp(&b.label))
+                .then_with(|| a.path.cmp(&b.path))
+        });
         Ok(runs)
     }
+    /// This run as a row on the Encounters page, as it is now and not as its file has it.
+    pub fn live_info(&self) -> Option<SavedRunInfo> {
+        Some(self.info(self.path()?.to_path_buf(), None))
+    }
+    fn info(&self, path: PathBuf, saved_at: Option<u64>) -> SavedRunInfo {
+        let round = self.state.round;
+        let saved = saved_at.map_or_else(String::new, |at| {
+            format!(
+                " · Saved\u{a0}{}",
+                // The phrase stays on one line when the label wraps.
+                crate::party::fetch_age(crate::hermetic::now().saturating_sub(at))
+                    .replace(' ', "\u{a0}")
+            )
+        });
+        let (standing, label) = match &self.state.phase {
+            Phase::Ended { outcome } => {
+                let outcome = Some(outcome.trim())
+                    .filter(|outcome| !outcome.is_empty())
+                    .unwrap_or("Ended");
+                (Standing::Ended, format!("{outcome} · Round {round}{saved}"))
+            }
+            phase => {
+                let status = if *phase == Phase::Setup {
+                    "Preparing"
+                } else {
+                    "In progress"
+                };
+                // The turn it stopped on, so a DM can tell two saves apart at a glance.
+                let turn = self
+                    .current()
+                    .map(|i| format!(" · {}’s turn", self.state.participants[i].name))
+                    .unwrap_or_default();
+                (
+                    Standing::Unfinished,
+                    format!("Round {round} · {status}{turn}{saved}"),
+                )
+            }
+        };
+        SavedRunInfo {
+            path,
+            id: Some(self.id),
+            source: self.source,
+            encounter: self.name.clone(),
+            label,
+            standing,
+            saved_at,
+            unsent: self.unsent_in_save(),
+        }
+    }
+    /// Who holds values that D&D Beyond did not confirm, in a run that keeps the party matched.
+    /// With its file gone, nothing else has these values.
+    fn unsent_in_save(&self) -> Vec<String> {
+        if !self.keep_party_synced {
+            return Vec::new();
+        }
+        self.state
+            .participants
+            .iter()
+            .filter(|p| remote_identity(p).is_some())
+            // As a first read would judge it. Before any match, a difference from the start
+            // is the DM's.
+            .filter(|p| match &p.started {
+                Some(started) if p.combat_values.is_empty() => {
+                    !shadow_differences(&SheetShadow::of(p), started).is_empty()
+                }
+                _ => {
+                    !p.combat_values.is_empty()
+                        && !groups_that_differ(p, &p.combat_values, p.max_hp).is_empty()
+                }
+            })
+            .map(|p| p.name.clone())
+            .collect()
+    }
+}
+
+/// Where a saved run stands, as the Encounters page sorts it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Standing {
+    Unfinished,
+    Ended,
+    /// The file is not a run this campaign can open. It can belong to another campaign that
+    /// shares the folder, so the page offers nothing that would change it.
+    Unreadable,
 }
 
 /// One saved run, as the Encounters page lists it.
 pub struct SavedRunInfo {
     pub path: PathBuf,
+    pub id: Option<Uuid>,
+    /// The encounter it came from, if the save says.
+    pub source: Option<Uuid>,
     pub encounter: String,
     pub label: String,
-    pub finished: bool,
-    pub readable: bool,
+    pub standing: Standing,
+    pub saved_at: Option<u64>,
+    /// Who holds values not sent to D&D Beyond.
+    pub unsent: Vec<String>,
+}
+
+/// A run file the DM deleted, kept in memory for one step of undo.
+pub struct DeletedRun {
+    path: PathBuf,
+    bytes: Vec<u8>,
+    saved_at: Option<std::time::SystemTime>,
+    pub encounter: String,
+    pub unsent: Vec<String>,
+}
+
+impl DeletedRun {
+    /// Remove the run's file.
+    pub fn delete(info: &SavedRunInfo) -> Result<Self, String> {
+        let bytes = fs::read(&info.path).map_err(|e| e.to_string())?;
+        let saved_at = fs::metadata(&info.path)
+            .and_then(|metadata| metadata.modified())
+            .ok();
+        fs::remove_file(&info.path).map_err(|e| e.to_string())?;
+        Ok(Self {
+            path: info.path.clone(),
+            bytes,
+            saved_at,
+            encounter: info.encounter.clone(),
+            unsent: info.unsent.clone(),
+        })
+    }
+    /// Put the file back as it was. A file that has since appeared there stays.
+    pub fn restore(&self) -> Result<(), String> {
+        let parent = self.path.parent().ok_or("Invalid run location")?;
+        let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+        temp.write_all(&self.bytes)
+            .and_then(|_| temp.as_file().sync_all())
+            .map_err(|e| e.to_string())?;
+        if let Some(at) = self.saved_at {
+            temp.as_file().set_modified(at).map_err(|e| e.to_string())?;
+        }
+        temp.persist_noclobber(&self.path)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 /// A UTC date and time, so two runs saved on one day can be told apart.
@@ -1886,6 +2465,17 @@ pub fn calendar_date(seconds: u64) -> String {
 
 #[cfg(test)]
 impl Run {
+    /// A participant's name, maximum HP and presence, for a test of what reached the run.
+    pub fn participant_stats(&self, index: usize) -> (String, Option<i64>, bool) {
+        let p = &self.state.participants[index];
+        (p.name.clone(), p.max_hp, p.present)
+    }
+    pub fn keeps_party_synced(&self) -> bool {
+        self.keep_party_synced
+    }
+    pub fn hp_of(&self, index: usize) -> Option<i64> {
+        self.state.participants[index].hp
+    }
     pub fn simulate_connection(&mut self) {
         self.simulate_connection = true;
     }
@@ -2051,6 +2641,26 @@ pub(crate) fn write_in_progress_run(
         run.apply(Command::Next)?;
     }
     run.configure_storage(campaign, directory, Initiative::default())
+}
+
+/// A run that has ended, for test scenes. It says what the timeline records about it.
+#[cfg(test)]
+pub(crate) fn write_ended_run(
+    campaign: Uuid,
+    directory: &Path,
+    name: &str,
+    source: Option<Uuid>,
+    outcome: &str,
+    participant: Participant,
+) -> Result<crate::timeline::RunFact, String> {
+    let mut run = Run::new(name.into(), vec![participant], format!("# {name}"))?;
+    run.state.random = Random::seeded(20_260_101);
+    run.source = source;
+    run.apply(Command::Initiative(0, Some(10)))?;
+    run.apply(Command::Begin)?;
+    run.apply(Command::End(outcome.into()))?;
+    run.configure_storage(campaign, directory, Initiative::default())?;
+    Ok(run.timeline_fact())
 }
 
 fn display(value: Option<i64>) -> String {
@@ -2406,6 +3016,144 @@ mod tests {
         );
     }
     #[test]
+    fn a_run_that_keeps_the_party_synced_starts_by_itself_and_respects_a_stop() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        linked(&mut run, 1, "22");
+        let (campaign, _) = remote_identity(&run.state.participants[0]).unwrap();
+        let ctx = egui::Context::default();
+        let session = || {
+            let hour = std::time::Duration::from_secs(3600);
+            Some(crate::auth::Session::for_test(hour, hour))
+        };
+        run.keep_party_synced();
+
+        run.tick_sync(&ctx, None, 1, Some(&campaign));
+        assert!(run.syncs.is_empty(), "no connection, so nothing to start");
+        run.tick_sync(&ctx, session(), 1, Some("another campaign"));
+        assert!(run.syncs.is_empty(), "only this campaign's players");
+
+        run.tick_sync(&ctx, session(), 1, Some(&campaign));
+        assert_eq!(run.syncs[&0].state(), SyncState::FirstRead);
+        assert_eq!(run.syncs[&1].state(), SyncState::FirstRead);
+        assert!(!run.syncs.contains_key(&2), "a creature has no sheet");
+
+        // The DM stopped one player. A later frame does not start it again.
+        run.syncs.get_mut(&1).unwrap().stop();
+        run.tick_sync(&ctx, session(), 1, Some(&campaign));
+        assert!(!run.syncs[&1].enabled);
+
+        // A lost connection comes back, and only what it stopped starts again.
+        run.tick_sync(&ctx, None, 1, Some(&campaign));
+        assert!(run.syncs[&0].session_lost());
+        run.tick_sync(&ctx, session(), 2, Some(&campaign));
+        assert!(run.syncs[&0].enabled && !run.syncs[&0].session_lost());
+        assert!(!run.syncs[&1].enabled);
+
+        // Stop for the whole party holds, as far as a later frame goes.
+        run.syncs.get_mut(&1).unwrap().start();
+        run.toggle_party_sync();
+        assert!(!run.keeps_party_synced());
+        run.tick_sync(&ctx, session(), 2, Some(&campaign));
+        assert!(!run.syncs[&0].enabled && !run.syncs[&1].enabled);
+    }
+    fn test_session() -> Option<crate::auth::Session> {
+        let hour = std::time::Duration::from_secs(3600);
+        Some(crate::auth::Session::for_test(hour, hour))
+    }
+    #[test]
+    fn a_stop_for_one_player_lasts_after_the_run_reopens() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut first = run();
+        linked(&mut first, 0, "11");
+        linked(&mut first, 1, "22");
+        let (remote, _) = remote_identity(&first.state.participants[0]).unwrap();
+        first
+            .configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        first.keep_party_synced();
+        let ctx = egui::Context::default();
+        first.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        first.syncs.get_mut(&1).unwrap().stop();
+        first.save().unwrap();
+
+        let path = first.path().unwrap().to_path_buf();
+        let mut reopened = Run::open(&path, campaign).unwrap();
+        reopened.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(reopened.syncs[&0].enabled, "still on for the other player");
+        assert!(!reopened.syncs[&1].enabled, "the DM's stop holds");
+    }
+    #[test]
+    fn a_finished_run_keeps_its_results_and_undoing_the_end_syncs_again() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        let (remote, _) = remote_identity(&run.state.participants[0]).unwrap();
+        run.keep_party_synced();
+        let ctx = egui::Context::default();
+        run.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(run.syncs[&0].enabled);
+
+        run.apply(Command::End("Won".into())).unwrap();
+        run.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(run.syncs.is_empty(), "no read can change the result");
+
+        run.undo();
+        run.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(run.syncs[&0].enabled);
+    }
+    #[test]
+    fn a_read_only_sheet_leaves_the_runs_value_alone_at_a_first_read() {
+        use crate::combat_sync::CombatSync;
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        let (remote, _) = remote_identity(&run.state.participants[0]).unwrap();
+        let sheet = serde_json::json!({
+            "id": 11,
+            "removedHitPoints": 3,
+            "temporaryHitPoints": 3,
+            "deathSaves": {"successCount": 1, "failCount": 0},
+            "conditions": [{"id": 11, "level": null}],
+        });
+        let mut last = CombatSync::default();
+        last.enabled = true;
+        last.simulate_sheet(11, 20, &sheet);
+        run.state.participants[0].combat_values = last.values().clone();
+        run.state.participants[0].hp = Some(10);
+        let mut sync = CombatSync::default();
+        sync.enabled = true;
+        sync.simulate_sheet(11, 20, &sheet);
+        run.syncs.insert(0, sync);
+
+        run.tick_sync(&egui::Context::default(), test_session(), 1, Some(&remote));
+
+        assert_eq!(run.syncs[&0].state(), SyncState::ReadOnly);
+        assert_eq!(run.state.participants[0].hp, Some(10));
+        assert!(run.close_block().is_none());
+    }
+    #[test]
+    fn keeping_the_party_synced_is_saved_and_older_saves_load_with_it_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut first = run();
+        first
+            .configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        first.keep_party_synced();
+        first.save().unwrap();
+        let path = first.path().unwrap().to_path_buf();
+        assert!(Run::open(&path, campaign).unwrap().keeps_party_synced());
+
+        let text = fs::read_to_string(&path).unwrap();
+        let mut older: serde_json::Value = serde_json::from_str(&text).unwrap();
+        older.as_object_mut().unwrap().remove("keep_party_synced");
+        fs::write(&path, serde_json::to_vec(&older).unwrap()).unwrap();
+        assert!(!Run::open(&path, campaign).unwrap().keeps_party_synced());
+    }
+    #[test]
     fn a_session_that_ends_stops_each_sync_says_so_and_keeps_unsent_changes_counted() {
         use crate::combat_sync::CombatSync;
         let mut run = run();
@@ -2537,6 +3285,96 @@ mod tests {
         assert_eq!(run.state.participants[0].hp, Some(max - 9));
         assert_eq!(run.syncs[&0].conflict_keys(), vec!["hp"]);
     }
+    #[test]
+    fn a_run_keeps_its_encounter_and_says_how_it_stands() {
+        let dir = tempfile::tempdir().unwrap();
+        let (campaign, encounter) = (Uuid::new_v4(), Uuid::new_v4());
+        let mut run = started_run_in(dir.path(), campaign);
+        run.came_from(encounter);
+        run.dirty = true;
+        run.save().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(saved[0].source, Some(encounter));
+        assert_eq!(saved[0].standing, Standing::Unfinished);
+        assert_eq!(saved[0].id, Some(run.id));
+        assert!(saved[0].label.contains("In progress"));
+
+        run.apply(Command::End("Party won".into())).unwrap();
+        run.save().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(saved[0].standing, Standing::Ended);
+        assert!(saved[0].label.starts_with("Party won · Round "));
+        assert_eq!(run.live_info().unwrap().standing, Standing::Ended);
+    }
+
+    /// With no connection, nothing was ever confirmed, so these values are only in this file.
+    #[test]
+    fn a_delete_knows_about_changes_that_never_reached_dnd_beyond() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut run = run();
+        linked(&mut run, 0, "1");
+        run.keep_party_synced();
+        for index in 0..3 {
+            run.apply(Command::Initiative(index, Some(10))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        let name = run.state.participants[0].name.clone();
+        assert!(run.live_info().unwrap().unsent.is_empty(), "nothing yet");
+
+        run.apply(Command::Damage(0, 1)).unwrap();
+        run.apply(Command::Damage(1, 1)).unwrap();
+        run.save().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(saved[0].unsent, vec![name], "only the linked participant");
+    }
+
+    /// Another campaign can share the folder, so its file is not this campaign's to change.
+    #[test]
+    fn a_file_this_campaign_cannot_open_is_unreadable() {
+        let dir = tempfile::tempdir().unwrap();
+        let other = Uuid::new_v4();
+        started_run_in(dir.path(), other);
+        let saved = Run::list(dir.path(), Uuid::new_v4()).unwrap();
+        assert_eq!(saved[0].standing, Standing::Unreadable);
+        assert_eq!(saved[0].id, None);
+    }
+
+    #[test]
+    fn a_deleted_run_comes_back_as_it_was() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let run = started_run_in(dir.path(), campaign);
+        let path = run.path().unwrap().to_path_buf();
+        let before = fs::read(&path).unwrap();
+        let time = fs::metadata(&path).unwrap().modified().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+
+        let deleted = DeletedRun::delete(&saved[0]).unwrap();
+        assert!(Run::list(dir.path(), campaign).unwrap().is_empty());
+
+        deleted.restore().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), time);
+        assert!(
+            deleted.restore().is_err(),
+            "a file now in its place stays as it is"
+        );
+    }
+
+    fn started_run_in(directory: &Path, campaign: Uuid) -> Run {
+        let mut run = run();
+        for index in 0..3 {
+            run.apply(Command::Initiative(index, Some(10))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.configure_storage(campaign, directory, Initiative::default())
+            .unwrap();
+        run
+    }
+
     /// Through the file, as a close and reopen does. Anything only in memory is gone.
     fn close_and_reopen(run: &mut Run, campaign: Uuid) -> Run {
         run.dirty = true;
@@ -3289,25 +4127,43 @@ mod tests {
         run.state.participants[0].npc = false;
         run.apply(Command::Initiative(0, Some(19))).unwrap();
         run.state.random = Random::controlled([10, 7]);
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::Identical)).unwrap();
         assert_eq!(run.state.participants[0].initiative, Some(19));
         assert_eq!(run.state.participants[1].initiative, Some(12));
         assert_eq!(run.state.participants[2].initiative, Some(12));
         run.undo();
-        run.initiative.grouping = Grouping::Individual;
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::Individual)).unwrap();
         assert_eq!(run.state.participants[1].initiative, Some(12));
         assert_eq!(run.state.participants[2].initiative, Some(9));
         run.undo();
-        run.initiative.grouping = Grouping::BySide;
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::BySide)).unwrap();
         assert_eq!(run.state.participants[2].initiative, Some(12));
         run.undo();
-        run.initiative.grouping = Grouping::Explicit;
         run.state.participants[1].initiative_group = Some("wave".into());
         run.state.participants[2].initiative_group = Some("wave".into());
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::Explicit)).unwrap();
         assert_eq!(run.state.participants[2].initiative, Some(12));
+    }
+    #[test]
+    fn one_npc_roll_can_use_another_rule_and_the_campaign_rule_stays() {
+        let mut run = run();
+        run.state.participants[0].npc = false;
+        run.state.random = Random::controlled([10, 7]);
+        assert_eq!(run.initiative.grouping, Grouping::Identical);
+        run.apply(Command::RollNpcs(Grouping::Individual)).unwrap();
+        assert_eq!(run.state.participants[1].initiative, Some(12));
+        assert_eq!(run.state.participants[2].initiative, Some(9));
+        assert_eq!(run.initiative.grouping, Grouping::Identical);
+        assert!(run.state.log.last().unwrap().contains("Individually"));
+    }
+    #[test]
+    fn initiative_groups_are_a_roll_choice_only_when_an_npc_has_a_group() {
+        let mut run = run();
+        assert!(!run.roll_choices().contains(&Grouping::Explicit));
+        run.state.participants[1].initiative_group = Some("wave".into());
+        assert!(run.roll_choices().contains(&Grouping::Explicit));
+        run.state.participants[1].npc = false;
+        assert!(!run.roll_choices().contains(&Grouping::Explicit));
     }
     #[test]
     fn undo_names_the_last_action_and_each_step_goes_back() {
@@ -3359,11 +4215,10 @@ mod tests {
     #[test]
     fn failed_npc_roll_is_atomic_and_surprise_uses_disadvantage() {
         let mut run = run();
-        run.initiative.grouping = Grouping::Individual;
         run.state.random = Random::controlled([18, 4, 10, 12]);
         run.state.participants[0].initiative_mode = -1;
         run.state.participants[2].initiative_bonus = None;
-        assert!(run.apply(Command::RollNpcs).is_err());
+        assert!(run.apply(Command::RollNpcs(Grouping::Individual)).is_err());
         assert!(
             run.state
                 .participants
@@ -3371,7 +4226,7 @@ mod tests {
                 .all(|p| p.initiative.is_none())
         );
         run.state.participants[2].initiative_bonus = Some(2);
-        run.apply(Command::RollNpcs).unwrap();
+        run.apply(Command::RollNpcs(Grouping::Individual)).unwrap();
         assert_eq!(run.state.participants[0].initiative, Some(6));
     }
     /// M9-1, L9-2: who changed fits the one line, and the whole stays for the log and hover.
@@ -3435,5 +4290,802 @@ mod tests {
         run.apply(Command::Initiative(0, Some(3))).unwrap();
         run.apply(Command::Presence(0, false)).unwrap();
         assert!(run.state.log.last().unwrap().contains("keeps initiative"));
+    }
+    // ---- Encounter groups ------------------------------------------------------------
+    fn guard_group(name: &str, count: u64) -> Arc<RunGroup> {
+        group_of(
+            name,
+            "enemies",
+            vec![(creature(), count, Overrides::default())],
+        )
+    }
+    fn group_of(name: &str, side: &str, members: Vec<(Entry, u64, Overrides)>) -> Arc<RunGroup> {
+        Arc::new(RunGroup {
+            id: Uuid::new_v4(),
+            path: format!("{name}.md"),
+            name: name.into(),
+            side: side.into(),
+            members: members
+                .into_iter()
+                .map(|(entry, count, overrides)| GroupMember {
+                    entry: Arc::new(entry),
+                    count,
+                    overrides,
+                })
+                .collect(),
+            notes: String::new(),
+            xp: 0,
+            xp_unknown: Vec::new(),
+            unavailable: 0,
+            problem: None,
+        })
+    }
+    fn changed(text: &str) -> Overrides {
+        Overrides::parse(&serde_yaml_ng::from_str(text).unwrap()).unwrap()
+    }
+    fn beast() -> Entry {
+        Entry::parse("beast.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Beast\nsplat_creature: {{type: beast}}\nsplat_stats:\n  max_hp: {{value: 40}}\n  armor_class: {{value: 12}}\n  initiative: {{value: -1}}\n  speed: {{value: 40}}\n---\n", Uuid::new_v4())).unwrap()
+    }
+    fn names(run: &Run, range: std::ops::Range<usize>) -> Vec<String> {
+        run.state.participants[range]
+            .iter()
+            .map(|p| p.name.clone())
+            .collect()
+    }
+    #[test]
+    fn a_group_added_in_setup_gets_fresh_keys_full_hp_and_one_roll() {
+        let mut run = run();
+        run.state.random = Random::controlled([10]);
+        run.apply(Command::AddGroup(guard_group("Wave", 2), None))
+            .unwrap();
+        assert_eq!(run.state.participants.len(), 5);
+        let added = &run.state.participants[3..];
+        assert_eq!(names(&run, 3..5), vec!["Guard 4", "Guard 5"]);
+        for p in added {
+            assert_eq!(p.hp, p.max_hp, "full HP, not the creature's starting 17");
+            assert_eq!(p.side, "enemies");
+            assert_eq!(p.initiative, Some(12), "10 and the bonus of 2");
+            assert!(p.npc && p.present);
+            assert_eq!(p.added_from.as_ref().unwrap().group, "Wave");
+        }
+        assert_ne!(added[0].key, added[1].key);
+        assert!(
+            run.state.participants[..3]
+                .iter()
+                .all(|p| p.key != added[0].key)
+        );
+        // Setup keeps the order sorted, with no total last.
+        assert_eq!(run.state.order[..2], [3, 4]);
+        let log = run.state.log.last().unwrap();
+        assert!(
+            log.contains("Wave") && log.contains("Guard 4") && log.contains("10 +2 = 12"),
+            "{log}"
+        );
+        // Combat can begin with them in it.
+        for i in 0..3 {
+            run.apply(Command::Initiative(i, Some(5))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        assert_eq!(run.current(), Some(3));
+    }
+    #[test]
+    fn a_group_added_mid_round_takes_its_place_and_the_current_turn_stays() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        assert_eq!(run.current(), Some(1));
+        run.apply(Command::AddGroup(guard_group("Later", 2), Some(12)))
+            .unwrap();
+        assert_eq!(run.state.order, vec![0, 1, 3, 4, 2]);
+        assert_eq!(run.current(), Some(1), "the current turn stays current");
+        assert_eq!(run.next_up(), Some(3), "they act this round");
+        // A higher total is past this round's cursor: they wait for the next round.
+        run.apply(Command::AddGroup(guard_group("Earlier", 1), Some(18)))
+            .unwrap();
+        assert_eq!(run.state.order, vec![0, 5, 1, 3, 4, 2]);
+        assert_eq!(run.current(), Some(1));
+        let seen: Vec<_> = (0..6)
+            .map(|_| {
+                run.apply(Command::Next).unwrap();
+                (run.state.round, run.current().unwrap())
+            })
+            .collect();
+        assert_eq!(
+            seen,
+            vec![(1, 3), (1, 4), (1, 2), (2, 0), (2, 5), (2, 1)],
+            "each acts once a round, in place"
+        );
+    }
+    #[test]
+    fn a_tie_with_the_current_turn_goes_after_it_and_keeps_the_group_together() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::AddGroup(guard_group("Tied", 2), Some(15)))
+            .unwrap();
+        assert_eq!(run.state.order, vec![0, 1, 3, 4, 2]);
+        assert_eq!(run.next_up(), Some(3));
+    }
+    #[test]
+    fn the_same_group_can_be_added_twice_with_separate_creatures() {
+        let mut run = run();
+        begin(&mut run);
+        let wave = guard_group("Wave", 2);
+        run.state.random = Random::controlled([3, 9]);
+        run.apply(Command::AddGroup(wave.clone(), None)).unwrap();
+        run.apply(Command::AddGroup(wave, None)).unwrap();
+        assert_eq!(run.state.participants.len(), 7);
+        assert_eq!(
+            names(&run, 3..7),
+            vec!["Guard 4", "Guard 5", "Guard 6", "Guard 7"]
+        );
+        let keys: BTreeMap<_, _> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| (&p.key, ()))
+            .collect();
+        assert_eq!(keys.len(), 7, "every key is its own");
+        assert_eq!(run.state.participants[3].initiative, Some(5));
+        assert_eq!(
+            run.state.participants[5].initiative,
+            Some(11),
+            "its own roll"
+        );
+        run.apply(Command::Damage(3, 6)).unwrap();
+        assert_eq!(
+            run.state.participants[3].hp,
+            Some(17),
+            "3 temporary HP took some"
+        );
+        assert_eq!(run.state.participants[5].hp, Some(20), "its own HP");
+    }
+    #[test]
+    fn a_display_name_cannot_share_a_number_given_to_a_duplicate() {
+        let entry = creature();
+        let slot = |key: &str, overrides: &Overrides| {
+            Participant::with_overrides(
+                key.into(),
+                "enemies".into(),
+                entry.clone(),
+                &Mapping::new(),
+                overrides,
+                true,
+            )
+            .unwrap()
+        };
+        let plain = Overrides::default();
+        let run = Run::new(
+            "Clash".into(),
+            vec![
+                slot("a", &plain),
+                slot("b", &plain),
+                slot("c", &changed("{name: Guard 2}")),
+            ],
+            String::new(),
+        )
+        .unwrap();
+        assert_eq!(names(&run, 0..3), vec!["Guard 1", "Guard 3", "Guard 2"]);
+    }
+    #[test]
+    fn names_in_one_addition_never_match_each_other_and_huge_numbers_do_not_overflow() {
+        let mut run = run();
+        run.apply(Command::AddGroup(
+            group_of(
+                "Clash",
+                "enemies",
+                vec![
+                    (creature(), 2, changed("{name: Rival}")),
+                    (creature(), 1, changed("{name: Rival 2}")),
+                ],
+            ),
+            Some(3),
+        ))
+        .unwrap();
+        let added = names(&run, 3..6);
+        let unique: std::collections::BTreeSet<_> = added.iter().collect();
+        assert_eq!(unique.len(), 3, "{added:?}");
+        run.apply(Command::AddGroup(
+            group_of(
+                "Huge",
+                "enemies",
+                vec![(creature(), 1, changed("{name: X 18446744073709551615}"))],
+            ),
+            Some(3),
+        ))
+        .unwrap();
+        run.apply(Command::AddGroup(
+            group_of(
+                "After",
+                "enemies",
+                vec![(creature(), 1, changed("{name: X}"))],
+            ),
+            Some(3),
+        ))
+        .unwrap();
+        assert_eq!(names(&run, 6..8), vec!["X 18446744073709551615", "X"]);
+    }
+    #[test]
+    fn numbers_go_on_from_names_already_in_the_fight_and_a_lone_name_stays_plain() {
+        let mut run = Run::new(
+            "One".into(),
+            vec![
+                Participant::new("a".into(), "enemies".into(), beast(), &Mapping::new(), true)
+                    .unwrap(),
+            ],
+            String::new(),
+        )
+        .unwrap();
+        run.apply(Command::AddGroup(
+            group_of("Pack", "enemies", vec![(beast(), 2, Overrides::default())]),
+            Some(3),
+        ))
+        .unwrap();
+        assert_eq!(names(&run, 0..3), vec!["Beast", "Beast 2", "Beast 3"]);
+        run.apply(Command::AddGroup(
+            group_of(
+                "Alone",
+                "enemies",
+                vec![(creature(), 1, Overrides::default())],
+            ),
+            Some(3),
+        ))
+        .unwrap();
+        assert_eq!(
+            run.state.participants[3].name, "Guard",
+            "no other Guard, so no number"
+        );
+        run.apply(Command::AddGroup(
+            group_of(
+                "Renamed",
+                "enemies",
+                vec![(creature(), 2, changed("{name: Rival}"))],
+            ),
+            Some(3),
+        ))
+        .unwrap();
+        assert_eq!(names(&run, 4..6), vec!["Rival 1", "Rival 2"]);
+    }
+    #[test]
+    fn undo_takes_a_group_back_whole_and_its_dice_with_it() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        let before_log = run.state.log.clone();
+        let before_order = run.state.order.clone();
+        run.state.random = Random::controlled([10, 4]);
+        run.apply(Command::AddGroup(guard_group("Wave", 2), None))
+            .unwrap();
+        assert_eq!(run.undo_label(), "Undo: add Wave");
+        run.selected = 4;
+        run.setup_inputs.insert(4, "7".into());
+        run.syncs
+            .insert(4, crate::combat_sync::CombatSync::default());
+        run.sheet_for = Some(4);
+        run.undo();
+        assert_eq!(run.state.participants.len(), 3);
+        assert_eq!(run.state.order, before_order);
+        assert_eq!(run.state.log, before_log);
+        assert_eq!(run.current(), Some(1));
+        assert_eq!(
+            run.selected, 1,
+            "a row that went away moves to the current turn"
+        );
+        assert!(run.setup_inputs.is_empty() && run.syncs.is_empty());
+        assert_eq!(run.sheet_for, None);
+        assert_eq!(run.undo_label(), "Undo: next turn");
+        // Nothing still points at the row, in any view.
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                run.show(ui);
+            });
+        });
+        // Adding it again is a new step, with new keys.
+        run.state.random = Random::controlled([10, 4]);
+        run.apply(Command::AddGroup(guard_group("Wave", 1), None))
+            .unwrap();
+        assert_eq!(run.state.participants[3].initiative, Some(12));
+        // Undo steps back through later steps first, in order.
+        run.apply(Command::Next).unwrap();
+        run.undo();
+        run.undo();
+        assert_eq!(run.state.participants.len(), 3);
+    }
+    #[test]
+    fn a_saved_run_reopens_with_added_groups_and_their_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::AddGroup(
+            group_of(
+                "Rivals",
+                "rivals",
+                vec![(
+                    creature(),
+                    1,
+                    changed(
+                        "{name: Captain, max_hp: {add: 10}, attack_bonus: {add: 1}, note: Sealed}",
+                    ),
+                )],
+            ),
+            Some(12),
+        ))
+        .unwrap();
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::Damage(3, 4)).unwrap();
+        let campaign = stored(&mut run, dir.path());
+        let mut reopened = close_and_reopen(&mut run, campaign);
+        let p = &reopened.state.participants[3];
+        assert_eq!(p.name, "Captain");
+        assert_eq!(p.side, "rivals");
+        assert_eq!((p.hp, p.max_hp), (Some(29), Some(30)));
+        assert_eq!(p.initiative, Some(12));
+        assert_eq!(p.added_from.as_ref().unwrap().group, "Rivals");
+        let changes = p.changes.as_ref().unwrap();
+        assert_eq!(changes.base.max_hp, Some(20));
+        assert_eq!(changes.overrides.attack_bonus, Some(1));
+        assert_eq!(reopened.state.order, run.state.order);
+        assert!(
+            reopened
+                .state
+                .log
+                .iter()
+                .any(|line| line.contains("Rivals"))
+        );
+        // A step after the reopening saves and opens again.
+        reopened.apply(Command::Next).unwrap();
+        reopened.save().unwrap();
+        let again = Run::open(reopened.path().unwrap(), campaign).unwrap();
+        assert_eq!(again.state.participants[3].name, "Captain");
+        assert_eq!(again.current(), reopened.current());
+    }
+    fn mixed_group() -> Arc<RunGroup> {
+        group_of(
+            "Mixed",
+            "enemies",
+            vec![
+                (creature(), 1, Overrides::default()),
+                (beast(), 2, Overrides::default()),
+            ],
+        )
+    }
+    #[test]
+    fn identical_rolls_once_for_a_mixed_group_with_the_first_members_bonus() {
+        let mut run = run();
+        run.initiative.grouping = Grouping::Identical;
+        // Only one die: a second roll would fail.
+        run.state.random = Random::controlled([10]);
+        run.apply(Command::AddGroup(mixed_group(), None)).unwrap();
+        for p in &run.state.participants[3..] {
+            assert_eq!(p.initiative, Some(12), "{}", p.name);
+        }
+    }
+    #[test]
+    fn identical_keeps_a_group_as_one_roll_when_npcs_are_rolled_later() {
+        let mut run = run();
+        run.apply(Command::AddGroup(mixed_group(), Some(1)))
+            .unwrap();
+        run.apply(Command::AddGroup(mixed_group(), Some(2)))
+            .unwrap();
+        // One for the three Guards of the roster, then one for each addition.
+        run.state.random = Random::controlled([5, 8, 11]);
+        run.apply(Command::RollNpcs(Grouping::Identical)).unwrap();
+        let totals: Vec<_> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.initiative.unwrap())
+            .collect();
+        assert_eq!(&totals[..3], [7, 7, 7], "the roster's identical Guards");
+        assert_eq!(
+            &totals[3..6],
+            [10, 10, 10],
+            "the first addition, not with its like"
+        );
+        assert_eq!(
+            &totals[6..9],
+            [13, 13, 13],
+            "the second addition, apart from the first"
+        );
+    }
+    #[test]
+    fn individual_rolls_each_member_alone_and_a_typed_total_still_applies_to_all() {
+        let mut run = run();
+        run.initiative.grouping = Grouping::Individual;
+        run.state.random = Random::controlled([10, 6, 15]);
+        run.apply(Command::AddGroup(mixed_group(), None)).unwrap();
+        let totals: Vec<_> = run.state.participants[3..]
+            .iter()
+            .map(|p| p.initiative)
+            .collect();
+        assert_eq!(totals, vec![Some(12), Some(5), Some(14)]);
+        run.apply(Command::AddGroup(mixed_group(), Some(9)))
+            .unwrap();
+        assert!(
+            run.state.participants[6..]
+                .iter()
+                .all(|p| p.initiative == Some(9))
+        );
+    }
+    #[test]
+    fn by_side_joins_the_side_or_rolls_once_for_a_side_with_none() {
+        let mut run = run();
+        run.initiative.grouping = Grouping::BySide;
+        begin(&mut run);
+        run.state.random = Random::controlled([]);
+        run.apply(Command::AddGroup(mixed_group(), None)).unwrap();
+        assert!(
+            run.state.participants[3..]
+                .iter()
+                .all(|p| p.initiative == Some(20)),
+            "the first total on its side, with no die"
+        );
+        run.state.random = Random::controlled([6]);
+        run.apply(Command::AddGroup(
+            group_of(
+                "Split",
+                "rivals",
+                vec![
+                    (creature(), 1, Overrides::default()),
+                    (beast(), 1, Overrides::default()),
+                    (creature(), 1, changed("{side: enemies}")),
+                ],
+            ),
+            None,
+        ))
+        .unwrap();
+        let p = &run.state.participants;
+        assert_eq!(p[6].initiative, Some(8), "the new side rolled once");
+        assert_eq!(p[7].initiative, Some(8));
+        assert_eq!(p[8].initiative, Some(20), "this member's own side");
+        assert!(
+            run.state
+                .log
+                .last()
+                .unwrap()
+                .contains("Joins enemies at 20")
+        );
+    }
+    #[test]
+    fn explicit_makes_each_addition_its_own_initiative_group() {
+        let mut run = run();
+        run.initiative.grouping = Grouping::Explicit;
+        run.state.random = Random::controlled([10, 3]);
+        run.apply(Command::AddGroup(mixed_group(), None)).unwrap();
+        run.apply(Command::AddGroup(mixed_group(), None)).unwrap();
+        let group = |i: usize| run.state.participants[i].initiative_group.clone();
+        assert!(group(3).is_some());
+        assert_eq!(group(3), group(5));
+        assert_ne!(group(3), group(6));
+        assert_eq!(run.state.participants[5].initiative, Some(12));
+        assert_eq!(run.state.participants[6].initiative, Some(5));
+        // The later roll keeps them so.
+        run.state.participants[..3]
+            .iter_mut()
+            .for_each(|p| p.npc = false);
+        run.state.random = Random::controlled([1, 2]);
+        run.apply(Command::RollNpcs(Grouping::Explicit)).unwrap();
+        assert_eq!(run.state.participants[3].initiative, Some(3));
+        assert_eq!(run.state.participants[5].initiative, Some(3));
+        assert_eq!(run.state.participants[8].initiative, Some(4));
+    }
+    #[test]
+    fn a_typed_total_uses_no_dice_under_any_rule() {
+        for grouping in Grouping::ALL {
+            let mut run = run();
+            run.initiative.grouping = grouping;
+            run.state.random = Random::controlled([]);
+            run.apply(Command::AddGroup(mixed_group(), Some(17)))
+                .unwrap();
+            assert!(
+                run.state.participants[3..]
+                    .iter()
+                    .all(|p| p.initiative == Some(17)),
+                "{grouping:?}"
+            );
+            assert!(run.state.log.last().unwrap().contains("entered by the DM"));
+        }
+    }
+    #[test]
+    fn a_group_that_cannot_join_leaves_the_run_as_it_was() {
+        let check = |run: &mut Run, group: Arc<RunGroup>, total: Option<i64>, words: &str| {
+            let (log, count) = (run.state.log.clone(), run.state.participants.len());
+            let steps = run.history.len();
+            let error = run.apply(Command::AddGroup(group, total)).unwrap_err();
+            assert!(error.contains(words), "{error}");
+            assert_eq!(run.state.log, log);
+            assert_eq!(run.state.participants.len(), count);
+            assert_eq!(run.history.len(), steps, "no step to undo");
+        };
+        let mut run = run();
+        begin(&mut run);
+        let mut stray = (*guard_group("Stray", 1)).clone();
+        stray.problem = Some("Member 1: this creature is unavailable.".into());
+        check(&mut run, Arc::new(stray), Some(4), "unavailable");
+        let mut empty = (*guard_group("Empty", 1)).clone();
+        empty.members.clear();
+        check(&mut run, Arc::new(empty), Some(4), "no members");
+        let unknown = Entry::parse("u.md", &format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: Unknown\nsplat_creature: {{}}\n---\n", Uuid::new_v4())).unwrap();
+        check(
+            &mut run,
+            group_of(
+                "NoHp",
+                "enemies",
+                vec![(unknown.clone(), 1, Overrides::default())],
+            ),
+            Some(4),
+            "no maximum HP",
+        );
+        // A max_hp override gives such a creature one. It then has no bonus to roll with.
+        let given = group_of(
+            "Given",
+            "enemies",
+            vec![(unknown, 1, changed("{max_hp: {set: 9}}"))],
+        );
+        check(&mut run, given.clone(), None, "no initiative bonus");
+        run.apply(Command::AddGroup(given, Some(4))).unwrap();
+        assert_eq!(run.state.participants[3].hp, Some(9));
+        check(
+            &mut run,
+            group_of(
+                "Weak",
+                "enemies",
+                vec![(creature(), 1, changed("{max_hp: {add: -20}}"))],
+            ),
+            Some(4),
+            "Maximum HP",
+        );
+        // A saved run holds at most so many, so a run cannot grow past what it can reopen.
+        check(&mut run, guard_group("Many", 1997), Some(4), "2000");
+        // Linked characters have one sheet each.
+        let mut linked = creature();
+        linked.fields.insert(
+            "splat_external".into(),
+            serde_yaml_ng::from_str("{provider: dndbeyond}").unwrap(),
+        );
+        check(
+            &mut run,
+            group_of(
+                "Linked",
+                "party",
+                vec![(linked, 1, changed("{conditions: [Prone]}"))],
+            ),
+            Some(4),
+            "D&D Beyond",
+        );
+        run.apply(Command::End("Done".into())).unwrap();
+        check(&mut run, guard_group("Late", 1), Some(4), "ended");
+    }
+    #[test]
+    fn a_failed_roll_leaves_the_dice_where_they_were() {
+        let mut run = run();
+        begin(&mut run);
+        run.state.random = Random::controlled([]);
+        assert!(
+            run.apply(Command::AddGroup(guard_group("Wave", 1), None))
+                .is_err()
+        );
+        assert_eq!(run.state.participants.len(), 3);
+    }
+
+    // ---- Overrides -------------------------------------------------------------------
+    fn overridden(text: &str, starting: &str) -> Result<Participant, String> {
+        Participant::with_overrides(
+            "slot".into(),
+            "enemies".into(),
+            creature(),
+            &serde_yaml_ng::from_str(starting).unwrap(),
+            &changed(text),
+            true,
+        )
+    }
+    #[test]
+    fn no_overrides_behave_and_save_exactly_as_before() {
+        let plain = Participant::new(
+            "slot".into(),
+            "enemies".into(),
+            creature(),
+            &Mapping::new(),
+            true,
+        )
+        .unwrap();
+        assert!(plain.changes.is_none() && plain.added_from.is_none());
+        assert_eq!(
+            (plain.hp, plain.max_hp, plain.armor_class),
+            (Some(17), Some(20), Some(16))
+        );
+        let saved = serde_json::to_value(&plain).unwrap();
+        assert!(saved.get("changes").is_none(), "a save has no new field");
+        assert!(saved.get("added_from").is_none());
+    }
+    #[test]
+    fn each_override_reaches_the_participant_and_the_entry_is_not_touched() {
+        let p = overridden(
+            "{name: Rival, max_hp: {add: 10}, armor_class: {set: 18}, initiative_bonus: {add: 3}, attack_bonus: {add: 1}, damage_bonus: {add: 1}, speed: {set: 40}, side: rivals, conditions: [Prone], note: Sealed}",
+            "{}",
+        )
+        .unwrap();
+        assert_eq!(p.name, "Rival");
+        assert_eq!(p.definition.name, "Guard", "the entry keeps its own name");
+        assert_eq!(p.max_hp, Some(30));
+        assert_eq!(p.hp, Some(30), "a changed maximum starts at that maximum");
+        assert_eq!(p.armor_class, Some(18));
+        assert_eq!(p.initiative_bonus, Some(5));
+        assert_eq!(p.side, "rivals");
+        assert_eq!(p.conditions, vec!["Poisoned", "Prone"], "added to its own");
+        assert_eq!(stat(&p.definition, "max_hp"), Some(20));
+        let changes = p.changes.as_ref().unwrap();
+        assert_eq!(
+            changes.base.max_hp,
+            Some(20),
+            "the card keeps the old value"
+        );
+        assert_eq!(changes.base.side, "enemies");
+        assert_eq!(
+            changes.overrides.table_bonuses(&changes.base),
+            vec!["Attack +1", "Damage +1", "Speed 40 ft"]
+        );
+        // What sync compares with is where the participant began.
+        assert_eq!(p.started.as_ref().unwrap().hp, Some(30));
+        assert_eq!(p.started.as_ref().unwrap().conditions.len(), 2);
+    }
+    #[test]
+    fn a_slots_starting_hp_stands_only_when_it_fits_the_changed_maximum() {
+        let p = overridden("{max_hp: {add: 10}}", "{hp: 12}").unwrap();
+        assert_eq!((p.hp, p.max_hp), (Some(12), Some(30)));
+        let error = overridden("{max_hp: {set: 10}}", "{hp: 12}").err().unwrap();
+        assert!(error.contains("slot") && error.contains("above"), "{error}");
+        // With no change to the maximum, starting HP keeps its old meaning.
+        assert_eq!(
+            overridden("{armor_class: {set: 3}}", "{}").unwrap().hp,
+            Some(17)
+        );
+        // A duplicate condition is one condition.
+        let p = overridden("{conditions: [poisoned]}", "{}").unwrap();
+        assert_eq!(p.conditions, vec!["Poisoned"]);
+    }
+    #[test]
+    fn a_changed_creature_is_no_longer_identical_to_its_like() {
+        let entry = creature();
+        let mut members: Vec<_> = (0..3)
+            .map(|i| {
+                Participant::new(
+                    format!("s{i}"),
+                    "enemies".into(),
+                    entry.clone(),
+                    &Mapping::new(),
+                    true,
+                )
+                .unwrap()
+            })
+            .collect();
+        members[0] = Participant::with_overrides(
+            "s0".into(),
+            "enemies".into(),
+            entry,
+            &Mapping::new(),
+            &changed("{attack_bonus: {add: 1}}"),
+            true,
+        )
+        .unwrap();
+        let mut run = Run::new("Arena".into(), members, String::new()).unwrap();
+        run.state.random = Random::controlled([3, 9]);
+        run.apply(Command::RollNpcs(Grouping::Identical)).unwrap();
+        let totals: Vec<_> = run
+            .state
+            .participants
+            .iter()
+            .map(|p| p.initiative)
+            .collect();
+        assert_eq!(totals, vec![Some(5), Some(11), Some(11)]);
+    }
+    #[test]
+    fn a_saved_run_keeps_a_roster_slots_overrides() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = overridden(
+            "{max_hp: {add: 10}, damage_bonus: {add: 2}, side: rivals}",
+            "{}",
+        )
+        .unwrap();
+        let mut run = Run::new("Arena".into(), vec![p], String::new()).unwrap();
+        run.apply(Command::Initiative(0, Some(9))).unwrap();
+        run.apply(Command::Begin).unwrap();
+        let campaign = stored(&mut run, dir.path());
+        let reopened = close_and_reopen(&mut run, campaign);
+        let p = &reopened.state.participants[0];
+        assert_eq!(p.max_hp, Some(30));
+        assert_eq!(p.side, "rivals");
+        let changes = p.changes.as_ref().unwrap();
+        assert_eq!(changes.overrides.damage_bonus, Some(2));
+        assert_eq!(changes.base.max_hp, Some(20));
+    }
+    #[test]
+    fn a_save_from_before_groups_and_overrides_still_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        begin(&mut run);
+        let campaign = stored(&mut run, dir.path());
+        let path = run.path().unwrap().to_path_buf();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        for p in saved["state"]["participants"].as_array().unwrap() {
+            assert!(p.get("changes").is_none() && p.get("added_from").is_none());
+        }
+        let reopened = Run::open(&path, campaign).unwrap();
+        assert!(
+            reopened
+                .state
+                .participants
+                .iter()
+                .all(|p| p.changes.is_none())
+        );
+    }
+    #[test]
+    fn the_run_card_and_panel_draw_with_changes_and_groups_in_setup_and_in_combat() {
+        let ctx = egui::Context::default();
+        let mut run = run();
+        run.groups = Some(Arc::new(vec![mixed_group(), guard_group("Wave", 2)]));
+        run.apply(Command::AddGroup(
+            group_of(
+                "Rivals",
+                "rivals",
+                vec![(
+                    creature(),
+                    1,
+                    changed(
+                        "{name: Captain, attack_bonus: {add: 1}, speed: {set: 40}, note: Sealed}",
+                    ),
+                )],
+            ),
+            Some(30),
+        ))
+        .unwrap();
+        run.selected = 3;
+        for panel in [Panel::Groups, Panel::Record, Panel::Reference] {
+            run.panel = panel;
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    run.show(ui);
+                });
+            });
+        }
+        for i in 0..3 {
+            run.apply(Command::Initiative(i, Some(5))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        for panel in [Panel::Groups, Panel::Reference] {
+            run.panel = panel;
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    run.show(ui);
+                });
+            });
+        }
+        let name = view::row_words_for_test(&run.state.participants[3]);
+        assert!(
+            name.contains("Changed") && name.contains("Attack +1"),
+            "{name}"
+        );
+    }
+    #[test]
+    fn a_drop_uses_the_total_typed_beside_the_group_and_a_failure_keeps_it() {
+        let mut run = run();
+        begin(&mut run);
+        let wave = guard_group("Wave", 1);
+        let id = wave.id;
+        run.groups = Some(Arc::new(vec![wave]));
+        run.group_totals.insert(id, "13".into());
+        run.add_group_from_panel(id);
+        assert_eq!(run.state.participants[3].initiative, Some(13));
+        assert!(!run.group_totals.contains_key(&id), "used once");
+        run.add_group_from_panel(Uuid::new_v4());
+        assert_eq!(
+            run.state.participants.len(),
+            4,
+            "a group no longer there adds nothing"
+        );
+        run.state.random = Random::controlled([]);
+        run.add_group_from_panel(id);
+        assert!(run.error.is_some());
     }
 }

@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 64 -->
 
-•  Gain all the traits in the Core Sorcerer Traits\
-table.\
-•  Gain the Sorcerer’s level 1 features, which are\
-listed in the Sorcerer Features table.\
+•  Gain all the traits in the Core Sorcerer Traits table.
+
+•  Gain the Sorcerer’s level 1 features, which are listed in the Sorcerer Features table.
 
 ## Rule
 

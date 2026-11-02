@@ -27,26 +27,23 @@ Str 19 +4 +4 Dex 12 +1 +4 Con 17 +3 +3\
 Int 16 +3 +3 Wis 13 +1 +4 Cha 15 +2 +2\
 Skills Deception +5, Perception +7, Stealth +4\
 Immunities Poison; Poisoned\
-Senses Blindsight 30 ft., Darkvision 120 ft.;\
-Passive Perception 17\
+Senses Blindsight 30 ft., Darkvision 120 ft.; Passive Perception 17\
 Languages Common, Draconic\
-CR 8 (XP 3,900; PB +3)\
+CR 8 (XP 3,900; PB +3)
 
 ### Traits
 
-Amphibious. The dragon can breathe air and water.\
+Amphibious. The dragon can breathe air and water.
 
 <!-- SRD page 294 -->
 
-
 ### Actions
 
-Multiattack. The dragon makes three Rend attacks.\
-Rend. Melee Attack Roll: +7, reach 10 ft. Hit: 11 (2d6\
-+ 4) Slashing damage plus 7 (2d6) Poison damage.\
-Poison Breath (Recharge 5–6). Constitution Saving\
-Throw: DC 14, each creature in a 30-foot Cone. Failure:\
-42 (12d6) Poison damage. Success: Half damage.\
+Multiattack. The dragon makes three Rend attacks.
+
+Rend. Melee Attack Roll: +7, reach 10 ft. Hit: 11 (2d6 + 4) Slashing damage plus 7 (2d6) Poison damage.
+
+Poison Breath (Recharge 5–6). Constitution Saving Throw: DC 14, each creature in a 30-foot Cone. Failure: 42 (12d6) Poison damage. Success: Half damage.
 
 Original layout: [[../../srd-5.2.1/pages/293|page 293]], [[../../srd-5.2.1/pages/294|page 294]].
 

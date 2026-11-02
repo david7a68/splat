@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 257 -->
 
-If the monster has Reaction options, those are listed\
-in this section along with their triggers. See “Play-\
-ing the Game” for details on Reactions.\
+If the monster has Reaction options, those are listed in this section along with their triggers. See “Playing the Game” for details on Reactions.
 
 ## Rule
 

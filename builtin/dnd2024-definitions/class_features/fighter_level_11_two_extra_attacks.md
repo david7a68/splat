@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 48 -->
 
-You can attack three times instead of once when-\
-ever you take the Attack action on your turn.\
+You can attack three times instead of once whenever you take the Attack action on your turn.
 
 ## Rule
 

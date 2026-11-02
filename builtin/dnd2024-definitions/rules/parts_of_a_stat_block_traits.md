@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-A monster’s traits, if any, are features that are ac-\
-tive at all times or in certain situations.\
+A monster’s traits, if any, are features that are active at all times or in certain situations.
 
 ## Rule
 

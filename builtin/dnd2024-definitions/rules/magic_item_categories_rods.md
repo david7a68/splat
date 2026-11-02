@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 204 -->
 
-An item in the Rod category is a scepter usually\
-made of metal, wood, or bone. A typical rod weighs\
-2 to 5 pounds.\
-Unless its description notes otherwise, a rod can\
-be used as an Arcane Focus.\
+An item in the Rod category is a scepter usually made of metal, wood, or bone. A typical rod weighs 2 to 5 pounds.
+
+Unless its description notes otherwise, a rod can be used as an Arcane Focus.
 
 ## Rule
 

@@ -18,13 +18,11 @@ splat_sources:
 
 <!-- SRD page 178 -->
 
-While you have the Charmed condition, you experi-\
-ence the following effects.\
-Can’t Harm the Charmer. You can’t attack the\
-charmer or target the charmer with damaging abili-\
-ties or magical effects.\
-Social Advantage. The charmer has Advantage on\
-any ability check to interact with you socially.\
+While you have the Charmed condition, you experience the following effects.
+
+Can’t Harm the Charmer. You can’t attack the charmer or target the charmer with damaging abilities or magical effects.
+
+Social Advantage. The charmer has Advantage on any ability check to interact with you socially.
 
 Original layout: [[../../srd-5.2.1/pages/178|page 178]].
 

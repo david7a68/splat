@@ -26,6 +26,7 @@ pub struct Participant {
     pub absent: Color32,
     pub concentrating: Color32,
     pub condition: Color32,
+    pub changed: Color32,
 }
 #[derive(Clone, Copy)]
 pub struct Side {
@@ -150,11 +151,12 @@ pub const DARK: Colors = Colors {
         absent: FAINT,
         concentrating: rgb(0x7CCBEA),
         condition: rgb(0xDCCBA9),
+        changed: rgb(0xE3AFC0),
     },
     side: Side {
         party: rgb(0xCFC6B4),
         enemies: rgb(0xFA8F55),
-        other: rgb(0xB4C08F),
+        other: rgb(0xB8A9D4),
     },
     sync: Sync {
         off: FAINT,
@@ -208,8 +210,18 @@ pub const RAIL_WIDTH: f32 = 136.0;
 /// Past this window width the rail can afford a campaign's whole name.
 pub const RAIL_WIDE_WIDTH: f32 = 188.0;
 pub const RAIL_WIDE_FROM: f32 = 1400.0;
+/// A drag can take the rail this far, in a window with room for it.
+pub const RAIL_DRAG_MAX_WIDTH: f32 = 320.0;
 pub const PANEL_MIN_WIDTH: f32 = 340.0;
 pub const PANEL_MAX_WIDTH: f32 = 560.0;
+/// A drag can take a side panel past the width it has by itself.
+pub const PANEL_DRAG_MAX_WIDTH: f32 = 720.0;
+/// A roster and its dock need this much beside a panel. With less, their words are cut.
+pub const RUN_LIST_KEEPS: f32 = 454.0;
+/// The same for Lookup and Notes, which sit outside the page's margins.
+pub const PANEL_LEAVES_PAGE: f32 = RUN_LIST_KEEPS + 2.0 * M;
+/// The rail is first, so it cannot see a panel. This leaves room for the page and one.
+pub const RAIL_LEAVES_WINDOW: f32 = PANEL_LEAVES_PAGE + PANEL_MIN_WIDTH;
 pub const READER_MEASURE: f32 = 488.0;
 pub const FORM_WIDTH: f32 = 560.0;
 
@@ -494,6 +506,7 @@ mod tests {
             ("participant.absent", c.participant.absent),
             ("participant.concentrating", c.participant.concentrating),
             ("participant.condition", c.participant.condition),
+            ("participant.changed", c.participant.changed),
             ("side.party", c.side.party),
             ("side.enemies", c.side.enemies),
             ("side.other", c.side.other),

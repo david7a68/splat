@@ -19,17 +19,14 @@ splat_sources:
 <!-- SRD page 125 -->
 
 Level 1 Evocation (Paladin)\
-Casting Time: Bonus Action, which you take immedi-\
-ately after hitting a target with a Melee weapon or an\
-Unarmed Strike\
+Casting Time: Bonus Action, which you take immediately after hitting a target with a Melee weapon or an Unarmed Strike\
 Range: Self\
 Component: V\
-Duration: Instantaneous\
-The target takes an extra 2d8 Radiant damage from\
-the attack. The damage increases by 1d8 if the tar-\
-get is a Fiend or an Undead.\
-Using a Higher-Level Spell Slot. The damage in-\
-creases by 1d8 for each spell slot level above 1.\
+Duration: Instantaneous
+
+The target takes an extra 2d8 Radiant damage from the attack. The damage increases by 1d8 if the target is a Fiend or an Undead.
+
+Using a Higher-Level Spell Slot. The damage increases by 1d8 for each spell slot level above 1.
 
 Original layout: [[../../srd-5.2.1/pages/125|page 125]].
 

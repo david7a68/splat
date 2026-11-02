@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 32 -->
 
-You gain Expertise (see “Rules Glossary”) in two of\
-your skill proficiencies of your choice. Performance\
-and Persuasion are recommended if you have profi-\
-ciency in them.\
-At Bard level 9, you gain Expertise in two more of\
-your skill proficiencies of your choice.\
+You gain Expertise (see “Rules Glossary”) in two of your skill proficiencies of your choice. Performance and Persuasion are recommended if you have proficiency in them.
+
+At Bard level 9, you gain Expertise in two more of your skill proficiencies of your choice.
 
 ## Rule
 

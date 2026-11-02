@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 51 -->
 
-You gain a Monk subclass of your choice. The War-\
-rior of the Open Hand subclass is detailed after this\
-class’s description. A subclass is a specialization\
-that grants you features at certain Monk levels. For\
-the rest of your career, you gain each of your sub-\
-class’s features that are of your Monk level or lower.\
+You gain a Monk subclass of your choice. The Warrior of the Open Hand subclass is detailed after this class’s description. A subclass is a specialization that grants you features at certain Monk levels. For the rest of your career, you gain each of your subclass’s features that are of your Monk level or lower.
 
 ## Rule
 

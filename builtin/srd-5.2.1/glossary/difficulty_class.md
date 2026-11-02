@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [181],
 
 <!-- SRD page 181 -->
 
-A Difficulty Class (DC) is the target number for an\
-ability check or a saving throw. See also “Playing the\
-Game” (“D20 Tests”).\
+A Difficulty Class (DC) is the target number for an ability check or a saving throw. See also “Playing the Game” (“D20 Tests”).
 
 Original layout: [[../pages/181|page 181]].

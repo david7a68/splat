@@ -18,48 +18,44 @@ splat_sources:
 
 <!-- SRD page 41 -->
 
-Core Druid Traits\
-Primary Ability Wisdom\
-Hit Point Die D8 per Druid level\
-Saving Throw Intelligence and Wisdom\
-Proficiencies\
-Skill Proficiencies Choose 2: Animal Handling,\
-Arcana, Insight, Medicine, Na-\
-ture, Perception, Religion, or\
-Survival\
-Weapon Proficiencies Simple weapons\
-Tool Proficiencies Herbalism Kit\
-Armor Training Light armor and Shields\
-Starting Equipment Choose A or B: (A) Leather Ar-\
-mor, Shield, Sickle, Druidic Fo-\
-cus (Quarterstaff), Explorer’s\
-Pack, Herbalism Kit, and 9 GP;\
-or (B) 50 GP\
-Druid Features\
-Proficiency Wild\
-Level Bonus Class Features Shape\
-1 +2 Spellcasting, Druidic, —\
-Primal Order\
-2 +2 Wild Shape, 2\
-Wild Companion\
-3 +2 Druid Subclass 2\
-4 +2 Ability Score Improvement 2\
-5 +3 Wild Resurgence 2\
-6 +3 Subclass feature 3\
-7 +3 Elemental Fury 3\
-8 +3 Ability Score Improvement 3\
-9 +4 — 3\
-10 +4 Subclass feature 3\
-11 +4 — 3\
-12 +4 Ability Score Improvement 3\
-13 +5 — 3\
-14 +5 Subclass feature 3\
-15 +5 Improved Elemental Fury 3\
-16 +5 Ability Score Improvement 3\
-17 +6 — 4\
-18 +6 Beast Spells 4\
-19 +6 Epic Boon 4\
-20 +6 Archdruid 4\
+**Core Druid Traits**
+
+|  |  |
+| --- | --- |
+| Primary Ability | Wisdom |
+| Hit Point Die | D8 per Druid level |
+| Saving Throw | Intelligence and Wisdom |
+| Proficiencies |  |
+| Skill Proficiencies | Choose 2: Animal Handling, Arcana, Insight, Medicine, Nature, Perception, Religion, or Survival |
+| Weapon Proficiencies | Simple weapons |
+| Tool Proficiencies | Herbalism Kit |
+| Armor Training | Light armor and Shields |
+| Starting Equipment | Choose A or B: (A) Leather Armor, Shield, Sickle, Druidic Focus (Quarterstaff), Explorer’s Pack, Herbalism Kit, and 9 GP; or (B) 50 GP |
+
+**Druid Features**
+
+| Level | Proficiency Bonus | Class Features | Wild Shape | Cantrips | Prepared Spells | Level 1 Slots | Level 2 Slots | Level 3 Slots | Level 4 Slots | Level 5 Slots | Level 6 Slots | Level 7 Slots | Level 8 Slots | Level 9 Slots |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | +2 | Spellcasting, Druidic, Primal Order | — | 2 | 4 | 2 | — | — | — | — | — | — | — | — |
+| 2 | +2 | Wild Shape, Wild Companion | 2 | 2 | 5 | 3 | — | — | — | — | — | — | — | — |
+| 3 | +2 | Druid Subclass | 2 | 2 | 6 | 4 | 2 | — | — | — | — | — | — | — |
+| 4 | +2 | Ability Score Improvement | 2 | 3 | 7 | 4 | 3 | — | — | — | — | — | — | — |
+| 5 | +3 | Wild Resurgence | 2 | 3 | 9 | 4 | 3 | 2 | — | — | — | — | — | — |
+| 6 | +3 | Subclass feature | 3 | 3 | 10 | 4 | 3 | 3 | — | — | — | — | — | — |
+| 7 | +3 | Elemental Fury | 3 | 3 | 11 | 4 | 3 | 3 | 1 | — | — | — | — | — |
+| 8 | +3 | Ability Score Improvement | 3 | 3 | 12 | 4 | 3 | 3 | 2 | — | — | — | — | — |
+| 9 | +4 | — | 3 | 3 | 14 | 4 | 3 | 3 | 3 | 1 | — | — | — | — |
+| 10 | +4 | Subclass feature | 3 | 4 | 15 | 4 | 3 | 3 | 3 | 2 | — | — | — | — |
+| 11 | +4 | — | 3 | 4 | 16 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
+| 12 | +4 | Ability Score Improvement | 3 | 4 | 16 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
+| 13 | +5 | — | 3 | 4 | 17 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
+| 14 | +5 | Subclass feature | 3 | 4 | 17 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
+| 15 | +5 | Improved Elemental Fury | 3 | 4 | 18 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
+| 16 | +5 | Ability Score Improvement | 3 | 4 | 18 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
+| 17 | +6 | — | 4 | 4 | 19 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | 1 |
+| 18 | +6 | Beast Spells | 4 | 4 | 20 | 4 | 3 | 3 | 3 | 3 | 1 | 1 | 1 | 1 |
+| 19 | +6 | Epic Boon | 4 | 4 | 21 | 4 | 3 | 3 | 3 | 3 | 2 | 1 | 1 | 1 |
+| 20 | +6 | Archdruid | 4 | 4 | 22 | 4 | 3 | 3 | 3 | 3 | 2 | 2 | 1 | 1 |
 
 ## Rule group
 

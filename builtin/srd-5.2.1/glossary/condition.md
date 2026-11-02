@@ -11,17 +11,16 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [179],
 
 <!-- SRD page 179 -->
 
-A condition is a temporary game state. The defini-\
-tion of a condition says how it affects its recipient,\
-and various rules define how to end a condition.\
-This glossary defines these conditions:\
-Blinded Grappled Poisoned\
-Charmed Incapacitated Prone\
-Deafened Invisible Restrained\
-Exhaustion Paralyzed Stunned\
-Frightened Petrified Unconscious\
-A condition doesn’t stack with itself; a recipient\
-either has a condition or doesn’t. The Exhaustion\
-condition is an exception to that rule.\
+A condition is a temporary game state. The definition of a condition says how it affects its recipient, and various rules define how to end a condition. This glossary defines these conditions:
+
+|  |  |  |
+| --- | --- | --- |
+| Blinded | Grappled | Poisoned |
+| Charmed | Incapacitated | Prone |
+| Deafened | Invisible | Restrained |
+| Exhaustion | Paralyzed | Stunned |
+| Frightened | Petrified | Unconscious |
+
+A condition doesn’t stack with itself; a recipient either has a condition or doesn’t. The Exhaustion condition is an exception to that rule.
 
 Original layout: [[../pages/179|page 179]].

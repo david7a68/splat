@@ -85,6 +85,7 @@ pub fn tokens(ui: &mut egui::Ui) {
             ("absent", c.participant.absent),
             ("concentrating", c.participant.concentrating),
             ("condition", c.participant.condition),
+            ("changed", c.participant.changed),
         ],
     );
     swatches(
@@ -180,6 +181,10 @@ pub fn components(ui: &mut egui::Ui) {
         let _ = link(ui, "A link");
         let mut choice = 1;
         segmented(ui, &mut choice, &[(0, "Read"), (1, "Edit"), (2, "Log")]);
+        let _ = split_action(ui, Action::secondary("Split"), "Other ways", |ui| {
+            let _ = ui.selectable_label(true, "The default");
+            let _ = ui.selectable_label(false, "Another way");
+        });
     });
     design_group(ui, "Fields");
     let mut text = "Bridge Ambush".to_owned();
@@ -318,6 +323,55 @@ pub enum Sheet {
     Tokens,
     Components,
     Messages,
+    Markdown,
+}
+
+/// One note where it is typed and where it is read, to judge the two together.
+const NOTE: &str = "# Session 4: The Old Mill
+
+2026-11-02, The Emberfall Marches
+
+## Plan for tonight
+
+*How does the session begin? Start close to the action.*
+
+## What happened
+
+We reached *the old mill* at dusk. **Oren** lit the lamps, and ***nobody*** spoke. The road behind us was covered in ash, and it stayed that way until the wolves came down from the ridge.
+
+- Roll `1d20 + 5` for the bridge
+- [[Timeline#^t-1a2b3c4d5e|Bridge Ambush]] left two wolves
+- ~~Kestrel has the key~~ The key is lost
+- 
+
+> The miller said the road was covered in ash.
+
+### Later that night
+
+See [the map](https://example.com) for the road north.
+
+```
+Reward: 40 gp
+```
+";
+
+pub fn markdown(ui: &mut egui::Ui) {
+    ui.columns(2, |columns| {
+        design_group(&mut columns[0], "Write");
+        let mut note = NOTE;
+        let mut layouter = crate::markdown_source::layouter;
+        let output = egui::TextEdit::multiline(&mut note)
+            .margin(egui::vec2(S, S))
+            .layouter(&mut layouter)
+            .desired_width(f32::INFINITY)
+            .show(&mut columns[0]);
+        crate::markdown_source::paint_section_rules(&columns[0], &output);
+        named(&columns[0], &output.response, "Sample note");
+        design_group(&mut columns[1], "Read");
+        // The Reader gets a reference as its words, from the timeline.
+        let read = NOTE.replace("[[Timeline#^t-1a2b3c4d5e|Bridge Ambush]]", "Bridge Ambush");
+        crate::markdown_view::show_reader(&mut columns[1], &read);
+    });
 }
 
 pub fn show(ui: &mut egui::Ui) {
@@ -332,6 +386,7 @@ pub fn show(ui: &mut egui::Ui) {
             (Sheet::Tokens, "Tokens"),
             (Sheet::Components, "Components"),
             (Sheet::Messages, "Messages"),
+            (Sheet::Markdown, "Markdown"),
         ],
     );
     ui.data_mut(|data| data.insert_temp(id, sheet));
@@ -342,5 +397,6 @@ pub fn show(ui: &mut egui::Ui) {
             Sheet::Tokens => tokens(ui),
             Sheet::Components => components(ui),
             Sheet::Messages => messages(ui),
+            Sheet::Markdown => markdown(ui),
         });
 }

@@ -18,21 +18,21 @@ splat_sources:
 
 <!-- SRD page 204 -->
 
-Every magic item belongs to a category. The Magic\
-Item Categories table lists the nine categories and\
-provides examples. Rules for the categories appear\
-after the table.\
-Magic Item Categories\
-Category Examples\
-Armor +1 Leather Armor, +1 Shield\
-Potions Potion of Healing\
-Rings Ring of Invisibility\
-Rods Immovable Rod\
-Scrolls Spell Scroll\
-Staffs Staff of Striking\
-Wands Wand of Fireballs\
-Weapons +1 Ammunition, +1 Longsword\
-Wondrous Items Bag of Holding, Boots of Elvenkind\
+Every magic item belongs to a category. The Magic Item Categories table lists the nine categories and provides examples. Rules for the categories appear after the table.
+
+**Magic Item Categories**
+
+| Category | Examples |
+| --- | --- |
+| Armor | +1 Leather Armor, +1 Shield |
+| Potions | Potion of Healing |
+| Rings | Ring of Invisibility |
+| Rods | Immovable Rod |
+| Scrolls | Spell Scroll |
+| Staffs | Staff of Striking |
+| Wands | Wand of Fireballs |
+| Weapons | +1 Ammunition, +1 Longsword |
+| Wondrous Items | Bag of Holding, Boots of Elvenkind |
 
 ## Rule
 

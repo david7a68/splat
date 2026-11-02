@@ -29,12 +29,11 @@ Vulnerabilities Fire\
 Resistances Bludgeoning, Piercing\
 Senses Passive Perception 10\
 Languages Common plus one other language\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Actions
 
-Slam. Melee Attack Roll: +6, reach 10 ft. Hit: 14 (3d6\
-+ 4) Bludgeoning damage.\
+Slam. Melee Attack Roll: +6, reach 10 ft. Hit: 14 (3d6 + 4) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/260|page 260]].
 

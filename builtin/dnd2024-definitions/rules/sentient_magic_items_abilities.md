@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 207 -->
 
-A sentient magic item has Intelligence, Wisdom, and\
-Charisma scores. Choose the item’s abilities, or de-\
-termine them randomly as follows: roll 4d6 for each\
-one, dropping the lowest roll and totaling the rest.\
+A sentient magic item has Intelligence, Wisdom, and Charisma scores. Choose the item’s abilities, or determine them randomly as follows: roll 4d6 for each one, dropping the lowest roll and totaling the rest.
 
 ## Rule
 

@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 18 -->
 
-Temporary Hit Points last until they’re depleted or\
-you finish a Long Rest (see “Rules Glossary”).\
+Temporary Hit Points last until they’re depleted or you finish a Long Rest (see “Rules Glossary”).
 
 ## Rule
 

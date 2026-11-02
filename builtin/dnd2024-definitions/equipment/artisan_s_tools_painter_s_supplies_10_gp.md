@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 93 -->
 
-Ability: Wisdom   Weight: 5 lb.\
-Utilize: Paint a recognizable image of something you’ve\
-seen (DC 10)\
-Craft: Druidic Focus, Holy Symbol\
+Ability: Wisdom Weight: 5 lb.\
+Utilize: Paint a recognizable image of something you’ve seen (DC 10)\
+Craft: Druidic Focus, Holy Symbol
 
 ## Item
 

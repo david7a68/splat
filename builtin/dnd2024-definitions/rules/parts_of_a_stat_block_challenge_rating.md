@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-Challenge Rating is defined in “Rules Glossary,”\
-while guidance on using CR to plan potential com-\
-bat encounters is in “Gameplay Toolbox.”\
+Challenge Rating is defined in “Rules Glossary,” while guidance on using CR to plan potential combat encounters is in “Gameplay Toolbox.”
 
 ## Rule
 

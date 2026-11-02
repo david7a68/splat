@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 177 -->
 
-A creature is Bloodied while it has half its Hit Points\
-or fewer remaining.\
+A creature is Bloodied while it has half its Hit Points or fewer remaining.
 
 Original layout: [[../../srd-5.2.1/pages/177|page 177]].
 

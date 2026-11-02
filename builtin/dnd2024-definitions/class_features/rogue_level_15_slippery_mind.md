@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 63 -->
 
-Your cunning mind is exceptionally difficult to con-\
-trol. You gain proficiency in Wisdom and Charisma\
-saving throws.\
+Your cunning mind is exceptionally difficult to control. You gain proficiency in Wisdom and Charisma saving throws.
 
 ## Rule
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 192 -->
 
-The presence of a good road increases the group’s\
-maximum pace by one step (from Slow to Normal or\
-from Normal to Fast).\
+The presence of a good road increases the group’s maximum pace by one step (from Slow to Normal or from Normal to Fast).
 
 ## Rule
 

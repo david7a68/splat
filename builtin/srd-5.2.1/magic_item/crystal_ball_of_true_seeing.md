@@ -11,10 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [216
 
 <!-- SRD page 216 -->
 
-Wondrous Item, Legendary (Requires Attunement)\
-While touching this crystal orb, you can cast Scrying\
-(save DC 17) with it. In addition, you have Truesight\
-with a range of 120 feet centered on the spell’s\
-sensor.\
+Wondrous Item, Legendary (Requires Attunement)
+
+While touching this crystal orb, you can cast Scrying (save DC 17) with it. In addition, you have Truesight with a range of 120 feet centered on the spell’s sensor.
 
 Original layout: [[../pages/216|page 216]].

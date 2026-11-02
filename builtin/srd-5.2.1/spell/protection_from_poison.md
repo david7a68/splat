@@ -15,10 +15,8 @@ Level 2 Abjuration (Cleric, Druid, Paladin, Ranger)\
 Casting Time: Action\
 Range: Touch\
 Components: V, S\
-Duration: 1 hour\
-You touch a creature and end the Poisoned condi-\
-tion on it. For the duration, the target has Advan-\
-tage on saving throws to avoid or end the Poisoned\
-condition, and it has Resistance to Poison damage.\
+Duration: 1 hour
+
+You touch a creature and end the Poisoned condition on it. For the duration, the target has Advantage on saving throws to avoid or end the Poisoned condition, and it has Resistance to Poison damage.
 
 Original layout: [[../pages/157|page 157]].

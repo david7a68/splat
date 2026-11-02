@@ -28,7 +28,8 @@ pub const CLOSE_COPY: &str = "Close";
 pub const EDIT_MARKDOWN: &str = "Edit Markdown";
 pub const UNSAVED_NOTE: &str = "Unsaved";
 
-pub const SAVED_RUNS: &str = "Saved runs (";
+pub const READY_TO_RUN: &str = "Ready to run (";
+pub const HISTORY: &str = "History (";
 pub const RESUME: &str = "Resume";
 pub const RUN_HEADING: &str = "Run · ";
 pub const CURRENT_TURN: &str = "Current turn";

@@ -1,7 +1,10 @@
 //! Imported creature records. Provider totals are supplied stats, never recalculated.
 //! Source records project into shared campaign content; simulation support is separate.
+pub mod build;
 mod cache;
 mod campaign;
+pub mod campaign_package;
+pub mod check;
 mod content;
 mod presentation;
 mod rules;
@@ -10,6 +13,7 @@ use crate::{
     execution::model::{Creature, Health, Pool, Stat},
 };
 pub use cache::Cache;
+pub use campaign::CampaignCopyError;
 pub use content::ContentNote;
 pub use presentation::description_text;
 use serde::{Deserialize, Serialize};
@@ -127,6 +131,15 @@ pub struct EntitySnapshot {
     pub character: CharacterDetails,
     pub source: Source,
     pub coverage: Vec<String>,
+}
+
+impl EntitySnapshot {
+    /// The portrait the player chose on D&D Beyond, if any.
+    pub fn portrait_url(&self) -> Option<&str> {
+        self.source.raw["decorations"]["avatarUrl"]
+            .as_str()
+            .filter(|url| !url.is_empty())
+    }
 }
 
 pub fn now() -> u64 {

@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 254 -->
 
-The rules for a stat block are detailed in “Rules Glos-\
-sary” and in this section.\
+The rules for a stat block are detailed in “Rules Glossary” and in this section.
 
 ## Rule
 

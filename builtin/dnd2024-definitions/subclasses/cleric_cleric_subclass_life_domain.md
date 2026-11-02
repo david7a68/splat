@@ -18,18 +18,11 @@ splat_sources:
 
 <!-- SRD page 40 -->
 
-Soothe the Hurts of the World\
-The Life Domain focuses on the positive energy that\
-helps sustain all life in the multiverse. Clerics who\
-tap into this domain are masters of healing, using\
-that life force to cure many hurts.\
-Existence itself relies on the positive energy as-\
-sociated with this domain, so a Cleric of almost any\
-religious tradition might choose it. This domain is\
-particularly associated with agricultural deities,\
-gods of healing or endurance, and gods of home and\
-community. Religious orders of healing also seek\
-the magic of this domain.\
+### Soothe the Hurts of the World
+
+The Life Domain focuses on the positive energy that helps sustain all life in the multiverse. Clerics who tap into this domain are masters of healing, using that life force to cure many hurts.
+
+Existence itself relies on the positive energy associated with this domain, so a Cleric of almost any religious tradition might choose it. This domain is particularly associated with agricultural deities, gods of healing or endurance, and gods of home and community. Religious orders of healing also seek the magic of this domain.
 
 ## Rule group
 

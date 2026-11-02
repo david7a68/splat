@@ -10,9 +10,18 @@ use crate::{
     persistence::Campaign,
 };
 use eframe::egui;
+use splat::character::campaign_package::{self, Move, Proposal};
 use splat::content::Entry;
-use std::{fs, sync::mpsc};
+use std::{
+    collections::BTreeSet,
+    fs,
+    sync::mpsc,
+    time::{Duration, Instant},
+};
 use uuid::Uuid;
+
+/// Sheets refresh in the background, so the campaign package needs another look now and then.
+const CHECK_EVERY: Duration = Duration::from_secs(5 * 60);
 
 /// The line a parser's message names, as a line of the whole note. The parser counts from
 /// the line after the note's opening `---`.
@@ -192,8 +201,26 @@ enum Listing {
     Entries,
     Required,
 }
+struct Checked {
+    applied: Option<Result<usize, String>>,
+    proposals: Result<Vec<Proposal>, String>,
+}
+/// What the last check of the campaign package found. Nothing moves until the DM applies it.
+#[derive(Default)]
+struct Reconcile {
+    campaign: Option<Uuid>,
+    checked_at: Option<Instant>,
+    pending: Option<mpsc::Receiver<Checked>>,
+    applying: bool,
+    proposals: Vec<Proposal>,
+    /// Proposals that the DM unticked.
+    declined: BTreeSet<String>,
+    error: Option<String>,
+    message: Option<String>,
+}
 #[derive(Default)]
 pub struct CampaignContent {
+    reconcile: Reconcile,
     active: Option<Campaign>,
     pending: Option<mpsc::Receiver<Loaded>>,
     snapshot: Option<Snapshot>,
@@ -227,6 +254,97 @@ impl CampaignContent {
                 .as_ref()
                 .is_some_and(|s| s.document.selections != self.saved_selections)
     }
+    /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.
+    pub fn tick(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+        self.finish_check();
+        if cfg!(test) {
+            return;
+        }
+        let Some(active) = campaigns.active_campaign() else {
+            return;
+        };
+        let due = self.reconcile.campaign != Some(active.id)
+            || self
+                .reconcile
+                .checked_at
+                .is_none_or(|at| at.elapsed() >= CHECK_EVERY);
+        if due && self.reconcile.pending.is_none() {
+            self.start_check(ctx, campaigns, active.clone(), None);
+        }
+    }
+    /// Words for the sidebar, when the campaign package has something to review.
+    pub fn review_detail(&self) -> Option<String> {
+        let count = self.reconcile.proposals.len();
+        (count > 0).then(|| format!("{count} to review"))
+    }
+    fn finish_check(&mut self) {
+        let Some(rx) = &self.reconcile.pending else {
+            return;
+        };
+        let checked = match rx.try_recv() {
+            Ok(checked) => checked,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => Checked {
+                applied: None,
+                proposals: Err("The campaign package check stopped.".into()),
+            },
+        };
+        self.reconcile.pending = None;
+        self.reconcile.applying = false;
+        self.reconcile.checked_at = Some(Instant::now());
+        self.reconcile.error = None;
+        match checked.proposals {
+            Ok(proposals) => self.reconcile.proposals = proposals,
+            Err(error) => self.reconcile.error = Some(error),
+        }
+        match checked.applied {
+            Some(Ok(count)) => {
+                self.reconcile.message = Some(design::count(
+                    count,
+                    "change applied. The old note is archived beside its path.",
+                    "changes applied. The old notes are archived beside their paths.",
+                ));
+                self.refresh_pending = !self.dirty();
+            }
+            Some(Err(error)) => self.reconcile.error = Some(error),
+            None => {}
+        }
+    }
+    /// With `keys`, carries out those proposals first. The check itself changes nothing.
+    fn start_check(
+        &mut self,
+        ctx: &egui::Context,
+        campaigns: &Campaigns,
+        campaign: Campaign,
+        keys: Option<BTreeSet<String>>,
+    ) {
+        let (tx, rx) = mpsc::channel();
+        self.reconcile.campaign = Some(campaign.id);
+        self.reconcile.pending = Some(rx);
+        self.reconcile.applying = keys.is_some();
+        let modules = campaigns.modules().to_vec();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let destinations = crate::content_workspace::destinations(&campaign.path, &modules);
+            let records = campaign.dndbeyond_campaign_id.as_ref().map_or_else(
+                || Ok(Vec::new()),
+                |remote| {
+                    crate::hermetic::character_cache()
+                        .and_then(|cache| cache.load_all(campaign.id, remote))
+                },
+            );
+            let applied = keys.map(|keys| {
+                records.as_ref().map_err(Clone::clone).and_then(|records| {
+                    campaign_package::apply(&campaign.path, &destinations, records, &keys)
+                })
+            });
+            let proposals = records.and_then(|records| {
+                campaign_package::check(&campaign.path, &destinations, &records)
+            });
+            let _ = tx.send(Checked { applied, proposals });
+            ctx.request_repaint();
+        });
+    }
     pub fn refresh_destination(&mut self, root: &std::path::Path) {
         if !self.dirty() && self.active.as_ref().is_some_and(|c| c.path == root) {
             self.refresh_pending = true;
@@ -242,6 +360,7 @@ impl CampaignContent {
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
         self.forget_discards_of_other_campaigns(&campaign);
         self.refresh_pending = false;
+        self.reconcile.checked_at = None;
         self.disabled_selections.clear();
         self.repairs.clear();
         let modules = campaigns.modules().to_vec();
@@ -359,9 +478,103 @@ impl CampaignContent {
             });
             return;
         }
+        self.reconcile_section(ui, campaigns, &active);
         if self.snapshot.is_some() {
             self.packages(ui, campaigns, &active);
         }
+    }
+
+    /// Each change waits for the DM. A blocked one says what they must decide first.
+    fn reconcile_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
+        let reconcile = &mut self.reconcile;
+        if let Some(error) = &reconcile.error {
+            design::message(ui, Tone::Error, error);
+        }
+        if let Some(message) = &reconcile.message {
+            design::message(ui, Tone::Success, message);
+        }
+        if reconcile.applying {
+            ui.horizontal(|ui| {
+                crate::design::spinner(ui);
+                ui.label("Applying changes to the campaign package…");
+            });
+            return;
+        }
+        if reconcile.proposals.is_empty() {
+            return;
+        }
+        let c = colors();
+        ui.label(
+            Type::Section
+                .rich(ui, "Campaign package: changes to review")
+                .color(c.text),
+        );
+        egui::ScrollArea::vertical()
+            .max_height(220.0)
+            .id_salt("campaign package changes")
+            .show(ui, |ui| {
+                for proposal in &reconcile.proposals {
+                    let line = format!(
+                        "{} ({}): {}",
+                        proposal.name,
+                        proposal.kind,
+                        match &proposal.change {
+                            Move::ToPackage(package) => format!("move to {package}"),
+                            Move::ToCampaign =>
+                                "move back to the campaign package; its package is no longer enabled"
+                                    .to_owned(),
+                            Move::Forget => "remove; no current entry uses it".to_owned(),
+                        }
+                    );
+                    if let Some(reason) = &proposal.blocked {
+                        ui.add(
+                            egui::Label::new(
+                                Type::Small
+                                    .rich(ui, format!("{line}. Not available: {reason}"))
+                                    .color(c.muted),
+                            )
+                            .wrap(),
+                        );
+                        continue;
+                    }
+                    let mut chosen = !reconcile.declined.contains(&proposal.key);
+                    if ui.checkbox(&mut chosen, line).changed() {
+                        if chosen {
+                            reconcile.declined.remove(&proposal.key);
+                        } else {
+                            reconcile.declined.insert(proposal.key.clone());
+                        }
+                    }
+                }
+            });
+        let keys: BTreeSet<String> = reconcile
+            .proposals
+            .iter()
+            .filter(|p| p.blocked.is_none() && !reconcile.declined.contains(&p.key))
+            .map(|p| p.key.clone())
+            .collect();
+        let unsaved = self
+            .snapshot
+            .as_ref()
+            .is_some_and(|s| s.document.selections != self.saved_selections);
+        let label = format!("Apply {}", design::count(keys.len(), "change", "changes"));
+        let apply = Action::secondary(&label)
+            .density(Density::Read)
+            .hint("Sheets follow the change. Package notes get the D&D Beyond ID and keep their words. Old notes go to archives.")
+            .blocked(if unsaved {
+                Some("Save or discard your selection changes first.")
+            } else if keys.is_empty() {
+                Some("Tick a change to apply it.")
+            } else {
+                None
+            })
+            .show(ui)
+            .clicked();
+        if apply && self.reconcile.pending.is_none() {
+            self.reconcile.message = None;
+            self.start_check(ui.ctx(), campaigns, active.clone(), Some(keys));
+        }
+        ui.add_space(design::S);
     }
 
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
@@ -541,6 +754,7 @@ impl CampaignContent {
                 match document.save() {
                     Ok(()) => {
                         self.saved_selections = document.selections.clone();
+                        self.reconcile.checked_at = None;
                         self.message = Some("Campaign selections saved.".into());
                         self.error = None;
                     }
@@ -682,9 +896,7 @@ impl CampaignContent {
             document.selections.remove(i);
         }
         design::rule(ui);
-        egui::SidePanel::left("campaign_modules")
-            .resizable(false)
-            .exact_width(236.0)
+        design::Column::left("campaign_modules", 236.0, 180.0..=420.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
                 right: design::M as i8,
@@ -696,7 +908,7 @@ impl CampaignContent {
                     .id_salt("package_list")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        for module in &catalogue.modules {
+                        for module in catalogue.modules.iter().filter(|m| !m.private) {
                             let existing = document.selections.iter().position(|s| {
                                 catalogue.resolve_ref(&s.package).ok() == Some(module.id)
                             });
@@ -1031,6 +1243,81 @@ mod tests {
             dndbeyond_campaign_id: None,
             dndbeyond_campaign_name: None,
         }
+    }
+
+    fn finished(content: &mut CampaignContent, checked: Checked) {
+        let (tx, rx) = mpsc::channel();
+        content.reconcile.pending = Some(rx);
+        tx.send(checked).unwrap();
+        content.finish_check();
+    }
+
+    #[test]
+    fn a_check_reaches_the_sidebar_and_the_review_list_and_changes_nothing() {
+        let temp = tempfile::tempdir().unwrap();
+        let active = campaign(temp.path());
+        let campaigns = Campaigns::at(temp.path().join("settings.json"));
+        let mut content = CampaignContent::default();
+        assert_eq!(content.review_detail(), None);
+        let proposal = |key: &str, blocked: Option<&str>| Proposal {
+            key: key.into(),
+            name: "Witch Bolt".into(),
+            kind: "spell".into(),
+            change: Move::ToPackage("Player's Handbook".into()),
+            blocked: blocked.map(str::to_owned),
+        };
+        finished(
+            &mut content,
+            Checked {
+                applied: None,
+                proposals: Ok(vec![
+                    proposal("a", None),
+                    proposal("b", Some("It has personal notes.")),
+                ]),
+            },
+        );
+        assert_eq!(content.review_detail().as_deref(), Some("2 to review"));
+        assert!(content.reconcile.pending.is_none());
+        assert!(!content.refresh_pending);
+        // Showing the list starts nothing. Only the DM's click applies a change.
+        let _ = egui::Context::default().run(Default::default(), |ctx| {
+            egui::CentralPanel::default()
+                .show(ctx, |ui| content.reconcile_section(ui, &campaigns, &active));
+        });
+        assert!(content.reconcile.pending.is_none());
+    }
+
+    #[test]
+    fn applied_changes_reload_the_catalogue_and_failures_are_shown() {
+        let mut content = CampaignContent::default();
+        finished(
+            &mut content,
+            Checked {
+                applied: Some(Ok(2)),
+                proposals: Ok(Vec::new()),
+            },
+        );
+        assert!(content.refresh_pending);
+        assert_eq!(content.review_detail(), None);
+        assert!(
+            content
+                .reconcile
+                .message
+                .as_deref()
+                .unwrap()
+                .starts_with("2 changes")
+        );
+        finished(
+            &mut content,
+            Checked {
+                applied: Some(Err("A sheet has local edits.".into())),
+                proposals: Ok(Vec::new()),
+            },
+        );
+        assert_eq!(
+            content.reconcile.error.as_deref(),
+            Some("A sheet has local edits.")
+        );
     }
 
     #[test]

@@ -18,34 +18,9 @@ splat_sources:
 
 <!-- SRD page 31 -->
 
-•  Gain all the traits in the Core Bard Traits table.\
-Bard Features\
-Proficiency Bardic\
-Level Bonus Class Features Die\
-1 +2 Bardic Inspiration, D6\
-Spellcasting\
-2 +2 Expertise, D6\
-Jack of All Trades\
-3 +2 Bard Subclass D6\
-4 +2 Ability Score Improvement D6\
-5 +3 Font of Inspiration D8\
-6 +3 Subclass feature D8\
-7 +3 Countercharm D8\
-8 +3 Ability Score Improvement D8\
-9 +4 Expertise D8\
-10 +4 Magical Secrets D10\
-11 +4 — D10\
-12 +4 Ability Score Improvement D10\
-13 +5 — D10\
-14 +5 Subclass feature D10\
-15 +5 — D12\
-16 +5 Ability Score Improvement D12\
-17 +6 — D12\
-18 +6 Superior Inspiration D12\
-19 +6 Epic Boon D12\
-20 +6 Words of Creation D12\
-•  Gain the Bard’s level 1 features, which are listed\
-in the Bard Features table.\
+•  Gain all the traits in the Core Bard Traits table.
+
+•  Gain the Bard’s level 1 features, which are listed in the Bard Features table.
 
 ## Rule
 

@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 32 -->
 
-You can add half your Proficiency Bonus (round\
-down) to any ability check you make that uses a\
-skill proficiency you lack and that doesn’t otherwise\
-use your Proficiency Bonus.\
-For example, if you make a Strength (Athletics)\
-check and lack Athletics proficiency, you can add\
-half your Proficiency Bonus to the check.\
+You can add half your Proficiency Bonus (round down) to any ability check you make that uses a skill proficiency you lack and that doesn’t otherwise use your Proficiency Bonus.
+
+For example, if you make a Strength (Athletics) check and lack Athletics proficiency, you can add half your Proficiency Bonus to the check.
 
 ## Rule
 

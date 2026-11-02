@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 22 -->
 
-Look at your class’s feature table in “Classes,” and\
-write down the level 1 features. The class features\
-are detailed there too.\
-Some class features offer choices. Make sure to\
-read all your features and make any offered choices.\
+Look at your class’s feature table in “Classes,” and write down the level 1 features. The class features are detailed there too.
+
+Some class features offer choices. Make sure to read all your features and make any offered choices.
 
 ## Rule
 

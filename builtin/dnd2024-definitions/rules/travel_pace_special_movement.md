@@ -18,33 +18,35 @@ splat_sources:
 
 <!-- SRD page 192 -->
 
-If a party can travel at a high Speed for an extended\
-time, as with a spell such as Wind Walk or a magic\
-item such as a Carpet of Flying, translate the party’s\
-Speed into travel rates using these rules:\
-Travel Terrain\
-Terrain Maximum Pace Encounter Distance\
-Arctic Fast* 6d6 × 10 feet\
-Coastal Normal 2d10 × 10 feet\
-Desert Normal 6d6 × 10 feet\
-Forest Normal 2d8 × 10 feet\
-Grassland Fast 6d6 × 10 feet\
-Hill Normal 2d10 × 10 feet\
-Mountain Slow 4d10 × 10 feet\
-Swamp Slow 2d8 × 10 feet\
-Underdark Normal 2d6 × 10 feet\
-Urban Normal 2d6 × 10 feet\
-Waterborne Special† 6d6 × 10 feet\
-*Appropriate equipment (such as skis) is necessary to keep up a Fast pace in Arctic terrain.\
-†Characters’ rate of travel while waterborne depends on the vehicle carrying them; see “Vehicles.”\
-Miles per hour = Speed ÷ 10\
-Miles per day (Normal pace) = Miles per hour\
-× number of hours traveled (typically 8)\
-Fast pace = Miles per day × 1⅓ (round down)\
-Slow pace = Miles per day × 2/3 (round down)\
-If the characters are flying or their special move-\
-ment allows them to ignore Difficult Terrain, they\
-can move at a Fast pace regardless of the terrain.\
+If a party can travel at a high Speed for an extended time, as with a spell such as Wind Walk or a magic item such as a Carpet of Flying, translate the party’s Speed into travel rates using these rules:
+
+**Travel Terrain**
+
+| Terrain | Maximum Pace | Encounter Distance | Foraging DC | Navigation DC | Search DC |
+| --- | --- | --- | --- | --- | --- |
+| Arctic | Fast* | 6d6 × 10 feet | 20 | 10 | 10 |
+| Coastal | Normal | 2d10 × 10 feet | 10 | 5 | 15 |
+| Desert | Normal | 6d6 × 10 feet | 20 | 10 | 10 |
+| Forest | Normal | 2d8 × 10 feet | 10 | 15 | 15 |
+| Grassland | Fast | 6d6 × 10 feet | 15 | 5 | 15 |
+| Hill | Normal | 2d10 × 10 feet | 15 | 10 | 15 |
+| Mountain | Slow | 4d10 × 10 feet | 20 | 15 | 20 |
+| Swamp | Slow | 2d8 × 10 feet | 10 | 15 | 20 |
+| Underdark | Normal | 2d6 × 10 feet | 20 | 10 | 20 |
+| Urban | Normal | 2d6 × 10 feet | 20 | 15 | 15 |
+| Waterborne | Special† | 6d6 × 10 feet | 15 | 10 | 15 |
+
+*Appropriate equipment (such as skis) is necessary to keep up a Fast pace in Arctic terrain. †Characters’ rate of travel while waterborne depends on the vehicle carrying them; see “Vehicles.”
+
+Miles per hour = Speed ÷ 10
+
+Miles per day (Normal pace) = Miles per hour × number of hours traveled (typically 8)
+
+Fast pace = Miles per day × 1⅓ (round down)
+
+Slow pace = Miles per day × 2/3 (round down)
+
+If the characters are flying or their special movement allows them to ignore Difficult Terrain, they can move at a Fast pace regardless of the terrain.
 
 ## Rule
 

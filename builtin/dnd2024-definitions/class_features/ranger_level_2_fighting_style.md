@@ -18,17 +18,9 @@ splat_sources:
 
 <!-- SRD page 59 -->
 
-You gain a Fighting Style feat of your choice (see\
-“Feats”). Instead of choosing one of those feats, you\
-can choose the option below.\
-Druidic Warrior. You learn two Druid cantrips of\
-your choice (see the Druid class’s section for a list of\
-Druid spells). Guidance and Starry Wisp are recom-\
-mended. The chosen cantrips count as Ranger spells\
-for you, and Wisdom is your spellcasting ability for\
-them. Whenever you gain a Ranger level, you can\
-replace one of these cantrips with another Druid\
-cantrip.\
+You gain a Fighting Style feat of your choice (see “Feats”). Instead of choosing one of those feats, you can choose the option below.
+
+Druidic Warrior. You learn two Druid cantrips of your choice (see the Druid class’s section for a list of Druid spells). Guidance and Starry Wisp are recommended. The chosen cantrips count as Ranger spells for you, and Wisdom is your spellcasting ability for them. Whenever you gain a Ranger level, you can replace one of these cantrips with another Druid cantrip.
 
 ## Rule
 

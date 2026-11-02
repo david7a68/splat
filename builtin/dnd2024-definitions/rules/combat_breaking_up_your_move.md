@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 14 -->
 
-You can break up your move, using some of its\
-movement before and after any action, Bonus Ac-\
-tion, or Reaction you take on the same turn. For\
-example, if you have a Speed of 30 feet, you could go\
-10 feet, take an action, and then go 20 feet.\
+You can break up your move, using some of its movement before and after any action, Bonus Action, or Reaction you take on the same turn. For example, if you have a Speed of 30 feet, you could go 10 feet, take an action, and then go 20 feet.
 
 ## Rule
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 28 -->
 
-As a Barbarian, you gain the following class features\
-when you reach the specified Barbarian levels.\
-These features are listed in the Barbarian Features\
-table.\
+As a Barbarian, you gain the following class features when you reach the specified Barbarian levels. These features are listed in the Barbarian Features table.
 
 ## Rule
 

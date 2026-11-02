@@ -28,16 +28,15 @@ Int 1 −5 −5 Wis 7 −2 −2 Cha 3 −4 −4\
 Resistances Fire\
 Senses Blindsight 30 ft.; Passive Perception 8\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Traits
 
-Illumination. The beetle sheds Bright Light in a 10-foot\
-radius and Dim Light for an additional 10 feet.\
+Illumination. The beetle sheds Bright Light in a 10-foot radius and Dim Light for an additional 10 feet.
 
 ### Actions
 
-Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Fire damage.\
+Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 Fire damage.
 
 Original layout: [[../../srd-5.2.1/pages/351|page 351]].
 

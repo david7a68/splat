@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-When rung as a Utilize action, a Bell produces a\
-sound that can be heard up to 60 feet away.\
+When rung as a Utilize action, a Bell produces a sound that can be heard up to 60 feet away.
 
 ## Item
 

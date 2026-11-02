@@ -11,7 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [178],
 
 <!-- SRD page 178 -->
 
-A cantrip is a level 0 spell, which is cast without a\
-spell slot. See also “Spells.”\
+A cantrip is a level 0 spell, which is cast without a spell slot. See also “Spells.”
 
 Original layout: [[../pages/178|page 178]].

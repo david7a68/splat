@@ -18,20 +18,9 @@ splat_sources:
 
 <!-- SRD page 11 -->
 
-Ability checks can be key in determining the out-\
-come of a social interaction. Your roleplaying efforts\
-can alter an NPC’s attitude, but there might still be\
-an element of chance if the GM wants dice to play\
-a role in determining an NPC’s response to you. In\
-such situations, the GM will typically ask you to\
-take the Influence action.\
-Pay attention to your skill proficiencies when\
-thinking of how you will interact with an NPC; use\
-an approach that relies on your group’s skill pro-\
-ficiencies. For example, if the group needs to trick\
-a guard into letting them into a castle, the Rogue\
-who is proficient in Deception should lead the\
-discussion.\
+Ability checks can be key in determining the outcome of a social interaction. Your roleplaying efforts can alter an NPC’s attitude, but there might still be an element of chance if the GM wants dice to play a role in determining an NPC’s response to you. In such situations, the GM will typically ask you to take the Influence action.
+
+Pay attention to your skill proficiencies when thinking of how you will interact with an NPC; use an approach that relies on your group’s skill proficiencies. For example, if the group needs to trick a guard into letting them into a castle, the Rogue who is proficient in Deception should lead the discussion.
 
 ## Rule
 

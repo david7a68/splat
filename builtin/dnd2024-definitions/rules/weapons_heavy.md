@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 89 -->
 
-You have Disadvantage on attack rolls with a Heavy\
-weapon if it’s a Melee weapon and your Strength\
-score isn’t at least 13 or if it’s a Ranged weapon and\
-your Dexterity score isn’t at least 13.\
+You have Disadvantage on attack rolls with a Heavy weapon if it’s a Melee weapon and your Strength score isn’t at least 13 or if it’s a Ranged weapon and your Dexterity score isn’t at least 13.
 
 ## Rule
 

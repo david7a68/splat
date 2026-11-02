@@ -11,14 +11,12 @@ splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [154], "e
 
 <!-- SRD page 154 -->
 
-Level 9 Enchantment (Bard, Sorcerer, Warlock,\
-Wizard)\
+Level 9 Enchantment (Bard, Sorcerer, Warlock, Wizard)\
 Casting Time: Action\
 Range: 60 feet\
 Component: V\
-Duration: Instantaneous\
-You compel one creature you can see within range\
-to die. If the target has 100 Hit Points or fewer, it\
-dies. Otherwise, it takes 12d12 Psychic damage.\
+Duration: Instantaneous
+
+You compel one creature you can see within range to die. If the target has 100 Hit Points or fewer, it dies. Otherwise, it takes 12d12 Psychic damage.
 
 Original layout: [[../pages/154|page 154]].

@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 198 -->
 
-Injury Poison\
-A creature subjected to Purple Worm Poison makes\
-a DC 21 Constitution saving throw, taking 35 (10d6)\
-Poison damage on a failed save or half as much dam-\
-age on a successful one.\
+Injury Poison
+
+A creature subjected to Purple Worm Poison makes a DC 21 Constitution saving throw, taking 35 (10d6) Poison damage on a failed save or half as much damage on a successful one.
 
 ## Rule
 

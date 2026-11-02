@@ -24,12 +24,35 @@ pub enum Grouping {
     Explicit,
 }
 impl Grouping {
+    pub const ALL: [Self; 4] = [
+        Self::Identical,
+        Self::Individual,
+        Self::BySide,
+        Self::Explicit,
+    ];
+    /// Reads on from "Roll NPC initiative".
     pub fn label(self) -> &'static str {
         match self {
-            Self::Identical => "Identical NPCs (D&D default)",
-            Self::Individual => "Each NPC separately",
-            Self::BySide => "One roll per side",
-            Self::Explicit => "Encounter initiative groups",
+            Self::Identical => "In groups of identical NPCs (D&D default)",
+            Self::Individual => "Individually",
+            Self::BySide => "In one group per side",
+            Self::Explicit => "In the encounter's initiative groups",
+        }
+    }
+    /// How an encounter group takes its initiative under this rule. A typed total is the
+    /// DM's ruling, and it applies to every member under any rule.
+    pub fn arrival_rule(self) -> &'static str {
+        match self {
+            Self::Identical => {
+                "A group rolls once, with the first member’s bonus, even with different creatures."
+            }
+            Self::Individual => "Each member of a group rolls alone, by the campaign's rule.",
+            Self::BySide => {
+                "A group takes the initiative its side already has. A side with none rolls once."
+            }
+            Self::Explicit => {
+                "A group rolls once, with the first member’s bonus, as its own initiative group."
+            }
         }
     }
 }
@@ -218,7 +241,7 @@ impl Options {
 mod tests {
     use super::*;
     #[test]
-    fn overrides_roundtrip_and_external_manifest_edits_are_preserved() {
+    fn settings_roundtrip_and_external_manifest_edits_are_preserved() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = Campaign {
             id: Uuid::new_v4(),
@@ -242,6 +265,10 @@ mod tests {
             options.directory(&campaign).unwrap(),
             dir.path().join("Sessions/Combat")
         );
+        let rule = "Rules/Encounter Initiative.md";
+        let source = fs::read_to_string(dir.path().join(rule)).unwrap();
+        let rule = Entry::parse(rule, &source).unwrap();
+        assert_eq!(splat::content::validate(&[rule]).warnings.len(), 0);
         let text = fs::read_to_string(dir.path().join("Campaign.md")).unwrap();
         assert!(options.save(&campaign, &document.text).is_err());
         assert_eq!(

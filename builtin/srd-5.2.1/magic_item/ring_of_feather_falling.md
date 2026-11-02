@@ -11,8 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [238
 
 <!-- SRD page 238 -->
 
-Ring, Rare (Requires Attunement)\
-When you fall while wearing this ring, you descend\
-60 feet per round and take no damage from falling.\
+Ring, Rare (Requires Attunement)
+
+When you fall while wearing this ring, you descend 60 feet per round and take no damage from falling.
 
 Original layout: [[../pages/238|page 238]].

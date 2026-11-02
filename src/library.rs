@@ -60,6 +60,16 @@ impl Owner {
     }
 }
 
+/// The line under the reader's title. It wraps, so unlike a list row it always has room to
+/// name the package, the built-in one too.
+fn reader_subtitle(owner: &Owner, listed: &str) -> String {
+    if *owner == Owner::Builtin {
+        format!("{listed} · {BUILTIN_NAME}")
+    } else {
+        listed.to_owned()
+    }
+}
+
 /// What the catalogue shows. The default is what the active campaign can use.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq)]
 enum Scope {
@@ -102,6 +112,8 @@ impl Note {
 #[derive(Default)]
 struct Loaded {
     notes: Vec<Note>,
+    /// Problems that kept content from loading. The notes cannot show these again.
+    load_errors: Vec<String>,
     diagnostics: Vec<String>,
     /// What the active campaign can use: its selections and what they require.
     uses: Option<std::collections::HashSet<Uuid>>,
@@ -109,6 +121,31 @@ struct Loaded {
     counts: std::sync::OnceLock<Vec<(Section, usize)>>,
 }
 impl Loaded {
+    /// Checks all the loaded content as one, so that a reference can resolve to built-in
+    /// content or to another package. The check of one package alone cannot see those.
+    fn refresh_diagnostics(&mut self) {
+        let entries: Vec<_> = self
+            .notes
+            .iter()
+            .filter_map(|n| n.entry.as_ref())
+            // The SRD pages have no notes in the Library, but entries can refer to them.
+            .chain(content::builtin::entries())
+            .collect();
+        let report = content::validate_all(&entries);
+        let checks = report.errors.into_iter().chain(report.warnings);
+        self.diagnostics = self
+            .load_errors
+            .iter()
+            .cloned()
+            .chain(checks.map(|d| format!("{}: {}", d.path, d.message)))
+            .chain(
+                self.notes
+                    .iter()
+                    .filter_map(|n| n.error.as_ref().map(|e| format!("{}: {e}", n.path))),
+            )
+            .collect();
+    }
+
     fn in_scope(&self, note: &Note, scope: Scope) -> bool {
         match scope {
             Scope::All => true,
@@ -270,8 +307,26 @@ fn action_with_reason<'a>(ui: &mut egui::Ui, action: Action<'a>, reason: Option<
     .inner
 }
 
-fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
-    design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, name, subtitle)
+fn entry_row(
+    ui: &mut egui::Ui,
+    name: &str,
+    subtitle: &str,
+    owner: &Owner,
+    selected: bool,
+) -> egui::Response {
+    // Only when the whole line fits: a cut name says nothing, and the reader always shows it.
+    // The line of an entry from any other package names it already.
+    let room = ui.available_width() - 2.0 * design::S;
+    let with_package = (*owner == Owner::Builtin)
+        .then(|| format!("{subtitle} · {BUILTIN_NAME}"))
+        .filter(|line| design::number_width(ui, line, &Type::Small.font(ui)) <= room);
+    design::two_line_row(
+        ui,
+        ENTRY_ROW_HEIGHT,
+        selected,
+        name,
+        with_package.as_deref().unwrap_or(subtitle),
+    )
 }
 
 fn local_module(path: &Path) -> Result<Module, String> {
@@ -437,7 +492,6 @@ pub(crate) fn write_note(
 
 fn load(module: Option<&Module>) -> Result<Loaded, String> {
     let mut notes = Vec::new();
-    let mut diagnostics = Vec::new();
     if let Some(module) = module {
         let path = module.path.canonicalize().map_err(|e| e.to_string())?;
         let (entries, errors) = content::read_directory(&path)?;
@@ -448,14 +502,6 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                     .into(),
             );
         }
-        let report = content::validate(&entries);
-        diagnostics.extend(
-            report
-                .errors
-                .into_iter()
-                .chain(report.warnings)
-                .map(|d| format!("{}: {}", d.path, d.message)),
-        );
         for entry in entries {
             let text = fs::read_to_string(note_path(&module.path, &entry.path)?)
                 .map_err(|e| e.to_string())?;
@@ -470,7 +516,6 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
         for error in errors {
             let text = fs::read_to_string(note_path(&module.path, &error.path)?)
                 .map_err(|e| e.to_string())?;
-            diagnostics.push(format!("{}: {}", error.path, error.message));
             notes.push(Note {
                 path: error.path,
                 text,
@@ -496,7 +541,6 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     notes.sort_by_cached_key(|n| natural_key(n.name()));
     Ok(Loaded {
         notes,
-        diagnostics,
         ..Default::default()
     })
 }
@@ -505,19 +549,23 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
 fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, String> {
     let mut all = load(None)?;
     for module in modules {
+        if let Err(error) = splat::content::art::ArtIndex::default().add_package(&module.path) {
+            all.load_errors.push(format!("{}: {error}", module.name));
+        }
         match load(Some(module)) {
             Ok(package) => {
                 all.notes.extend(package.notes);
-                all.diagnostics.extend(package.diagnostics);
             }
-            Err(error) => all.diagnostics.push(format!("{}: {error}", module.name)),
+            Err(error) => all.load_errors.push(format!("{}: {error}", module.name)),
         }
     }
     if let Some(campaign) = campaign {
         let owner = Owner::Campaign(campaign.clone());
         match content::read_directory(&campaign.path) {
             Ok((entries, errors)) => {
-                for entry in entries.into_iter().filter(|e| e.kind != "campaign") {
+                for entry in entries.into_iter().filter(|e| {
+                    e.kind != "campaign" && !splat::character::campaign_package::is_manifest(e)
+                }) {
                     let text = fs::read_to_string(note_path(&campaign.path, &entry.path)?)
                         .map_err(|e| e.to_string())?;
                     all.notes.push(Note {
@@ -540,7 +588,7 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
                     });
                 }
             }
-            Err(error) => all.diagnostics.push(format!("{}: {error}", campaign.name)),
+            Err(error) => all.load_errors.push(format!("{}: {error}", campaign.name)),
         }
         // If the selections cannot be read, say so and show everything rather than nothing.
         match CampaignDocument::load(campaign)
@@ -557,10 +605,11 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
                         .collect(),
                 );
             }
-            Err(error) => all.diagnostics.push(format!("{}: {error}", campaign.name)),
+            Err(error) => all.load_errors.push(format!("{}: {error}", campaign.name)),
         }
     }
     all.notes.sort_by_cached_key(|n| natural_key(n.name()));
+    all.refresh_diagnostics();
     Ok(all)
 }
 
@@ -959,7 +1008,7 @@ impl Library {
                         });
                     ui.label(
                         Type::Small
-                            .rich(ui, "A reference to another package can stay unresolved in a check of one package.")
+                            .rich(ui, "An unresolved reference can mean that the package it needs is not registered.")
                             .color(colors().muted),
                     );
                 },
@@ -1004,10 +1053,12 @@ impl Library {
             .unwrap_or_default();
         let searching = !self.search.trim().is_empty();
         if !compact {
-            egui::SidePanel::left("library_sections")
-                .resizable(false)
-                .exact_width(158.0)
-                .frame(egui::Frame::new())
+            design::Column::left("library_sections", 166.0, 150.0..=280.0)
+                // The drag handle is on this edge, so the rows stop short of it.
+                .frame(egui::Frame::new().inner_margin(egui::Margin {
+                    right: design::S as i8,
+                    ..Default::default()
+                }))
                 .show_inside(ui, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt("section_list")
@@ -1133,9 +1184,7 @@ impl Library {
         // Beside Lookup at the minimum window, a draft needs the room more than the list.
         let hide_list = ui.available_width() < 480.0 && (dirty || self.source);
         if !hide_list {
-            egui::SidePanel::left("library_entries")
-            .resizable(false)
-            .exact_width(list_width)
+            design::Column::left("library_entries", list_width, 190.0..=560.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: design::S as i8,
                 right: design::S as i8,
@@ -1239,7 +1288,13 @@ impl Library {
                             let subtitle = &subtitles[i];
                             let response = ui
                                 .push_id(i, |ui| {
-                                    entry_row(ui, note.name(), subtitle, selected == Some(i))
+                                    entry_row(
+                                        ui,
+                                        note.name(),
+                                        subtitle,
+                                        &note.owner,
+                                        selected == Some(i),
+                                    )
                                 })
                                 .inner;
                             if response
@@ -1768,6 +1823,17 @@ impl Library {
         let title = reading
             .as_ref()
             .map_or(note.name(), |reading| reading.title.as_str());
+        let reading_subtitle = reader_subtitle(
+            &note.owner,
+            &parsed
+                .as_ref()
+                .ok()
+                .filter(|_| reading.is_some())
+                .map_or_else(
+                    || subtitle.to_owned(),
+                    |entry| presentation::reading_subtitle(entry, subtitle),
+                ),
+        );
         let dirty = self.draft != note.text;
         if dirty {
             self.message = None;
@@ -2016,16 +2082,7 @@ impl Library {
                             );
                             reader_style::title(ui, title);
                             if note.entry.is_some() {
-                                // A reviewed title drops the level, so the line keeps it.
-                                let line = parsed
-                                    .as_ref()
-                                    .ok()
-                                    .filter(|_| reading.is_some())
-                                    .map_or_else(
-                                        || subtitle.to_owned(),
-                                        |entry| presentation::reading_subtitle(entry, subtitle),
-                                    );
-                                reader_style::subtitle(ui, &line);
+                                reader_style::subtitle(ui, &reading_subtitle);
                             }
                         });
                         open_link = view::show(
@@ -2100,19 +2157,7 @@ impl Library {
                     self.scope_counts = None;
                     self.just_saved = true;
                     self.content_changed = Some(root);
-                    let entries: Vec<_> = l.notes.iter().filter_map(|n| n.entry.clone()).collect();
-                    let r = content::validate(&entries);
-                    l.diagnostics = r
-                        .errors
-                        .into_iter()
-                        .chain(r.warnings)
-                        .map(|d| format!("{}: {}", d.path, d.message))
-                        .collect();
-                    l.diagnostics.extend(
-                        l.notes
-                            .iter()
-                            .filter_map(|n| n.error.as_ref().map(|e| format!("{}: {e}", n.path))),
-                    );
+                    l.refresh_diagnostics();
                     self.error = None;
                 }
                 Err(e) if e == NOTE_CHANGED => {
@@ -2245,6 +2290,7 @@ mod tests {
                         ui,
                         &"Long entry name ".repeat(30),
                         &"Long subtitle ".repeat(30),
+                        &Owner::Builtin,
                         false,
                     );
                     assert_eq!(response.rect.height(), 44.0);
@@ -2290,6 +2336,57 @@ mod tests {
         loaded.invalidate();
         assert_eq!(loaded.count(Section::All), 2);
         assert_eq!(loaded.subtitles().len(), 2);
+    }
+
+    #[test]
+    fn built_in_row_names_its_package_only_when_the_whole_line_fits() {
+        let line_at = |width: f32| {
+            let ctx = egui::Context::default();
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, 200.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        entry_row(ui, "Fireball", "Spell · Level 3", &Owner::Builtin, false);
+                    });
+                },
+            );
+            output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.starts_with("Spell") => {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .unwrap()
+        };
+        assert_eq!(line_at(600.0), format!("Spell · Level 3 · {BUILTIN_NAME}"));
+        assert_eq!(line_at(150.0), "Spell · Level 3");
+    }
+
+    #[test]
+    fn reader_names_the_package_once() {
+        let package = Owner::Package(Module {
+            id: Uuid::new_v4(),
+            name: "Ashen Marches".into(),
+            path: "ashen".into(),
+        });
+        // The list leaves the built-in package unsaid, and already names any other.
+        assert_eq!(
+            reader_subtitle(&Owner::Builtin, "Spell · Level 3"),
+            format!("Spell · Level 3 · {BUILTIN_NAME}")
+        );
+        assert_eq!(
+            reader_subtitle(&package, "Spell · Level 3 · Ashen Marches"),
+            "Spell · Level 3 · Ashen Marches"
+        );
     }
 
     /// Run explicitly to measure the complete library UI while scrolling the built-in package.
@@ -2369,11 +2466,11 @@ mod tests {
             ),
             (
                 "definitions/rules/d20_tests_ability_modifier_2.md",
-                "Strength Physically resist direct force\nDexterity Dodge",
+                "Physically resist direct force",
             ),
             (
                 "definitions/rules/d20_tests_ability_modifier.md",
-                "Wisdom Notice things in the environment or in creatures’ behavior\nCharisma",
+                "Notice things in the environment or in creatures’ behavior",
             ),
             (
                 "definitions/spells/divine_smite.md",
@@ -2403,7 +2500,7 @@ mod tests {
             if path.ends_with("augury.md") {
                 assert!(
                     readable.contains(
-                        "Weal Good  \nWoe Bad  \nWeal and woe Good and bad  \nIndifference"
+                        "| Weal | Good |\n| Woe | Bad |\n| Weal and woe | Good and bad |"
                     ),
                     "{readable}"
                 );
@@ -2666,7 +2763,7 @@ mod tests {
         assert!(
             entry
                 .body
-                .contains("of Lore subclass is detailed after this class’s descrip-")
+                .contains("of Lore subclass is detailed after this class’s description")
         );
         for width in [390.0, 900.0] {
             let mut library = Library {
@@ -2714,7 +2811,7 @@ mod tests {
                 .join("\n");
             for expected in [
                 "Bard Subclass",
-                "Definition · class feature · Bard · Level 3",
+                "Definition · class feature · Bard · Level 3 · D&D 2024 · SRD 5.2.1",
                 "Choose a Bard subclass.",
                 "Available",
                 "Source text",
@@ -2876,9 +2973,11 @@ mod tests {
         assert!(rendered.contains("Starting equipment"));
         assert!(!rendered.contains("dnd2024:class_features/"));
         assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());
+        // The class table names the feature too. The link is in the list below it.
+        assert!(rendered.contains("Class table"));
         let link = texts
             .iter()
-            .find(|text| text.galley.job.text == "Relentless Rage")
+            .rfind(|text| text.galley.job.text == "Relentless Rage")
             .unwrap();
         let pos = link.pos + link.galley.size() * 0.5;
         for pressed in [true, false] {
@@ -3054,6 +3153,59 @@ mod tests {
         let loaded = load(Some(&m)).unwrap();
         assert_eq!(loaded.notes.len(), 2);
         assert!(loaded.notes.iter().any(|n| n.error.is_some()));
-        assert!(!loaded.diagnostics.is_empty());
+        let loaded = load_all(std::slice::from_ref(&m), None).unwrap();
+        assert!(
+            loaded
+                .diagnostics
+                .iter()
+                .any(|d| d.starts_with("Broken.md"))
+        );
+    }
+
+    /// Writes a package whose one item needs `needs`.
+    fn package_needing(root: &Path, name: &str, namespace: &str, needs: &str) -> Module {
+        let module = create_module(&root.join(name), name, namespace).unwrap();
+        let note = format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: item\nsplat_key: {namespace}:items/own\n\
+             splat_name: Own\nsplat_item: {{category: gear}}\nsplat_requires:\n  - key: {needs}\n---\n",
+            Uuid::new_v4()
+        );
+        fs::write(module.path.join("Own.md"), note).unwrap();
+        module
+    }
+
+    #[test]
+    fn references_resolve_across_the_whole_library() {
+        let temp = tempfile::tempdir().unwrap();
+        let modules = [
+            // One reference to built-in content, and one to the other package.
+            package_needing(temp.path(), "First", "first", "dnd2024:equipment/battleaxe"),
+            package_needing(temp.path(), "Second", "second", "first:items/own"),
+        ];
+        let mut loaded = load_all(&modules, None).unwrap();
+        assert_eq!(loaded.diagnostics, Vec::<String>::new());
+        // A save checks again, and that check must agree with the first.
+        loaded.refresh_diagnostics();
+        assert_eq!(loaded.diagnostics, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_reference_to_nothing_is_still_reported() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = package_needing(temp.path(), "First", "first", "missing:items/gone");
+        let loaded = load_all(&[module], None).unwrap();
+        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
+        assert!(loaded.diagnostics[0].contains("missing:items/gone"));
+    }
+
+    #[test]
+    fn a_save_keeps_the_problems_that_kept_content_from_loading() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut module = package_needing(temp.path(), "First", "first", "first:items/own");
+        module.path = temp.path().join("deleted");
+        let mut loaded = load_all(&[module], None).unwrap();
+        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
+        loaded.refresh_diagnostics();
+        assert_eq!(loaded.diagnostics.len(), 1, "{:?}", loaded.diagnostics);
     }
 }

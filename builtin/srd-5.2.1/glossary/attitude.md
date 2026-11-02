@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [177],
 
 <!-- SRD page 177 -->
 
-A monster has a starting attitude toward a player\
-character: Friendly, Hostile, or Indifferent. See also\
-“Friendly,” “Hostile,” “Indifferent,” and “Influence.”\
+A monster has a starting attitude toward a player character: Friendly, Hostile, or Indifferent. See also “Friendly,” “Hostile,” “Indifferent,” and “Influence.”
 
 Original layout: [[../pages/177|page 177]].

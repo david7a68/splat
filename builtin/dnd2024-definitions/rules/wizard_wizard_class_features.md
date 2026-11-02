@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 77 -->
 
-As a Wizard, you gain the following class features\
-when you reach the specified Wizard levels. These\
-features are listed in the Wizard Features table.\
+As a Wizard, you gain the following class features when you reach the specified Wizard levels. These features are listed in the Wizard Features table.
 
 ## Rule
 

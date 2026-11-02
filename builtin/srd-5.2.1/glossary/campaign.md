@@ -11,7 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [178],
 
 <!-- SRD page 178 -->
 
-A campaign is a series of adventures. See also\
-“Adventure.”\
+A campaign is a series of adventures. See also “Adventure.”
 
 Original layout: [[../pages/178|page 178]].

@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-A Bucket holds up to half a cubic foot of contents.\
+A Bucket holds up to half a cubic foot of contents.
 
 ## Item
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 13 -->
 
-Adventurers encounter many dangerous monsters\
-and nefarious villains. In those moments, combat\
-often breaks out.\
+Adventurers encounter many dangerous monsters and nefarious villains. In those moments, combat often breaks out.
 
 ## Rule
 

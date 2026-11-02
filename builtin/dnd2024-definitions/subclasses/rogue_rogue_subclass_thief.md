@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 64 -->
 
-Hunt for Treasure as a Classic Adventurer\
-A mix of burglar, treasure hunter, and explorer, you\
-are the epitome of an adventurer. In addition to im-\
-proving your agility and stealth, you gain abilities\
-useful for delving into ruins and getting maximum\
-benefit from the magic items you find there.\
+### Hunt for Treasure as a Classic Adventurer
+
+A mix of burglar, treasure hunter, and explorer, you are the epitome of an adventurer. In addition to improving your agility and stealth, you gain abilities useful for delving into ruins and getting maximum benefit from the magic items you find there.
 
 ## Rule group
 

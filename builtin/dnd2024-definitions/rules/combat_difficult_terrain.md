@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 14 -->
 
-Combatants are often slowed down by Difficult\
-Terrain. Low furniture, rubble, undergrowth, steep\
-stairs, snow, and shallow bogs are examples of Diffi-\
-cult Terrain.\
-Every foot of movement in Difficult Terrain costs\
-1 extra foot, even if multiple things in a space count\
-as Difficult Terrain.\
+Combatants are often slowed down by Difficult Terrain. Low furniture, rubble, undergrowth, steep stairs, snow, and shallow bogs are examples of Difficult Terrain.
+
+Every foot of movement in Difficult Terrain costs 1 extra foot, even if multiple things in a space count as Difficult Terrain.
 
 ## Rule
 

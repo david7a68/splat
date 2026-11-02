@@ -28,12 +28,11 @@ Int 3 −4 −4 Wis 12 +1 +1 Cha 6 −2 −2\
 Skills Perception +5, Stealth +4\
 Senses Darkvision 90 ft.; Passive Perception 15\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Actions
 
-Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 – 1)\
-Piercing damage.\
+Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 – 1) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/356|page 356]].
 

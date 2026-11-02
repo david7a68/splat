@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 7 -->
 
-You add your Proficiency Bonus to your saving\
-throw if you have proficiency in that kind of save.\
-See “Proficiency” later in “Playing the Game.”\
+You add your Proficiency Bonus to your saving throw if you have proficiency in that kind of save. See “Proficiency” later in “Playing the Game.”
 
 ## Rule
 

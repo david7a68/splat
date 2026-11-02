@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 74 -->
 
-Prerequisite: Level 9+ Warlock\
-You can cast Arcane Eye without expending a spell\
-slot.\
+Prerequisite: Level 9+ Warlock
+
+You can cast Arcane Eye without expending a spell slot.
 
 ## Rule
 

@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 24 -->
 
-In tier 2, characters are full-fledged adventurers.\
-Spellcasters gain iconic spells such as Fireball, Light-\
-ning Bolt, and Raise Dead. Most weapon-focused\
-classes gain the ability to make multiple attacks\
-in a round. The characters now face dangers that\
-threaten cities and kingdoms.\
+In tier 2, characters are full-fledged adventurers. Spellcasters gain iconic spells such as Fireball, Lightning Bolt, and Raise Dead. Most weapon-focused classes gain the ability to make multiple attacks in a round. The characters now face dangers that threaten cities and kingdoms.
 
 ## Rule
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-You spend the bare minimum for your necessities.\
-You might be exposed to unhealthy conditions and\
-opportunistic criminals.\
+You spend the bare minimum for your necessities. You might be exposed to unhealthy conditions and opportunistic criminals.
 
 ## Rule
 

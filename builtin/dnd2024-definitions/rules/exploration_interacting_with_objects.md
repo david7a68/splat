@@ -18,15 +18,7 @@ splat_sources:
 
 <!-- SRD page 11 -->
 
-Interacting with objects is often simple to resolve.\
-The player tells the GM that their character is do-\
-ing something, such as moving a lever or opening\
-
-<!-- SRD page 12 -->
-
-a door, and the GM describes what happens. Some-\
-times, however, rules govern what you can do with\
-an object, as detailed in the following sections.\
+Interacting with objects is often simple to resolve. The player tells the GM that their character is doing something, such as moving a lever or opening a door, and the GM describes what happens. Sometimes, however, rules govern what you can do with an object, as detailed in the following sections.
 
 ## Rule
 

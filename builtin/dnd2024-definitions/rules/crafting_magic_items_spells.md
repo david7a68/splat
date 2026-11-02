@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 207 -->
 
-If a magic item allows its user to cast any spells\
-from it, you must have all those spells prepared ev-\
-ery day you spend crafting the item.\
+If a magic item allows its user to cast any spells from it, you must have all those spells prepared every day you spend crafting the item.
 
 ## Rule
 

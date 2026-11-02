@@ -18,24 +18,11 @@ splat_sources:
 
 <!-- SRD page 106 -->
 
-The effects of different spells add together while\
-their durations overlap. In contrast, the effects of\
-the same spell cast multiple times don’t combine.\
-Instead, the most potent effect—such as the high-\
-est bonus—from those castings applies while their\
-durations overlap. The most recent effect applies if\
-the castings are equally potent and their durations\
-overlap. For example, if two Clerics cast Bless on\
-the same target, that target gains the spell’s benefit\
-only once; the target doesn’t receive two bonus dice.\
-But if the durations of the spells overlap, the effect\
-continues until the duration of the second Bless\
-ends.\
-idEntiFyinG an onGoinG spEll\
-You can try to identify a non-instantaneous spell by\
-its observable effects if its duration is ongoing. To\
-identify it, you must take the Study action and suc-\
-ceed on a DC 15 Intelligence (Arcana) check.\
+The effects of different spells add together while their durations overlap. In contrast, the effects of the same spell cast multiple times don’t combine. Instead, the most potent effect—such as the highest bonus—from those castings applies while their durations overlap. The most recent effect applies if the castings are equally potent and their durations overlap. For example, if two Clerics cast Bless on the same target, that target gains the spell’s benefit only once; the target doesn’t receive two bonus dice. But if the durations of the spells overlap, the effect continues until the duration of the second Bless ends.
+
+### Identifying An Ongoing Spell
+
+You can try to identify a non-instantaneous spell by its observable effects if its duration is ongoing. To identify it, you must take the Study action and succeed on a DC 15 Intelligence (Arcana) check.
 
 ## Rule
 

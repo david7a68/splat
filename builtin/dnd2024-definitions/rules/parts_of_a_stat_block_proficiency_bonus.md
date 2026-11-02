@@ -18,17 +18,16 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-A monster’s Proficiency Bonus (PB) is determined\
-by its CR, as shown in the Proficiency Bonus by\
-Challenge Rating table, and is reflected in saving\
-throws, skills, and other statistics where the mon-\
-ster’s exceptional aptitude is a factor.\
-Proficiency Bonus by Challenge Rating\
-CR PB CR PB\
-0–4 +2 17–20 +6\
-5–8 +3 21–24 +7\
-9–12 +4 25–28 +8\
-13–16 +5 29–30 +9\
+A monster’s Proficiency Bonus (PB) is determined by its CR, as shown in the Proficiency Bonus by Challenge Rating table, and is reflected in saving throws, skills, and other statistics where the monster’s exceptional aptitude is a factor.
+
+**Proficiency Bonus by Challenge Rating**
+
+| CR | PB | CR | PB |
+| --- | --- | --- | --- |
+| 0–4 | +2 | 17–20 | +6 |
+| 5–8 | +3 | 21–24 | +7 |
+| 9–12 | +4 | 25–28 | +8 |
+| 13–16 | +5 | 29–30 | +9 |
 
 ## Rule
 

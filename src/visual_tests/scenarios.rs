@@ -6,10 +6,13 @@
 //! says what the user does and a rename changes one line.
 use super::{
     driver::{DEFAULT, Driver, LARGE, SMALL, Sizes},
-    fixture::{CAMPAIGN, MODULE, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20, UNLINKED_CAMPAIGN},
+    fixture::{
+        CAMPAIGN, GROUP_GOBLINS, GROUP_LOST, GROUP_RIVALS, MODULE, PAST_SESSION, QUIET_CAMPAIGN,
+        RUN, RUN_12, RUN_20, RUN_ARENA, RUN_OLD, RUN_PAST, UNLINKED_CAMPAIGN,
+    },
     steps::*,
 };
-use eframe::egui::{Key, Pos2, pos2};
+use eframe::egui::{self, Key, Pos2, pos2};
 
 /// The middle of the reading pane and of the entry list, at the minimum window.
 const READER: Pos2 = pos2(720.0, 400.0);
@@ -39,7 +42,7 @@ pub mod library_browse {
     const SEARCH_RESULTS: &str = "Search results";
     const CREATURE: &str = "Adult Black Dragon";
     const SPELL_ROW: &str = "Fireball · ";
-    const CLASS_ROW: &str = "Wizard · ";
+    const CLASS_ROW: &str = "Wizard · Class";
     const CREATURES_SECTION: &str = "Creatures   ";
     const CREATURES_COUNT: &str = "336 entries";
     const NEXT_CREATURE: &str = "Aboleth";
@@ -524,8 +527,8 @@ pub mod campaign_content {
         );
         d.click(CLEAR_SEARCH);
         d.begin_task();
-        d.click_containing(CAMPAIGN_ENTRY);
-        d.state("entry-read", Sizes::Default);
+        d.click_containing(&format!("{CAMPAIGN_ENTRY} · Creature"));
+        d.state("entry-read", Sizes::All);
         d.review("T6.4", "the campaign entry reader");
         // Read from the reader's own place: the list beside it has numbers of its own.
         let reader = d.painted_from_label(CAMPAIGN_ENTRY);
@@ -547,6 +550,14 @@ pub mod campaign_content {
         d.expect(SAVED);
         d.state("entry-saved", Sizes::Default);
         d.goal("save the campaign entry");
+
+        // A picture opens at full size, over the page, and Escape closes it.
+        d.click("Read");
+        d.click(CAMPAIGN_ENTRY);
+        d.state("picture-full-size", Sizes::Default);
+        d.press(Key::Escape);
+        d.settle();
+        d.expect(EDIT_MARKDOWN);
 
         std::fs::write(
             d.root.join(BROKEN_NOTE),
@@ -698,7 +709,56 @@ pub mod party {
         d.expect(NOT_LINKED);
         d.state("campaign-not-linked", Sizes::All);
         d.goal("see a campaign with no link");
+
+        // A note edited outside Splat stops its save. Force read needs a session, then replaces
+        // the note and keeps the edited version in an archive.
+        let copies = d.root.join("campaigns/emberfall/Characters/D&D Beyond");
+        let note = std::fs::read_dir(&copies)
+            .expect("list character copies")
+            .map(|file| file.expect("read character copy").path())
+            .find(|path| path.is_file() && path.extension().is_some_and(|x| x == "md"))
+            .expect("a character copy");
+        std::fs::write(&note, EDITED_NOTE).expect("edit the copy on disk");
+        switch_campaign(d, CAMPAIGN);
+        d.expect(CONNECT_FIRST);
+        d.observe(
+            "Force read needs a session",
+            !d.has(FORCE_READ) && std::fs::read_to_string(&note).is_ok_and(|t| t == EDITED_NOTE),
+            "Signed out, the warning says to connect, and the edited note stays",
+        );
+        d.state("copy-has-local-edits-signed-out", Sizes::Default);
+
+        d.app_mut()
+            .settings
+            .simulate(crate::settings::Account::Connected);
+        d.settle();
+        d.expect(FORCE_READ);
+        d.state("copy-has-local-edits", Sizes::Default);
+        d.click(FORCE_READ);
+        d.settle();
+        d.expect(REPLACED);
+        d.state("force-read-replaced", Sizes::Default);
+        let archive = note.with_extension("md.splat-archive");
+        d.observe(
+            "Force read replaces and keeps",
+            std::fs::read_to_string(&note).is_ok_and(|t| t != EDITED_NOTE && t.starts_with("---"))
+                && std::fs::read_to_string(&archive).is_ok_and(|t| t == EDITED_NOTE)
+                && !d.has(FORCE_READ),
+            "The note holds the sheet, the archive holds the edited words, and the warning is gone",
+        );
+        d.click(DISMISS);
+        d.settle();
+        d.observe(
+            "Force read report dismisses",
+            !d.has_containing(REPLACED),
+            "Dismiss removes the report of where the edits went",
+        );
     }
+    const FORCE_READ: &str = "Force read";
+    const CONNECT_FIRST: &str = "Connect to D&D Beyond in Settings to use it.";
+    const REPLACED: &str = "Force read replaced local edits";
+    const DISMISS: &str = "Dismiss";
+    const EDITED_NOTE: &str = "My own words";
 }
 
 /// W5: build an encounter from a cold start, then inspect a saved one.
@@ -711,6 +771,10 @@ pub mod encounter_build {
     const SAVED_NOTE: &str = "Encounter saved.";
     const SAVED_ENCOUNTER: &str = "Bridge Ambush";
     const SAVED_FIRST_SLOT: &str = "1. Brannoch Vale";
+    const SYNC_OPTION: &str = "Sync party with D&D Beyond";
+    const PARTY_NOW: &str = "Party now: HP";
+    const LIVE_ROW: &str = "HP 11/41 · Bloodied · AC 15 · Poisoned";
+    const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
     const READ: &str = "Read";
     const RESULT_NAME: &str = "Wolf";
@@ -732,7 +796,7 @@ pub mod encounter_build {
     pub fn run(d: &mut Driver<'_>) {
         // T5.3 measures the whole build, so it starts from the cold start.
         d.begin_task();
-        d.expect(SAVED_RUNS);
+        d.expect(READY_TO_RUN);
         d.state("encounter-list", Sizes::All);
         d.check_tab_order("encounters, list");
 
@@ -844,26 +908,26 @@ pub mod encounter_build {
         );
 
         d.click(BACK_TO_LIST);
-        d.expect(SAVED_RUNS);
+        d.expect(READY_TO_RUN);
         let nodes = d.nodes();
         let dated = nodes.iter().any(|node| {
             node.name.contains(RUN)
                 && node.name.contains("In progress")
                 && node.name.contains("Saved ")
         });
-        let grouped = nodes
+        let first = nodes
             .iter()
-            .position(|node| node.name == RUN.to_uppercase())
+            .position(|node| node.name == "In progress")
             .zip(
                 nodes
                     .iter()
-                    .position(|node| node.name.contains(RUN) && node.name.contains("Round")),
+                    .position(|node| node.name.contains(READY_TO_RUN)),
             )
-            .is_some_and(|(group, run)| group < run);
+            .is_some_and(|(unfinished, ready)| unfinished < ready);
         d.observe(
             "T4.4",
-            dated && grouped,
-            format!("Saved runs show when they were saved, and their status: {dated}. Grouped under their encounter: {grouped}"),
+            dated && first,
+            format!("Unfinished runs show their encounter, when they were saved, and their status: {dated}. They come first: {first}"),
         );
         d.state("saved-runs", Sizes::Default);
 
@@ -872,6 +936,30 @@ pub mod encounter_build {
         d.expect(SAVED_FIRST_SLOT);
         d.state("saved-roster", Sizes::All);
         d.goal("open a saved encounter");
+        d.begin_task();
+
+        // T5.6: what the party has left is in view while the DM decides what to put against it.
+        let (option, together, row) = (
+            d.has(SYNC_OPTION),
+            d.visible_text(PARTY_NOW),
+            d.visible_text(LIVE_ROW),
+        );
+        d.observe(
+            "T5.6",
+            option && together && row,
+            format!(
+                "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
+            ),
+        );
+        d.click(SYNC_OPTION);
+        d.state("saved-roster-sync-off", Sizes::Default);
+        d.observe(
+            "T5.6",
+            d.visible_text(LOCAL_ONLY) && !d.visible_text(PARTY_NOW),
+            "With sync off, the roster says that nothing reaches D&D Beyond, and the live line goes",
+        );
+        d.click(SYNC_OPTION);
+        d.expect(PARTY_NOW);
     }
 }
 
@@ -889,7 +977,7 @@ pub mod encounter_run {
     const ANCHOR_ROW: &str = "Ember Cultist";
 
     pub fn run(d: &mut Driver<'_>) {
-        d.expect(SAVED_RUNS);
+        d.expect(READY_TO_RUN);
         d.state("saved-runs", Sizes::Default);
         d.click_beside(RUN, RESUME);
         d.expect(&format!("{RUN_HEADING}{RUN}"));
@@ -1048,6 +1136,17 @@ pub mod encounter_run {
         d.click(ROLL_NPCS);
         d.state("npc-initiative-rolled", Sizes::Default);
         d.goal("start a new run and roll initiative");
+
+        d.click("Roll NPC initiative another way");
+        d.state("npc-roll-menu", Sizes::Default);
+        d.check_tab_order("NPC roll menu");
+        d.click("Individually");
+        d.state("npc-initiative-rolled-individually", Sizes::Default);
+        d.goal_within(
+            "Roll once another way",
+            "roll NPC initiative another way",
+            2,
+        );
     }
 }
 
@@ -2598,6 +2697,8 @@ pub mod gallery {
         d.click(MESSAGES);
         d.state("messages", Sizes::AllAndHiDpi);
         d.goal("see every part of the design system");
+        d.click("Markdown");
+        d.state("markdown", Sizes::AllAndHiDpi);
         d.click(COMPONENTS);
         let temp = crate::design::temp_hp_text(5);
         for _ in 0..30 {
@@ -2611,6 +2712,210 @@ pub mod gallery {
             d.visible_text(&temp),
             "Temporary HP shows with its mark, as it does in the run and on Party",
         );
+    }
+}
+
+/// Drag the edges of the rail, a page's lists and a panel, then work at those widths.
+/// The widths come back after a restart.
+pub mod column_resize {
+    use super::*;
+    use crate::design::{PANEL_MIN_WIDTH, RAIL_DRAG_MAX_WIDTH, RAIL_WIDTH, S, side_panel_width};
+
+    const CHECK: &str = "Column resize";
+    const MEMBER: &str = "Brannoch Vale";
+    const ENCOUNTER: &str = "Shrine of Cinders";
+    /// Far past either end of what any column can reach.
+    const FAR_LEFT: f32 = 1.0;
+    const FAR_RIGHT: f32 = 1190.0;
+
+    fn rail_edge(d: &Driver<'_>) -> f32 {
+        d.place_of(NAV_LIBRARY).map_or(0.0, |rect| rect.right() + S)
+    }
+
+    fn search(d: &Driver<'_>) -> egui::Rect {
+        d.place_of(SEARCH_LIBRARY).unwrap_or(egui::Rect::ZERO)
+    }
+
+    fn sections_edge(d: &Driver<'_>) -> f32 {
+        search(d).left() - S
+    }
+
+    fn entries_edge(d: &Driver<'_>) -> f32 {
+        search(d).right() + S
+    }
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1.0
+    }
+
+    fn right_of(d: &Driver<'_>, name: &str) -> f32 {
+        d.place_of(name).map_or(0.0, |rect| rect.right())
+    }
+
+    /// What is beside a column reaches it, in a window with more room than it needs.
+    fn content_follows_the_panel(d: &mut Driver<'_>) {
+        let roster = right_of(d, NEXT_TURN);
+        let edge = roster + crate::design::M;
+        d.drag_column_edge(edge, edge + 300.0);
+        d.observe(
+            CHECK,
+            near(right_of(d, NEXT_TURN), roster + 300.0),
+            format!(
+                "The roster follows the run's panel from {roster} to {}",
+                right_of(d, NEXT_TURN)
+            ),
+        );
+    }
+
+    fn the_roster_follows_the_add_panel(d: &mut Driver<'_>) {
+        d.set_base(LARGE);
+        // An open run blocks editing an encounter.
+        close_run(d);
+        go_encounters(d);
+        open_saved_encounter(d, ENCOUNTER);
+        let edge = |d: &Driver<'_>| d.place_of(FIND_CREATURE).map_or(0.0, |r| r.left()) - S;
+        let start = edge(d);
+        d.drag_column_edge(start, start + 100.0);
+        let roster = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.ends_with("Remove") && node.in_view())
+            .map(|node| node.rect.right())
+            .fold(0.0, f32::max);
+        d.observe(
+            CHECK,
+            edge(d) - roster <= crate::design::XL,
+            format!("The roster reaches {roster}, beside a panel at {}", edge(d)),
+        );
+        d.state("roster-follows-add-panel", Sizes::All);
+    }
+
+    fn the_session_fills_its_column(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        new_session(d, "Room to spare");
+        let page = right_of(d, "New session");
+        d.observe(
+            CHECK,
+            (right_of(d, "Record this session") - page).abs() <= S,
+            format!(
+                "A session's actions reach the edge of its column: {} of {page}",
+                right_of(d, "Record this session")
+            ),
+        );
+        d.state("session-fills-its-column", Sizes::All);
+    }
+
+    /// Write, Read and Events use the whole column, and Write and Read break lines alike.
+    fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
+        d.set_base(LARGE);
+        let page = right_of(d, "New session");
+        let filled = |right: f32| page - right <= crate::design::XL;
+        let box_right = right_of(d, "Note text");
+        d.observe(
+            CHECK,
+            filled(box_right),
+            format!("The note box reaches {box_right} of {page}"),
+        );
+        d.type_into_editor(&"The party crossed the old bridge at dusk. ".repeat(30));
+        let write = d.longest_visible_line();
+        d.click("Read");
+        let read = d.longest_visible_line();
+        d.observe(
+            CHECK,
+            read > 75 && read.abs_diff(write) <= 2,
+            format!("Longest line in a wide window: {write} in Write, {read} in Read"),
+        );
+        d.state("session-read-fills-its-column", Sizes::All);
+        d.click("Events");
+        d.click("Add Major event");
+        let action = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Add to notes"))
+            .map_or(0.0, |node| node.rect.right());
+        d.observe(
+            CHECK,
+            filled(action),
+            format!("An event's action reaches {action} of {page}"),
+        );
+        d.state("session-events-fill-their-column", Sizes::All);
+    }
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.set_base(LARGE);
+        resume_run_from_cold_start(d);
+        content_follows_the_panel(d);
+        d.set_base(DEFAULT);
+        let run_edge = right_of(d, NEXT_TURN) + crate::design::M;
+        d.drag_column_edge(run_edge, FAR_RIGHT);
+        d.state("run-panel-narrow", Sizes::All);
+        d.drag_column_edge(DEFAULT.0 - crate::design::M - PANEL_MIN_WIDTH, FAR_LEFT);
+        d.state("run-panel-wide", Sizes::All);
+
+        go_library(d);
+        d.drag_column_edge(rail_edge(d), RAIL_DRAG_MAX_WIDTH);
+        d.observe(
+            CHECK,
+            near(rail_edge(d), RAIL_DRAG_MAX_WIDTH),
+            format!("The rail follows its edge to {}", rail_edge(d)),
+        );
+        d.drag_column_edge(sections_edge(d), FAR_RIGHT);
+        let start = entries_edge(d) - sections_edge(d);
+        d.drag_column_edge(entries_edge(d), FAR_RIGHT);
+        let wide = (rail_edge(d), sections_edge(d), entries_edge(d));
+        d.observe(
+            CHECK,
+            wide.2 - wide.1 > start,
+            "The entry list follows its edge",
+        );
+        d.observe(
+            CHECK,
+            wide.2 <= DEFAULT.0 - 320.0,
+            "The reader keeps its room, however far the list is dragged",
+        );
+        d.state("library-wide-columns", Sizes::All);
+
+        d.click(BACK_TO_RUN);
+        d.restart();
+        go_library(d);
+        d.observe(
+            CHECK,
+            (rail_edge(d), sections_edge(d), entries_edge(d)) == wide,
+            "Dragged widths return after a restart",
+        );
+
+        d.drag_column_edge(entries_edge(d), FAR_LEFT);
+        d.drag_column_edge(sections_edge(d), FAR_LEFT);
+        d.drag_column_edge(rail_edge(d), FAR_LEFT);
+        d.observe(
+            CHECK,
+            near(rail_edge(d), RAIL_WIDTH),
+            "The rail stops at its narrowest",
+        );
+        d.state("library-narrow-columns", Sizes::All);
+
+        // Beside the widest rail, the pages and panels must still work.
+        d.drag_column_edge(rail_edge(d), RAIL_DRAG_MAX_WIDTH);
+        go_party(d);
+        d.expect(MEMBER);
+        d.state("party-beside-wide-rail", Sizes::All);
+        d.click(BACK_TO_RUN);
+        d.state("run-beside-wide-rail", Sizes::All);
+        d.click(NAV_LOOKUP);
+        d.state("lookup-beside-wide-rail", Sizes::All);
+        // Lookup gives the page what it needs, here beside a rail of the widest kind.
+        let lookup_edge = (DEFAULT.0 - side_panel_width(DEFAULT.0))
+            .max(RAIL_DRAG_MAX_WIDTH + crate::design::PANEL_LEAVES_PAGE);
+        d.drag_column_edge(lookup_edge, FAR_LEFT);
+        d.state("lookup-wide-beside-wide-rail", Sizes::All);
+        d.click(NAV_LOOKUP);
+        d.expect(NEXT_TURN);
+        d.click(NEXT_TURN);
+        d.goal("resize the columns and go on working");
+        the_roster_follows_the_add_panel(d);
+        d.set_base(DEFAULT);
+        the_session_fills_its_column(d);
+        the_session_tabs_fill_their_column(d);
     }
 }
 
@@ -2649,7 +2954,7 @@ pub mod run_restart {
         go_encounters(d);
         d.observe(
             "Restart",
-            d.has_containing(SAVED_RUNS) && !d.has_containing(PREVIOUS_CAMPAIGN),
+            d.has_containing(READY_TO_RUN) && !d.has_containing(PREVIOUS_CAMPAIGN),
             "After a restart into a run, Encounters lists the campaign's encounters",
         );
         d.state("encounters-after-restart", Sizes::Default);
@@ -3370,7 +3675,10 @@ pub mod signed_in {
     const PAGES: [&str; 4] = ["Actions", "Spells", "Gear", "Features"];
     const OVERVIEW: &str = "Overview";
     const MEMBER: &str = "Brannoch Vale";
-    const SYNC_SECTION: &str = "Sync off";
+    const SYNC_SECTION: &str = "Combat sync";
+    const SYNC_ON: &str = "Combat sync · On";
+    const SYNC_OFF: &str = "Combat sync · Off";
+    const RAIL_STOPPED: &str = "Party sync stopped";
     const SYNC_TOGGLE: &str = "Sync combat stats with D&D Beyond";
     const SYNC_HP_FIELD: &str = "Current HP on the sheet";
     const SYNCED_WORD: &str = "Synced";
@@ -3486,9 +3794,9 @@ pub mod signed_in {
         d.click(OVERVIEW);
         d.begin_task();
 
-        // T7.3: sync stops on leaving, and the DM hears of it where they look next.
+        // T7.3: sync is on from the time Splat connects, and leaving the page does not stop it.
+        let on = d.has_containing(SYNC_ON);
         d.click_containing(SYNC_SECTION);
-        d.click(SYNC_TOGGLE);
         d.state("party-sync-on", Sizes::Default);
         d.observe(
             "L6-47",
@@ -3525,21 +3833,29 @@ pub mod signed_in {
         d.settle();
         d.begin_task();
         go_library(d);
-        let rail = d.visible_text("Party sync stopped");
+        let rail = !d.visible_text(RAIL_STOPPED);
         go_party(d);
-        let page = d.visible_text(STOPPED);
-        d.state("party-sync-stopped", Sizes::Default);
         d.observe(
             "T7.3",
-            rail && page,
-            format!("Leaving Party with sync on: the rail says so: {rail}. The page says so on return: {page}"),
+            on && rail && d.has_containing(SYNC_ON) && !d.has_containing(STOPPED),
+            format!(
+                "Connected, sync is on with no click: {on}. Leaving Party does not stop it, and the rail stays quiet: {rail}"
+            ),
         );
-        d.click("Dismiss this message");
+        // The DM can turn it off here, and it stays off.
+        d.click(SYNC_TOGGLE);
+        go_library(d);
+        go_party(d);
         d.observe(
             "T7.3",
-            !d.has_containing(STOPPED),
-            "The DM can dismiss the message",
+            d.has_containing(SYNC_OFF) && !d.has_containing(STOPPED),
+            "Turned off by the DM, sync stays off and nothing calls that a fault",
         );
+        // F2-01 keeps the section open through the change of title.
+        if !d.has(SYNC_TOGGLE) {
+            d.click_containing(SYNC_SECTION);
+        }
+        d.click(SYNC_TOGGLE);
         d.begin_task();
 
         // A short network drop keeps the session, and says so.
@@ -3588,7 +3904,8 @@ pub mod signed_in {
             row.contains(NOT_SENT)
                 && d.row_words(NOTHING_TO_SEND).contains(STOPPED_ROW)
                 && d.visible_text(&format!("{MEMBER}: kept in Splat, not sent"))
-                && rail.contains(RAIL_OFFLINE),
+                && rail.contains(RAIL_OFFLINE)
+                && rail.contains(RAIL_STOPPED),
             format!(
                 "A session that ends during a run: the row says {row}, the header says so, and the rail says {rail}"
             ),
@@ -3624,12 +3941,13 @@ pub mod signed_in {
         let hp_in_run = d.row_hp(MEMBER);
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
-        d.click(SYNC_PARTY);
         let row = d.row_words(MEMBER);
         d.observe(
             "T3.3",
-            row.contains(FIRST_READ) && !d.visible_text(STOPPED_ROW),
-            format!("After a reconnect, Sync party starts the stopped rows again: {row}"),
+            row.contains(FIRST_READ)
+                && !d.visible_text(STOPPED_ROW)
+                && !d.rail_words().contains(RAIL_STOPPED),
+            format!("After a reconnect, the stopped rows start again with no click: {row}"),
         );
         // The sheet still holds what it held before the outage.
         d.app_mut().encounters.simulate_read(MEMBER, 0);
@@ -3718,21 +4036,19 @@ pub mod nav_table {
     const ENCOUNTER: &str = "Shrine of Cinders";
 
     pub fn run(d: &mut Driver<'_>) {
-        // T4.4 with more than one group: each saved run under its own encounter.
+        // T4.4 with more than one unfinished run: each row names its encounter.
         let nodes = d.nodes();
-        let grouped = [RUN, RUN_12, RUN_20].iter().all(|run| {
-            let heading = nodes
-                .iter()
-                .position(|node| node.name == run.to_uppercase());
+        let named = [RUN, RUN_12, RUN_20].iter().all(|run| {
+            let name = nodes.iter().position(|node| node.name == *run);
             let row = nodes
                 .iter()
                 .position(|node| node.name.starts_with(&format!("{run} · ")));
-            matches!((heading, row), (Some(heading), Some(row)) if heading < row)
+            matches!((name, row), (Some(name), Some(row)) if name < row)
         });
         d.observe(
             "T4.4",
-            grouped,
-            "Three saved runs, each under its own encounter's heading",
+            named,
+            "Three unfinished runs, each with its encounter's name on its row",
         );
 
         // Open run first, because its strip moves every other page down.
@@ -4816,6 +5132,18 @@ pub mod session_recording {
         d.click(NAV_SESSIONS);
         d.expect("names to api.openai.com");
         d.state("recording-ready", Sizes::Default);
+        // The words were held to 680 before they could follow the column.
+        let notice = d.at_size(LARGE, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Process sends"))
+                .map_or(0.0, |node| node.rect.width())
+        });
+        d.observe(
+            "Column resize",
+            notice > 680.0,
+            format!("The Recordings tab's words use the column, {notice} wide"),
+        );
         d.observe(
             "T11.6",
             d.has_containing("events go to Codex (gpt-6.1-sol) twice"),
@@ -5001,5 +5329,347 @@ pub mod session_recording {
             "A note whose file went keeps its words, saved under a new identity",
         );
         d.goal("record a session and process it");
+    }
+}
+
+/// W13: prepare encounter groups, and add one to a run when it arrives.
+pub mod encounter_groups {
+    use super::*;
+    const LIST_HEADING: &str = "Encounter groups (4)";
+    const GROUPS_TAB: &str = "Groups";
+    const NEW_GROUP: &str = "New group";
+    const SAVE_GROUP: &str = "Save group";
+    const SAVED_NOTE: &str = "Group saved.";
+    const FIND: &str = FIND_CREATURE;
+    const CHANGES: &str = "Overrides for Ember Cultist";
+    const FIRST_GOBLIN: &str = "Goblin Warrior 1";
+    const RIVAL_NAME: &str = "Rival Captain";
+    const TOTAL_FOR_RIVALS: &str = "Initiative total for Rival Team";
+
+    fn add_group(name: &str) -> String {
+        format!("Add {name} to the initiative list")
+    }
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.expect(LIST_HEADING);
+        d.state("groups-in-the-list", Sizes::All);
+        d.check_tab_order("encounters, with groups");
+
+        // An existing group: its changes are out in the open, with the values they replace.
+        d.click(&format!("Edit group {GROUP_RIVALS}"));
+        d.expect("Members: 3 creatures · Total XP 600");
+        d.state("group-editor", Sizes::All);
+        d.observe(
+            "T13.3",
+            d.has_containing("Maximum HP: 33 → 43 (+10)")
+                && d.has_containing("Overrides, here only"),
+            "The group editor shows each change with its base value, marked as changed",
+        );
+        d.click(CHANGES);
+        d.expect("Maximum HP: how it changes");
+        d.state("group-member-changes", Sizes::All);
+        d.check_tab_order("group editor, changes open");
+        d.click(CHANGES);
+        d.click("Back to encounters");
+
+        // A group that cannot be added says why, in the editor, and its change says why.
+        d.click(&format!("Edit group {GROUP_LOST}"));
+        d.expect("Unavailable creature");
+        let (found, invalid) = d.at_size(SMALL, |d| {
+            (
+                d.in_view_containing("cannot find this creature"),
+                d.in_view_containing("would become -28"),
+            )
+        });
+        d.observe(
+            "T13.3",
+            found && invalid && !d.has("Overrides for Unavailable creature"),
+            "The editor says why a creature is unavailable, and that a change cannot stand",
+        );
+        d.state("group-unavailable-creature", Sizes::Default);
+        d.click("Overrides for Cinder Wolf");
+        let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become -28"));
+        d.observe(
+            "T13.3",
+            in_view,
+            "At the minimum window, an open form says in view that its change cannot stand",
+        );
+        d.state("group-invalid-change", Sizes::Default);
+        d.click("Back to encounters");
+
+        // A new group cannot be saved empty, and it says so.
+        d.click(NEW_GROUP);
+        d.type_text("Ash Pack");
+        d.click(SAVE_GROUP);
+        d.expect("This group is empty");
+        d.state("group-rejected-empty", Sizes::Default);
+        d.type_into(FIND, "wolf");
+        d.state("group-find-creature", Sizes::Default);
+        d.click_beside("Wolf", ADD);
+        d.click(SAVE_GROUP);
+        d.expect(SAVED_NOTE);
+        d.state("group-saved", Sizes::Default);
+        d.goal("make an encounter group");
+        d.click("Back to encounters");
+        d.expect("Encounter groups (5)");
+
+        // At the table: the panel, with members and XP.
+        resume_run(d, RUN);
+        d.click(GROUPS_TAB);
+        d.expect(&add_group(GROUP_GOBLINS));
+        d.state("group-panel", Sizes::AllAndHiDpi);
+        d.check_tab_order("run, group panel");
+        d.observe(
+            "T13.1",
+            d.has_containing("3 × Goblin Warrior") && d.visible_text("3 creatures · Total XP 150"),
+            "The panel lists each group's members and total XP",
+        );
+        d.observe(
+            "T13.1",
+            d.has_containing("XP not known for Captain Varra")
+                && d.has_containing("Unavailable creature: check"),
+            "XP that is not known says so, and a group that cannot be added says why",
+        );
+        d.observe(
+            "T13.1",
+            d.is_disabled(&add_group(GROUP_LOST)),
+            "A group that cannot be added has no working Add button",
+        );
+        d.observe(
+            "T13.1",
+            d.visible_text("3 creatures · Total XP 250 or more")
+                && d.has_containing("Unavailable creature")
+                && d.has_containing("Unavailable creature: check")
+                && d.has_containing("Member 2 (Cinder Wolf):"),
+            "A group counts a creature it cannot find, and gives every reason it cannot be added",
+        );
+        d.begin_task();
+        d.click(&add_group(GROUP_GOBLINS));
+        d.expect(FIRST_GOBLIN);
+        d.state("group-added-by-rolling", Sizes::All);
+        d.goal_within("T13.2", "add a group to the running fight, rolling once", 1);
+
+        // Undo names it, and takes the whole group back.
+        d.expect("Undo: add Goblin Wave");
+        d.click_containing("Undo: add Goblin Wave");
+        let gone = !roster_places(d)
+            .iter()
+            .any(|(name, _)| name.contains("Goblin Warrior"));
+        d.observe("T13.2", gone, "Undo removes every member of an added group");
+
+        // A typed total, as players give one.
+        d.type_into(TOTAL_FOR_RIVALS, "14");
+        d.state("group-total-typed", Sizes::Default);
+        d.click(&add_group(GROUP_RIVALS));
+        d.expect(RIVAL_NAME);
+        d.observe(
+            "T13.2",
+            d.nodes()
+                .iter()
+                .any(|node| node.name.contains(RIVAL_NAME) && node.name.contains("Initiative 14")),
+            "A typed total places the group, with no roll",
+        );
+        d.state("group-added-with-a-total", Sizes::Default);
+        d.observe(
+            "T13.2",
+            d.has_containing("Encounter group Rival Team added")
+                && d.has_containing("Initiative 14, entered by the DM"),
+            "The panel says who arrived, and at what total",
+        );
+
+        // The card of a creature that arrived: where it came from, and its changes.
+        d.click_row(RIVAL_NAME);
+        d.click("Stat block");
+        d.expect("Arrived with Rival Team");
+        d.state("card-of-an-added-member", Sizes::Default);
+        d.click(GROUPS_TAB);
+
+        // The same group again, by dragging it onto the initiative list.
+        let rows_before = roster_places(d).len();
+        let list = roster_places(d)
+            .first()
+            .map(|(_, rect)| *rect)
+            .expect("run rows");
+        d.drag_hold(
+            &format!("Drag {GROUP_GOBLINS} to the initiative list"),
+            list,
+        );
+        d.state("group-held-over-the-list", Sizes::Default);
+        d.drag_release(list);
+        d.expect(FIRST_GOBLIN);
+        d.observe(
+            "T13.4",
+            roster_places(d).len() == rows_before + 3,
+            "Dragging a group onto the initiative list adds each member once",
+        );
+        d.state("group-added-by-dragging", Sizes::Default);
+
+        // A side of its own, on the current row. The next step also ends the panel's line.
+        d.click(NEXT_TURN);
+        d.observe(
+            "T13.2",
+            !d.has_containing("Encounter group "),
+            "The panel's line about an addition ends with the next step",
+        );
+        for _ in 0..25 {
+            if current_participant(d).as_deref() == Some(RIVAL_NAME) {
+                break;
+            }
+            d.click(NEXT_TURN);
+        }
+        d.expect(RIVAL_NAME);
+        d.state("a-named-side-on-its-turn", Sizes::Default);
+        d.goal("add groups by a total and by dragging");
+
+        // Setup has the same panel.
+        close_run(d);
+        run_saved_encounter(d, "Shrine of Cinders");
+        d.click(GROUPS_TAB);
+        d.state("group-panel-in-setup", Sizes::Default);
+        d.click(&add_group(GROUP_GOBLINS));
+        d.expect(FIRST_GOBLIN);
+        d.state("group-added-in-setup", Sizes::Default);
+        d.goal("add a group during setup");
+    }
+}
+
+pub mod encounter_history {
+    use super::*;
+    const DELETE_RUN: &str = "Delete the saved run of Bridge Ambush";
+    const UNDO_DELETE: &str = "Undo delete";
+    const OPEN_OLD: &str = "Open the run of Old Mill Raid";
+    const BACK: &str = "Back to this run";
+    const NO_SESSION: &str = "NO SESSION";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.expect(READY_TO_RUN);
+        d.expect(HISTORY);
+        d.observe(
+            "T4.6",
+            !d.has_label(RUN_PAST),
+            "An encounter whose run ended is not in Ready to run, and History starts closed",
+        );
+        d.state("encounters-with-history", Sizes::All);
+
+        d.click_starting(HISTORY);
+        let session = d.has_containing(&PAST_SESSION.to_uppercase());
+        d.observe(
+            "T4.6",
+            session && d.has(NO_SESSION) && d.has_label(RUN_PAST) && d.has_label(RUN_OLD),
+            format!("Ended runs sit under their session, or under No session: {session}"),
+        );
+        d.state("history-open", Sizes::All);
+        d.check_tab_order("encounters, history open");
+
+        // Undo is the guard on a delete, and the row comes back as it was.
+        d.click_starting(DELETE_RUN);
+        d.expect(UNDO_DELETE);
+        d.observe(
+            "T4.6",
+            !d.has_containing(DELETE_RUN),
+            "A deleted run leaves the list, and Undo delete is offered",
+        );
+        d.state("run-deleted", Sizes::Default);
+        d.click(UNDO_DELETE);
+        d.expect(DELETE_RUN);
+
+        // Reading an old run writes nothing to the story.
+        let before = d.app_mut().timeline.events.len();
+        d.click_starting(OPEN_OLD);
+        d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));
+        let after = d.app_mut().timeline.events.len();
+        d.observe(
+            "T4.6",
+            after == before,
+            "Opening an ended run with no event adds none",
+        );
+        d.state("ended-run-open", Sizes::Default);
+
+        go_encounters(d);
+        d.expect(BACK);
+        let nodes = d.nodes();
+        let open_first = nodes
+            .iter()
+            .position(|node| node.name == BACK)
+            .zip(nodes.iter().position(|node| node.name == RESUME))
+            .is_some_and(|(back, resume)| back < resume);
+        d.observe("T4.6", open_first, "The open run comes before the others");
+        d.state("open-ended-run-first", Sizes::Default);
+        d.click(BACK);
+        d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));
+    }
+}
+
+/// W13: changes built in to one creature, never hidden, in the editor and on the card.
+pub mod run_overrides {
+    use super::*;
+    const RIVAL: &str = "Rival Captain";
+    const FIRST_SLOT: &str = "6. Rival Captain";
+    const BASE_AND_CHANGED: &str = "Maximum HP: 33 → 43 (+10)";
+
+    pub fn run(d: &mut Driver<'_>) {
+        // The card has both values, and marks what the run cannot apply.
+        d.click_beside(RUN_ARENA, RESUME);
+        d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
+        d.click_row(RIVAL);
+        d.state("overridden-participant", Sizes::AllAndHiDpi);
+        // A number stays with its word on the row, by a space that does not wrap.
+        let row = d.row_words(RIVAL).replace('\u{a0}', " ");
+        d.observe(
+            "T13.3",
+            row.contains("Changed") && row.contains("Attack +1") && row.contains("Damage +1"),
+            format!("The row marks a change and carries its bonuses: {row}"),
+        );
+        d.observe(
+            "T13.3",
+            d.has_containing(BASE_AND_CHANGED)
+                && d.has_containing("Attack bonus: As printed → +1 on each attack")
+                && d.has_containing("add by hand")
+                && d.has_containing("Speed: 30 ft → 40 ft")
+                && d.has_containing("Changed for this encounter"),
+            "The card shows the base and changed values, and says what to add by hand",
+        );
+        d.goal("read a changed creature's card in a run");
+        close_run(d);
+
+        // The editor names the creature, and each change under it.
+        open_saved_encounter(d, RUN_ARENA);
+        d.expect(FIRST_SLOT);
+        d.state("slot-with-changes", Sizes::All);
+        d.click_beside(
+            FIRST_SLOT,
+            "Options: starting HP, temporary HP, initiative group and overrides",
+        );
+        d.observe(
+            "T13.3",
+            d.in_view("Maximum HP: how it changes"),
+            "Opening a slot's overrides brings the form into view, however low the slot is",
+        );
+        d.state("slot-changes-open", Sizes::All);
+        d.click("Back to encounters");
+
+        // A new run takes them when it starts.
+        run_saved_encounter(d, RUN_ARENA);
+        d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
+        d.state("setup-with-a-changed-row", Sizes::Default);
+        d.observe(
+            "T13.3",
+            d.has_containing("Changed · HP 43/43 · AC 15"),
+            "A new run starts with the slot's changes, and its setup row says so",
+        );
+        d.goal("start a run with a changed creature");
+    }
+}
+
+/// W13: a campaign with no groups says what to do, in the run.
+pub mod run_no_groups {
+    use super::*;
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN);
+        d.click("Groups");
+        d.expect("No encounter groups yet");
+        d.state("no-groups", Sizes::Default);
+        d.goal("see that a campaign has no groups");
     }
 }

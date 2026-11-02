@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-One sheet of Parchment can hold about 250 hand-\
-written words.\
+One sheet of Parchment can hold about 250 handwritten words.
 
 ## Item
 

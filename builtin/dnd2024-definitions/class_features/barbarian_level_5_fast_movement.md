@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 29 -->
 
-Your speed increases by 10 feet while you aren’t\
-wearing Heavy armor.\
+Your speed increases by 10 feet while you aren’t wearing Heavy armor.
 
 ## Rule
 

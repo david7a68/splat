@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 16 -->
 
-When you create a damaging effect that forces two\
-or more targets to make saving throws against it at\
-the same time, roll the damage once for all the tar-\
-gets. For example, when a wizard casts Fireball, the\
-spell’s damage is rolled once for all creatures caught\
-in the blast.\
+When you create a damaging effect that forces two or more targets to make saving throws against it at the same time, roll the damage once for all the targets. For example, when a wizard casts Fireball, the spell’s damage is rolled once for all creatures caught in the blast.
 
 ## Rule
 

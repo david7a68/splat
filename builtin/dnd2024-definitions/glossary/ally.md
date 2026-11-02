@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 176 -->
 
-A creature is your ally if it is a member of your ad-\
-venturing party, your friend, on your side in combat,\
-or a creature that the rules or the GM designates as\
-your ally.\
+A creature is your ally if it is a member of your adventuring party, your friend, on your side in combat, or a creature that the rules or the GM designates as your ally.
 
 Original layout: [[../../srd-5.2.1/pages/176|page 176]].
 

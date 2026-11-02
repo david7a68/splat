@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 194 -->
 
-Alchemists, potion brewers, and areas of wild magic\
-are credited with creating the first magical con-\
-tagions. An outbreak of such a contagion can form\
-the basis of an adventure as characters search for a\
-cure and try to stop the contagion’s spread.\
+Alchemists, potion brewers, and areas of wild magic are credited with creating the first magical contagions. An outbreak of such a contagion can form the basis of an adventure as characters search for a cure and try to stop the contagion’s spread.
 
 ## Rule
 

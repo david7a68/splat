@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 52 -->
 
-When you take a Bonus Action other than Step of\
-the Wind, you can also use Step of the Wind imme-\
-diately after that Bonus Action.\
+When you take a Bonus Action other than Step of the Wind, you can also use Step of the Wind immediately after that Bonus Action.
 
 ## Rule
 

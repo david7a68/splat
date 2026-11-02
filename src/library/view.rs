@@ -128,6 +128,7 @@ pub(crate) fn show(
     let reading = reading.as_ref();
     let builtin = origin.builtin;
     let room = ui.available_width();
+    let art = entry.and_then(|entry| crate::art::entry_art(ui.ctx(), entry));
     // A wide window's margin holds what is rarely wanted, so the prose keeps its measure and
     // the page has no dead space.
     if room >= design::READER_MEASURE + design::XXL + REFERENCE_MIN {
@@ -144,6 +145,9 @@ pub(crate) fn show(
             let width = ui.available_width().min(REFERENCE_MAX);
             ui.allocate_ui_with_layout(vec2(width, 0.0), layout, |ui| {
                 ui.set_max_width(width);
+                if let Some(path) = &art {
+                    crate::art::hero(ui, path, name);
+                }
                 reference(ui, entry, &sections, styled.is_some(), origin);
             });
         });
@@ -151,6 +155,9 @@ pub(crate) fn show(
     }
     // Rules text keeps its measure in a wide side panel too.
     style::measure(ui, |ui| {
+        if let Some(path) = &art {
+            crate::art::small_hero(ui, path, name);
+        }
         let open_link = content(ui, entry, reading, &sections, styled, builtin, links);
         ui.add_space(design::L);
         design::rule(ui);
@@ -222,7 +229,20 @@ fn reference(
     let status = conversion
         .and_then(|c| c.get("status"))
         .and_then(|s| s.as_str());
+    let gap_list = |key: &'static str| {
+        conversion
+            .and_then(move |c| c.get(key))
+            .and_then(|v| v.as_sequence())
+            .into_iter()
+            .flatten()
+            .filter_map(|gap| gap.as_str())
+    };
+    let open_gaps: Vec<&str> = gap_list("engine_gaps")
+        // Only built-in rules can be on the implemented list. A note cannot claim it by name.
+        .filter(|gap| !origin.builtin || !splat::content::adapters::is_implemented(gap))
+        .collect();
     let support = match status {
+        Some("specified") if open_gaps.is_empty() => "Implemented",
         Some("specified") => "Incomplete",
         Some("informational") => "Reference only",
         Some("partial") => "Conversion incomplete",
@@ -231,18 +251,9 @@ fn reference(
     // A verdict means nothing at a table, so it waits inside.
     design::quiet_section(ui, "Engine support", |ui| {
         ui.label(support);
-        if let Some(conversion) = conversion {
-            for key in ["conversion_gaps", "engine_gaps"] {
-                for gap in conversion
-                    .get(key)
-                    .and_then(|v| v.as_sequence())
-                    .into_iter()
-                    .flatten()
-                {
-                    if let Some(gap) = gap.as_str() {
-                        ui.monospace(gap);
-                    }
-                }
+        if conversion.is_some() {
+            for gap in gap_list("conversion_gaps").chain(open_gaps.iter().copied()) {
+                ui.monospace(gap);
             }
         } else {
             ui.label("Draft structure does not establish engine support.");

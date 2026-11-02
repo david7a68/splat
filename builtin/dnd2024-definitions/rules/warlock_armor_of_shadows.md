@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 72 -->
 
-You can cast Mage Armor on yourself without ex-\
-pending a spell slot.\
+You can cast Mage Armor on yourself without expending a spell slot.
 
 ## Rule
 

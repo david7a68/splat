@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 19 -->
 
-Determining your character’s origin involves choos-\
-ing a background, a species, and two languages.\
-A character’s background represents the place\
-and occupation that were most formative for the\
-character. The combination of background, species,\
-and languages provides fertile soil for your imagi-\
-nation as you ponder your character’s earliest days.\
+Determining your character’s origin involves choosing a background, a species, and two languages.
+
+A character’s background represents the place and occupation that were most formative for the character. The combination of background, species, and languages provides fertile soil for your imagination as you ponder your character’s earliest days.
 
 ## Rule
 

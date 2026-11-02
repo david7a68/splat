@@ -18,34 +18,36 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-A saddle comes with a bit, a bridle, reins, and any\
-other equipment needed to use the saddle. A Mil-\
-itary Saddle gives Advantage on any ability check\
-you make to remain mounted. An Exotic Saddle is\
-required for riding an aquatic or a flying mount.\
-Mounts and Other Animals\
-Item Carrying Capacity Cost\
-Camel 450 lb. 50 GP\
-Elephant 1,320 lb. 200 GP\
-Horse, Draft 540 lb. 50 GP\
-Horse, Riding 480 lb. 75 GP\
-Mastiff 195 lb. 25 GP\
-Mule 420 lb. 8 GP\
-Pony 225 lb. 30 GP\
-Warhorse 540 lb. 400 GP\
-Tack, Harness, and Drawn Vehicles\
-Item Weight Cost\
-Carriage 600 lb. 100 GP\
-Cart 200 lb. 15 GP\
-Chariot 100 lb. 250 GP\
-Feed per day 10 lb. 5 CP\
-Saddle\
-Exotic 40 lb. 60 GP\
-Military 30 lb. 20 GP\
-Riding 25 lb. 10 GP\
-Sled 300 lb. 20 GP\
-Stabling per day — 5 SP\
-Wagon 400 lb. 35 GP\
+A saddle comes with a bit, a bridle, reins, and any other equipment needed to use the saddle. A Military Saddle gives Advantage on any ability check you make to remain mounted. An Exotic Saddle is required for riding an aquatic or a flying mount.
+
+**Mounts and Other Animals**
+
+| Item | Carrying Capacity | Cost |
+| --- | --- | --- |
+| Camel | 450 lb. | 50 GP |
+| Elephant | 1,320 lb. | 200 GP |
+| Horse, Draft | 540 lb. | 50 GP |
+| Horse, Riding | 480 lb. | 75 GP |
+| Mastiff | 195 lb. | 25 GP |
+| Mule | 420 lb. | 8 GP |
+| Pony | 225 lb. | 30 GP |
+| Warhorse | 540 lb. | 400 GP |
+
+**Tack, Harness, and Drawn Vehicles**
+
+| Item | Weight | Cost |
+| --- | --- | --- |
+| Carriage | 600 lb. | 100 GP |
+| Cart | 200 lb. | 15 GP |
+| Chariot | 100 lb. | 250 GP |
+| Feed per day | 10 lb. | 5 CP |
+| Saddle |  |  |
+| Exotic | 40 lb. | 60 GP |
+| Military | 30 lb. | 20 GP |
+| Riding | 25 lb. | 10 GP |
+| Sled | 300 lb. | 20 GP |
+| Stabling per day | — | 5 SP |
+| Wagon | 400 lb. | 35 GP |
 
 ## Rule
 

@@ -18,20 +18,17 @@ splat_sources:
 
 <!-- SRD page 7 -->
 
-The Attack Roll Abilities table shows which ability\
-modifier to use for different types of attack rolls.\
-Attack Roll Abilities\
-Ability Attack Type\
-Strength Melee attack with a weapon or an Un-\
-armed Strike (see “Rules Glossary”)\
-Dexterity Ranged attack with a weapon\
-Varies Spell attack (the ability used is determined\
-by the spellcaster’s spellcasting feature, as\
-explained in “Spells”)\
-Some features let you use different ability modifiers\
-from those listed. For example, the Finesse property\
-(see “Equipment”) lets you use Strength or Dexter-\
-ity with a weapon that has that property.\
+The Attack Roll Abilities table shows which ability modifier to use for different types of attack rolls.
+
+**Attack Roll Abilities**
+
+| Ability | Attack Type |
+| --- | --- |
+| Strength | Melee attack with a weapon or an Unarmed Strike (see “Rules Glossary”) |
+| Dexterity | Ranged attack with a weapon |
+| Varies | Spell attack (the ability used is determined by the spellcaster’s spellcasting feature, as explained in “Spells”) |
+
+Some features let you use different ability modifiers from those listed. For example, the Finesse property (see “Equipment”) lets you use Strength or Dexterity with a weapon that has that property.
 
 ## Rule
 

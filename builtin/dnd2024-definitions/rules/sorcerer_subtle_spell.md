@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 67 -->
 
-Cost: 1 Sorcery Point\
-When you cast a spell, you can spend 1 Sorcery\
-Point to cast it without any Verbal, Somatic, or Ma-\
-terial components, except Material components that\
-are consumed by the spell or that have a cost speci-\
-fied in the spell.\
+Cost: 1 Sorcery Point
+
+When you cast a spell, you can spend 1 Sorcery Point to cast it without any Verbal, Somatic, or Material components, except Material components that are consumed by the spell or that have a cost specified in the spell.
 
 ## Rule
 

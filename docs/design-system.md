@@ -35,7 +35,7 @@ Fonts are in `assets/fonts/` with their licences. All are OFL. egui 0.33 rasteri
 | Source Serif 4 (Text, Italic, Semibold) | Prose | A sturdy text serif with lining tabular digits, so `65 (10d8 + 20)` lines up |
 | Source Serif 4 Subhead (Semibold) | Titles | The optical cut for 18 to 28 px |
 | Source Serif 4 SmText (Regular, Semibold) | Stat blocks | The optical cut for 13 to 14 px, for the compact table at 1x |
-| egui's monospace | Markdown editor | Source text only. `Type::Mono` |
+| egui's monospace | Library and template editors, code in a note | Source text only. `Type::Mono` |
 
 Atkinson Hyperlegible was the first choice. Its digits are proportional and its zero is
 slashed, and painting each digit in a fixed cell left wide gaps. So the font
@@ -95,7 +95,7 @@ has a word, an icon, or a shape, and `src/design/tokens.rs` tests the contrast p
 | Recording | `recording` | `Recording` with its time and a record icon, in the rail on every page |
 | Turn | `turn.current turn.next` | The word `Turn` and a bar; the word `Next` |
 | HP | `hp.healthy damaged bloodied zero temp unknown track` | Numbers tinted by state, a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
-| Participant | `participant.absent concentrating condition` | `Absent`, `Conc`, each condition by name |
+| Participant | `participant.absent concentrating condition changed` | `Absent`, `Conc`, each condition by name, a pencil and `Changed` |
 | Side | `side.party enemies other` | A square, a diamond or a circle on a live row, where the shape alone is enough at a look, with the name on hover. The name in words in setup and on Encounters. No red and green |
 | Sync | `sync.off first_read matching pending conflict read_only error` | Icon and word in every case: `Reading…`, `Synced`, `Sync pending`, `Conflict`, `Sync read-only`, `Sync error`. A row at risk has `Not sent` in the strongest tone, and `Sync stopped` is amber, with nothing to lose |
 | Connection | `connection.connected offline busy` | Icon and word |
@@ -122,6 +122,9 @@ the page keys also scroll. Tab steps over it (`Splat::skip_unnamed_focus`). The 
 counts a node as a bar only if it has no role and no name, lies outside a scroll
 surface, and matches the full length of that surface's edge.
 
+A column's drag handle is the same kind of chrome: 10 px wide and as tall as the column.
+Tab steps over it too. It has no keyboard control. A column keeps a usable width without a drag.
+
 ## Widgets
 
 `theme::install` sets one global `egui::Style`, so any plain egui widget still fits: hover,
@@ -136,6 +139,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Page header | `page_header` | Title, one line of context, actions on the right |
 | Nav item | `nav_item` | Icon and word. Accent bar when selected |
 | Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and shows why (G1). `.key("N")` shows the key beside the word |
+| Split button | `split_action` | An `Action` that does the default, and a caret that opens a menu of the other ways |
 | Field | `field` | Label, control, help, error; names the control for accessibility |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
 | Dialog | `dialog` | An `egui::Modal`, for the brief's modal tasks only: discard on close, removing a campaign or a package, copy review |
@@ -151,6 +155,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Empty state | `empty_state` | What this is, and the one next step |
 | Message | `message`, `compact_message`, `Tone` | Inline. Never modal. `compact_message` is the run's small form, for the room under the roster |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
+| Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS`. What sits beside a column reaches its edge, so no blank band opens between them. Text keeps its measure inside that room |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2 entries` |
@@ -238,12 +243,26 @@ a line.
   saved field and a second way to move someone in the order. `Mark present` puts the keyboard in
   that field, so letter keys wait for Escape, and digits and Enter set a total there. The same limit
   covers that case.
+- **Changed:** a creature with overrides has `Changed` on its second line, then anything the
+  run cannot apply, such as `Attack +1` or `Speed 40 ft`, because the DM needs it at the table. A setup
+  row has the word `Changed` only. Its card lists each
+  change at the top of the stat block's tab, so no tab moves, as `Maximum HP: 33 → 43 (+10)`. What
+  the run cannot apply comes first, in larger type, and says `add by hand`. A line then says that the
+  stat block below is as printed. The list scrolls with the stat block, and each participant keeps
+  its own place in it. A side of its own also has its word on a live row. In setup, a row gives
+  the side when it has room, and Record gives it always.
+- **Groups:** a tab beside the stat block lists the campaign's encounter groups, with members,
+  count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
+  outline while one is held. Each group also has a field for a total, blank to roll, and an `Add`
+  button that the keyboard reaches. No step asks for confirmation, because Undo names the addition.
 
 ## Sessions and the timeline
 
-Notes are Markdown in the campaign's folder, and Sessions has the Library's two voices: a source editor in
-monospace, and the one Reader. A draft saves two seconds after the last edit, because at the table nobody
-stops to press Save. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
+Notes are Markdown in the campaign's folder. `Write` styles the source as it is typed, in the Reader's faces: a heading
+is large, has the Reader's rule, and `*these words*` are italic. Markup stays in view in the plain face and `faint`, so the
+file is exactly what was typed and Obsidian reads the same text. The box fills its column, and `Read` uses the same width,
+so a note keeps its line breaks between the two views. A session's notes, events and recordings follow the column, because these are the DM's own working pages. The books' rules prose keeps `READER_MEASURE`. `Read` is the one Reader. The gallery's `Markdown` sheet shows both from one note. A draft saves two seconds after the last edit, because at the
+table nobody stops to press Save. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
 
 The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
 a word for each kind. A day opens with a rule, as a heading does, and numbers itself. It has no card and no

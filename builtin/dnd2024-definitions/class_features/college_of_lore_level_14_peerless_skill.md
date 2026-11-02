@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 35 -->
 
-When you make an ability check or attack roll and\
-fail, you can expend one use of Bardic Inspiration;\
-roll the Bardic Inspiration die, and add the number\
-rolled to the d20, potentially turning a failure into\
-a success. On a failure, the Bardic Inspiration isn’t\
-expended.\
+When you make an ability check or attack roll and fail, you can expend one use of Bardic Inspiration; roll the Bardic Inspiration die, and add the number rolled to the d20, potentially turning a failure into a success. On a failure, the Bardic Inspiration isn’t expended.
 
 ## Rule
 

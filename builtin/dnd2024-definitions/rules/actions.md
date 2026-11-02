@@ -18,52 +18,31 @@ splat_sources:
 
 <!-- SRD page 9 -->
 
-When you do something other than moving or com-\
-municating, you typically take an action. The Action\
-table lists the game’s main actions, which are de-\
-fined in more detail in “Rules Glossary.”\
-Actions\
-Action Summary\
-Attack Attack with a weapon or an Unarmed\
-Strike.\
-Dash For the rest of the turn, give yourself extra\
-movement equal to your Speed.\
+When you do something other than moving or communicating, you typically take an action. The Action table lists the game’s main actions, which are defined in more detail in “Rules Glossary.”
+
+**Actions**
+
+| Action | Summary |
+| --- | --- |
+| Attack | Attack with a weapon or an Unarmed Strike. |
+| Dash | For the rest of the turn, give yourself extra movement equal to your Speed. |
 
 <!-- SRD page 10 -->
 
-Action Summary\
-Disengage Your movement doesn’t provoke Oppor-\
-tunity Attacks for the rest of the turn.\
-Dodge Until the start of your next turn, attack\
-rolls against you have Disadvantage, and\
-you make Dexterity saving throws with\
-Advantage. You lose this benefit if you\
-have the Incapacitated condition or if your\
-Speed is 0.\
-Help Help another creature’s ability check or\
-attack roll, or administer first aid.\
-Hide Make a Dexterity (Stealth) check.\
-Influence Make a Charisma (Deception, Intimidation,\
-Performance, or Persuasion) or Wisdom\
-(Animal Handling) check to alter a crea-\
-ture’s attitude.\
-Magic Cast a spell, use a magic item, or use a\
-magical feature.\
-Ready Prepare to take an action in response to a\
-trigger you define.\
-Search Make a Wisdom (Insight, Medicine,\
-Perception, or Survival) check.\
-Study Make an Intelligence (Arcana, History, In-\
-vestigation, Nature, or Religion) check.\
-Utilize Use a nonmagical object.\
-Player characters and monsters can also do things\
-not covered by these actions. Many class features\
-and other abilities provide additional action op-\
-tions, and you can improvise other actions. When\
-you describe an action not detailed elsewhere in the\
-rules, the Game Master tells you whether that action\
-is possible and what kind of D20 Test you need to\
-make, if any.\
+| Action | Summary |
+| --- | --- |
+| Disengage | Your movement doesn’t provoke Opportunity Attacks for the rest of the turn. |
+| Dodge | Until the start of your next turn, attack rolls against you have Disadvantage, and you make Dexterity saving throws with Advantage. You lose this benefit if you have the Incapacitated condition or if your Speed is 0. |
+| Help | Help another creature’s ability check or attack roll, or administer first aid. |
+| Hide | Make a Dexterity (Stealth) check. |
+| Influence | Make a Charisma (Deception, Intimidation, Performance, or Persuasion) or Wisdom (Animal Handling) check to alter a creature’s attitude. |
+| Magic | Cast a spell, use a magic item, or use a magical feature. |
+| Ready | Prepare to take an action in response to a trigger you define. |
+| Search | Make a Wisdom (Insight, Medicine, Perception, or Survival) check. |
+| Study | Make an Intelligence (Arcana, History, Investigation, Nature, or Religion) check. |
+| Utilize | Use a nonmagical object. |
+
+Player characters and monsters can also do things not covered by these actions. Many class features and other abilities provide additional action options, and you can improvise other actions. When you describe an action not detailed elsewhere in the rules, the Game Master tells you whether that action is possible and what kind of D20 Test you need to make, if any.
 
 ## Rule
 

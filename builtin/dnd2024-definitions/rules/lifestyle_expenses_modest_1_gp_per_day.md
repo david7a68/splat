@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-You support yourself at an average level.\
+You support yourself at an average level.
 
 ## Rule
 

@@ -17,7 +17,12 @@ use crate::{
 use eframe::egui::{
     self, Align, Align2, Galley, Key, Layout, Modifiers, Rect, Stroke, StrokeKind, pos2, vec2,
 };
-use std::sync::Arc;
+use splat::content::overrides::{BY_HAND, PRINTED, Row};
+use std::{path::PathBuf, sync::Arc};
+use uuid::Uuid;
+
+/// What is held while an encounter group is dragged to the initiative list.
+struct GroupDrag(Uuid);
 
 const AMOUNT: &str = "Amount";
 const SHEET_PAGES: [(usize, &str); 5] = [
@@ -119,7 +124,7 @@ pub(crate) fn sync_status(state: SyncState) -> Status<'static> {
     }
 }
 
-/// The roster keeps its capped width. The panel uses the rest deliberately.
+/// Until the DM drags it, the panel leaves the roster its capped width and uses the rest.
 fn panel_width(ui: &egui::Ui) -> f32 {
     design::side_panel_width(ui.ctx().content_rect().width())
         .max(ui.available_width() - design::RUN_LARGE.max_width - GUTTER)
@@ -174,6 +179,7 @@ const KEYS: [(&str, &str); 9] = [
 impl Run {
     /// Returns true only after the DM chooses to close the run.
     pub fn show(&mut self, ui: &mut egui::Ui) -> bool {
+        self.refresh_portraits();
         let closed = match self.state.phase {
             Phase::Setup => self.setup_view(ui),
             Phase::Running => self.live_view(ui),
@@ -192,7 +198,10 @@ impl Run {
         // note. The roll goes on to the first empty field.
         let keeps_keyboard = matches!(
             command,
-            Command::Initiative(..) | Command::Health(..) | Command::Bonus(..) | Command::RollNpcs
+            Command::Initiative(..)
+                | Command::Health(..)
+                | Command::Bonus(..)
+                | Command::RollNpcs(_)
         );
         match self.apply(command) {
             Err(error) => self.error = Some(error),
@@ -477,6 +486,16 @@ impl Run {
         ui.add_space(design::XS);
     }
 
+    /// Beside a panel the roster reaches it, wherever the DM drags it. Alone, it keeps its cap.
+    fn roster_width(&self, ui: &egui::Ui) -> f32 {
+        let room = ui.available_width() - GUTTER;
+        if self.hide_panel {
+            room.min(design::RUN_LARGE.max_width)
+        } else {
+            room
+        }
+    }
+
     // ---- Live -------------------------------------------------------------------
 
     fn live_view(&mut self, ui: &mut egui::Ui) -> bool {
@@ -486,9 +505,8 @@ impl Run {
         let mut closed = false;
         let width = panel_width(ui);
         if !self.hide_panel {
-            egui::SidePanel::right("run_panel")
-                .resizable(false)
-                .exact_width(width)
+            design::Column::panel("run_panel", width)
+                .page_keeps(design::RUN_LIST_KEEPS)
                 .frame(side_frame())
                 .show_inside(ui, |ui| self.side_panel(ui));
         }
@@ -496,10 +514,7 @@ impl Run {
             .frame(egui::Frame::new())
             .show_inside(ui, |ui| {
                 // A panel's own width is fixed, so the cap needs an inner layout.
-                let size = vec2(
-                    (ui.available_width() - GUTTER).min(design::RUN_LARGE.max_width),
-                    ui.available_height(),
-                );
+                let size = vec2(self.roster_width(ui), ui.available_height());
                 ui.allocate_ui_with_layout(size, Layout::top_down(Align::LEFT), |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     // The rows' scale decides the header's size, and needs only a close
@@ -550,7 +565,7 @@ impl Run {
                     let notice = notice.filter(|_| !hidden);
                     let notice_height = if notice.is_some() { notice_height } else { 0.0 };
                     let list = room - notice_height;
-                    ui.allocate_ui_with_layout(
+                    let roster = ui.allocate_ui_with_layout(
                         vec2(ui.available_width(), list),
                         Layout::top_down(Align::LEFT),
                         |ui| {
@@ -558,6 +573,7 @@ impl Run {
                             self.roster(ui, list, notice_height);
                         },
                     );
+                    self.group_drop_zone(ui, roster.response.rect);
                     if let Some(notice) = notice {
                         // All the height the list gave up, so the dock stays where it was.
                         ui.allocate_ui_with_layout(
@@ -875,6 +891,7 @@ impl Run {
             .map(|&index| {
                 let p = &self.state.participants[index];
                 RowLayout::new(ui, width, p, self.sync_word(index), scale, fit, longest)
+                    .with_art(self.row_art(ui.ctx(), p))
             })
             .collect()
     }
@@ -1642,7 +1659,10 @@ impl Run {
     }
 
     pub(super) fn toggle_party_sync(&mut self) {
-        match self.party_sync_plan() {
+        let plan = self.party_sync_plan();
+        self.keep_party_synced = matches!(plan, PartySync::Start(_));
+        self.dirty = true;
+        match plan {
             PartySync::Stop(indexes) => {
                 for index in indexes {
                     self.syncs.entry(index).or_default().stop();
@@ -1668,7 +1688,7 @@ impl Run {
             .syncs
             .iter()
             .filter(|(_, sync)| {
-                (sync.enabled && (sync.busy() || sync.dirty())) || sync.state() == SyncState::Error
+                (sync.enabled && sync.unconfirmed()) || sync.state() == SyncState::Error
             })
             .filter_map(|(index, _)| {
                 Some((*index, self.state.participants.get(*index)?.name.clone()))
@@ -1703,6 +1723,7 @@ impl Run {
                                 .clicked()
                         {
                             sync.stop();
+                            self.dirty = true;
                         }
                     });
                 });
@@ -1742,6 +1763,7 @@ impl Run {
             (Panel::Record, "Record", "Record"),
             (Panel::Log, "Log", log_name),
             (Panel::Encounter, "Prep", "Prep"),
+            (Panel::Groups, "Groups", "Groups"),
         ];
         if ui.available_width() >= PANEL_TWO_COLUMNS {
             // Room for both: the reference stays open, with the DM's records beside it.
@@ -1839,6 +1861,7 @@ impl Run {
             Panel::Log => self.log_tab(ui),
             Panel::Keys => self.keys_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
+            Panel::Groups => self.groups_tab(ui),
         }
     }
 
@@ -1847,6 +1870,322 @@ impl Run {
             .id_salt("run_encounter_notes")
             .auto_shrink([false, false])
             .show(ui, |ui| style::markdown(ui, &self.setup_details));
+    }
+
+    /// The campaign's encounter groups. A group is dragged to the initiative list, or added
+    /// with its button, by the rule the campaign chose for initiative.
+    fn groups_tab(&mut self, ui: &mut egui::Ui) {
+        let c = colors();
+        ui.add_space(design::XS);
+        ui.label(Type::Heading.rich(ui, "Encounter groups").color(c.text));
+        let Some(groups) = self.groups.clone() else {
+            ui.add(
+                egui::Label::new(
+                    Type::Body
+                        .rich(
+                            ui,
+                            "This campaign's groups have not loaded yet. If this stays, the Encounters page says why.",
+                        )
+                        .color(c.muted),
+                )
+                .wrap(),
+            );
+            return;
+        };
+        if groups.is_empty() {
+            ui.add(
+                egui::Label::new(
+                    Type::Body
+                        .rich(
+                            ui,
+                            "No encounter groups yet. Make them on the Encounters page, with New group.",
+                        )
+                        .color(c.muted),
+                )
+                .wrap(),
+            );
+            return;
+        }
+        ui.add(
+            egui::Label::new(
+                Type::Small
+                    .rich(
+                        ui,
+                        format!(
+                            "Drag a name to the initiative list, or press Add. {} A typed total applies to every member.",
+                            self.initiative.grouping.arrival_rule()
+                        ),
+                    )
+                    .color(c.muted),
+            )
+            .wrap(),
+        );
+        // The roll and where it placed them. Undo or a later step takes this away.
+        let added = self
+            .history_labels
+            .last()
+            .and_then(|label| label.strip_prefix("add "))
+            .map(|group| format!("{}{group} added: ", super::GROUP_ADDED));
+        if let Some(line) = self
+            .state
+            .log
+            .last()
+            .filter(|line| added.as_ref().is_some_and(|start| line.starts_with(start)))
+        {
+            let short: String = line.chars().take(super::GROUP_LINE_LIMIT).collect();
+            let shown = if short.len() < line.len() {
+                format!("{short}… The Log has the rest.")
+            } else {
+                short
+            };
+            design::message(ui, Tone::Success, &shown);
+        }
+        design::rule(ui);
+        let mut add = None;
+        egui::ScrollArea::vertical()
+            .id_salt("run_groups")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for group in groups.iter() {
+                    ui.push_id(group.id, |ui| {
+                        if self.group_row(ui, group) {
+                            add = Some(group.id);
+                        }
+                    });
+                    design::rule(ui);
+                }
+            });
+        if let Some(id) = add {
+            self.add_group_from_panel(id);
+        }
+    }
+
+    /// Returns true when the DM chooses to add this group.
+    fn group_row(&mut self, ui: &mut egui::Ui, group: &super::RunGroup) -> bool {
+        let c = colors();
+        ui.add_space(design::XS);
+        let name = &group.name;
+        let creatures = group.creature_count();
+        let grip = ui.allocate_response(
+            vec2(ui.available_width(), Density::Read.control()),
+            egui::Sense::DRAG,
+        );
+        // A pointer's way to do what the Add button does, so the keyboard does not stop here.
+        grip.widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::Other,
+                true,
+                format!("Drag {name} to the initiative list"),
+            )
+        });
+        let totals = ui.painter().text(
+            grip.rect.right_center(),
+            Align2::RIGHT_CENTER,
+            format!(
+                "{} · Total XP {}{}",
+                design::count(creatures as usize, "creature", "creatures"),
+                group.xp,
+                if group.xp_unknown.is_empty() && group.unavailable == 0 {
+                    ""
+                } else {
+                    " or more"
+                }
+            ),
+            Type::Small.font(ui),
+            c.muted,
+        );
+        // A long name stops short of the totals, and its row shows it whole on hover.
+        let title = egui::WidgetText::from(
+            Type::Strong
+                .rich(ui, format!("{} {name}", icons::DRAG))
+                .color(c.text),
+        )
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Truncate),
+            (totals.left() - grip.rect.left() - design::S).max(0.0),
+            Type::Strong.font(ui),
+        );
+        let cut = title.elided;
+        ui.painter().galley(
+            pos2(
+                grip.rect.left(),
+                grip.rect.center().y - title.size().y / 2.0,
+            ),
+            title,
+            c.text,
+        );
+        let grip = grip.on_hover_cursor(egui::CursorIcon::Grab);
+        let grip = if cut { grip.on_hover_text(name) } else { grip };
+        grip.dnd_set_drag_payload(GroupDrag(group.id));
+        if grip.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            if let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) {
+                // On a surface of its own, because the list under it is full of words.
+                let painter = ui
+                    .ctx()
+                    .layer_painter(egui::LayerId::new(egui::Order::Tooltip, grip.id));
+                let galley = painter.layout_no_wrap(
+                    format!("{} {name}", icons::ADD),
+                    Type::Strong.font(ui),
+                    c.accent,
+                );
+                let place = pointer + vec2(design::M, -galley.size().y / 2.0);
+                painter.rect_filled(
+                    Rect::from_min_size(place, galley.size()).expand(design::XS),
+                    design::RADIUS_CONTROL,
+                    c.raised,
+                );
+                painter.galley(place, galley, c.accent);
+            }
+        }
+        for member in &group.members {
+            let base = splat::content::overrides::Base::of(&member.entry, &group.side);
+            let shown = member
+                .overrides
+                .resolve(&base)
+                .map_or_else(|_| base.name.clone(), |resolved| resolved.name);
+            let font = Type::Small.font(ui);
+            let mut line = egui::text::LayoutJob::default();
+            let mut add = |text: String, color: egui::Color32| {
+                line.append(
+                    &text,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font.clone(),
+                        color,
+                        ..Default::default()
+                    },
+                );
+            };
+            add(format!("{} × {shown}", member.count), c.text);
+            if !member.overrides.is_empty() {
+                add(
+                    format!(" · {} Changed", icons::CHANGED),
+                    c.participant.changed,
+                );
+            }
+            ui.add(egui::Label::new(line).wrap());
+        }
+        if group.unavailable > 0 {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!(
+                                "{} × {} Unavailable creature",
+                                group.unavailable,
+                                icons::WARN
+                            ),
+                        )
+                        .color(c.result.warning),
+                )
+                .wrap(),
+            );
+        }
+        let mut facts = vec![format!("Side: {}", style::human_label(&group.side))];
+        if !group.xp_unknown.is_empty() {
+            facts.push(format!("XP not known for {}", group.xp_unknown.join(", ")));
+        }
+        ui.add(egui::Label::new(Type::Small.rich(ui, facts.join(" · ")).color(c.muted)).wrap());
+        if !group.notes.trim().is_empty() {
+            ui.add(
+                egui::Label::new(Type::Small.rich(ui, group.notes.trim()).color(c.muted)).wrap(),
+            );
+        }
+        if let Some(problem) = &group.problem {
+            design::message(ui, Tone::Warning, problem);
+        }
+        let mut add = false;
+        ui.horizontal(|ui| {
+            let field = format!("Initiative total for {name}");
+            ui.label(Type::Small.rich(ui, "Total").color(c.muted));
+            let text = self.group_totals.entry(group.id).or_default();
+            // By id, because two groups can have one name.
+            let response = design::number_field_with_id(
+                ui,
+                design::focus_id(&field).with(group.id),
+                &field,
+                text,
+                "Roll",
+                72.0,
+                Density::Read.control(),
+            );
+            let total = text.parse::<i64>().ok();
+            let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+            // By side, a group can join its side's initiative with no roll.
+            let leader = group.leader();
+            let joins_side = self.initiative.grouping == Grouping::BySide
+                && leader.as_ref().is_some_and(|leader| {
+                    self.state
+                        .participants
+                        .iter()
+                        .any(|p| p.npc && p.side == leader.side && p.initiative.is_some())
+                });
+            let may_roll = !joins_side;
+            let label = match total {
+                Some(total) => format!("Add at {total}"),
+                None if may_roll => "Add and roll".to_owned(),
+                None => "Add".to_owned(),
+            };
+            let blocked = group.problem.as_deref().or((total.is_none()
+                && may_roll
+                && leader.is_some_and(|leader| leader.initiative_bonus.is_none()))
+            .then_some("The first member has no initiative bonus. Type a total."));
+            add = Action::secondary(&label)
+                .icon(icons::ADD)
+                .density(Density::Read)
+                .name(&format!("Add {name} to the initiative list"))
+                .blocked(blocked)
+                .show(ui)
+                .clicked()
+                || (enter && blocked.is_none());
+        });
+        ui.add_space(design::XS);
+        add
+    }
+
+    /// The same step for the button and for a drop: the total typed beside it, or a roll.
+    pub(super) fn add_group_from_panel(&mut self, id: Uuid) {
+        let Some(group) = self
+            .groups
+            .iter()
+            .flat_map(|groups| groups.iter())
+            .find(|group| group.id == id)
+            .cloned()
+        else {
+            return;
+        };
+        let total = self
+            .group_totals
+            .get(&id)
+            .and_then(|text| text.parse::<i64>().ok());
+        self.run_command(Command::AddGroup(group, total));
+        if self.error.is_none() {
+            self.group_totals.remove(&id);
+            self.return_focus = self.lookup_open;
+        }
+    }
+
+    /// While a group is held, the initiative list says it can take it.
+    fn group_drop_zone(&mut self, ui: &mut egui::Ui, rect: Rect) {
+        let Some(held) = egui::DragAndDrop::payload::<GroupDrag>(ui.ctx()) else {
+            return;
+        };
+        ui.painter().rect_stroke(
+            rect,
+            design::RADIUS_CONTROL,
+            Stroke::new(design::FOCUS_WIDTH, colors().accent),
+            StrokeKind::Inside,
+        );
+        let over = ui
+            .input(|i| i.pointer.latest_pos())
+            .is_some_and(|pointer| rect.contains(pointer));
+        if over && ui.input(|i| i.pointer.any_released()) {
+            egui::DragAndDrop::clear_payload(ui.ctx());
+            self.add_group_from_panel(held.0);
+        }
     }
 
     fn keys_tab(&self, ui: &mut egui::Ui) {
@@ -1936,6 +2275,18 @@ impl Run {
                 temporary_hp: p.temporary_hp,
                 conditions: p.conditions.clone(),
             };
+            if let Some(path) = self
+                .storage
+                .as_ref()
+                .and_then(|storage| crate::party_sync::portrait_path(storage.campaign, record))
+            {
+                let (rect, _) = ui.allocate_exact_size(
+                    egui::Vec2::splat(crate::party::SHEET_PORTRAIT),
+                    egui::Sense::empty(),
+                );
+                crate::art::portrait(ui, rect, Some(&path), &record.definition.splat_name, None);
+            }
+            changes_block(ui, p, false);
             let freshness = crate::party::freshness(record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
             // While sync reads this sheet, the copy's age says nothing about these values.
@@ -1986,9 +2337,12 @@ impl Run {
             );
         }
         egui::ScrollArea::vertical()
-            .id_salt(("run_reference", definition.id))
+            // By participant: copies of one creature can differ, and each card opens on its own
+            // changes, not at the place the last copy was left.
+            .id_salt(("run_reference", &p.key))
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                changes_block(ui, p, true);
                 let links: &dyn view::Links = match &self.content {
                     Some(index) => index.as_ref(),
                     None => &view::NoLinks,
@@ -2144,12 +2498,13 @@ impl Run {
                     );
                 }
                 if p.definition.fields.contains_key("splat_external") {
-                    design::group_label(ui, "D&D Beyond sync");
+                    design::group_label(ui, "D&D Beyond combat sync");
                     let offline = (!self.connected && !self.simulate_connection)
                         .then_some("Connect to D&D Beyond in Settings to sync.");
-                    ui.push_id(index, |ui| {
-                        self.syncs.entry(index).or_default().show(ui, offline);
-                    });
+                    let sync = self.syncs.entry(index).or_default();
+                    let was = sync.enabled;
+                    ui.push_id(index, |ui| sync.show(ui, offline));
+                    self.dirty |= was != sync.enabled;
                 }
             });
         if let Some(command) = command {
@@ -2198,19 +2553,15 @@ impl Run {
         let mut closed = false;
         let width = panel_width(ui);
         if !self.hide_panel {
-            egui::SidePanel::right("run_setup_panel")
-                .resizable(false)
-                .exact_width(width)
+            design::Column::panel("run_setup_panel", width)
+                .page_keeps(design::RUN_LIST_KEEPS)
                 .frame(side_frame())
                 .show_inside(ui, |ui| self.setup_panel(ui));
         }
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
             .show_inside(ui, |ui| {
-                let size = vec2(
-                    (ui.available_width() - GUTTER).min(design::RUN_LARGE.max_width),
-                    ui.available_height(),
-                );
+                let size = vec2(self.roster_width(ui), ui.available_height());
                 ui.allocate_ui_with_layout(size, Layout::top_down(Align::LEFT), |ui| {
                     closed = self.setup_body(ui);
                 });
@@ -2252,6 +2603,9 @@ impl Run {
             None
         };
         let mut command = None;
+        let default_roll = self.initiative.grouping;
+        let default_hint = format!("Campaign default: {}", default_roll.label());
+        let roll_choices = self.roll_choices();
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), 44.0),
             Layout::right_to_left(Align::Center),
@@ -2265,13 +2619,26 @@ impl Run {
                 {
                     command = Some(Command::Begin);
                 }
-                if Action::secondary("Roll NPC initiative")
-                    .icon(icons::DICE)
-                    .density(Density::Glance)
-                    .show(ui)
-                    .clicked()
-                {
-                    command = Some(Command::RollNpcs);
+                let roll = design::split_action(
+                    ui,
+                    Action::secondary("Roll NPCs")
+                        .name("Roll NPC initiative")
+                        .icon(icons::DICE)
+                        .density(Density::Glance)
+                        .hint(&default_hint),
+                    "Roll NPC initiative another way",
+                    |ui| {
+                        ui.label(Type::Small.rich(ui, "This roll only").color(colors().muted));
+                        for mode in &roll_choices {
+                            let item = ui.selectable_label(*mode == default_roll, mode.label());
+                            if item.clicked() {
+                                command = Some(Command::RollNpcs(*mode));
+                            }
+                        }
+                    },
+                );
+                if roll.clicked() {
+                    command = Some(Command::RollNpcs(default_roll));
                 }
                 ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
@@ -2320,7 +2687,7 @@ impl Run {
                 .position(|p| p.initiative.is_none() && p.present);
         }
         let room = ui.available_height() - FOOTER_HEIGHT - design::M;
-        ui.allocate_ui_with_layout(
+        let rows = ui.allocate_ui_with_layout(
             vec2(ui.available_width(), room),
             Layout::top_down(Align::LEFT),
             |ui| {
@@ -2340,6 +2707,7 @@ impl Run {
                     });
             },
         );
+        self.group_drop_zone(ui, rows.response.rect);
         design::rule(ui);
         ui.add_space(design::XS);
         ui.horizontal(|ui| {
@@ -2368,7 +2736,7 @@ impl Run {
             if matches!(command, Command::Begin) {
                 self.panel = Panel::Reference;
             }
-            let rolled = matches!(command, Command::RollNpcs);
+            let rolled = matches!(command, Command::RollNpcs(_));
             self.run_command(command);
             // Next is the first player still without a number.
             if rolled {
@@ -2390,14 +2758,13 @@ impl Run {
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
         let p = &self.state.participants[index];
-        let detail = format!(
-            "{}{} · HP {}/{} · AC {}",
-            if p.present { "" } else { "Absent · " },
-            p.side,
+        let numbers = format!(
+            "HP {}/{} · AC {}",
             display(p.hp),
             display(p.max_hp),
             display(p.armor_class)
         );
+        let absent = if p.present { "" } else { "Absent · " };
         let selected = self.panel == Panel::Record && self.selected == index;
         let (name, npc, mode, bonus, initiative, present) = (
             &p.name,
@@ -2422,6 +2789,21 @@ impl Run {
             };
             let actions = 72.0 + 76.0 + 28.0 + presence_slot + 4.0 * design::XS;
             let name_width = (ui.available_width() - actions).max(110.0);
+            let side = &p.side;
+            let plain = format!("{absent}{side} · {numbers}");
+            // The side stays when the row has room. Record says it when the row has not.
+            let detail = if p.changes.is_none() {
+                plain
+            } else {
+                let changed = format!("{} Changed", icons::CHANGED);
+                let both = format!("{absent}{side} · {changed} · {numbers}");
+                let font = Type::Small.font(ui);
+                if design::number_width(ui, &both, &font) + 2.0 * design::S <= name_width {
+                    both
+                } else {
+                    format!("{absent}{changed} · {numbers}")
+                }
+            };
             let response = ui
                 .allocate_ui(vec2(name_width, row), |ui| {
                     design::two_line_row(ui, row, selected, name, &detail)
@@ -2561,6 +2943,7 @@ impl Run {
                 (Panel::Record, "Record"),
                 (Panel::Log, "Log"),
                 (Panel::Encounter, "Prep"),
+                (Panel::Groups, "Groups"),
             ],
         );
         design::rule(ui);
@@ -2573,10 +2956,18 @@ impl Run {
                         .rich(ui, &self.state.participants[self.selected].name)
                         .color(colors().text),
                 );
+                let p = &self.state.participants[self.selected];
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("Side: {}", style::human_label(&p.side)))
+                        .color(colors().muted),
+                );
+                changes_block(ui, p, false);
                 self.record_tab(ui, self.selected);
             }
             Panel::Log => self.log_tab(ui),
             Panel::Encounter => self.notes_tab(ui),
+            Panel::Groups => self.groups_tab(ui),
         }
     }
 
@@ -2609,7 +3000,7 @@ impl Run {
                     .rich(
                         ui,
                         format!(
-                            "{} · {}",
+                            "Default NPC roll: {} · {}",
                             self.initiative.grouping.label(),
                             if self.initiative.roster_ties {
                                 "Roster order breaks ties"
@@ -2810,9 +3201,8 @@ impl Run {
         // Beside a panel, the final state comes first.
         if !self.hide_panel {
             let width = design::side_panel_width(ui.ctx().content_rect().width());
-            egui::SidePanel::right("run_ended_log")
-                .resizable(false)
-                .exact_width(width)
+            design::Column::panel("run_ended_log", width)
+                .page_keeps(design::RUN_LIST_KEEPS)
                 .frame(side_frame())
                 .show_inside(ui, |ui| {
                     // With choices to make, they have the column, and the log waits behind a
@@ -2842,7 +3232,11 @@ impl Run {
                 });
         }
         egui::CentralPanel::default()
-            .frame(egui::Frame::new())
+            // The panel's drag handle lies on this edge, so the rows stop short of it.
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
+                right: design::S as i8,
+                ..egui::Margin::ZERO
+            }))
             .show_inside(ui, |ui| {
                 design::group_label(ui, "Final state");
                 let scale = RunScale::fit(
@@ -2868,7 +3262,8 @@ impl Run {
                                 scale,
                                 RowFit::Natural,
                                 0.0,
-                            );
+                            )
+                            .with_art(self.row_art(ui.ctx(), p));
                             design::row(ui, layout.height(scale), false, &name, |ui, rect| {
                                 paint_row(ui, rect, p, TurnMark::None, sync, scale, &layout);
                             });
@@ -2880,6 +3275,78 @@ impl Run {
 }
 
 /// The action names what it does, so its label cannot be read as a state.
+/// What an encounter or group changed on this creature: the value it replaced and the new
+/// one, each marked. It stays out in the open, above the stat block that keeps its own values.
+fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
+    let c = colors();
+    if let Some(added) = &p.added_from {
+        ui.add(
+            egui::Label::new(
+                Type::Small
+                    .rich(ui, format!("Arrived with {}", added.group))
+                    .color(c.muted),
+            )
+            .wrap(),
+        );
+    }
+    let Some(changes) = &p.changes else {
+        return;
+    };
+    design::status(
+        ui,
+        Status {
+            icon: icons::CHANGED,
+            word: "Changed for this encounter",
+            color: c.participant.changed,
+        },
+    );
+    let rows = changes.overrides.rows(&changes.base);
+    change_rows(ui, &rows);
+    let note = if above_stat_block {
+        Some(PRINTED)
+    } else {
+        rows.iter().any(|row| row.by_hand).then_some(BY_HAND)
+    };
+    if let Some(note) = note {
+        ui.add(egui::Label::new(Type::Small.rich(ui, note).color(c.muted)).wrap());
+    }
+    ui.add_space(design::S);
+}
+
+/// Each change, with the value it replaces. The editors and the run say it the same way.
+pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
+    let c = colors();
+    // What the DM must do comes first, in larger type. The rest the run has done.
+    let (by_hand, applied): (Vec<&Row>, Vec<&Row>) = rows.iter().partition(|row| row.by_hand);
+    for row in by_hand.into_iter().chain(applied) {
+        let font = if row.by_hand {
+            Type::Body.font(ui)
+        } else {
+            Type::Small.font(ui)
+        };
+        let mut job = egui::text::LayoutJob::default();
+        let mut add = |text: &str, color: egui::Color32| {
+            job.append(
+                text,
+                0.0,
+                egui::TextFormat {
+                    font_id: font.clone(),
+                    color,
+                    ..Default::default()
+                },
+            );
+        };
+        add(&format!("{}: ", row.label), c.muted);
+        add(&row.base, c.muted);
+        add(" → ", c.muted);
+        add(&row.changed, c.participant.changed);
+        if row.by_hand {
+            add(" ·\u{a0}add\u{a0}by\u{a0}hand", c.result.warning);
+        }
+        ui.add(egui::Label::new(job).wrap());
+    }
+}
+
 fn presence_action(present: bool) -> (&'static str, &'static str) {
     if present {
         (
@@ -2947,10 +3414,19 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
         parts.push("Concentrating".into());
     }
     parts.extend(p.conditions.iter().cloned());
+    if let Some(changes) = &p.changes {
+        parts.push("Changed".into());
+        parts.extend(changes.overrides.table_bonuses(&changes.base));
+    }
     if let Some(sync) = sync {
         parts.push(sync_status(sync).word.into());
     }
     parts.join(", ")
+}
+
+#[cfg(test)]
+pub(super) fn row_words_for_test(p: &Participant) -> String {
+    row_name(p, TurnMark::None, None)
 }
 
 /// How much height a row may use.
@@ -2982,7 +3458,15 @@ fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
 }
 
 /// The fixed columns of a run row, and its second line, which grows rather than cuts.
+const PICTURE_GAP: f32 = 6.0;
+
 struct RowLayout {
+    /// The participant's picture. A row with none shows the first letter of the name.
+    art: Option<PathBuf>,
+    /// The width of the picture's column.
+    picture: f32,
+    /// Where the second line starts.
+    second_left: f32,
     /// The name at this row's width. A long name wraps and the row grows.
     name: Arc<Galley>,
     second_line: Option<Arc<Galley>>,
@@ -3007,6 +3491,11 @@ fn header_height(scale: RunScale) -> f32 {
 }
 
 impl RowLayout {
+    fn with_art(mut self, art: Option<PathBuf>) -> Self {
+        self.art = art;
+        self
+    }
+
     fn new(
         ui: &egui::Ui,
         width: f32,
@@ -3030,7 +3519,13 @@ impl RowLayout {
         // Its bar starts later, still under the digits, so its second line has the width that
         // the turn word took and a condition does not wrap again.
         let bar_inset = if narrow { 8.0 } else { 0.0 };
-        let name_left = initiative_right + gap + scale.name * 0.7;
+        // Compressed rows have a roster to fit, so the picture gives up what it can.
+        let picture = if narrow {
+            scale.name * 1.25
+        } else {
+            (scale.row - 10.0).min(scale.name * 1.75)
+        };
+        let name_left = initiative_right + gap + scale.name * 0.7 + picture + PICTURE_GAP;
         let hp_width = scale.hp * 1.9 + scale.hp_max * 2.0 + 4.0;
         let state_width = (scale.mark * 8.5).clamp(84.0, 118.0);
         let temp_width = scale.stat * 2.6 + 12.0;
@@ -3046,7 +3541,13 @@ impl RowLayout {
 
         let mut job = egui::text::LayoutJob::default();
         // The line wraps before the HP column, so that it never runs over the HP bar.
-        job.wrap.max_width = (temp_right + bar_inset - name_left).max(1.0);
+        // In a compressed list it starts under the picture, as the row has no height to spare.
+        let second_left = if narrow {
+            name_left - picture - PICTURE_GAP
+        } else {
+            name_left
+        };
+        job.wrap.max_width = (temp_right + bar_inset - second_left).max(1.0);
         // With HP in what a DM looks for: as strong as the state words, and stronger than AC.
         // The compact scale keeps body weight, so a wrapped line costs no row its place.
         let role = if narrow { Type::Body } else { Type::Strong };
@@ -3069,6 +3570,21 @@ impl RowLayout {
         }
         for condition in &p.conditions {
             words.push((condition.clone(), c.participant.condition));
+        }
+        // A side of its own needs its word: a name and a number can look like another side's.
+        if !["party", "enemies"].contains(&p.side.as_str()) {
+            words.push((style::human_label(&p.side), c.side.other));
+        }
+        // A change is never hidden. What the run cannot apply is on the row, for the roll.
+        // A number stays with its word when the line wraps.
+        if let Some(changes) = &p.changes {
+            words.push((
+                format!("{}\u{a0}Changed", icons::CHANGED),
+                c.participant.changed,
+            ));
+            for bonus in changes.overrides.table_bonuses(&changes.base) {
+                words.push((bonus.replace(' ', "\u{a0}"), c.participant.changed));
+            }
         }
         let separator = design::number_width(ui, " · ", &font);
         // A separator stands between words on one line, and never opens the next. A word moves
@@ -3134,6 +3650,9 @@ impl RowLayout {
             && sync.is_none()
             && name.rows.len() == 1;
         Self {
+            art: None,
+            picture,
+            second_left,
             name,
             even: 0.0,
             bar_inset,
@@ -3275,11 +3794,32 @@ fn paint_row(
     }
     side_mark(
         painter,
-        pos2(x + layout.name_left - scale.name * 0.6, line_y),
+        pos2(
+            x + layout.name_left - layout.picture - PICTURE_GAP - scale.name * 0.6,
+            line_y,
+        ),
         &p.side,
         scale.name * 0.55,
     );
     let name_left = x + layout.name_left;
+    // A compressed row can be shorter than the picture's column is wide.
+    crate::art::portrait(
+        ui,
+        Rect::from_center_size(
+            pos2(
+                name_left - PICTURE_GAP - layout.picture / 2.0,
+                if layout.second_left < layout.name_left {
+                    line_y
+                } else {
+                    rect.center().y
+                },
+            ),
+            egui::Vec2::splat(layout.picture.min(rect.height() - 4.0)),
+        ),
+        layout.art.as_deref(),
+        &p.name,
+        (!p.present).then_some(c.participant.absent),
+    );
     painter.galley(
         pos2(name_left, line_y - name_line / 2.0),
         layout.name.clone(),
@@ -3357,7 +3897,7 @@ fn paint_row(
     // strong as Bloodied, because a conflict must be seen at a glance.
     if let Some(line) = &layout.second_line {
         painter.galley(
-            pos2(name_left, second_y),
+            pos2(x + layout.second_left, second_y),
             line.clone(),
             c.participant.condition,
         );

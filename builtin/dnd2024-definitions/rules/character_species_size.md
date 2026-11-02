@@ -18,14 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-Your character’s species determines the character’s\
-size. Individuals within a species cover a wide range\
-of heights, and some species include such diversity\
-
-<!-- SRD page 84 -->
-
-of size that you can choose whether your character\
-is Small or Medium.\
+Your character’s species determines the character’s size. Individuals within a species cover a wide range of heights, and some species include such diversity of size that you can choose whether your character is Small or Medium.
 
 ## Rule
 

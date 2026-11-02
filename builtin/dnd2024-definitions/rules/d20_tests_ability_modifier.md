@@ -18,21 +18,18 @@ splat_sources:
 
 <!-- SRD page 6 -->
 
-An ability check is named for the ability modifier it\
-uses: a Strength check, an Intelligence check, and so\
-on. Different ability checks are called for in differ-\
-ent situations, depending on which ability is most\
-relevant. See the Ability Check Examples table for\
-examples of each check’s use.\
-Ability Check Examples\
-Ability Make a Check To …\
-Strength Lift, push, pull, or break something\
-Dexterity Move nimbly, quickly, or quietly\
-Constitution Push your body beyond normal limits\
-Intelligence Reason or remember\
-Wisdom Notice things in the environment or in\
-creatures’ behavior\
-Charisma Influence, entertain, or deceive\
+An ability check is named for the ability modifier it uses: a Strength check, an Intelligence check, and so on. Different ability checks are called for in different situations, depending on which ability is most relevant. See the Ability Check Examples table for examples of each check’s use.
+
+**Ability Check Examples**
+
+| Ability | Make a Check To … |
+| --- | --- |
+| Strength | Lift, push, pull, or break something |
+| Dexterity | Move nimbly, quickly, or quietly |
+| Constitution | Push your body beyond normal limits |
+| Intelligence | Reason or remember |
+| Wisdom | Notice things in the environment or in creatures’ behavior |
+| Charisma | Influence, entertain, or deceive |
 
 ## Rule
 

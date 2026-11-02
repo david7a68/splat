@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-A Tent sleeps up to two Small or Medium creatures.\
+A Tent sleeps up to two Small or Medium creatures.
 
 ## Item
 

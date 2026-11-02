@@ -22,22 +22,18 @@ Skills Perception +5\
 Immunities Fire\
 Senses Darkvision 60 ft.; Passive Perception 15\
 Languages Understands Infernal but can’t speak\
-CR 3 (XP 700; PB +2)\
+CR 3 (XP 700; PB +2)
 
 ### Traits
 
-Pack Tactics. The hound has Advantage on an attack\
-roll against a creature if at least one of the hound’s al-\
-lies is within 5 feet of the creature and the ally doesn’t\
-have the Incapacitated condition.\
+Pack Tactics. The hound has Advantage on an attack roll against a creature if at least one of the hound’s allies is within 5 feet of the creature and the ally doesn’t have the Incapacitated condition.
 
 ### Actions
 
-Multiattack. The hound makes two Bite attacks.\
-Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3)\
-Piercing damage plus 3 (1d6) Fire damage.\
-Fire Breath (Recharge 5–6). Dexterity Saving Throw:\
-DC 12, each creature in a 15-foot Cone. Failure: 17\
-(5d6) Fire damage. Success: Half damage.\
+Multiattack. The hound makes two Bite attacks.
+
+Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage plus 3 (1d6) Fire damage.
+
+Fire Breath (Recharge 5–6). Dexterity Saving Throw: DC 12, each creature in a 15-foot Cone. Failure: 17 (5d6) Fire damage. Success: Half damage.
 
 Original layout: [[../pages/297|page 297]].

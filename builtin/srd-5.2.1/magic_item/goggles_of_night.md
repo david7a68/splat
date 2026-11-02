@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [224
 
 <!-- SRD page 224 -->
 
-Wondrous Item, Uncommon\
-While wearing these dark lenses, you have Darkvi-\
-sion out to 60 feet. If you already have Darkvision,\
-wearing the goggles increases its range by 60 feet.\
+Wondrous Item, Uncommon
+
+While wearing these dark lenses, you have Darkvision out to 60 feet. If you already have Darkvision, wearing the goggles increases its range by 60 feet.
 
 Original layout: [[../pages/224|page 224]].

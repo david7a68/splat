@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 97 -->
 
-A Component Pouch is watertight and filled with\
-compartments that hold all the free Material com-\
-ponents of your spells.\
+A Component Pouch is watertight and filled with compartments that hold all the free Material components of your spells.
 
 ## Item
 

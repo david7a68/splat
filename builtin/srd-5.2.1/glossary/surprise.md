@@ -11,9 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [189],
 
 <!-- SRD page 189 -->
 
-If a creature is caught unawares by the start of\
-combat, that creature is surprised, which causes it\
-to have Disadvantage on its Initiative roll. See also\
-“Playing the Game” (“Combat”).\
+If a creature is caught unawares by the start of combat, that creature is surprised, which causes it to have Disadvantage on its Initiative roll. See also “Playing the Game” (“Combat”).
 
 Original layout: [[../pages/189|page 189]].

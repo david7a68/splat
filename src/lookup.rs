@@ -82,11 +82,7 @@ impl ContentIndex {
                     |c| format!("Campaign entry · {}", c.name),
                 )
             } else {
-                catalogue
-                    .modules
-                    .iter()
-                    .find(|module| module.id == owner)
-                    .map_or_else(|| "Package".to_owned(), |module| module.name.clone())
+                catalogue.package_name(owner)
             }
         };
         let builtin = catalogue.modules.first().map(|module| module.id);
@@ -331,9 +327,8 @@ impl Lookup {
 
     pub fn show(&mut self, ctx: &egui::Context) {
         let width = design::side_panel_width(ctx.content_rect().width());
-        egui::SidePanel::right("lookup")
-            .resizable(false)
-            .exact_width(width)
+        design::Column::panel("lookup", width)
+            .page_keeps(design::PANEL_LEAVES_PAGE)
             .frame(
                 egui::Frame::new()
                     .fill(colors().page)

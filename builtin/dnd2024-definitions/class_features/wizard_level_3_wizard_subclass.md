@@ -18,41 +18,17 @@ splat_sources:
 
 <!-- SRD page 78 -->
 
-You gain a Wizard subclass of your choice. The\
-Evoker subclass is detailed after this class’s de-\
-scription. A subclass is a specialization that grants\
-you features at certain Wizard levels. For the rest\
-ExpandinG and rEplacinG a spEllBook\
-The spells you add to your spellbook as you gain\
-levels reflect your ongoing magical research, but you\
-might find other spells during your adventures that\
-you can add to the book. You could discover a Wiz-\
-ard spell on a Spell Scroll, for example, and then copy\
-it into your spellbook.\
-Copying a Spell into the Book. When you find\
-a level 1+ Wizard spell, you can copy it into your\
-spellbook if it’s of a level you can prepare and if you\
-have time to copy it. For each level of the spell, the\
-transcription takes 2 hours and costs 50 GP. After-\
-ward you can prepare the spell like the other spells\
-in your spellbook.\
-Copying the Book. You can copy a spell from\
-your spellbook into another book. This is like copy-\
-ing a new spell into your spellbook but faster, since\
-you already know how to cast the spell. You need\
-spend only 1 hour and 10 GP for each level of the\
-copied spell.\
-If you lose your spellbook, you can use the same\
-procedure to transcribe the Wizard spells that you\
-have prepared into a new spellbook. Filling out the\
-remainder of the new book requires you to find new\
-spells to do so. For this reason, many wizards keep a\
-backup spellbook.\
+You gain a Wizard subclass of your choice. The Evoker subclass is detailed after this class’s description. A subclass is a specialization that grants you features at certain Wizard levels. For the rest of your career, you gain each of your subclass’s features that are of your Wizard level or lower.
 
-<!-- SRD page 79 -->
+### Expanding And Replacing A Spellbook
 
-of your career, you gain each of your subclass’s fea-\
-tures that are of your Wizard level or lower.\
+The spells you add to your spellbook as you gain levels reflect your ongoing magical research, but you might find other spells during your adventures that you can add to the book. You could discover a Wizard spell on a Spell Scroll, for example, and then copy it into your spellbook.
+
+Copying a Spell into the Book. When you find a level 1+ Wizard spell, you can copy it into your spellbook if it’s of a level you can prepare and if you have time to copy it. For each level of the spell, the transcription takes 2 hours and costs 50 GP. Afterward you can prepare the spell like the other spells in your spellbook.
+
+Copying the Book. You can copy a spell from your spellbook into another book. This is like copying a new spell into your spellbook but faster, since you already know how to cast the spell. You need spend only 1 hour and 10 GP for each level of the copied spell.
+
+If you lose your spellbook, you can use the same procedure to transcribe the Wizard spells that you have prepared into a new spellbook. Filling out the remainder of the new book requires you to find new spells to do so. For this reason, many wizards keep a backup spellbook.
 
 ## Rule
 

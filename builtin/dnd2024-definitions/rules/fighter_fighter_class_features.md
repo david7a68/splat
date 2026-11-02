@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 47 -->
 
-As a Fighter, you gain the following class features\
-when you reach the specified Fighter levels. These\
-features are listed on the Fighter Features table.\
+As a Fighter, you gain the following class features when you reach the specified Fighter levels. These features are listed on the Fighter Features table.
 
 ## Rule
 

@@ -11,10 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [186],
 
 <!-- SRD page 186 -->
 
-Some effects cause a creature to be possessed by\
-another creature or entity. A possessing effect de-\
-fines how the possession operates. Possession can\
-be prevented by the Protection from Evil and Good\
-spell and ended by the Dispel Evil and Good spell.\
+Some effects cause a creature to be possessed by another creature or entity. A possessing effect defines how the possession operates. Possession can be prevented by the Protection from Evil and Good spell and ended by the Dispel Evil and Good spell.
 
 Original layout: [[../pages/186|page 186]].

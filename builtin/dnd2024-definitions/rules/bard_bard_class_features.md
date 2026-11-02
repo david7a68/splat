@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 31 -->
 
-As a Bard, you gain the following class features\
-when you reach the specified Bard levels. These fea-\
-tures are listed in the Bard Features table.\
+As a Bard, you gain the following class features when you reach the specified Bard levels. These features are listed in the Bard Features table.
 
 ## Rule
 

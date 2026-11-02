@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 207 -->
 
-When you make a sentient magic item, you create\
-the item’s persona much as you would create an\
-NPC, with these exceptions.\
+When you make a sentient magic item, you create the item’s persona much as you would create an NPC, with these exceptions.
 
 ## Rule
 

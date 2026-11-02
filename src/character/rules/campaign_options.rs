@@ -36,7 +36,7 @@ fn catalogue() -> &'static OptionRegistry {
         .expect("checked campaign option catalogue")
     })
 }
-fn option_fingerprint(source: &Value) -> String {
+pub(in crate::character) fn option_fingerprint(source: &Value) -> String {
     let values: BTreeMap<_, _> = ["id", "label", "description", "sourceId"]
         .into_iter()
         .map(|key| (key, source[key].clone()))

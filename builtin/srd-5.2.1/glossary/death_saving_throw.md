@@ -11,9 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [181],
 
 <!-- SRD page 181 -->
 
-A player character must make a Death Saving\
-Throw (also called a Death Save) if they start their\
-turn with 0 Hit Points. See also “Playing the Game”\
-(“Damage and Healing”).\
+A player character must make a Death Saving Throw (also called a Death Save) if they start their turn with 0 Hit Points. See also “Playing the Game” (“Damage and Healing”).
 
 Original layout: [[../pages/181|page 181]].

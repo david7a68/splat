@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 25 -->
 
-When you gain your first level in a class other than\
-your initial class, you gain only some of the new\
-class’s starting proficiencies, as detailed in each\
-class’s description in “Classes.”\
+When you gain your first level in a class other than your initial class, you gain only some of the new class’s starting proficiencies, as detailed in each class’s description in “Classes.”
 
 ## Rule
 

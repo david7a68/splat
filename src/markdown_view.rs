@@ -2,6 +2,7 @@
 use crate::design::{self, Type, colors};
 use eframe::egui::{self, text::LayoutJob};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use std::borrow::Cow;
 
 #[cfg(test)]
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
@@ -35,17 +36,30 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let mut code = false;
     let mut strong = false;
     let mut italic = false;
+    let mut struck = false;
+    let mut quotes = 0_usize;
     let mut lists: Vec<Option<u64>> = Vec::new();
     let mut table: Option<Vec<Vec<String>>> = None;
+    let mut figures: Vec<std::path::PathBuf> = Vec::new();
+    let mut in_figure = false;
+    let ctx = ui.ctx().clone();
+    let source = local_figure_links(markdown, |url| crate::art::link_art(&ctx, url).is_some());
     for event in Parser::new_ext(
-        markdown,
+        &source,
         Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
     ) {
         match event {
             Event::Html(ref text) if text.trim().starts_with("<!-- splat:inventory") => {
                 inventory_table = true;
             }
+            Event::Text(ref text) if in_figure && &**text == "image" => {}
             Event::Start(Tag::Link { dest_url, .. }) if table.is_none() => {
+                // A link to an image with a local copy shows the image instead of opening a page.
+                if let Some(path) = crate::art::link_art(&ctx, &dest_url) {
+                    figures.push(path);
+                    in_figure = true;
+                    continue;
+                }
                 if target.is_some() {
                     flush(ui, &mut job, &mut target);
                 }
@@ -54,7 +68,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     in_link = true;
                 }
             }
-            Event::End(TagEnd::Link) => in_link = false,
+            Event::End(TagEnd::Link) => {
+                in_link = false;
+                in_figure = false;
+            }
             Event::Start(Tag::Table(_)) => {
                 flush(ui, &mut job, &mut target);
                 table = Some(Vec::new());
@@ -108,14 +125,15 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                             cell.to_owned()
                         }
                     };
-                    let widths = column_widths(ui, &rows, &columns, &display);
+                    let gap = table_gap(ui.available_width(), columns.len());
+                    let widths = column_widths(ui, &rows, &columns, &display, gap);
                     // The rules end with the table, not at the measure.
-                    let table_width = widths.iter().sum::<f32>()
-                        + TABLE_GAP * widths.len().saturating_sub(1) as f32;
+                    let table_width =
+                        widths.iter().sum::<f32>() + gap * widths.len().saturating_sub(1) as f32;
                     ui.scope(|ui| {
                         ui.set_max_width(ui.available_width().min(table_width));
                         for (i, row) in rows.iter().enumerate() {
-                            design::table_row(ui, &widths, TABLE_GAP, |ui, position| {
+                            design::table_row(ui, &widths, gap, |ui, position| {
                                 let cell = display(
                                     row.get(columns[position]).map(String::as_str).unwrap_or(""),
                                 );
@@ -154,6 +172,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 heading = Some(level);
             }
             Event::End(TagEnd::Heading(level)) => {
+                draw_figures(ui, &mut figures, &job);
                 flush(ui, &mut job, &mut target);
                 if level == pulldown_cmark::HeadingLevel::H2
                     || (!dense && level == pulldown_cmark::HeadingLevel::H3)
@@ -175,6 +194,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             Event::End(TagEnd::Strong) => strong = false,
             Event::Start(Tag::Emphasis) => italic = true,
             Event::End(TagEnd::Emphasis) => italic = false,
+            Event::Start(Tag::Strikethrough) => struck = true,
+            Event::End(TagEnd::Strikethrough) => struck = false,
+            Event::Start(Tag::BlockQuote(_)) => quotes += 1,
+            Event::End(TagEnd::BlockQuote(_)) => quotes = quotes.saturating_sub(1),
             Event::Start(Tag::List(start)) => lists.push(start),
             Event::End(TagEnd::List(_)) => {
                 lists.pop();
@@ -201,7 +224,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     },
                 );
             }
-            Event::End(TagEnd::Paragraph | TagEnd::Item) => flush(ui, &mut job, &mut target),
+            Event::End(TagEnd::Paragraph | TagEnd::Item) => {
+                draw_figures(ui, &mut figures, &job);
+                flush(ui, &mut job, &mut target);
+            }
             Event::HardBreak if table.is_none() => job.append(
                 "\n",
                 0.0,
@@ -217,6 +243,18 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 egui::TextFormat {
                     font_id: prose.font(ui),
                     line_height: Some(prose.line()),
+                    ..Default::default()
+                },
+            ),
+            Event::Code(text) if !dense && heading.is_none() => job.append(
+                &text,
+                0.0,
+                egui::TextFormat {
+                    font_id: Type::Mono.font(ui),
+                    // Mono's own line puts code on the baseline of the serif beside it.
+                    line_height: Some(Type::Mono.line()),
+                    color: colors().text,
+                    background: design::reader::inline_code_fill(),
                     ..Default::default()
                 },
             ),
@@ -238,7 +276,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     } else {
                         Type::ProseStrong
                     }
-                } else if italic && !dense {
+                } else if (italic || quotes > 0) && !dense {
                     Type::ProseItalic
                 } else {
                     prose
@@ -253,6 +291,11 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 } else {
                     crate::design::reader::keep_dice_together(&text)
                 };
+                let color = if in_link {
+                    colors().accent
+                } else {
+                    colors().text
+                };
                 job.append(
                     &shown,
                     0.0,
@@ -263,10 +306,11 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                         } else {
                             prose.line()
                         }),
-                        color: if in_link {
-                            colors().accent
+                        color,
+                        strikethrough: if struck {
+                            egui::Stroke::new(1.0, color)
                         } else {
-                            colors().text
+                            egui::Stroke::NONE
                         },
                         ..Default::default()
                     },
@@ -279,18 +323,63 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             _ => {}
         }
     }
+    draw_figures(ui, &mut figures, &job);
     flush(ui, &mut job, &mut target);
+}
+
+/// Images come before the words of their block, which are their caption.
+fn draw_figures(ui: &mut egui::Ui, figures: &mut Vec<std::path::PathBuf>, caption: &LayoutJob) {
+    for figure in figures.drain(..) {
+        crate::art::figure(ui, &figure, &caption.text);
+    }
+}
+
+/// Notes write a captioned image as `*caption* ([image](url))`. Where the image will show in
+/// place, the brackets around the link have nothing left to enclose.
+fn local_figure_links(markdown: &str, local: impl Fn(&str) -> bool) -> Cow<'_, str> {
+    const OPEN: &str = "([image](";
+    if !markdown.contains(OPEN) {
+        return Cow::Borrowed(markdown);
+    }
+    let mut output = String::with_capacity(markdown.len());
+    let mut rest = markdown;
+    while let Some(start) = rest.find(OPEN) {
+        let after = &rest[start + OPEN.len()..];
+        match after.find("))") {
+            Some(end) if local(&after[..end]) => {
+                output.push_str(&rest[..start]);
+                output.push_str("[image](");
+                output.push_str(&after[..=end]);
+                rest = &after[end + 2..];
+            }
+            _ => {
+                output.push_str(&rest[..start + OPEN.len()]);
+                rest = after;
+            }
+        }
+    }
+    output.push_str(rest);
+    Cow::Owned(output)
 }
 
 const TABLE_GAP: f32 = design::M;
 
 /// Fit columns to their text. Never narrower than a column's longest word, while
 /// there is room, so "Constitution" does not break in a side panel.
+/// A wide table in a narrow reader gives up its gaps too, so that it stays inside the reader.
+fn table_gap(available: f32, columns: usize) -> f32 {
+    match columns.saturating_sub(1) {
+        0 => TABLE_GAP,
+        gaps => TABLE_GAP.min(available / 3.0 / gaps as f32),
+    }
+}
+
 fn column_widths(
     ui: &egui::Ui,
     rows: &[Vec<String>],
     columns: &[usize],
     display: &dyn Fn(&str) -> String,
+    gap: f32,
 ) -> Vec<f32> {
     let font = Type::StatLabel.font(ui);
     let measure = |text: &str| {
@@ -312,7 +401,7 @@ fn column_widths(
             }
         }
     }
-    let gaps = TABLE_GAP * columns.len().saturating_sub(1) as f32;
+    let gaps = gap * columns.len().saturating_sub(1) as f32;
     let available = (ui.available_width() - gaps - design::XS).max(1.0);
     let total: f32 = natural.iter().sum();
     if total <= available {
@@ -411,6 +500,62 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Option<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn brackets_go_only_from_links_with_a_local_image() {
+        let text =
+            "*A map* ([image](https://a/map.png)) and *a lost one* ([image](https://a/lost.png)).";
+        let result = local_figure_links(text, |url| url.ends_with("map.png"));
+        assert_eq!(
+            result,
+            "*A map* [image](https://a/map.png) and *a lost one* ([image](https://a/lost.png))."
+        );
+        assert_eq!(local_figure_links(text, |_| false), text);
+    }
+
+    /// The Reader's parts of a note, painted.
+    fn painted(markdown: &str) -> Vec<std::sync::Arc<egui::Galley>> {
+        let context = egui::Context::default();
+        let output = context.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| show(ui, markdown));
+        });
+        output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn format_of(galleys: &[std::sync::Arc<egui::Galley>], words: &str) -> egui::TextFormat {
+        galleys
+            .iter()
+            .flat_map(|galley| {
+                galley
+                    .job
+                    .sections
+                    .iter()
+                    .filter(|part| &galley.job.text[part.byte_range.clone()] == words)
+                    .map(|part| part.format.clone())
+            })
+            .next()
+            .unwrap_or_else(|| panic!("no words {words:?}"))
+    }
+
+    #[test]
+    fn code_and_struck_words_show_in_the_reader() {
+        let galleys = painted("Roll `1d20` ~~old~~ now\n");
+        let code = format_of(&galleys, "1d20");
+        assert_eq!(code.font_id.family, egui::FontFamily::Monospace);
+        assert_ne!(code.background, egui::Color32::TRANSPARENT);
+        assert_ne!(format_of(&galleys, "old").strikethrough, egui::Stroke::NONE);
+        assert_eq!(
+            format_of(&galleys, " now").strikethrough,
+            egui::Stroke::NONE
+        );
+    }
     #[test]
     fn inventory_reader_shows_names_without_exposing_storage_ids() {
         let context = egui::Context::default();

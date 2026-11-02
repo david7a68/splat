@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 58 -->
 
-You always have the Hunter’s Mark spell prepared.\
-You can cast it twice without expending a spell slot,\
-and you regain all expended uses of this ability\
-when you finish a Long Rest.\
-The number of times you can cast the spell with-\
-out a spell slot increases when you reach certain\
-Ranger levels, as shown in the Favored Enemy col-\
-umn of the Ranger Features table.\
+You always have the Hunter’s Mark spell prepared. You can cast it twice without expending a spell slot, and you regain all expended uses of this ability when you finish a Long Rest.
+
+The number of times you can cast the spell without a spell slot increases when you reach certain Ranger levels, as shown in the Favored Enemy column of the Ranger Features table.
 
 ## Rule
 

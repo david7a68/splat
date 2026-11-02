@@ -19,9 +19,8 @@ splat_sources:
 <!-- SRD page 93 -->
 
 Ability: Intelligence Weight: 9 lb.\
-Utilize: Detect poisoned drink (DC 15), or identify alco-\
-hol (DC 10)\
-Craft: Antitoxin\
+Utilize: Detect poisoned drink (DC 15), or identify alcohol (DC 10)\
+Craft: Antitoxin
 
 ## Item
 

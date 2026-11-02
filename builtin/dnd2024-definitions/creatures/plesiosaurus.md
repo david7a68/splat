@@ -28,20 +28,17 @@ Int 2 −4 −4 Wis 12 +1 +1 Cha  5 −3 −3\
 Skills Perception +3, Stealth +4\
 Senses Passive Perception 13\
 Languages None\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Traits
 
-Hold Breath. The plesiosaurus can hold its breath\
-for 1 hour.\
+Hold Breath. The plesiosaurus can hold its breath for 1 hour.
 
 <!-- SRD page 359 -->
 
-
 ### Actions
 
-Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 +\
-4) Piercing damage.\
+Bite. Melee Attack Roll: +6, reach 10 ft. Hit: 11 (2d6 + 4) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/358|page 358]], [[../../srd-5.2.1/pages/359|page 359]].
 

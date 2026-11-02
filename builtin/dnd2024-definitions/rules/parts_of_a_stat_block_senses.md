@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-The Senses entry specifies a monster’s Passive\
-Perception score, as well as any special senses the\
-monster possesses. Passive Perception and special\
-senses are described in “Rules Glossary.”\
+The Senses entry specifies a monster’s Passive Perception score, as well as any special senses the monster possesses. Passive Perception and special senses are described in “Rules Glossary.”
 
 ## Rule
 

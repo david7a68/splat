@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 57 -->
 
-•  Gain all the traits in the Core Ranger Traits table.\
-•  Gain the Ranger’s level 1 features, which are\
-listed in the Ranger Features table.\
+•  Gain all the traits in the Core Ranger Traits table.
+
+•  Gain the Ranger’s level 1 features, which are listed in the Ranger Features table.
 
 ## Rule
 

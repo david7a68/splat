@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 103 -->
 
-A spellcaster can transfer a spell to a scroll and cre-\
-ate a Spell Scroll, using the rules below.\
+A spellcaster can transfer a spell to a scroll and create a Spell Scroll, using the rules below.
 
 ## Rule
 

@@ -18,21 +18,43 @@ splat_sources:
 
 <!-- SRD page 70 -->
 
-Core Warlock Traits\
-Primary Ability Charisma\
-Hit Point Die D8 per Warlock level\
-Saving Throw Wisdom and Charisma\
-Proficiencies\
-Skill Proficiencies Choose 2: Arcana, Deception,\
-History, Intimidation, Investi-\
-gation, Nature, or Religion\
-Weapon Proficiencies Simple weapons\
-Armor Training Light armor\
-Starting Equipment Choose A or B: (A) Leather\
-Armor, Sickle, 2 Daggers, Ar-\
-cane Focus (orb), Book (occult\
-lore), Scholar’s Pack, and 15\
-GP; or (B) 100 GP\
+**Core Warlock Traits**
+
+|  |  |
+| --- | --- |
+| Primary Ability | Charisma |
+| Hit Point Die | D8 per Warlock level |
+| Saving Throw | Wisdom and Charisma |
+| Proficiencies |  |
+| Skill Proficiencies | Choose 2: Arcana, Deception, History, Intimidation, Investigation, Nature, or Religion |
+| Weapon Proficiencies | Simple weapons |
+| Armor Training | Light armor |
+| Starting Equipment | Choose A or B: (A) Leather Armor, Sickle, 2 Daggers, Arcane Focus (orb), Book (occult lore), Scholar’s Pack, and 15 GP; or (B) 100 GP |
+
+**Warlock Features**
+
+| Level | Proficiency Bonus | Class Features | Eldritch Invocations | Cantrips | Prepared Spells | Pact Slots | Pact Slot Level |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | +2 | Eldritch Invocations, Pact Magic | 1 | 2 | 2 | 1 | 1 |
+| 2 | +2 | Magical Cunning | 3 | 2 | 3 | 2 | 1 |
+| 3 | +2 | Warlock Subclass | 3 | 2 | 4 | 2 | 2 |
+| 4 | +2 | Ability Score Improvement | 3 | 3 | 5 | 2 | 2 |
+| 5 | +3 | — | 5 | 3 | 6 | 2 | 3 |
+| 6 | +3 | Subclass feature | 5 | 3 | 7 | 2 | 3 |
+| 7 | +3 | — | 6 | 3 | 8 | 2 | 4 |
+| 8 | +3 | Ability Score Improvement | 6 | 3 | 9 | 2 | 4 |
+| 9 | +4 | Contact Patron | 7 | 3 | 10 | 2 | 5 |
+| 10 | +4 | Subclass feature | 7 | 4 | 10 | 2 | 5 |
+| 11 | +4 | Mystic Arcanum (level 6 spell) | 7 | 4 | 11 | 3 | 5 |
+| 12 | +4 | Ability Score Improvement | 8 | 4 | 11 | 3 | 5 |
+| 13 | +5 | Mystic Arcanum (level 7 spell) | 8 | 4 | 12 | 3 | 5 |
+| 14 | +5 | Subclass feature | 8 | 4 | 12 | 3 | 5 |
+| 15 | +5 | Mystic Arcanum (level 8 spell) | 9 | 4 | 13 | 3 | 5 |
+| 16 | +5 | Ability Score Improvement | 9 | 4 | 13 | 3 | 5 |
+| 17 | +6 | Mystic Arcanum (level 9 spell) | 9 | 4 | 14 | 4 | 5 |
+| 18 | +6 | — | 10 | 4 | 14 | 4 | 5 |
+| 19 | +6 | Epic Boon | 10 | 4 | 15 | 4 | 5 |
+| 20 | +6 | Eldritch Master | 10 | 4 | 15 | 4 | 5 |
 
 ## Rule group
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 24 -->
 
-At tier 4, characters achieve the pinnacle of their\
-class features, becoming heroic archetypes. The\
-fate of the world or even the order of the multiverse\
-might hang in the balance during their adventures.\
+At tier 4, characters achieve the pinnacle of their class features, becoming heroic archetypes. The fate of the world or even the order of the multiverse might hang in the balance during their adventures.
 
 ## Rule
 

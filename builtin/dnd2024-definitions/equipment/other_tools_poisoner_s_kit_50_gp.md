@@ -20,7 +20,7 @@ splat_sources:
 
 Ability: Intelligence Weight: 2 lb.\
 Utilize: Detect a poisoned object (DC 10)\
-Craft: Basic Poison\
+Craft: Basic Poison
 
 ## Item
 

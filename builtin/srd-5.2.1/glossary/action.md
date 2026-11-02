@@ -11,13 +11,12 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [176],
 
 <!-- SRD page 176 -->
 
-On your turn, you can take one action. Choose which\
-action to take from those below or from the special\
-actions provided by your features. See also “Playing\
-the Game” (“Actions”). These actions are defined\
-elsewhere in this glossary:\
-Attack Dodge Influence Search\
-Dash Help Magic Study\
-Disengage Hide Ready Utilize\
+On your turn, you can take one action. Choose which action to take from those below or from the special actions provided by your features. See also “Playing the Game” (“Actions”). These actions are defined elsewhere in this glossary:
+
+|  |  |  |  |
+| --- | --- | --- | --- |
+| Attack | Dodge | Influence | Search |
+| Dash | Help | Magic | Study |
+| Disengage | Hide | Ready | Utilize |
 
 Original layout: [[../pages/176|page 176]].

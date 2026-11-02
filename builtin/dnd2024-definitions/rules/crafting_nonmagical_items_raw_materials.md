@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 103 -->
 
-To make an item, you need raw materials worth\
-half its purchase cost (round down). For example,\
-you need 750 GP of raw materials to make Plate\
-Armor, which sells for 1,500 GP. The GM determines\
-whether appropriate raw materials are available.\
+To make an item, you need raw materials worth half its purchase cost (round down). For example, you need 750 GP of raw materials to make Plate Armor, which sells for 1,500 GP. The GM determines whether appropriate raw materials are available.
 
 ## Rule
 

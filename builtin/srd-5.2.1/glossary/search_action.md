@@ -11,16 +11,15 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [187],
 
 <!-- SRD page 187 -->
 
-When you take the Search action, you make a Wis-\
-dom check to discern something that isn’t obvious.\
-The Search table suggests which skills are applica-\
-ble when you take this action, depending on what\
-you’re trying to detect.\
-Search\
-Skill Thing to Detect\
-Insight Creature’s state of mind\
-Medicine Creature’s ailment or cause of death\
-Perception Concealed creature or object\
-Survival Tracks or food\
+When you take the Search action, you make a Wisdom check to discern something that isn’t obvious. The Search table suggests which skills are applicable when you take this action, depending on what you’re trying to detect.
+
+**Search**
+
+| Skill | Thing to Detect |
+| --- | --- |
+| Insight | Creature’s state of mind |
+| Medicine | Creature’s ailment or cause of death |
+| Perception | Concealed creature or object |
+| Survival | Tracks or food |
 
 Original layout: [[../pages/187|page 187]].

@@ -11,12 +11,10 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [236
 
 <!-- SRD page 236 -->
 
-Potion, Rare\
-When you drink this potion, you gain 10 Temporary\
-Hit Points that last for 1 hour. For the same dura-\
-tion, you are under the effect of the Bless spell (no\
-Concentration required).\
-This potion’s blue liquid bubbles and steams as if\
-boiling.\
+Potion, Rare
+
+When you drink this potion, you gain 10 Temporary Hit Points that last for 1 hour. For the same duration, you are under the effect of the Bless spell (no Concentration required).
+
+This potion’s blue liquid bubbles and steams as if boiling.
 
 Original layout: [[../pages/236|page 236]].

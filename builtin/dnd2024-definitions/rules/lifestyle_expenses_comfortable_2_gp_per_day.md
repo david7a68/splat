@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-You spend modestly for your necessities and enjoy a\
-few luxuries.\
+You spend modestly for your necessities and enjoy a few luxuries.
 
 ## Rule
 

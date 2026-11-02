@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 49 -->
 
-•  Gain the Hit Point Die trait from the Core Monk\
-Traits table.\
-•  Gain the Monk’s level 1 features, which are listed\
-in the Monk Features table.\
+•  Gain the Hit Point Die trait from the Core Monk Traits table.
+
+•  Gain the Monk’s level 1 features, which are listed in the Monk Features table.
 
 ## Rule
 

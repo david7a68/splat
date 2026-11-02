@@ -7,10 +7,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use uuid::Uuid;
 
+pub mod adapters;
+pub mod art;
 pub mod builtin;
 pub mod character;
 pub mod contracts;
 pub mod definitions;
+pub mod encounter_group;
+pub mod overrides;
 mod reading;
 pub use reading::Reading;
 mod markdown;
@@ -44,7 +48,7 @@ pub struct InventoryRow {
     pub container: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Reference {
     Id(Uuid),
     Key(String),
@@ -148,6 +152,7 @@ impl Entry {
             "effect",
             "container",
             "encounter",
+            "encounter_group",
             "sequence",
             "rule",
             "rule_group",
@@ -206,6 +211,7 @@ impl Entry {
             "spell" => Some("splat_spell"),
             "effect" => Some("splat_effect"),
             "encounter" => Some("splat_encounter"),
+            "encounter_group" => Some("splat_encounter_group"),
             "sequence" => Some("splat_sequence"),
             "rule" => Some("splat_rule"),
             "rule_group" => Some("splat_rule_group"),
@@ -223,6 +229,25 @@ impl Entry {
                 }
             } else if !value.is_mapping() {
                 return Err(format!("{name} must be a mapping"));
+            }
+        }
+        if self.kind == "encounter_group" {
+            encounter_group::EncounterGroup::of(self)?;
+        }
+        if self.kind == "encounter"
+            && let Some(roster) = field(&self.fields, "splat_encounter")
+                .and_then(|encounter| encounter.get("roster"))
+                .and_then(Value::as_sequence)
+        {
+            for slot in roster {
+                let Some(block) = slot.get("overrides") else {
+                    continue;
+                };
+                let key = slot.get("key").and_then(Value::as_str).unwrap_or("A slot");
+                let block = block
+                    .as_mapping()
+                    .ok_or_else(|| format!("{key}: overrides must be a mapping."))?;
+                overrides::Overrides::parse(block).map_err(|e| format!("{key}: {e}"))?;
             }
         }
         if self.kind == "reference" {
@@ -528,6 +553,11 @@ pub fn required_references(entry: &Entry) -> Result<Vec<Reference>, String> {
 }
 
 pub fn validate(entries: &[Entry]) -> Report {
+    validate_all(&entries.iter().collect::<Vec<_>>())
+}
+
+/// [`validate`] for entries that are not held in one slice, such as the Library's notes.
+pub fn validate_all(entries: &[&Entry]) -> Report {
     let mut report = Report {
         entries: entries.len(),
         reference_only: entries.iter().filter(|e| e.kind == "reference").count(),
@@ -542,7 +572,7 @@ pub fn validate(entries: &[Entry]) -> Report {
             message,
         })
     };
-    for e in entries {
+    for &e in entries {
         if ids.insert(e.id, e).is_some() {
             error(&e.path, format!("Duplicate UUID {}", e.id))
         }
@@ -566,7 +596,7 @@ pub fn validate(entries: &[Entry]) -> Report {
         Reference::Id(id) => ids.get(id).copied(),
         Reference::Key(k) => keys.get(k).copied(),
     };
-    for e in entries {
+    for &e in entries {
         let mut refs = Vec::new();
         let mut required_fields: Mapping = e
             .fields
@@ -595,6 +625,18 @@ pub fn validate(entries: &[Entry]) -> Report {
         for r in refs {
             if resolve(&r).is_none() {
                 error(&e.path, format!("Unresolved reference {r:?}"))
+            }
+        }
+        if e.kind == "encounter_group"
+            && let Ok(group) = encounter_group::EncounterGroup::of(e)
+        {
+            for member in &group.members {
+                if resolve(&member.creature).is_some_and(|entry| entry.kind != "creature") {
+                    error(
+                        &e.path,
+                        format!("{} must reference a creature entry", member.creature),
+                    );
+                }
             }
         }
         if let Some(character) = field(&e.fields, "splat_character") {
@@ -787,10 +829,13 @@ pub fn validate(entries: &[Entry]) -> Report {
         "splat_external",
         "splat_effects",
         "splat_encounter",
+        "splat_encounter_group",
         "splat_forms",
         "splat_health",
         "splat_hit_dice",
+        "splat_dndbeyond_ids",
         "splat_id",
+        "splat_import_routes",
         "splat_initial",
         "splat_inventory_details",
         "splat_item",
@@ -816,6 +861,7 @@ pub fn validate(entries: &[Entry]) -> Report {
         "splat_rule",
         "splat_rule_choices",
         "splat_rule_group",
+        "splat_run_settings",
         "splat_schema",
         "splat_seed",
         "splat_senses",
@@ -846,6 +892,79 @@ fn unless_vanished<T>(result: std::io::Result<T>) -> Result<Option<T>, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error.to_string()),
     }
+}
+
+/// Replace only named top-level fields; all other bytes, comments and body stay intact.
+pub fn patch_fields(
+    text: &str,
+    changes: &[(&str, Option<serde_yaml_ng::Value>)],
+) -> Result<String, String> {
+    let prefix = if text.starts_with('\u{feff}') {
+        "\u{feff}"
+    } else {
+        ""
+    };
+    let raw = text.trim_start_matches('\u{feff}');
+    let newline = if raw.starts_with("---\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let start = format!("---{newline}");
+    let raw = raw.strip_prefix(&start).ok_or("Missing frontmatter")?;
+    let end = format!("{newline}---");
+    let index = raw.find(&end).ok_or("Missing frontmatter end")?;
+    let front = &raw[..index];
+    let value: serde_yaml_ng::Value = serde_yaml_ng::from_str(front).map_err(|e| e.to_string())?;
+    let map = value.as_mapping().ok_or("Frontmatter must be a mapping")?;
+    let lines: Vec<_> = front.split(newline).collect();
+    let mut remove = std::collections::BTreeSet::new();
+    for (key, _) in changes {
+        if map.contains_key(*key) {
+            let matches: Vec<_> = lines
+                .iter()
+                .enumerate()
+                .filter(|(_, line)| line.starts_with(&format!("{key}:")))
+                .map(|(i, _)| i)
+                .collect();
+            if matches.len() != 1 {
+                return Err(format!(
+                    "Cannot safely edit {key}. Use a plain, unquoted top-level field in Markdown first."
+                ));
+            }
+            let start = matches[0];
+            let mut stop = start + 1;
+            while stop < lines.len() {
+                let line = lines[stop];
+                if !line.is_empty() && !line.starts_with([' ', '\t', '-', '#']) {
+                    break;
+                }
+                // Keep comments and blank lines; removing a changed field's data is intentional.
+                if !line.trim().is_empty() && !line.trim_start().starts_with('#') {
+                    remove.insert(stop);
+                }
+                stop += 1;
+            }
+            remove.insert(start);
+        }
+    }
+    let mut output = format!("{prefix}{start}");
+    for (i, line) in lines.iter().enumerate() {
+        if !remove.contains(&i) {
+            output.push_str(line);
+            output.push_str(newline);
+        }
+    }
+    for (key, value) in changes {
+        if let Some(value) = value {
+            let mut field = serde_yaml_ng::Mapping::new();
+            field.insert((*key).into(), value.clone());
+            let yaml = serde_yaml_ng::to_string(&field).map_err(|e| e.to_string())?;
+            output.push_str(&yaml.replace('\n', newline));
+        }
+    }
+    output.push_str(raw[index + newline.len()..].as_ref());
+    Ok(output)
 }
 
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {

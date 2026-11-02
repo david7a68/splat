@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 48 -->
 
-Whenever you activate your Second Wind with a\
-Bonus Action, you can move up to half your Speed\
-without provoking Opportunity Attacks.\
+Whenever you activate your Second Wind with a Bonus Action, you can move up to half your Speed without provoking Opportunity Attacks.
 
 ## Rule
 

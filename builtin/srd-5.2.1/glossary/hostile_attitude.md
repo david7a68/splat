@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [183],
 
 <!-- SRD page 183 -->
 
-A Hostile creature views you unfavorably. You have\
-Disadvantage on an ability check to influence a Hos-\
-tile creature. See also “Influence.”\
+A Hostile creature views you unfavorably. You have Disadvantage on an ability check to influence a Hostile creature. See also “Influence.”
 
 Original layout: [[../pages/183|page 183]].

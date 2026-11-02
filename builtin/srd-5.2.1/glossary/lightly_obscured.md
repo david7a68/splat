@@ -11,9 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [184],
 
 <!-- SRD page 184 -->
 
-You have Disadvantage on Wisdom (Perception)\
-checks to see something in a Lightly Obscured\
-space. See also “Dim Light” and “Playing the Game”\
-(“Exploration”).\
+You have Disadvantage on Wisdom (Perception) checks to see something in a Lightly Obscured space. See also “Dim Light” and “Playing the Game” (“Exploration”).
 
 Original layout: [[../pages/184|page 184]].

@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 188 -->
 
-A Spellcasting Focus is an object that certain crea-\
-tures can use in place of a spell’s Material compo-\
-nents if those materials aren’t consumed by the\
-spell and don’t have a cost specified. Some classes\
-allow its members to use certain types of Spellcast-\
-ing Focuses. See also “Spells” (“Casting Spells”).\
+A Spellcasting Focus is an object that certain creatures can use in place of a spell’s Material components if those materials aren’t consumed by the spell and don’t have a cost specified. Some classes allow its members to use certain types of Spellcasting Focuses. See also “Spells” (“Casting Spells”).
 
 Original layout: [[../../srd-5.2.1/pages/188|page 188]].
 

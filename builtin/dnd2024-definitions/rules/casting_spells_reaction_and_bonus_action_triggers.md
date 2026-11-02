@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 105 -->
 
-A spell that has a casting time of a Reaction is cast\
-in response to a trigger that is defined in the spell’s\
-Casting Time entry. Some spells that have a casting\
-time of a Bonus Action are also cast in response to a\
-trigger defined in the spell.\
+A spell that has a casting time of a Reaction is cast in response to a trigger that is defined in the spell’s Casting Time entry. Some spells that have a casting time of a Bonus Action are also cast in response to a trigger defined in the spell.
 
 ## Rule
 

@@ -11,8 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [239
 
 <!-- SRD page 239 -->
 
-Ring, Very Rare (Requires Attunement)\
-While wearing this ring, you can cast Telekinesis\
-from it.\
+Ring, Very Rare (Requires Attunement)
+
+While wearing this ring, you can cast Telekinesis from it.
 
 Original layout: [[../pages/239|page 239]].

@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 213 -->
 
-Wondrous Item, Common\
-This flavorless, gelatinous bead dissolves on your\
-tongue and provides as much nourishment as 1 day\
-of Rations.\
+Wondrous Item, Common
+
+This flavorless, gelatinous bead dissolves on your tongue and provides as much nourishment as 1 day of Rations.
 
 Original layout: [[../../srd-5.2.1/pages/213|page 213]].
 

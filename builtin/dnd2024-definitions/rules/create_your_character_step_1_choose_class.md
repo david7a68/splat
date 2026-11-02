@@ -18,30 +18,27 @@ splat_sources:
 
 <!-- SRD page 19 -->
 
-Choose a class, and write it on your character sheet.\
-The Class Overview table summarizes the classes.\
-See “Classes” for the classes’ details.\
-Class Overview\
-Class Likes ... Primary Complexity\
-Ability\
-Barbarian Battle Strength Average\
-Bard Performing Charisma High\
-Cleric Gods Wisdom Average\
-Druid Nature Wisdom High\
-Fighter Weapons Strength Low\
-or Dexterity\
-Monk Unarmed Dexterity High\
-combat and Wisdom\
-Paladin Defense Strength Average\
-and Charisma\
-Ranger Survival Dexterity Average\
-and Wisdom\
-Class Likes ... Primary Complexity\
-Ability\
-Rogue Stealth Dexterity Low\
-Sorcerer Power Charisma High\
-Warlock Occult lore Charisma High\
-Wizard Spellbooks Intelligence Average\
+Choose a class, and write it on your character sheet. The Class Overview table summarizes the classes. See “Classes” for the classes’ details.
+
+**Class Overview**
+
+| Class | Likes ... | Primary Ability | Complexity |
+| --- | --- | --- | --- |
+| Barbarian | Battle | Strength | Average |
+| Bard | Performing | Charisma | High |
+| Cleric | Gods | Wisdom | Average |
+| Druid | Nature | Wisdom | High |
+| Fighter | Weapons | Strength or Dexterity | Low |
+| Monk | Unarmed combat | Dexterity and Wisdom | High |
+| Paladin | Defense | Strength and Charisma | Average |
+| Ranger | Survival | Dexterity and Wisdom | Average |
+
+| Class | Likes ... | Primary Ability | Complexity |
+| --- | --- | --- | --- |
+| Rogue | Stealth | Dexterity | Low |
+| Sorcerer | Power | Charisma | High |
+| Warlock | Occult lore | Charisma | High |
+| Wizard | Spellbooks | Intelligence | Average |
 
 ## Rule
 

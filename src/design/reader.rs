@@ -11,6 +11,11 @@ pub fn prose_type(ui: &Ui) -> Type {
     }
 }
 
+/// The fill behind code among words, in the Reader and where a note is typed.
+pub fn inline_code_fill() -> egui::Color32 {
+    colors().hover
+}
+
 /// Keep rules text at a comfortable measure, however wide the window is.
 pub fn measure<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.scope(|ui| {

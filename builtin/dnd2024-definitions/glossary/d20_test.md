@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 180 -->
 
-D20 Tests encompass the three main d20 rolls of\
-the game: ability checks, attack rolls, and saving\
-throws. If something in the game affects D20 Tests,\
-it affects all three of these rolls. The GM determines\
-whether a D20 Test is warranted in a given circum-\
-stance. See also “Playing the Game” (“D20 Tests”).\
+D20 Tests encompass the three main d20 rolls of the game: ability checks, attack rolls, and saving throws. If something in the game affects D20 Tests, it affects all three of these rolls. The GM determines whether a D20 Test is warranted in a given circumstance. See also “Playing the Game” (“D20 Tests”).
 
 Original layout: [[../../srd-5.2.1/pages/180|page 180]].
 

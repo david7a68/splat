@@ -11,10 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [244
 
 <!-- SRD page 244 -->
 
-Armor (Shield), Very Rare (Requires Attunement)\
-While holding this Shield, you have Advantage on\
-saving throws against spells and other magical\
-effects, and spell attack rolls have Disadvantage\
-against you.\
+Armor (Shield), Very Rare (Requires Attunement)
+
+While holding this Shield, you have Advantage on saving throws against spells and other magical effects, and spell attack rolls have Disadvantage against you.
 
 Original layout: [[../pages/244|page 244]].

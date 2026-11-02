@@ -4,7 +4,7 @@ use crate::{
     Splat,
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, EntryRef, PackageSelection, Selection},
-    encounter_run::{Participant, write_in_progress_run},
+    encounter_run::{Participant, write_ended_run, write_in_progress_run},
     hermetic,
     persistence::{Campaign, Module, Store, UserData},
 };
@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use serde_yaml_ng::Mapping;
 use splat::{
     character::{Cache, EntitySnapshot, stable_id},
-    content::Entry,
+    content::{Entry, overrides::Overrides},
 };
 use std::{
     fs,
@@ -29,6 +29,14 @@ pub const MODULE: &str = "Ashen Marches";
 pub const RUN: &str = "Bridge Ambush";
 pub const RUN_12: &str = "Border Skirmish";
 pub const RUN_20: &str = "Siege of Emberfall";
+pub const RUN_ARENA: &str = "Arena Final";
+pub const RUN_PAST: &str = "Goblin Crossing";
+pub const RUN_OLD: &str = "Old Mill Raid";
+pub const PAST_SESSION: &str = "The Road North";
+pub const GROUP_RIVALS: &str = "Rival Team";
+pub const GROUP_GOBLINS: &str = "Goblin Wave";
+pub const GROUP_LOST: &str = "Lost Patrol";
+pub const GROUP_WATCH: &str = "Watch Detail";
 
 /// What settings the app starts with.
 #[derive(Clone, Copy, PartialEq)]
@@ -40,6 +48,10 @@ pub enum Seed {
     Campaign,
     /// `Campaign`, plus saved runs with rosters of 12 and 20.
     LargeRosters,
+    /// `Campaign`, plus two encounter groups, and an encounter and a run with overrides.
+    Groups,
+    /// `Campaign`, plus ended runs: one on the timeline under a session, one with no event.
+    History,
 }
 
 #[derive(Clone)]
@@ -109,6 +121,12 @@ fn seed_campaigns(
     if seed == Seed::LargeRosters {
         write_run(&active, &module.path, &party, RUN_12, &[(5, 15), (2, 7)])?;
         write_run(&active, &module.path, &party, RUN_20, &[(12, 15), (3, 7)])?;
+    }
+    if seed == Seed::Groups {
+        write_groups(&active, &module.path, &party)?;
+    }
+    if seed == Seed::History {
+        write_history(&active, &module.path)?;
     }
 
     let data = UserData {
@@ -256,11 +274,55 @@ fn write_module(root: &Path) -> Result<Module, String> {
     ] {
         write_note(root, path, &text)?;
     }
+    write_art(root)?;
     Ok(Module {
         id,
         name: MODULE.into(),
         path: root.to_path_buf(),
     })
+}
+
+/// A plain picture, drawn here, so that the scenes use no published art.
+fn picture_bytes(width: u32, height: u32, color: [u8; 3]) -> Result<Vec<u8>, String> {
+    let (cx, cy) = (width as f32 / 2.0, height as f32 * 0.4);
+    let radius = width.min(height) as f32 * 0.32;
+    let image = image::RgbImage::from_fn(width, height, |x, y| {
+        let distance = (x as f32 - cx).hypot(y as f32 - cy);
+        let shade = if distance < radius {
+            1.0
+        } else {
+            0.35 + 0.25 * (y as f32 / height as f32)
+        };
+        image::Rgb(color.map(|part| (part as f32 * shade) as u8))
+    });
+    let mut bytes = Vec::new();
+    image
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Png,
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(bytes)
+}
+
+/// Art for the module: one creature of its own, and a default picture for one creature type.
+fn write_art(root: &Path) -> Result<(), String> {
+    let art = root.join("Art");
+    fs::create_dir_all(&art).map_err(|e| e.to_string())?;
+    let wolf = picture_bytes(480, 640, [190, 96, 52])?;
+    fs::write(art.join("cinder-wolf.png"), wolf).map_err(|e| e.to_string())?;
+    let humanoid = picture_bytes(320, 320, [84, 118, 170])?;
+    fs::write(art.join("type-humanoid.png"), humanoid).map_err(|e| e.to_string())?;
+    let index = json!({
+        "splat_art": 1,
+        "entries": {"ashen_marches:creatures/cinder_wolf": "Art/cinder-wolf.png"},
+        "creature_types": {"humanoid": "Art/type-humanoid.png"},
+    });
+    fs::write(
+        root.join(splat::content::art::ART_FILE),
+        format!("# Art Index\n\n```json\n{index}\n```\n"),
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn write_campaign_notes(root: &Path) -> Result<(), String> {
@@ -359,6 +421,113 @@ fn write_encounters(root: &Path, party: &[EntitySnapshot]) -> Result<(), String>
     Ok(())
 }
 
+/// Two groups, and the same changes built in to an encounter's slot and to a run in progress.
+fn write_groups(
+    campaign: &Campaign,
+    module: &Path,
+    party: &[EntitySnapshot],
+) -> Result<(), String> {
+    const RIVAL_CHANGES: &str = "{name: Rival Captain, max_hp: {add: 10}, armor_class: {set: 15}, attack_bonus: {add: 1}, damage_bonus: {add: 1}, speed: {set: 40}, conditions: [Blessed], note: Gained a seal in the last round}";
+    let root = &campaign.path;
+    write_note(
+        root,
+        &format!("Encounter Groups/{GROUP_RIVALS}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_RIVALS}\nsplat_encounter_group:\n  side: rivals\n  members:\n  - creature: {{id: {}}}\n    count: 1\n    overrides: {RIVAL_CHANGES}\n  - creature: {{id: {}}}\n    count: 2\n---\n\nThey come through the east gate at the horn.\n",
+            stable_id("visual:group:rivals"),
+            module_entry_id("ember_cultist"),
+            module_entry_id("cinder_wolf"),
+        ),
+    )?;
+    write_note(
+        root,
+        &format!("Encounter Groups/{GROUP_GOBLINS}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_GOBLINS}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n    count: 3\n---\n",
+            stable_id("visual:group:goblins"),
+        ),
+    )?;
+    // A group that cannot be added: a creature gone, and a change this one cannot take.
+    write_note(
+        root,
+        &format!("Encounter Groups/{GROUP_LOST}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_LOST}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {}}}\n  - creature: {{id: {}}}\n    overrides: {{max_hp: {{add: -50}}}}\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n---\n",
+            stable_id("visual:group:lost"),
+            stable_id("visual:group:lost:creature"),
+            module_entry_id("cinder_wolf"),
+        ),
+    )?;
+    // A creature whose text gives no XP, which must not count as none.
+    write_note(
+        root,
+        &format!("Encounter Groups/{GROUP_WATCH}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_WATCH}\nsplat_encounter_group:\n  side: party\n  members:\n  - creature: {{id: {}}}\n---\n",
+            stable_id("visual:group:watch"),
+            stable_id("visual:note:varra"),
+        ),
+    )?;
+    let heroes: String = party
+        .iter()
+        .map(|hero| {
+            slot(
+                &format!("actor_hero_{}", hero.source.character_id),
+                hero.definition.splat_id,
+                "party",
+                "player",
+            )
+        })
+        .collect();
+    let rival = slot(
+        "actor_rival",
+        module_entry_id("ember_cultist"),
+        "enemies",
+        "gm",
+    );
+    write_note(
+        root,
+        &format!("Encounters/{RUN_ARENA}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter\nsplat_name: {RUN_ARENA}\nsplat_encounter:\n  roster:\n{heroes}{rival}    overrides: {RIVAL_CHANGES}\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n---\n\nThe last fight of the season.\n",
+            stable_id("visual:encounter:arena"),
+        ),
+    )?;
+    let mut participants = Vec::new();
+    for (index, hero) in party.iter().enumerate() {
+        participants.push((
+            Participant::new(
+                format!("actor_hero_{}", hero.source.character_id),
+                "party".into(),
+                hero.entry()?,
+                &Mapping::new(),
+                true,
+            )?,
+            18 - index as i64 * 2,
+        ));
+    }
+    let file = "Creatures/Ember Cultist.md";
+    let text = fs::read_to_string(module.join(file)).map_err(|e| e.to_string())?;
+    let changes: Mapping = serde_yaml_ng::from_str(RIVAL_CHANGES).map_err(|e| e.to_string())?;
+    participants.push((
+        Participant::with_overrides(
+            "actor_rival".into(),
+            "enemies".into(),
+            Entry::parse(file, &text)?,
+            &Mapping::new(),
+            &Overrides::parse(&changes)?,
+            true,
+        )?,
+        15,
+    ));
+    write_in_progress_run(
+        campaign.id,
+        &root.join("Encounter Runs"),
+        RUN_ARENA,
+        participants,
+    )
+}
+
 /// A run with the whole party, and `(count, initiative)` wolves then cultists.
 fn write_run(
     campaign: &Campaign,
@@ -404,6 +573,64 @@ fn write_run(
     )
 }
 
+/// An encounter a run has ended, its event on the timeline under a session, and an ended run
+/// from before the timeline, whose encounter is gone.
+fn write_history(campaign: &Campaign, module: &Path) -> Result<(), String> {
+    let id = stable_id(&format!("visual:encounter:{RUN_PAST}"));
+    let root = &campaign.path;
+    write_note(
+        root,
+        &format!("Encounters/{RUN_PAST}.md"),
+        &format!(
+            "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: {RUN_PAST}\nsplat_encounter:\n  roster: []\n  sides:\n    party: {{hostile_to: [enemies]}}\n    enemies: {{hostile_to: [party]}}\n  assumptions: []\n  completion: {{mode: manual}}\n  limits: {{rounds: 20, resolution_events: 10000}}\n---\n\nThey held the ford.\n"
+        ),
+    )?;
+    let file = "Creatures/Cinder Wolf.md";
+    let text = fs::read_to_string(module.join(file)).map_err(|e| e.to_string())?;
+    let wolf = |key: &str| {
+        Participant::new(
+            key.into(),
+            "enemies".into(),
+            Entry::parse(file, &text)?,
+            &Mapping::new(),
+            true,
+        )
+    };
+    let directory = root.join("Encounter Runs");
+    let past = write_ended_run(
+        campaign.id,
+        &directory,
+        RUN_PAST,
+        Some(id),
+        "Party won",
+        wolf("actor_past")?,
+    )?;
+    write_ended_run(
+        campaign.id,
+        &directory,
+        RUN_OLD,
+        None,
+        "Party fled",
+        wolf("actor_old")?,
+    )?;
+    let session = stable_id("visual:session:past");
+    // A session note is not a content entry, so `write_note` would refuse it.
+    let sessions = crate::sessions::folder(campaign)?;
+    fs::create_dir_all(&sessions).map_err(|e| e.to_string())?;
+    fs::write(
+        sessions.join("Session 7.md"),
+        format!(
+            "---\nsession_id: {session}\nsession_number: 7\nsession_title: {PAST_SESSION}\nsession_date: 2026-01-01\n---\n\nNotes.\n"
+        ),
+    )
+    .map_err(|e| e.to_string())?;
+    let mut book = crate::timeline::Book::default();
+    book.open(Some(&sessions));
+    book.record_run(&past, Some(session));
+    book.save();
+    Ok(())
+}
+
 /// The cached sheets a player sees without a connection, and their campaign copies.
 fn party(
     campaign_path: &Path,
@@ -415,6 +642,11 @@ fn party(
     for hero in HEROES {
         let record = hero.snapshot()?;
         cache.save(campaign, &record)?;
+        if let Some(url) = record.portrait_url() {
+            let color = hero.portrait_color();
+            let bytes = picture_bytes(320, 320, color)?;
+            cache.save_portrait(campaign, REMOTE_CAMPAIGN, hero.id, url, &bytes)?;
+        }
         record.save_campaign_copy(campaign_path)?;
         party.push(record);
     }
@@ -424,6 +656,19 @@ fn party(
         &HEROES.map(|hero| hero.id.to_string()),
     )?;
     Ok(party)
+}
+
+impl Hero {
+    fn portrait_color(&self) -> [u8; 3] {
+        let seed = self.name.bytes().fold(7_u32, |sum, b| {
+            sum.wrapping_mul(31).wrapping_add(u32::from(b))
+        });
+        [
+            70 + (seed % 150) as u8,
+            70 + (seed / 150 % 150) as u8,
+            70 + (seed / 22500 % 150) as u8,
+        ]
+    }
 }
 
 struct Hero {
@@ -808,9 +1053,13 @@ impl Hero {
             .iter()
             .map(|name| json!({"name": name}))
             .collect();
+        // One hero has no portrait, as many D&D Beyond characters have none.
+        let portrait = (self.name != "Oren Thistlewick")
+            .then(|| format!("https://www.dndbeyond.com/avatars/visual/{}.png", self.id));
         let raw = json!({
             "id": self.id.parse::<u64>().map_err(|e| e.to_string())?,
             "name": self.name,
+            "decorations": {"avatarUrl": portrait},
             "campaign": {"id": REMOTE_CAMPAIGN.parse::<u64>().map_err(|e| e.to_string())?},
             "race": {"sizeId": 4, "creatureTypeId": 11, "racialTraits": [
                 {"definition": {"name": format!("{} Resilience", self.species), "description": "<p>Your ancestry grants advantage against one kind of harm.</p>"}},

@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-This entry lists languages that the monster can use\
-to communicate. Sometimes a monster can under-\
-stand a language but can’t communicate with it,\
-which is noted in its entry. “None” indicates that a\
-creature doesn’t comprehend any language.\
+This entry lists languages that the monster can use to communicate. Sometimes a monster can understand a language but can’t communicate with it, which is noted in its entry. “None” indicates that a creature doesn’t comprehend any language.
 
 ## Rule
 

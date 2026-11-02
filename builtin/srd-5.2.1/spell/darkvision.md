@@ -11,13 +11,12 @@ splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [122], "e
 
 <!-- SRD page 122 -->
 
-Level 2 Transmutation (Druid, Ranger, Sorcerer,\
-Wizard)\
+Level 2 Transmutation (Druid, Ranger, Sorcerer, Wizard)\
 Casting Time: Action\
 Range: Touch\
 Components: V, S, M (a dried carrot)\
-Duration: 8 hours\
-For the duration, a willing creature you touch has\
-Darkvision with a range of 150 feet.\
+Duration: 8 hours
+
+For the duration, a willing creature you touch has Darkvision with a range of 150 feet.
 
 Original layout: [[../pages/122|page 122]].

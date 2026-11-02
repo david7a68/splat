@@ -16,36 +16,30 @@ splat_sources:
 
 ## Source text
 
-From SRD 5.2.1 page 77.
+**Wizard Features**
 
-     Wizard Features
-            Proficiency                                                      Prepared     ——Spell Slots per Spell Level——
-      Level Bonus       Class Features                           Cantrips     Spells     1    2   3   4    5   6    7   8    9
-        1         +2       Spellcasting, Ritual Adept,              3            4       2   — — — — — — — —
-                           Arcane Recovery
-        2         +2       Scholar                                  3            5       3   — — — — — — — —
-        3         +2       Wizard Subclass                          3            6       4    2   — — — — — — —
-        4         +2       Ability Score Improvement                4            7       4    3   — — — — — — —
-        5         +3       Memorize Spell                           4            9       4    3   2   — — — — — —
-        6         +3       Subclass feature                         4           10       4    3   3   — — — — — —
-        7         +3       —                                        4           11       4    3   3    1   — — — — —
-        8         +3       Ability Score Improvement                4           12       4    3   3    2   — — — — —
-        9         +4       —                                        4           14       4    3   3    3   1   — — — —
-       10         +4       Subclass feature                         5           15       4    3   3    3   2   — — — —
-       11         +4       —                                        5           16       4    3   3    3   2   1    — — —
-       12         +4       Ability Score Improvement                5           16       4    3   3    3   2   1    — — —
-       13         +5       —                                        5           17       4    3   3    3   2   1    1   — —
-       14         +5       Subclass feature                         5           18       4    3   3    3   2   1    1   — —
-       15         +5       —                                        5           19       4    3   3    3   2   1    1   1   —
-       16         +5       Ability Score Improvement                5           21       4    3   3    3   2   1    1   1   —
-       17         +6       —                                        5           22       4    3   3    3   2    1   1   1    1
-       18         +6       Spell Mastery                            5           23       4    3   3    3   3    1   1   1    1
-       19         +6       Epic Boon                                5           24       4    3   3    3   3    2   1   1    1
-       20         +6       Signature Spells                         5           25       4    3   3    3   3    2   2   1    1
-
-
-
-77   System Reference Document 5.2.1
+| Level | Proficiency Bonus | Class Features | Cantrips | Prepared Spells | Level 1 Slots | Level 2 Slots | Level 3 Slots | Level 4 Slots | Level 5 Slots | Level 6 Slots | Level 7 Slots | Level 8 Slots | Level 9 Slots |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | +2 | Spellcasting, Ritual Adept, Arcane Recovery | 3 | 4 | 2 | — | — | — | — | — | — | — | — |
+| 2 | +2 | Scholar | 3 | 5 | 3 | — | — | — | — | — | — | — | — |
+| 3 | +2 | Wizard Subclass | 3 | 6 | 4 | 2 | — | — | — | — | — | — | — |
+| 4 | +2 | Ability Score Improvement | 4 | 7 | 4 | 3 | — | — | — | — | — | — | — |
+| 5 | +3 | Memorize Spell | 4 | 9 | 4 | 3 | 2 | — | — | — | — | — | — |
+| 6 | +3 | Subclass feature | 4 | 10 | 4 | 3 | 3 | — | — | — | — | — | — |
+| 7 | +3 | — | 4 | 11 | 4 | 3 | 3 | 1 | — | — | — | — | — |
+| 8 | +3 | Ability Score Improvement | 4 | 12 | 4 | 3 | 3 | 2 | — | — | — | — | — |
+| 9 | +4 | — | 4 | 14 | 4 | 3 | 3 | 3 | 1 | — | — | — | — |
+| 10 | +4 | Subclass feature | 5 | 15 | 4 | 3 | 3 | 3 | 2 | — | — | — | — |
+| 11 | +4 | — | 5 | 16 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
+| 12 | +4 | Ability Score Improvement | 5 | 16 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
+| 13 | +5 | — | 5 | 17 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
+| 14 | +5 | Subclass feature | 5 | 18 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
+| 15 | +5 | — | 5 | 19 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
+| 16 | +5 | Ability Score Improvement | 5 | 21 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
+| 17 | +6 | — | 5 | 22 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | 1 |
+| 18 | +6 | Spell Mastery | 5 | 23 | 4 | 3 | 3 | 3 | 3 | 1 | 1 | 1 | 1 |
+| 19 | +6 | Epic Boon | 5 | 24 | 4 | 3 | 3 | 3 | 3 | 2 | 1 | 1 | 1 |
+| 20 | +6 | Signature Spells | 5 | 25 | 4 | 3 | 3 | 3 | 3 | 2 | 2 | 1 | 1 |
 
 ## Rule
 

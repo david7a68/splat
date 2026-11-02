@@ -22,14 +22,10 @@ Vulnerabilities Bludgeoning\
 Immunities Poison; Exhaustion, Poisoned\
 Senses Darkvision 60 ft.; Passive Perception 9\
 Languages None\
-CR 1/2 (XP 100; PB +2)\
+CR 1/2 (XP 100; PB +2)
 
 ### Actions
 
-Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 7 (1d6\
-+ 4) Bludgeoning damage. If the target is a Large or\
-smaller creature and the skeleton moved 20+ feet\
-straight toward it immediately before the hit, the target\
-has the Prone condition.\
+Hooves. Melee Attack Roll: +6, reach 5 ft. Hit: 7 (1d6 + 4) Bludgeoning damage. If the target is a Large or smaller creature and the skeleton moved 20+ feet straight toward it immediately before the hit, the target has the Prone condition.
 
 Original layout: [[../pages/326|page 326]].

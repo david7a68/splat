@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 199 -->
 
-Traps should be used sparingly, lest they lose their\
-charm. A hidden pit can be a fun surprise, but too\
-many traps in an adventure can lead players to be-\
-come overly cautious, which slows down the game.\
-The best traps are fleeting distractions that\
-skilled characters can overcome in a short amount\
-of time or deadly puzzles that require quick think-\
-ing and teamwork to overcome. Traps that are un-\
-detectable and inescapable are rarely fun.\
+Traps should be used sparingly, lest they lose their charm. A hidden pit can be a fun surprise, but too many traps in an adventure can lead players to become overly cautious, which slows down the game.
+
+The best traps are fleeting distractions that skilled characters can overcome in a short amount of time or deadly puzzles that require quick thinking and teamwork to overcome. Traps that are undetectable and inescapable are rarely fun.
 
 ## Rule
 

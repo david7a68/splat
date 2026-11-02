@@ -18,41 +18,37 @@ splat_sources:
 
 <!-- SRD page 254 -->
 
-Each monster has a tag that identifies the type of\
-creature it is. Certain spells, magic items, class fea-\
-tures, and other effects in the game interact in spe-\
-cial ways with creatures of a particular type.\
-The game includes the following creature types,\
-which have no rules of their own:\
-Aberrations are utterly alien beings, such as abo-\
-leths and cloakers.\
-Beasts are non-Humanoid natural creatures, like\
-horses and wolves, as well as most giant animals.\
-Celestials are magical creatures, such as angels and\
-pegasi, with ties to the Upper Planes.\
-Constructs are magically created creatures such as\
-homunculi and shield guardians.\
-Dragons are scaly beings of ancient origin, such as\
-red dragons and wyverns.\
-Elementals are beings from the Elemental Planes,\
-such as efreet and water elementals.\
-Fey are creatures tied to the Feywild or the forces\
-of nature, such as dryads and goblins.\
-Fiends are creatures tied to terrifying Lower\
-Planes, such as balors and hell hounds.\
-Giants are towering beings with humanlike shapes,\
-like fire giants and trolls.\
-Humanoids are people defined by their roles and\
-professions, such as mages, pirates, and warriors.\
-They include members of varied species.\
-Monstrosities are unnatural creatures with\
-strange origins, such as mimics and owlbears.\
-Oozes are gelatinous creatures, including black\
-puddings and gelatinous cubes.\
-Plants are sentient vegetation and fungal monsters,\
-such as shambling mounds and treants.\
-Undead are spirits and the reanimated dead, such\
-as ghosts, vampires, and zombies.\
+Each monster has a tag that identifies the type of creature it is. Certain spells, magic items, class features, and other effects in the game interact in special ways with creatures of a particular type.
+
+The game includes the following creature types, which have no rules of their own:
+
+Aberrations are utterly alien beings, such as aboleths and cloakers.
+
+Beasts are non-Humanoid natural creatures, like horses and wolves, as well as most giant animals.
+
+Celestials are magical creatures, such as angels and pegasi, with ties to the Upper Planes.
+
+Constructs are magically created creatures such as homunculi and shield guardians.
+
+Dragons are scaly beings of ancient origin, such as red dragons and wyverns.
+
+Elementals are beings from the Elemental Planes, such as efreet and water elementals.
+
+Fey are creatures tied to the Feywild or the forces of nature, such as dryads and goblins.
+
+Fiends are creatures tied to terrifying Lower Planes, such as balors and hell hounds.
+
+Giants are towering beings with humanlike shapes, like fire giants and trolls.
+
+Humanoids are people defined by their roles and professions, such as mages, pirates, and warriors. They include members of varied species.
+
+Monstrosities are unnatural creatures with strange origins, such as mimics and owlbears.
+
+Oozes are gelatinous creatures, including black puddings and gelatinous cubes.
+
+Plants are sentient vegetation and fungal monsters, such as shambling mounds and treants.
+
+Undead are spirits and the reanimated dead, such as ghosts, vampires, and zombies.
 
 ## Rule
 

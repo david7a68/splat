@@ -8,7 +8,7 @@ splat_origin:
   key: dnd2024:reference/pages/089
 splat_sources:
 - title: SRD 5.2.1
-  locator: pp. 89
+  locator: pp. 89, 91
   url: https://www.dndbeyond.com/srd
 ---
 
@@ -18,32 +18,70 @@ splat_sources:
 
 <!-- SRD page 89 -->
 
-The Weapons table in this section shows the game’s\
-main weapons. The table lists the cost and weight of\
-each weapon, as well as the following details:\
-Category. Every weapon falls into a category: Sim-\
-ple or Martial. Weapon proficiencies are usually\
-tied to one of these categories. For example, you\
-might have proficiency with Simple weapons.\
-Melee or Ranged. A weapon is classified as either\
-Melee or Ranged. A Melee weapon is used to at-\
-tack a target within 5 feet, whereas a Ranged\
-weapon is used to attack at a greater distance.\
-Damage. The table lists the amount of damage a\
-weapon deals when an attacker hits with it as well\
-as the type of that damage.\
-Properties. Any properties a weapon has are listed\
-in the Properties column. Each property is de-\
-fined in the “Properties” section.\
-Mastery. Each weapon has a mastery property,\
-which is defined in the “Mastery Properties” sec-\
-tion. To use that property, you must have a feature\
-that lets you use it.\
-sEllinG EquipMEnt\
-Equipment fetches half its cost when sold. In con-\
-trast, trade goods and valuables—like gems and art\
-objects—retain their full value in the marketplace.\
-“Magic Items” has prices for magic items.\
+The Weapons table in this section shows the game’s main weapons. The table lists the cost and weight of each weapon, as well as the following details:
+
+Category. Every weapon falls into a category: Simple or Martial. Weapon proficiencies are usually tied to one of these categories. For example, you might have proficiency with Simple weapons.
+
+Melee or Ranged. A weapon is classified as either Melee or Ranged. A Melee weapon is used to attack a target within 5 feet, whereas a Ranged weapon is used to attack at a greater distance.
+
+Damage. The table lists the amount of damage a weapon deals when an attacker hits with it as well as the type of that damage.
+
+Properties. Any properties a weapon has are listed in the Properties column. Each property is defined in the “Properties” section.
+
+Mastery. Each weapon has a mastery property, which is defined in the “Mastery Properties” section. To use that property, you must have a feature that lets you use it.
+
+### Selling Equipment
+
+Equipment fetches half its cost when sold. In contrast, trade goods and valuables—like gems and art objects—retain their full value in the marketplace. “Magic Items” has prices for magic items.
+
+<!-- SRD page 91 -->
+
+**Weapons**
+
+| Name | Damage | Properties | Mastery | Weight | Cost |
+| --- | --- | --- | --- | --- | --- |
+| Simple Melee Weapons |  |  |  |  |  |
+| Club | 1d4 Bludgeoning | Light | Slow | 2 lb. | 1 SP |
+| Dagger | 1d4 Piercing | Finesse, Light, Thrown (Range 20/60) | Nick | 1 lb. | 2 GP |
+| Greatclub | 1d8 Bludgeoning | Two-Handed | Push | 10 lb. | 2 SP |
+| Handaxe | 1d6 Slashing | Light, Thrown (Range 20/60) | Vex | 2 lb. | 5 GP |
+| Javelin | 1d6 Piercing | Thrown (Range 30/120) | Slow | 2 lb. | 5 SP |
+| Light Hammer | 1d4 Bludgeoning | Light, Thrown (Range 20/60) | Nick | 2 lb. | 2 GP |
+| Mace | 1d6 Bludgeoning | — | Sap | 4 lb. | 5 GP |
+| Quarterstaff | 1d6 Bludgeoning | Versatile (1d8) | Topple | 4 lb. | 2 SP |
+| Sickle | 1d4 Slashing | Light | Nick | 2 lb. | 1 GP |
+| Spear | 1d6 Piercing | Thrown (Range 20/60), Versatile (1d8) | Sap | 3 lb. | 1 GP |
+| Simple Ranged Weapons |  |  |  |  |  |
+| Dart | 1d4 Piercing | Finesse, Thrown (Range 20/60) | Vex | 1/4 lb. | 5 CP |
+| Light Crossbow | 1d8 Piercing | Ammunition (Range 80/320; Bolt), Loading, Two-Handed | Slow | 5 lb. | 25 GP |
+| Shortbow | 1d6 Piercing | Ammunition (Range 80/320; Arrow), Two-Handed | Vex | 2 lb. | 25 GP |
+| Sling | 1d4 Bludgeoning | Ammunition (Range 30/120; Bullet) | Slow | — | 1 SP |
+| Martial Melee Weapons |  |  |  |  |  |
+| Battleaxe | 1d8 Slashing | Versatile (1d10) | Topple | 4 lb. | 10 GP |
+| Flail | 1d8 Bludgeoning | — | Sap | 2 lb. | 10 GP |
+| Glaive | 1d10 Slashing | Heavy, Reach, Two-Handed | Graze | 6 lb. | 20 GP |
+| Greataxe | 1d12 Slashing | Heavy, Two-Handed | Cleave | 7 lb. | 30 GP |
+| Greatsword | 2d6 Slashing | Heavy, Two-Handed | Graze | 6 lb. | 50 GP |
+| Halberd | 1d10 Slashing | Heavy, Reach, Two-Handed | Cleave | 6 lb. | 20 GP |
+| Lance | 1d10 Piercing | Heavy, Reach, Two-Handed (unless mounted) | Topple | 6 lb. | 10 GP |
+| Longsword | 1d8 Slashing | Versatile (1d10) | Sap | 3 lb. | 15 GP |
+| Maul | 2d6 Bludgeoning | Heavy, Two-Handed | Topple | 10 lb. | 10 GP |
+| Morningstar | 1d8 Piercing | — | Sap | 4 lb. | 15 GP |
+| Pike | 1d10 Piercing | Heavy, Reach, Two-Handed | Push | 18 lb. | 5 GP |
+| Rapier | 1d8 Piercing | Finesse | Vex | 2 lb. | 25 GP |
+| Scimitar | 1d6 Slashing | Finesse, Light | Nick | 3 lb. | 25 GP |
+| Shortsword | 1d6 Piercing | Finesse, Light | Vex | 2 lb. | 10 GP |
+| Trident | 1d8 Piercing | Thrown (Range 20/60), Versatile (1d10) | Topple | 4 lb. | 5 GP |
+| Warhammer | 1d8 Bludgeoning | Versatile (1d10) | Push | 5 lb. | 15 GP |
+| War Pick | 1d8 Piercing | Versatile (1d10) | Sap | 2 lb. | 5 GP |
+| Whip | 1d4 Slashing | Finesse, Reach | Slow | 3 lb. | 2 GP |
+| Martial Ranged Weapons |  |  |  |  |  |
+| Blowgun | 1 Piercing | Ammunition (Range 25/100; Needle), Loading | Vex | 1 lb. | 10 GP |
+| Hand Crossbow | 1d6 Piercing | Ammunition (Range 30/120; Bolt), Light, Loading | Vex | 3 lb. | 75 GP |
+| Heavy Crossbow | 1d10 Piercing | Ammunition (Range 100/400; Bolt), Heavy, Loading, Two-Handed | Push | 18 lb. | 50 GP |
+| Longbow | 1d8 Piercing | Ammunition (Range 150/600; Arrow), Heavy, Two-Handed | Slow | 2 lb. | 50 GP |
+| Musket | 1d12 Piercing | Ammunition (Range 40/120; Bullet), Loading, Two-Handed | Slow | 10 lb. | 500 GP |
+| Pistol | 1d10 Piercing | Ammunition (Range 30/90; Bullet), Loading | Vex | 3 lb. | 250 GP |
 
 ## Rule
 

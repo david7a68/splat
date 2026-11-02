@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [188],
 
 <!-- SRD page 188 -->
 
-A spell attack is an attack roll made as part of a spell\
-or another magical effect. See also “Spells” (“Casting\
-Spells”).\
+A spell attack is an attack roll made as part of a spell or another magical effect. See also “Spells” (“Casting Spells”).
 
 Original layout: [[../pages/188|page 188]].

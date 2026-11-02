@@ -21,20 +21,16 @@ Int 1 −5 −5 Wis 10 +0 +0 Cha 2 −4 −4\
 Skills Stealth +4\
 Senses Darkvision 30 ft.; Passive Perception 10\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Traits
 
-Spider Climb. The spider can climb difficult surfaces,\
-including along ceilings, without needing to make an\
-ability check.\
-Web Walker. The spider ignores movement restrictions\
-caused by webs, and the spider knows the location of\
-any other creature in contact with the same web.\
+Spider Climb. The spider can climb difficult surfaces, including along ceilings, without needing to make an ability check.
+
+Web Walker. The spider ignores movement restrictions caused by webs, and the spider knows the location of any other creature in contact with the same web.
 
 ### Actions
 
-Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing\
-damage plus 2 (1d4) Poison damage.\
+Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage plus 2 (1d4) Poison damage.
 
 Original layout: [[../pages/361|page 361]].

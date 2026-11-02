@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-A background lists three of your character’s ability\
-scores. Increase one by 2 and another one by 1, or\
-increase all three by 1. None of these increases can\
-raise a score above 20.\
+A background lists three of your character’s ability scores. Increase one by 2 and another one by 1, or increase all three by 1. None of these increases can raise a score above 20.
 
 ## Rule
 

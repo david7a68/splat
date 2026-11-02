@@ -18,14 +18,7 @@ splat_sources:
 
 <!-- SRD page 82 -->
 
-You can create pockets of relative safety within the\
-effects of your evocations. When you cast an Evoca-\
-tion spell that affects other creatures that you can\
-see, you can choose a number of them equal to 1\
-plus the spell’s level. The chosen creatures automat-\
-ically succeed on their saving throws against the\
-spell, and they take no damage if they would nor-\
-mally take half damage on a successful save.\
+You can create pockets of relative safety within the effects of your evocations. When you cast an Evocation spell that affects other creatures that you can see, you can choose a number of them equal to 1 plus the spell’s level. The chosen creatures automatically succeed on their saving throws against the spell, and they take no damage if they would normally take half damage on a successful save.
 
 ## Rule
 

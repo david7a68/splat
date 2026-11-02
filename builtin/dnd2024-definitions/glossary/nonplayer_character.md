@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 185 -->
 
-A nonplayer character (NPC) is a monster that has\
-a personal name and a distinct personality. See also\
-“Monster.”\
+A nonplayer character (NPC) is a monster that has a personal name and a distinct personality. See also “Monster.”
 
 Original layout: [[../../srd-5.2.1/pages/185|page 185]].
 

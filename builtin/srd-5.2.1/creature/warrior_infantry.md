@@ -21,21 +21,16 @@ Int 8 −1 −1 Wis 11 +0 +0 Cha 8 −1 −1\
 Gear Chain Shirt, Spear\
 Senses Passive Perception 10\
 Languages Common\
-CR 1/8 (XP 25; PB +2)\
+CR 1/8 (XP 25; PB +2)
 
 <!-- SRD page 337 -->
 
-
 ### Traits
 
-Pack Tactics. The warrior has Advantage on an attack\
-roll against a creature if at least one of the warrior’s al-\
-lies is within 5 feet of the creature and the ally doesn’t\
-have the Incapacitated condition.\
+Pack Tactics. The warrior has Advantage on an attack roll against a creature if at least one of the warrior’s allies is within 5 feet of the creature and the ally doesn’t have the Incapacitated condition.
 
 ### Actions
 
-Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or\
-range 20/60 ft. Hit: 4 (1d6 + 1) Piercing damage.\
+Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or range 20/60 ft. Hit: 4 (1d6 + 1) Piercing damage.
 
 Original layout: [[../pages/336|page 336]], [[../pages/337|page 337]].

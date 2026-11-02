@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 93 -->
 
-Ability: Strength   Weight: 6 lb.\
+Ability: Strength Weight: 6 lb.\
 Utilize: Seal or pry open a door or container (DC 20)\
-Craft: Club, Greatclub, Quarterstaff, Barrel, Chest, Lad-\
-der, Pole, Portable Ram, Torch\
+Craft: Club, Greatclub, Quarterstaff, Barrel, Chest, Ladder, Pole, Portable Ram, Torch
 
 ## Item
 

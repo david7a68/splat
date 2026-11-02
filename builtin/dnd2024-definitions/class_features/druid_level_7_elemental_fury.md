@@ -18,16 +18,11 @@ splat_sources:
 
 <!-- SRD page 43 -->
 
-The might of the elements flows through you. You\
-gain one of the following options of your choice.\
-Potent Spellcasting. Add your Wisdom modifier\
-to the damage you deal with any Druid cantrip.\
-Primal Strike. Once on each of your turns when\
-you hit a creature with an attack roll using a\
-weapon or a Beast form’s attack in Wild Shape, you\
-can cause the target to take an extra 1d8 Cold, Fire,\
-Lightning, or Thunder damage (choose when you\
-hit).\
+The might of the elements flows through you. You gain one of the following options of your choice.
+
+Potent Spellcasting. Add your Wisdom modifier to the damage you deal with any Druid cantrip.
+
+Primal Strike. Once on each of your turns when you hit a creature with an attack roll using a weapon or a Beast form’s attack in Wild Shape, you can cause the target to take an extra 1d8 Cold, Fire, Lightning, or Thunder damage (choose when you hit).
 
 ## Rule
 

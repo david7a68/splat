@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 21 -->
 
-After assigning your ability scores, adjust them ac-\
-cording to your background. Your background lists\
-three abilities; increase one of those scores by 2 and\
-a different one by 1, or increase all three by 1. None\
-of these increases can raise a score above 20.\
-Some players like to increase their class’s primary\
-ability, while others prefer to increase a low score.\
+After assigning your ability scores, adjust them according to your background. Your background lists three abilities; increase one of those scores by 2 and a different one by 1, or increase all three by 1. None of these increases can raise a score above 20.
+
+Some players like to increase their class’s primary ability, while others prefer to increase a low score.
 
 ## Rule
 

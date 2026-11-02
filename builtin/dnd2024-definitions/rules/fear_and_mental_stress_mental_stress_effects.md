@@ -18,29 +18,17 @@ splat_sources:
 
 <!-- SRD page 196 -->
 
-When a character is subjected to an effect that\
-causes intense mental stress, Psychic damage is the\
-best way to emulate that effect.\
-The Sample Mental Stress Effects table provides a\
-few examples of such effects, with suggested saving\
-throw DCs and damage. Mental stress can usually\
-be resisted with a successful Wisdom save, but\
-sometimes an Intelligence or Charisma save is more\
-appropriate. On a successful save, a character might\
-take half as much damage instead of no damage, at\
-your discretion.\
-Sample Mental Stress Effects\
-Save Psychic\
-Example DC Damage\
-A character ingests a hallucinogenic 10 1d6\
-substance that distorts the charac-\
-ter’s perception of reality.\
-A character touches a fiendish idol 15 3d6\
-that tears at the character’s mind,\
-threatening to shatter it.\
-A magical trap flings a character into 20 9d6\
-the Far Realm until the end of that\
-character’s next turn.\
+When a character is subjected to an effect that causes intense mental stress, Psychic damage is the best way to emulate that effect.
+
+The Sample Mental Stress Effects table provides a few examples of such effects, with suggested saving throw DCs and damage. Mental stress can usually be resisted with a successful Wisdom save, but sometimes an Intelligence or Charisma save is more appropriate. On a successful save, a character might take half as much damage instead of no damage, at your discretion.
+
+**Sample Mental Stress Effects**
+
+| Example | Save DC | Psychic Damage |
+| --- | --- | --- |
+| A character ingests a hallucinogenic substance that distorts the character’s perception of reality. | 10 | 1d6 |
+| A character touches a fiendish idol that tears at the character’s mind, threatening to shatter it. | 15 | 3d6 |
+| A magical trap flings a character into the Far Realm until the end of that character’s next turn. | 20 | 9d6 |
 
 ## Rule
 

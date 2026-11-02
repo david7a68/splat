@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 62 -->
 
-You gain a Rogue subclass of your choice. The Thief\
-subclass is detailed after this class’s description. A\
-subclass is a specialization that grants you features\
-at certain Rogue levels. For the rest of your career,\
-you gain each of your subclass’s features that are of\
-your Rogue level or lower.\
+You gain a Rogue subclass of your choice. The Thief subclass is detailed after this class’s description. A subclass is a specialization that grants you features at certain Rogue levels. For the rest of your career, you gain each of your subclass’s features that are of your Rogue level or lower.
 
 ## Rule
 

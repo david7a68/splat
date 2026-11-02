@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 49 -->
 
-Your attack rolls with weapons and Unarmed\
-Strikes can score a Critical Hit on a roll of 19 or 20\
-on the d20.\
+Your attack rolls with weapons and Unarmed Strikes can score a Critical Hit on a roll of 19 or 20 on the d20.
 
 ## Rule
 

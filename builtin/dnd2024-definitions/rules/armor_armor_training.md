@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 92 -->
 
-Anyone can don armor or hold a Shield, but only\
-those with training can use them effectively, as\
-explained below. A character’s class and other fea-\
-tures determine the character’s armor training.\
-A monster has training with any armor in its stat\
-block.\
+Anyone can don armor or hold a Shield, but only those with training can use them effectively, as explained below. A character’s class and other features determine the character’s armor training. A monster has training with any armor in its stat block.
 
 ## Rule
 

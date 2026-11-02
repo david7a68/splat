@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 101 -->
 
-The table lists the number of Small and Medium\
-passengers the ship can accommodate using ham-\
-mocks. A ship outfitted with private accommoda-\
-tions can carry one-fifth as many passengers. A pas-\
-senger usually pays 5 SP per day for a hammock, but\
-prices can vary from ship to ship. A small private\
-cabin usually costs 2 GP per day.\
+The table lists the number of Small and Medium passengers the ship can accommodate using hammocks. A ship outfitted with private accommodations can carry one-fifth as many passengers. A passenger usually pays 5 SP per day for a hammock, but prices can vary from ship to ship. A small private cabin usually costs 2 GP per day.
 
 ## Rule
 

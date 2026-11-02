@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [224
 
 <!-- SRD page 224 -->
 
-Wondrous Item, Uncommon\
-These gloves are imperceptible while worn. While\
-wearing them, you gain a +5 bonus to Dexterity\
-(Sleight of Hand) checks.\
+Wondrous Item, Uncommon
+
+These gloves are imperceptible while worn. While wearing them, you gain a +5 bonus to Dexterity (Sleight of Hand) checks.
 
 Original layout: [[../pages/224|page 224]].

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 254 -->
 
-A monster might have one or more tags in parenthe-\
-ses following its type. Such tags provide additional\
-categorization and have no rules of their own, but\
-certain game effects might refer to them.\
+A monster might have one or more tags in parentheses following its type. Such tags provide additional categorization and have no rules of their own, but certain game effects might refer to them.
 
 ## Rule
 

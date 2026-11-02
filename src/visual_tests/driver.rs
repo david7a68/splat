@@ -224,6 +224,7 @@ impl<'a> Driver<'a> {
         };
         builder.build_eframe(move |cc| {
             crate::design::theme::install(&cc.egui_ctx);
+            crate::art::install(&cc.egui_ctx);
             app
         })
     }
@@ -544,6 +545,66 @@ impl<'a> Driver<'a> {
         self.film_result(caption);
     }
 
+    /// Drag a column's edge sideways, halfway down the window.
+    pub fn drag_column_edge(&mut self, from: f32, to: f32) {
+        let y = self.window.1 / 2.0;
+        let (start, end) = (egui::pos2(from, y), egui::pos2(to, y));
+        self.harness.hover_at(start);
+        self.harness.step();
+        for (pos, pressed) in [(start, true), (end, true), (end, false)] {
+            self.harness.hover_at(pos);
+            self.harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            self.harness.step();
+        }
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        self.settle();
+        self.film_result("Drag a column's edge");
+    }
+
+    /// Press on a control by its accessible name, and carry it to a place. It stays held.
+    pub fn drag_hold(&mut self, name: &str, target: egui::Rect) {
+        let rect = self.aim(&format!("drag handle {name:?}"), |node| {
+            node.name == name && Self::is_control(node)
+        });
+        let (from, to) = (rect.center(), target.center());
+        self.film_aim(rect, &format!("Drag: {name}"));
+        self.harness.hover_at(from);
+        self.harness.step();
+        self.harness.event(egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        self.harness.step();
+        for step in 1..=4 {
+            self.harness
+                .hover_at(from + (to - from) * (step as f32 / 4.0));
+            self.harness.step();
+        }
+    }
+
+    /// Let go of what `drag_hold` holds, over this place.
+    pub fn drag_release(&mut self, target: egui::Rect) {
+        self.harness.event(egui::Event::PointerButton {
+            pos: target.center(),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        self.settle();
+        self.film_result("Dropped");
+    }
+
     fn is_control(node: &Found) -> bool {
         !node.disabled && !matches!(node.role, Role::Label | Role::TextRun)
     }
@@ -783,14 +844,22 @@ impl<'a> Driver<'a> {
 
     /// Like `click_beside`, for a row whose text is exactly this, among longer texts.
     pub fn click_beside_exact(&mut self, text: &str, name: &str) {
-        let row = self.aim(&format!("row with exactly {text:?}"), |node| {
-            node.name == text && !matches!(node.role, Role::TextRun)
-        });
+        let is_row = |node: &Found| node.name == text && !matches!(node.role, Role::TextRun);
+        self.aim(&format!("row with exactly {text:?}"), is_row);
+        // One name can head several rows, and only one of them has this control.
+        let rows: Vec<_> = self
+            .nodes()
+            .into_iter()
+            .filter(|node| is_row(node))
+            .map(|node| node.rect)
+            .collect();
         let rect = self.aim(&format!("{name:?} beside {text:?}"), |node| {
             node.name == name
                 && Self::is_control(node)
-                && node.rect.center().y >= row.min.y - 16.0
-                && node.rect.center().y <= row.max.y + 16.0
+                && rows.iter().any(|row| {
+                    node.rect.center().y >= row.min.y - 16.0
+                        && node.rect.center().y <= row.max.y + 16.0
+                })
         });
         self.click_rect(rect, &format!("Click: {name} beside {text}"));
     }

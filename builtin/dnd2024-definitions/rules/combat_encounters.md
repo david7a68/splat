@@ -18,25 +18,15 @@ splat_sources:
 
 <!-- SRD page 202 -->
 
-The following features can make a combat encoun-\
-ter more interesting or challenging:\
-Changes in Elevation. Terrain features that pro-\
-vide a change of elevation (such as stacks of empty\
-crates, ledges, and balconies) reward clever posi-\
-tioning and encourage characters to jump, climb,\
-fly, or teleport.\
-Defensive Positions. Enemies in hard-to-reach\
-locations or defensive positions force characters\
-who normally attack at range to move around.\
-Mixed Monster Groups. When different types\
-of monsters work together, they can combine\
-their abilities—just like characters with differ-\
-ent classes and origins. A diverse force is more\
-powerful.\
-Reasons to Move. Use features that encourage\
-characters and their enemies to move around,\
-such as chandeliers, kegs of gunpowder or oil, and\
-rolling stone traps.\
+The following features can make a combat encounter more interesting or challenging:
+
+Changes in Elevation. Terrain features that provide a change of elevation (such as stacks of empty crates, ledges, and balconies) reward clever positioning and encourage characters to jump, climb, fly, or teleport.
+
+Defensive Positions. Enemies in hard-to-reach locations or defensive positions force characters who normally attack at range to move around.
+
+Mixed Monster Groups. When different types of monsters work together, they can combine their abilities—just like characters with different classes and origins. A diverse force is more powerful.
+
+Reasons to Move. Use features that encourage characters and their enemies to move around, such as chandeliers, kegs of gunpowder or oil, and rolling stone traps.
 
 ## Rule
 

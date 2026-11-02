@@ -18,14 +18,7 @@ splat_sources:
 
 <!-- SRD page 103 -->
 
-To scribe a scroll, you must have proficiency in the\
-Arcana skill or with Calligrapher’s Supplies and\
-have the spell prepared on each day of the inscrip-\
-tion. You must also have at hand any Material com-\
-ponents required by the spell; if the spell consumes\
-its Material components, they are consumed only\
-when you complete the scroll. The scroll’s spell uses\
-your spell save DC and spell attack bonus.\
+To scribe a scroll, you must have proficiency in the Arcana skill or with Calligrapher’s Supplies and have the spell prepared on each day of the inscription. You must also have at hand any Material components required by the spell; if the spell consumes its Material components, they are consumed only when you complete the scroll. The scroll’s spell uses your spell save DC and spell attack bonus.
 
 ## Rule
 
