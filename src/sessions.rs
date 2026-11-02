@@ -679,8 +679,9 @@ pub fn section_text(body: &str, heading: &str) -> Option<String> {
     (!words.is_empty()).then(|| words.to_owned())
 }
 
-/// The names in a note's `[[links]]`, in order, without timeline references.
-pub fn linked_names(text: &str) -> Vec<String> {
+/// Every name in a note's `[[links]]`, in order, without timeline references. A name linked
+/// twice comes twice: a plan can hold the same fight again.
+pub fn each_linked_name(text: &str) -> Vec<String> {
     let mut names = Vec::new();
     let mut rest = text;
     while let Some(start) = rest.find("[[") {
@@ -690,11 +691,19 @@ pub fn linked_names(text: &str) -> Vec<String> {
         };
         let inner = &rest[..end];
         let name = inner.split('|').next().unwrap_or(inner).trim();
-        if !name.is_empty() && !name.starts_with("Timeline#") && !names.iter().any(|n| n == name) {
+        if !name.is_empty() && !name.starts_with("Timeline#") {
             names.push(name.to_owned());
         }
         rest = &rest[end + 2..];
     }
+    names
+}
+
+/// The names in a note's `[[links]]`, once each.
+pub fn linked_names(text: &str) -> Vec<String> {
+    let mut names = each_linked_name(text);
+    let mut seen = std::collections::BTreeSet::new();
+    names.retain(|name| seen.insert(name.clone()));
     names
 }
 
@@ -1375,6 +1384,10 @@ mod tests {
         let text =
             "See [[Ashfall Crossing]], [[Hobb|the miller]] and [[Timeline#^t-1|Day 1]]. [[Hobb]]";
         assert_eq!(linked_names(text), vec!["Ashfall Crossing", "Hobb"]);
+        assert_eq!(
+            each_linked_name(text),
+            vec!["Ashfall Crossing", "Hobb", "Hobb"]
+        );
         assert_eq!(
             plain_links("See [[Ashfall Crossing]] and [[Hobb|the miller]], [[open"),
             "See Ashfall Crossing and the miller, [[open"

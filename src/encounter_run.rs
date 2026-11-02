@@ -1144,9 +1144,9 @@ impl Run {
                 format!("{amount} healing applied; {} HP remains.", p.hp.unwrap())
             }
             Command::Initiative(_, total) => {
-                // In combat, only for someone who came back without one.
-                if state.phase != Phase::Setup && (p.initiative.is_some() || total.is_none()) {
-                    return Err("Initiative is fixed during combat.".into());
+                // In combat, a total can be set or corrected, and never taken away.
+                if state.phase != Phase::Setup && total.is_none() {
+                    return Err("Enter an initiative total.".into());
                 }
                 p.initiative = total;
                 let change = format!("Initiative set to {}.", display(total));
@@ -1341,6 +1341,9 @@ impl Run {
             Command::Several(commands) => {
                 let word = match commands.first() {
                     Some(Command::Health(..)) => return "HP from the sheets".to_owned(),
+                    Some(Command::RemoveCondition(i, _)) => {
+                        return format!("Exhaustion on {}", name(i));
+                    }
                     Some(Command::Heal(_, amount)) => format!("{amount} healing to"),
                     Some(Command::TempHp(_, amount)) => format!("{amount} temporary HP on"),
                     Some(Command::Damage(_, amount)) => {
@@ -2768,7 +2771,8 @@ mod tests {
         run.apply(Command::Begin).unwrap();
         assert_eq!(run.current(), Some(1));
         assert!(run.apply(Command::RollInitiative(0)).is_err());
-        assert!(run.apply(Command::Initiative(0, Some(30))).is_err());
+        // In combat a total can be corrected, and never taken away.
+        assert!(run.apply(Command::Initiative(0, None)).is_err());
     }
     #[test]
     fn missing_or_inconsistent_health_requires_dm_input() {
@@ -3736,7 +3740,7 @@ mod tests {
         assert_eq!(run.state.order, vec![1, 0, 2]);
         assert_eq!(run.current(), Some(1));
         // Once only, and a named step.
-        assert!(run.apply(Command::Initiative(0, Some(20))).is_err());
+        assert!(run.apply(Command::Initiative(0, None)).is_err());
         assert!(run.undo_label().contains("initiative"));
         run.undo();
         assert_eq!(run.state.order, vec![1, 2, 0]);
@@ -4065,6 +4069,22 @@ mod tests {
         run.also.insert(1);
         run.also.insert(0);
         assert_eq!(run.targets().iter().filter(|at| **at == 1).count(), 1);
+    }
+    #[test]
+    fn a_wrong_initiative_moves_its_row_and_the_turn_stays_with_one_step_back() {
+        let mut run = run();
+        begin(&mut run);
+        let current = run.current().unwrap();
+        let other = (0..run.state.participants.len())
+            .find(|index| *index != current)
+            .unwrap();
+        let order = run.state.order.clone();
+        run.apply(Command::Initiative(other, Some(100))).unwrap();
+        assert_eq!(run.state.order[0], other);
+        assert_eq!(run.current(), Some(current));
+        run.undo();
+        assert_eq!(run.state.order, order);
+        assert!(run.apply(Command::Initiative(other, None)).is_err());
     }
     #[test]
     fn a_setup_with_nothing_done_is_untouched_until_sync_changes_it() {

@@ -2,7 +2,7 @@
 //! recorder and the processing job live here, and keep going while the DM uses other pages.
 use super::{
     DEFAULT_FOLDER, Draft, DraftState, NewNote, Note, Recording, Template, body_of, create_note,
-    create_template, delete_recording, folder as session_folder, folder_setting,
+    create_template, delete_recording, each_linked_name, folder as session_folder, folder_setting,
     fresh_line_in_note, insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings,
     list_templates, nested_in_note, new_recording_path, parts_of, plain_links, recording_title,
     save_folder, section_text, unreadable_notes, update_details, without_empty_sections,
@@ -43,6 +43,10 @@ const PLAN_BESIDE_NOTE_FROM: f32 = 720.0;
 const PLAN_WIDTH: f32 = 330.0;
 /// Room in the plan for the widest action on a row.
 const PLAN_ACTION: f32 = 112.0;
+/// A list longer than this gets a search, and it scrolls instead of leaving the window.
+const FIGHT_SEARCH_FROM: usize = 8;
+const FIGHT_MENU_WIDTH: f32 = 240.0;
+const FIGHT_MENU_HEIGHT: f32 = 240.0;
 /// The kinds a session adds by one press. A fight has its own control, for what it can name.
 const PLAN_KINDS: [Kind; 5] = [
     Kind::Day,
@@ -195,6 +199,10 @@ pub struct Sessions {
     templates_list_only: bool,
     /// Where new events and runs go, if the DM chose. Otherwise the newest session.
     events_to: Option<Option<Uuid>>,
+    /// The session chosen when the app last closed, until its campaign opens.
+    pub restored_session: Option<(Uuid, Option<Uuid>)>,
+    fight_search: String,
+    focus_fight_search: bool,
     draft: Option<Draft>,
     form: Option<Form>,
     templates: Vec<Template>,
@@ -768,14 +776,23 @@ impl Sessions {
             None => self.folder = None,
         }
         self.refresh();
-        self.events_to = None;
+        self.events_to = self
+            .restored_session
+            .take()
+            .filter(|(campaign, _)| Some(*campaign) == active.map(|c| c.id))
+            .map(|(_, session)| session);
         self.alerts.clear();
         self.job_done = false;
         self.job_warned = false;
         self.deleted_template = None;
         self.folder_saved = false;
         self.notice_session = None;
-        self.select(self.notes.first().map(|note| note.id));
+        self.select(self.current().or(self.notes.first().map(|note| note.id)));
+    }
+
+    /// The session the DM chose to play, when they chose.
+    pub fn chosen_session(&self) -> Option<Option<Uuid>> {
+        self.events_to
     }
 
     pub fn refresh(&mut self) {
@@ -2264,8 +2281,15 @@ impl Sessions {
             .draft
             .as_ref()
             .map_or_else(String::new, |draft| draft.body.clone());
-        // A fight in the note's plan that has not happened yet in this session.
-        let planned: Vec<&PlanFight> = linked_names(&body)
+        // A fight in the note's plan that has not happened yet in this session. Each link is one
+        // occurrence, so a patrol planned twice can be started twice.
+        let mut played: BTreeMap<String, usize> = BTreeMap::new();
+        for event in &book.events {
+            if event.is_in(session) && event.run.is_some() {
+                *played.entry(event.title.to_lowercase()).or_default() += 1;
+            }
+        }
+        let planned: Vec<&PlanFight> = each_linked_name(&body)
             .iter()
             .filter_map(|name| {
                 plan.fights
@@ -2273,11 +2297,10 @@ impl Sessions {
                     .find(|fight| fight.name.eq_ignore_ascii_case(name))
             })
             .filter(|fight| {
-                !book.events.iter().any(|event| {
-                    event.session == session
-                        && event.run.is_some()
-                        && event.title.eq_ignore_ascii_case(&fight.name)
-                })
+                let done = played.entry(fight.name.to_lowercase()).or_default();
+                let waiting = *done == 0;
+                *done = done.saturating_sub(1);
+                waiting
             })
             .collect();
         let mut insert = None;
@@ -2296,7 +2319,7 @@ impl Sessions {
                 let widths = [width - PLAN_ACTION - design::S, PLAN_ACTION];
                 let mut any = false;
                 for at in 0..book.events.len() {
-                    if book.events[at].session != session {
+                    if !book.events[at].is_in(session) {
                         continue;
                     }
                     any = true;
@@ -2427,7 +2450,7 @@ impl Sessions {
                 }
                 for (position, fight) in planned.iter().enumerate() {
                     any = true;
-                    ui.push_id(&fight.path, |ui| {
+                    ui.push_id((&fight.path, position), |ui| {
                         plan_row(
                             ui,
                             &widths,
@@ -2531,24 +2554,58 @@ impl Sessions {
             .name("Add a fight")
             .density(Density::Read)
             .show(ui);
-        egui::Popup::menu(&response).show(|ui| {
-            for fight in plan.fights {
-                if ui.selectable_label(false, &fight.name).clicked() {
-                    self.add_to_plan(&fight.name);
+        if response.clicked() {
+            self.focus_fight_search = true;
+        }
+        egui::Popup::menu(&response)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                // A fixed place, whatever the list's length.
+                if Action::quiet("New encounter")
+                    .icon(icons::ADD)
+                    .density(Density::Read)
+                    .blocked(plan.blocked)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.wants_new_fight = true;
+                    ui.close();
                 }
-            }
-            if !plan.fights.is_empty() {
+                if plan.fights.len() > FIGHT_SEARCH_FROM {
+                    let field = design::search_field(
+                        ui,
+                        "Find a fight",
+                        &mut self.fight_search,
+                        "Find a fight…",
+                        FIGHT_MENU_WIDTH,
+                    );
+                    if std::mem::take(&mut self.focus_fight_search) {
+                        field.request_focus();
+                    }
+                }
                 ui.separator();
-            }
-            if Action::quiet("New encounter")
-                .density(Density::Read)
-                .blocked(plan.blocked)
-                .show(ui)
-                .clicked()
-            {
-                self.wants_new_fight = true;
-            }
-        });
+                let query = self.fight_search.trim().to_lowercase();
+                let mut chosen = None;
+                egui::ScrollArea::vertical()
+                    .id_salt("session_fight_menu")
+                    .max_height(FIGHT_MENU_HEIGHT)
+                    .show(ui, |ui| {
+                        for fight in plan.fights {
+                            if fight.name.to_lowercase().contains(&query) {
+                                let row = ui.selectable_label(false, &fight.name);
+                                design::named(ui, &row, &format!("Plan {}", fight.name));
+                                if row.clicked() {
+                                    chosen = Some(fight.name.clone());
+                                }
+                            }
+                        }
+                    });
+                if let Some(name) = chosen {
+                    self.add_to_plan(&name);
+                    self.fight_search.clear();
+                    ui.close();
+                }
+            });
     }
 
     /// How a fight ended, in place: final HP and the log, with no run to reopen.

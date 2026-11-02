@@ -928,6 +928,7 @@ impl Run {
         let list_height = if overflow { room - OVERFLOW_LINE } else { room };
         let mut clicked = None;
         let mut rule = None;
+        let mut toggle_half = None;
         // A changed window size must not leave the selected row out of view.
         let resized = (room - self.roster_height).abs() > 1.0;
         self.roster_height = room;
@@ -967,15 +968,41 @@ impl Run {
                         rule = Some(position);
                         clicked = Some((index, false));
                     }
-                    // More than a fill says a row is one of several targets.
+                    // More than a fill says a row is one of several targets, and the mark
+                    // says whether it took half for a save.
                     if selected && !self.also.is_empty() {
+                        let half = self.halved.contains(&index);
+                        let target = Rect::from_center_size(
+                            pos2(rect.left() + design::L, rect.center().y),
+                            vec2(24.0, 24.0),
+                        );
+                        let id = ui.id().with(("half_damage", &p.key));
+                        let mark = ui
+                            .interact(target, id, egui::Sense::click())
+                            .on_hover_text("This target saved, so it takes half, rounded down.")
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        let name = format!("Half damage: {}", p.name);
+                        mark.widget_info(|| {
+                            egui::WidgetInfo::selected(
+                                egui::WidgetType::Checkbox,
+                                ui.is_enabled(),
+                                half,
+                                &name,
+                            )
+                        });
                         ui.painter().text(
-                            pos2(rect.left() + design::M, rect.center().y),
+                            target.center(),
                             Align2::CENTER_CENTER,
-                            icons::OK,
+                            if half { "½" } else { icons::OK },
                             Type::Heading.font(ui),
                             colors().accent,
                         );
+                        if mark.has_focus() {
+                            design::focus_ring(ui, target);
+                        }
+                        if mark.clicked() {
+                            toggle_half = Some(index);
+                        }
                     }
                     if self.selected == index {
                         selected_rect = Some(rect);
@@ -997,6 +1024,12 @@ impl Run {
                 }
             });
         self.overflow_note(ui, &output, &spans);
+        if let Some(index) = toggle_half {
+            if !self.halved.remove(&index) {
+                self.halved.insert(index);
+            }
+            self.focus_amount = true;
+        }
         match clicked {
             Some((index, true)) => self.toggle_target(index),
             Some((index, false)) => self.select(index),
@@ -1137,7 +1170,7 @@ impl Run {
                 });
             });
             if !self.also.is_empty() {
-                self.target_chips(ui);
+                self.target_words(ui);
                 return;
             }
             let p = &self.state.participants[index];
@@ -1229,49 +1262,25 @@ impl Run {
         }
     }
 
-    /// In place of the one row's actions: who takes this amount, and who takes half.
-    fn target_chips(&mut self, ui: &mut egui::Ui) {
-        let c = colors();
-        let targets = self.targets();
+    /// In place of the one row's actions: how many take this amount, and how to give half. The
+    /// choice is on each row, so that any number of targets stays in view.
+    fn target_words(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.set_min_height(28.0);
-            let word = if ui.available_width() < DOCK_ALL_WORDS_FROM {
-                "Half for:".to_owned()
-            } else {
-                format!("{} targets · half for:", targets.len())
-            };
-            ui.label(Type::Small.rich(ui, word).color(c.muted));
-            egui::ScrollArea::horizontal()
-                .id_salt("run_targets")
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        for index in targets {
-                            let name = &self.state.participants[index].name;
-                            let half = self.halved.contains(&index);
-                            let word = if half {
-                                format!("{name} ½")
-                            } else {
-                                name.clone()
-                            };
-                            if Action::quiet(&word)
-                                .name(&format!("Half damage: {name}"))
-                                .density(Density::Read)
-                                .hint("This target saved, so it takes half, rounded down.")
-                                .selected(half)
-                                .show(ui)
-                                .clicked()
-                            {
-                                if half {
-                                    self.halved.remove(&index);
-                                } else {
-                                    self.halved.insert(index);
-                                }
-                                self.focus_amount = true;
-                            }
-                        }
-                    });
-                });
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!(
+                                "{} targets. Press a row's mark for half, rounded down.",
+                                self.targets().len()
+                            ),
+                        )
+                        .color(colors().muted),
+                )
+                .truncate(),
+            );
         });
     }
 
@@ -1435,6 +1444,39 @@ impl Run {
                             }
                         }
                     });
+                // One level, not a pile of lines. Each step replaces the last.
+                let exhausted = p.conditions.iter().position(|c| c.starts_with("Exhaustion"));
+                if let Some(at) = exhausted {
+                    let level = exhaustion_level(&p.conditions[at]);
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            Type::Body
+                                .rich(ui, format!("Exhaustion level {level}"))
+                                .color(colors().text),
+                        );
+                        if Action::quiet("−")
+                            .name("Less exhaustion")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            command = Some(if level > 1 {
+                                set_exhaustion(index, at, level - 1)
+                            } else {
+                                Command::RemoveCondition(index, at)
+                            });
+                        }
+                        if Action::quiet("+")
+                            .name("More exhaustion")
+                            .density(Density::Read)
+                            .blocked_if(level >= 6, "Level 6 is the highest.")
+                            .show(ui)
+                            .clicked()
+                        {
+                            command = Some(set_exhaustion(index, at, level + 1));
+                        }
+                    });
+                }
                 ui.add_space(design::S);
                 let official = |c: &String| super::recognized_condition(c).is_some();
                 let custom: Vec<_> = p
@@ -1478,7 +1520,12 @@ impl Run {
                         || enter)
                         && !self.condition.trim().is_empty()
                     {
-                        command = Some(Command::Condition(index, self.condition.clone()));
+                        // Typed as a level, it is still the one Exhaustion a creature has.
+                        let typed = self.condition.trim();
+                        command = Some(match exhausted.filter(|_| typed.starts_with("Exhaustion")) {
+                            Some(at) => set_exhaustion(index, at, exhaustion_level(typed)),
+                            None => Command::Condition(index, self.condition.clone()),
+                        });
                     }
                 });
                 ui.add(
@@ -2419,11 +2466,9 @@ impl Run {
                 let mut max = p.max_hp;
                 design::group_label(ui, "Correct HP");
                 let sheet_decides = self.syncs.get(&index).is_some_and(|sync| sync.ready());
-                ui.horizontal_wrapped(|ui| {
-                    optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
-                    design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
-                        optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
-                    });
+                optional_number(ui, "Current HP", &mut hp, 0..=1_000_000);
+                design::locked(ui, sheet_decides.then_some(MAX_FROM_SHEET), |ui| {
+                    optional_number(ui, "Maximum HP", &mut max, 1..=1_000_000);
                 });
                 if sheet_decides {
                     ui.add(
@@ -2442,19 +2487,21 @@ impl Run {
                     if bonus != p.initiative_bonus {
                         command = Some(Command::Bonus(index, bonus));
                     }
-                } else if p.initiative.is_none() {
-                    // Absent at the start, so no roll was asked for. The DM says when it is.
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(
-                                    ui,
-                                    "No initiative yet: last in the order until you set it. The current turn stays.",
-                                )
-                                .color(colors().result.warning),
+                } else {
+                    // Absent at the start, so no roll was asked for, or a wrong number typed
+                    // under pressure. The DM says what it is, and whose turn it is does not change.
+                    let (words, color) = if p.initiative.is_none() {
+                        (
+                            "No initiative yet: last in the order until you set it. The current turn stays.",
+                            colors().result.warning,
                         )
-                        .wrap(),
-                    );
+                    } else {
+                        (
+                            "Correct initiative. This row moves, and the current turn stays.",
+                            colors().muted,
+                        )
+                    };
+                    ui.add(egui::Label::new(Type::Small.rich(ui, words).color(color)).wrap());
                     let field = format!("Initiative for {}", p.name);
                     let text = self.setup_inputs.entry(index).or_default();
                     let total = text.trim().parse::<i64>().ok();
@@ -2478,15 +2525,10 @@ impl Run {
                             && let Some(total) = total
                         {
                             command = Some(Command::Initiative(index, Some(total)));
+                            text.clear();
                             self.return_focus = self.lookup_open;
                         }
                     });
-                } else {
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "Initiative is fixed once combat begins.")
-                            .color(colors().muted),
-                    );
                 }
                 design::group_label(ui, "Death saves (manual)");
                 ui.horizontal(|ui| {
@@ -3318,6 +3360,24 @@ impl Run {
     }
 }
 
+/// The level in `Exhaustion (2)`. Plain `Exhaustion` is the first.
+fn exhaustion_level(condition: &str) -> u8 {
+    condition
+        .trim()
+        .strip_prefix("Exhaustion (")
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|level| level.trim().parse().ok())
+        .unwrap_or(1)
+}
+
+/// One step of undo: the old level goes, and the new one comes.
+fn set_exhaustion(index: usize, at: usize, level: u8) -> Command {
+    Command::Several(vec![
+        Command::RemoveCondition(index, at),
+        Command::Condition(index, format!("Exhaustion ({level})")),
+    ])
+}
+
 /// The action names what it does, so its label cannot be read as a state.
 /// What an encounter or group changed on this creature: the value it replaced and the new
 /// one, each marked. It stays out in the open, above the stat block that keeps its own values.
@@ -3774,7 +3834,10 @@ fn condition_links(
     if galley.rows.len() > 1 {
         return None;
     }
-    let origin = pos2(rect.left() + layout.name_left, layout.second_y(scale, rect));
+    let origin = pos2(
+        rect.left() + layout.second_left,
+        layout.second_y(scale, rect),
+    );
     let mut opened = None;
     for (position, (condition, span)) in layout.condition_spans.iter().enumerate() {
         let Some(entry) = content.condition_rule(condition) else {
@@ -4025,27 +4088,30 @@ fn optional_number(
     value: &mut Option<i64>,
     range: std::ops::RangeInclusive<i64>,
 ) {
-    ui.label(Type::Body.rich(ui, label).color(colors().text));
-    if let Some(n) = value {
-        let response = ui.add(egui::DragValue::new(n).range(range));
-        design::named(ui, &response, label);
-        if Action::quiet("Unknown")
-            .name(&format!("Mark {label} unknown"))
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-        {
-            *value = None;
+    // Its words stay on one line, in any width of panel.
+    ui.horizontal(|ui| {
+        ui.label(Type::Body.rich(ui, label).color(colors().text));
+        if let Some(n) = value {
+            let response = ui.add(egui::DragValue::new(n).range(range));
+            design::named(ui, &response, label);
+            if Action::quiet("Unknown")
+                .name(&format!("Mark {label} unknown"))
+                .density(Density::Read)
+                .show(ui)
+                .clicked()
+            {
+                *value = None;
+            }
+        } else {
+            ui.label(Type::Small.rich(ui, "Unknown").color(colors().muted));
+            if Action::quiet("Enter")
+                .name(&format!("Enter {label}"))
+                .density(Density::Read)
+                .show(ui)
+                .clicked()
+            {
+                *value = Some(*range.start().max(&0));
+            }
         }
-    } else {
-        ui.label(Type::Small.rich(ui, "Unknown").color(colors().muted));
-        if Action::quiet("Enter")
-            .name(&format!("Enter {label}"))
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
-        {
-            *value = Some(*range.start().max(&0));
-        }
-    }
+    });
 }

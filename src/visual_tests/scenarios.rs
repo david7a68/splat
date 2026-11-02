@@ -4851,6 +4851,13 @@ pub mod run_no_groups {
 /// W14: an evening from the session's one page: the plan, the fights, and what they leave behind.
 pub mod session_plan {
     use super::*;
+    /// New events go to this session, by the Timeline page's own control.
+    fn go_timeline_choose_session(d: &mut Driver<'_>, session: &str) {
+        d.click(NAV_TIMELINE);
+        d.open_combo_at(1);
+        d.click_starting(session);
+    }
+
     const FIRST: &str = "Bridge Ambush";
     const SECOND: &str = "Shrine of Cinders";
     const PLAYERS: [(&str, &str); 5] = [
@@ -4890,7 +4897,7 @@ pub mod session_plan {
         d.state("plan-empty", Sizes::Default);
         for name in [FIRST, SECOND] {
             d.click("Add a fight");
-            d.click_first(name);
+            d.click(&format!("Plan {name}"));
         }
         d.expect(&format!("Start fight: {FIRST}"));
         d.state("plan-with-fights", Sizes::AllAndHiDpi);
@@ -5006,6 +5013,38 @@ pub mod session_plan {
         );
         d.press(Key::Escape);
 
+        // T14.2: a number typed wrong can be put right, and the turn stays.
+        let turn = current_participant(d);
+        d.click_row("Ember Cultist");
+        d.click("Record");
+        d.state("correct-initiative", Sizes::Default);
+        d.type_into("Initiative for Ember Cultist", "30");
+        d.click("Set initiative");
+        d.observe(
+            "T14.2",
+            roster_places(d).first().map(|row| row.0.as_str()) == Some("Ember Cultist")
+                && current_participant(d) == turn,
+            "A wrong initiative moves its row, and whose turn it is does not change",
+        );
+        d.click_containing("Undo: initiative for Ember Cultist");
+
+        // T14.3: Exhaustion is one level, however many steps it takes.
+        d.click_row("Oren Thistlewick");
+        d.click(CONDITIONS);
+        d.click("Exhaustion");
+        d.click("More exhaustion");
+        d.click("More exhaustion");
+        d.state("exhaustion-level", Sizes::Default);
+        let row = d.row_words("Oren Thistlewick");
+        d.observe(
+            "T14.3",
+            row.contains("Exhaustion (3)") && !row.contains("Exhaustion (2)"),
+            format!("Each step replaces the last level: {row}"),
+        );
+        d.click("Less exhaustion");
+        d.click("Less exhaustion");
+        d.click("Less exhaustion");
+
         // Kestrel ends this fight hurt, so the next one has something to carry.
         d.click_row("Kestrel Dunmoor");
         d.type_text("4");
@@ -5037,6 +5076,16 @@ pub mod session_plan {
             "Final HP reads in the plan, with no run to reopen",
         );
         d.click(FIRST);
+
+        // T14.4: a patrol can be planned again after it is played.
+        d.click("Add a fight");
+        d.click(&format!("Plan {FIRST}"));
+        d.observe(
+            "T14.4",
+            d.has(&format!("Start fight: {FIRST}")),
+            "A fight planned a second time can start a second time",
+        );
+        d.state("plan-the-same-fight-again", Sizes::Default);
 
         // T12.2: the next fight remembers the last one.
         d.click(&format!("Start fight: {SECOND}"));
@@ -5074,6 +5123,30 @@ pub mod session_plan {
             format!("After Everyone to full: {}", kestrel(d)),
         );
         close_run(d);
+
+        // T14.5: a restart keeps the session being played, and where a run goes back to.
+        d.click("New session");
+        d.type_text("Later");
+        d.click("Create session");
+        d.expect("Session 3: Later");
+        go_timeline_choose_session(d, "Session 2: The Crossing");
+        d.click(NAV_SESSIONS);
+        d.click_starting("Session 2: The Crossing ·");
+        show_plan(d);
+        d.click(&format!("Start fight: {FIRST}"));
+        d.expect(&format!("{RUN_HEADING}{FIRST}"));
+        d.app_mut().sessions.flush();
+        d.app_mut().timeline.save();
+        d.settle();
+        d.restart();
+        d.expect(&format!("{RUN_HEADING}{FIRST}"));
+        close_run(d);
+        d.observe(
+            "T14.5",
+            d.page_title().as_deref() == Some("Session")
+                && d.has_containing("Session 2: The Crossing"),
+            "After a restart, Close run goes to the page the run began on, in the session chosen",
+        );
 
         // Party says what it shows, and lets the DM compare.
         go_party(d);

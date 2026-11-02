@@ -155,7 +155,7 @@ title, length, place and notes. Add buttons stay at the foot of the plan. At the
 In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
 Read leaves out headings with nothing under them.
 
-During a session, a new run starts each player from where the fights so far left them, and setup says so. A player who
+A fight resumed under a later session also counts as part of that session. During a session, a new run starts each player from where the fights so far left them, and setup says so. A player who
 missed the last fight stands where an earlier one left them. If a fight's run cannot be read, setup says that too. **Use the sheets'
 HP** goes back to the sheets, as one step of undo. **Everyone to full** on a long rest records your ruling that the next fight
 starts everyone at full HP. Party shows the same HP, and says where it came from. A starting HP written in the encounter
@@ -339,7 +339,7 @@ rounds. Absent participants keep their state and initiative when they return.
 Participants at zero HP stay in turn order until you mark them absent.
 
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
-**Temp HP** are beside it. Ctrl+click adds more rows for one amount, as one step of undo, and a chip beside each name
+**Temp HP** are beside it. Ctrl+click adds more rows for one amount, as one step of undo, and the mark on each of those rows
 gives it half, rounded down, for a save. **Conditions** lists the official conditions, one click
 each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Record** (HP corrections, death
 saves, notes, sync), **Log**, encounter **Notes**, and **Groups**. A spell named in a stat block opens

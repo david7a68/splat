@@ -217,7 +217,9 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
     a.task("Back to the session plan, with tonight's encounter in it");
     a.act(Nav, "Back to session", |d| d.click("Back to session"));
     a.click(Find, "Add a fight");
-    a.act(Do, "plan the second fight", |d| d.click_first(SECOND));
+    a.act(Do, "plan the second fight", |d| {
+        d.click(&format!("Plan {SECOND}"));
+    });
     a.fact(format!(
         "the plan offers tonight's fight: {}",
         a.d.has(&format!("Start fight: {TONIGHT}"))

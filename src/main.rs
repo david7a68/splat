@@ -205,6 +205,7 @@ impl Splat {
         self.started = true;
         let saved = self.ui_store.load();
         design::restore_column_widths(ctx, saved.column_widths);
+        self.sessions.restored_session = saved.playing;
         let active = self.campaigns.active_campaign();
         self.page =
             saved
@@ -232,7 +233,20 @@ impl Splat {
         let active = self.campaigns.active_campaign();
         let state = ui_state::UiState {
             column_widths: design::column_widths(ctx),
-            page: Some(self.page.name().to_owned()).filter(|_| self.page != Page::Run),
+            // With a run open, the page it began on: Close run goes back there after a restart.
+            page: Some(
+                if self.page == Page::Run {
+                    self.run_origin
+                } else {
+                    self.page
+                }
+                .name()
+                .to_owned(),
+            ),
+            playing: active
+                .as_ref()
+                .zip(self.sessions.chosen_session())
+                .map(|(campaign, session)| (campaign.id, session)),
             open_run: self.encounters.run().and_then(|run| {
                 Some(ui_state::OpenRun {
                     campaign: active.as_ref()?.id,

@@ -499,9 +499,10 @@ pub fn inspect(
                 continue;
             }
             let overlap = first_shown.intersect(shown(second));
-            // A link inside a row is the row's second target, and it is meant to be on top.
+            // A link or a mark inside a row is the row's second target, meant to be on top.
             let nested = |inner: &Control, outer: &Control| {
-                inner.role == Role::Link && outer.rect.contains_rect(inner.rect)
+                matches!(inner.role, Role::Link | Role::CheckBox)
+                    && outer.rect.contains_rect(inner.rect)
             };
             if nested(first, second) || nested(second, first) {
                 continue;

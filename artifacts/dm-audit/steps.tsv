@@ -26,7 +26,7 @@ before	Write the read-aloud text and tactics for the encounter	Do	write the text
 before	Write the read-aloud text and tactics for the encounter	Do	save	1	Encounters		false
 before	Back to the session plan, with tonight's encounter in it	Nav	Back to session	1	Encounters	Session	false
 before	Back to the session plan, with tonight's encounter in it	Find	Add a fight	1	Session		false
-before	Back to the session plan, with tonight's encounter in it	Do	plan the second fight	1	Session		false
+before	Back to the session plan, with tonight's encounter in it	Do	plan the second fight	2	Session		false
 during	Start recording	Do	Record this session	1	Session		false
 during	Start recording	Do	Start recording	1	Session		false
 during	Read last session's recap aloud	Find	open Last time	1	Session		false

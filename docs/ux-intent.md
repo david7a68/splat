@@ -303,7 +303,7 @@ recap, the plan, the note, the rest to record. **Context:** table. **Frequency:*
 the plan, so that a DM never chooses between Encounters, Timeline and the note in the gap between two fights. A measured
 evening is in `artifacts/dm-audit/README.md`.
 
-**Done well:** T12.0 to T12.9, and T14.1.
+**Done well:** T12.0 to T12.9, and T14.1 to T14.5.
 
 ## 3. Information architecture
 
@@ -581,6 +581,10 @@ reading the code, not from a test run.
 | T12.8 | A condition's rule opens from its word on the row, and is gone again, in 2 | session-plan | cost | New |
 | T12.9 | Lookup finds words in a session note and keeps the run in view | session-plan | state, view | New |
 | T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
+| T14.2 | A wrong initiative is corrected during combat, as one step of undo, and the current turn stays | session-plan | state | New |
+| T14.3 | Exhaustion is one level with a control, and each step replaces the last | session-plan | state | New |
+| T14.4 | A fight planned a second time can start a second time | session-plan | state | New |
+| T14.5 | After a restart, Close run goes to the page the run began on, in the session the DM chose | session-plan | state | New |
 | T14.1 | Saved runs say View or Resume, and a run can be removed, with one step of undo | session-plan | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |

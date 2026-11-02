@@ -24,6 +24,9 @@ pub struct UiState {
     pub page: Option<String>,
     #[serde(default)]
     pub open_run: Option<OpenRun>,
+    /// The session the DM chose to play, by campaign, when it is not the newest.
+    #[serde(default)]
+    pub playing: Option<(Uuid, Option<Uuid>)>,
     /// The widths the DM dragged columns to, by column.
     #[serde(default)]
     pub column_widths: BTreeMap<String, f32>,
@@ -102,6 +105,7 @@ mod tests {
         let mut store = Store::at(path.clone());
         assert_eq!(store.load(), UiState::default());
         let state = UiState {
+            playing: None,
             page: Some("Run".into()),
             open_run: Some(OpenRun {
                 campaign: Uuid::new_v4(),

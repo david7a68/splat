@@ -7,14 +7,25 @@ measured again in the running app with the changes in place:
 
 | Phase | Transitions before | Transitions now | Interactions before | Interactions now |
 |---|---:|---:|---:|---:|
-| Before | 9 | 5 | 74 | 33 |
+| Before | 9 | 5 | 74 | 34 |
 | During | 12 | 7 | 212 | 180 |
 | After | 6 | 1 | 23 | 17 |
-| Total | 27 | 13 | 309 | 230 |
+| Total | 27 | 13 | 309 | 231 |
 
 The hand count in section 6 said 11 and 221. It missed a trip from Party back to the session in prep, and one through
 Encounters for an improvised fight. `steps.tsv` and `summary.tsv` hold this measured evening, and the tables from section 2
 on describe the app before the changes.
+
+Two later audits, by Codex Astra and Codex Sol, each played other journeys on this work. Fixed from their findings: a fight
+that goes on under a later session keeps its HP for the next fight; a fight can be planned and started again; Close run and
+the session being played survive a restart; the fight picker scrolls and has a search; half for a save is a mark on each
+target's row, so any number of targets stays in view; initiative can be corrected during combat; and Exhaustion is one level.
+
+Left for later, because each is a feature of its own:
+
+- **Undo after a restart.** A wrong number stays, and only Record can correct it. `docs/ux-intent.md` A8 keeps undo in memory.
+- **A note pinned to a creature**, with a reminder on its turn, for a recurring save.
+- **A way to choose several targets with one hand.** Ctrl+click needs both.
 
 Corrections to the first audit:
 

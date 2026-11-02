@@ -105,9 +105,17 @@ pub struct Event {
     /// The DM said this long rest brought everyone back to full. It records their ruling.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub restores: bool,
+    /// A fight that went on in a later session belongs to that one too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continued_in: Option<Uuid>,
 }
 
 impl Event {
+    /// Does this event belong to this session, or go on in it?
+    pub fn is_in(&self, session: Option<Uuid>) -> bool {
+        self.session == session || (session.is_some() && self.continued_in == session)
+    }
+
     /// The name people read. A day has its number, and it can also have a name.
     pub fn label(&self, day: u32) -> String {
         match (self.kind, self.title.trim()) {
@@ -154,7 +162,7 @@ pub fn party_state(events: &[Event], session: Option<Uuid>) -> PartyState {
         return state;
     }
     for (event, day) in events.iter().zip(day_numbers(events)) {
-        if event.session != session {
+        if !event.is_in(session) {
             continue;
         }
         if let Some(run) = event.run {
@@ -658,6 +666,7 @@ impl Book {
                 run: None,
                 marker: String::new(),
                 restores: false,
+                continued_in: None,
             },
         );
         self.touch();
@@ -759,6 +768,15 @@ impl Book {
             Some(index) => {
                 if self.events[index].result != result {
                     self.events[index].result = result;
+                    self.touch();
+                }
+                // Played on under a later session. Reading an ended fight is not playing it.
+                if matches!(fact.state, RunState::Running)
+                    && session.is_some()
+                    && self.events[index].session != session
+                    && self.events[index].continued_in != session
+                {
+                    self.events[index].continued_in = session;
                     self.touch();
                 }
             }
@@ -987,6 +1005,24 @@ mod tests {
     }
 
     #[test]
+    fn a_fight_played_on_under_a_later_session_goes_on_there_and_reading_it_does_not() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut book = book(temp.path());
+        let (first, later) = (Some(Uuid::new_v4()), Some(Uuid::new_v4()));
+        let mut run = fact(RunState::Running);
+        book.record_run(&run, first);
+        book.record_run(&run, first);
+        assert_eq!(book.events[0].continued_in, None);
+        run.state = RunState::Ended("Won".into());
+        book.record_run(&run, later);
+        assert_eq!(book.events[0].continued_in, None, "only read, not played");
+        run.state = RunState::Running;
+        book.record_run(&run, later);
+        assert_eq!(book.events[0].continued_in, later);
+        assert_eq!(book.events[0].session, first);
+    }
+
+    #[test]
     fn a_new_round_is_not_an_edit_so_undo_stays() {
         let mut book = Book::default();
         let rest = book.add(Kind::LongRest, None);
@@ -1106,6 +1142,7 @@ mod tests {
             run,
             marker: String::new(),
             restores,
+            continued_in: None,
         };
         let first = Uuid::new_v4();
         let mut events = vec![event(Kind::ShortRest, None, false)];
@@ -1124,6 +1161,11 @@ mod tests {
         let state = party_state(&events, session);
         assert!(state.rested);
         assert_eq!(state.fights[0].0, second);
+        // A fight that went on under a later session counts there too.
+        let later = Some(Uuid::new_v4());
+        assert_eq!(party_state(&events, later), PartyState::default());
+        events.last_mut().unwrap().continued_in = later;
+        assert_eq!(party_state(&events, later).fights[0].0, second);
         // Another session's fight, or none, has nothing to say about this one.
         assert_eq!(party_state(&events, None), PartyState::default());
         assert_eq!(
