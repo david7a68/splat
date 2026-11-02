@@ -4801,13 +4801,14 @@ pub mod encounter_history {
             format!("Ended runs sit under their session, or under No session: {session}"),
         );
         d.state("history-open", Sizes::All);
+        d.check_tab_order("encounters, history open");
 
         // Undo is the guard on a delete, and the row comes back as it was.
-        d.click(DELETE_RUN);
+        d.click_starting(DELETE_RUN);
         d.expect(UNDO_DELETE);
         d.observe(
             "T4.6",
-            !d.has(DELETE_RUN),
+            !d.has_containing(DELETE_RUN),
             "A deleted run leaves the list, and Undo delete is offered",
         );
         d.state("run-deleted", Sizes::Default);
@@ -4816,7 +4817,7 @@ pub mod encounter_history {
 
         // Reading an old run writes nothing to the story.
         let before = d.app_mut().timeline.events.len();
-        d.click(OPEN_OLD);
+        d.click_starting(OPEN_OLD);
         d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));
         let after = d.app_mut().timeline.events.len();
         d.observe(
@@ -4828,6 +4829,13 @@ pub mod encounter_history {
 
         go_encounters(d);
         d.expect(BACK);
+        let nodes = d.nodes();
+        let open_first = nodes
+            .iter()
+            .position(|node| node.name == BACK)
+            .zip(nodes.iter().position(|node| node.name == RESUME))
+            .is_some_and(|(back, resume)| back < resume);
+        d.observe("T4.6", open_first, "The open run comes before the others");
         d.state("open-ended-run-first", Sizes::Default);
         d.click(BACK);
         d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));

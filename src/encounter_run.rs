@@ -2254,9 +2254,17 @@ impl Run {
         self.state
             .participants
             .iter()
-            .filter(|p| {
-                !p.combat_values.is_empty()
-                    && !groups_that_differ(p, &p.combat_values, p.max_hp).is_empty()
+            .filter(|p| remote_identity(p).is_some())
+            // As a first read would judge it. Before any match, a difference from the start
+            // is the DM's.
+            .filter(|p| match &p.started {
+                Some(started) if p.combat_values.is_empty() => {
+                    !shadow_differences(&SheetShadow::of(p), started).is_empty()
+                }
+                _ => {
+                    !p.combat_values.is_empty()
+                        && !groups_that_differ(p, &p.combat_values, p.max_hp).is_empty()
+                }
             })
             .map(|p| p.name.clone())
             .collect()
@@ -3156,6 +3164,30 @@ mod tests {
         assert_eq!(saved[0].standing, Standing::Ended);
         assert!(saved[0].label.starts_with("Party won · Round "));
         assert_eq!(run.live_info().unwrap().standing, Standing::Ended);
+    }
+
+    /// With no connection, nothing was ever confirmed, so these values are only in this file.
+    #[test]
+    fn a_delete_knows_about_changes_that_never_reached_dnd_beyond() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut run = run();
+        linked(&mut run, 0, "1");
+        run.keep_party_synced();
+        for index in 0..3 {
+            run.apply(Command::Initiative(index, Some(10))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        let name = run.state.participants[0].name.clone();
+        assert!(run.live_info().unwrap().unsent.is_empty(), "nothing yet");
+
+        run.apply(Command::Damage(0, 1)).unwrap();
+        run.apply(Command::Damage(1, 1)).unwrap();
+        run.save().unwrap();
+        let saved = Run::list(dir.path(), campaign).unwrap();
+        assert_eq!(saved[0].unsent, vec![name], "only the linked participant");
     }
 
     /// Another campaign can share the folder, so its file is not this campaign's to change.

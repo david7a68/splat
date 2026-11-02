@@ -697,7 +697,12 @@ impl Splat {
             });
         }
         // A run files itself under this session, and the run's own page has no room to say so.
-        if self.run_fact.is_some() && self.old_session {
+        // A run that is over files nothing more.
+        let filing = self
+            .run_fact
+            .as_ref()
+            .is_some_and(|fact| !matches!(fact.state, timeline::RunState::Ended(_)));
+        if filing && self.old_session {
             statuses.push(Status {
                 icon: icons::WARN,
                 word: "Old session",

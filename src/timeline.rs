@@ -695,9 +695,9 @@ impl Book {
         fact: &RunFact,
         session: Option<Uuid>,
     ) {
-        let opened = before.is_none_or(|before| before.id != fact.id);
+        // A new ID with a run already open is that run's copy, which keeps its place in the story.
         let known = self.events.iter().any(|event| event.run == Some(fact.id));
-        if opened && !known && matches!(fact.state, RunState::Ended(_)) {
+        if before.is_none() && !known && matches!(fact.state, RunState::Ended(_)) {
             return;
         }
         self.record_run(fact, session);
@@ -813,9 +813,17 @@ mod tests {
         book.record_change(Some(&running), &ended, None);
         assert!(book.events[0].result.starts_with("Party won"));
 
+        // Keep both, on a run that ended: the copy has a new ID, and it is the story too.
+        let copy = RunFact {
+            id: Uuid::new_v4(),
+            ..ended.clone()
+        };
+        book.record_change(Some(&ended), &copy, None);
+        assert_eq!(book.events.len(), 2);
+
         // Opened again, it keeps its event up to date.
         book.record_change(None, &ended, None);
-        assert_eq!(book.events.len(), 1);
+        assert_eq!(book.events.len(), 2);
     }
 
     #[test]

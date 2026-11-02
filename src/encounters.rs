@@ -398,6 +398,14 @@ struct Snapshot {
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
 }
 impl Snapshot {
+    /// A refresh keeps settings the DM is editing. Otherwise the file decides, or the next
+    /// save would write an old value over a change made outside Splat.
+    fn keep_edited_settings(&mut self, old: &Self) {
+        if old.options != old.saved_options {
+            self.options = old.options.clone();
+            self.saved_options = old.saved_options.clone();
+        }
+    }
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
         let document = CampaignDocument::load(campaign)?;
         let catalogue = Catalogue::load(modules, Some(campaign))?;
@@ -702,8 +710,9 @@ impl Encounters {
             self.discarded = None;
             self.discarded_group = None;
             self.discarded_options = None;
-            self.deleted_run = None;
         }
+        // Its path can be out of date after this, so undo could put it where nothing lists it.
+        self.deleted_run = None;
         self.active = Some(campaign.clone());
         self.draft = None;
         self.group_draft = None;
@@ -760,8 +769,7 @@ impl Encounters {
                             if std::mem::take(&mut self.refreshing)
                                 && let Some(old) = &self.snapshot
                             {
-                                s.options = old.options.clone();
-                                s.saved_options = old.saved_options.clone();
+                                s.keep_edited_settings(old);
                             }
                             self.snapshot = Some(s);
                         }
@@ -1012,7 +1020,7 @@ impl Encounters {
 
     /// One step back from `Discard changes`. Undo is the guard, so no dialog is needed.
     fn discard_undo(&mut self, ui: &mut egui::Ui) {
-        if self.draft_dirty() {
+        if self.draft.as_ref().is_some_and(Draft::dirty) {
             self.discarded = None;
         }
         // Each undo waits while the other kind of draft is open. Restored behind that editor,
@@ -1022,7 +1030,7 @@ impl Encounters {
             self.message = None;
             self.error = None;
         }
-        if self.draft_dirty() {
+        if self.group_draft.as_ref().is_some_and(GroupDraft::dirty) {
             self.discarded_group = None;
         }
         if self.group_undo_ready() && design::draft_discarded(ui) {
@@ -1141,6 +1149,7 @@ impl Encounters {
         }
         if reload {
             if self.has_run() {
+                self.error = None;
                 self.refresh_content(ui.ctx(), campaigns, &active.path);
             } else {
                 self.reload(ui.ctx(), active.clone(), campaigns.modules().to_vec());
@@ -1229,7 +1238,14 @@ impl Encounters {
             .id_salt("encounter_list")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                in_progress_list(ui, &page, live.as_ref(), start_blocked, &mut action);
+                in_progress_list(
+                    ui,
+                    &page,
+                    live.as_ref(),
+                    start_blocked,
+                    loading,
+                    &mut action,
+                );
                 if two_columns {
                     ui.columns(2, |columns| {
                         within_row_width(&mut columns[0], |ui| {
@@ -2164,6 +2180,7 @@ fn in_progress_list(
     page: &history::Arranged<'_>,
     live: Option<&crate::encounter_run::SavedRunInfo>,
     start_blocked: Option<&'static str>,
+    loading: bool,
     action: &mut Option<ListAction>,
 ) {
     if page.in_progress.is_empty() {
@@ -2205,7 +2222,12 @@ fn in_progress_list(
                     }
                     if Action::quiet("Delete")
                         .density(Density::Read)
-                        .name(&format!("Delete the saved run of {}", run.encounter))
+                        .name(&format!(
+                            "Delete the saved run of {}, {}",
+                            run.encounter, run.label
+                        ))
+                        // A load under way has read the list, and would bring the row back.
+                        .blocked(loading.then_some("Still reading this campaign."))
                         .show(ui)
                         .clicked()
                     {
@@ -2312,7 +2334,7 @@ fn history_list(
                         // The ending's undo lasted until the run closed, so this only reads it.
                         if Action::secondary("Open")
                             .density(Density::Read)
-                            .name(&format!("Open the run of {}", run.encounter))
+                            .name(&format!("Open the run of {}, {}", run.encounter, run.label))
                             .blocked(start_blocked)
                             .show(ui)
                             .clicked()
@@ -2388,6 +2410,42 @@ mod tests {
         let read: Setup = serde_yaml_ng::from_str(&written).unwrap();
         assert!(read.repeatable);
     }
+    /// Typing in a new group must not cost the DM the undo of an encounter they discarded.
+    #[test]
+    fn a_dirty_draft_of_the_other_kind_does_not_end_an_undo() {
+        let mut encounters = Encounters {
+            discarded: Some(Draft::new()),
+            group_draft: Some(GroupDraft::new()),
+            ..Default::default()
+        };
+        assert!(encounters.draft_dirty());
+        let _ = egui::Context::default().run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| encounters.discard_undo(ui));
+        });
+        assert!(encounters.discarded.is_some());
+    }
+
+    /// Reload is how the DM takes a change made outside Splat. Keeping the old value would
+    /// write it back over that change at the next save.
+    #[test]
+    fn a_refresh_keeps_settings_only_while_they_are_being_edited() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let mut old = Snapshot::load(&active, &[]).unwrap();
+        let mut changed = old.options.clone();
+        changed.folder = "Elsewhere".into();
+
+        let mut new = Snapshot::load(&active, &[]).unwrap();
+        new.options = changed.clone();
+        new.saved_options = changed.clone();
+        new.keep_edited_settings(&old);
+        assert_eq!(new.saved_options, changed, "the file decides");
+
+        old.options.folder = "Being typed".into();
+        new.keep_edited_settings(&old);
+        assert_eq!(new.options.folder, "Being typed", "the edit stays");
+    }
+
     /// Restored behind the group editor, the encounter draft could be neither reached nor closed.
     #[test]
     fn undo_discard_waits_while_the_other_kind_of_draft_is_open() {

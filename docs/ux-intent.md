@@ -162,7 +162,7 @@ first turn, or the exact turn left off, fast. **Context:** boundary of desk and 
 - Saved runs and run settings are in collapsed sections of the builder page.
 - A resumed ended run cannot be reopened, because undo is not saved (`:261`, `:1119`).
 
-**Done well:** T4.1 to T4.5.
+**Done well:** T4.1 to T4.6.
 
 ### W5. Build an encounter
 **Trigger:** the DM plans the next session. **Goal:** a saved roster the DM trusts.

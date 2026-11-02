@@ -263,9 +263,20 @@ mod tests {
         assert_eq!(page.in_progress.len(), 1, "one row, not two");
 
         let brand_new = run(&templates[0], Standing::Ended);
-        let page = arrange(&templates, &[], Some(&brand_new), &[], &[]);
+        let other = [run(&templates[0], Standing::Unfinished)];
+        let page = arrange(&templates, &other, Some(&brand_new), &[], &[]);
         assert!(ready_names(&page).is_empty(), "it ended while open");
-        assert_eq!(page.in_progress.len(), 1, "the way back stays first");
+        assert_eq!(page.in_progress.len(), 2);
+        assert_eq!(
+            page.in_progress[0].id, brand_new.id,
+            "the way back stays first"
+        );
+        assert!(
+            page.in_progress[1..]
+                .iter()
+                .all(|run| run.id == other[0].id),
+            "then the rest"
+        );
         assert_eq!(page.ended_count(), 0);
     }
 
