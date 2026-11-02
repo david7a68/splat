@@ -1,16 +1,24 @@
 //! Class reading layout. Keep source wording and raw definitions available.
-use super::{Note, presentation};
-use crate::reader_style as style;
+use super::{presentation, view::Links};
+use crate::design::{self, Type, colors, reader as style};
 use eframe::egui;
-use splat::content::Entry;
+use splat::content::{Entry, Reference};
 
-pub(super) fn supports(entry: &Entry) -> bool {
+fn category(entry: &Entry) -> Option<&str> {
     entry
         .fields
         .get("splat_rule_group")
         .and_then(|group| group.get("category"))
         .and_then(|value| value.as_str())
-        == Some("class")
+}
+
+pub(super) fn supports(entry: &Entry) -> bool {
+    category(entry) == Some("class")
+}
+
+/// A class or a subclass grants features.
+pub(super) fn lists_features(entry: &Entry) -> bool {
+    matches!(category(entry), Some("class" | "subclass"))
 }
 
 /// Only recognize the imported core-traits block. Authored text and any trailing
@@ -61,129 +69,198 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     }
     style::section_heading(ui, "Core traits");
     ui.add_space(6.0);
+    let mut equipment = None;
+    let mut facts = Vec::new();
     for (label, value) in rows {
         let value = presentation::overview_markdown(&value).trim().to_owned();
         if label == "Starting Equipment" {
-            ui.add_space(10.0);
-            style::section_heading(ui, "Starting equipment");
-            // Preserve the choice instruction and each option, including classes
-            // with three alternatives. Do not split on punctuation inside items.
-            let value = value
-                .replace("(A)", "\n\n- **A:**")
-                .replace("; or (B)", "\n\n- **B:**")
-                .replace("; (B)", "\n\n- **B:**")
-                .replace("; or (C)", "\n\n- **C:**");
-            style::markdown(ui, &value, false);
+            equipment = Some(value);
         } else {
-            let label = if label == "Saving Throw" {
-                "Saving throw proficiencies"
-            } else {
-                label
+            // Short enough to share the row with the value, as a spell's labels do.
+            let label = match label {
+                "Primary Ability" => "Primary ability",
+                "Hit Point Die" => "Hit point die",
+                "Saving Throw" => "Saving throws",
+                "Skill Proficiencies" => "Skills",
+                "Weapon Proficiencies" => "Weapons",
+                "Tool Proficiencies" => "Tools",
+                "Armor Training" => "Armor training",
+                other => other,
             };
-            style::markdown(ui, &format!("**{label}:** {value}"), false);
-            ui.add_space(5.0);
+            facts.push((label.to_owned(), value));
         }
     }
+    style::facts(ui, &facts);
+    if let Some(value) = equipment {
+        ui.add_space(design::S);
+        style::section_heading(ui, "Starting equipment");
+        ui.add_space(6.0);
+        // Preserve the choice instruction and each option, including classes
+        // with three alternatives. Do not split on punctuation inside items.
+        let value = value
+            .replace("(A)", "\n\n(A)")
+            .replace("; or (B)", "\n\n(B)")
+            .replace("; (B)", "\n\n(B)")
+            .replace("; or (C)", "\n\n(C)");
+        let mut options = Vec::new();
+        for part in value.split("\n\n").map(str::trim) {
+            let option = ["A", "B", "C"]
+                .into_iter()
+                .find_map(|letter| Some((letter, part.strip_prefix(&format!("({letter})"))?)));
+            if let Some((letter, text)) = option {
+                options.push((format!("Option {letter}"), text.trim().to_owned()));
+            } else if !part.is_empty() {
+                style::markdown(ui, part);
+            }
+        }
+        style::facts(ui, &options);
+    }
     if !remainder.is_empty() {
-        ui.collapsing("Additional source text", |ui| {
+        design::section(ui, "Additional source text", |ui| {
             // Keep printed progression rows separate instead of joining a table
             // into prose; the named feature list is shown below.
-            style::markdown(
-                ui,
-                &remainder.lines().collect::<Vec<_>>().join("  \n"),
-                false,
-            );
+            style::markdown(ui, &remainder.lines().collect::<Vec<_>>().join("  \n"));
         });
     }
     true
 }
 
-struct Feature<'a> {
+struct Feature {
     level: Option<u32>,
-    name: &'a str,
+    name: String,
     target: Option<usize>,
 }
 
-fn features<'a>(entry: &'a Entry, notes: &'a [Note]) -> Vec<Feature<'a>> {
+fn features(entry: &Entry, links: &dyn Links) -> Vec<Feature> {
     let mut features = Vec::new();
-    for member in entry
+    // Some classes list their members, and others grant their features. Both are the list.
+    let members = entry
         .fields
         .get("splat_rule_group")
         .and_then(|group| group.get("members"))
         .and_then(|members| members.as_sequence())
         .into_iter()
+        .flatten();
+    let granted = entry
+        .fields
+        .get("splat_rule")
+        .and_then(|rule| rule.get("parameters"))
+        .and_then(|parameters| parameters.get("feature_grants"))
+        .and_then(|grants| grants.as_sequence())
+        .into_iter()
         .flatten()
-    {
+        .filter_map(|grant| grant.get("definition"));
+    let mut seen = std::collections::BTreeSet::new();
+    for member in members.chain(granted) {
         let key = member.get("key").and_then(|v| v.as_str());
         let id = member.get("id").and_then(|v| v.as_str());
-        let id = id.and_then(|id| uuid::Uuid::parse_str(id).ok());
-        let mut targets = notes.iter().enumerate().filter_map(|(index, note)| {
-            note.entry
-                .as_ref()
-                .filter(|entry| {
-                    key.is_some_and(|key| entry.key.as_deref() == Some(key)) || id == Some(entry.id)
-                })
-                .map(|_| index)
-        });
-        let target = targets.next().filter(|_| targets.next().is_none());
-        let name = target.map(|i| notes[i].name()).unwrap_or_else(|| {
-            key.or_else(|| member.get("id").and_then(|value| value.as_str()))
-                .unwrap_or("Unresolved feature")
-        });
+        let reference = key.or(id);
+        if !seen.insert(reference) {
+            continue;
+        }
+        let target = key
+            .map(|key| Reference::Key(key.to_owned()))
+            .or(id
+                .and_then(|id| uuid::Uuid::parse_str(id).ok())
+                .map(Reference::Id))
+            .and_then(|reference| links.find(&reference));
+        let name = target.as_ref().map_or_else(
+            || reference.unwrap_or("Unresolved feature").to_owned(),
+            |(_, name)| name.clone(),
+        );
         let (level, name) = name
             .strip_prefix("Level ")
             .and_then(|name| name.split_once(": "))
             .and_then(|(level, name)| level.parse().ok().map(|level| (Some(level), name)))
-            .unwrap_or((None, name));
+            .unwrap_or((None, name.as_str()));
         features.push(Feature {
             level,
-            name,
-            target,
+            name: name.to_owned(),
+            target: target.map(|(index, _)| index),
         });
     }
     features.sort_by(|a, b| {
         a.level
             .unwrap_or(u32::MAX)
             .cmp(&b.level.unwrap_or(u32::MAX))
-            .then(a.name.cmp(b.name))
+            .then(a.name.cmp(&b.name))
     });
     features
 }
 
-pub(super) fn show_features(
-    ui: &mut egui::Ui,
-    entry: &Entry,
-    notes: &[Note],
-    dirty: bool,
-) -> Option<usize> {
-    let features = features(entry, notes);
-    if features.is_empty() {
-        return None;
-    }
-    ui.add_space(14.0);
-    style::section_heading(ui, "Class features");
-    ui.add_space(6.0);
+/// What else a class has, by the keys the definitions use: its progression and spell list.
+fn related(entry: &Entry, links: &dyn Links) -> Vec<(usize, String)> {
+    let class = entry
+        .fields
+        .get("splat_rule")
+        .and_then(|rule| rule.get("parameters"))
+        .and_then(|parameters| parameters.get("class"))
+        .and_then(|class| class.as_str());
+    let Some(class) = class else {
+        return Vec::new();
+    };
+    [
+        format!("dnd2024:tables/{class}_progression"),
+        format!("dnd2024:rules/{class}_{class}_spell_list"),
+    ]
+    .into_iter()
+    .filter_map(|key| links.find(&Reference::Key(key)))
+    .collect()
+}
+
+pub(super) fn show_features(ui: &mut egui::Ui, entry: &Entry, links: &dyn Links) -> Option<usize> {
+    let features = features(entry, links);
+    let related = related(entry, links);
     let mut selected = None;
+    if !related.is_empty() {
+        ui.add_space(design::M);
+        style::section_heading(ui, "Related");
+        for (target, name) in related {
+            if design::link(ui, &name).clicked() {
+                selected = Some(target);
+            }
+        }
+    }
+    if features.is_empty() {
+        return selected;
+    }
+    ui.add_space(design::M);
+    style::section_heading(
+        ui,
+        if supports(entry) {
+            "Class features"
+        } else {
+            "Subclass features"
+        },
+    );
     for feature in features {
         ui.horizontal_top(|ui| {
-            ui.add_sized(
-                [60.0, 0.0],
-                egui::Label::new(
-                    feature
-                        .level
-                        .map_or("—".into(), |level| format!("Level {level}")),
-                ),
+            let (rect, _) = ui.allocate_exact_size(
+                egui::vec2(60.0, Type::Stat.line().max(24.0)),
+                egui::Sense::hover(),
+            );
+            let level = feature
+                .level
+                .map_or("—".into(), |level| format!("Level {level}"));
+            let galley = design::one_line(ui, &level, Type::Stat.font(ui), colors().muted, 60.0);
+            ui.painter().galley(
+                egui::pos2(rect.left(), rect.center().y - galley.size().y / 2.0),
+                galley,
+                colors().muted,
             );
             if let Some(target) = feature.target {
-                let response = ui.add_enabled(!dirty, egui::Link::new(feature.name));
-                if response
-                    .on_disabled_hover_text("Save or discard changes before opening a feature.")
-                    .clicked()
-                {
+                if design::link(ui, &feature.name).clicked() {
                     selected = Some(target);
                 }
             } else {
-                ui.add(egui::Label::new(format!("{} (unavailable)", feature.name)).wrap());
+                ui.add(
+                    egui::Label::new(
+                        Type::Stat
+                            .rich(ui, format!("{} (unavailable)", feature.name))
+                            .color(colors().muted),
+                    )
+                    .wrap(),
+                );
             }
         });
     }

@@ -1,0 +1,1 @@
+# path rule count. Shrink only. See src/design/lint.rs.

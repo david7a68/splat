@@ -1,0 +1,194 @@
+{
+  "violations": {
+    "accessible-name/egui-chrome": {
+      "campaign-content": 11,
+      "dialogs": 1,
+      "empty": 1,
+      "encounter-build": 5,
+      "encounter-run": 3,
+      "gallery": 6,
+      "library-author": 1,
+      "library-browse": 27,
+      "library-scope": 3,
+      "library-to-encounter": 3,
+      "nav-state": 8,
+      "party": 7,
+      "party-from-run": 5,
+      "prep-to-table": 3,
+      "run-absent-player": 6,
+      "run-edge-states": 3,
+      "run-large-roster": 3,
+      "run-long-names": 8,
+      "run-lookup": 1,
+      "run-restart": 6,
+      "run-roster-conflict": 3,
+      "run-sync-conflict": 6,
+      "run-sync-states": 4,
+      "signed-in": 8
+    },
+    "no-overlap/egui-chrome": {
+      "dialogs": 4,
+      "library-author": 2,
+      "library-scope": 5
+    },
+    "target-size/egui-chrome": {
+      "campaign-content": 11,
+      "empty": 1,
+      "encounter-build": 5,
+      "encounter-run": 3,
+      "gallery": 6,
+      "library-browse": 27,
+      "library-scope": 2,
+      "library-to-encounter": 3,
+      "nav-state": 8,
+      "party": 7,
+      "party-from-run": 5,
+      "prep-to-table": 3,
+      "run-absent-player": 6,
+      "run-edge-states": 3,
+      "run-large-roster": 3,
+      "run-long-names": 8,
+      "run-lookup": 1,
+      "run-restart": 6,
+      "run-roster-conflict": 3,
+      "run-sync-conflict": 6,
+      "run-sync-states": 4,
+      "signed-in": 8
+    }
+  },
+  "task_cost": {
+    "campaign-content": {
+      "change and discard a selection": 2,
+      "open a campaign entry for editing": 2,
+      "save the campaign entry": 4,
+      "see a partial package selection": 1
+    },
+    "dialogs": {
+      "ask to close with unsaved changes": 8,
+      "copy an entry to a campaign": 7,
+      "open the copy dialog": 3,
+      "return to the draft": 1
+    },
+    "empty": {
+      "add a first campaign": 6,
+      "see the no-campaign state": 1,
+      "see the other empty tabs": 4
+    },
+    "encounter-build": {
+      "T5.3: save a roster of party and monsters from a cold start": 9,
+      "open a saved encounter": 5
+    },
+    "encounter-run": {
+      "T1.1: advance the turn": 1,
+      "T1.2: damage a named participant who is not current": 3,
+      "T1.5: add an official condition": 3,
+      "resume a run in progress": 1,
+      "run a turn, damage, undo and a lookup by keyboard alone": 7,
+      "start a new run and roll initiative": 4,
+      "undo the last action": 1
+    },
+    "gallery": {
+      "see every part of the design system": 3
+    },
+    "library-author": {
+      "change the note": 3,
+      "create a new entry": 4,
+      "handle a failed save": 4,
+      "open a local package": 2,
+      "open a note for editing": 2,
+      "open and close the package form": 3,
+      "save with the keyboard": 1,
+      "try each way out of a failed save": 19
+    },
+    "library-browse": {
+      "open a class": 4,
+      "open a creature stat block": 1,
+      "open a spell": 4,
+      "return through the list and open another entry": 3,
+      "scroll down a long entry": 12,
+      "search for dragons": 2
+    },
+    "library-scope": {
+      "A9: show everything": 2
+    },
+    "library-to-encounter": {
+      "copy an entry and use it in an encounter": 9,
+      "save the encounter with the copy": 1
+    },
+    "nav-state": {
+      "return to every page": 5,
+      "set up state on three pages": 10
+    },
+    "nav-table": {
+      "walk section 3's table": 22
+    },
+    "party": {
+      "change character": 1,
+      "read every sheet page": 11,
+      "see a campaign with no link": 2,
+      "see a linked campaign with no characters": 2,
+      "see the party and a sheet": 1
+    },
+    "party-from-run": {
+      "T7.1: open a participant's sheet from the run": 1,
+      "read a page and return to the run": 2,
+      "resume the run": 1
+    },
+    "prep-to-table": {
+      "T4.1: cold start to run setup": 1,
+      "T4.3: enter one player's initiative": 2,
+      "begin combat": 1,
+      "enter the other players' initiative": 8,
+      "roll NPC initiative": 1
+    },
+    "run-edge-states": {
+      "record a long effect": 6,
+      "see everyone absent": 16,
+      "see the run changed on disk": 19
+    },
+    "run-folder-defect": {
+      "edit the run folder with no draft": 5
+    },
+    "run-large-roster": {
+      "T1.1: advance the turn with 12 participants": 1,
+      "advance through a full round of 20": 20,
+      "open a run with 12 participants": 1,
+      "open a run with 20 participants": 1
+    },
+    "run-lookup": {
+      "T2.1: read a spell from a run": 2,
+      "T2.2: return to the run": 1,
+      "be in a run, with a participant selected": 2,
+      "read the creature's details in the run": 1,
+      "try a lookup with a draft open": 2
+    },
+    "run-restart": {
+      "be in a run": 3,
+      "restart": 0,
+      "restart on a page": 3
+    },
+    "run-resume": {
+      "T4.2: cold start to the interrupted turn": 1
+    },
+    "run-roster-conflict": {
+      "show a conflict with 12 rows": 1,
+      "tab through a roster of 20": 1
+    },
+    "run-sync-conflict": {
+      "T3.2: resolve a conflict": 2,
+      "resume the run": 1
+    },
+    "run-sync-states": {
+      "show every sync state": 1
+    },
+    "settings": {
+      "edit a campaign's details": 5,
+      "find campaign management": 0,
+      "open settings": 1,
+      "try to connect without a network": 5
+    },
+    "signed-in": {
+      "see the remote campaign list": 2
+    }
+  }
+}

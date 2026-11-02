@@ -1,6 +1,6 @@
 //! A common reading layout for all non-creature entries.
 use super::presentation::{self, ReadingSection};
-use crate::reader_style as style;
+use crate::design::{Type, colors, reader as style};
 use eframe::egui;
 use splat::content::Entry;
 
@@ -77,6 +77,7 @@ fn display_value(value: &serde_yaml_ng::Value) -> String {
             .join(", "),
         Value::Mapping(values) => values
             .iter()
+            .filter(|(_, value)| !blank(value))
             .map(|(key, value)| {
                 format!(
                     "{}: {}",
@@ -93,7 +94,7 @@ fn display_value(value: &serde_yaml_ng::Value) -> String {
     }
 }
 
-fn item_summary(ui: &mut egui::Ui, entry: &Entry) {
+fn item_summary(ui: &mut egui::Ui, entry: &Entry, printed: Option<&str>) {
     let Some(item) = entry.fields.get("splat_item").and_then(|v| v.as_mapping()) else {
         return;
     };
@@ -103,6 +104,8 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry) {
         .collect::<Vec<_>>()
         .join(" · ")
         .replace('_', " ");
+    // One line: the book's own has attunement in it, and says what the fields say.
+    let identity = printed.map_or(identity, str::to_owned);
     if !identity.is_empty() {
         style::identity(ui, &identity);
     }
@@ -162,9 +165,12 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry) {
         {
             if value.is_mapping() || value.is_sequence() {
                 egui::CollapsingHeader::new(
-                    egui::RichText::new(style::human_label(key)).color(style::ACCENT),
+                    Type::StatLabel
+                        .rich(ui, style::human_label(key))
+                        .color(colors().text),
                 )
                 .id_salt(("item_summary", key))
+                .icon(crate::design::section_icon)
                 .show(ui, |ui| structured_value(ui, value));
                 continue;
             }
@@ -174,6 +180,18 @@ fn item_summary(ui: &mut egui::Ui, entry: &Entry) {
                 &display_value(value),
             );
         }
+    }
+}
+
+/// A value with nothing to read. Sheet copies often have these, and they must not show
+/// as a label with no text after it.
+fn blank(value: &serde_yaml_ng::Value) -> bool {
+    match value {
+        serde_yaml_ng::Value::Null => true,
+        serde_yaml_ng::Value::String(text) => text.trim().is_empty(),
+        serde_yaml_ng::Value::Sequence(values) => values.iter().all(blank),
+        serde_yaml_ng::Value::Mapping(values) => values.values().all(blank),
+        _ => false,
     }
 }
 
@@ -210,9 +228,10 @@ fn preparation_summary(ui: &mut egui::Ui, entry: &Entry, has_source: bool) {
         ]
         .into_iter()
         .filter_map(|key| Some((style::human_label(key), display_value(spell.get(key)?))))
+        .filter(|(_, value)| !value.is_empty() && value != "—")
         .collect::<Vec<_>>();
         style::facts(ui, &facts);
-        if let Some(components) = spell.get("components") {
+        if let Some(components) = spell.get("components").filter(|value| !blank(value)) {
             style::detail(ui, "Components", &display_value(components));
         }
     }
@@ -254,14 +273,25 @@ pub(super) fn show(
     builtin: bool,
     has_summary: bool,
 ) {
-    ui.add_space(12.0);
+    ui.add_space(crate::design::S);
     if let Some(entry) = entry {
-        item_summary(ui, entry);
+        let printed = sections
+            .iter()
+            .find(|section| section.title == "Source text")
+            .filter(|_| builtin)
+            .and_then(|section| {
+                source_facts(section.body)
+                    .0
+                    .into_iter()
+                    .find(|(label, _)| label == "Identity")
+                    .map(|(_, identity)| identity)
+            });
+        item_summary(ui, entry, printed.as_deref());
         preparation_summary(ui, entry, sections.iter().any(|s| s.title == "Source text"));
     }
     for section in sections {
         if section.title == "Source text" && has_summary {
-            ui.collapsing("Source text", |ui| style::markdown(ui, section.body, false));
+            crate::design::quiet_section(ui, "Source text", |ui| style::markdown(ui, section.body));
             continue;
         }
         if section.body.contains("<!-- splat:") {
@@ -282,11 +312,9 @@ pub(super) fn show(
                 let (mut facts, prose) = source_facts(section.body);
                 if let Some(index) = facts.iter().position(|(label, _)| label == "Identity") {
                     let identity = facts.remove(index).1;
+                    // An item's is already its identity line, above.
                     if !entry.is_some_and(|e| e.fields.contains_key("splat_item")) {
                         style::identity(ui, &identity);
-                    } else {
-                        // Preserve the source qualifier even when item metadata differs.
-                        style::detail(ui, "Source classification", &identity);
                     }
                 }
                 let (cards, details): (Vec<_>, Vec<_>) =
@@ -300,11 +328,19 @@ pub(super) fn show(
                 for (label, value) in details {
                     style::detail(ui, &label, &value);
                 }
-                style::section_heading(ui, "Overview");
+                ui.add_space(crate::design::S);
                 style::source_prose(ui, &presentation::overview_markdown(&prose));
             } else {
-                style::section_heading(ui, &section.title);
-                style::markdown(ui, section.body, false);
+                // An intro has no printed heading, so the reader adds none.
+                if section.title != "Overview" {
+                    style::section_heading(ui, &section.title);
+                }
+                // A hand-written stat block's actions read as the book's do.
+                if entry.is_some_and(super::creature::has_stats) {
+                    style::source_prose(ui, section.body);
+                } else {
+                    style::markdown(ui, section.body);
+                }
             }
         }
     }

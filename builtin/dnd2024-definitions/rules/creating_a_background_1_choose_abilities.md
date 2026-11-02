@@ -24,18 +24,6 @@ Strength or Dexterity. These abilities are ideal for\
 a background involving physical exertion.\
 Constitution. This ability is ideal for a background\
 that involves endurance or long hours of activity.\
-Foraging DC Navigation DC Search DC\
-20 10 10\
-10 5 15\
-20 10 10\
-10 15 15\
-15 5 15\
-15 10 15\
-20 15 20\
-10 15 20\
-20 10 20\
-20 15 15\
-15 10 15\
 
 <!-- SRD page 193 -->
 

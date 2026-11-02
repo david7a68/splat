@@ -1,0 +1,103 @@
+//! The app's routes to per-user state and to values that differ between runs.
+//!
+//! Test builds compile a closed variant of each route, so a test can never reach
+//! the user's character cache, a native file dialog, or real time and randomness.
+//! The settings store, keyring and sign-in are closed the same way where they live
+//! (`persistence::Store::user`, `credentials::Vault`, `auth::connect`). Test builds can
+//! make a `Session`, to show the signed-in state, but each route that would use one
+//! returns first (`dndbeyond::fetch`, `party_sync::refresh`, `party_stream::Stream::start`,
+//! `combat_sync::CombatSync::tick`). So no D&D Beyond request is ever sent.
+use splat::character::Cache;
+use std::path::PathBuf;
+use uuid::Uuid;
+
+#[cfg(not(test))]
+pub fn character_cache() -> Result<Cache, String> {
+    Cache::user()
+}
+
+#[cfg(not(test))]
+pub fn pick_folder() -> Option<PathBuf> {
+    rfd::FileDialog::new().pick_folder()
+}
+
+#[cfg(not(test))]
+pub fn new_uuid() -> Uuid {
+    Uuid::new_v4()
+}
+
+#[cfg(not(test))]
+pub fn now() -> u64 {
+    splat::character::now()
+}
+
+/// When a file last changed, in seconds since the epoch.
+#[cfg(not(test))]
+pub fn file_time(path: &std::path::Path) -> Option<u64> {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|elapsed| elapsed.as_secs())
+}
+
+#[cfg(test)]
+pub use closed::{character_cache, file_time, new_uuid, now, pick_folder};
+
+#[cfg(test)]
+pub mod closed {
+    use super::*;
+    use std::{cell::Cell, sync::OnceLock};
+
+    /// A fixed clock, so "Fetched 3 h ago" renders the same on every run.
+    pub const FIXED_NOW: u64 = 1_767_236_400;
+
+    static CACHE_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+    thread_local! {
+        static NEXT_UUID: Cell<Option<u128>> = const { Cell::new(None) };
+    }
+
+    /// Open the character cache at a temporary folder for this test process.
+    /// Without this call, every character cache request fails.
+    pub fn use_cache_root(root: PathBuf) {
+        assert!(root.starts_with(std::env::temp_dir()));
+        assert_eq!(CACHE_ROOT.get_or_init(|| root.clone()), &root);
+    }
+
+    /// Make `new_uuid` repeatable on this thread. Other tests keep random IDs.
+    pub fn repeatable_uuids(start: u128) {
+        NEXT_UUID.with(|next| next.set(Some(start)));
+    }
+
+    pub fn character_cache() -> Result<Cache, String> {
+        CACHE_ROOT
+            .get()
+            .cloned()
+            .map(Cache::at)
+            .ok_or_else(|| "Test builds have no character cache.".to_owned())
+    }
+
+    pub fn pick_folder() -> Option<PathBuf> {
+        None
+    }
+
+    pub fn new_uuid() -> Uuid {
+        NEXT_UUID.with(|next| match next.get() {
+            Some(value) => {
+                next.set(Some(value + 1));
+                Uuid::from_u128(value)
+            }
+            None => Uuid::new_v4(),
+        })
+    }
+
+    pub fn now() -> u64 {
+        FIXED_NOW
+    }
+
+    /// The fixed clock, for a file too: a real one would change every capture of its date.
+    pub fn file_time(_: &std::path::Path) -> Option<u64> {
+        Some(FIXED_NOW)
+    }
+}

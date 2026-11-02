@@ -11,6 +11,7 @@ pub struct Session {
     cookie: Zeroizing<String>,
     token: Zeroizing<String>,
     refresh_at: Instant,
+    expires_at: Instant,
 }
 
 impl Session {
@@ -62,6 +63,23 @@ impl Session {
         Instant::now() >= self.refresh_at
     }
 
+    /// The token no longer works. Before this, a failed refresh changes nothing yet.
+    pub fn expired(&self) -> bool {
+        Instant::now() >= self.expires_at
+    }
+
+    /// A session no request can use: test builds have no route to D&D Beyond. It lets a
+    /// test show the signed-in state.
+    #[cfg(test)]
+    pub fn for_test(refresh_in: Duration, expires_in: Duration) -> Self {
+        Self {
+            cookie: Zeroizing::new("test-cookie".to_owned()),
+            token: Zeroizing::new("test-token".to_owned()),
+            refresh_at: Instant::now() + refresh_in,
+            expires_at: Instant::now() + expires_in,
+        }
+    }
+
     pub(crate) fn website_request(
         &self,
         request: reqwest::blocking::RequestBuilder,
@@ -106,7 +124,21 @@ fn cookie_header(cookie: &str) -> Result<header::HeaderValue, String> {
     Ok(value)
 }
 
+#[cfg(not(test))]
 pub fn connect(cookie: Zeroizing<String>) -> Result<Session, String> {
+    exchange(AUTH_URL, cookie)
+}
+
+// Every D&D Beyond request needs a Session. Test builds cannot sign in, so they
+// cannot reach the network, and the UI shows its ordinary connection failure.
+#[cfg(test)]
+pub fn connect(_: Zeroizing<String>) -> Result<Session, String> {
+    Err("Could not reach D&D Beyond. Check your connection and try again.".into())
+}
+
+/// For the `#[ignore]`d live tests only, which a person runs on purpose.
+#[cfg(test)]
+pub fn connect_live(cookie: Zeroizing<String>) -> Result<Session, String> {
     exchange(AUTH_URL, cookie)
 }
 
@@ -147,6 +179,7 @@ fn exchange(url: &str, cookie: Zeroizing<String>) -> Result<Session, String> {
         cookie,
         token,
         refresh_at: Instant::now() + refresh_in,
+        expires_at: Instant::now() + Duration::from_secs(data.ttl.min(300)),
     })
 }
 

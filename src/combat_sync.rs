@@ -418,6 +418,39 @@ struct Pending {
     receiver: mpsc::Receiver<Result<Outcome, String>>,
     sent: Groups,
 }
+/// The sync states the brief names. Each has a word and an icon on the participant row.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SyncState {
+    Off,
+    FirstRead,
+    Matching,
+    Pending,
+    Conflict,
+    ReadOnly,
+    Error,
+    /// The session ended under a running sync. It needs a connection and `Sync party`.
+    Stopped,
+    /// Sync is off, and this row has a change it has not sent.
+    NotSent,
+}
+
+const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings, then select Sync party. Splat reads the sheet first, and asks before it replaces a value you changed.";
+/// Groups the run holds as its own values, so a saved run keeps them.
+const KEPT_BY_THE_RUN: [&str; 3] = ["hp", "death", "conditions"];
+const DIFFER_AFTER_READ: &str =
+    "Splat and D&D Beyond differ, and you changed this while sync was off. Choose which to keep.";
+
+/// A sheet with this damage and nothing else recorded. Test builds cannot read a live one.
+#[cfg(test)]
+fn simulated_sheet(character: u64, max_hp: i64, damage: i64, can_edit: bool) -> Remote {
+    Remote::from_raw(
+        character,
+        max_hp,
+        &json!({"id":character,"canEdit":can_edit,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
+    )
+    .expect("simulated sheet")
+}
+
 #[derive(Default)]
 pub struct CombatSync {
     pub enabled: bool,
@@ -432,6 +465,18 @@ pub struct CombatSync {
     refresh_only: bool,
     pub error: Option<String>,
     pub updated: bool,
+    session_lost: bool,
+    /// The last sheet values read before this sync was started again. What the run changed
+    /// since then is the DM's own, and the next first read must not replace it unasked.
+    matched: Option<Groups>,
+    /// Unsent values the run does not hold itself, such as spell slots. They last until the
+    /// next first read, where a difference asks. They are not in a saved run.
+    unsent: Groups,
+    /// A first read arrived, and the run has not compared it with its values yet.
+    first_read: bool,
+    /// Never talks to D&D Beyond. It only shows the state it was given.
+    #[cfg(test)]
+    simulated: bool,
 }
 impl Drop for CombatSync {
     fn drop(&mut self) {
@@ -441,6 +486,47 @@ impl Drop for CombatSync {
     }
 }
 impl CombatSync {
+    /// A sync in a state test builds cannot read from a live sheet. It only shows that.
+    #[cfg(test)]
+    pub fn simulated_state(state: SyncState, character: u64, max_hp: i64, damage: i64) -> Self {
+        if state == SyncState::Conflict {
+            return Self::simulated_conflict(character, max_hp, damage);
+        }
+        let mut sync = Self::default();
+        sync.simulated = true;
+        sync.enabled = state != SyncState::Off;
+        if matches!(state, SyncState::FirstRead | SyncState::Off) {
+            return sync;
+        }
+        let read = simulated_sheet(character, max_hp, damage, state != SyncState::ReadOnly);
+        sync.desired = read.groups.clone();
+        sync.remote = Some(read);
+        if state == SyncState::Pending {
+            sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 1).into();
+        }
+        if state == SyncState::Error {
+            sync.error = Some("Could not read this character from D&D Beyond.".into());
+        }
+        sync
+    }
+
+    /// The state after a refresh finds that D&D Beyond and Splat changed the same HP.
+    /// Test builds cannot read a live sheet, so a visual test shows the panel this way.
+    #[cfg(test)]
+    pub fn simulated_conflict(character: u64, max_hp: i64, damage: i64) -> Self {
+        let read = simulated_sheet(character, max_hp, damage, true);
+        let mut sync = Self::default();
+        sync.enabled = true;
+        sync.simulated = true;
+        sync.remote = Some(read.clone());
+        sync.desired = read.groups.clone();
+        sync.desired.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 4).into();
+        let mut changed = read;
+        changed.groups.get_mut("hp").expect("HP group")["removedHitPoints"] = (damage + 9).into();
+        sync.accept_read(changed);
+        sync
+    }
+
     pub fn stop(&mut self) {
         if let Some(gate) = &self.gate {
             gate.store(false, Ordering::SeqCst);
@@ -449,8 +535,101 @@ impl CombatSync {
         self.gate = None;
         self.enabled = false;
     }
+    /// The session ended. This sync stops, and says so until the DM starts it again.
+    pub fn session_ended(&mut self) {
+        #[cfg(test)]
+        if self.simulated {
+            return;
+        }
+        if self.enabled {
+            self.stop();
+            self.error = Some(SESSION_LOST.into());
+            self.session_lost = true;
+        }
+    }
+    pub fn session_lost(&self) -> bool {
+        self.session_lost
+    }
+    /// Changes D&D Beyond has not confirmed: on their way, or stranded with sync off.
+    pub fn unconfirmed(&self) -> bool {
+        (self.enabled && (self.busy() || self.dirty())) || self.stranded()
+    }
+    /// Sync is off, by the session or by the DM, and these changes have not gone.
+    pub fn stranded(&self) -> bool {
+        !self.enabled && self.dirty()
+    }
+    /// Off, with a read to compare the run's values with.
+    pub fn stopped_after_read(&self) -> bool {
+        !self.enabled && self.remote.is_some()
+    }
+    /// Sync is off, and values only this sync holds have not gone. A close loses them.
+    pub fn unsent_only_here(&self) -> bool {
+        !self.enabled && !self.only_here().is_empty()
+    }
+    fn only_here(&self) -> Groups {
+        self.desired
+            .iter()
+            .filter(|(key, value)| {
+                !KEPT_BY_THE_RUN.contains(&key.as_str())
+                    && self.remote.as_ref().and_then(|r| r.groups.get(*key)) != Some(*value)
+            })
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect()
+    }
+    fn keep_unsent(&mut self) {
+        self.unsent.extend(self.only_here());
+    }
+    /// What D&D Beyond last confirmed.
+    pub fn confirmed(&self) -> Option<&Groups> {
+        self.remote.as_ref().map(|remote| &remote.groups)
+    }
+    /// Let this sync react to the session, as a real one does.
+    #[cfg(test)]
+    pub fn stop_simulating(&mut self) {
+        self.simulated = false;
+    }
     pub fn ready(&self) -> bool {
         self.enabled && self.remote.is_some()
+    }
+    pub fn state(&self) -> SyncState {
+        if !self.blocked.is_empty() {
+            SyncState::Conflict
+        } else if self.stranded() {
+            SyncState::NotSent
+        } else if self.session_lost {
+            SyncState::Stopped
+        } else if self.error.is_some() {
+            SyncState::Error
+        } else if !self.enabled {
+            SyncState::Off
+        } else {
+            match &self.remote {
+                None => SyncState::FirstRead,
+                Some(remote) if !remote.can_edit => SyncState::ReadOnly,
+                Some(_) if self.busy() || self.dirty() => SyncState::Pending,
+                Some(_) => SyncState::Matching,
+            }
+        }
+    }
+    /// Test builds have no session, and `tick` stops sync without one. Keep it on.
+    #[cfg(test)]
+    pub fn keep_without_connection(&mut self) {
+        self.simulated = true;
+    }
+    #[cfg(not(test))]
+    pub fn keep_without_connection(&mut self) {}
+    /// Turn sync on. It reads the sheet before it writes anything.
+    pub fn start(&mut self) {
+        self.enabled = true;
+        self.keep_unsent();
+        if let Some(remote) = self.remote.take() {
+            self.matched = Some(remote.groups);
+        }
+        self.desired.clear();
+        self.blocked.clear();
+        self.next = None;
+        self.error = None;
+        self.session_lost = false;
     }
     pub fn busy(&self) -> bool {
         self.pending.is_some()
@@ -487,13 +666,18 @@ impl CombatSync {
         campaign: &str,
         id: &str,
     ) {
+        // Test builds have no route to D&D Beyond. A signed-in test stays on its first read.
+        if cfg!(test) {
+            let _ = (ctx, &session, epoch, campaign, id);
+            return;
+        }
+        // Its words and unsent changes stay until the DM starts it again.
+        if self.session_lost {
+            return;
+        }
         let scope = (epoch, campaign.to_owned(), id.to_owned());
         if self.scope.as_ref() != Some(&scope) {
-            let enabled = self.enabled;
-            self.stop();
-            *self = Self::default();
-            self.enabled = enabled;
-            self.scope = Some(scope);
+            self.enter_scope(scope);
         }
         if !self.enabled || session.is_none() {
             if self.pending.is_some() || session.is_none() {
@@ -600,8 +784,82 @@ impl CombatSync {
         }
         ctx.request_repaint_after(Duration::from_millis(500));
     }
+    /// A new session or character starts clean, apart from what was last matched: that is
+    /// how the next read can tell the DM's changes from the sheet's.
+    fn enter_scope(&mut self, scope: (u64, String, String)) {
+        let enabled = self.enabled;
+        self.keep_unsent();
+        let unsent = std::mem::take(&mut self.unsent);
+        let matched = self
+            .remote
+            .take()
+            .map(|remote| remote.groups)
+            .or_else(|| self.matched.take());
+        self.stop();
+        *self = Self::default();
+        self.enabled = enabled;
+        self.scope = Some(scope);
+        self.matched = matched;
+        self.unsent = unsent;
+    }
+    /// True once for each first read, for the run to compare with its own values.
+    pub fn take_first_read(&mut self) -> bool {
+        std::mem::take(&mut self.first_read)
+    }
+    pub fn take_matched(&mut self) -> Option<Groups> {
+        self.matched.take()
+    }
+    /// The run's value and the sheet's differ, and the DM changed the run's: their choice.
+    pub fn hold_conflict(&mut self, key: &str, local: Value) {
+        self.desired.insert(key.into(), local);
+        self.blocked.insert(key.into(), DIFFER_AFTER_READ.into());
+    }
+    /// A change the DM recorded while sync was off. It cannot be sent yet, and it counts.
+    pub fn note_while_stopped(&mut self, key: &str, local: Value) {
+        self.desired.insert(key.into(), local);
+    }
+    pub fn use_remote(&mut self, key: &str) {
+        self.updated = true;
+        if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(key)) {
+            self.desired.insert(key.to_owned(), value.clone());
+        } else {
+            self.desired.remove(key);
+        }
+        self.blocked.remove(key);
+    }
+    pub fn keep_local(&mut self, key: &str) {
+        self.blocked.remove(key);
+        self.changed = None;
+        self.next = None;
+    }
+    /// A read from D&D Beyond, with the sheet's HP. Test builds have no route to a live one.
+    #[cfg(test)]
+    pub fn simulate_read(&mut self, character: u64, max_hp: i64, damage: i64) {
+        self.accept_read(simulated_sheet(character, max_hp, damage, true));
+    }
+    /// A read of a sheet given in full, in D&D Beyond's own fields.
+    #[cfg(test)]
+    pub fn simulate_sheet(&mut self, character: u64, max_hp: i64, sheet: &Value) {
+        self.accept_read(Remote::from_raw(character, max_hp, sheet).expect("simulated sheet"));
+    }
+    #[cfg(test)]
+    fn accept_read(&mut self, remote: Remote) {
+        let sent = self.desired.clone();
+        self.accept(
+            Outcome {
+                remote,
+                blocked: BTreeMap::new(),
+            },
+            &sent,
+        );
+    }
+    #[cfg(test)]
+    pub fn conflict_keys(&self) -> Vec<String> {
+        self.blocked.keys().cloned().collect()
+    }
     fn accept(&mut self, outcome: Outcome, sent: &Groups) {
         let initial = self.remote.is_none();
+        self.first_read |= initial;
         let previous = self
             .remote
             .as_ref()
@@ -626,7 +884,7 @@ impl CombatSync {
             {
                 self.blocked.insert(
                     key.clone(),
-                    "The live sheet and local values both changed. Choose which to keep.".into(),
+                    "Splat and D&D Beyond both changed this. Choose which to keep.".into(),
                 );
             }
         }
@@ -645,9 +903,93 @@ impl CombatSync {
             }
         }
         self.blocked.extend(outcome.blocked);
+        // Back from a stop: an unsent value the sheet does not have is the DM's to settle.
+        for (key, value) in std::mem::take(&mut self.unsent) {
+            if outcome.remote.groups.get(&key).is_some_and(|v| v != &value) {
+                self.hold_conflict(&key, value);
+            }
+        }
         self.remote = Some(outcome.remote);
         self.error = None;
         self.updated = true;
+    }
+    /// Each conflict with both values and its two ways out. The run shows this beside
+    /// the roster, so it does not stop the table.
+    pub fn conflicts(&mut self, ui: &mut egui::Ui) {
+        use crate::design::{self, Action, Density, Type, colors};
+        for (key, message) in self.blocked.clone() {
+            let c = colors();
+            ui.label(
+                Type::Heading
+                    .rich(
+                        ui,
+                        format!("{} {} conflict", design::icons::WARN, group_label(&key)),
+                    )
+                    .color(c.sync.conflict),
+            );
+            ui.add(egui::Label::new(Type::Small.rich(ui, message.as_str()).color(c.text)).wrap());
+            // The two values side by side, so the difference is what the eye finds.
+            egui::Grid::new(("conflict_values", &key))
+                .num_columns(2)
+                .spacing([design::L, 2.0])
+                .show(ui, |ui| {
+                    for (label, value) in [
+                        ("Splat", self.desired.get(&key)),
+                        (
+                            "D&D Beyond",
+                            self.remote.as_ref().and_then(|r| r.groups.get(&key)),
+                        ),
+                    ] {
+                        ui.label(Type::Small.rich(ui, label).color(colors().muted));
+                        ui.label(
+                            Type::Strong
+                                .rich(ui, describe(&key, value, self.max_hp().unwrap_or(0)))
+                                .color(colors().text),
+                        );
+                        ui.end_row();
+                    }
+                });
+            ui.push_id(&key, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    let busy = self.busy().then_some("Wait for the current sheet read.");
+                    let max = self.max_hp().unwrap_or(0);
+                    let sheet = self.remote.as_ref().and_then(|r| r.groups.get(&key));
+                    let (use_label, keep_label) = (
+                        format!("Use {} from D&D Beyond", short_value(&key, sheet, max)),
+                        format!(
+                            "Keep {}, send to D&D Beyond",
+                            short_value(&key, self.desired.get(&key), max)
+                        ),
+                    );
+                    if Action::secondary(&use_label)
+                        .name("Use D&D Beyond values")
+                        .density(Density::Read)
+                        .blocked(busy)
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.use_remote(&key);
+                    }
+                    let writable = self
+                        .remote
+                        .as_ref()
+                        .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
+                    if Action::secondary(&keep_label)
+                        .name("Keep Splat values and retry")
+                        .density(Density::Read)
+                        .blocked(busy.or(
+                            (!writable).then_some(
+                                "This session cannot edit this character on D&D Beyond.",
+                            ),
+                        ))
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.keep_local(&key);
+                    }
+                });
+            });
+        }
     }
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let was = self.enabled;
@@ -656,15 +998,11 @@ impl CombatSync {
             self.stop();
         }
         if !was && self.enabled {
-            self.remote = None;
-            self.desired.clear();
-            self.blocked.clear();
-            self.next = None;
-            self.error = None;
+            self.start();
         }
         if !self.enabled {
             if let Some(error) = &self.error {
-                ui.colored_label(egui::Color32::LIGHT_RED, error);
+                ui.colored_label(crate::design::colors().result.error, error);
             }
             ui.weak("Enable to read the live sheet. Edits made here will then update D&D Beyond.");
             return;
@@ -672,16 +1010,18 @@ impl CombatSync {
         ui.weak("HP, death saves, conditions, spell slots, and supported limited uses · checks every 15 seconds");
         if self.busy() {
             ui.horizontal(|ui| {
-                ui.spinner();
+                crate::design::spinner(ui);
                 ui.label("Checking character…");
             });
         }
         if let Some(e) = &self.error {
-            ui.colored_label(egui::Color32::LIGHT_RED, e);
+            ui.colored_label(crate::design::colors().result.error, e);
         }
         ui.horizontal(|ui| {
-            if ui
-                .add_enabled(!self.busy(), egui::Button::new("Refresh / verify"))
+            if crate::design::Action::secondary("Refresh / verify")
+                .density(crate::design::Density::Read)
+                .blocked_if(self.busy(), "Wait for the current sheet read.")
+                .show(ui)
                 .clicked()
             {
                 self.refresh_only = true;
@@ -693,56 +1033,9 @@ impl CombatSync {
                 ui.label("Combat values match the last read");
             }
         });
-        for (key, message) in self.blocked.clone() {
-            ui.group(|ui| {
-                ui.colored_label(
-                    egui::Color32::LIGHT_YELLOW,
-                    format!("{}: {message}", group_label(&key)),
-                );
-                for (label, value) in [
-                    ("Splat", self.desired.get(&key)),
-                    (
-                        "D&D Beyond",
-                        self.remote.as_ref().and_then(|r| r.groups.get(&key)),
-                    ),
-                ] {
-                    ui.label(format!(
-                        "{label}: {}",
-                        describe(&key, value, self.max_hp().unwrap_or(0))
-                    ));
-                }
-                ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .add_enabled(!self.busy(), egui::Button::new("Use D&D Beyond values"))
-                        .clicked()
-                    {
-                        if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(&key)) {
-                            self.desired.insert(key.clone(), value.clone());
-                        } else {
-                            self.desired.remove(&key);
-                        }
-                        self.blocked.remove(&key);
-                    }
-                    if ui
-                        .add_enabled(
-                            !self.busy()
-                                && self
-                                    .remote
-                                    .as_ref()
-                                    .is_some_and(|r| r.can_edit && r.groups.contains_key(&key)),
-                            egui::Button::new("Keep Splat values and retry"),
-                        )
-                        .clicked()
-                    {
-                        self.blocked.remove(&key);
-                        self.changed = None;
-                        self.next = None;
-                    }
-                });
-            });
-        }
+        self.conflicts(ui);
         let Some(remote) = &self.remote else {
-            ui.label("Connect in Settings and wait for the first sheet read.");
+            ui.label("Waiting for the first sheet read. If it does not come, check the connection in Settings.");
             return;
         };
         if !remote.can_edit {
@@ -787,7 +1080,7 @@ impl CombatSync {
                     }
                 });
             }
-            ui.collapsing("Sheet conditions", |ui| {
+            crate::design::section(ui, "Sheet conditions", |ui| {
                 if let Some(Value::Object(conditions)) = self.desired.get_mut("conditions") {
                     ui.horizontal_wrapped(|ui| {
                         for (id, name) in CONDITIONS {
@@ -816,7 +1109,7 @@ impl CombatSync {
                     });
                 }
             });
-            ui.collapsing("Spell slots spent", |ui| {
+            crate::design::section(ui, "Spell slots spent", |ui| {
                 for (key, label, levels) in
                     [("slots", "Ordinary slots", 9), ("pact", "Pact slots", 5)]
                 {
@@ -838,7 +1131,7 @@ impl CombatSync {
                     }
                 }
             });
-            ui.collapsing("Limited uses spent", |ui| {
+            crate::design::section(ui, "Limited uses spent", |ui| {
                 for (key, label) in labels {
                     if let Some(resource) = self.desired.get_mut(&key) {
                         ui.push_id(&key, |ui| {
@@ -911,9 +1204,20 @@ fn describe(key: &str, value: Option<&Value>, max_hp: i64) -> String {
         _ => format!("{} uses spent", value["uses"]),
     }
 }
+/// A value on a button: the number, for HP, and otherwise which side's values.
+fn short_value(key: &str, value: Option<&Value>, max_hp: i64) -> String {
+    match (key, value) {
+        ("hp", Some(hp)) => format!(
+            "{}/{max_hp} HP",
+            (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0)
+        ),
+        _ => "these values".to_owned(),
+    }
+}
+
 fn group_label(key: &str) -> &str {
     match key {
-        "hp" => "HP / temporary HP",
+        "hp" => "HP",
         "death" => "Death saves",
         "conditions" => "Conditions",
         "slots" => "Spell slots",
@@ -1167,6 +1471,22 @@ mod tests {
         assert_eq!(sync.desired["hp"]["removedHitPoints"], 8);
         assert!(sync.blocked.is_empty());
         assert!(sync.dirty());
+    }
+    #[test]
+    fn a_new_session_keeps_what_was_last_matched() {
+        let mut sync = CombatSync::default();
+        sync.enabled = true;
+        sync.remote = Some(remote());
+        let matched = remote().groups;
+        sync.enter_scope((2, "1".into(), "123".into()));
+        assert!(sync.enabled);
+        assert!(sync.remote.is_none());
+        assert_eq!(sync.take_matched(), Some(matched.clone()));
+        // Started again, then a new session: what was matched still stands.
+        sync.remote = Some(remote());
+        sync.start();
+        sync.enter_scope((3, "1".into(), "123".into()));
+        assert_eq!(sync.take_matched(), Some(matched));
     }
     #[test]
     fn refresh_preserves_unsent_edits_and_blocks_external_conflicts() {

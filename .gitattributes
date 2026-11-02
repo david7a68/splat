@@ -1,3 +1,5 @@
 # Preserve exact Poppler extraction, including source trailing whitespace.
 builtin/srd-5.2.1/source.txt -text -whitespace
 builtin/srd-5.2.1/source.pdf binary
+# Bundled fonts are binary and must not change.
+assets/fonts/*.ttf binary

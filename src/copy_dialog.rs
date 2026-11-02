@@ -1,3 +1,4 @@
+use crate::design::{self, Action, Tone, Type, colors};
 use crate::{
     campaigns::Campaigns,
     content_workspace::{Catalogue, CopyPlan, CopySource, check_destination},
@@ -18,8 +19,18 @@ pub struct CopyDialog {
     error: Option<String>,
     completed: Option<String>,
     pub refresh: Option<PathBuf>,
+    /// The open encounter draft, if a copied creature could join it now.
+    pub draft: Option<String>,
+    copied_creature: Option<Uuid>,
+    /// The DM chose to add the copy to the open draft.
+    pub add_to_draft: Option<Uuid>,
 }
 impl CopyDialog {
+    #[cfg(test)]
+    pub fn busy(&self) -> bool {
+        self.pending.is_some()
+    }
+
     pub fn new(source: CopySource, campaigns: &Campaigns, ctx: &egui::Context) -> Self {
         let modules = campaigns.modules().to_vec();
         let campaign = source.campaign.clone();
@@ -31,8 +42,12 @@ impl CopyDialog {
         });
         Self {
             name: format!("{} copy", source.entry.name),
+            // The likeliest place is the active campaign, unless the entry is already there.
+            destination: campaigns
+                .active_campaign()
+                .filter(|active| source.campaign.as_ref().map(|c| c.id) != Some(active.id))
+                .map(|active| (true, active.id)),
             source,
-            destination: None,
             folder: String::new(),
             plan: None,
             catalogue: None,
@@ -40,6 +55,9 @@ impl CopyDialog {
             error: None,
             completed: None,
             refresh: None,
+            draft: None,
+            copied_creature: None,
+            add_to_draft: None,
         }
     }
     pub fn show(&mut self, ctx: &egui::Context, campaigns: &Campaigns) -> bool {
@@ -59,52 +77,217 @@ impl CopyDialog {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
-        let mut open = !ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+        let open = !ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let mut close = false;
-        egui::Window::new("Copy entry").default_width(560.0).resizable(true).collapsible(false).open(&mut open).show(ctx, |ui| {
-            ui.heading(&self.source.entry.name);
-            ui.label("Create an independent copy with a new identity. Existing references stay unchanged.");
+        design::dialog(ctx, "copy_entry", "Copy entry", |ui| {
+            ui.label(
+                Type::Heading
+                    .rich(ui, &self.source.entry.name)
+                    .color(colors().text),
+            );
+            if self.completed.is_none() {
+                ui.label(
+                    "This makes a separate copy you can change. Links to the original stay as they are.",
+                );
+            }
             if let Some(message) = &self.completed {
-                ui.label(message);
-                ui.label("The destination refreshes automatically when it has no unsaved changes.");
+                design::message(ui, Tone::Success, message);
                 ui.horizontal(|ui| {
-                    if ui.button("Close").clicked() { close = true; }
-                    if ui.button("Copy another").clicked() { self.completed = None; self.plan = None; }
+                    if let (Some(id), Some(draft)) = (self.copied_creature, &self.draft) {
+                        let label = format!("Add to {draft}");
+                        if Action::primary(&label).show(ui).clicked() {
+                            self.add_to_draft = Some(id);
+                            close = true;
+                        }
+                    }
+                    if Action::secondary("Close").show(ui).clicked() {
+                        close = true;
+                    }
+                    if Action::secondary("Copy another").show(ui).clicked() {
+                        self.completed = None;
+                        self.plan = None;
+                    }
                 });
                 return;
             }
-            if self.pending.is_some() { ui.spinner(); ui.label("Checking content dependencies…"); }
-            if let Some(error) = &self.error { ui.colored_label(egui::Color32::LIGHT_RED, error); }
-            let destinations: Vec<(bool,Uuid,String,PathBuf,Option<Campaign>)> = campaigns.modules().iter().map(|m| (false,m.id,format!("Module · {}",m.name),m.path.clone(),None))
-                .chain(campaigns.all().iter().map(|c| (true,c.id,format!("Campaign · {}",c.name),c.path.clone(),Some(c.clone())))).collect();
+            if self.pending.is_some() {
+                ui.horizontal(|ui| {
+                    crate::design::spinner(ui);
+                    ui.label("Checking content dependencies…");
+                });
+            }
+            if let Some(error) = &self.error {
+                design::message(ui, Tone::Error, error);
+            }
+            let destinations: Vec<(bool, Uuid, String, PathBuf, Option<Campaign>)> = campaigns
+                .modules()
+                .iter()
+                .map(|m| {
+                    (
+                        false,
+                        m.id,
+                        format!("Package · {}", m.name),
+                        m.path.clone(),
+                        None,
+                    )
+                })
+                .chain(campaigns.all().iter().map(|c| {
+                    (
+                        true,
+                        c.id,
+                        format!("Campaign · {}", c.name),
+                        c.path.clone(),
+                        Some(c.clone()),
+                    )
+                }))
+                .collect();
             let old = self.destination;
-            egui::ComboBox::from_id_salt("copy_destination").selected_text(destinations.iter().find(|(c,id,..)| Some((*c,*id)) == self.destination).map_or("Choose destination", |d| d.2.as_str())).show_ui(ui, |ui| {
-                for (campaign, id, label, ..) in &destinations { ui.selectable_value(&mut self.destination, Some((*campaign,*id)), label); }
+            design::field(ui, "Destination", None, None, |ui| {
+                let combo = egui::ComboBox::from_id_salt("copy_destination")
+                    .icon(design::combo_icon)
+                    .width(ui.available_width().min(360.0))
+                    .selected_text(
+                        destinations
+                            .iter()
+                            .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
+                            .map_or("Choose destination", |d| d.2.as_str()),
+                    )
+                    .show_ui(ui, |ui| {
+                        for (campaign, id, label, ..) in &destinations {
+                            ui.selectable_value(
+                                &mut self.destination,
+                                Some((*campaign, *id)),
+                                label,
+                            );
+                        }
+                    });
+                design::named(ui, &combo.response, "Destination");
             });
-            ui.label("Copy name"); let name_changed = ui.text_edit_singleline(&mut self.name).changed();
-            ui.label("Existing subfolder (leave blank for the owner folder)"); let folder_changed = ui.text_edit_singleline(&mut self.folder).changed();
-            if old != self.destination || name_changed || folder_changed { self.plan = None; self.error = None; }
-            if ui.add_enabled(self.catalogue.is_some() && self.destination.is_some(), egui::Button::new("Review copy")).clicked()
-                && let Some(destination) = destinations.iter().find(|(c,id,..)| Some((*c,*id)) == self.destination) {
-                    let result = check_destination(&destination.3, destination.1, destination.0).and_then(|_| CopyPlan::prepare(&self.source, &destination.3, destination.4.as_ref().map(|c| c.id), &self.name, &self.folder, self.catalogue.as_ref().unwrap()));
-                    match result {
-                        Ok(plan) => { self.plan = Some(plan); self.error = None; }, Err(e) => self.error = Some(e),
+            let name_changed =
+                design::text_field(ui, "Copy name", &mut self.name, None, None).changed();
+            let folder_changed = design::text_field(
+                ui,
+                "Subfolder",
+                &mut self.folder,
+                Some("An existing subfolder. Leave blank to use the main folder."),
+                None,
+            )
+            .changed();
+            if old != self.destination || name_changed || folder_changed {
+                self.plan = None;
+                self.error = None;
+            }
+            let blocked = if self.catalogue.is_none() {
+                Some("Still checking content dependencies.")
+            } else if self.destination.is_none() {
+                Some("Choose a destination first.")
+            } else {
+                None
+            };
+            // One row of actions, at the end: the review's own once there is one.
+            let mut review = false;
+            if self.plan.is_none() {
+                ui.horizontal(|ui| {
+                    review = Action::secondary("Review copy")
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked();
+                    if Action::quiet("Cancel").show(ui).clicked() {
+                        close = true;
                     }
+                });
+            }
+            if review
+                && let Some(destination) = destinations
+                    .iter()
+                    .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
+            {
+                let result = check_destination(&destination.3, destination.1, destination.0)
+                    .and_then(|_| {
+                        CopyPlan::prepare(
+                            &self.source,
+                            &destination.3,
+                            destination.4.as_ref().map(|c| c.id),
+                            &self.name,
+                            &self.folder,
+                            self.catalogue.as_ref().unwrap(),
+                        )
+                    });
+                match result {
+                    Ok(plan) => {
+                        self.plan = Some(plan);
+                        self.error = None;
+                    }
+                    Err(e) => self.error = Some(e),
+                }
             }
             if let Some(plan) = &self.plan {
-                ui.separator();
-                ui.strong("Ready to copy");
-                ui.label(plan.root.join(&plan.relative).display().to_string());
-                if plan.dependencies.is_empty() { ui.label("No required content dependencies."); }
-                else { ui.collapsing(format!("Dependencies kept as references: {}", plan.dependencies.len()), |ui| { for d in &plan.dependencies { ui.label(d); } }); }
-                ui.collapsing("Review Markdown", |ui| { egui::ScrollArea::both().max_height(200.0).show(ui, |ui| { ui.monospace(&plan.text); }); });
-                if ui.button("Create copy").clicked() {
-                    let result = destinations.iter().find(|(c,id,..)| Some((*c,*id)) == self.destination).ok_or_else(|| "Destination is no longer registered.".to_owned()).and_then(|d| {
-                        check_destination(&d.3, d.1, d.0)?;
-                        if d.3 != plan.root { return Err("Destination folder changed. Review the copy again.".into()); }
-                        plan.save()
+                design::rule(ui);
+                ui.label(Type::Heading.rich(ui, "Ready to copy").color(colors().text));
+                ui.add(
+                    egui::Label::new(plan.root.join(&plan.relative).display().to_string()).wrap(),
+                );
+                if plan.dependencies.is_empty() {
+                    ui.label("No required content dependencies.");
+                } else {
+                    design::section(
+                        ui,
+                        format!(
+                            "Dependencies kept as references: {}",
+                            plan.dependencies.len()
+                        ),
+                        |ui| {
+                            for d in &plan.dependencies {
+                                ui.label(d);
+                            }
+                        },
+                    );
+                }
+                design::section(ui, "Review Markdown", |ui| {
+                    egui::ScrollArea::both().max_height(160.0).show(ui, |ui| {
+                        ui.monospace(&plan.text);
                     });
-                    match result { Ok(_) => { self.completed = Some(format!("Saved: {}", plan.relative)); self.refresh = Some(plan.root.clone()); self.error = None; }, Err(e) => self.error = Some(e) }
+                });
+                let mut create = false;
+                ui.horizontal(|ui| {
+                    create = Action::primary("Create copy").show(ui).clicked();
+                    if Action::quiet("Cancel").show(ui).clicked() {
+                        close = true;
+                    }
+                });
+                if create {
+                    let result = destinations
+                        .iter()
+                        .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
+                        .ok_or_else(|| "Destination is no longer registered.".to_owned())
+                        .and_then(|d| {
+                            check_destination(&d.3, d.1, d.0)?;
+                            if d.3 != plan.root {
+                                return Err(
+                                    "Destination folder changed. Review the copy again.".into()
+                                );
+                            }
+                            plan.save()
+                        });
+                    match result {
+                        Ok(_) => {
+                            // A creature copied to the active campaign can join the open
+                            // draft now. A copy elsewhere is not one this draft can use.
+                            let to_active = self.destination.is_some_and(|(is_campaign, id)| {
+                                is_campaign
+                                    && campaigns.active_campaign().is_some_and(|a| a.id == id)
+                            });
+                            self.copied_creature =
+                                splat::content::Entry::parse(&plan.relative, &plan.text)
+                                    .ok()
+                                    .filter(|entry| to_active && entry.kind == "creature")
+                                    .map(|entry| entry.id);
+                            self.completed = Some(format!("Saved: {}", plan.relative));
+                            self.refresh = Some(plan.root.clone());
+                            self.error = None;
+                        }
+                        Err(e) => self.error = Some(e),
+                    }
                 }
             }
         });

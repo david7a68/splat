@@ -1,22 +1,32 @@
 //! Read-only Markdown presentation. Content cannot execute UI actions.
+use crate::design::{self, Type, colors};
 use eframe::egui::{self, text::LayoutJob};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 
+#[cfg(test)]
 pub fn show(ui: &mut egui::Ui, markdown: &str) {
-    show_with_density(ui, markdown, false, false);
+    show_with_density(ui, markdown, false);
 }
 
-/// Library Markdown uses the shared accent and compact field rows when requested.
-pub fn show_reader(ui: &mut egui::Ui, markdown: &str, dense: bool) {
+/// The Reader's Markdown.
+pub fn show_reader(ui: &mut egui::Ui, markdown: &str) {
+    ui.scope(|ui| show_with_density(ui, markdown, false));
+}
+
+/// The Reader's Markdown, as compact field rows.
+pub fn show_compact(ui: &mut egui::Ui, markdown: &str) {
     ui.scope(|ui| {
-        if dense {
-            ui.spacing_mut().item_spacing.y = 3.0;
-        }
-        show_with_density(ui, markdown, dense, true);
+        ui.spacing_mut().item_spacing.y = 3.0;
+        show_with_density(ui, markdown, true);
     });
 }
 
-fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, styled: bool) {
+fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
+    let prose = if dense {
+        Type::Stat
+    } else {
+        design::reader::prose_type(ui)
+    };
     let mut job = LayoutJob::default();
     let mut heading = None;
     let mut inventory_table = false;
@@ -62,7 +72,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, styled: boo
             Event::End(TagEnd::Table) => {
                 if let Some(rows) = table.take() {
                     if dense && rows.first().is_some_and(|row| row == &["Field", "Value"]) {
-                        show_fields(ui, &rows[1..], styled);
+                        show_fields(ui, &rows[1..]);
                         inventory_table = false;
                         continue;
                     }
@@ -85,50 +95,39 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, styled: boo
                     } else {
                         (0..rows.first().map_or(0, Vec::len)).collect()
                     };
-                    let column_width = ((ui.available_width() - 16.0 * columns.len() as f32)
-                        / columns.len().max(1) as f32)
-                        .clamp(90.0, 180.0);
-                    ui.push_id(ui.next_auto_id(), |ui| {
-                        egui::Grid::new("markdown_table")
-                            .num_columns(columns.len())
-                            .min_col_width(column_width)
-                            .max_col_width(column_width)
-                            .spacing([16.0, 7.0])
-                            .striped(true)
-                            .show(ui, |ui| {
-                                for (i, row) in rows.iter().enumerate() {
-                                    for &column in &columns {
-                                        let cell =
-                                            row.get(column).map(String::as_str).unwrap_or("");
-                                        let cell = if compact {
-                                            match cell {
-                                                "Link" => "Item",
-                                                "true" => "Yes",
-                                                "false" => "—",
-                                                other => other,
-                                            }
-                                        } else {
-                                            cell
-                                        };
-                                        let text = egui::RichText::new(cell);
-                                        ui.add(
-                                            egui::Label::new(if i == 0 {
-                                                text.strong().color(if styled {
-                                                    crate::reader_style::ACCENT
-                                                } else {
-                                                    ui.visuals().strong_text_color()
-                                                })
-                                            } else {
-                                                text
-                                            })
-                                            .wrap(),
-                                        );
-                                    }
-                                    ui.end_row();
-                                }
+                    let display = |cell: &'_ str| -> String {
+                        if compact {
+                            match cell {
+                                "Link" => "Item",
+                                "true" => "Yes",
+                                "false" => "—",
+                                other => other,
+                            }
+                            .to_owned()
+                        } else {
+                            cell.to_owned()
+                        }
+                    };
+                    let widths = column_widths(ui, &rows, &columns, &display);
+                    // The rules end with the table, not at the measure.
+                    let table_width = widths.iter().sum::<f32>()
+                        + TABLE_GAP * widths.len().saturating_sub(1) as f32;
+                    ui.scope(|ui| {
+                        ui.set_max_width(ui.available_width().min(table_width));
+                        for (i, row) in rows.iter().enumerate() {
+                            design::table_row(ui, &widths, TABLE_GAP, |ui, position| {
+                                let cell = display(
+                                    row.get(columns[position]).map(String::as_str).unwrap_or(""),
+                                );
+                                let role = if i == 0 { Type::StatLabel } else { Type::Stat };
+                                ui.add(
+                                    egui::Label::new(role.rich(ui, cell).color(colors().text))
+                                        .wrap(),
+                                );
                             });
+                        }
                     });
-                    ui.add_space(8.0);
+                    ui.add_space(design::S);
                 }
                 inventory_table = false;
             }
@@ -144,12 +143,12 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, styled: boo
             Event::Start(Tag::Heading { level, .. }) => {
                 flush(ui, &mut job, &mut target);
                 ui.add_space(if dense {
-                    6.0
+                    design::S
                 } else {
                     match level {
-                        pulldown_cmark::HeadingLevel::H1 => 8.0,
-                        pulldown_cmark::HeadingLevel::H2 => 18.0,
-                        _ => 12.0,
+                        pulldown_cmark::HeadingLevel::H1 => design::S,
+                        pulldown_cmark::HeadingLevel::H2 => design::L,
+                        _ => design::M,
                     }
                 });
                 heading = Some(level);
@@ -157,10 +156,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, styled: boo
             Event::End(TagEnd::Heading(level)) => {
                 flush(ui, &mut job, &mut target);
                 if level == pulldown_cmark::HeadingLevel::H2
-                    || (styled && !dense && level == pulldown_cmark::HeadingLevel::H3)
+                    || (!dense && level == pulldown_cmark::HeadingLevel::H3)
                 {
-                    ui.separator();
-                    ui.add_space(3.0);
+                    design::rule(ui);
+                    ui.add_space(design::XS);
                 }
                 heading = None;
             }
@@ -195,76 +194,82 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, styled: boo
                     &format!("{indent}{marker}"),
                     0.0,
                     egui::TextFormat {
-                        color: ui.visuals().text_color(),
+                        font_id: prose.font(ui),
+                        line_height: Some(prose.line()),
+                        color: colors().muted,
                         ..Default::default()
                     },
                 );
             }
             Event::End(TagEnd::Paragraph | TagEnd::Item) => flush(ui, &mut job, &mut target),
-            Event::HardBreak if table.is_none() => {
-                job.append("\n", 0.0, egui::TextFormat::default())
-            }
+            Event::HardBreak if table.is_none() => job.append(
+                "\n",
+                0.0,
+                egui::TextFormat {
+                    font_id: prose.font(ui),
+                    line_height: Some(prose.line()),
+                    ..Default::default()
+                },
+            ),
             Event::SoftBreak if table.is_none() => job.append(
                 if code { "\n" } else { " " },
                 0.0,
-                egui::TextFormat::default(),
+                egui::TextFormat {
+                    font_id: prose.font(ui),
+                    line_height: Some(prose.line()),
+                    ..Default::default()
+                },
             ),
             Event::Text(text) | Event::Code(text) => {
-                let font_id = if code {
-                    egui::TextStyle::Monospace
-                } else if heading.is_some() {
-                    egui::TextStyle::Heading
-                } else if strong {
-                    egui::TextStyle::Button
-                } else {
-                    egui::TextStyle::Body
-                }
-                .resolve(ui.style());
-                let font_id = if let Some(level) = heading {
-                    egui::FontId::proportional(if dense {
-                        14.0
-                    } else if styled
-                        && matches!(
-                            level,
-                            pulldown_cmark::HeadingLevel::H2 | pulldown_cmark::HeadingLevel::H3
-                        )
-                    {
-                        crate::reader_style::SECTION_SIZE
-                    } else {
-                        match level {
-                            pulldown_cmark::HeadingLevel::H1 => 30.0,
-                            pulldown_cmark::HeadingLevel::H2 => 22.0,
-                            pulldown_cmark::HeadingLevel::H3 => 18.0,
-                            pulldown_cmark::HeadingLevel::H4 => 16.0,
-                            pulldown_cmark::HeadingLevel::H5 => 15.0,
-                            pulldown_cmark::HeadingLevel::H6 => 14.0,
+                let role = if code {
+                    Type::Mono
+                } else if let Some(level) = heading {
+                    match level {
+                        _ if dense => Type::StatLabel,
+                        pulldown_cmark::HeadingLevel::H1 => Type::Title,
+                        pulldown_cmark::HeadingLevel::H2 | pulldown_cmark::HeadingLevel::H3 => {
+                            Type::Section
                         }
-                    })
+                        _ => Type::ProseStrong,
+                    }
+                } else if strong {
+                    if dense {
+                        Type::StatLabel
+                    } else {
+                        Type::ProseStrong
+                    }
+                } else if italic && !dense {
+                    Type::ProseItalic
                 } else {
-                    font_id
+                    prose
                 };
+                // Compact prose keeps the size it was given, whatever its weight.
+                let mut font_id = role.font(ui);
+                if matches!(role, Type::ProseStrong | Type::ProseItalic) && heading.is_none() {
+                    font_id.size = prose.size();
+                }
                 job.append(
                     &text,
                     0.0,
                     egui::TextFormat {
                         font_id,
-                        color: if in_link {
-                            ui.visuals().hyperlink_color
-                        } else if styled && heading.is_some() {
-                            crate::reader_style::ACCENT
-                        } else if strong || heading.is_some() {
-                            ui.visuals().strong_text_color()
+                        line_height: Some(if heading.is_some() || code {
+                            role.line()
                         } else {
-                            ui.visuals().text_color()
+                            prose.line()
+                        }),
+                        color: if in_link {
+                            colors().accent
+                        } else {
+                            colors().text
                         },
-                        italics: italic,
                         ..Default::default()
                     },
                 );
             }
             Event::Rule => {
                 flush(ui, &mut job, &mut target);
-                ui.separator();
+                design::rule(ui);
             }
             _ => {}
         }
@@ -272,15 +277,62 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool, styled: boo
     flush(ui, &mut job, &mut target);
 }
 
-fn show_fields(ui: &mut egui::Ui, rows: &[Vec<String>], styled: bool) {
+const TABLE_GAP: f32 = design::M;
+
+/// Fit columns to their text. Never narrower than a column's longest word, while
+/// there is room, so "Constitution" does not break in a side panel.
+fn column_widths(
+    ui: &egui::Ui,
+    rows: &[Vec<String>],
+    columns: &[usize],
+    display: &dyn Fn(&str) -> String,
+) -> Vec<f32> {
+    let font = Type::StatLabel.font(ui);
+    let measure = |text: &str| {
+        ui.fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(text.to_owned(), font.clone(), colors().text)
+                .size()
+                .x
+        })
+    };
+    let mut natural = vec![1.0_f32; columns.len()];
+    let mut floor = vec![1.0_f32; columns.len()];
+    for row in rows {
+        for (position, &column) in columns.iter().enumerate() {
+            let cell = display(row.get(column).map(String::as_str).unwrap_or(""));
+            natural[position] = natural[position].max(measure(&cell));
+            for word in cell.split_whitespace() {
+                floor[position] = floor[position].max(measure(word));
+            }
+        }
+    }
+    let gaps = TABLE_GAP * columns.len().saturating_sub(1) as f32;
+    let available = (ui.available_width() - gaps - design::XS).max(1.0);
+    let total: f32 = natural.iter().sum();
+    if total <= available {
+        return natural;
+    }
+    let floors: f32 = floor.iter().sum();
+    if floors >= available {
+        return floor.iter().map(|w| w * available / floors).collect();
+    }
+    let share = (available - floors) / (total - floors).max(1.0);
+    natural
+        .iter()
+        .zip(&floor)
+        .map(|(natural, floor)| floor + (natural - floor) * share)
+        .collect()
+}
+
+fn show_fields(ui: &mut egui::Ui, rows: &[Vec<String>]) {
     let available = ui.available_width();
     let label_width = (available * 0.25).clamp(100.0, 145.0);
     let value_width = (available - label_width - 16.0).max(70.0);
     ui.push_id(ui.next_auto_id(), |ui| {
         egui::Grid::new("library_fields")
             .num_columns(2)
-            .spacing([16.0, 3.0])
-            .striped(true)
+            .spacing([design::M, 3.0])
             .min_col_width(0.0)
             .max_col_width(value_width.max(label_width))
             .show(ui, |ui| {
@@ -295,13 +347,13 @@ fn show_fields(ui: &mut egui::Ui, rows: &[Vec<String>], styled: bool) {
                     field_cell(
                         ui,
                         label_width,
-                        egui::RichText::new(field).size(13.0).color(if styled {
-                            crate::reader_style::ACCENT
-                        } else {
-                            ui.visuals().weak_text_color()
-                        }),
+                        Type::StatLabel.rich(ui, field).color(colors().text),
                     );
-                    field_cell(ui, value_width, egui::RichText::new(value).size(13.0));
+                    field_cell(
+                        ui,
+                        value_width,
+                        Type::Stat.rich(ui, value).color(colors().text),
+                    );
                     ui.end_row();
                 }
             });
@@ -348,7 +400,7 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Option<String>) {
     } else {
         ui.add(label);
     }
-    ui.add_space(5.0);
+    ui.add_space(design::S);
 }
 
 #[cfg(test)]

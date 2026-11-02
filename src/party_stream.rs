@@ -32,6 +32,11 @@ impl Stream {
     pub fn start(session: Session, campaign: String, ctx: &egui::Context) -> Self {
         let (tx, rx) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
+        // Test builds have no route to D&D Beyond. A signed-in test has an open stream.
+        if cfg!(test) {
+            let _ = tx.send(Event::Open);
+            return Self { rx, cancel };
+        }
         let stop = cancel.clone();
         let ctx = ctx.clone();
         thread::spawn(move || {
@@ -180,7 +185,7 @@ mod live_monitor {
             .find(|v| v["id"] == config["active_campaign_id"])
             .unwrap();
         let remote = campaign["dndbeyond_campaign_id"].as_str().unwrap();
-        let session = crate::auth::connect(zeroize::Zeroizing::new(
+        let session = crate::auth::connect_live(zeroize::Zeroizing::new(
             keyring::Entry::new("splat", "dndbeyond-session")
                 .unwrap()
                 .get_password()

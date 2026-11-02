@@ -121,7 +121,7 @@ impl Catalogue {
         let mut result = Self::default();
         let builtin = builtin_manifest();
         let builtin_id = builtin.id;
-        let mut entries = content::builtin::load().entries;
+        let mut entries = content::builtin::entries();
         entries.extend(content::definitions::entries()?);
         let ids = entries.iter().map(|e| e.id).collect();
         for entry in entries {
@@ -153,7 +153,7 @@ impl Catalogue {
                 || entries.iter().any(|e| e.kind == "campaign")
             {
                 result.errors.push(format!(
-                    "{}: module identity or ownership does not match its registration.",
+                    "{}: package identity or ownership does not match its registration.",
                     module.name
                 ));
                 continue;
@@ -162,9 +162,9 @@ impl Catalogue {
                 .fields
                 .get("splat_namespace")
                 .and_then(Value::as_str)
-                .ok_or("Missing module namespace")?;
+                .ok_or("Missing package namespace")?;
             if !namespaces.insert(ns.to_owned()) {
-                return Err(format!("Duplicate module namespace: {ns}"));
+                return Err(format!("Duplicate package namespace: {ns}"));
             }
             let ids = entries.iter().map(|e| e.id).collect();
             let name = manifests[0].name.clone();
@@ -194,7 +194,7 @@ impl Catalogue {
             );
             for entry in entries {
                 if entry.kind == "package" {
-                    return Err("A campaign cannot contain a shared module manifest.".into());
+                    return Err("A campaign cannot contain a shared package manifest.".into());
                 }
                 if entry.kind == "campaign" && entry.id != campaign.id {
                     return Err("Campaign manifest identity differs from settings.".into());
@@ -238,7 +238,7 @@ impl Catalogue {
                 Some(module) => module,
                 None => {
                     result.errors.push(format!(
-                        "Selected module unavailable: {}",
+                        "Selected package unavailable: {}",
                         selection.package.label()
                     ));
                     continue;
@@ -428,7 +428,7 @@ fn campaign_manifest(root: &Path) -> Result<Option<Entry>, String> {
         return Err("Repair invalid notes before creating a campaign manifest.".into());
     }
     if entries.iter().any(|e| e.kind == "package") {
-        return Err("A campaign folder cannot contain a module manifest.".into());
+        return Err("A campaign folder cannot contain a package manifest.".into());
     }
     let mut manifests = entries.into_iter().filter(|e| e.kind == "campaign");
     let manifest = manifests.next();
@@ -585,7 +585,7 @@ impl CampaignDocument {
         for selection in &selections {
             selection.package.reference()?;
             if !seen.insert(selection.package.label()) {
-                return Err("Duplicate module selection.".into());
+                return Err("Duplicate package selection.".into());
             }
             if let Selection::Selected { entries } = &selection.selection {
                 for entry in entries {

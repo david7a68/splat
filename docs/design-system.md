@@ -1,0 +1,239 @@
+# Splat design system
+
+The brief is `docs/ux-intent.md`. This document records the visual decisions and why
+they were made. The code is `src/design/`. Tokens are the only source of colour, size
+and type. A lint test (`src/design/lint.rs`) keeps other code from adding raw values.
+
+## Art direction: a working ledger, at night
+
+A DM keeps a ledger for hours in a dim room. The screen must feel like a well-set page
+and a confident tool. It is not a dashboard, and it is not parchment.
+
+- **Warm dark, one theme.** The app forces `ThemePreference::Dark`. All neutrals lean
+  warm (hue about 35°). The page is `#1B1815`, not black. Text is paper `#E9E1D3`, not
+  white. There are no large bright areas. A later light theme adds one `Colors` value.
+- **One accent: blue-black ink, inverted (`#A9BDE6`).** Most state colours are warm or
+  earthy (HP damage, warnings, conflicts). Temporary HP and concentration are cool, and they
+  are told apart from the accent by shape and word. The party's side mark is a warm neutral,
+  so that it is not read as the accent. The accent marks the current turn, the primary
+  action, focus, and links. It is not decoration.
+- **Hierarchy from type, spacing and hairlines.** Surfaces carry meaning only: the rail
+  is recessed (navigation), a well is an input, a raised layer floats above the page. No
+  cards around everything, and no pill badges. A status is an icon, a word, and a colour.
+- **Two voices.** A sans for working UI. A serif for what the books say: entry titles,
+  rules prose, and stat blocks. The change of voice tells the DM "this is reference".
+
+## Type
+
+Fonts are in `assets/fonts/` with their licences. All are OFL. egui 0.33 rasterizes with
+`ab_glyph` and has no variable axes or OpenType features, so these are static files.
+
+| Face | Use | Why |
+|---|---|---|
+| IBM Plex Sans (Regular, Medium, SemiBold, Bold) | UI | Tabular digits by default and a plain zero, so numbers read fast and hold their place with no special drawing. `1`, `l` and `I` differ. Holds up at 12 px and from a seated distance |
+| Source Serif 4 (Text, Italic, Semibold) | Prose | A sturdy text serif with lining tabular digits, so `65 (10d8 + 20)` lines up |
+| Source Serif 4 Subhead (Semibold) | Titles | The optical cut for 18 to 28 px |
+| Source Serif 4 SmText (Regular, Semibold) | Stat blocks | The optical cut for 13 to 14 px, for the compact table at 1x |
+| egui's monospace | Markdown editor | Source text only. `Type::Mono` |
+
+Atkinson Hyperlegible was the first choice. Its digits are proportional and its zero is
+slashed, and painting each digit in a fixed cell left wide gaps. So the font
+changed, and no fixed cells are left. `design::number` right-aligns ordinary text, and
+HP and initiative hold their place because the font's digits have one width.
+
+**Fallback.** Every UI family falls back to Source Serif 4 for symbols such as `× – — ½ ¼
+¾ ⅓ ⅔`, then Phosphor, then egui's defaults.
+
+**Scale.** Each role is one `design::Type` value. Do not add sizes outside it.
+
+| Role | Face, size / line | Use |
+|---|---|---|
+| `Display` | Subhead Semibold 26 / 32 | Entry title, sheet title |
+| `Title` | Subhead Semibold 20 / 26 | Page title, current turn |
+| `Section` | Subhead Semibold 17 / 23 | Reader section heading |
+| `Heading` | UI SemiBold 14 / 20 | UI group heading |
+| `Body` | UI Regular 14 / 20 | Default UI text |
+| `Strong` | UI Medium 14 / 20 | Button, selected item |
+| `Name` | UI SemiBold 15 / 20 | A participant's name on a run row |
+| `Small` | UI Regular 12 / 16 | Second line, help, status |
+| `Label` | UI SemiBold 11 / 14, tracked +0.6, capitals | Field label, column heading |
+| `Numeral` | UI SemiBold 14 | AC, initiative, outside the run's scale |
+| `NumeralLarge` | UI Bold 18 | Current HP, outside the run's scale |
+| `Round` | UI Bold 18 | The round number in the run header |
+| `Prose` | Serif 16 / 24 | Rules text at full width |
+| `ProseCompact` | Serif 15 / 22 | Rules text in a side panel |
+| `ProseStrong` / `ProseItalic` | As prose | Named actions, emphasis |
+| `StatLabel` / `Stat` | SmText 13 / 18 | Stat block rows |
+| `Mono` | Monospace 13 | Markdown source |
+
+**Measure.** `READER_MEASURE` is 488 px at `Prose`, about 62 characters on average and
+at most 75 (T6.1). Prose never fills a wide window.
+
+**The run has its own scale.** `RunScale` holds a row height and type sizes, and
+`RunScale::fit(height, width, rows)` takes the largest that fits with no scrolling.
+
+| Scale | Row | Name | HP / max | AC, initiative | Conditions | Turn word | Roster width |
+|---|---|---|---|---|---|---|---|
+| `RUN_COMPACT` | 36 | 16 | 20 / 13 | 15 | 14 | 12 | 560 |
+| `RUN_REGULAR` | 52 | 18 | 24 / 15 | 16 | 14 | 13 | 640 |
+| `RUN_LARGE` | 68 | 22 | 30 / 18 | 19 | 16 | 14 | 760 |
+
+## Colour tokens
+
+`design::colors()` returns the active `Colors`. Names say what a colour means. Each family
+below maps to section 6 of the brief. **Colour is never the only signal:** each state also
+has a word, an icon, or a shape, and `src/design/tokens.rs` tests the contrast pairs (text
+4.5:1; large text and UI 3:1).
+
+| Family | Tokens | Words and shapes that go with them |
+|---|---|---|
+| Surface | `page rail raised well hover selected current_row` | Recessed, raised, sunken |
+| Line | `hairline rule field_border` | Decorative rules, and the 3:1 field edge |
+| Text | `text muted faint disabled` | Primary, secondary, tertiary |
+| Accent | `accent accent_fill accent_hover on_accent focus` | Focus also has a 2 px ring |
+| Turn | `turn.current turn.next` | The word `Turn` and a bar; the word `Next` |
+| HP | `hp.healthy damaged bloodied zero temp unknown track` | Numbers tinted by state, a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
+| Participant | `participant.absent concentrating condition` | `Absent`, `Conc`, each condition by name |
+| Side | `side.party enemies other` | The side name, with a square, a diamond or a circle. No red and green |
+| Sync | `sync.off first_read matching pending conflict read_only error` | Icon and word in every case |
+| Connection | `connection.connected offline busy` | Icon and word |
+| Document | `document.clean unsaved saved invalid external read_only` | Icon and word |
+| Result | `result.error warning success info` | `message` adds an icon and a bar |
+
+## Space, shape and density
+
+- **Grid:** 4 px. Tokens `XS 4, S 8, M 12, L 16, XL 24, XXL 32`.
+- **Radii:** `RADIUS_CONTROL 3`, `RADIUS_LAYER 6`. Nothing is round for its own sake.
+- **Density** is a level a control asks for, by what it is for, and not a setting of the
+  screen. A screen mostly keeps to one, and may use a lighter one for what is rare:
+
+| Level | Control | Row | Mostly used by |
+|---|---|---|---|
+| `Glance` | 36 | see `RunScale` | The run's `Next turn` and damage entry |
+| `Scan` | 30 | 32 | Run setup, Encounters, Party, Lookup results |
+| `Read` | 28 | 28 | Library, Settings, Campaign, and the run's footer |
+
+Every control the app draws is at least 24 px (WCAG 2.5.8, and the `target-size` check).
+The exception is egui's own scroll bar, which is 8 px. The check reports it as chrome.
+It stays 8 px because egui paints the handle at the width it senses, and the wheel and
+the page keys also scroll. Tab steps over it (`Splat::skip_unnamed_focus`). The check
+counts a node as a bar only if it has no role and no name, lies outside a scroll
+surface, and matches the full length of that surface's edge.
+
+## Widgets
+
+`theme::install` sets one global `egui::Style`, so any plain egui widget still fits: hover,
+active, focus ring, disabled, text selection, text edit, solid scroll bars, windows,
+tooltips, and separators. Text cursors do not blink, because motion draws the eye (brief,
+"Long sessions").
+
+`design::components` holds the shared parts, each a function or a small builder:
+
+| Part | Function | Notes |
+|---|---|---|
+| Page header | `page_header` | Title, one line of context, actions on the right |
+| Nav item | `nav_item` | Icon and word. Accent bar when selected |
+| Buttons | `Action::primary / secondary / quiet / destructive` | `.blocked(reason)` disables and shows why (G1). `.key("N")` shows the key beside the word |
+| Field | `field` | Label, control, help, error; names the control for accessibility |
+| Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
+| Dialog | `dialog` | An `egui::Modal`, for the brief's modal tasks only: discard on close, removing a campaign or a package, copy review |
+| Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows. `quiet_section` is for technical details at a page's end |
+| Table row | `table_row` | Fixed cell widths and a hairline, for Markdown tables and sheets. No stripes, because a row's height follows its text |
+| Rail toggle | `nav_toggle` | Lookup and panels. Its own `Open` word, so that it never looks like the current page |
+| Segmented | `segmented` | Words with an underline, not a pill |
+| List row | `row`, `two_line_row` | Fixed height, for `show_rows`. Paints hover at the current frame |
+| Status | `status`, `Status` | Icon, word, colour |
+| Stat tile | `stat_tile` | A label over a large value, with no box |
+| HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots. Temp HP is separate |
+| Empty state | `empty_state` | What this is, and the one next step |
+| Message | `message`, `Tone` | Inline. Never modal |
+| Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup and the run. Above 820 px, the run's panel has two columns |
+| Link | `link` | A real `Link` role, at least 24 px high |
+| Number | `number`, `number_width` | Right-aligned digits |
+| Count | `count` | `1 entry`, `2 entries` |
+
+Icons support words. They replace a word only where the meaning is universal, and then the
+control still has an accessible name and a tooltip.
+
+## Keeping a draft
+
+`Discard` is one press and one step of undo, not a dialog: `Draft discarded` with `Undo
+discard` stays until the next edit. It stands apart from `Save`, and it shows only when
+there is something to discard. A file that changed on disk stops saving and asks: the run
+offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
+draft`, `Show disk version` and `Reload and lose my draft`. These messages cannot be dismissed.
+
+## The Reader
+
+`design::reader` holds the typographic parts. `library::view::show` draws one entry and is
+the only entry reader: Library, Lookup, the run's side panel, and campaign entries all
+call it (T6.4). A stat block is a typeset reference block: a heavy rule, then identity, then
+armor class, hit points and initiative as three labelled values, then one tight attribute
+table with physical and mental abilities side by side and numbers right-aligned, then rows
+of details. It has no card. Section headings use the serif over a hairline.
+
+Imported rules text is reflowed for reading, and the stored note is never changed.
+`design::reader::run_in_title` finds a named paragraph (`Acid Breath (Recharge 5–6).`), and
+only that turns bold. A title-case line above prose is a heading. Three or more rows of
+numbers, or of a name and a number, become a table. `presentation::reading_tests` runs these
+rules over every built-in note, so a fault cannot come back unseen. A window wide enough
+moves the rarely wanted sections (source, engine support, technical details) to a margin.
+
+## The live run
+
+The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
+temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and the sync
+word. Conditions take a second line that wraps before the HP column and grows the row, so
+no condition is cut. When a window has no room for the state column, as at 960x640 beside
+the panel, those words open the second line instead, so that a name is never cut.
+
+- **Current row:** the `current_row` fill, a 2 px stroke, a 6 px bar, and the word `TURN`
+  under the initiative, which has its own column. In a compressed list the word sits beside
+  the number on its line, so that a row's height never depends on whose turn it is, and the
+  room left over is shared across the rows. **Next row:** the word `NEXT`. The name
+  line keeps one height with or without a second line, so a new condition moves no number.
+- **Row height:** the scale sets the type, and spare room goes to the rows, up to 1.4 times
+  the scale's height. When rows cannot fit, name-only rows shrink to 25 px before anything
+  scrolls.
+- **Header:** the round and the current turn in bold sans, larger than any row's name, and
+  `Next turn`. Its second line belongs to `Undo`, which always names the action, then to a
+  sync conflict, a notice, or the next name, in that order. A notice too long for the line,
+  or one behind a conflict, takes its own line below.
+- **Dock:** a fixed place above the footer. `Amount`, `Damage`, `Heal`, `Temp HP`, then the
+  selected name, `Conditions`, `Conc` and `Absent`. Enter applies damage.
+- **Overflow:** when rows still cannot fit, a line under the list says how many are above
+  and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
+  counts as out of view. Each turn scrolls to show the current row and the next.
+- **Strip:** on other pages, a line with the turn, any conflict, `Back to run` and `Next turn`.
+
+## The catalogue
+
+Library is one catalogue of built-in, package and campaign entries. Its scope opens on what
+this campaign can use, and a switch shows everything, one package, or the campaign's own
+entries. Changing the scope never changes the active campaign. Editing, save state and
+`Copy to…` stay in the same page. Package actions are inline. The word `module` is gone
+from the interface.
+
+## Icons
+
+`egui-phosphor` (MIT, Phosphor Regular). `.gitignore` forbids committed images, so all
+icons are glyphs or painter shapes. `design::icons` names only the glyphs in use.
+
+## Tests
+
+- `design::tokens::tests`: WCAG contrast over the token pairs.
+- `design::lint`: no raw colours or text sizes outside `src/design/`, with a shrink-only
+  allowlist in `src/design/lint_allowlist.txt`.
+- `gallery` visual scenario: the tokens and shared parts people choose between, as PNGs.
+  It is a reference, not a full inventory: some tokens and whole-screen parts, such as the
+  run row and the dialogs, are seen in their own scenarios.
+- `visual_tests::ergonomics`: target size, accessible name, in view, overlap (including
+  over labels), clipped text (any ellipsis, or text past its pane's edge, read from the
+  painted shapes), keyboard reach, and the workflow goals. Each check except the workflow
+  goals has a seeded failure in its unit tests. Workflow goals were shown to fail by breaking
+  the app for one run.
+- A run of every scenario must report every test in section 8 of the brief, and the baseline
+  refuses a failed goal. `visual-compare <labelA> <labelB>` lists captures that differ above
+  the rendering noise. Its own tests prove
+  that a thin unnamed control in scroll content, and an unnamed control in a popup, do not
+  count as egui's chrome.

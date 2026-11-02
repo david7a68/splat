@@ -592,3 +592,16 @@ columns:
     let e = parse("nested", "rule", "", body);
     assert_eq!(field(&e.fields,"splat_rule").unwrap(),&serde_yaml_ng::from_str::<Value>("parameters: {groups: [{name: winter, spells: [{spell: {key: 'test:spells/ice'}}]}, {name: summer}]}").unwrap());
 }
+
+#[test]
+fn a_file_replaced_during_a_load_is_not_a_failed_load() {
+    let temp = tempfile::tempdir().unwrap();
+    let gone = temp.path().join("gone.md.tmp");
+    assert_eq!(unless_vanished(std::fs::read(&gone)), Ok(None));
+    assert_eq!(
+        unless_vanished(std::fs::read(temp.path().join("gone.md.tmp/inside"))),
+        Ok(None)
+    );
+    // A directory read as a file is a real failure.
+    assert!(unless_vanished(std::fs::read(temp.path())).is_err());
+}

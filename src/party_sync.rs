@@ -7,7 +7,7 @@ use reqwest::{
 };
 use serde::Deserialize;
 use serde_json::Value;
-use splat::character::{Cache, EntitySnapshot, now};
+use splat::character::{EntitySnapshot, now};
 use std::{
     collections::BTreeMap,
     io::Read,
@@ -292,7 +292,8 @@ impl Reader {
         let ctx = ctx.clone();
         let gate = self.gate.clone();
         thread::spawn(move || {
-            let result = Cache::user().and_then(|c| c.load_all(scope.local, &scope.remote));
+            let result = crate::hermetic::character_cache()
+                .and_then(|c| c.load_all(scope.local, &scope.remote));
             if let Ok(records) = &result {
                 for record in records {
                     if let Ok(active) = gate.lock() {
@@ -392,6 +393,13 @@ impl Reader {
             && (self.refresh_requested || !self.stream_open || safety_due)
     }
     pub fn refresh(&mut self, session: Session, ctx: &egui::Context, full: bool) {
+        // Test builds have no route to D&D Beyond. A signed-in test keeps its saved sheets.
+        if cfg!(test) {
+            self.refresh_requested = false;
+            self.last_check = Some(Instant::now());
+            self.next = Some(Instant::now() + INTERVAL);
+            return;
+        }
         if self.pending.is_some() || self.cooldown.is_some_and(|t| t > Instant::now()) {
             return;
         }
@@ -428,7 +436,7 @@ impl Reader {
                     // The authoritative roster prevents removed members from returning offline.
                     if let Ok(active) = gate.lock()
                         && *active
-                        && let Err(e) = Cache::user().and_then(|c| {
+                        && let Err(e) = crate::hermetic::character_cache().and_then(|c| {
                             c.save_roster(
                                 scope.local,
                                 &scope.remote,
@@ -456,7 +464,8 @@ impl Reader {
                             break;
                         }
                         if let Ok(record) = &result
-                            && let Err(e) = Cache::user().and_then(|c| c.save(scope.local, record))
+                            && let Err(e) = crate::hermetic::character_cache()
+                                .and_then(|c| c.save(scope.local, record))
                         {
                             let _ = tx.send(Event::Warning(e));
                         }
@@ -674,7 +683,7 @@ mod tests {
             .unwrap();
         let remote = campaign["dndbeyond_campaign_id"].as_str().unwrap();
         let local = Uuid::parse_str(campaign["id"].as_str().unwrap()).unwrap();
-        let session = crate::auth::connect(zeroize::Zeroizing::new(
+        let session = crate::auth::connect_live(zeroize::Zeroizing::new(
             keyring::Entry::new("splat", "dndbeyond-session")
                 .unwrap()
                 .get_password()
@@ -693,7 +702,7 @@ mod tests {
         )
         .unwrap();
         assert!(!members.is_empty());
-        let cache = Cache::user().unwrap();
+        let cache = splat::character::Cache::user().unwrap();
         for m in &members {
             let record = fetch(&client, &session, &m.id, remote).unwrap();
             assert_eq!(
@@ -729,7 +738,7 @@ mod tests {
             let ctx = egui::Context::default();
             let _ = ctx.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    crate::party::overview(ui, &record);
+                    crate::party::overview(ui, &record, None);
                     for page in 1..5 {
                         crate::party::details(ui, &record, page, "");
                     }

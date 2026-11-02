@@ -830,6 +830,16 @@ pub fn validate(entries: &[Entry]) -> Report {
     report
 }
 
+/// A file can vanish between listing and reading, because a save replaces it through a
+/// temporary file. That file is simply no longer there, and the load goes on.
+fn unless_vanished<T>(result: std::io::Result<T>) -> Result<Option<T>, String> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
     fn walk(root: &Path, current: &Path, files: &mut Vec<(String, String)>) -> Result<(), String> {
         let mut paths = std::fs::read_dir(current)
@@ -839,14 +849,18 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
             .map_err(|e| e.to_string())?;
         paths.sort();
         for path in paths {
-            let meta = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+            let Some(meta) = unless_vanished(std::fs::symlink_metadata(&path))? else {
+                continue;
+            };
             if meta.file_type().is_symlink() {
                 continue;
             }
             if meta.is_dir() {
                 walk(root, &path, files)?
             } else if path.extension().is_some_and(|x| x == "md") {
-                let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+                let Some(text) = unless_vanished(std::fs::read_to_string(&path))? else {
+                    continue;
+                };
                 let normalized = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
                 let Some(frontmatter) = normalized.strip_prefix("---\n") else {
                     continue;

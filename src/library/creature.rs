@@ -1,7 +1,10 @@
 //! A reading view of creature values, with the original rules prose retained.
 use super::presentation;
-use crate::reader_style::{self, ACCENT, card, section_heading};
-use eframe::egui::{self, RichText};
+use crate::design::{
+    self, Type, colors,
+    reader::{self as reader_style, heavy_rule, section_heading},
+};
+use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use splat::content::{Entry, Reference};
 
@@ -45,11 +48,15 @@ fn size(entry: &Entry) -> Option<&str> {
 }
 
 pub(super) fn supports(entry: &Entry, sections: &[presentation::ReadingSection<'_>]) -> bool {
-    entry.kind == "creature"
-        && entry.fields.contains_key("splat_stats")
+    has_stats(entry)
         && sections
             .iter()
             .any(|section| section.title == "Source text")
+}
+
+/// A creature with stats, from the book or written by hand, has a stat block at its head.
+pub(super) fn has_stats(entry: &Entry) -> bool {
+    entry.kind == "creature" && entry.fields.contains_key("splat_stats")
 }
 
 /// Remove only source rows represented by the styled values. Unknown prose stays.
@@ -79,6 +86,11 @@ fn rules_prose(entry: &Entry, source: &str) -> String {
                 return false;
             }
             if line.starts_with("HP ") && field(entry, "hit_points_text").is_some() {
+                return false;
+            }
+            if line.starts_with("Passive Perception")
+                && field(entry, "senses_text").is_some_and(|senses| senses.contains(line))
+            {
                 return false;
             }
             if line == "MOD SAVE MOD SAVE MOD SAVE"
@@ -172,34 +184,126 @@ pub(super) fn spell_references(entry: &Entry) -> Vec<Reference> {
         .collect()
 }
 
-fn prose(ui: &mut egui::Ui, text: &str, spell_links: &mut impl FnMut(&mut egui::Ui)) {
+fn prose(ui: &mut egui::Ui, text: &str, spell_links: &mut impl FnMut(&mut egui::Ui, &str)) {
     for paragraph in text.split("\n\n").map(str::trim).filter(|s| !s.is_empty()) {
         reader_style::source_prose(ui, paragraph);
         if paragraph.starts_with("Spellcasting.") {
-            spell_links(ui);
+            spell_links(ui, paragraph);
         }
     }
 }
 
-fn ability_card(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
-    card(ui, 8, |ui| {
-        ui.vertical_centered(|ui| {
-            ui.label(
-                RichText::new(ability[..3].to_uppercase())
-                    .color(ACCENT)
-                    .strong(),
-            );
-            ui.label(RichText::new(value(entry, ability)).size(22.0).strong());
-            let modifier = stat(entry, ability).map(|score| (score - 10).div_euclid(2));
-            ui.label(modifier.map_or_else(|| "Mod —".into(), |v| format!("Mod {v:+}")));
-            // An absent override does not establish proficiency or a save total.
-            let save = stat(entry, &format!("save_{ability}"));
-            ui.label(
-                RichText::new(save.map_or_else(|| "Save —".into(), |v| format!("Save {v:+}")))
-                    .small(),
-            );
-        });
+/// One ability row of the stat block's attribute table.
+fn ability_row(ui: &mut egui::Ui, entry: &Entry, ability: &str) {
+    let c = colors();
+    let modifier = stat(entry, ability).map(|score| (score - 10).div_euclid(2));
+    // An absent override does not establish proficiency or a save total.
+    let save = stat(entry, &format!("save_{ability}"));
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = design::XS;
+        cell(
+            ui,
+            30.0,
+            &ability[..3].to_uppercase(),
+            Type::StatLabel,
+            c.text,
+        );
+        cell(ui, 24.0, &value(entry, ability), Type::Stat, c.text);
+        cell(
+            ui,
+            26.0,
+            &modifier.map_or_else(|| "—".into(), design::signed),
+            Type::Stat,
+            c.muted,
+        );
+        cell(
+            ui,
+            56.0,
+            &save.map_or_else(
+                || "Save —".into(),
+                |v| format!("Save {}", design::signed(v)),
+            ),
+            Type::Stat,
+            c.muted,
+        );
     });
+}
+
+fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Color32) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, role.line()), egui::Sense::hover());
+    let galley = design::one_line(ui, text, role.font(ui), color, width + design::S);
+    // Numbers line up on their right edge, so that a column of them can be read down.
+    let numeric = text.starts_with(|c: char| c.is_ascii_digit() || "+\u{2212}\u{2014}".contains(c));
+    let left = if numeric {
+        rect.right() - galley.size().x
+    } else {
+        rect.left()
+    };
+    ui.painter()
+        .galley(egui::pos2(left, rect.top()), galley, color);
+}
+
+/// Armor class, hit points and initiative, under capital labels. Only what the entry has.
+fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
+    let hp = field(entry, "hit_points_text")
+        .map(str::to_owned)
+        .or_else(|| {
+            hit_points_line(entry).and_then(|line| {
+                line.strip_prefix("HP ")
+                    .map(|text| text.trim_end_matches('\\').trim().to_owned())
+            })
+        })
+        .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()));
+    [
+        (
+            "ARMOR CLASS",
+            stat(entry, "armor_class").map(|ac| ac.to_string()),
+        ),
+        ("HIT POINTS", hp),
+        ("INITIATIVE", stat(entry, "initiative").map(design::signed)),
+    ]
+    .into_iter()
+    .filter_map(|(label, text)| text.map(|text| (label, text)))
+    .collect()
+}
+
+fn vitals(ui: &mut egui::Ui, entry: &Entry) {
+    let c = colors();
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);
+        for (label, text) in vital_rows(entry) {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.label(Type::Label.rich(ui, label).color(c.muted));
+                ui.label(Type::Prose.rich(ui, text).color(c.text));
+            });
+        }
+    });
+}
+
+/// The body line that gives this creature's hit points, such as `HP 22 (4d8 + 4)`. The
+/// vitals show it, with the dice, so the page says it once.
+fn hit_points_line(entry: &Entry) -> Option<&str> {
+    let max = stat(entry, "max_hp")?;
+    entry.body.lines().map(str::trim).find(|line| {
+        line.strip_prefix("HP ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|number| number.parse::<i64>().ok())
+            == Some(max)
+    })
+}
+
+fn without_line(body: &str, line: Option<&str>) -> String {
+    let Some(line) = line else {
+        return body.to_owned();
+    };
+    let mut out = String::with_capacity(body.len());
+    for text in body.split_inclusive('\n') {
+        if text.trim() != line {
+            out.push_str(text);
+        }
+    }
+    out
 }
 
 fn detail(entry: &Entry, key: &str) -> Option<String> {
@@ -225,56 +329,81 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
     Some(movement.join(", "))
 }
 
-pub(super) fn show(
-    ui: &mut egui::Ui,
-    entry: &Entry,
-    sections: &[presentation::ReadingSection<'_>],
-    mut spell_links: impl FnMut(&mut egui::Ui),
-) {
-    ui.add_space(12.0);
+/// Identity, vitals, abilities and details: what the entry has, and no empty cells.
+pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry) {
+    ui.add_space(design::S);
     let identity = [size(entry), field(entry, "type"), field(entry, "alignment")]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>()
         .join(" · ");
-    reader_style::identity(ui, &identity);
-    let hp = field(entry, "hit_points_text")
-        .map(str::to_owned)
-        .unwrap_or_else(|| value(entry, "max_hp"));
-    let initiative = stat(entry, "initiative").map_or_else(|| "—".into(), |v| format!("{v:+}"));
-    reader_style::facts(
-        ui,
-        &[
-            ("Armor class".into(), value(entry, "armor_class")),
-            ("Hit points".into(), hp),
-            ("Initiative".into(), initiative),
-        ],
-    );
-    ui.add_space(10.0);
-    let per_row = if ui.available_width() < 480.0 { 3 } else { 6 };
-    for abilities in ABILITIES.chunks(per_row) {
-        ui.columns(abilities.len(), |columns| {
-            for (column, ability) in columns.iter_mut().zip(abilities) {
-                ability_card(column, entry, ability);
+    reader_style::identity(ui, &reader_style::human_label(&identity));
+    heavy_rule(ui);
+    ui.add_space(design::S);
+    vitals(ui, entry);
+    ui.add_space(design::S);
+    // The rulebook's table: physical abilities beside mental ones.
+    let two_columns = ui.available_width() >= 300.0;
+    let any_ability = ABILITIES
+        .iter()
+        .any(|ability| stat(entry, ability).is_some());
+    if any_ability {
+        design::rule(ui);
+        ui.add_space(design::XS);
+    }
+    if !any_ability {
+        // An authored creature can have no scores. There is nothing to tabulate.
+    } else if two_columns {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = design::M;
+            for column in ABILITIES.chunks(3) {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 1.0;
+                    for ability in column {
+                        ability_row(ui, entry, ability);
+                    }
+                });
             }
         });
-        ui.add_space(6.0);
+    } else {
+        ui.spacing_mut().item_spacing.y = 1.0;
+        for ability in ABILITIES {
+            ability_row(ui, entry, ability);
+        }
     }
-    ui.add_space(4.0);
+    if any_ability {
+        ui.add_space(design::XS);
+        design::rule(ui);
+        ui.add_space(design::XS);
+    }
+    ui.spacing_mut().item_spacing.y = 2.0;
     for (key, label) in DETAILS {
         if let Some(text) = detail(entry, key).filter(|text| !text.is_empty()) {
             reader_style::detail(ui, label, &text);
         }
     }
-    ui.add_space(8.0);
+    ui.add_space(design::XS);
+    heavy_rule(ui);
+    ui.add_space(design::S);
+    ui.spacing_mut().item_spacing.y = design::XS;
+}
+
+pub(super) fn show(
+    ui: &mut egui::Ui,
+    entry: &Entry,
+    sections: &[presentation::ReadingSection<'_>],
+    mut spell_links: impl FnMut(&mut egui::Ui, &str),
+) {
+    stat_head(ui, entry);
     for section in sections {
         if section.title == "Source text" {
-            prose(ui, &rules_prose(entry, section.body), &mut spell_links);
+            let body = without_line(section.body, hit_points_line(entry));
+            prose(ui, &rules_prose(entry, &body), &mut spell_links);
         } else {
             let body = if section.body.contains("<!-- splat:") {
                 authored_prose(section.body)
             } else {
-                section.body.to_owned()
+                without_line(section.body, hit_points_line(entry))
             };
             if body.trim().is_empty() {
                 continue;
@@ -282,7 +411,7 @@ pub(super) fn show(
             if section.title != "Overview" {
                 section_heading(ui, &section.title);
             }
-            reader_style::markdown(ui, &body, false);
+            reader_style::source_prose(ui, &body);
         }
     }
 }
@@ -290,6 +419,20 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_hand_written_creature_reads_as_a_stat_block_with_only_what_it_has() {
+        let text = "---\nsplat_schema: 1\nsplat_id: 8f4a2f8e-41f0-4c4a-9d4c-0a7a1a1b2c3d\nsplat_kind: creature\nsplat_name: Varra\nsplat_creature: {size: medium}\nsplat_stats:\n  max_hp: {value: 52}\n  armor_class: {value: 16}\n---\n\n# Varra\n\n## Actions\n\nLongsword. Melee Attack Roll: +5.\n";
+        let entry = Entry::parse("Notes/Varra.md", text).unwrap();
+        assert!(has_stats(&entry));
+        assert_eq!(
+            vital_rows(&entry),
+            vec![
+                ("ARMOR CLASS", "16".to_string()),
+                ("HIT POINTS", "52".to_string())
+            ]
+        );
+    }
 
     #[test]
     fn custom_prose_around_structured_data_is_preserved() {
