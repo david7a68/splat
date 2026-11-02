@@ -139,11 +139,11 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Field | `field` | Label, control, help, error; names the control for accessibility |
 | Text fields | `text_field`, `text_input`, `number_field`, `search_field`, `named` | Always have an accessible name and a 26 px target. Numbers align left, so the caret never lies on a digit |
 | Dialog | `dialog` | An `egui::Modal`, for the brief's modal tasks only: discard on close, removing a campaign or a package, copy review |
-| Section | `section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows. `quiet_section` is for technical details at a page's end |
+| Section | `section`, `keyed_section`, `quiet_section`, `section_icon`, `combo_icon` | Collapsing, with Phosphor arrows. `keyed_section` is for a title that changes while open, as egui makes a section's id from its title. `quiet_section` is for technical details at a page's end |
 | Table row | `table_row` | Fixed cell widths and a hairline, for Markdown tables and sheets. No stripes, because a row's height follows its text |
 | Rail toggle | `nav_toggle` | Lookup and panels. Its own `Open` word, so that it never looks like the current page |
 | Segmented | `segmented`, `segmented_named` | Words with an underline, not a pill. `segmented_named` is for a tab that paints a mark |
-| List row | `row`, `two_line_row` | Fixed height, for `show_rows`. Paints hover at the current frame |
+| List row | `row`, `hover_row`, `two_line_row` | Fixed height, for `show_rows`. Paints hover at the current frame. `hover_row` says something, with no click or Tab stop |
 | Status | `status`, `status_link`, `Status` | Icon, word, colour. `status_link` also leads to where the DM can act |
 | Stat tile | `stat_tile` | A label over a large value, with no box. HP takes its state's colour |
 | Icon button | `icon_button`, `icon_toggle` | One icon, with a name and a tooltip. `icon_toggle` stays pressed while its state is on |
@@ -191,8 +191,8 @@ temporary HP, HP with its bar, then a state column for `Bloodied`, `0 HP` and th
 word. Conditions take a second line that wraps before the HP column and grows the row, so
 no condition is cut. A separator stands between words, and never opens a wrapped line. When a
 window has no room for the state column, as at 960x640 beside the panel, the HP word opens the
-second line and the sync word closes it, so that a name is never cut. On a full row, the sync word
-stays near the front, as one more line would cost another row its place.
+second line and the sync word closes it, so that a name is never cut. On a full row, that can cost
+a line.
 
 - **Current row:** the `current_row` fill, a 2 px stroke, a 6 px bar, and the word `TURN`
   under the initiative, which has its own column. In a compressed list the word sits beside
@@ -270,7 +270,7 @@ Library is one catalogue of built-in, package and campaign entries. Its scope op
 this campaign can use, and a switch shows everything, one package, or the campaign entries. Changing the scope never changes the active campaign. Editing, save state and
 `Copy to…` stay in the same page. Package actions are inline. The word `module` is gone
 from the interface. `Campaign entry` is the one term for what a campaign owns. A list row and the
-reader use one second line. On **Campaign → Packages**, required entries are in columns, listed
+reader use one second line, and the reader adds a level the title has lost (`· Level 3`). On **Campaign → Packages**, required entries are in columns, listed
 only under the package that holds them, with the campaign entries as their own group.
 
 ## Icons

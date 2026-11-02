@@ -208,8 +208,9 @@ references under **Source and identifiers**. Raw definitions stay under collapse
 feature links in level order. Display changes do not alter saved content.
 
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
-manifest, or choose a new folder, a name and a namespace (for example `my_homebrew`) to create
-a package. The folder that holds a new package must already exist. Package
+manifest, or choose an empty or new folder, a name and a namespace (for example `my_homebrew`) to
+create a package. The folder that holds a new one must already exist. A folder with anything in it
+is refused, and nothing is written. Package
 registrations are stored in user settings; package notes remain in their own folders.
 Unregistering a package leaves its files in place. Package and campaign folders must
 be separate. Register My Homebrew in your preferred location for shared homebrew.

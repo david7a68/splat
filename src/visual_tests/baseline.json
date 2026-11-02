@@ -7,7 +7,7 @@
       "encounter-build": 5,
       "encounter-run": 3,
       "gallery": 7,
-      "library-author": 2,
+      "library-author": 3,
       "library-browse": 28,
       "library-scope": 3,
       "library-to-encounter": 3,
@@ -26,7 +26,6 @@
       "run-sync-states": 5,
       "session-notes": 21,
       "session-recording": 19,
-      "settings": 1,
       "signed-in": 12
     },
     "no-overlap/egui-chrome": {
@@ -41,7 +40,7 @@
       "encounter-build": 5,
       "encounter-run": 3,
       "gallery": 7,
-      "library-author": 1,
+      "library-author": 2,
       "library-browse": 28,
       "library-scope": 2,
       "library-to-encounter": 3,
@@ -60,7 +59,6 @@
       "run-sync-states": 5,
       "session-notes": 21,
       "session-recording": 18,
-      "settings": 1,
       "signed-in": 12
     }
   },

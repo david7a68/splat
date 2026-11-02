@@ -156,7 +156,7 @@ fn required_table(
                         let every = reasons.iter().cloned().collect::<Vec<_>>().join(", ");
                         let name = format!("{} · {kind} · required by {every}", entry.name);
                         let response = ui.push_id(id, |ui| {
-                            design::row(ui, ROW, false, &name, |ui, rect| {
+                            design::hover_row(ui, ROW, &name, |ui, rect| {
                                 let body = Type::Body.font(ui);
                                 let small = Type::Small.font(ui);
                                 let room = name_width - design::S - design::XS;
@@ -324,7 +324,7 @@ impl CampaignContent {
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
-                    self.error = Some("Loading stopped. Reload to retry.".into());
+                    self.error = Some("Loading stopped. Refresh to retry.".into());
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
@@ -383,12 +383,17 @@ impl CampaignContent {
                                     "The details at the top of this note stop making sense at line {line}, marked below. The mistake is there or just above it. Often a bracket or a quote is not closed."
                                 ),
                             );
-                            ui.add(
-                                egui::Label::new(
-                                    Type::Small.rich(ui, problem.as_str()).color(colors().muted),
-                                )
-                                .wrap(),
-                            );
+                            // The parser counts from the details, so its line is not the note's.
+                            design::quiet_section(ui, "Technical details", |ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        Type::Small
+                                            .rich(ui, problem.as_str())
+                                            .color(colors().muted),
+                                    )
+                                    .wrap(),
+                                );
+                            });
                         } else {
                             design::message(ui, Tone::Error, problem);
                         }

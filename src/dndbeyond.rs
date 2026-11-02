@@ -279,11 +279,19 @@ impl DndBeyond {
                                             .blocked(Some("This campaign is already in your list."))
                                             .show(ui);
                                     } else if is_chosen {
-                                        let _ = crate::design::Action::quiet("Choosing a folder")
-                                            .density(density)
-                                            .selected(true)
-                                            .name(&format!("Adding {}", remote.name))
-                                            .show(ui);
+                                        let response = crate::design::status(
+                                            ui,
+                                            crate::design::Status {
+                                                icon: crate::design::icons::CAMPAIGN,
+                                                word: "Choosing a folder",
+                                                color: crate::design::colors().muted,
+                                            },
+                                        );
+                                        crate::design::named(
+                                            ui,
+                                            &response,
+                                            &format!("Adding {}", remote.name),
+                                        );
                                     } else if crate::design::Action::secondary("Add")
                                         .density(density)
                                         .name(&format!("Add {}", remote.name))

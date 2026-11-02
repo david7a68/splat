@@ -3,7 +3,7 @@
 Open **Campaign → Party**. Link the active campaign in Settings and connect your
 D&D Beyond session to fetch its party. Saved local copies remain available offline.
 
-Select a member and use Overview, Actions, Spells, Equipment, Features, or
+Select a member and use Overview, Actions, Spells, Gear, Features, or
 Source & parity. Totals and attacks come from D&D Beyond's simplified computed
 character service (SCDS), rather than Splat's earlier basic formulas. Detailed
 source data comes from the character v5 endpoint. Source & parity explains the

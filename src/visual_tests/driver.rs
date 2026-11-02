@@ -118,6 +118,11 @@ impl Found {
         self.role == Role::Link
     }
 
+    /// It says something, and takes no click or Tab stop.
+    pub fn is_plain_label(&self) -> bool {
+        self.role == Role::Label
+    }
+
     pub fn in_view(&self) -> bool {
         self.shown.is_positive()
     }
@@ -1038,23 +1043,6 @@ impl<'a> Driver<'a> {
         self.harness.remove_cursor();
         self.settle();
         self.film_result("Scroll");
-    }
-
-    /// Wheel-scroll up over this point, back to the start of what scrolled.
-    pub fn scroll_up_at(&mut self, pos: egui::Pos2, notches: u32) {
-        self.harness.hover_at(pos);
-        self.harness.step();
-        for _ in 0..notches {
-            self.harness.event(egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                delta: egui::vec2(0.0, 100.0),
-                modifiers: egui::Modifiers::NONE,
-            });
-            self.harness.step();
-            self.interactions += 1;
-        }
-        self.harness.remove_cursor();
-        self.settle();
     }
 
     /// Wheel-scroll over this point until a virtual list shows the text.

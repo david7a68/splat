@@ -325,17 +325,17 @@ pub mod library_author {
         d.click(MANAGE_PACKAGES);
         d.expect(MANAGE_TITLE);
         d.state("manage-packages", Sizes::All);
-        let whole_form = d.at_size(DEFAULT, |d| {
-            d.has("Browse for package folder")
-                && d.has("Browse for new package folder")
-                && d.visible_text("Enter the folder's path first.")
-                && d.visible_text("Enter a folder, a name and a namespace first.")
-                && d.visible_text("opens each entry's key")
-        });
-        d.observe(
+        d.observe_both(
             "M6-6",
-            whole_form,
-            "At 1200x800: two groups, Browse on each, a help line for Namespace, and each reason in view",
+            "Two groups, Browse on each, a help line for Namespace, each reason in view, and the list's head",
+            |d| {
+                d.has("Browse for package folder")
+                    && d.has("Browse for new package folder")
+                    && d.visible_text("Enter the folder's path first.")
+                    && d.visible_text("Enter a folder, a name and a namespace first.")
+                    && d.visible_text("opens each entry's key")
+                    && d.visible_text("Registered packages")
+            },
         );
         escape_closes(d, "manage packages form", MANAGE_TITLE, CLOSE_WINDOW);
         d.goal("open and close the package form");
@@ -362,12 +362,65 @@ pub mod library_author {
                 && d.field_text(NEW_NAME_FIELD).as_deref() == Some(NEW_NAME),
             "A name clash states the fix, and the typed name stays",
         );
+        d.click(NEW_ENTRY);
+
+        // Create package through the form. A folder with anything in it is refused, and an
+        // empty one is used. Both are inside this scenario's temporary world.
+        let world = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .and_then(|campaign| campaign.path.parent().map(std::path::Path::to_path_buf))
+            .expect("the world's folder");
+        let (full, empty) = (world.join("folder-with-a-file"), world.join("empty-folder"));
+        std::fs::create_dir_all(&full).expect("make a folder");
+        std::fs::write(full.join("notes.txt"), "the DM's own").expect("write a file");
+        std::fs::create_dir_all(&empty).expect("make a folder");
+        d.click(PACKAGE_ACTIONS);
+        d.click(MANAGE_PACKAGES);
+        d.type_into("New package folder", &full.to_string_lossy());
+        d.type_into("Name", "Copper Road");
+        d.type_into("Namespace", "copper_road");
+        d.observe(
+            "L6-52",
+            !d.is_disabled("Create package"),
+            "With a folder, a name and a namespace, Create package is on",
+        );
+        d.click("Create package");
+        d.state("create-package-refused", Sizes::Default);
+        let files = std::fs::read_dir(&full).expect("the folder").count();
+        d.observe(
+            "F2-02",
+            d.visible_text("Choose an empty folder") && files == 1,
+            format!("A folder with a file is refused, says what to do, and has {files} file"),
+        );
+        d.replace_text_in("New package folder", &empty.to_string_lossy());
+        d.click("Create package");
+        d.state("create-package-empty-folder", Sizes::Default);
+        d.observe(
+            "F2-15",
+            empty.join("Module.md").is_file() && d.visible_text("Copper Road"),
+            "Create package makes the package in the folder the field names, and opens it",
+        );
     }
 }
 
 /// W9: choose what a campaign uses, then edit a campaign-owned entry.
 pub mod campaign_content {
     use super::*;
+
+    /// A required row paints its first reason, in the words its name has after `required by`.
+    fn a_row_paints_its_reason(d: &Driver<'_>) -> bool {
+        d.nodes().iter().any(|node| {
+            node.name
+                .split_once(" · required by ")
+                .is_some_and(|(_, every)| {
+                    let first = every.split(", ").next().unwrap_or(every);
+                    d.painted_in(node.shown).contains(first)
+                })
+        })
+    }
+
     const PAGE_TITLE: &str = "entries chosen";
     const MODULE_ROW: &str = "Ashen Marches · ";
     const PARTIAL: &str = "5 of 6";
@@ -395,7 +448,21 @@ pub mod campaign_content {
         d.state("packages-tab", Sizes::Default);
         d.check_tab_order("campaign, packages");
         // No click: the brief asks for these on screen, with the built-in package open.
-        let reasons = d.visible_text(REQUIRED_BY) && d.visible_text(OWN_GROUP);
+        let reasons =
+            d.visible_text(REQUIRED_BY) && d.visible_text(OWN_GROUP) && a_row_paints_its_reason(d);
+        let required_rows: Vec<_> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.contains(" · required by "))
+            .collect();
+        d.observe(
+            "F2-05",
+            !required_rows.is_empty()
+                && required_rows
+                    .iter()
+                    .all(crate::visual_tests::driver::Found::is_plain_label),
+            "A required row says something, and takes no click or Tab stop",
+        );
         let counted = d.has_containing(REQUIRED);
         // Membership: a row sits only under the package that holds it, or the campaign's group.
         let not_here = !d.has_containing(IN_PACKAGE_ONLY);
@@ -418,6 +485,7 @@ pub mod campaign_content {
             "T9.1",
             d.has_containing(IN_PACKAGE_ONLY)
                 && d.has_containing("required by Ember Cultist")
+                && a_row_paints_its_reason(d)
                 && d.visible_text("In Ashen Marches (1)"),
             "With the package that holds it open, the required entry is listed under it, with its reason",
         );
@@ -494,9 +562,22 @@ pub mod campaign_content {
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
-            d.visible_text("Invalid YAML"),
+            d.visible_text("stop making sense at line 4"),
             "The repair says what is wrong before the DM edits anything",
         );
+        // The parser's own count of lines starts after the details' first line, so it is apart.
+        d.observe(
+            "F2-09",
+            !d.visible_text("Invalid YAML"),
+            "The note's line number is the only one in view",
+        );
+        d.click("Technical details");
+        d.observe(
+            "F2-09",
+            d.visible_text("Invalid YAML"),
+            "The parser's words are in a closed section, and open with a click",
+        );
+        d.click("Technical details");
         d.observe(
             "T9.2",
             d.editor_text()
@@ -530,6 +611,24 @@ pub mod party {
         d.expect(FIRST_MEMBER);
         d.expect(OFFLINE);
         d.state("list-and-sheet", Sizes::AllAndHiDpi);
+        // The sections under the tiles sit on the tiles' own columns.
+        let left = |d: &Driver<'_>, name: &str| d.place_of(name).map(|place| place.left());
+        let on_grid = |d: &Driver<'_>, name: &str, tile: &str| -> Option<f32> {
+            Some((left(d, name)? - left(d, tile)?).abs())
+        };
+        let skills = d.at_size(DEFAULT, |d| on_grid(d, "Skills", "TEMP HP"));
+        let (skills_wide, defenses_wide) = d.at_size((1920.0, 1080.0), |d| {
+            (
+                on_grid(d, "Skills", "TEMP HP"),
+                on_grid(d, "Defenses & senses", "PROFICIENCY"),
+            )
+        });
+        let close = |gap: Option<f32>| gap.is_some_and(|gap| gap < 1.5);
+        d.observe(
+            "F2-06",
+            close(skills) && close(skills_wide) && close(defenses_wide),
+            format!("Sections sit on the tile grid. Off by: {skills:?} at 1200x800, {skills_wide:?} and {defenses_wide:?} at 1920x1080"),
+        );
         d.check_tab_order("party, character sheet");
         d.goal("see the party and a sheet");
         d.observe(
@@ -565,6 +664,23 @@ pub mod party {
         d.click(OVERVIEW);
         d.click(SOURCE);
         d.state("source-and-parity", Sizes::Default);
+        let schema_words = [
+            "computed-character",
+            "character v5",
+            "schema",
+            "Beyond services",
+        ];
+        let shown: Vec<_> = schema_words
+            .iter()
+            .filter(|words| d.visible_text(words))
+            .collect();
+        d.observe(
+            "F2-07",
+            shown.is_empty(),
+            format!(
+                "With Technical details closed, no service or schema words are in view: {shown:?}"
+            ),
+        );
         d.goal("read every sheet page");
 
         switch_campaign(d, QUIET_CAMPAIGN);
@@ -952,6 +1068,8 @@ pub mod settings {
     const OFFLINE_ERROR: &str = "Could not reach D&D Beyond";
     const CAMPAIGNS_SECTION: &str = "Campaigns";
     const EDIT_DETAILS: &str = "Edit details";
+    const SAVE_DETAILS: &str = "Save details";
+    const CAMPAIGN_NAME_FIELD: &str = "Campaign name";
     const EDIT_FORM: &str = "Edit The Emberfall Marches";
     const CANCEL: &str = "Cancel";
     const ADD_FROM_REMOTE: &str = "Add from D&D Beyond";
@@ -1025,6 +1143,17 @@ pub mod settings {
         d.state("confirm-remove-campaign", Sizes::Default);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
+
+        d.click(EDIT_DETAILS);
+        let off_before = d.is_disabled(SAVE_DETAILS);
+        d.type_into(CAMPAIGN_NAME_FIELD, " Two");
+        let on_after = !d.is_disabled(SAVE_DETAILS);
+        d.observe(
+            "F2-15",
+            off_before && on_after,
+            format!("Save details is off until an edit: off {off_before}, then on {on_after}"),
+        );
+        d.click(CANCEL);
     }
 }
 
@@ -3241,8 +3370,17 @@ pub mod signed_in {
         );
         d.observe(
             "L7-14",
-            d.has(&format!("Adding {REMOTE_NAME}")) && !d.visible_text("ID 9002"),
-            "The chosen campaign has a selected state, and no D&D Beyond number is on show",
+            d.has(&format!("Adding {REMOTE_NAME}"))
+                && d.visible_text("Choosing a folder")
+                && !d.visible_text("ID 9002"),
+            "The chosen campaign says so, and no D&D Beyond number is on show",
+        );
+        d.observe(
+            "F2-05",
+            !d.nodes()
+                .iter()
+                .any(|node| node.name == format!("Adding {REMOTE_NAME}") && !node.is_plain_label()),
+            "Choosing a folder is a status word, not a button that does nothing",
         );
         d.observe(
             "T10.3",
@@ -3250,7 +3388,26 @@ pub mod signed_in {
             "Choosing a remote campaign opens its import, with the name filled in",
         );
         d.click("Cancel");
-        d.scroll_up_at(pos2(780.0, 300.0), 10);
+        // Again, as a capture's other sizes moved the scroll.
+        d.click(ADD_REMOTE);
+        let (form, top) = (
+            d.visible_text("Choose a folder."),
+            d.visible_text(CONNECTED_PAGE),
+        );
+        d.observe(
+            "F2-12",
+            form && !top,
+            format!(
+                "At 960x640, Add scrolled the form into view: {form}, away from the page's top: {}",
+                !top
+            ),
+        );
+        d.click("Cancel");
+        d.observe(
+            "F2-12",
+            d.visible_text(CONNECTED_PAGE),
+            "At 960x640, Cancel takes the page back to its top",
+        );
         d.begin_task();
 
         go_party(d);

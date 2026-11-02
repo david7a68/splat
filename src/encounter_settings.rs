@@ -143,7 +143,7 @@ impl Options {
         self.directory(campaign)?;
         let document = CampaignDocument::load(campaign)?;
         if document.text != baseline {
-            return Err("Campaign settings changed on disk. Reload before saving.".into());
+            return Err("Campaign settings changed on disk. Refresh before saving.".into());
         }
         let entry = Entry::parse(&document.path, &document.text)?;
         let relative = "Rules/Encounter Initiative.md";

@@ -232,11 +232,11 @@ impl Store {
 
     pub(crate) fn check_save(&self, data: &UserData) -> Result<(), String> {
         if !self.loaded {
-            return Err("Reload a valid settings file before saving changes.".into());
+            return Err("Refresh a valid settings file before saving changes.".into());
         }
         data.validate()?;
         if self.read()? != self.baseline {
-            return Err("Settings changed outside this window. Reload them before saving.".into());
+            return Err("Settings changed outside this window. Refresh them before saving.".into());
         }
         Ok(())
     }

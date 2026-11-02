@@ -581,7 +581,7 @@ impl CampaignDocument {
             && entry.fields.contains_key("splat_dndbeyond_campaign_id")
             && campaign_metadata(&entry, previous.clone())? != *previous
         {
-            return Err("Campaign settings changed on disk. Reload before saving.".into());
+            return Err("Campaign settings changed on disk. Refresh before saving.".into());
         }
         let text = patch_fields(
             &document.text,
@@ -711,7 +711,7 @@ pub fn check_destination(root: &Path, id: Uuid, private: bool) -> Result<(), Str
         || manifests[0].kind != if private { "campaign" } else { "package" }
     {
         return Err(
-            "The destination owner changed. Reload its registration before copying.".into(),
+            "The destination owner changed. Refresh its registration before copying.".into(),
         );
     }
     Ok(())
@@ -842,7 +842,7 @@ impl CopyPlan {
         if let Some(path) = &self.source_path
             && fs::read_to_string(path).map_err(|e| e.to_string())? != self.source_text
         {
-            return Err("The source changed on disk. Reload it and review a new copy.".into());
+            return Err("The source changed on disk. Refresh it and review a new copy.".into());
         }
         write_note(&self.root, &self.relative, None, &self.text)
     }

@@ -295,9 +295,17 @@ fn roster_summary(setup: &Setup) -> String {
     }
     sides
         .iter()
-        .map(|(side, count)| format!("{count} {side}"))
+        .map(|(side, count)| side_count(*count, side))
         .collect::<Vec<_>>()
         .join(" · ")
+}
+/// A count with its side's stored word. `enemies` has a singular, and `party` needs none.
+fn side_count(count: usize, side: &str) -> String {
+    if side == "enemies" {
+        design::count(count, "enemy", "enemies")
+    } else {
+        format!("{count} {side}")
+    }
 }
 struct Snapshot {
     catalogue: Catalogue,
@@ -652,7 +660,7 @@ impl Encounters {
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
-                    self.error = Some("Loading stopped. Reload to retry.".into());
+                    self.error = Some("Loading stopped. Refresh to retry.".into());
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
@@ -702,7 +710,7 @@ impl Encounters {
         }
         let fresh = Draft::open(&campaign.path, &draft.path)?;
         if fresh.baseline != draft.baseline {
-            return Err("The encounter changed on disk. Reload it before running.".into());
+            return Err("The encounter changed on disk. Refresh it before running.".into());
         }
         let snapshot = Snapshot::load(campaign, modules)?;
         fresh.validate(&snapshot)?;
@@ -1871,6 +1879,12 @@ impl Encounters {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn one_enemy_is_singular() {
+        assert_eq!(side_count(1, "enemies"), "1 enemy");
+        assert_eq!(side_count(3, "enemies"), "3 enemies");
+        assert_eq!(side_count(5, "party"), "5 party");
+    }
     #[test]
     fn undo_discard_stays_in_its_campaign() {
         let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());

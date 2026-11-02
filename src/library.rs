@@ -844,7 +844,7 @@ impl Library {
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
-                    self.error = Some("Library loading stopped. Reload to retry.".into());
+                    self.error = Some("Library loading stopped. Refresh to retry.".into());
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
             }
@@ -1007,8 +1007,12 @@ impl Library {
                                 {
                                     continue;
                                 }
-                                if !group.is_empty() {
+                                // A group with no label keeps its gap, so that it does not
+                                // read as part of the group above. `All entries` has none above.
+                                if !group.is_empty() || sections != [Section::All] {
                                     ui.add_space(design::M);
+                                }
+                                if !group.is_empty() {
                                     design::group_label(ui, group);
                                     ui.add_space(design::XS);
                                 }
@@ -1417,41 +1421,52 @@ impl Library {
                         }
                     });
                 });
-                // What each action waits for, in view: at a desk, a greyed button is a question.
+                // What each action waits for, beside it: at a desk, a greyed button is a question.
                 let why = |ui: &mut egui::Ui, reason: Option<&str>| {
                     if let Some(reason) = reason {
-                        ui.label(Type::Small.rich(ui, reason).color(c.muted));
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, reason).color(c.muted)).wrap(),
+                        );
                     }
                 };
+                // A group's head is stronger than the field labels under it.
+                let group = |ui: &mut egui::Ui, words: &str| {
+                    ui.label(Type::Heading.rich(ui, words).color(c.text));
+                };
                 ui.add_space(design::XS);
-                design::group_label(ui, "Add a package you already have");
+                group(ui, "Add a package you already have");
                 ui.add_space(design::XS);
                 crate::campaigns::folder_field(
                     ui,
                     "Package folder",
                     &mut self.path,
-                    Some("A folder that already holds a Package.md note. Its files stay where they are."),
+                    Some("A folder with one package note. Files stay put."),
                 );
                 let reason = locked.or(self
                     .path
                     .trim()
                     .is_empty()
                     .then_some("Enter the folder's path first."));
-                let register = Action::secondary("Register folder")
-                    .blocked(reason)
-                    .show(ui)
-                    .clicked();
-                why(ui, reason);
-                ui.add_space(design::M);
+                let register = ui
+                    .horizontal(|ui| {
+                        let register = Action::secondary("Register folder")
+                            .blocked(reason)
+                            .show(ui)
+                            .clicked();
+                        why(ui, reason);
+                        register
+                    })
+                    .inner;
+                ui.add_space(design::S);
                 design::rule(ui);
-                ui.add_space(design::M);
-                design::group_label(ui, "Create a new package");
+                ui.add_space(design::S);
+                group(ui, "Create a new package");
                 ui.add_space(design::XS);
                 crate::campaigns::folder_field(
                     ui,
                     "New package folder",
                     &mut self.new_package_path,
-                    Some("An empty folder, or a new one that Splat creates inside a folder that exists."),
+                    Some("Empty, or a new name in a folder that exists."),
                 );
                 design::text_field(ui, "Name", &mut self.name, None, None);
                 design::text_field(
@@ -1476,11 +1491,16 @@ impl Library {
                     _ => Some("Enter a folder, a name and a namespace first.".to_owned()),
                 };
                 let reason = locked.or(waiting.as_deref());
-                let create = Action::primary("Create package")
-                    .blocked(reason)
-                    .show(ui)
-                    .clicked();
-                why(ui, reason);
+                let create = ui
+                    .horizontal(|ui| {
+                        let create = Action::primary("Create package")
+                            .blocked(reason)
+                            .show(ui)
+                            .clicked();
+                        why(ui, reason);
+                        create
+                    })
+                    .inner;
                 if register || create {
                     let result = if create {
                         create_module(
@@ -1505,8 +1525,8 @@ impl Library {
                         Err(e) => self.error = Some(e),
                     }
                 }
-                ui.add_space(design::M);
-                design::group_label(ui, "Registered packages");
+                ui.add_space(design::S);
+                group(ui, "Registered packages");
                 design::rule(ui);
                 if campaigns.modules().is_empty() {
                     ui.label(Type::Body.rich(ui, "None yet.").color(c.muted));

@@ -10,6 +10,8 @@ use uuid::Uuid;
 pub struct Campaigns {
     /// `Add` on a remote campaign opened the form, so it scrolls into view once.
     scroll_to_form: bool,
+    scrolled_to_form: bool,
+    scroll_back: bool,
     store: Option<Store>,
     data: UserData,
     error: Option<String>,
@@ -32,6 +34,8 @@ impl Default for Campaigns {
     fn default() -> Self {
         let mut result = Self {
             scroll_to_form: false,
+            scrolled_to_form: false,
+            scroll_back: false,
             store: None,
             data: UserData::default(),
             error: None,
@@ -177,6 +181,8 @@ impl Campaigns {
         let data = store.load().unwrap();
         Self {
             scroll_to_form: false,
+            scrolled_to_form: false,
+            scroll_back: false,
             store: Some(store),
             data,
             error: None,
@@ -234,7 +240,7 @@ impl Campaigns {
 
     fn persist(&mut self, data: UserData) -> Result<(), String> {
         if !self.writable {
-            return Err("Reload valid campaign settings before saving.".into());
+            return Err("Refresh valid campaign settings before saving.".into());
         }
         let store = self.store.as_mut().ok_or("Settings are unavailable.")?;
         store.check_save(&data)?;
@@ -314,6 +320,7 @@ impl Campaigns {
     }
 
     fn clear_form(&mut self) {
+        self.scrolled_to_form = false;
         self.editing = None;
         self.name.clear();
         self.path.clear();
@@ -345,7 +352,7 @@ impl Campaigns {
         let reason = if self.writable {
             blocked
         } else {
-            Some("Reload valid campaign settings in Settings first.")
+            Some("Refresh valid campaign settings in Settings first.")
         };
         ui.add_enabled_ui(self.writable && blocked.is_none(), |ui| {
             // A name wraps to two lines here, rather than ending in dots.
@@ -522,6 +529,10 @@ impl Campaigns {
     ) {
         let c = colors();
         self.remove_dialog(ui.ctx());
+        // The top of this list is the top of the page's scroll.
+        if std::mem::take(&mut self.scroll_back) {
+            ui.scroll_to_cursor(Some(egui::Align::Min));
+        }
         if let Some(added) = self.added.clone() {
             ui.horizontal(|ui| {
                 design::message(ui, Tone::Success, &added);
@@ -557,7 +568,7 @@ impl Campaigns {
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
-        let unwritable = (!self.writable).then_some("Reload valid campaign settings first.");
+        let unwritable = (!self.writable).then_some("Refresh valid campaign settings first.");
         design::locked(ui, unwritable, |ui| {
             design::rule(ui);
             if self.data.campaigns.is_empty() {
@@ -596,14 +607,19 @@ impl Campaigns {
                             });
                             // Where it is, or, if the folder is missing, that first.
                             if campaign.path.is_dir() {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small
-                                            .rich(ui, campaign.path.display().to_string())
-                                            .color(c.muted),
-                                    )
-                                    .wrap(),
+                                let path = campaign.path.display().to_string();
+                                let shown = design::cut_middle(
+                                    ui,
+                                    &path,
+                                    &Type::Small.font(ui),
+                                    ui.available_width(),
                                 );
+                                let response = ui.add(
+                                    egui::Label::new(Type::Small.rich(ui, shown).color(c.muted))
+                                        .truncate(),
+                                );
+                                design::named(ui, &response, &path);
+                                response.on_hover_text(&path);
                             } else {
                                 Self::folder_status(ui, &campaign)
                                     .on_hover_text(campaign.path.display().to_string());
@@ -729,7 +745,10 @@ impl Campaigns {
                     if (editing || waiting.is_none() || self.remote.is_some())
                         && Action::quiet("Cancel").show(ui).clicked()
                     {
+                        // If Add scrolled the page down to this form, Cancel takes it back.
+                        self.scroll_back = self.scrolled_to_form;
                         self.clear_form();
+                        ui.ctx().request_repaint();
                     }
                 });
                 // What it is waiting for, without a hover: only what is missing.
@@ -739,6 +758,7 @@ impl Campaigns {
                 // A row's Add opened this form, and it can be below the fold.
                 if std::mem::take(&mut self.scroll_to_form) {
                     ui.scroll_to_cursor(Some(egui::Align::Max));
+                    self.scrolled_to_form = true;
                 }
                 if let Some(error) = &self.error {
                     design::message(ui, Tone::Error, error);
@@ -866,6 +886,8 @@ mod tests {
         }
         let mut campaigns = Campaigns {
             scroll_to_form: false,
+            scrolled_to_form: false,
+            scroll_back: false,
             store: Some(store),
             data,
             error: None,

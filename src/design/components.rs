@@ -25,6 +25,32 @@ pub fn one_line(
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
 
+/// `text` with its middle cut so that it fits on one line, for a path: its two ends say the
+/// most. Whoever shows this has the whole on hover.
+pub fn cut_middle(ui: &Ui, text: &str, font: &FontId, width: f32) -> String {
+    if number_width(ui, text, font) <= width {
+        return text.to_owned();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let cut = |keep: usize| -> String {
+        let front = keep / 2;
+        let back = keep - front;
+        let head: String = chars[..front].iter().collect();
+        let tail: String = chars[chars.len() - back..].iter().collect();
+        format!("{head}…{tail}")
+    };
+    let (mut fits, mut over) = (0, chars.len());
+    while over - fits > 1 {
+        let keep = usize::midpoint(fits, over);
+        if number_width(ui, &cut(keep), font) <= width {
+            fits = keep;
+        } else {
+            over = keep;
+        }
+    }
+    cut(fits)
+}
+
 /// As many whole words of `text` as fit. For a place that repeats a name shown whole nearby:
 /// no letter is cut, and the first word always stays.
 pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String {
@@ -804,9 +830,24 @@ pub fn row(
     name: &str,
     paint: impl FnOnce(&Ui, Rect),
 ) -> Response {
+    any_row(ui, height, selected, name, Sense::click(), paint)
+}
+
+/// A row that only says something: it takes the pointer's hover, and no click or Tab stop.
+pub fn hover_row(ui: &mut Ui, height: f32, name: &str, paint: impl FnOnce(&Ui, Rect)) -> Response {
+    any_row(ui, height, false, name, Sense::hover(), paint)
+}
+
+fn any_row(
+    ui: &mut Ui,
+    height: f32,
+    selected: bool,
+    name: &str,
+    sense: Sense,
+    paint: impl FnOnce(&Ui, Rect),
+) -> Response {
     let c = colors();
-    let (rect, mut response) =
-        ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
+    let (rect, mut response) = ui.allocate_exact_size(vec2(ui.available_width(), height), sense);
     // egui hit-tests the previous frame's rectangles. Paint hover at the current
     // position so it does not trail the pointer while the list scrolls.
     let hovered = response.enabled()
@@ -814,7 +855,12 @@ pub fn row(
         && (!ui.ctx().is_using_pointer() || response.is_pointer_button_down_on());
     response.flags.set(egui::response::Flags::HOVERED, hovered);
     response.widget_info(|| {
-        WidgetInfo::selected(WidgetType::SelectableLabel, ui.is_enabled(), selected, name)
+        let kind = if sense.senses_click() {
+            WidgetType::SelectableLabel
+        } else {
+            WidgetType::Label
+        };
+        WidgetInfo::selected(kind, ui.is_enabled(), selected, name)
     });
     if ui.is_rect_visible(rect) {
         if selected {
@@ -1320,6 +1366,25 @@ pub fn focus_and_select(ui: &Ui, id: Id, text: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_path_keeps_its_two_ends_and_fits() {
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Small.font(ui);
+                let path = "/home/dm/campaigns/the-emberfall-marches/quiet-harbor";
+                assert_eq!(cut_middle(ui, path, &font, 2000.0), path);
+                let cut = cut_middle(ui, path, &font, 120.0);
+                assert!(cut.contains('…'), "{cut}");
+                assert!(cut.starts_with('/') && cut.ends_with("harbor"), "{cut}");
+                assert!(number_width(ui, &cut, &font) <= 120.0, "{cut}");
+                // Not a letter is split, whatever the text.
+                let cut = cut_middle(ui, "ééééééééééééééééééééééééééééééééééééééééé", &font, 60.0);
+                assert!(cut.contains('…'), "{cut}");
+            });
+        });
+    }
 
     #[test]
     fn bloodied_is_half_or_less_and_zero_stands_alone() {

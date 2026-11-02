@@ -191,7 +191,7 @@ impl EntitySnapshot {
         let mut coverage = vec!["Computed totals, checks, attacks, defenses and casting values are supplied by D&D Beyond; their internal modifier contributions are not exposed.".into(),
             "Descriptions, choices, inventory and custom fields are retained from character v5. Campaign copies use the shared content schema. Simulation rule conversion is reported separately.".into()];
         if string(&raw["name"]) != name {
-            coverage.push("The two D&D Beyond services returned different names. A later refresh may reconcile them.".into());
+            coverage.push("D&D Beyond returned two different names for this character. A later refresh may reconcile them.".into());
         }
         let mut stats = BTreeMap::new();
         let mut put = |key: String, value: i64, unit: Option<&str>| {

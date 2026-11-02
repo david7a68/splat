@@ -650,9 +650,13 @@ fn source_and_parity(
     };
     small(
         ui,
-        "Displayed totals come directly from D&D Beyond’s computed-character service. Splat does not add modifiers to these totals.".into(),
+        "Displayed totals come directly from D&D Beyond. Splat does not add modifiers to these totals.".into(),
     );
-    for message in &record.coverage {
+    // Every sheet has these two, in the words of the services and the schema.
+    let standard = |message: &&String| {
+        message.starts_with("Computed totals,") || message.starts_with("Descriptions, choices,")
+    };
+    for message in record.coverage.iter().filter(|m| !standard(m)) {
         small(ui, message.clone());
     }
     if let Some(Ok(entry)) = content_entry {
@@ -716,11 +720,14 @@ fn source_and_parity(
     if let Some(modified) = &record.source.source_modified {
         small(ui, format!("Last changed on D&D Beyond: {modified}"));
     }
-    small(
-        ui,
-        "A cache read or a successful fetch does not prove that the two Beyond services represent the same edit. The next check can reconcile delayed results.".into(),
-    );
     design::quiet_section(ui, "Technical details", |ui| {
+        for message in record.coverage.iter().filter(standard) {
+            small(ui, message.clone());
+        }
+        small(
+            ui,
+            "A cache read or a successful fetch does not prove that the two Beyond services represent the same edit. The next check can reconcile delayed results.".into(),
+        );
         small(
             ui,
             format!(
@@ -837,6 +844,9 @@ fn subsection_heading(ui: &mut egui::Ui, title: &str) {
     ui.label(Type::Heading.rich(ui, title).color(colors().text));
 }
 const TILE_WIDTH: f32 = 112.0;
+/// What `metric` gives a tile: a little less than its slot, so the tiles' pitch is this plus
+/// the spacing between them.
+const TILE_INSET: f32 = 4.0;
 
 /// A row of stat tiles that breaks evenly: six across, or three, or two. A lone tile on a
 /// second line reads as a different kind of value.
@@ -860,7 +870,7 @@ fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
 }
 fn metric_in(ui: &mut egui::Ui, label: &str, value: impl ToString, color: egui::Color32) {
     ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
-        ui.set_width(TILE_WIDTH - 4.0);
+        ui.set_width(TILE_WIDTH - TILE_INSET);
         design::stat_tile(ui, label, &value.to_string(), color);
     });
 }
@@ -886,10 +896,12 @@ fn grid_column(ui: &mut egui::Ui, width: f32, add: impl FnOnce(&mut egui::Ui)) {
     );
 }
 pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
-    // Columns only where they can sit on the tiles' own grid.
-    let each = TILE_WIDTH + ui.spacing().item_spacing.x;
-    let wide = ui.available_width() >= 6.0 * each;
-    let medium = ui.available_width() >= 4.0 * each;
+    // Columns only where they can sit on the tiles' own grid. These two widths are `tiles`'s
+    // own test for six across, and `each` is the pitch the tiles land on.
+    let slot = TILE_WIDTH + ui.spacing().item_spacing.x;
+    let wide = ui.available_width() >= 6.0 * slot;
+    let medium = ui.available_width() >= 4.0 * slot;
+    let each = slot - TILE_INSET;
     section_heading(ui, "Combat");
     tiles(ui, |ui| {
         let (hp, max, temp) = live.map_or_else(
@@ -1328,7 +1340,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             }
         }
         3 => {
-            section_heading(ui, "Equipment & coins");
+            section_heading(ui, "Gear & coins");
             for v in array(&d["inventory"]) {
                 add(v, "");
             }
