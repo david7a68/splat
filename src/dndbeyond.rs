@@ -244,7 +244,7 @@ impl DndBeyond {
                     ui.label("No campaigns returned for this account.");
                 }
                 for remote in &self.campaigns {
-                    let added = local.linked_elsewhere(&remote.id);
+                    let added = local.is_added(&remote.id);
                     let label = if added {
                         format!("{} · Added", remote.name)
                     } else {

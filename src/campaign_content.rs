@@ -253,6 +253,14 @@ impl CampaignContent {
                     }
                     if let Some((_, text)) =
                         self.discarded_repair.as_ref().filter(|(p, _)| p == path)
+                        && {
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, "Draft discarded.")
+                                    .color(colors().muted),
+                            );
+                            true
+                        }
                         && Action::secondary("Undo discard")
                             .density(Density::Read)
                             .show(ui)
@@ -314,6 +322,10 @@ impl CampaignContent {
                     ));
                 }
             } else if self.discarded_selections.is_some()
+                && {
+                    ui.label(Type::Small.rich(ui, "Selections discarded.").color(c.muted));
+                    true
+                }
                 && Action::secondary("Undo discard")
                     .density(Density::Read)
                     .hint("Bring back the selection changes you discarded")
@@ -610,6 +622,19 @@ impl CampaignContent {
                 }
                 design::rule(ui);
                 if listing == Listing::Required {
+                    // Whose it is: this list covers the whole campaign, not the package above it.
+                    let owner = |id: &uuid::Uuid| {
+                        let e = &catalogue.entries[id];
+                        if e.private {
+                            "Campaign".to_owned()
+                        } else {
+                            catalogue
+                                .modules
+                                .iter()
+                                .find(|m| m.id == e.owner)
+                                .map_or_else(|| "Package".to_owned(), |m| m.name.clone())
+                        }
+                    };
                     // By name, with the kind: two entries can share a name, and an ID order means nothing.
                     let mut required: Vec<_> = closure.required.iter().collect();
                     required.sort_by_key(|(id, _)| {
@@ -639,14 +664,17 @@ impl CampaignContent {
                                             .rich(
                                                 ui,
                                                 format!(
-                                                    "{} · {} — required by {}",
+                                                    "{} · {} · {} — required by {}",
                                                     entry.name,
-                                                    entry.kind.replace('_', " "),
-                                                    reasons
-                                                        .iter()
-                                                        .cloned()
-                                                        .collect::<Vec<_>>()
-                                                        .join(", ")
+                                                    crate::design::reader::human_label(&entry.kind),
+                                                    owner(id),
+                                                    match reasons.iter().collect::<Vec<_>>().as_slice() {
+                                                        [only] => (*only).clone(),
+                                                        [first, rest @ ..] => {
+                                                            format!("{first} and {} more", rest.len())
+                                                        }
+                                                        [] => String::new(),
+                                                    }
                                                 ),
                                             )
                                             .color(c.text),

@@ -399,7 +399,8 @@ impl Lookup {
         }
         let matches = &self.matches.as_ref().unwrap().1;
         if before != self.query && !query.is_empty() {
-            self.results_open = true;
+            // In a short panel the best match opens by itself, and its text gets the height.
+            self.results_open = matches.is_empty() || ui.available_height() >= 600.0;
             if let Some(&top) = matches.first() {
                 self.current = Some(top);
             }

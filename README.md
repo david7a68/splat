@@ -308,6 +308,15 @@ state, and a conflict shows on the row and the strip without stopping the table.
 Saved runs do not automatically push old values. The session must have edit
 permission for the character.
 
+If a session ends during a run, each synced row says `Sync stopped`, and keep recording: nothing
+is lost. Closing warns about changes that were not sent. After you reconnect, **Sync party** reads
+the sheet first. A value you changed since the last match, when sync was stopped by the session or
+by you, or while a saved run waited for a connection, stays in the run. If the sheet differs, that
+is a conflict you settle with **Use D&D Beyond values** or **Keep Splat values and retry**. A value
+you did not change takes the sheet's. Two things cannot be told apart, so the sheet's value stands:
+damage recorded before a participant's first read in this run, and a change that had not been sent
+when Splat closed.
+
 Sync covers current and temporary HP, death saves, official conditions,
 ordinary and pact spell slots spent, and supported action/spell limited uses.
 Concentration, custom effects, inventory charges, initiative, and notes stay local.
@@ -317,7 +326,7 @@ visible and offer a choice of local or remote values. Unconfirmed changes are no
 retried without review. The service has no verified atomic compare-and-set API,
 so another client can still change values between a read and a write.
 
-Incoming health or condition changes clear the run's undo history, and a message says so. Wait for sync
+Health or condition values taken from the sheet clear the run's undo history, and a message says so. Wait for sync
 or disable it before closing a run with pending changes. Disabling sync cancels
 queued work but cannot recall a request already sent. Party sync stops when you leave its
 page, and the sidebar says so; run sync remains active while that run is open.

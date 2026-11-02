@@ -258,8 +258,30 @@ impl Party {
                 }
             }
         }
+        let title = self
+            .combat
+            .record()
+            .or_else(|| self.reader.sheets.get(id))
+            .map(|record| (record.definition.splat_name.clone(), class_line(record)));
+        if let Some((name, class)) = &title {
+            ui.horizontal(|ui| {
+                ui.label(Type::Display.rich(ui, name).color(c.text));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if design::link(ui, "D&D Beyond ↗").clicked() {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+                            "https://www.dndbeyond.com/characters/{id}"
+                        )));
+                    }
+                });
+            });
+            ui.label(Type::Small.rich(ui, class).color(c.muted));
+        }
         if session.is_some() {
-            design::section(ui, "Combat sync", |ui| self.combat.show(ui));
+            // Under the name, and it says its state while closed.
+            let word = if self.combat.enabled { "On" } else { "Off" };
+            design::section(ui, format!("Combat sync · {word}"), |ui| {
+                self.combat.show(ui)
+            });
         }
         let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) else {
             if !self.reader.loading() {
@@ -271,21 +293,6 @@ impl Party {
             }
             return;
         };
-        ui.horizontal(|ui| {
-            ui.label(
-                Type::Display
-                    .rich(ui, &record.definition.splat_name)
-                    .color(c.text),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if design::link(ui, "D&D Beyond ↗").clicked() {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
-                        "https://www.dndbeyond.com/characters/{id}"
-                    )));
-                }
-            });
-        });
-        ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
         let before = self.page;
         design::segmented(
             ui,
@@ -570,7 +577,7 @@ fn member_row(
             painter.text(
                 egui::pos2(left - design::XS, line),
                 egui::Align2::RIGHT_CENTER,
-                format!("{} +{temp}", icons::TEMP_HP),
+                design::temp_hp_text(temp),
                 Type::Numeral.font(ui),
                 c.hp.temp,
             );

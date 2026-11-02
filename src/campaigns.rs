@@ -292,6 +292,18 @@ impl Campaigns {
         self.persist(data)
     }
 
+    /// Any campaign in the list, active or not, already links to this one.
+    pub fn is_added(&self, remote_id: &str) -> bool {
+        let remote = remote_id.parse::<u64>().ok();
+        self.data.campaigns.iter().any(|c| {
+            remote.is_some()
+                && c.dndbeyond_campaign_id
+                    .as_deref()
+                    .and_then(|id| id.parse::<u64>().ok())
+                    == remote
+        })
+    }
+
     pub fn linked_elsewhere(&self, remote_id: &str) -> bool {
         self.data.campaigns.iter().any(|c| {
             Some(c.id) != self.data.active_campaign_id

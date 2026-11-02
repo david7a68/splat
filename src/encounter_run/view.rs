@@ -32,6 +32,8 @@ const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 const GUTTER: f32 = design::M;
 /// Room for the note under a long roster, past the scroll area's clip margin.
 const OVERFLOW_LINE: f32 = 22.0;
+/// Kept free under a list that fits, for one line of message.
+const MESSAGE_ROOM: f32 = 28.0;
 const SCROLL_BAR: f32 = 12.0;
 /// A name-only row when the list has no other way to fit. Still a 24 px target and more.
 const TIGHT_ROW: f32 = 25.0;
@@ -422,14 +424,44 @@ impl Run {
                     self.live_header(ui, scale);
                     self.error_line(ui);
                     let room = ui.available_height() - DOCK_HEIGHT - FOOTER_HEIGHT;
+                    // A message goes in the room under the list, so it moves no row while
+                    // the DM's eye is on them. A long one wraps there.
+                    let notice = self.notice.clone().filter(|_| self.notice_below);
+                    let notice_height = notice.as_ref().map_or(0.0, |notice| {
+                        let width = ui.available_width() - 32.0;
+                        let font = Type::Small.font(ui);
+                        ui.fonts_mut(|fonts| {
+                            fonts.layout(notice.clone(), font, egui::Color32::PLACEHOLDER, width)
+                        })
+                        .size()
+                        .y
+                        .max(MESSAGE_ROOM)
+                    });
+                    let list = room - notice_height;
                     ui.allocate_ui_with_layout(
-                        vec2(ui.available_width(), room),
+                        vec2(ui.available_width(), list),
                         Layout::top_down(Align::LEFT),
                         |ui| {
-                            ui.set_min_height(room);
-                            self.roster(ui, room);
+                            ui.set_min_height(list);
+                            self.roster(ui, list, notice_height);
                         },
                     );
+                    if let Some(notice) = notice {
+                        ui.horizontal(|ui| {
+                            let dismiss =
+                                design::icon_button(ui, icons::CLOSE, "Dismiss this message")
+                                    .clicked();
+                            ui.add(
+                                egui::Label::new(
+                                    Type::Small.rich(ui, notice).color(colors().result.warning),
+                                )
+                                .wrap(),
+                            );
+                            if dismiss {
+                                self.notice = None;
+                            }
+                        });
+                    }
                     self.dock(ui);
                     closed = self.live_footer(ui);
                 });
@@ -473,25 +505,32 @@ impl Run {
                         &format!("Run · {} · Round {}", self.name, self.state.round),
                     );
                     ui.add_space(design::S);
-                    // The first answer on the screen. It gives up size, then a word, before
-                    // it gives up a letter of the name.
+                    // The first answer on the screen, and larger than any row's name. It gives
+                    // up a little size, then the later words of a long name. The row, the panel
+                    // and the dock's hover have the whole name.
                     let room = ui.available_width() - 1.0;
                     let full = format!("{name}’s turn");
-                    let least = Type::Name.font(ui).size.min(turn_size);
+                    let least = (scale.name + 1.0).min(turn_size);
                     let fit = |text: &str| {
                         let width =
                             design::number_width(ui, text, &Type::Name.sized(ui, turn_size));
                         (turn_size * room / width).min(turn_size)
                     };
-                    let (full_size, name_size) = (fit(&full), fit(name));
+                    let full_size = fit(&full);
                     let (text, size) = if full_size >= least {
                         (full, full_size)
-                    } else if name_size >= least {
-                        (name.to_owned(), name_size)
                     } else {
-                        // The row, the panel and the dock's hover have the whole name.
-                        let font = Type::Name.sized(ui, least);
-                        (design::words_that_fit(ui, name, &font, room), least)
+                        let font = Type::Name.sized(ui, turn_size);
+                        let suffix = "’s turn";
+                        let words = design::words_that_fit(
+                            ui,
+                            name,
+                            &font,
+                            room - design::number_width(ui, suffix, &font),
+                        );
+                        let short = format!("{words}{suffix}");
+                        let size = fit(&short).max(least);
+                        (short, size)
                     };
                     ui.add(
                         egui::Label::new(
@@ -539,6 +578,7 @@ impl Run {
         let notice_fits = self.notice.as_ref().is_none_or(|notice| {
             design::number_width(ui, notice, &notice_font) + undo_room + 32.0 < ui.available_width()
         });
+        self.notice_below = self.notice.is_some() && (sync_alert.is_some() || !notice_fits);
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), 28.0),
             Layout::right_to_left(Align::Center),
@@ -591,19 +631,6 @@ impl Run {
             },
         );
         ui.add_space(2.0);
-        // A conflict outranks a notice, and a long notice has no room above.
-        if let Some(notice) = self
-            .notice
-            .as_ref()
-            .filter(|_| sync_alert.is_some() || !notice_fits)
-        {
-            ui.horizontal(|ui| {
-                dismiss = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, notice).color(c.result.warning)).wrap(),
-                );
-            });
-        }
         design::rule(ui);
         if dismiss {
             self.notice = None;
@@ -648,11 +675,13 @@ impl Run {
             .collect()
     }
 
-    fn roster(&mut self, ui: &mut egui::Ui, room: f32) {
+    /// `room` is what the list has now, and `lent` what a message under it has taken. A list
+    /// that fits leaves that much free at all times, so a message moves none of its rows.
+    fn roster(&mut self, ui: &mut egui::Ui, room: f32, lent: f32) {
         let current = self.current();
         let next_up = self.next_up();
         let count = self.state.order.len();
-        let mut scale = RunScale::fit(room, ui.available_width(), count);
+        let mut scale = RunScale::fit(room + lent, ui.available_width(), count);
         let width = ui.available_width();
         let total = |layouts: &[RowLayout], scale: RunScale| -> f32 {
             layouts.iter().map(|l| l.height(scale)).sum()
@@ -661,7 +690,7 @@ impl Run {
         let natural = total(&layouts, scale);
         if natural <= room {
             // Spare room goes to the rows, so a short list leaves no gap under it.
-            let share = (room - natural - 2.0).max(0.0) / count.max(1) as f32;
+            let share = (room + lent - MESSAGE_ROOM - natural - 2.0).max(0.0) / count.max(1) as f32;
             scale.row += share.min(scale.row * 0.4);
         } else {
             layouts = self.roster_layouts(ui, width, scale, RowFit::Compressed);
@@ -1092,11 +1121,19 @@ impl Run {
             }
             // Five actions share the narrowest row. None of them may lose a letter.
             ui.spacing_mut().item_spacing.x = 0.0;
-            if Action::quiet("Close run")
-                .density(Density::Read)
-                .blocked(self.close_block())
-                .show(ui)
-                .clicked()
+            // Off while sync has work to finish, and the label says so without a hover.
+            let blocked = self.close_block();
+            let wide = ui.available_width() >= 520.0;
+            if Action::quiet(match (blocked.is_some(), wide) {
+                (false, _) => "Close run",
+                (true, true) => "Close after sync",
+                (true, false) => "Sync first",
+            })
+            .name("Close run")
+            .density(Density::Read)
+            .blocked(blocked)
+            .show(ui)
+            .clicked()
             {
                 self.closing = true;
             }
@@ -1158,18 +1195,10 @@ impl Run {
     fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
         let cannot_save = self.strip().not_saved;
         let stranded = self.stranded_names();
-        let c = colors();
-        let (note, color) = match (cannot_save, stranded.as_slice()) {
-            (true, _) => ("Closing loses unsaved changes.".to_owned(), c.result.error),
-            (false, []) => (note.to_owned(), c.muted),
-            // Short: it shares the footer with both buttons at the minimum size.
-            (false, [name]) => (format!("Not sent: {name}."), c.result.error),
-            (false, [name, others @ ..]) => (
-                format!("Not sent: {name} and {} more.", others.len()),
-                c.result.error,
-            ),
-        };
-        ui.label(Type::Small.rich(ui, note).color(color));
+        if cannot_save || !stranded.is_empty() {
+            return self.close_with_loss(ui, cannot_save, &stranded);
+        }
+        ui.label(Type::Small.rich(ui, note).color(colors().muted));
         if Action::quiet("Keep running")
             .density(Density::Read)
             .show(ui)
@@ -1177,22 +1206,55 @@ impl Run {
         {
             self.closing = false;
         }
-        if cannot_save {
-            return Action::destructive("Close anyway")
-                .density(Density::Read)
-                .blocked(self.close_block())
-                .show(ui)
-                .clicked();
-        }
-        Action::destructive(if stranded.is_empty() {
-            "Close now"
-        } else {
-            "Close anyway"
-        })
-        .density(Density::Read)
-        .show(ui)
-        .clicked()
+        Action::destructive("Close now")
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
             && self.close_run()
+    }
+
+    /// Something would be lost, so the question gets the whole screen and says what. Like
+    /// closing the app, the safe answer is the filled one.
+    fn close_with_loss(&mut self, ui: &egui::Ui, cannot_save: bool, stranded: &[String]) -> bool {
+        let mut keep = ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
+        let mut close = false;
+        let block = self.close_block();
+        design::dialog(ui.ctx(), "close_run_with_loss", "Close this run?", |ui| {
+            if cannot_save {
+                ui.add(
+                    egui::Label::new(
+                        "This run could not be saved. Closing loses unsaved changes: everything since its last save.",
+                    )
+                    .wrap(),
+                );
+            }
+            if !stranded.is_empty() {
+                ui.add(
+                    egui::Label::new(format!(
+                        "Changes for {} were not sent to D&D Beyond. The saved run keeps them, and asks you to choose when you next sync.",
+                        stranded.join(", "),
+                    ))
+                    .wrap(),
+                );
+            }
+            ui.add_space(design::S);
+            ui.horizontal(|ui| {
+                keep |= Action::primary("Keep running").show(ui).clicked();
+                ui.add_space(design::L);
+                close = Action::destructive("Close anyway")
+                    .blocked(block)
+                    .show(ui)
+                    .clicked();
+            });
+        });
+        if keep {
+            self.closing = false;
+        }
+        if !close {
+            return false;
+        }
+        // A run that cannot save closes without saving. One that can, saves first.
+        cannot_save || self.close_run()
     }
 
     pub(super) fn close_run(&mut self) -> bool {
@@ -2299,17 +2361,6 @@ enum RowFit {
     Compressed,
 }
 
-impl RowFit {
-    /// A compressed row's bar starts later, still under the digits, so its second line has
-    /// the width that the turn word took and a condition does not wrap again.
-    fn bar_inset(self) -> f32 {
-        match self {
-            RowFit::Natural => 0.0,
-            RowFit::Compressed => 8.0,
-        }
-    }
-}
-
 /// The height that makes these rows, none shorter than it is now, fill `room`, up to `cap`.
 /// Rows taller than that keep their own height. Zero if the rows already fill `room`.
 fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
@@ -2341,6 +2392,7 @@ struct RowLayout {
     /// A name-only row in a list that needs the height.
     tight: bool,
     fit: RowFit,
+    bar_inset: f32,
     /// The compressed list's shared row height, once any spare room is shared out.
     even: f32,
     initiative_right: f32,
@@ -2351,15 +2403,11 @@ struct RowLayout {
 }
 
 /// The current-row bar, the gap after it, and room for the word `TURN` at this size.
-fn initiative_width(scale: RunScale, fit: RowFit) -> f32 {
+fn initiative_width(scale: RunScale, narrow: bool) -> f32 {
     let word = scale.mark * 3.2;
-    6.0 + design::XS
-        + match fit {
-            RowFit::Natural => word,
-            // The word sits on the number's line, so that a row's height never depends on
-            // whose turn it is.
-            RowFit::Compressed => word + scale.stat,
-        }
+    // The word can sit on the number's line, so that a row's height never depends on whose
+    // turn it is.
+    6.0 + design::XS + if narrow { word + scale.stat } else { word }
 }
 
 fn header_height(scale: RunScale) -> f32 {
@@ -2378,8 +2426,14 @@ impl RowLayout {
     ) -> Self {
         let c = colors();
         // Fixed columns from the left of the numbers. A name stays near its HP.
-        let initiative_right = initiative_width(scale, fit);
-        let gap = if fit == RowFit::Compressed { 6.0 } else { 12.0 };
+        // The smallest scale has one set of columns, compressed or not, so that a list that
+        // starts to compress does not move its names sideways.
+        let narrow = fit == RowFit::Compressed || scale.row <= design::RUN_COMPACT.row;
+        let initiative_right = initiative_width(scale, narrow);
+        let gap = if narrow { 6.0 } else { 12.0 };
+        // Its bar starts later, still under the digits, so its second line has the width that
+        // the turn word took and a condition does not wrap again.
+        let bar_inset = if narrow { 8.0 } else { 0.0 };
         let name_left = initiative_right + gap + scale.name * 0.7;
         let hp_width = scale.hp * 1.9 + scale.hp_max * 2.0 + 4.0;
         let state_width = (scale.mark * 7.0).clamp(84.0, 110.0);
@@ -2396,7 +2450,7 @@ impl RowLayout {
 
         let mut job = egui::text::LayoutJob::default();
         // The line wraps before the HP column, so that it never runs over the HP bar.
-        job.wrap.max_width = (temp_right + fit.bar_inset() - name_left).max(1.0);
+        job.wrap.max_width = (temp_right + bar_inset - name_left).max(1.0);
         let font = Type::Body.sized(ui, scale.condition);
         let mut first = true;
         let mut add = |text: &str, color: egui::Color32| {
@@ -2459,6 +2513,7 @@ impl RowLayout {
         Self {
             name,
             even: 0.0,
+            bar_inset,
             second_line,
             inline_state,
             tight,
@@ -2655,10 +2710,7 @@ fn paint_row(
     // Close under the digits, and clear of the hairline.
     let bar_top = (line_y + scale.hp * 0.5 + 3.0).min(rect.bottom() - bar_height - 1.0);
     let bar = Rect::from_min_max(
-        pos2(
-            x + layout.temp_right + layout.fit.bar_inset() + 4.0,
-            bar_top,
-        ),
+        pos2(x + layout.temp_right + layout.bar_inset + 4.0, bar_top),
         pos2(hp_right, bar_top + bar_height),
     );
     design::hp_bar(painter, bar, p.hp, p.max_hp, p.temporary_hp);

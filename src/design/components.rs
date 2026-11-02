@@ -43,6 +43,11 @@ pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String 
     fitted
 }
 
+/// Temporary HP, with its mark, in every place that shows it.
+pub fn temp_hp_text(temp: i64) -> String {
+    format!("{} +{temp}", icons::TEMP_HP)
+}
+
 /// Controls that cannot be used for one reason, which each of them says on hover.
 pub fn locked<R>(ui: &mut Ui, reason: Option<&str>, add: impl FnOnce(&mut Ui) -> R) -> R {
     let group = ui.add_enabled_ui(reason.is_none(), add);

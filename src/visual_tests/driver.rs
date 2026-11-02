@@ -247,6 +247,60 @@ impl<'a> Driver<'a> {
             .contains(text)
     }
 
+    /// What is painted from this label down, in its column and to its right.
+    pub fn painted_from_label(&self, name: &str) -> String {
+        self.nodes()
+            .into_iter()
+            .find(|node| node.name == name && node.role == Role::Label)
+            .map_or_else(String::new, |label| {
+                let window = self.harness.ctx.content_rect();
+                self.painted_in(egui::Rect::from_min_max(label.rect.min, window.max))
+            })
+    }
+
+    /// What the run's header paints: between the rail and `Next turn`, on its line.
+    pub fn header_rect(&self) -> egui::Rect {
+        let next = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Next turn")
+            .expect("the run's header");
+        egui::Rect::from_min_max(
+            egui::pos2(self.harness.ctx.content_rect().left() + 136.0, 0.0),
+            egui::pos2(next.rect.min.x, next.rect.max.y),
+        )
+    }
+
+    /// The size of the painted text in this rect that holds these words.
+    pub fn painted_size(&self, rect: egui::Rect, words: &str) -> Option<f32> {
+        fn search(shape: &egui::Shape, rect: egui::Rect, words: &str, found: &mut Option<f32>) {
+            match shape {
+                egui::Shape::Vec(shapes) => {
+                    shapes
+                        .iter()
+                        .for_each(|shape| search(shape, rect, words, found));
+                }
+                egui::Shape::Text(text)
+                    if rect.contains(text.visual_bounding_rect().center())
+                        && text.galley.job.text.contains(words) =>
+                {
+                    *found = text
+                        .galley
+                        .job
+                        .sections
+                        .first()
+                        .map(|s| s.format.font_id.size);
+                }
+                _ => {}
+            }
+        }
+        let mut found = None;
+        for clipped in &self.harness.output().shapes {
+            search(&clipped.shape, rect, words, &mut found);
+        }
+        found
+    }
+
     /// What the rail paints. It has its own words, whatever the page says.
     pub fn rail_words(&self) -> String {
         let window = self.harness.ctx.content_rect();
@@ -625,6 +679,11 @@ impl<'a> Driver<'a> {
 
     /// Every disabled control here that gives no reason when the pointer rests on it.
     pub fn disabled_without_reason(&mut self) -> Vec<String> {
+        self.disabled_without_reason_except(&[])
+    }
+
+    /// A dialog turns off what is behind it, and that says nothing about what is in it.
+    pub fn disabled_without_reason_except(&mut self, behind: &[String]) -> Vec<String> {
         let names: Vec<(String, egui::Rect)> = self
             .nodes()
             .into_iter()
@@ -632,7 +691,11 @@ impl<'a> Driver<'a> {
                 node.disabled
                     && node.fully_in_view()
                     && !node.name.is_empty()
-                    && matches!(node.role, Role::Button | Role::ComboBox | Role::TextInput)
+                    && !behind.contains(&node.name)
+                    && matches!(
+                        node.role,
+                        Role::Button | Role::ComboBox | Role::TextInput | Role::CheckBox
+                    )
             })
             .map(|node| (node.name, node.shown))
             .collect();

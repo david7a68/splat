@@ -212,6 +212,37 @@ struct Creature {
 const ROSTER_MAX_WIDTH: f32 = 860.0;
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
 const RESULT_ROW: f32 = 40.0;
+/// A result's stats, each in its own place, so that they can be compared down the list. The
+/// first place holds a party copy's word, which has no challenge rating.
+fn detail_columns(ui: &mut egui::Ui, detail: &str) {
+    const COLUMNS: [(&str, f32); 3] = [("CR ", 66.0), ("HP ", 46.0), ("AC ", 38.0)];
+    let parts: Vec<&str> = detail.split(" · ").collect();
+    let other = parts
+        .iter()
+        .find(|part| !COLUMNS.iter().any(|(prefix, _)| part.starts_with(prefix)));
+    // A row of plain words: it sits close under its name, not at a control's height.
+    ui.spacing_mut().interact_size.y = 0.0;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        for (prefix, width) in COLUMNS {
+            let part = parts
+                .iter()
+                .find(|part| part.starts_with(prefix))
+                .or(other.filter(|_| prefix == COLUMNS[0].0));
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, Type::Small.line()),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.set_min_width(width);
+                    if let Some(part) = part {
+                        ui.label(Type::Small.rich(ui, *part).color(colors().muted));
+                    }
+                },
+            );
+        }
+    });
+}
+
 fn creature_detail(entry: &Entry, party: bool) -> String {
     let stat = |name: &str| {
         entry
@@ -404,6 +435,12 @@ impl Encounters {
             .as_mut()
             .expect("an open run")
             .simulate_rename(name, to);
+    }
+
+    /// A read of this participant's sheet, holding its last matched values.
+    #[cfg(test)]
+    pub fn simulate_read(&mut self, name: &str) {
+        self.run.as_mut().expect("an open run").simulate_read(name);
     }
 
     /// Running syncs react to the session from now on, as real ones do.
@@ -1392,19 +1429,14 @@ impl Encounters {
                             // The name is what the eye looks for, so it comes first.
                             ui.vertical(|ui| {
                                 ui.spacing_mut().item_spacing.y = 0.0;
-                                ui.set_max_width((ui.available_width() - 112.0).max(80.0));
+                                ui.set_max_width((ui.available_width() - 150.0).max(80.0));
                                 ui.add(
                                     egui::Label::new(
                                         Type::Body.rich(ui, &c.name).color(colors().text),
                                     )
                                     .truncate(),
                                 );
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, &c.detail).color(colors().muted),
-                                    )
-                                    .truncate(),
-                                );
+                                detail_columns(ui, &c.detail);
                             });
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),

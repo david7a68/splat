@@ -432,7 +432,9 @@ pub enum SyncState {
     Stopped,
 }
 
-const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then have not been sent. Connect in Settings, then select Sync party.";
+const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then have not been sent. Connect in Settings, then select Sync party. Splat reads the sheet first, and asks before it replaces a value you changed.";
+const DIFFER_AFTER_READ: &str =
+    "Splat and D&D Beyond differ, and you changed this while sync was off. Choose which to keep.";
 
 #[derive(Default)]
 pub struct CombatSync {
@@ -449,6 +451,11 @@ pub struct CombatSync {
     pub error: Option<String>,
     pub updated: bool,
     session_lost: bool,
+    /// The last sheet values read before this sync was started again. What the run changed
+    /// since then is the DM's own, and the next first read must not replace it unasked.
+    matched: Option<Groups>,
+    /// A first read arrived, and the run has not compared it with its values yet.
+    first_read: bool,
     /// Never talks to D&D Beyond. It only shows the state it was given.
     #[cfg(test)]
     simulated: bool,
@@ -586,7 +593,9 @@ impl CombatSync {
     /// Turn sync on. It reads the sheet before it writes anything.
     pub fn start(&mut self) {
         self.enabled = true;
-        self.remote = None;
+        if let Some(remote) = self.remote.take() {
+            self.matched = Some(remote.groups);
+        }
         self.desired.clear();
         self.blocked.clear();
         self.next = None;
@@ -639,11 +648,7 @@ impl CombatSync {
         }
         let scope = (epoch, campaign.to_owned(), id.to_owned());
         if self.scope.as_ref() != Some(&scope) {
-            let enabled = self.enabled;
-            self.stop();
-            *self = Self::default();
-            self.enabled = enabled;
-            self.scope = Some(scope);
+            self.enter_scope(scope);
         }
         if !self.enabled || session.is_none() {
             if self.pending.is_some() || session.is_none() {
@@ -750,8 +755,85 @@ impl CombatSync {
         }
         ctx.request_repaint_after(Duration::from_millis(500));
     }
+    /// A new session or character starts clean, apart from what was last matched: that is
+    /// how the next read can tell the DM's changes from the sheet's.
+    fn enter_scope(&mut self, scope: (u64, String, String)) {
+        let enabled = self.enabled;
+        let matched = self
+            .remote
+            .take()
+            .map(|remote| remote.groups)
+            .or_else(|| self.matched.take());
+        self.stop();
+        *self = Self::default();
+        self.enabled = enabled;
+        self.scope = Some(scope);
+        self.matched = matched;
+    }
+    /// True once for each first read, for the run to compare with its own values.
+    pub fn take_first_read(&mut self) -> bool {
+        std::mem::take(&mut self.first_read)
+    }
+    pub fn take_matched(&mut self) -> Option<Groups> {
+        self.matched.take()
+    }
+    /// The run's value and the sheet's differ, and the DM changed the run's: their choice.
+    pub fn hold_conflict(&mut self, key: &str, local: Value) {
+        self.desired.insert(key.into(), local);
+        self.blocked.insert(key.into(), DIFFER_AFTER_READ.into());
+    }
+    /// A change the DM recorded after the session ended. It cannot be sent yet, and it counts.
+    pub fn note_while_stopped(&mut self, key: &str, local: Value) {
+        if self.session_lost {
+            self.desired.insert(key.into(), local);
+        }
+    }
+    fn use_remote(&mut self, key: &str) {
+        if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(key)) {
+            self.desired.insert(key.to_owned(), value.clone());
+        } else {
+            self.desired.remove(key);
+        }
+        self.blocked.remove(key);
+    }
+    fn keep_local(&mut self, key: &str) {
+        self.blocked.remove(key);
+        self.changed = None;
+        self.next = None;
+    }
+    /// A read from D&D Beyond, with the sheet's HP. Test builds have no route to a live one.
+    #[cfg(test)]
+    pub fn simulate_read(&mut self, character: u64, max_hp: i64, damage: i64) {
+        let remote = Remote::from_raw(
+            character,
+            max_hp,
+            &json!({"id":character,"canEdit":true,"removedHitPoints":damage,"temporaryHitPoints":0,"deathSaves":{"successCount":0,"failCount":0},"conditions":[]}),
+        )
+        .expect("simulated sheet");
+        let sent = self.desired.clone();
+        self.accept(
+            Outcome {
+                remote,
+                blocked: BTreeMap::new(),
+            },
+            &sent,
+        );
+    }
+    #[cfg(test)]
+    pub fn simulate_choice(&mut self, key: &str, keep_local: bool) {
+        if keep_local {
+            self.keep_local(key);
+        } else {
+            self.use_remote(key);
+        }
+    }
+    #[cfg(test)]
+    pub fn conflict_keys(&self) -> Vec<String> {
+        self.blocked.keys().cloned().collect()
+    }
     fn accept(&mut self, outcome: Outcome, sent: &Groups) {
         let initial = self.remote.is_none();
+        self.first_read |= initial;
         let previous = self
             .remote
             .as_ref()
@@ -839,12 +921,7 @@ impl CombatSync {
                         .show(ui)
                         .clicked()
                     {
-                        if let Some(value) = self.remote.as_ref().and_then(|r| r.groups.get(&key)) {
-                            self.desired.insert(key.clone(), value.clone());
-                        } else {
-                            self.desired.remove(&key);
-                        }
-                        self.blocked.remove(&key);
+                        self.use_remote(&key);
                     }
                     let writable = self
                         .remote
@@ -860,9 +937,7 @@ impl CombatSync {
                         .show(ui)
                         .clicked()
                     {
-                        self.blocked.remove(&key);
-                        self.changed = None;
-                        self.next = None;
+                        self.keep_local(&key);
                     }
                 });
             });
@@ -1337,6 +1412,22 @@ mod tests {
         assert_eq!(sync.desired["hp"]["removedHitPoints"], 8);
         assert!(sync.blocked.is_empty());
         assert!(sync.dirty());
+    }
+    #[test]
+    fn a_new_session_keeps_what_was_last_matched() {
+        let mut sync = CombatSync::default();
+        sync.enabled = true;
+        sync.remote = Some(remote());
+        let matched = remote().groups;
+        sync.enter_scope((2, "1".into(), "123".into()));
+        assert!(sync.enabled);
+        assert!(sync.remote.is_none());
+        assert_eq!(sync.take_matched(), Some(matched.clone()));
+        // Started again, then a new session: what was matched still stands.
+        sync.remote = Some(remote());
+        sync.start();
+        sync.enter_scope((3, "1".into(), "123".into()));
+        assert_eq!(sync.take_matched(), Some(matched));
     }
     #[test]
     fn refresh_preserves_unsent_edits_and_blocks_external_conflicts() {
