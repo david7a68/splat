@@ -856,9 +856,6 @@ impl Splat {
         if std::mem::take(&mut self.encounters.go_to_run) {
             self.page = Page::Run;
         }
-        if std::mem::take(&mut self.encounters.wants_run) {
-            self.page = Page::Run;
-        }
         if std::mem::take(&mut self.party.wants_settings) {
             self.page = Page::Settings;
         }

@@ -229,8 +229,6 @@ pub struct Strip {
     pub current: Option<String>,
     pub next: Option<String>,
     pub conflict: Option<String>,
-    /// Everyone is marked absent, so there is no next turn to take.
-    pub nobody_present: bool,
     /// A sync stopped when the session ended.
     pub sync_stopped: bool,
     /// A sync reports an error.
@@ -808,29 +806,26 @@ impl Run {
             self.error = Some(e);
         }
     }
+    /// The first participant whose sync is in this state.
+    fn first_sync_in(&self, state: crate::combat_sync::SyncState) -> Option<usize> {
+        self.syncs
+            .iter()
+            .find(|(_, sync)| sync.state() == state)
+            .map(|(index, _)| *index)
+    }
     pub fn strip(&self) -> Strip {
+        use crate::combat_sync::SyncState;
         let name = |index: usize| self.state.participants[index].name.clone();
-        let conflict = self
-            .syncs
-            .iter()
-            .find(|(_, sync)| sync.state() == crate::combat_sync::SyncState::Conflict)
-            .map(|(index, _)| name(*index));
-        let sync_error = self
-            .syncs
-            .iter()
-            .find(|(_, sync)| sync.state() == crate::combat_sync::SyncState::Error)
-            .map(|(index, _)| name(*index));
         Strip {
             round: self.state.round,
             current: self.current().map(name),
             next: self.next_up().map(name),
-            conflict,
-            nobody_present: !self.state.participants.iter().any(|p| p.present),
+            conflict: self.first_sync_in(SyncState::Conflict).map(name),
             sync_stopped: self
                 .syncs
                 .values()
                 .any(crate::combat_sync::CombatSync::session_lost),
-            sync_error,
+            sync_error: self.first_sync_in(SyncState::Error).map(name),
             not_saved: self.disk_conflict || (self.dirty && self.error.is_some()),
             running: self.state.phase == Phase::Running,
             name: self.name.clone(),
@@ -849,12 +844,7 @@ impl Run {
     }
     /// Show the first participant with a conflict, so it can be resolved.
     pub fn review_conflict(&mut self) {
-        if let Some(index) = self
-            .syncs
-            .iter()
-            .find(|(_, sync)| sync.state() == crate::combat_sync::SyncState::Conflict)
-            .map(|(index, _)| *index)
-        {
+        if let Some(index) = self.first_sync_in(crate::combat_sync::SyncState::Conflict) {
             self.selected = index;
             self.scroll_to_selected = true;
             // Its controls are in the side panel, which Lookup covers.
@@ -875,14 +865,17 @@ impl Run {
             self.sheet_for = Some(self.selected);
         }
     }
-    /// The names of characters with sync changes not yet confirmed.
-    pub fn pending_sync_names(&self) -> Vec<String> {
+    fn sync_names(&self, wanted: impl Fn(&crate::combat_sync::CombatSync) -> bool) -> Vec<String> {
         self.syncs
             .iter()
-            .filter(|(_, sync)| sync.unconfirmed())
+            .filter(|(_, sync)| wanted(sync))
             .filter_map(|(index, _)| self.state.participants.get(*index))
             .map(|p| p.name.clone())
             .collect()
+    }
+    /// The names of characters with sync changes not yet confirmed.
+    pub fn pending_sync_names(&self) -> Vec<String> {
+        self.sync_names(crate::combat_sync::CombatSync::unconfirmed)
     }
     pub fn pending_sync(&self) -> bool {
         self.syncs
@@ -891,12 +884,7 @@ impl Run {
     }
     /// Who has changes a lost session left unsent.
     pub(crate) fn stranded_names(&self) -> Vec<String> {
-        self.syncs
-            .iter()
-            .filter(|(_, sync)| sync.stranded())
-            .filter_map(|(index, _)| self.state.participants.get(*index))
-            .map(|p| p.name.clone())
-            .collect()
+        self.sync_names(crate::combat_sync::CombatSync::stranded)
     }
     pub fn path(&self) -> Option<&Path> {
         self.storage.as_ref().map(|storage| storage.path.as_path())

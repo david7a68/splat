@@ -52,15 +52,22 @@ pub struct ContentIndex {
     pub errors: Vec<String>,
 }
 
+/// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum Origin {
+    Own,
+    Book,
+    Sheet,
+}
+
 impl Item {
-    /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
-    fn origin(&self) -> u8 {
+    fn origin(&self) -> Origin {
         if self.from_sheet {
-            2
+            Origin::Sheet
         } else if self.private {
-            0
+            Origin::Own
         } else {
-            1
+            Origin::Book
         }
     }
 }
@@ -133,7 +140,7 @@ impl ContentIndex {
 
     /// Best first: exact name, then a prefix, then a word, then anywhere in the name.
     fn search(&self, query: &str) -> Vec<usize> {
-        let mut found: Vec<(u8, u8, usize)> = self
+        let mut found: Vec<(u8, Origin, usize)> = self
             .items
             .iter()
             .enumerate()
@@ -577,12 +584,13 @@ mod tests {
         item.owner = "Campaign Companion".into();
         item.private = false;
         item.from_sheet = false;
-        assert_eq!(item.origin(), 1, "a package ranks with the book");
+        assert_eq!(item.origin(), Origin::Book, "a package ranks with the book");
         item.owner = "Campaign · Emberfall".into();
         item.private = true;
-        assert_eq!(item.origin(), 0, "the DM's own entry ranks first");
+        assert_eq!(item.origin(), Origin::Own, "the DM's own entry ranks first");
         item.from_sheet = true;
-        assert_eq!(item.origin(), 2, "a sheet's copy ranks last");
+        assert_eq!(item.origin(), Origin::Sheet, "a sheet's copy ranks last");
+        assert!(Origin::Own < Origin::Book && Origin::Book < Origin::Sheet);
     }
 
     #[test]

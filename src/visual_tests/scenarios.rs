@@ -365,7 +365,7 @@ pub mod campaign_content {
         // No click: the brief asks for these on screen, with the built-in package open.
         let reasons = d.visible_text(REQUIRED_BY);
         let counted = d.has_containing(REQUIRED);
-        // Row pitch: M-26. The list fills its pane, rather than stopping short of the end.
+        // The list fills its pane, rather than stopping short of the end.
         d.state("required-dependencies", Sizes::All);
         d.click(ENTRIES_LISTING);
         d.observe(
@@ -1431,7 +1431,7 @@ pub mod run_large_roster {
             "All 12 rows are fully in view, with the damage entry",
             whole_roster,
         );
-        // H-3: at the minimum, 12 rows hold their places, use the room, and share a pitch.
+        // At the minimum, 12 rows hold their places, use the room, and share a pitch.
         let places = roster_places(d);
         let dock = d
             .nodes()

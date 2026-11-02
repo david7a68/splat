@@ -441,13 +441,10 @@ impl Run {
     /// they grow with the rows. Next up is the only name that may be off the roster's view.
     fn live_header(&mut self, ui: &mut egui::Ui, scale: RunScale) {
         let c = colors();
-        let current = self.current();
-        let name = current.map_or_else(String::new, |i| self.state.participants[i].name.clone());
-        let next_up = self
-            .next_up()
-            .map(|i| self.state.participants[i].name.clone());
+        let strip = self.strip();
+        let name = strip.current.as_deref().unwrap_or_default();
         let mut next_turn = false;
-        let nobody_present = self.strip().nobody_present;
+        let nobody_present = !self.state.participants.iter().any(|p| p.present);
         // As large as the largest HP, in the row's own face: nothing outweighs the header.
         let turn_size = scale.hp;
         let height = header_height(scale);
@@ -480,20 +477,21 @@ impl Run {
                     // it gives up a letter of the name.
                     let room = ui.available_width() - 1.0;
                     let full = format!("{name}’s turn");
-                    let width = |text: &str, size: f32| {
-                        design::number_width(ui, text, &Type::Name.sized(ui, size))
-                    };
                     let least = Type::Name.font(ui).size.min(turn_size);
-                    let fit =
-                        |text: &str| (turn_size * room / width(text, turn_size)).min(turn_size);
-                    let (text, size) = if fit(&full) >= least {
-                        (full.clone(), fit(&full))
-                    } else if fit(&name) >= least {
-                        (name.clone(), fit(&name))
+                    let fit = |text: &str| {
+                        let width =
+                            design::number_width(ui, text, &Type::Name.sized(ui, turn_size));
+                        (turn_size * room / width).min(turn_size)
+                    };
+                    let (full_size, name_size) = (fit(&full), fit(name));
+                    let (text, size) = if full_size >= least {
+                        (full, full_size)
+                    } else if name_size >= least {
+                        (name.to_owned(), name_size)
                     } else {
                         // The row, the panel and the dock's hover have the whole name.
                         let font = Type::Name.sized(ui, least);
-                        (design::words_that_fit(ui, &name, &font, room), least)
+                        (design::words_that_fit(ui, name, &font, room), least)
                     };
                     ui.add(
                         egui::Label::new(
@@ -512,7 +510,6 @@ impl Run {
         let undo_label = self.undo_label();
         let mut undo = false;
         let mut dismiss = false;
-        let strip = self.strip();
         // What sync needs from the DM. These stay until the cause is gone. A stopped sync
         // comes first, because nothing else can be resolved without a connection.
         let sync_alert = if strip.sync_stopped {
@@ -576,7 +573,7 @@ impl Run {
                             .next()
                             .unwrap_or_default();
                         ui.label(Type::Small.rich(ui, first).color(c.result.warning));
-                    } else if let Some(next) = &next_up {
+                    } else if let Some(next) = &strip.next {
                         let text = format!("Next: {next}");
                         let role = if design::number_width(ui, &text, &Type::Body.font(ui))
                             < ui.available_width()
@@ -774,32 +771,18 @@ impl Run {
                     self.state.participants[i].max_hp,
                 )
             };
+            let syncs_in = |wanted: SyncState| {
+                count(&|i| {
+                    self.syncs
+                        .get(&i)
+                        .is_some_and(|sync| sync.state() == wanted)
+                })
+            };
             let mut text = format!("{} {word}", rows.len());
             for (n, label) in [
-                (
-                    count(&|i| {
-                        self.syncs
-                            .get(&i)
-                            .is_some_and(|sync| sync.state() == SyncState::Conflict)
-                    }),
-                    "Conflict",
-                ),
-                (
-                    count(&|i| {
-                        self.syncs
-                            .get(&i)
-                            .is_some_and(|sync| sync.state() == SyncState::Stopped)
-                    }),
-                    "Sync stopped",
-                ),
-                (
-                    count(&|i| {
-                        self.syncs
-                            .get(&i)
-                            .is_some_and(|sync| sync.state() == SyncState::Error)
-                    }),
-                    "Sync error",
-                ),
+                (syncs_in(SyncState::Conflict), "Conflict"),
+                (syncs_in(SyncState::Stopped), "Sync stopped"),
+                (syncs_in(SyncState::Error), "Sync error"),
                 (count(&|i| state(i) == design::HpState::Zero), "0 HP"),
                 (
                     count(&|i| state(i) == design::HpState::Bloodied),
@@ -1175,22 +1158,16 @@ impl Run {
     fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
         let cannot_save = self.strip().not_saved;
         let stranded = self.stranded_names();
-        let note = if cannot_save {
-            "Closing loses unsaved changes.".to_owned()
-        } else if !stranded.is_empty() {
+        let c = colors();
+        let (note, color) = match (cannot_save, stranded.as_slice()) {
+            (true, _) => ("Closing loses unsaved changes.".to_owned(), c.result.error),
+            (false, []) => (note.to_owned(), c.muted),
             // Short: it shares the footer with both buttons at the minimum size.
-            match stranded.as_slice() {
-                [name] => format!("Not sent: {name}."),
-                [name, others @ ..] => format!("Not sent: {name} and {} more.", others.len()),
-                [] => unreachable!("not empty"),
-            }
-        } else {
-            note.to_owned()
-        };
-        let color = if cannot_save || !stranded.is_empty() {
-            colors().result.error
-        } else {
-            colors().muted
+            (false, [name]) => (format!("Not sent: {name}."), c.result.error),
+            (false, [name, others @ ..]) => (
+                format!("Not sent: {name} and {} more.", others.len()),
+                c.result.error,
+            ),
         };
         ui.label(Type::Small.rich(ui, note).color(color));
         if Action::quiet("Keep running")
@@ -2334,14 +2311,14 @@ impl RowFit {
 }
 
 /// The height that makes these rows, none shorter than it is now, fill `room`, up to `cap`.
-/// Rows taller than that keep their own height. None if the rows already fill `room`.
+/// Rows taller than that keep their own height. Zero if the rows already fill `room`.
 fn even_height(heights: &[f32], room: f32, cap: f32) -> f32 {
     let mut sorted = heights.to_vec();
     sorted.sort_by(f32::total_cmp);
     let mut rest = room;
     let mut left = sorted.len();
     for &height in sorted.iter().rev() {
-        if left == 0 || height <= rest / left as f32 {
+        if height <= rest / left as f32 {
             break;
         }
         rest -= height;

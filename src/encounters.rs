@@ -347,15 +347,14 @@ pub struct Encounters {
     discarded_options: Option<crate::encounter_settings::Options>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
-    /// A run just opened, so the shell goes to the Run page.
+    /// A run just opened, or the DM asked to go back to it from its row in the list, so the
+    /// shell goes to the Run page.
     pub go_to_run: bool,
     /// A creature to read beside the draft, in Lookup.
     pub peek: Option<Uuid>,
     focus_name: bool,
     focus_search: bool,
     editor_pane: EditorPane,
-    /// The DM asked to go back to the open run, from its row in the list.
-    pub wants_run: bool,
     expanded: Option<String>,
 }
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -1033,7 +1032,7 @@ impl Encounters {
                     template_list(ui, &mut open_path, &mut run_path);
                 }
             });
-        self.wants_run |= back_to_run.get();
+        self.go_to_run |= back_to_run.get();
         if let Some(path) = resume {
             match crate::encounter_run::Run::open(&path, active.id) {
                 Ok(run) => {
@@ -1114,15 +1113,6 @@ impl Encounters {
                         color: colors().document.unsaved,
                     },
                 );
-            } else if saved_note.is_none() {
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::OK,
-                        word: "No changes",
-                        color: colors().muted,
-                    },
-                );
             } else if let Some(note) = &saved_note {
                 // Beside the name, so that saving does not move the roster.
                 design::status(
@@ -1131,6 +1121,15 @@ impl Encounters {
                         icon: icons::OK,
                         word: note,
                         color: colors().document.saved,
+                    },
+                );
+            } else {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::OK,
+                        word: "No changes",
+                        color: colors().muted,
                     },
                 );
             }

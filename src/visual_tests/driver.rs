@@ -644,11 +644,10 @@ impl<'a> Driver<'a> {
             self.harness.run_steps(6);
             // A reason is words, not any new thing on screen. Three is the shortest.
             let after = self.painted_in(window);
-            let added = after.split_whitespace().count()
-                - before
-                    .split_whitespace()
-                    .count()
-                    .min(after.split_whitespace().count());
+            let added = after
+                .split_whitespace()
+                .count()
+                .saturating_sub(before.split_whitespace().count());
             if added < 3 {
                 silent.push(name);
             }
