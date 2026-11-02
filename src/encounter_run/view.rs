@@ -1745,16 +1745,16 @@ impl Run {
             .wrap(),
         );
         // The roll and where it placed them. Undo or a later step takes this away.
+        let added = self
+            .history_labels
+            .last()
+            .and_then(|label| label.strip_prefix("add "))
+            .map(|group| format!("{}{group} added: ", super::GROUP_ADDED));
         if let Some(line) = self
             .state
             .log
             .last()
-            .filter(|line| line.starts_with(super::GROUP_ADDED))
-            .filter(|_| {
-                self.history_labels
-                    .last()
-                    .is_some_and(|label| label.starts_with("add "))
-            })
+            .filter(|line| added.as_ref().is_some_and(|start| line.starts_with(start)))
         {
             let short: String = line.chars().take(super::GROUP_LINE_LIMIT).collect();
             let shown = if short.len() < line.len() {
@@ -3189,7 +3189,7 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
     parts.extend(p.conditions.iter().cloned());
     if let Some(changes) = &p.changes {
         parts.push("Changed".into());
-        parts.extend(changes.overrides.table_bonuses());
+        parts.extend(changes.overrides.table_bonuses(&changes.base));
     }
     if let Some(sync) = sync {
         parts.push(sync_status(sync).word.into());
@@ -3384,7 +3384,7 @@ impl RowLayout {
                 &format!("{}\u{a0}Changed", icons::CHANGED),
                 c.participant.changed,
             );
-            for bonus in changes.overrides.table_bonuses() {
+            for bonus in changes.overrides.table_bonuses(&changes.base) {
                 add(&bonus.replace(' ', "\u{a0}"), c.participant.changed);
             }
         }

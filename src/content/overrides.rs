@@ -68,6 +68,10 @@ pub struct Base {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<String>,
 }
+/// Whether two names are one condition, whatever their case.
+pub fn same_condition(a: &str, b: &str) -> bool {
+    a.trim().to_lowercase() == b.trim().to_lowercase()
+}
 /// The names in a list of starting conditions, as a note can hold them.
 pub fn condition_names(value: &Value) -> Vec<String> {
     value
@@ -370,16 +374,12 @@ impl Overrides {
             let Some(change) = change else {
                 return Ok(value);
             };
-            let changed = change.apply(value).ok_or_else(|| {
-                format!(
-                    "{field}: {} has no value to add to. Set a value instead.",
-                    base.name
-                )
-            })?;
+            let changed = change
+                .apply(value)
+                .ok_or_else(|| format!("{field} has no value to add to. Set a value instead."))?;
             if !(low..=high).contains(&changed) {
                 return Err(format!(
-                    "{field}: {} would become {changed}, and it must be from {low} to {high}.",
-                    base.name
+                    "{field} would become {changed}. It must be from {low} to {high}."
                 ));
             }
             Ok(Some(changed))
@@ -389,7 +389,8 @@ impl Overrides {
                 .name
                 .as_deref()
                 .map_or_else(|| base.name.clone(), |name| name.trim().to_owned()),
-            side: self.side.clone().unwrap_or_else(|| base.side.clone()),
+            // The same side, however it was typed: by-side initiative compares these.
+            side: self.side.as_deref().unwrap_or(&base.side).trim().to_owned(),
             max_hp: number("Maximum HP", self.max_hp, base.max_hp, 1, MAX_HP)?,
             armor_class: number("AC", self.armor_class, base.armor_class, 0, MAX_STAT)?,
             initiative_bonus: number(
@@ -503,7 +504,7 @@ impl Overrides {
                 changed: {
                     let mut all = base.conditions.clone();
                     for condition in &self.conditions {
-                        if !all.iter().any(|c| c.eq_ignore_ascii_case(condition)) {
+                        if !all.iter().any(|c| same_condition(c, condition)) {
                             all.push(condition.clone());
                         }
                     }
@@ -524,13 +525,16 @@ impl Overrides {
     }
 
     /// What a table needs on the row, for what the run cannot apply itself.
-    pub fn table_bonuses(&self) -> Vec<String> {
+    pub fn table_bonuses(&self, base: &Base) -> Vec<String> {
         let mut bonuses = Vec::new();
         if let Some(amount) = self.attack_bonus {
             bonuses.push(format!("Attack {}", signed(amount)));
         }
         if let Some(amount) = self.damage_bonus {
             bonuses.push(format!("Damage {}", signed(amount)));
+        }
+        if let Some(speed) = self.speed.and_then(|change| change.apply(base.speed)) {
+            bonuses.push(format!("Speed {speed} ft"));
         }
         bonuses
     }
@@ -623,7 +627,10 @@ mod tests {
         );
         assert_eq!(all.attack_bonus, Some(1));
         assert_eq!(all.damage_bonus, Some(-1));
-        assert_eq!(all.table_bonuses(), vec!["Attack +1", "Damage -1"]);
+        assert_eq!(
+            all.table_bonuses(&base()),
+            vec!["Attack +1", "Damage -1", "Speed 40 ft"]
+        );
         assert_eq!(parsed("{max_hp: {set: 30}}").max_hp, Some(Change::Set(30)));
     }
 
@@ -656,10 +663,7 @@ mod tests {
     #[test]
     fn a_change_that_leaves_a_stat_invalid_names_the_creature() {
         let error = parsed("{max_hp: {add: -10}}").resolve(&base()).unwrap_err();
-        assert!(
-            error.contains("Maximum HP") && error.contains("Goblin"),
-            "{error}"
-        );
+        assert!(error.contains("Maximum HP would become 0"), "{error}");
         let unknown = Base {
             armor_class: None,
             ..base()

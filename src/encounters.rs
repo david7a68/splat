@@ -218,7 +218,7 @@ impl Draft {
         let overrides = Overrides::parse(&slot.overrides).map_err(&named)?;
         let resolved = overrides.resolve_for(entry, &slot.side).map_err(&named)?;
         if let Some(side) = &overrides.side
-            && !self.setup.sides.contains_key(side.as_str())
+            && !self.setup.sides.contains_key(side.trim())
         {
             return Err(named(format!(
                 "side {side} is not a side of this encounter."
@@ -1827,6 +1827,7 @@ impl Encounters {
                         entry,
                         &slot.side,
                         Some(&slot.initial),
+                        is_open,
                     );
                 }
                 if is_open {

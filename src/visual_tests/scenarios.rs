@@ -4581,19 +4581,24 @@ pub mod encounter_groups {
         // A group that cannot be added says why, in the editor, and its change says why.
         d.click(&format!("Edit group {GROUP_LOST}"));
         d.expect("Unavailable creature");
+        let (found, invalid) = d.at_size(SMALL, |d| {
+            (
+                d.in_view_containing("cannot find this creature"),
+                d.in_view_containing("would become -28"),
+            )
+        });
         d.observe(
             "T13.3",
-            d.in_view_containing("cannot find this creature")
-                && d.in_view_containing("would become -28")
-                && !d.has("Overrides for Unavailable creature"),
+            found && invalid && !d.has("Overrides for Unavailable creature"),
             "The editor says why a creature is unavailable, and that a change cannot stand",
         );
         d.state("group-unavailable-creature", Sizes::Default);
         d.click("Overrides for Cinder Wolf");
+        let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become -28"));
         d.observe(
             "T13.3",
-            d.in_view_containing("would become -28"),
-            "A change that cannot stand says so in view, with its form open or closed",
+            in_view,
+            "At the minimum window, an open form says in view that its change cannot stand",
         );
         d.state("group-invalid-change", Sizes::Default);
         d.click("Back to encounters");
@@ -4627,7 +4632,8 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.has_containing("XP not known for Captain Varra") && d.has_containing("Member 1:"),
+            d.has_containing("XP not known for Captain Varra")
+                && d.has_containing("Unavailable creature: check"),
             "XP that is not known says so, and a group that cannot be added says why",
         );
         d.observe(
@@ -4637,9 +4643,9 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("2 creatures · Total XP 200 or more")
+            d.visible_text("3 creatures · Total XP 250 or more")
                 && d.has_containing("Unavailable creature")
-                && d.has_containing("Member 1:")
+                && d.has_containing("Unavailable creature: check")
                 && d.has_containing("Member 2 (Cinder Wolf):"),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
         );

@@ -211,8 +211,9 @@ the panel, those words open the second line instead, so that a name is never cut
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view. Each turn scrolls to show the current row and the next.
 - **Strip:** on other pages, a line with the turn, any conflict, `Back to run` and `Next turn`.
-- **Changed:** a creature with overrides has `Changed` on its second line, then any bonus the
-  run cannot apply, such as `Attack +1`, because the DM needs it for the roll. Its card lists each
+- **Changed:** a creature with overrides has `Changed` on its second line, then anything the
+  run cannot apply, such as `Attack +1` or `Speed 40 ft`, because the DM needs it at the table. A setup
+  row has the word `Changed` only. Its card lists each
   change at the top of the stat block's tab, so no tab moves, as `Maximum HP: 33 → 43 (+10)`. What
   the run cannot apply comes first, in larger type, and says `add by hand`. A line then says that the
   stat block below is as printed. The list scrolls with the stat block, and each participant keeps
