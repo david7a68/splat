@@ -309,7 +309,10 @@ fn pools(record: &EntitySnapshot, prefix: &str) -> BTreeMap<i64, i64> {
 }
 
 fn compare_spell_slots(record: &EntitySnapshot, built: &Build, review: &mut Review) {
-    let pact = built.classes.iter().find_map(|class| class.pact_slots.as_ref());
+    let pact = built
+        .classes
+        .iter()
+        .find_map(|class| class.pact_slots.as_ref());
     let casts = built
         .spell_slots
         .is_some_and(|slots| slots.iter().any(|count| *count > 0));
@@ -1018,7 +1021,11 @@ mod tests {
                 .iter()
                 .any(|m| m.contains("skill Athletics"))
         );
-        assert!(!review.matched.contains(&"Barbarian skill choices".to_owned()));
+        assert!(
+            !review
+                .matched
+                .contains(&"Barbarian skill choices".to_owned())
+        );
     }
 
     #[test]
@@ -1030,7 +1037,12 @@ mod tests {
             json!(10);
         let review = run_with(&changed, &links);
         let unchecked = messages(&review, FindingKind::NotChecked);
-        assert!(unchecked.iter().any(|m| m.contains("Weapon Mastery changed")), "{unchecked:?}");
+        assert!(
+            unchecked
+                .iter()
+                .any(|m| m.contains("Weapon Mastery changed")),
+            "{unchecked:?}"
+        );
         assert_eq!(messages(&review, FindingKind::Differs), Vec::<&str>::new());
         assert!(!review.matched.iter().any(|m| m.contains("Weapon Mastery")));
     }
@@ -1063,13 +1075,21 @@ mod tests {
             messages(&review, FindingKind::InvalidChoice),
             vec!["Barbarian: Athletics is not an option this skill choice offers."]
         );
-        assert!(!review.matched.contains(&"Barbarian skill choices".to_owned()));
+        assert!(
+            !review
+                .matched
+                .contains(&"Barbarian skill choices".to_owned())
+        );
         let review = run(&record(1, &[61, 61], &[71, 72]));
         assert_eq!(
             messages(&review, FindingKind::InvalidChoice),
             vec!["Barbarian: Athletics is chosen twice as a skill."]
         );
-        assert!(!review.matched.contains(&"Barbarian skill choices".to_owned()));
+        assert!(
+            !review
+                .matched
+                .contains(&"Barbarian skill choices".to_owned())
+        );
     }
 
     #[test]
