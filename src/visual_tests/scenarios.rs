@@ -2426,6 +2426,42 @@ pub mod column_resize {
         d.state("session-fills-its-column", Sizes::All);
     }
 
+    /// Write, Read and Events use the whole column, and Write and Read break lines alike.
+    fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
+        d.set_base(LARGE);
+        let page = right_of(d, "New session");
+        let filled = |right: f32| page - right <= crate::design::XL;
+        let box_right = right_of(d, "Note text");
+        d.observe(
+            CHECK,
+            filled(box_right),
+            format!("The note box reaches {box_right} of {page}"),
+        );
+        d.type_into_editor(&"The party crossed the old bridge at dusk. ".repeat(30));
+        let write = d.longest_visible_line();
+        d.click("Read");
+        let read = d.longest_visible_line();
+        d.observe(
+            CHECK,
+            read > 75 && read.abs_diff(write) <= 2,
+            format!("Longest line in a wide window: {write} in Write, {read} in Read"),
+        );
+        d.state("session-read-fills-its-column", Sizes::All);
+        d.click("Events");
+        d.click("Add Major event");
+        let action = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Add to notes"))
+            .map_or(0.0, |node| node.rect.right());
+        d.observe(
+            CHECK,
+            filled(action),
+            format!("An event's action reaches {action} of {page}"),
+        );
+        d.state("session-events-fill-their-column", Sizes::All);
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         d.set_base(LARGE);
         resume_run_from_cold_start(d);
@@ -2500,6 +2536,7 @@ pub mod column_resize {
         the_roster_follows_the_add_panel(d);
         d.set_base(DEFAULT);
         the_session_fills_its_column(d);
+        the_session_tabs_fill_their_column(d);
     }
 }
 
@@ -4299,6 +4336,18 @@ pub mod session_recording {
         d.click(NAV_SESSIONS);
         d.expect("names to api.openai.com");
         d.state("recording-ready", Sizes::Default);
+        // The words were held to 680 before they could follow the column.
+        let notice = d.at_size(LARGE, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Process sends"))
+                .map_or(0.0, |node| node.rect.width())
+        });
+        d.observe(
+            "Column resize",
+            notice > 680.0,
+            format!("The Recordings tab's words use the column, {notice} wide"),
+        );
         d.observe(
             "T11.6",
             d.has_containing("events go to Codex (gpt-6.1-sol) twice"),

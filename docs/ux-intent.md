@@ -404,7 +404,8 @@ you sure?" on damage or `Next turn` is rejected. Confirmation is only for work t
 comfortable line spacing, a clear heading scale, and no competing controls. Every entry uses one
 reader everywhere, including the run. Stat lines and tables keep alignment. Source, identifiers,
 and engine support stay collapsed. *Dispute:* a reader that fills a wide window, or a dense "power
-user" reader, is rejected. Dense layouts are for lists, not for rules prose.
+user" reader, is rejected. Dense layouts are for lists, not for rules prose. A session's own notes
+and transcripts are the exception: they follow their column, at the width the DM chooses.
 
 **6. Show what is unsure.** Stale, offline, local-only, unsaved, conflicting, read-only, and
 unsupported states are always visible where the DM looks, as words or icons as well as colour.

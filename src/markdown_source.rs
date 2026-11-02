@@ -248,8 +248,7 @@ pub fn layouter(ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32) -> Arc<eg
             .collect(),
         ..Default::default()
     };
-    // Lines break where the Reader breaks them, so a note keeps its shape between views.
-    job.wrap.max_width = wrap_width.min(design::READER_MEASURE);
+    job.wrap.max_width = wrap_width;
     ui.fonts_mut(|fonts| fonts.layout_job(job))
 }
 

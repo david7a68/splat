@@ -34,7 +34,7 @@ const LIST_WIDTH: f32 = 216.0;
 const LIST_WIDTHS: std::ops::RangeInclusive<f32> = 170.0..=420.0;
 const STATUS_WIDTH: f32 = 128.0;
 const TWO_COLUMNS_FROM: f32 = 640.0;
-/// About 80 characters of source. A note keeps its shape in a wide window.
+/// About 80 characters of source. A template keeps its shape in a wide window.
 const EDITOR_WIDTH: f32 = 680.0;
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 const SCAN_EVERY: Duration = Duration::from_secs(5);
@@ -203,6 +203,16 @@ pub struct Sessions {
     /// The DM asked to see the session this is about.
     pub wants_sessions_page: bool,
     pub wants_event: Option<String>,
+}
+
+/// Read and a transcript use the width of `Write`'s text, so a note keeps its line breaks
+/// between the views. The DM's own notes follow the column, unlike the books' rules prose.
+fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width() - 2.0 * design::S);
+        add(ui)
+    })
+    .inner
 }
 
 /// The words for a note that looks like last week's. A forgotten `New session` puts
@@ -1645,11 +1655,7 @@ impl Sessions {
                     .font(design::reader::prose_type(ui).font(ui))
                     .layouter(&mut layouter)
                     .margin(egui::vec2(design::S, design::S))
-                    // The box fits the text, which wraps at the Reader's measure.
-                    .desired_width(
-                        ui.available_width()
-                            .min(design::READER_MEASURE + 2.0 * design::S),
-                    )
+                    .desired_width(ui.available_width())
                     .min_size(egui::vec2(0.0, ui.available_height()))
                     .show(ui);
                 crate::markdown_source::paint_section_rules(ui, &output);
@@ -1855,7 +1861,7 @@ impl Sessions {
             .id_salt(("session_reader", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                design::reader::measure(ui, |ui| {
+                note_width(ui, |ui| {
                     markdown_view::show_reader(ui, &text);
                     let events: Vec<_> = book
                         .events
@@ -1939,10 +1945,7 @@ impl Sessions {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 let action = 104.0;
-                let widths = [
-                    ui.available_width().min(EDITOR_WIDTH) - action - design::XL,
-                    action,
-                ];
+                let widths = [ui.available_width() - action - design::XL, action];
                 let mut any = false;
                 for (event, day) in book.events.iter().zip(&days) {
                     if event.session != session {
@@ -2474,7 +2477,7 @@ impl Sessions {
             ))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                design::reader::measure(ui, |ui| {
+                note_width(ui, |ui| {
                     let body = &reading.parts[reading.part].1;
                     let at = reading.mark.as_deref().and_then(|mark| body.find(mark));
                     match at {
@@ -2532,11 +2535,6 @@ impl Sessions {
             } else {
                 processing::host(&config.llm_url)
             };
-            let width = ui.available_width().min(EDITOR_WIDTH);
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, 0.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
             ui.add(
                 egui::Label::new(
                     Type::Small
@@ -2550,8 +2548,6 @@ impl Sessions {
                         .color(colors().muted),
                 )
                 .wrap(),
-            );
-                },
             );
         }
         let recordings = self.recordings.clone();
@@ -2586,24 +2582,15 @@ impl Sessions {
             .id_salt(("session_recordings", self.selected))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                // Words and their action stay near each other in a wide window.
-                let width = ui.available_width().min(EDITOR_WIDTH);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.set_width(width);
-                        for recording in &recordings {
-                            ui.add_space(design::S);
-                            self.recording_row(ui, recording, settings, book);
-                            self.markers(ui, recording, book);
-                            // Each marker row ends in a rule already.
-                            if recording.markers.is_empty() {
-                                design::rule(ui);
-                            }
-                        }
-                    },
-                );
+                for recording in &recordings {
+                    ui.add_space(design::S);
+                    self.recording_row(ui, recording, settings, book);
+                    self.markers(ui, recording, book);
+                    // Each marker row ends in a rule already.
+                    if recording.markers.is_empty() {
+                        design::rule(ui);
+                    }
+                }
             });
     }
 
