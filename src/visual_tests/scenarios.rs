@@ -886,6 +886,17 @@ pub mod encounter_run {
         d.click(ROLL_NPCS);
         d.state("npc-initiative-rolled", Sizes::Default);
         d.goal("start a new run and roll initiative");
+
+        d.click("Roll NPC initiative another way");
+        d.state("npc-roll-menu", Sizes::Default);
+        d.check_tab_order("NPC roll menu");
+        d.click("Individually");
+        d.state("npc-initiative-rolled-individually", Sizes::Default);
+        d.goal_within(
+            "Roll once another way",
+            "roll NPC initiative another way",
+            2,
+        );
     }
 }
 

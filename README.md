@@ -337,11 +337,13 @@ edits. If the file changed, saving stops until you choose **Keep this run** or *
 run**. Other failed saves keep the current run in memory and show an error. Undo history
 is kept for the current session only. Changing the folder does not move old runs.
 
-The same settings select the campaign initiative rule. **Roll NPC initiative**
-uses that rule and leaves player totals alone. Choices are identical NPC groups
-(the D&D default), individual NPCs, one group per side, or explicit encounter
-initiative groups. Side and explicit groups use the first NPC in roster order
-for their bonus and roll mode. Normal, advantage, and disadvantage rolls are
+The same settings select how the campaign rolls NPC initiative: in groups of
+identical NPCs (the D&D default), individually, in one group per side, or in the
+encounter's initiative groups. **Roll NPC initiative** in run setup uses that
+choice and leaves player totals alone. The arrow beside it uses another choice for
+one roll, and the campaign's choice stays the default. An arrow choice for the
+encounter's groups shows only when an NPC has a group. Side and encounter groups
+use the first NPC in roster order for their bonus and roll mode. Normal, advantage, and disadvantage rolls are
 available; use disadvantage for surprise. Ties use the campaign's roster-order
 setting or the DM/player ordering controls. NPC status can be changed before
 combat begins. Run folder settings use `splat_run_storage.directory`; initiative

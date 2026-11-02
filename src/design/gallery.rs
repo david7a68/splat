@@ -154,6 +154,10 @@ pub fn components(ui: &mut egui::Ui) {
         let _ = link(ui, "A link");
         let mut choice = 1;
         segmented(ui, &mut choice, &[(0, "Read"), (1, "Edit"), (2, "Log")]);
+        let _ = split_action(ui, Action::secondary("Split"), "Other ways", |ui| {
+            let _ = ui.selectable_label(true, "The default");
+            let _ = ui.selectable_label(false, "Another way");
+        });
     });
     design_group(ui, "Fields");
     let mut text = "Bridge Ambush".to_owned();
