@@ -121,6 +121,9 @@ the page keys also scroll. Tab steps over it (`Splat::skip_unnamed_focus`). The 
 counts a node as a bar only if it has no role and no name, lies outside a scroll
 surface, and matches the full length of that surface's edge.
 
+A column's drag handle is the same kind of chrome: 10 px wide and as tall as the column.
+Tab steps over it too. It has no keyboard control. A column keeps a usable width without a drag.
+
 ## Widgets
 
 `theme::install` sets one global `egui::Style`, so any plain egui widget still fits: hover,
@@ -150,6 +153,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Empty state | `empty_state` | What this is, and the one next step |
 | Message | `message`, `Tone` | Inline. Never modal |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run. Above 820 px, the run's panel has two columns |
+| Column | `Column::left / right / panel` | Every side column: the rail, a page's list, a panel. A drag handle on its inner edge. Natural width until dragged, then the DM's width, here and after a restart. A drag always leaves the page its room, and the run's roster keeps `RUN_LIST_KEEPS` |
 | Link | `link` | A real `Link` role, at least 24 px high |
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2 entries` |

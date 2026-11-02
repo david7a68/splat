@@ -31,6 +31,7 @@ use uuid::Uuid;
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
 const SAVED_WORD_FOR: Duration = Duration::from_secs(8);
 const LIST_WIDTH: f32 = 216.0;
+const LIST_WIDTHS: std::ops::RangeInclusive<f32> = 170.0..=420.0;
 const STATUS_WIDTH: f32 = 128.0;
 const TWO_COLUMNS_FROM: f32 = 640.0;
 /// About 80 characters of source. A note keeps its shape in a wide window.
@@ -1761,9 +1762,8 @@ impl Sessions {
 
     pub fn notes_panel(&mut self, ctx: &egui::Context) {
         let width = design::side_panel_width(ctx.content_rect().width());
-        egui::SidePanel::right("session_notes")
-            .resizable(false)
-            .exact_width(width)
+        design::Column::panel("session_notes", width)
+            .page_keeps(design::PANEL_LEAVES_PAGE)
             .frame(
                 egui::Frame::new()
                     .fill(colors().page)
@@ -2828,9 +2828,7 @@ impl Sessions {
             }
             return;
         }
-        egui::SidePanel::left("session_list_panel")
-            .resizable(false)
-            .exact_width(LIST_WIDTH)
+        design::Column::left("session_list_panel", LIST_WIDTH, LIST_WIDTHS)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 right: design::S as i8,
                 ..Default::default()
@@ -2904,9 +2902,7 @@ impl Sessions {
                 self.templates_list_only = true;
             }
         } else {
-            egui::SidePanel::left("template_list_panel")
-                .resizable(false)
-                .exact_width(LIST_WIDTH)
+            design::Column::left("template_list_panel", LIST_WIDTH, LIST_WIDTHS)
                 .frame(egui::Frame::new().inner_margin(egui::Margin {
                     right: design::S as i8,
                     ..Default::default()

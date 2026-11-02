@@ -3,6 +3,7 @@
 //! It lives beside the settings file. Test builds name a temporary file or none.
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     fs,
     io::Write,
     path::{Path, PathBuf},
@@ -23,6 +24,9 @@ pub struct UiState {
     pub page: Option<String>,
     #[serde(default)]
     pub open_run: Option<OpenRun>,
+    /// The widths the DM dragged columns to, by column.
+    #[serde(default)]
+    pub column_widths: BTreeMap<String, f32>,
 }
 
 #[derive(Default)]
@@ -104,9 +108,16 @@ mod tests {
                 path: "/tmp/run.json".into(),
                 synced: vec!["actor_hero_1".into()],
             }),
+            column_widths: BTreeMap::from([("navigation".to_owned(), 240.0)]),
         };
         store.save(&state);
         assert_eq!(Store::at(path.clone()).load(), state);
+        // A file from before columns could be dragged still opens.
+        fs::write(&path, r#"{"page":"Party"}"#).unwrap();
+        assert_eq!(
+            Store::at(path.clone()).load().page.as_deref(),
+            Some("Party")
+        );
         fs::write(&path, "not json").unwrap();
         assert_eq!(Store::at(path).load(), UiState::default());
     }

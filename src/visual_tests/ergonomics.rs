@@ -15,8 +15,9 @@ use std::collections::{BTreeMap, HashMap};
 pub const MIN_TARGET: f32 = 24.0;
 /// A control can exceed a neighbour by rounding without a person noticing.
 const OVERLAP_TOLERANCE: f32 = 1.0;
-/// Panel and window resize handles, and scroll bars, are at most this thick.
-const CHROME_THICKNESS: f32 = 16.0;
+/// Panel and window resize handles, and scroll bars, are at most this thick. The tree
+/// reports pixels, and a column's 10 point handle is 20 at twice the density.
+const CHROME_THICKNESS: f32 = 20.0;
 /// A window's resize corners are small in both directions.
 const CHROME_CORNER: f32 = 24.0;
 
@@ -166,6 +167,17 @@ fn scroll_bar(node: &AccessKitNode<'_>, rect: egui::Rect, surfaces: &[egui::Rect
         })
 }
 
+/// A column's drag handle, which egui adds to the panel: unnamed, with no role, thin, as
+/// tall as a column, and only draggable. A control the app draws has a role and a name.
+fn column_handle(node: &AccessKitNode<'_>, rect: egui::Rect) -> bool {
+    const AS_TALL_AS_A_COLUMN: f32 = 100.0;
+    node.role() == Role::Unknown
+        && node.label().is_none()
+        && !supports(node, Action::Click)
+        && rect.width() <= CHROME_THICKNESS
+        && rect.height() >= AS_TALL_AS_A_COLUMN
+}
+
 /// A popup's own background: unnamed, with no role, directly under the window, and with
 /// all the popup's contents inside it. A control is a leaf, so it cannot match.
 fn popup_body(node: &Node<'_>, rect: egui::Rect, parent_is_window: bool) -> bool {
@@ -283,6 +295,7 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
                 scope,
                 clip,
                 chrome: scroll_bar(&access, rect, surfaces)
+                    || column_handle(&access, rect)
                     || popup_body(node, rect, parent_is_window),
             });
         },
@@ -682,6 +695,24 @@ pub fn write_markdown(report: &Report<'_>) -> String {
 mod tests {
     use super::*;
     use egui_kittest::Harness;
+
+    #[test]
+    fn a_column_handle_is_chrome() {
+        let mut harness = Harness::builder().build_state(
+            |ctx, _: &mut crate::Splat| {
+                crate::design::Column::left("c", 200.0, 150.0..=300.0).show(ctx, |_| {});
+                egui::CentralPanel::default().show(ctx, |_| {});
+            },
+            crate::Splat::default(),
+        );
+        harness.run_steps(2);
+        let found = controls(&harness);
+        assert_eq!(
+            found.iter().filter(|control| control.chrome).count(),
+            1,
+            "{found:?}"
+        );
+    }
 
     /// A real control can never count as egui chrome, however small it is.
     #[test]

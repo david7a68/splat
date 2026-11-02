@@ -39,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 30] = [
+const SCENARIOS: [(&str, Seed, Script); 31] = [
     (
         "library-browse",
         Seed::Empty,
@@ -104,6 +104,11 @@ const SCENARIOS: [(&str, Seed, Script); 30] = [
     ),
     ("gallery", Seed::Empty, scenarios::gallery::run),
     ("run-restart", Seed::Campaign, scenarios::run_restart::run),
+    (
+        "column-resize",
+        Seed::Campaign,
+        scenarios::column_resize::run,
+    ),
     (
         "library-scope",
         Seed::Campaign,

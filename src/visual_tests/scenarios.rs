@@ -9,7 +9,7 @@ use super::{
     fixture::{CAMPAIGN, MODULE, QUIET_CAMPAIGN, RUN, RUN_12, RUN_20, UNLINKED_CAMPAIGN},
     steps::*,
 };
-use eframe::egui::{Key, Pos2, pos2};
+use eframe::egui::{self, Key, Pos2, pos2};
 
 /// The middle of the reading pane and of the entry list, at the minimum window.
 const READER: Pos2 = pos2(720.0, 400.0);
@@ -2323,6 +2323,110 @@ pub mod gallery {
             d.visible_text(&temp),
             "Temporary HP shows with its mark, as it does in the run and on Party",
         );
+    }
+}
+
+/// Drag the edges of the rail, a page's lists and a panel, then work at those widths.
+/// The widths come back after a restart.
+pub mod column_resize {
+    use super::*;
+    use crate::design::{PANEL_MIN_WIDTH, RAIL_DRAG_MAX_WIDTH, RAIL_WIDTH, S, side_panel_width};
+
+    const CHECK: &str = "Column resize";
+    const MEMBER: &str = "Brannoch Vale";
+    /// Far past either end of what any column can reach.
+    const FAR_LEFT: f32 = 1.0;
+    const FAR_RIGHT: f32 = 1190.0;
+
+    fn rail_edge(d: &Driver<'_>) -> f32 {
+        d.place_of(NAV_LIBRARY).map_or(0.0, |rect| rect.right() + S)
+    }
+
+    fn search(d: &Driver<'_>) -> egui::Rect {
+        d.place_of(SEARCH_LIBRARY).unwrap_or(egui::Rect::ZERO)
+    }
+
+    fn sections_edge(d: &Driver<'_>) -> f32 {
+        search(d).left() - S
+    }
+
+    fn entries_edge(d: &Driver<'_>) -> f32 {
+        search(d).right() + S
+    }
+
+    fn near(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1.0
+    }
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.set_base(DEFAULT);
+        resume_run_from_cold_start(d);
+        let run_edge = DEFAULT.0 - crate::design::M - side_panel_width(DEFAULT.0);
+        d.drag_column_edge(run_edge, FAR_RIGHT);
+        d.state("run-panel-narrow", Sizes::All);
+        d.drag_column_edge(DEFAULT.0 - crate::design::M - PANEL_MIN_WIDTH, FAR_LEFT);
+        d.state("run-panel-wide", Sizes::All);
+
+        go_library(d);
+        d.drag_column_edge(rail_edge(d), RAIL_DRAG_MAX_WIDTH);
+        d.observe(
+            CHECK,
+            near(rail_edge(d), RAIL_DRAG_MAX_WIDTH),
+            format!("The rail follows its edge to {}", rail_edge(d)),
+        );
+        d.drag_column_edge(sections_edge(d), FAR_RIGHT);
+        let start = entries_edge(d) - sections_edge(d);
+        d.drag_column_edge(entries_edge(d), FAR_RIGHT);
+        let wide = (rail_edge(d), sections_edge(d), entries_edge(d));
+        d.observe(
+            CHECK,
+            wide.2 - wide.1 > start,
+            "The entry list follows its edge",
+        );
+        d.observe(
+            CHECK,
+            wide.2 <= DEFAULT.0 - 320.0,
+            "The reader keeps its room, however far the list is dragged",
+        );
+        d.state("library-wide-columns", Sizes::All);
+
+        d.click(BACK_TO_RUN);
+        d.restart();
+        go_library(d);
+        d.observe(
+            CHECK,
+            (rail_edge(d), sections_edge(d), entries_edge(d)) == wide,
+            "Dragged widths return after a restart",
+        );
+
+        d.drag_column_edge(entries_edge(d), FAR_LEFT);
+        d.drag_column_edge(sections_edge(d), FAR_LEFT);
+        d.drag_column_edge(rail_edge(d), FAR_LEFT);
+        d.observe(
+            CHECK,
+            near(rail_edge(d), RAIL_WIDTH),
+            "The rail stops at its narrowest",
+        );
+        d.state("library-narrow-columns", Sizes::All);
+
+        // Beside the widest rail, the pages and panels must still work.
+        d.drag_column_edge(rail_edge(d), RAIL_DRAG_MAX_WIDTH);
+        go_party(d);
+        d.expect(MEMBER);
+        d.state("party-beside-wide-rail", Sizes::All);
+        d.click(BACK_TO_RUN);
+        d.state("run-beside-wide-rail", Sizes::All);
+        d.click(NAV_LOOKUP);
+        d.state("lookup-beside-wide-rail", Sizes::All);
+        // Lookup gives the page what it needs, here beside a rail of the widest kind.
+        let lookup_edge = (DEFAULT.0 - side_panel_width(DEFAULT.0))
+            .max(RAIL_DRAG_MAX_WIDTH + crate::design::PANEL_LEAVES_PAGE);
+        d.drag_column_edge(lookup_edge, FAR_LEFT);
+        d.state("lookup-wide-beside-wide-rail", Sizes::All);
+        d.click(NAV_LOOKUP);
+        d.expect(NEXT_TURN);
+        d.click(NEXT_TURN);
+        d.goal("resize the columns and go on working");
     }
 }
 

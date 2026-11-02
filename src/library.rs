@@ -992,10 +992,12 @@ impl Library {
             .unwrap_or_default();
         let searching = !self.search.trim().is_empty();
         if !compact {
-            egui::SidePanel::left("library_sections")
-                .resizable(false)
-                .exact_width(158.0)
-                .frame(egui::Frame::new())
+            design::Column::left("library_sections", 166.0, 150.0..=280.0)
+                // The drag handle is on this edge, so the rows stop short of it.
+                .frame(egui::Frame::new().inner_margin(egui::Margin {
+                    right: design::S as i8,
+                    ..Default::default()
+                }))
                 .show_inside(ui, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt("section_list")
@@ -1117,9 +1119,7 @@ impl Library {
         // Beside Lookup at the minimum window, a draft needs the room more than the list.
         let hide_list = ui.available_width() < 480.0 && (dirty || self.source);
         if !hide_list {
-            egui::SidePanel::left("library_entries")
-            .resizable(false)
-            .exact_width(list_width)
+            design::Column::left("library_entries", list_width, 190.0..=560.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: design::S as i8,
                 right: design::S as i8,
