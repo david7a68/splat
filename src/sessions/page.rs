@@ -1639,9 +1639,11 @@ impl Sessions {
             .show(ui, |ui| {
                 // Beside a page, Tab indents. It must not walk to `Next turn`, where the next
                 // space would press it. Escape still leaves the panel.
+                let mut layouter = crate::markdown_source::layouter;
                 let output = egui::TextEdit::multiline(&mut draft.body)
                     .lock_focus(in_panel)
-                    .font(egui::TextStyle::Monospace)
+                    .font(design::reader::prose_type(ui).font(ui))
+                    .layouter(&mut layouter)
                     .margin(egui::vec2(design::S, design::S))
                     .desired_width(ui.available_width().min(EDITOR_WIDTH))
                     .min_size(egui::vec2(0.0, ui.available_height()))

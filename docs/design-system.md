@@ -34,7 +34,7 @@ Fonts are in `assets/fonts/` with their licences. All are OFL. egui 0.33 rasteri
 | Source Serif 4 (Text, Italic, Semibold) | Prose | A sturdy text serif with lining tabular digits, so `65 (10d8 + 20)` lines up |
 | Source Serif 4 Subhead (Semibold) | Titles | The optical cut for 18 to 28 px |
 | Source Serif 4 SmText (Regular, Semibold) | Stat blocks | The optical cut for 13 to 14 px, for the compact table at 1x |
-| egui's monospace | Markdown editor | Source text only. `Type::Mono` |
+| egui's monospace | Library and template editors, code in a note | Source text only. `Type::Mono` |
 
 Atkinson Hyperlegible was the first choice. Its digits are proportional and its zero is
 slashed, and painting each digit in a fixed cell left wide gaps. So the font
@@ -214,9 +214,10 @@ the panel, those words open the second line instead, so that a name is never cut
 
 ## Sessions and the timeline
 
-Notes are Markdown in the campaign's folder, and Sessions has the Library's two voices: a source editor in
-monospace, and the one Reader. A draft saves two seconds after the last edit, because at the table nobody
-stops to press Save. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
+Notes are Markdown in the campaign's folder. `Write` styles the source as it is typed, in the Reader's faces: a heading
+is large and `*these words*` are italic. Markup stays in view and goes quiet, so the file is exactly what was typed and
+Obsidian reads the same text. `Read` is the one Reader. A draft saves two seconds after the last edit, because at the
+table nobody stops to press Save. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
 
 The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
 a word for each kind. A day opens with a rule, as a heading does, and numbers itself. It has no card and no

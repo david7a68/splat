@@ -14,6 +14,7 @@ mod encounters;
 mod hermetic;
 mod library;
 mod lookup;
+mod markdown_source;
 mod markdown_view;
 mod party;
 mod party_stream;
