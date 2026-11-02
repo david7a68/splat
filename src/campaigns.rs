@@ -122,6 +122,8 @@ impl Campaigns {
         data.active_campaign_id = Some(campaign.id);
         let adding = self.editing.is_none();
         self.persist(data)?;
+        // If Add scrolled the page down to this form, the page goes back to the message.
+        self.scroll_back = self.scrolled_to_form;
         self.clear_form();
         self.added = adding.then(|| format!("Added {}.", campaign.name));
         Ok(())

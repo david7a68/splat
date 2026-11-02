@@ -394,6 +394,12 @@ pub mod library_author {
             d.visible_text("Choose an empty folder") && files == 1,
             format!("A folder with a file is refused, says what to do, and has {files} file"),
         );
+        let in_view = d.at_size((960.0, 640.0), |d| d.in_view("Create package"));
+        d.observe(
+            "F3-09",
+            !d.visible_text("Created ") && in_view,
+            "A refused package has no older success line beside its error, and Create package stays in view at 960x640",
+        );
         d.replace_text_in("New package folder", &empty.to_string_lossy());
         d.click("Create package");
         d.state("create-package-empty-folder", Sizes::Default);
@@ -2735,6 +2741,9 @@ pub mod run_edge_states {
         d.observe(
             "L6-15",
             !quiet.is_empty()
+                && !quiet_wide.is_empty()
+                && quiet.len() == loud.len()
+                && quiet_wide.len() == loud_wide.len()
                 && moved_wide < 3.0
                 && shrunk_wide < 1.0
                 && moved < 15.0
@@ -3332,6 +3341,10 @@ pub mod typed_sync_number {
     const OPENING: &str = "Sending to D&D Beyond, then opening Iselle Marrowind";
     const USE_REMOTE: &str = "Use D&D Beyond values";
     const CLOSE_NAMES: &str = "A number typed on Party has not reached D&D Beyond.";
+    const REMOTE: &str = "Add from D&D Beyond";
+    const ADD_REMOTE: &str = "Add Salt Road";
+    const ADDED: &str = "Added Salt Road.";
+    const CONNECTED_PAGE: &str = "Connected to D&D Beyond";
 
     fn type_in_field(d: &mut Driver<'_>, number: i64) {
         d.click(PANEL_HP);
@@ -3628,12 +3641,33 @@ pub mod typed_sync_number {
         );
     }
 
+    /// F3-08: a scrolled form, saved. The message that says so is in view.
+    fn added_from_a_scrolled_form(d: &mut Driver<'_>) {
+        go_settings(d);
+        d.click(REMOTE);
+        d.click(ADD_REMOTE);
+        let top = d.visible_text(CONNECTED_PAGE);
+        let folder = d.root.join("salt-road");
+        std::fs::create_dir_all(&folder).expect("create campaign folder");
+        d.type_into("Folder", &folder.display().to_string());
+        d.click("Add this campaign");
+        d.settle();
+        let added = d.visible_text(ADDED);
+        d.observe(
+            "F3-08",
+            !top && added,
+            format!("At 960x640, Add scrolled the page down: {}. After the save, the message is in view: {added}", !top),
+        );
+        d.state("campaign-added-from-scrolled-form", Sizes::Default);
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         d.set_base((960.0, 640.0));
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
         in_a_run(d);
         on_party(d);
+        added_from_a_scrolled_form(d);
     }
 }
 

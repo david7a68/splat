@@ -1509,7 +1509,11 @@ impl Library {
                             self.section = Section::All;
                             self.stale = true;
                         }
-                        Err(e) => self.error = Some(e),
+                        Err(e) => {
+                            // An older success beside the error would push the form down.
+                            self.message = None;
+                            self.error = Some(e);
+                        }
                     }
                 }
                 ui.add_space(design::S);
