@@ -11,12 +11,10 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [214
 
 <!-- SRD page 214 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While you wear these boots, your Speed becomes\
-30 feet unless your Speed is higher, and your Speed\
-isn’t reduced by you carrying weight in excess of\
-your carrying capacity or wearing Heavy Armor.\
-Once on each of your turns, you can jump up to 30\
-feet by spending only 10 feet of movement.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While you wear these boots, your Speed becomes 30 feet unless your Speed is higher, and your Speed isn’t reduced by you carrying weight in excess of your carrying capacity or wearing Heavy Armor.
+
+Once on each of your turns, you can jump up to 30 feet by spending only 10 feet of movement.
 
 Original layout: [[../pages/214|page 214]].

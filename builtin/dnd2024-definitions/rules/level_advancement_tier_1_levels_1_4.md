@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 24 -->
 
-In tier 1, characters are apprentice adventurers,\
-though they are already set apart from the broader\
-populace by virtue of their extraordinary abilities.\
-They learn their starting class features and choose\
-a subclass. The threats they face usually pose a dan-\
-ger to local farmsteads or villages.\
+In tier 1, characters are apprentice adventurers, though they are already set apart from the broader populace by virtue of their extraordinary abilities. They learn their starting class features and choose a subclass. The threats they face usually pose a danger to local farmsteads or villages.
 
 ## Rule
 

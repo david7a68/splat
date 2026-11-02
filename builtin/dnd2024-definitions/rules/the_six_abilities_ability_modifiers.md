@@ -18,28 +18,26 @@ splat_sources:
 
 <!-- SRD page 5 -->
 
-Each ability has a modifier that you apply whenever\
-you make a D20 Test with that ability (explained in\
-“D20 Tests”). An ability modifier is derived from its\
-score, as shown in the Ability Modifiers table.\
-round down\
-Whenever you divide or multiply a number in the\
-game, round down if you end up with a fraction, even\
-if the fraction is one-half or greater. Some rules make\
-an exception and tell you to round up.\
+Each ability has a modifier that you apply whenever you make a D20 Test with that ability (explained in “D20 Tests”). An ability modifier is derived from its score, as shown in the Ability Modifiers table.
+
+### Round Down
+
+Whenever you divide or multiply a number in the game, round down if you end up with a fraction, even if the fraction is one-half or greater. Some rules make an exception and tell you to round up.
 
 <!-- SRD page 6 -->
 
-Ability Modifiers\
-Score Modifier Score Modifier\
-1 −5 16–17 +3\
-2–3 −4 18–19 +4\
-4–5 −3 20–21 +5\
-6–7 −2 22–23 +6\
-8–9 −1 24–25 +7\
-10–11 +0 26–27 +8\
-12–13 +1 28–29 +9\
-14–15 +2 30 +10\
+**Ability Modifiers**
+
+| Score | Modifier | Score | Modifier |
+| --- | --- | --- | --- |
+| 1 | −5 | 16–17 | +3 |
+| 2–3 | −4 | 18–19 | +4 |
+| 4–5 | −3 | 20–21 | +5 |
+| 6–7 | −2 | 22–23 | +6 |
+| 8–9 | −1 | 24–25 | +7 |
+| 10–11 | +0 | 26–27 | +8 |
+| 12–13 | +1 | 28–29 | +9 |
+| 14–15 | +2 | 30 | +10 |
 
 ## Rule
 

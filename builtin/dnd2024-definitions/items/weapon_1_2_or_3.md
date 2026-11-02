@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 253 -->
 
-Weapon (Any Simple or Martial), Uncommon (+1), Rare\
-(+2), or Very Rare (+3)\
-You have a bonus to attack rolls and damage rolls\
-made with this magic weapon. The bonus is deter-\
-mined by the weapon’s rarity.\
+Weapon (Any Simple or Martial), Uncommon (+1), Rare (+2), or Very Rare (+3)
+
+You have a bonus to attack rolls and damage rolls made with this magic weapon. The bonus is determined by the weapon’s rarity.
 
 Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 
@@ -33,7 +31,7 @@ Original layout: [[../../srd-5.2.1/pages/253|page 253]].
 | Field | Value |
 | --- | --- |
 | ` category ` | ` weapon ` |
-| ` rarity ` | ` uncommon ` |
+| ` rarity ` | ` varies ` |
 
 ### Equipment
 

@@ -28,14 +28,13 @@ Int 10 +0 +0 Wis 10 +0 +0 Cha 10 +0 +0\
 Gear Leather Armor, Light Crossbow, Scimitar\
 Senses Passive Perception 10\
 Languages Common, Thieves’ Cant\
-CR 1/8 (XP 25; PB +2)\
+CR 1/8 (XP 25; PB +2)
 
 ### Actions
 
-Scimitar. Melee Attack Roll: +3, reach 5 ft. Hit: 4 (1d6\
-+ 1) Slashing damage.\
-Light Crossbow. Ranged Attack Roll: +3, range 80/320\
-ft. Hit: 5 (1d8 + 1) Piercing damage.\
+Scimitar. Melee Attack Roll: +3, reach 5 ft. Hit: 4 (1d6 + 1) Slashing damage.
+
+Light Crossbow. Ranged Attack Roll: +3, range 80/320 ft. Hit: 5 (1d8 + 1) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/261|page 261]].
 

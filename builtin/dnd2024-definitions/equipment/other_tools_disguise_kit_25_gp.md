@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 94 -->
 
-Ability:  Charisma  Weight: 3 lb.\
+Ability: Charisma Weight: 3 lb.\
 Utilize: Apply makeup (DC 10)\
-Craft: Costume\
+Craft: Costume
 
 ## Item
 

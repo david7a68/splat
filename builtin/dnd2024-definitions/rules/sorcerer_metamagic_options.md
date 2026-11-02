@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 66 -->
 
-The following options are available to your Meta-\
-magic feature. The options are presented in alpha-\
-betical order.\
+The following options are available to your Metamagic feature. The options are presented in alphabetical order.
 
 ## Rule
 

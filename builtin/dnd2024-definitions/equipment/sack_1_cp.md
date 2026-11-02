@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-A Sack holds up to 30 pounds within 1 cubic foot.\
+A Sack holds up to 30 pounds within 1 cubic foot.
 
 ## Item
 

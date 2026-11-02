@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-Objects viewed through a Spyglass are magnified to\
-twice their size.\
+Objects viewed through a Spyglass are magnified to twice their size.
 
 ## Item
 

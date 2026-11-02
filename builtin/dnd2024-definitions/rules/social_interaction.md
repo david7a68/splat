@@ -18,20 +18,11 @@ splat_sources:
 
 <!-- SRD page 10 -->
 
-During their adventures, player characters meet\
-many different people and face some monsters that\
-would rather talk than fight. In those situations, it’s\
-time for social interaction, which takes many forms.\
-For example, you might try to convince a burglar to\
-confess to wrongdoing or try to flatter a guard. The\
-Game Master assumes the roles of any nonplayer\
-characters who are participating.\
-An NPC’s attitude toward your character is\
-Friendly, Indifferent, or Hostile, as defined in “Rules\
-Glossary.” Friendly NPCs are predisposed to help,\
-and Hostile ones are inclined to hinder.\
-Social interactions progress in two ways: through\
-roleplaying and ability checks.\
+During their adventures, player characters meet many different people and face some monsters that would rather talk than fight. In those situations, it’s time for social interaction, which takes many forms. For example, you might try to convince a burglar to confess to wrongdoing or try to flatter a guard. The Game Master assumes the roles of any nonplayer characters who are participating.
+
+An NPC’s attitude toward your character is Friendly, Indifferent, or Hostile, as defined in “Rules Glossary.” Friendly NPCs are predisposed to help, and Hostile ones are inclined to hinder.
+
+Social interactions progress in two ways: through roleplaying and ability checks.
 
 ## Rule
 

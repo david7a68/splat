@@ -18,19 +18,18 @@ splat_sources:
 
 <!-- SRD page 7 -->
 
-Saving throws are named for the ability modifiers\
-they use: a Constitution saving throw, a Wisdom\
-saving throw, and so on. Different saving throws are\
-used to resist different kinds of effects, as shown on\
-the Saving Throw Examples table.\
-Saving Throw Examples\
-Ability Make a Save To …\
-Strength Physically resist direct force\
-Dexterity Dodge out of harm’s way\
-Constitution Endure a toxic hazard\
-Intelligence Recognize an illusion as fake\
-Wisdom Resist a mental assault\
-Charisma Assert your identity\
+Saving throws are named for the ability modifiers they use: a Constitution saving throw, a Wisdom saving throw, and so on. Different saving throws are used to resist different kinds of effects, as shown on the Saving Throw Examples table.
+
+**Saving Throw Examples**
+
+| Ability | Make a Save To … |
+| --- | --- |
+| Strength | Physically resist direct force |
+| Dexterity | Dodge out of harm’s way |
+| Constitution | Endure a toxic hazard |
+| Intelligence | Recognize an illusion as fake |
+| Wisdom | Resist a mental assault |
+| Charisma | Assert your identity |
 
 ## Rule
 

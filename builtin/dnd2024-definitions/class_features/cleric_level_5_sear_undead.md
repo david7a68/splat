@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 37 -->
 
-Whenever you use Turn Undead, you can roll a\
-number of d8s equal to your Wisdom modifier\
-(minimum of 1d8) and add the rolls together. Each\
-Undead that fails its saving throw against that use\
-of Turn Undead takes Radiant damage equal to the\
-roll’s total. This damage doesn’t end the turn effect.\
+Whenever you use Turn Undead, you can roll a number of d8s equal to your Wisdom modifier (minimum of 1d8) and add the rolls together. Each Undead that fails its saving throw against that use of Turn Undead takes Radiant damage equal to the roll’s total. This damage doesn’t end the turn effect.
 
 ## Rule
 

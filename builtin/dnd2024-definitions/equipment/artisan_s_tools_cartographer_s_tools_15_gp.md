@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 93 -->
 
-Ability: Wisdom   Weight: 6 lb.\
+Ability: Wisdom Weight: 6 lb.\
 Utilize: Draft a map of a small area (DC 15)\
-Craft: Map\
+Craft: Map
 
 ## Item
 

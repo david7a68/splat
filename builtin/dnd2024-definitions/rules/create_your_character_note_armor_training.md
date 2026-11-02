@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 19 -->
 
-Your class might give you training with certain\
-categories of armor. Note your armor training on\
-your character sheet. Armor training with a kind of\
-armor means you can wear that armor effectively,\
-gaining defensive bonuses from it. The categories of\
-armor are described in “Equipment.”\
+Your class might give you training with certain categories of armor. Note your armor training on your character sheet. Armor training with a kind of armor means you can wear that armor effectively, gaining defensive bonuses from it. The categories of armor are described in “Equipment.”
 
 ## Rule
 

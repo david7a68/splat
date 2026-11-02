@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 29 -->
 
-Your instincts are so honed that you have Advan-\
-tage on Initiative rolls.\
+Your instincts are so honed that you have Advantage on Initiative rolls.
 
 ## Rule
 

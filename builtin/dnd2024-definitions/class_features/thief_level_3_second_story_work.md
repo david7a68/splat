@@ -18,12 +18,11 @@ splat_sources:
 
 <!-- SRD page 64 -->
 
-You’ve trained to get into especially hard-to-reach\
-places, granting you these benefits.\
-Climber. You gain a Climb Speed equal to your\
-Speed.\
-Jumper. You can determine your jump distance\
-using your Dexterity rather than your Strength.\
+You’ve trained to get into especially hard-to-reach places, granting you these benefits.
+
+Climber. You gain a Climb Speed equal to your Speed.
+
+Jumper. You can determine your jump distance using your Dexterity rather than your Strength.
 
 ## Rule
 

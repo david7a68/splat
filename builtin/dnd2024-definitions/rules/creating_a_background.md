@@ -18,16 +18,9 @@ splat_sources:
 
 <!-- SRD page 192 -->
 
-A character’s background represents what the char-\
-acter did prior to becoming an adventurer. Creating\
-a unique background or customizing an existing\
-one can reflect the particular theme of your cam-\
-paign or elements of your world. You can also create\
-a background to help a player craft the story they\
-have in mind for their character.\
-This section describes, step by step, how you can\
-create backgrounds tailored for your world and the\
-heroes in it.\
+A character’s background represents what the character did prior to becoming an adventurer. Creating a unique background or customizing an existing one can reflect the particular theme of your campaign or elements of your world. You can also create a background to help a player craft the story they have in mind for their character.
+
+This section describes, step by step, how you can create backgrounds tailored for your world and the heroes in it.
 
 ## Rule
 

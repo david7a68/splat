@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-The Airborne and Waterborne Vehicles table pro-\
-vides statistics for various types of large vehicles.\
-The following notes apply.\
+The Airborne and Waterborne Vehicles table provides statistics for various types of large vehicles. The following notes apply.
 
 ## Rule
 

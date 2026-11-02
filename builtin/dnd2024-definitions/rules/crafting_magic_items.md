@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 206 -->
 
-“Equipment” contains rules on brewing Potions of\
-Healing and scribing Spell Scrolls. To create other\
-magic items, follow the rules below. In these rules,\
-“you” refers to the character crafting the magic\
-item.\
+“Equipment” contains rules on brewing Potions of Healing and scribing Spell Scrolls. To create other magic items, follow the rules below. In these rules, “you” refers to the character crafting the magic item.
 
 ## Rule
 

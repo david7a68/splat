@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 7 -->
 
-A saving throw—also called a save—represents an\
-attempt to evade or resist a threat, such as a fiery\
-explosion, a blast of poisonous gas, or a spell trying\
-to invade your mind. You don’t normally choose to\
-make a save; you must make one because your char-\
-acter or a monster (if you’re the GM) is at risk. A\
-save’s result is detailed in the effect that caused it.\
-If you don’t want to resist the effect, you can\
-choose to fail the save without rolling.\
+A saving throw—also called a save—represents an attempt to evade or resist a threat, such as a fiery explosion, a blast of poisonous gas, or a spell trying to invade your mind. You don’t normally choose to make a save; you must make one because your character or a monster (if you’re the GM) is at risk. A save’s result is detailed in the effect that caused it.
+
+If you don’t want to resist the effect, you can choose to fail the save without rolling.
 
 ## Rule
 

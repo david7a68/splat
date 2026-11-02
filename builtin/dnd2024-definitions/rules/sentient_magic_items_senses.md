@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 207 -->
 
-A sentient item can perceive its surroundings out to\
-a limited range. You can choose its senses or roll on\
-the Sentient Item’s Senses table.\
+A sentient item can perceive its surroundings out to a limited range. You can choose its senses or roll on the Sentient Item’s Senses table.
 
 ## Rule
 

@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-A curse typically takes one of the forms detailed\
-below.\
+A curse typically takes one of the forms detailed below.
 
 ## Rule
 

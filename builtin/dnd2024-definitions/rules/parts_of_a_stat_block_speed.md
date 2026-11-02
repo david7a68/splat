@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-The Speed entry specifies a monster’s Speed. Some\
-monsters have one or more of the following speeds:\
-Burrow, Climb, Fly, Swim. Rules for Speed and these\
-specials speeds appear in “Rules Glossary.”\
+The Speed entry specifies a monster’s Speed. Some monsters have one or more of the following speeds: Burrow, Climb, Fly, Swim. Rules for Speed and these specials speeds appear in “Rules Glossary.”
 
 ## Rule
 

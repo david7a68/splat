@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 97 -->
 
-Using a Crowbar gives you Advantage on Strength\
-checks where the Crowbar’s leverage can be\
-applied.\
+Using a Crowbar gives you Advantage on Strength checks where the Crowbar’s leverage can be applied.
 
 ## Item
 

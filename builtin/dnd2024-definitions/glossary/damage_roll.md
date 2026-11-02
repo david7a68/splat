@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 180 -->
 
-A damage roll is a die roll, adjusted by any applica-\
-ble modifiers, that deals damage to a target. See also\
-“Playing the Game” (“Damage and Healing”).\
+A damage roll is a die roll, adjusted by any applicable modifiers, that deals damage to a target. See also “Playing the Game” (“Damage and Healing”).
 
 Original layout: [[../../srd-5.2.1/pages/180|page 180]].
 

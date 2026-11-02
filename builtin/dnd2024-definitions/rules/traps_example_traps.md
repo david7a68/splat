@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 199 -->
 
-Traps are presented in alphabetical order.\
+Traps are presented in alphabetical order.
 
 ## Rule
 

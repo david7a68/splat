@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-A Basket holds up to 40 pounds within 2 cubic feet.\
+A Basket holds up to 40 pounds within 2 cubic feet.
 
 ## Item
 

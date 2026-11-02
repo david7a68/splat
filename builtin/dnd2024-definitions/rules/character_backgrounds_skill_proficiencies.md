@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-A background gives your character proficiency in\
-two specified skills.\
+A background gives your character proficiency in two specified skills.
 
 ## Rule
 

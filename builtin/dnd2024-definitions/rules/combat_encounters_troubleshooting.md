@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 203 -->
 
-When creating and running combat encounters,\
-keep the following in mind.\
+When creating and running combat encounters, keep the following in mind.
 
 ## Rule
 

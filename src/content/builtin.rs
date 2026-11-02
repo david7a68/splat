@@ -132,11 +132,16 @@ fn verify(files: &BTreeMap<String, &[u8]>) -> Package {
             error(path, "Missing required SRD attribution");
         }
     }
-    let mut expected_files: BTreeSet<String> =
-        ["source.pdf", "source.txt", "LICENSE.txt", "inventory.json"]
-            .into_iter()
-            .map(str::to_owned)
-            .collect();
+    let mut expected_files: BTreeSet<String> = [
+        "source.pdf",
+        "source.txt",
+        "LICENSE.txt",
+        "inventory.json",
+        "transcription_patches.json",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
     let mut actual_counts = BTreeMap::<String, usize>::new();
     let mut page_numbers = BTreeSet::new();
     for record in &inventory.files {
@@ -198,7 +203,12 @@ fn verify(files: &BTreeMap<String, &[u8]>) -> Package {
     {
         error("inventory.json", "Incomplete entry or page coverage");
     }
-    // Independently compare every facsimile page with the full extracted source.
+    // Independently compare every page with the full extracted source and its listed corrections.
+    let patches: Vec<serde_json::Value> = files
+        .get("transcription_patches.json")
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(bytes).ok())
+        .and_then(|data| data["patches"].as_array().cloned())
+        .unwrap_or_default();
     if let Some(text) = files
         .get("source.txt")
         .and_then(|bytes| std::str::from_utf8(bytes).ok())
@@ -209,6 +219,17 @@ fn verify(files: &BTreeMap<String, &[u8]>) -> Package {
         }
         for (index, page) in pages.iter().take(364).enumerate() {
             let path = format!("pages/{:03}.md", index + 1);
+            let mut page = (*page).to_owned();
+            for patch in patches.iter().filter(|p| p["page"] == index + 1) {
+                let (find, replace) = (
+                    patch["find"].as_str().unwrap_or_default(),
+                    patch["replace"].as_str().unwrap_or_default(),
+                );
+                if find.is_empty() || !page.contains(find) {
+                    error(&path, "Transcription patch does not match the source text");
+                }
+                page = page.replace(find, replace);
+            }
             let expected = page
                 .trim_end()
                 .lines()

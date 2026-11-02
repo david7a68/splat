@@ -18,19 +18,9 @@ splat_sources:
 
 <!-- SRD page 257 -->
 
-If the monster has Legendary Action options, those\
-are listed in this section. A Legendary Action is an\
-action that a monster can take immediately after\
-another creature’s turn. Only one of these actions\
-can be taken at a time and only after another crea-\
-ture’s turn ends. The monster can’t take a Legend-\
-ary Action if it has the Incapacitated condition or is\
-otherwise unable to take actions.\
-The monster has a limited number of Legendary\
-Action uses, and that number is specified in the\
-stat block. The monster expends one use whenever\
-it takes a Legendary Action, and it regains all ex-\
-pended uses at the start of each of its turns.\
+If the monster has Legendary Action options, those are listed in this section. A Legendary Action is an action that a monster can take immediately after another creature’s turn. Only one of these actions can be taken at a time and only after another creature’s turn ends. The monster can’t take a Legendary Action if it has the Incapacitated condition or is otherwise unable to take actions.
+
+The monster has a limited number of Legendary Action uses, and that number is specified in the stat block. The monster expends one use whenever it takes a Legendary Action, and it regains all expended uses at the start of each of its turns.
 
 ## Rule
 

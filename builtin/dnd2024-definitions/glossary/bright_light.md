@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 178 -->
 
-Bright Light is normal illumination. See also “Play-\
-ing the Game” (“Exploration”).\
+Bright Light is normal illumination. See also “Playing the Game” (“Exploration”).
 
 Original layout: [[../../srd-5.2.1/pages/178|page 178]].
 

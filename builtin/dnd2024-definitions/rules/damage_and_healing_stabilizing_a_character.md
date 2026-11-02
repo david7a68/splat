@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 18 -->
 
-You can take the Help action to try to stabilize a\
-creature with 0 Hit Points, which requires a suc-\
-cessful DC 10 Wisdom (Medicine) check.\
-A Stable creature doesn’t make Death Saving\
-Throws even though it has 0 Hit Points, but it still\
-has the Unconscious condition. If the creature takes\
-damage, it stops being Stable and starts making\
-Death Saving Throws again. A Stable creature that\
-isn’t healed regains 1 Hit Point after 1d4 hours.\
+You can take the Help action to try to stabilize a creature with 0 Hit Points, which requires a successful DC 10 Wisdom (Medicine) check.
+
+A Stable creature doesn’t make Death Saving Throws even though it has 0 Hit Points, but it still has the Unconscious condition. If the creature takes damage, it stops being Stable and starts making Death Saving Throws again. A Stable creature that isn’t healed regains 1 Hit Point after 1d4 hours.
 
 ## Rule
 

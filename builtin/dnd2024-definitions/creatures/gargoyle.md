@@ -29,18 +29,17 @@ Skills Stealth +4\
 Immunities Poison; Exhaustion, Petrified, Poisoned\
 Senses Darkvision 60 ft.; Passive Perception 10\
 Languages Primordial (Terran)\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Traits
 
-Flyby. The gargoyle doesn’t provoke an Opportunity\
-Attack when it flies out of an enemy’s reach.\
+Flyby. The gargoyle doesn’t provoke an Opportunity Attack when it flies out of an enemy’s reach.
 
 ### Actions
 
-Multiattack. The gargoyle makes two Claw attacks.\
-Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2)\
-Slashing damage.\
+Multiattack. The gargoyle makes two Claw attacks.
+
+Claw. Melee Attack Roll: +4, reach 5 ft. Hit: 7 (2d4 + 2) Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/286|page 286]].
 

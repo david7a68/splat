@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 90 -->
 
-A Two-Handed weapon requires two hands when\
-you attack with it.\
+A Two-Handed weapon requires two hands when you attack with it.
 
 ## Rule
 

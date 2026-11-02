@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 49 -->
 
-The thrill of battle drives you toward victory.\
-During combat, you can give yourself Heroic Inspi-\
-ration whenever you start your turn without it.\
+The thrill of battle drives you toward victory. During combat, you can give yourself Heroic Inspiration whenever you start your turn without it.
 
 ## Rule
 

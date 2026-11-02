@@ -2325,11 +2325,11 @@ mod tests {
             ),
             (
                 "definitions/rules/d20_tests_ability_modifier_2.md",
-                "Strength Physically resist direct force\nDexterity Dodge",
+                "Physically resist direct force",
             ),
             (
                 "definitions/rules/d20_tests_ability_modifier.md",
-                "Wisdom Notice things in the environment or in creatures’ behavior\nCharisma",
+                "Notice things in the environment or in creatures’ behavior",
             ),
             (
                 "definitions/spells/divine_smite.md",
@@ -2359,7 +2359,7 @@ mod tests {
             if path.ends_with("augury.md") {
                 assert!(
                     readable.contains(
-                        "Weal Good  \nWoe Bad  \nWeal and woe Good and bad  \nIndifference"
+                        "| Weal | Good |\n| Woe | Bad |\n| Weal and woe | Good and bad |"
                     ),
                     "{readable}"
                 );
@@ -2622,7 +2622,7 @@ mod tests {
         assert!(
             entry
                 .body
-                .contains("of Lore subclass is detailed after this class’s descrip-")
+                .contains("of Lore subclass is detailed after this class’s description")
         );
         for width in [390.0, 900.0] {
             let mut library = Library {
@@ -2832,9 +2832,11 @@ mod tests {
         assert!(rendered.contains("Starting equipment"));
         assert!(!rendered.contains("dnd2024:class_features/"));
         assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());
+        // The class table names the feature too. The link is in the list below it.
+        assert!(rendered.contains("Class table"));
         let link = texts
             .iter()
-            .find(|text| text.galley.job.text == "Relentless Rage")
+            .rfind(|text| text.galley.job.text == "Relentless Rage")
             .unwrap();
         let pos = link.pos + link.galley.size() * 0.5;
         for pressed in [true, false] {

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 191 -->
 
-You normally interact with an object while doing\
-something else, such as when you draw a sword as\
-part of the Attack action. When an object requires\
-an action for its use, you take the Utilize action.\
+You normally interact with an object while doing something else, such as when you draw a sword as part of the Attack action. When an object requires an action for its use, you take the Utilize action.
 
 Original layout: [[../../srd-5.2.1/pages/191|page 191]].
 

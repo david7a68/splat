@@ -11,9 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [187],
 
 <!-- SRD page 187 -->
 
-Whenever you divide or multiply a number in the\
-game, round down if you end up with a fraction,\
-even if the fraction is one-half or greater. Some\
-rules make an exception and tell you to round up.\
+Whenever you divide or multiply a number in the game, round down if you end up with a fraction, even if the fraction is one-half or greater. Some rules make an exception and tell you to round up.
 
 Original layout: [[../pages/187|page 187]].

@@ -18,21 +18,13 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-The entry for a monster’s attack identifies whether\
-the attack is a melee or a ranged attack and then\
-provides the attack roll’s bonus, its reach or range,\
-and what happens on a hit. An attack is against one\
-target unless its entry says otherwise. For details\
-on different kinds of attacks, see “Playing the Game”\
-and “Spells.”\
-Hit. Any damage dealt or other effects that occur\
-as a result of an attack hitting a target are described\
-after the “Hit:” notation.\
-Miss. If an attack has an effect that occurs on a\
-miss, that information follows the “Miss:” notation.\
-Hit or Miss. If an attack has an effect that occurs\
-regardless of whether it hits or misses its target,\
-that information follows the “Hit or Miss:” notation.\
+The entry for a monster’s attack identifies whether the attack is a melee or a ranged attack and then provides the attack roll’s bonus, its reach or range, and what happens on a hit. An attack is against one target unless its entry says otherwise. For details on different kinds of attacks, see “Playing the Game” and “Spells.”
+
+Hit. Any damage dealt or other effects that occur as a result of an attack hitting a target are described after the “Hit:” notation.
+
+Miss. If an attack has an effect that occurs on a miss, that information follows the “Miss:” notation.
+
+Hit or Miss. If an attack has an effect that occurs regardless of whether it hits or misses its target, that information follows the “Hit or Miss:” notation.
 
 ## Rule
 

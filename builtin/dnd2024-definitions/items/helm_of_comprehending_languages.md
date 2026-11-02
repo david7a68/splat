@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 226 -->
 
-Wondrous Item, Uncommon\
-While wearing this helm, you can cast Comprehend\
-Languages from it.\
+Wondrous Item, Uncommon
+
+While wearing this helm, you can cast Comprehend Languages from it.
 
 Original layout: [[../../srd-5.2.1/pages/226|page 226]].
 

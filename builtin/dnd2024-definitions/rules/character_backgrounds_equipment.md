@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-Each background offers a choice between a package\
-of equipment and 50 GP.\
+Each background offers a choice between a package of equipment and 50 GP.
 
 ## Rule
 

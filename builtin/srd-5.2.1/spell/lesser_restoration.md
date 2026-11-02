@@ -11,13 +11,12 @@ splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [144], "e
 
 <!-- SRD page 144 -->
 
-Level 2 Abjuration (Bard, Cleric, Druid, Paladin,\
-Ranger)\
+Level 2 Abjuration (Bard, Cleric, Druid, Paladin, Ranger)\
 Casting Time: Bonus Action\
 Range: Touch\
 Components: V, S\
-Duration: Instantaneous\
-You touch a creature and end one condition on it:\
-Blinded, Deafened, Paralyzed, or Poisoned.\
+Duration: Instantaneous
+
+You touch a creature and end one condition on it: Blinded, Deafened, Paralyzed, or Poisoned.
 
 Original layout: [[../pages/144|page 144]].

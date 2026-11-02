@@ -11,8 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [238
 
 <!-- SRD page 238 -->
 
-Ring, Uncommon (Requires Attunement)\
-While wearing this ring, you can cast Jump from it,\
-but can target only yourself when you do so.\
+Ring, Uncommon (Requires Attunement)
+
+While wearing this ring, you can cast Jump from it, but can target only yourself when you do so.
 
 Original layout: [[../pages/238|page 238]].

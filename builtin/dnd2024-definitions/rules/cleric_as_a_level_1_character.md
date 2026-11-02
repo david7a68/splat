@@ -18,32 +18,9 @@ splat_sources:
 
 <!-- SRD page 36 -->
 
-•  Gain all the traits in the Core Cleric Traits table.\
-•  Gain the Cleric’s level 1 features, which are listed\
-in the Cleric Features table.\
-Cleric Features\
-Proficiency Channel\
-Level Bonus Class Features Divinity\
-1 +2 Spellcasting, Divine Order —\
-2 +2 Channel Divinity 2\
-3 +2 Cleric Subclass 2\
-4 +2 Ability Score Improvement 2\
-5 +3 Sear Undead 2\
-6 +3 Subclass feature 3\
-7 +3 Blessed Strikes 3\
-8 +3 Ability Score Improvement 3\
-9 +4 — 3\
-10 +4 Divine Intervention 3\
-11 +4 — 3\
-12 +4 Ability Score Improvement 3\
-13 +5 — 3\
-14 +5 Improved Blessed Strikes 3\
-15 +5 — 3\
-16 +5 Ability Score Improvement 3\
-17 +6 Subclass feature 3\
-18 +6 — 4\
-19 +6 Epic Boon 4\
-20 +6 Greater Divine Intervention 4\
+•  Gain all the traits in the Core Cleric Traits table.
+
+•  Gain the Cleric’s level 1 features, which are listed in the Cleric Features table.
 
 ## Rule
 

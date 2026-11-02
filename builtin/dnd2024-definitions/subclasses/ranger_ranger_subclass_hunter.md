@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 61 -->
 
-Protect Nature and People from Destruction\
-You stalk prey in the wilds and elsewhere, using\
-your abilities as a Hunter to protect nature and\
-people everywhere from forces that would destroy\
-them.\
+### Protect Nature and People from Destruction
+
+You stalk prey in the wilds and elsewhere, using your abilities as a Hunter to protect nature and people everywhere from forces that would destroy them.
 
 ## Rule group
 

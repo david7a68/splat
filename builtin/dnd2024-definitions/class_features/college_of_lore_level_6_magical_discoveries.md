@@ -18,16 +18,9 @@ splat_sources:
 
 <!-- SRD page 35 -->
 
-You learn two spells of your choice. These spells can\
-come from the Cleric, Druid, or Wizard spell list or\
-any combination thereof (see a class’s section for its\
-spell list). A spell you choose must be a cantrip or a\
-spell for which you have spell slots, as shown in the\
-Bard Features table.\
-You always have the chosen spells prepared, and\
-whenever you gain a Bard level, you can replace one\
-of the spells with another spell that meets these\
-requirements.\
+You learn two spells of your choice. These spells can come from the Cleric, Druid, or Wizard spell list or any combination thereof (see a class’s section for its spell list). A spell you choose must be a cantrip or a spell for which you have spell slots, as shown in the Bard Features table.
+
+You always have the chosen spells prepared, and whenever you gain a Bard level, you can replace one of the spells with another spell that meets these requirements.
 
 ## Rule
 

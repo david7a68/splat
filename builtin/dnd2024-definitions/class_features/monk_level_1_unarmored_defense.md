@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 50 -->
 
-While you aren’t wearing armor or wielding a\
-Shield, your base Armor Class equals 10 plus your\
-Dexterity and Wisdom modifiers.\
+While you aren’t wearing armor or wielding a Shield, your base Armor Class equals 10 plus your Dexterity and Wisdom modifiers.
 
 ## Rule
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 41 -->
 
-As a Druid, you gain the following class features\
-when you reach the specified Druid levels. These\
-features are listed in the Druid Features table.\
+As a Druid, you gain the following class features when you reach the specified Druid levels. These features are listed in the Druid Features table.
 
 ## Rule
 

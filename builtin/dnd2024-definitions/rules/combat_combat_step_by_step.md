@@ -18,20 +18,13 @@ splat_sources:
 
 <!-- SRD page 13 -->
 
-Combat unfolds in these steps:\
-1: Establish Positions. The Game Master deter-\
-mines where all the characters and monsters are\
-located. Given the adventurers’ marching order\
-or their stated positions in the room or other lo-\
-cation, the GM figures out where the adversaries\
-are—how far away and in what direction.\
-2: Roll Initiative. Everyone involved in the combat\
-encounter rolls Initiative, determining the order\
-of combatants’ turns.\
-3: Take Turns. Each participant in the battle takes\
-a turn in Initiative order. When everyone in-\
-volved in the combat has had a turn, the round\
-ends. Repeat this step until the fighting stops.\
+Combat unfolds in these steps:
+
+1: Establish Positions. The Game Master determines where all the characters and monsters are located. Given the adventurers’ marching order or their stated positions in the room or other location, the GM figures out where the adversaries are—how far away and in what direction.
+
+2: Roll Initiative. Everyone involved in the combat encounter rolls Initiative, determining the order of combatants’ turns.
+
+3: Take Turns. Each participant in the battle takes a turn in Initiative order. When everyone involved in the combat has had a turn, the round ends. Repeat this step until the fighting stops.
 
 ## Rule
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 254 -->
 
-A monster is Tiny, Small, Medium, Large, Huge,\
-or Gargantuan. If size options are presented, you\
-choose the creature’s size from those options. See\
-“Playing the Game” for information on size.\
+A monster is Tiny, Small, Medium, Large, Huge, or Gargantuan. If size options are presented, you choose the creature’s size from those options. See “Playing the Game” for information on size.
 
 ## Rule
 

@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-A Crossbow Bolt Case holds up to 20 Bolts.\
+A Crossbow Bolt Case holds up to 20 Bolts.
 
 ## Item
 

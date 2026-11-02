@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 66 -->
 
-You gain the Ability Score Improvement feat (see\
-“Feats”) or another feat of your choice for which you\
-qualify. You gain this feature again at Sorcerer lev-\
-els 8, 12, and 16.\
+You gain the Ability Score Improvement feat (see “Feats”) or another feat of your choice for which you qualify. You gain this feature again at Sorcerer levels 8, 12, and 16.
 
 ## Rule
 

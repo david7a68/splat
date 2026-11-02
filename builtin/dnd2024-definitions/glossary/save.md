@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 187 -->
 
-Save is another name for a saving throw. See also\
-“Saving Throw.”\
+Save is another name for a saving throw. See also “Saving Throw.”
 
 Original layout: [[../../srd-5.2.1/pages/187|page 187]].
 

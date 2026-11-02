@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 206 -->
 
-Some magic items have charges that must be ex-\
-pended to activate their properties. The number\
-of charges an item has remaining is revealed when\
-the Identify spell is cast on it. A creature attuned to\
-an item knows how many charges the item has and\
-how many it regains.\
+Some magic items have charges that must be expended to activate their properties. The number of charges an item has remaining is revealed when the Identify spell is cast on it. A creature attuned to an item knows how many charges the item has and how many it regains.
 
 ## Rule
 

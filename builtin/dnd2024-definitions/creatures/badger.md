@@ -29,12 +29,11 @@ Skills Perception +3\
 Resistances Poison\
 Senses Darkvision 30 ft.; Passive Perception 13\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Actions
 
-Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Piercing\
-damage.\
+Bite. Melee Attack Roll: +2, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/345|page 345]].
 

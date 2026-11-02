@@ -11,10 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [215
 
 <!-- SRD page 215 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While you wear this cloak, Wisdom (Perception)\
-checks made to perceive you have Disadvantage,\
-and you have Advantage on Dexterity (Stealth)\
-checks.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While you wear this cloak, Wisdom (Perception) checks made to perceive you have Disadvantage, and you have Advantage on Dexterity (Stealth) checks.
 
 Original layout: [[../pages/215|page 215]].

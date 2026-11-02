@@ -11,15 +11,12 @@ splat_reference: {"source": "SRD 5.2.1", "category": "spell", "pages": [165], "e
 
 <!-- SRD page 165 -->
 
-Level 4 Transmutation (Druid, Ranger, Sorcerer,\
-Wizard)\
+Level 4 Transmutation (Druid, Ranger, Sorcerer, Wizard)\
 Casting Time: Action\
 Range: Touch\
-Components: V, S, M (diamond dust worth 100+ GP,\
-which the spell consumes)\
-Duration: Concentration, up to 1 hour\
-Until the spell ends, one willing creature you touch\
-has Resistance to Bludgeoning, Piercing, and Slash-\
-ing damage.\
+Components: V, S, M (diamond dust worth 100+ GP, which the spell consumes)\
+Duration: Concentration, up to 1 hour
+
+Until the spell ends, one willing creature you touch has Resistance to Bludgeoning, Piercing, and Slashing damage.
 
 Original layout: [[../pages/165|page 165]].

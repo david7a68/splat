@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 205 -->
 
-An item in the Wand category is typically 12 to 15\
-inches long and crafted of metal, bone, or wood. It\
-is tipped with metal, crystal, stone, or some other\
-material.\
-Unless its description notes otherwise, a wand\
-can be used as an Arcane Focus.\
+An item in the Wand category is typically 12 to 15 inches long and crafted of metal, bone, or wood. It is tipped with metal, crystal, stone, or some other material.
+
+Unless its description notes otherwise, a wand can be used as an Arcane Focus.
 
 ## Rule
 

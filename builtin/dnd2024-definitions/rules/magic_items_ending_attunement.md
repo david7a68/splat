@@ -18,16 +18,7 @@ splat_sources:
 
 <!-- SRD page 102 -->
 
-Your Attunement to an item ends if you no longer\
-satisfy the prerequisites for Attunement, if the item\
-has been more than 100 feet away for at least 24\
-hours, if you die, or if another creature attunes to\
-
-<!-- SRD page 103 -->
-
-the item. You can also voluntarily end Attunement\
-by spending another Short Rest focused on the item\
-unless the item is cursed.\
+Your Attunement to an item ends if you no longer satisfy the prerequisites for Attunement, if the item has been more than 100 feet away for at least 24 hours, if you die, or if another creature attunes to the item. You can also voluntarily end Attunement by spending another Short Rest focused on the item unless the item is cursed.
 
 ## Rule
 

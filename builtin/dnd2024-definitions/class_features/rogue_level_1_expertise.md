@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 61 -->
 
-You gain Expertise in two of your skill proficiencies\
-of your choice. Sleight of Hand and Stealth are rec-\
-ommended if you have proficiency in them.\
-At Rogue level 6, you gain Expertise in two more\
-of your skill proficiencies of your choice.\
+You gain Expertise in two of your skill proficiencies of your choice. Sleight of Hand and Stealth are recommended if you have proficiency in them.
+
+At Rogue level 6, you gain Expertise in two more of your skill proficiencies of your choice.
 
 ## Rule
 

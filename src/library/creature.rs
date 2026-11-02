@@ -80,7 +80,8 @@ fn rules_prose(entry: &Entry, source: &str) -> String {
                 return false;
             }
             if line.starts_with("AC ")
-                && stat(entry, "armor_class").is_some()
+                && (stat(entry, "armor_class").is_some()
+                    || field(entry, "armor_class_text").is_some())
                 && (!line.contains("Initiative") || stat(entry, "initiative").is_some())
             {
                 return false;
@@ -254,11 +255,11 @@ fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
             })
         })
         .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()));
+    let armor_class = field(entry, "armor_class_text")
+        .map(str::to_owned)
+        .or_else(|| stat(entry, "armor_class").map(|ac| ac.to_string()));
     [
-        (
-            "ARMOR CLASS",
-            stat(entry, "armor_class").map(|ac| ac.to_string()),
-        ),
+        ("ARMOR CLASS", armor_class),
         ("HIT POINTS", hp),
         ("INITIATIVE", stat(entry, "initiative").map(design::signed)),
     ]
@@ -332,7 +333,13 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
 /// Identity, vitals, abilities and details: what the entry has, and no empty cells.
 pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry) {
     ui.add_space(design::S);
-    let identity = [size(entry), field(entry, "type"), field(entry, "alignment")]
+    let kind = field(entry, "type_options_text")
+        .or_else(|| field(entry, "type"))
+        .map(|kind| match field(entry, "tags_text") {
+            Some(tags) => format!("{kind} {tags}"),
+            None => kind.to_owned(),
+        });
+    let identity = [size(entry), kind.as_deref(), field(entry, "alignment")]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>()

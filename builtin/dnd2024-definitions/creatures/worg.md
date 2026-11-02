@@ -28,14 +28,11 @@ Int 7 −2 −2 Wis 11 +0 +0 Cha 8 −1 −1\
 Skills Perception +4\
 Senses Darkvision 60 ft.; Passive Perception 14\
 Languages Goblin, Worg\
-CR 1/2 (XP 100; PB +2)\
+CR 1/2 (XP 100; PB +2)
 
 ### Actions
 
-Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3)\
-Piercing damage, and the next attack roll made against\
-the target before the start of the worg’s next turn has\
-Advantage.\
+Bite. Melee Attack Roll: +5, reach 5 ft. Hit: 7 (1d8 + 3) Piercing damage, and the next attack roll made against the target before the start of the worg’s next turn has Advantage.
 
 Original layout: [[../../srd-5.2.1/pages/342|page 342]].
 

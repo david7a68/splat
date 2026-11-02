@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-Barding is armor designed for a mount. Any type\
-of armor on the Armor table in “Equipment” can\
-be purchased as barding. The cost is four times the\
-normal cost, and it weighs twice as much.\
+Barding is armor designed for a mount. Any type of armor on the Armor table in “Equipment” can be purchased as barding. The cost is four times the normal cost, and it weighs twice as much.
 
 ## Rule
 

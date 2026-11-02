@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 183 -->
 
-If you have Immunity to a damage type or a condi-\
-tion, it doesn’t affect you in any way.\
+If you have Immunity to a damage type or a condition, it doesn’t affect you in any way.
 
 Original layout: [[../../srd-5.2.1/pages/183|page 183]].
 

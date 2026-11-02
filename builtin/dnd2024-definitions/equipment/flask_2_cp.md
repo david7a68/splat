@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 97 -->
 
-A Flask holds up to 1 pint.\
+A Flask holds up to 1 pint.
 
 ## Item
 

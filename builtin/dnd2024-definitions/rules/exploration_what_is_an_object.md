@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 12 -->
 
-For the purpose of the rules, an object is a discrete,\
-inanimate item like a window, door, sword, book,\
-table, chair, or stone. It isn’t a building or a vehicle,\
-which are composed of many objects.\
+For the purpose of the rules, an object is a discrete, inanimate item like a window, door, sword, book, table, chair, or stone. It isn’t a building or a vehicle, which are composed of many objects.
 
 ## Rule
 

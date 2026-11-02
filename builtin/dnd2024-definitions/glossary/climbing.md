@@ -18,16 +18,11 @@ splat_sources:
 
 <!-- SRD page 178 -->
 
-While you’re climbing, each foot of movement costs\
-1 extra foot (2 extra feet in Difficult Terrain). You\
-ignore this extra cost if you have a Climb Speed and\
-use it to climb.\
+While you’re climbing, each foot of movement costs 1 extra foot (2 extra feet in Difficult Terrain). You ignore this extra cost if you have a Climb Speed and use it to climb.
 
 <!-- SRD page 179 -->
 
-At the GM’s option, climbing a slippery surface or\
-one with few handholds might require a successful\
-DC 15 Strength (Athletics) check.\
+At the GM’s option, climbing a slippery surface or one with few handholds might require a successful DC 15 Strength (Athletics) check.
 
 Original layout: [[../../srd-5.2.1/pages/178|page 178]], [[../../srd-5.2.1/pages/179|page 179]].
 

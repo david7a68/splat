@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 29 -->
 
-You gain a Barbarian subclass of your choice. The\
-Path of the Berserker subclass is detailed after this\
-class’s description. A subclass is a specialization\
-that grants you features at certain Barbarian levels.\
-For the rest of your career, you gain each of your\
-subclass’s features that are of your Barbarian level\
-or lower.\
+You gain a Barbarian subclass of your choice. The Path of the Berserker subclass is detailed after this class’s description. A subclass is a specialization that grants you features at certain Barbarian levels. For the rest of your career, you gain each of your subclass’s features that are of your Barbarian level or lower.
 
 ## Rule
 

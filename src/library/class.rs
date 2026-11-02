@@ -34,21 +34,42 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
         "Armor Training",
         "Starting Equipment",
     ];
+    // The traits are a two-column table: a label and its value. Later tables stay tables.
+    let flatten = |line: &str| {
+        line.strip_prefix('|').map_or_else(
+            || line.to_owned(),
+            |row| {
+                row.trim_end_matches('|')
+                    .split(" | ")
+                    .map(str::trim)
+                    .filter(|cell| !cell.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            },
+        )
+    };
     let mut lines = source
         .lines()
         .map(|line| line.trim().trim_end_matches('\\'))
         .filter(|line| !line.is_empty() && !line.starts_with("<!-- SRD page "));
-    if lines.next() != Some(format!("Core {name} Traits").as_str()) {
+    let first = lines
+        .by_ref()
+        .find(|line| !line.chars().all(|c| "| -".contains(c)));
+    if first.map(|line| line.trim_matches('*')) != Some(format!("Core {name} Traits").as_str()) {
         return false;
     }
     let mut rows: Vec<(&'static str, String)> = Vec::new();
     let mut remainder = String::new();
     let mut trailing = false;
-    for line in lines {
+    for raw in lines {
+        let flat = flatten(raw.trim_matches('*'));
+        let line = flat.as_str();
         trailing |= line == format!("{name} Features") || line.starts_with('#');
         if trailing {
-            remainder.push_str(line);
+            remainder.push_str(raw);
             remainder.push('\n');
+        } else if raw.chars().all(|c| "| -".contains(c)) {
+            continue;
         } else if let Some((label, value)) = LABELS.iter().find_map(|label| {
             line.strip_prefix(&format!("{label} "))
                 .map(|value| (*label, value))
@@ -116,11 +137,9 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
         style::facts(ui, &options);
     }
     if !remainder.is_empty() {
-        design::section(ui, "Additional source text", |ui| {
-            // Keep printed progression rows separate instead of joining a table
-            // into prose; the named feature list is shown below.
-            style::markdown(ui, &remainder.lines().collect::<Vec<_>>().join("  \n"));
-        });
+        ui.add_space(10.0);
+        style::section_heading(ui, "Class table");
+        style::markdown(ui, &presentation::overview_markdown(&remainder));
     }
     true
 }

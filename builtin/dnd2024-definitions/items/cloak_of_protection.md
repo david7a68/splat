@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 216 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-You gain a +1 bonus to Armor Class and saving\
-throws while you wear this cloak.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+You gain a +1 bonus to Armor Class and saving throws while you wear this cloak.
 
 Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 

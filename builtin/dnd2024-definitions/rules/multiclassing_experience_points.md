@@ -18,14 +18,7 @@ splat_sources:
 
 <!-- SRD page 25 -->
 
-The Experience Point cost to gain a level is based on\
-your total character level, not your level in a partic-\
-ular class, as shown in the Character Advancement\
-table in “Character Creation.” For example, if you\
-are a level 6 Cleric / level 1 Fighter, you must gain\
-enough XP to reach level 8 before you can take your\
-second level as a Fighter or your seventh level as a\
-Cleric.\
+The Experience Point cost to gain a level is based on your total character level, not your level in a particular class, as shown in the Character Advancement table in “Character Creation.” For example, if you are a level 6 Cleric / level 1 Fighter, you must gain enough XP to reach level 8 before you can take your second level as a Fighter or your seventh level as a Cleric.
 
 ## Rule
 

@@ -21,16 +21,14 @@ Int 1 −5 −5 Wis 10 +0 +0 Cha 4 −3 −3\
 Skills Perception +2\
 Senses Blindsight 60 ft.; Passive Perception 12\
 Languages None\
-CR 2 (XP 450; PB +2)\
+CR 2 (XP 450; PB +2)
 
 ### Traits
 
-Water Breathing. The shark can breathe only underwater.\
+Water Breathing. The shark can breathe only underwater.
 
 ### Actions
 
-Bite. Melee Attack Roll: +6 (with Advantage if the tar-\
-get doesn’t have all its Hit Points), reach 5 ft. Hit: 14\
-(3d6 + 4) Piercing damage.\
+Bite. Melee Attack Roll: +6 (with Advantage if the target doesn’t have all its Hit Points), reach 5 ft. Hit: 14 (3d6 + 4) Piercing damage.
 
 Original layout: [[../pages/356|page 356]].

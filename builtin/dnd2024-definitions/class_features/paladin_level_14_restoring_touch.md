@@ -18,14 +18,7 @@ splat_sources:
 
 <!-- SRD page 55 -->
 
-When you use Lay On Hands on a creature, you can\
-also remove one or more of the following conditions\
-from the creature: Blinded, Charmed, Deafened,\
-Frightened, Paralyzed, or Stunned. You must ex-\
-pend 5 Hit Points from the healing pool of Lay On\
-Hands for each of these conditions you remove;\
-those points don’t also restore Hit Points to the\
-creature.\
+When you use Lay On Hands on a creature, you can also remove one or more of the following conditions from the creature: Blinded, Charmed, Deafened, Frightened, Paralyzed, or Stunned. You must expend 5 Hit Points from the healing pool of Lay On Hands for each of these conditions you remove; those points don’t also restore Hit Points to the creature.
 
 ## Rule
 

@@ -11,10 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [238
 
 <!-- SRD page 238 -->
 
-Ring, Legendary (Requires Attunement)\
-While wearing this ring, you can take a Magic action\
-to give yourself the Invisible condition. You remain\
-Invisible until the ring is removed or until you take\
-a Bonus Action to become visible again.\
+Ring, Legendary (Requires Attunement)
+
+While wearing this ring, you can take a Magic action to give yourself the Invisible condition. You remain Invisible until the ring is removed or until you take a Bonus Action to become visible again.
 
 Original layout: [[../pages/238|page 238]].

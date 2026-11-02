@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 181 -->
 
-An area with Dim Light is Lightly Obscured. See\
-also “Lightly Obscured” and “Playing the Game”\
-(“Exploration”).\
+An area with Dim Light is Lightly Obscured. See also “Lightly Obscured” and “Playing the Game” (“Exploration”).
 
 Original layout: [[../../srd-5.2.1/pages/181|page 181]].
 

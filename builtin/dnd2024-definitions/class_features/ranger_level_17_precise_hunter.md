@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 59 -->
 
-You have Advantage on attack rolls against the crea-\
-ture currently marked by your Hunter’s Mark.\
+You have Advantage on attack rolls against the creature currently marked by your Hunter’s Mark.
 
 ## Rule
 

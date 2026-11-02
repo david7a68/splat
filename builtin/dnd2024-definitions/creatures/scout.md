@@ -29,16 +29,15 @@ Skills Nature +4, Perception +5, Stealth +6, Survival +5\
 Gear Leather Armor, Longbow, Shortsword\
 Senses Passive Perception 15\
 Languages Common plus one other language\
-CR 1/2 (XP 100; PB +2)\
+CR 1/2 (XP 100; PB +2)
 
 ### Actions
 
-Multiattack. The scout makes two attacks, using Shorts-\
-word and Longbow in any combination.\
-Shortsword. Melee Attack Roll: +4, reach 5 ft. Hit: 5\
-(1d6 + 2) Piercing damage.\
-Longbow. Ranged Attack Roll: +4, range 150/600 ft.\
-Hit: 6 (1d8 + 2) Piercing damage.\
+Multiattack. The scout makes two attacks, using Shortsword and Longbow in any combination.
+
+Shortsword. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage.
+
+Longbow. Ranged Attack Roll: +4, range 150/600 ft. Hit: 6 (1d8 + 2) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/322|page 322]].
 

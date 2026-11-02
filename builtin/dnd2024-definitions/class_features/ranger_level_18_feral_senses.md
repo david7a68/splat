@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 59 -->
 
-Your connection to the forces of nature grants you\
-Blindsight with a range of 30 feet.\
+Your connection to the forces of nature grants you Blindsight with a range of 30 feet.
 
 ## Rule
 

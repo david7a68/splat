@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 36 -->
 
-As a Cleric, you gain the following class features\
-when you reach the specified Cleric levels. These\
-features are listed in the Cleric Features table.\
+As a Cleric, you gain the following class features when you reach the specified Cleric levels. These features are listed in the Cleric Features table.
 
 ## Rule
 

@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 188 -->
 
-A creature is Stable if it has 0 Hit Points but isn’t\
-required to make Death Saving Throws. See also\
-“Playing the Game” (“Damage and Healing”).\
+A creature is Stable if it has 0 Hit Points but isn’t required to make Death Saving Throws. See also “Playing the Game” (“Damage and Healing”).
 
 Original layout: [[../../srd-5.2.1/pages/188|page 188]].
 

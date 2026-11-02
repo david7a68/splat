@@ -18,16 +18,17 @@ splat_sources:
 
 <!-- SRD page 21 -->
 
-Finally, determine your ability modifiers using the\
-Ability Scores and Modifiers table. Write the modi-\
-fier next to each of your scores.\
-Ability Scores and Modifiers\
-Score Modifier Score Modifier\
-3 −4 12–13 +1\
-4–5 −3 14–15 +2\
-6–7 −2 16–17 +3\
-8–9 −1 18–19 +4\
-10–11 +0 20 +5\
+Finally, determine your ability modifiers using the Ability Scores and Modifiers table. Write the modifier next to each of your scores.
+
+**Ability Scores and Modifiers**
+
+| Score | Modifier | Score | Modifier |
+| --- | --- | --- | --- |
+| 3 | −4 | 12–13 | +1 |
+| 4–5 | −3 | 14–15 | +2 |
+| 6–7 | −2 | 16–17 | +3 |
+| 8–9 | −1 | 18–19 | +4 |
+| 10–11 | +0 | 20 | +5 |
 
 ## Rule
 

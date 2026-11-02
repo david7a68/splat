@@ -11,11 +11,10 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [239
 
 <!-- SRD page 239 -->
 
-Ring, Uncommon (Requires Attunement)\
-If you take Cold damage while wearing this ring, the\
-ring reduces the damage you take by 2d8.\
-In addition, while wearing this ring, you and\
-everything you wear and carry are unharmed by\
-temperatures of 0 degrees Fahrenheit or lower.\
+Ring, Uncommon (Requires Attunement)
+
+If you take Cold damage while wearing this ring, the ring reduces the damage you take by 2d8.
+
+In addition, while wearing this ring, you and everything you wear and carry are unharmed by temperatures of 0 degrees Fahrenheit or lower.
 
 Original layout: [[../pages/239|page 239]].

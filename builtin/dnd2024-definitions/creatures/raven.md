@@ -28,19 +28,15 @@ Int  5 −3 −3 Wis 13 +1 +1 Cha 6 −2 −2\
 Skills Perception +3\
 Senses Passive Perception 13\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Traits
 
-Mimicry. The raven can mimic simple sounds it has\
-heard, such as a whisper or chitter. A hearer can dis-\
-cern the sounds are imitations with a successful DC 10\
-Wisdom (Insight) check.\
+Mimicry. The raven can mimic simple sounds it has heard, such as a whisper or chitter. A hearer can discern the sounds are imitations with a successful DC 10 Wisdom (Insight) check.
 
 ### Actions
 
-Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing\
-damage.\
+Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/359|page 359]].
 

@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-An animal pulling a carriage, cart, chariot, sled, or\
-wagon can move weight up to five times its base\
-carrying capacity, including the weight of the vehi-\
-cle. If multiple animals pull the same vehicle, add\
-their carrying capacities together.\
+An animal pulling a carriage, cart, chariot, sled, or wagon can move weight up to five times its base carrying capacity, including the weight of the vehicle. If multiple animals pull the same vehicle, add their carrying capacities together.
 
 ## Rule
 

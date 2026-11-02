@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 25 -->
 
-If you gain the Extra Attack feature from more than\
-one class, the features don’t stack. You can’t make\
-more than two attacks with this feature unless you\
-have a feature that says you can (such as the Fight-\
-er’s Two Extra Attacks feature).\
-Similarly, the Warlock’s Thirsting Blade invo-\
-cation, which grants you the Extra Attack feature\
-with your pact weapon, doesn’t give you additional\
-attacks if you also have Extra Attack.\
+If you gain the Extra Attack feature from more than one class, the features don’t stack. You can’t make more than two attacks with this feature unless you have a feature that says you can (such as the Fighter’s Two Extra Attacks feature).
+
+Similarly, the Warlock’s Thirsting Blade invocation, which grants you the Extra Attack feature with your pact weapon, doesn’t give you additional attacks if you also have Extra Attack.
 
 ## Rule
 

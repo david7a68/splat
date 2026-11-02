@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-This entry lists the monster’s Immunities, if any. If\
-the monster has damage and condition Immunities,\
-the damage types are listed before the conditions.\
-See “Playing the Game” for details.\
+This entry lists the monster’s Immunities, if any. If the monster has damage and condition Immunities, the damage types are listed before the conditions. See “Playing the Game” for details.
 
 ## Rule
 

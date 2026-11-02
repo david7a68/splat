@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 105 -->
 
-A spell’s components are physical requirements the\
-spellcaster must meet to cast the spell. Each spell’s\
-description indicates whether it requires Verbal\
-(V), Somatic (S), or Material (M) components. If the\
-spellcaster can’t provide one or more of a spell’s\
-components, the spellcaster can’t cast the spell.\
+A spell’s components are physical requirements the spellcaster must meet to cast the spell. Each spell’s description indicates whether it requires Verbal (V), Somatic (S), or Material (M) components. If the spellcaster can’t provide one or more of a spell’s components, the spellcaster can’t cast the spell.
 
 ## Rule
 

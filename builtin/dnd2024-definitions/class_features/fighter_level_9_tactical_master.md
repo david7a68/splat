@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 48 -->
 
-When you attack with a weapon whose mastery\
-property you can use, you can replace that property\
-with the Push, Sap, or Slow property for that attack.\
+When you attack with a weapon whose mastery property you can use, you can replace that property with the Push, Sap, or Slow property for that attack.
 
 ## Rule
 

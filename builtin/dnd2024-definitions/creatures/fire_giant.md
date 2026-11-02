@@ -29,21 +29,15 @@ Skills Athletics +11, Perception +6\
 Immunities Fire\
 Senses Passive Perception 16\
 Languages Giant\
-CR 9 (XP 5,000; PB +4)\
+CR 9 (XP 5,000; PB +4)
 
 ### Actions
 
-Multiattack. The giant makes two attacks, using Flame\
-Sword or Hammer Throw in any combination.\
-Flame Sword. Melee Attack Roll: +11, reach 10 ft.\
-Hit: 21 (4d6 + 7) Slashing damage plus 10 (3d6)\
-Fire damage.\
-Hammer Throw. Ranged Attack Roll: +11, range 60/240\
-ft. Hit: 23 (3d10 + 7) Bludgeoning damage plus 4 (1d8)\
-Fire damage, and the target is pushed up to 15 feet\
-straight away from the giant and has Disadvantage\
-on the next attack roll it makes before the end of its\
-next turn.\
+Multiattack. The giant makes two attacks, using Flame Sword or Hammer Throw in any combination.
+
+Flame Sword. Melee Attack Roll: +11, reach 10 ft. Hit: 21 (4d6 + 7) Slashing damage plus 10 (3d6) Fire damage.
+
+Hammer Throw. Ranged Attack Roll: +11, range 60/240 ft. Hit: 23 (3d10 + 7) Bludgeoning damage plus 4 (1d8) Fire damage, and the target is pushed up to 15 feet straight away from the giant and has Disadvantage on the next attack roll it makes before the end of its next turn.
 
 Original layout: [[../../srd-5.2.1/pages/285|page 285]].
 

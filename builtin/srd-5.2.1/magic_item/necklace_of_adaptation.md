@@ -11,10 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [232
 
 <!-- SRD page 232 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While wearing this necklace, you can breathe nor-\
-mally in any environment, and you have Advantage\
-on saving throws made to avoid or end the Poisoned\
-condition.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While wearing this necklace, you can breathe normally in any environment, and you have Advantage on saving throws made to avoid or end the Poisoned condition.
 
 Original layout: [[../pages/232|page 232]].

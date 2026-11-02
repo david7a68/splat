@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 18 -->
 
-Temporary Hit Points can’t be added together. If\
-you have Temporary Hit Points and receive more\
-of them, you decide whether to keep the ones you\
-have or to gain the new ones. For example, if a spell\
-grants you 12 Temporary Hit Points when you al-\
-ready have 10, you can have 12 or 10, not 22.\
+Temporary Hit Points can’t be added together. If you have Temporary Hit Points and receive more of them, you decide whether to keep the ones you have or to gain the new ones. For example, if a spell grants you 12 Temporary Hit Points when you already have 10, you can have 12 or 10, not 22.
 
 ## Rule
 

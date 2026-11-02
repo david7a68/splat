@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 90 -->
 
-If you hit a creature with this weapon, that creature\
-has Disadvantage on its next attack roll before the\
-start of your next turn.\
+If you hit a creature with this weapon, that creature has Disadvantage on its next attack roll before the start of your next turn.
 
 ## Rule
 

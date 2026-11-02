@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 49 -->
 
-•  Gain all the traits in the Core Monk Traits table.\
-•  Gain the Monk’s level 1 features, which are listed\
-in the Monk Features table.\
+•  Gain all the traits in the Core Monk Traits table.
+
+•  Gain the Monk’s level 1 features, which are listed in the Monk Features table.
 
 ## Rule
 

@@ -1,5 +1,8 @@
 # Young White Dragon: unsigned Intelligence save
 
+**Replaced on 2026-11-01.** The user now rules that the unsigned `2` is a printing
+error, so the save is −2. The rest of this note records the earlier +2 ruling.
+
 Checked online on 2026-09-15.
 
 Use **+2 as the complete base Intelligence saving-throw modifier** for the

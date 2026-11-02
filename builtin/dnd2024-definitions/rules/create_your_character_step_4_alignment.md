@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 21 -->
 
-Choose your character’s alignment from the options\
-below, and note it on your character sheet.\
-The game assumes that player characters aren’t of\
-an evil alignment. Check with your GM before mak-\
-ing an evil character.\
+Choose your character’s alignment from the options below, and note it on your character sheet.
+
+The game assumes that player characters aren’t of an evil alignment. Check with your GM before making an evil character.
 
 ## Rule
 

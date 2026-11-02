@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 55 -->
 
-You gain an Epic Boon feat (see “Feats”) or another\
-feat of your choice for which you qualify. Boon of\
-Truesight is recommended.\
+You gain an Epic Boon feat (see “Feats”) or another feat of your choice for which you qualify. Boon of Truesight is recommended.
 
 ## Rule
 

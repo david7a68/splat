@@ -18,13 +18,11 @@ splat_sources:
 
 <!-- SRD page 234 -->
 
-Potion, Uncommon\
-The next time you see a creature within 10 minutes\
-after drinking this philter, you are charmed by that\
-creature and have the Charmed condition for 1\
-hour.\
-This rose-hued, effervescent liquid contains one\
-easy-to-miss bubble shaped like a heart.\
+Potion, Uncommon
+
+The next time you see a creature within 10 minutes after drinking this philter, you are charmed by that creature and have the Charmed condition for 1 hour.
+
+This rose-hued, effervescent liquid contains one easy-to-miss bubble shaped like a heart.
 
 Original layout: [[../../srd-5.2.1/pages/234|page 234]].
 

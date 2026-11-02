@@ -18,37 +18,19 @@ splat_sources:
 
 <!-- SRD page 7 -->
 
-Sometimes a D20 Test is modified by Advantage or\
-Disadvantage. Advantage reflects the positive cir-\
-cumstances surrounding a d20 roll, while Disadvan-\
-tage reflects negative circumstances.\
-You usually acquire Advantage or Disadvantage\
-through the use of special abilities and actions. The\
+Sometimes a D20 Test is modified by Advantage or Disadvantage. Advantage reflects the positive circumstances surrounding a d20 roll, while Disadvantage reflects negative circumstances.
 
-<!-- SRD page 8 -->
+You usually acquire Advantage or Disadvantage through the use of special abilities and actions. The GM can also decide that circumstances grant Advantage or impose Disadvantage.
 
-HEroic inspiration\
-Sometimes the GM or a rule gives you Heroic Inspira-\
-tion. If you have Heroic Inspiration, you can expend it\
-to reroll any die immediately after rolling it, and you\
-must use the new roll.\
-Only One at a Time. You can never have more\
-than one instance of Heroic Inspiration. If something\
-gives you Heroic Inspiration and you already have it,\
-you can give it to a player character in your group\
-who lacks it.\
-Gaining Heroic Inspiration. Your GM can\
-give you Heroic Inspiration for a variety of reasons.\
-Typically, GMs award it when you do something par-\
-ticularly heroic, in character, or entertaining. It’s a\
-reward for making the game more fun for everyone\
-playing.\
-Other rules might allow your character to gain\
-Heroic Inspiration independent of the GM’s decision.\
-For example, Human characters start each day with\
-Heroic Inspiration.\
-GM can also decide that circumstances grant Ad-\
-vantage or impose Disadvantage.\
+### Heroic Inspiration
+
+Sometimes the GM or a rule gives you Heroic Inspiration. If you have Heroic Inspiration, you can expend it to reroll any die immediately after rolling it, and you must use the new roll.
+
+Only One at a Time. You can never have more than one instance of Heroic Inspiration. If something gives you Heroic Inspiration and you already have it, you can give it to a player character in your group who lacks it.
+
+Gaining Heroic Inspiration. Your GM can give you Heroic Inspiration for a variety of reasons. Typically, GMs award it when you do something particularly heroic, in character, or entertaining. It’s a reward for making the game more fun for everyone playing.
+
+Other rules might allow your character to gain Heroic Inspiration independent of the GM’s decision. For example, Human characters start each day with Heroic Inspiration.
 
 ## Rule
 

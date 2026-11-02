@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 97 -->
 
-As a Utilize action, you can throw the Grappling\
-Hook at a railing, a ledge, or another catch within 50\
-feet of yourself, and the hook catches on if you suc-\
-ceed on a DC 13 Dexterity (Acrobatics) check. If you\
-tied a Rope to the hook, you can then climb it.\
+As a Utilize action, you can throw the Grappling Hook at a railing, a ledge, or another catch within 50 feet of yourself, and the hook catches on if you succeed on a DC 13 Dexterity (Acrobatics) check. If you tied a Rope to the hook, you can then climb it.
 
 ## Item
 

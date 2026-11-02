@@ -29,12 +29,11 @@ Skills Perception +2\
 Gear Chain Shirt, Shield, Spear\
 Senses Passive Perception 12\
 Languages Common\
-CR 1/8 (XP 25; PB +2)\
+CR 1/8 (XP 25; PB +2)
 
 ### Actions
 
-Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or\
-range 20/60 ft. Hit: 4 (1d6 + 1) Piercing damage.\
+Spear. Melee or Ranged Attack Roll: +3, reach 5 ft. or range 20/60 ft. Hit: 4 (1d6 + 1) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/296|page 296]].
 

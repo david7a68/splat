@@ -18,35 +18,9 @@ splat_sources:
 
 <!-- SRD page 62 -->
 
-Your training with weapons allows you to use the\
-mastery properties of two kinds of weapons of your\
-choice with which you have proficiency, such as\
-Daggers and Shortbows.\
-Sneak Attack\
-1d6\
-1d6\
-2d6\
-2d6\
-3d6\
-3d6\
-4d6\
-4d6\
-5d6\
-5d6\
-6d6\
-6d6\
-7d6\
-7d6\
-8d6\
-8d6\
-9d6\
-9d6\
-10d6\
-10d6\
-Whenever you finish a Long Rest, you can change\
-the kinds of weapons you chose. For example, you\
-could switch to using the mastery properties of\
-Scimitars and Shortswords.\
+Your training with weapons allows you to use the mastery properties of two kinds of weapons of your choice with which you have proficiency, such as Daggers and Shortbows.
+
+Whenever you finish a Long Rest, you can change the kinds of weapons you chose. For example, you could switch to using the mastery properties of Scimitars and Shortswords.
 
 ## Rule
 

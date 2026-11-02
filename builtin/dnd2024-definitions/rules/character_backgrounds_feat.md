@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 83 -->
 
-A background gives your character a specified Ori-\
-gin feat (described in “Feats”).\
+A background gives your character a specified Origin feat (described in “Feats”).
 
 ## Rule
 

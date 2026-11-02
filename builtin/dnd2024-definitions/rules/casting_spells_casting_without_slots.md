@@ -18,25 +18,15 @@ splat_sources:
 
 <!-- SRD page 104 -->
 
-There are several ways to cast a spell without\
-expending a spell slot:\
-Cantrips. A cantrip is cast without a spell slot.\
-Rituals. Certain spells have the Ritual tag in the\
-Casting Time entry. Such a spell can be cast fol-\
-lowing the normal rules for spellcasting, or it can\
-be cast as a Ritual. The Ritual version of a spell\
-takes 10 minutes longer to cast than normal, but it\
-doesn’t expend a spell slot. To cast a spell as a Rit-\
-ual, a spellcaster must have it prepared.\
-Special Abilities. Some characters and monsters\
-have special abilities that allow them to cast spe-\
-cific spells without a spell slot. This casting is usu-\
-ally limited in another way, such as being able to\
-cast the spell a limited number of times per day.\
-Magic Items. Spell Scrolls and some other magic\
-items contain spells that can be cast without a\
-spell slot. The description of such an item speci-\
-fies how many times a spell can be cast from it.\
+There are several ways to cast a spell without expending a spell slot:
+
+Cantrips. A cantrip is cast without a spell slot.
+
+Rituals. Certain spells have the Ritual tag in the Casting Time entry. Such a spell can be cast following the normal rules for spellcasting, or it can be cast as a Ritual. The Ritual version of a spell takes 10 minutes longer to cast than normal, but it doesn’t expend a spell slot. To cast a spell as a Ritual, a spellcaster must have it prepared.
+
+Special Abilities. Some characters and monsters have special abilities that allow them to cast specific spells without a spell slot. This casting is usually limited in another way, such as being able to cast the spell a limited number of times per day.
+
+Magic Items. Spell Scrolls and some other magic items contain spells that can be cast without a spell slot. The description of such an item specifies how many times a spell can be cast from it.
 
 ## Rule
 

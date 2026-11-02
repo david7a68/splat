@@ -622,7 +622,14 @@ impl CampaignDocument {
     pub fn load(campaign: &Campaign) -> Result<Self, String> {
         let (path, baseline, text) = if let Some(manifest) = campaign_manifest(&campaign.path)? {
             if manifest.id != campaign.id {
-                return Err("Campaign manifest identity differs from its registration. Repair the mismatch before saving.".into());
+                return Err(format!(
+                    "Campaign “{}” does not match its folder. Settings has ID {}, but {} in {} has ID {}. Correct the ID or folder in settings.json, then reload.",
+                    campaign.name,
+                    campaign.id,
+                    manifest.path,
+                    campaign.path.display(),
+                    manifest.id,
+                ));
             }
             let text = fs::read_to_string(note_path(&campaign.path, &manifest.path)?)
                 .map_err(|e| e.to_string())?;
@@ -989,6 +996,23 @@ mod tests {
         let fixed = note_text("Repaired", "item", None);
         write_note(temp.path(), "Broken.md", Some(&bad), &fixed).unwrap();
         assert!(content::read_directory(temp.path()).unwrap().1.is_empty());
+    }
+    #[test]
+    fn manifest_mismatch_names_what_to_repair() {
+        let temp = tempfile::tempdir().unwrap();
+        let registered = campaign(temp.path().into());
+        CampaignDocument::load(&registered).unwrap().save().unwrap();
+        let stale = campaign(temp.path().into());
+        let error = CampaignDocument::load(&stale).err().unwrap();
+        for detail in [
+            stale.name,
+            stale.id.to_string(),
+            registered.id.to_string(),
+            "Campaign.md".into(),
+            temp.path().display().to_string(),
+        ] {
+            assert!(error.contains(&detail), "{detail} missing from: {error}");
+        }
     }
     #[test]
     fn invalid_notes_prevent_creation_of_a_second_manifest() {

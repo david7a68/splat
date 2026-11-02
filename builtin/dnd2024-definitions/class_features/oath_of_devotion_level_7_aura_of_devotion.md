@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 56 -->
 
-You and your allies have Immunity to the Charmed\
-condition while in your Aura of Protection. If a\
-Charmed ally enters the aura, that condition has no\
-effect on that ally while there.\
+You and your allies have Immunity to the Charmed condition while in your Aura of Protection. If a Charmed ally enters the aura, that condition has no effect on that ally while there.
 
 ## Rule
 

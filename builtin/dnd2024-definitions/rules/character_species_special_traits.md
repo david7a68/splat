@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 84 -->
 
-Each species gives a character special traits—\
-unique characteristics based on the species’ physi-\
-ology or magical nature. When you choose a species,\
-your character gets all the special traits listed for it.\
-Some traits involve making a choice from a handful\
-of options.\
+Each species gives a character special traits— unique characteristics based on the species’ physiology or magical nature. When you choose a species, your character gets all the special traits listed for it. Some traits involve making a choice from a handful of options.
 
 ## Rule
 

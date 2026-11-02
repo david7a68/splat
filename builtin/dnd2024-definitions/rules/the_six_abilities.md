@@ -18,17 +18,18 @@ splat_sources:
 
 <!-- SRD page 5 -->
 
-All creatures—characters and monsters—have six\
-abilities that measure physical and mental charac-\
-teristics, as shown on the Ability Descriptions table.\
-Ability Descriptions\
-Ability Score Measures …\
-Strength Physical might\
-Dexterity Agility, reflexes, and balance\
-Constitution Health and stamina\
-Intelligence Reasoning and memory\
-Wisdom Perceptiveness and mental fortitude\
-Charisma Confidence, poise, and charm\
+All creatures—characters and monsters—have six abilities that measure physical and mental characteristics, as shown on the Ability Descriptions table.
+
+**Ability Descriptions**
+
+| Ability | Score Measures … |
+| --- | --- |
+| Strength | Physical might |
+| Dexterity | Agility, reflexes, and balance |
+| Constitution | Health and stamina |
+| Intelligence | Reasoning and memory |
+| Wisdom | Perceptiveness and mental fortitude |
+| Charisma | Confidence, poise, and charm |
 
 ## Rule
 

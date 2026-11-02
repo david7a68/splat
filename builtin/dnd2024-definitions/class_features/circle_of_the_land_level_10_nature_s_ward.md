@@ -18,14 +18,14 @@ splat_sources:
 
 <!-- SRD page 46 -->
 
-You are immune to the Poisoned condition, and you\
-have Resistance to a damage type associated with\
-your current land choice in the Circle Spells feature,\
-as shown in the Nature’s Ward table.\
-Nature’s Ward\
-Land Type Resistance Land Type Resistance\
-Arid Fire Temperate Lightning\
-Polar Cold Tropical Poison\
+You are immune to the Poisoned condition, and you have Resistance to a damage type associated with your current land choice in the Circle Spells feature, as shown in the Nature’s Ward table.
+
+**Nature’s Ward**
+
+| Land Type | Resistance | Land Type | Resistance |
+| --- | --- | --- | --- |
+| Arid | Fire | Temperate | Lightning |
+| Polar | Cold | Tropical | Poison |
 
 ## Rule
 

@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 96 -->
 
-A Glass Bottle holds up to 11/2 pints.\
+A Glass Bottle holds up to 1½ pints.
 
 ## Item
 

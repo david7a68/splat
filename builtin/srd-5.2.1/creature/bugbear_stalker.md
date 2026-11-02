@@ -22,28 +22,22 @@ Skills Stealth +6, Survival +3\
 Gear Chain Shirt, Javelins (6), Morningstar\
 Senses Darkvision 60 ft.; Passive Perception 11\
 Languages Common, Goblin\
-CR 3 (XP 700; PB +2)\
+CR 3 (XP 700; PB +2)
 
 ### Traits
 
-Abduct. The bugbear needn’t spend extra movement to\
-move a creature it is grappling.\
+Abduct. The bugbear needn’t spend extra movement to move a creature it is grappling.
 
 ### Actions
 
-Multiattack. The bugbear makes two Javelin or Morn-\
-ingstar attacks.\
-Javelin. Melee or Ranged Attack Roll: +5, reach 10 ft.\
-or range 30/120 ft. Hit: 13 (3d6 + 3) Piercing damage.\
-Morningstar. Melee Attack Roll: +5 (with Advantage if\
-the target is Grappled by the bugbear), reach 10 ft. Hit:\
-12 (2d8 + 3) Piercing damage.\
+Multiattack. The bugbear makes two Javelin or Morningstar attacks.
+
+Javelin. Melee or Ranged Attack Roll: +5, reach 10 ft. or range 30/120 ft. Hit: 13 (3d6 + 3) Piercing damage.
+
+Morningstar. Melee Attack Roll: +5 (with Advantage if the target is Grappled by the bugbear), reach 10 ft. Hit: 12 (2d8 + 3) Piercing damage.
 
 ### Bonus Actions
 
-Quick Grapple. Dexterity Saving Throw: DC 13, one\
-Medium or smaller creature the bugbear can see within\
-10 feet. Failure: The target has the Grappled condition\
-(escape DC 13).\
+Quick Grapple. Dexterity Saving Throw: DC 13, one Medium or smaller creature the bugbear can see within 10 feet. Failure: The target has the Grappled condition (escape DC 13).
 
 Original layout: [[../pages/271|page 271]].

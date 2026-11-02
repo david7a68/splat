@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 29 -->
 
-As part of the Bonus Action you take to enter your\
-Rage, you can move up to half your Speed.\
+As part of the Bonus Action you take to enter your Rage, you can move up to half your Speed.
 
 ## Rule
 

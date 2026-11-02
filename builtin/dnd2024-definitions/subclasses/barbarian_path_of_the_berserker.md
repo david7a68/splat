@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 30 -->
 
-Channel Rage into Violent Fury\
-Barbarians who walk the Path of the Berserker\
-direct their Rage primarily toward violence. Their\
-path is one of untrammeled fury, and they thrill in\
-the chaos of battle as they allow their Rage to seize\
-and empower them.\
+### Channel Rage into Violent Fury
+
+Barbarians who walk the Path of the Berserker direct their Rage primarily toward violence. Their path is one of untrammeled fury, and they thrill in the chaos of battle as they allow their Rage to seize and empower them.
 
 ## Rule group
 

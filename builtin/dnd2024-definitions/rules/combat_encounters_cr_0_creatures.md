@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 203 -->
 
-Creatures that have a CR of 0, particularly ones that\
-are worth 0 XP, should be used sparingly. If you\
-want to include many CR 0 critters in an encounter,\
-use swarms instead.\
+Creatures that have a CR of 0, particularly ones that are worth 0 XP, should be used sparingly. If you want to include many CR 0 critters in an encounter, use swarms instead.
 
 ## Rule
 

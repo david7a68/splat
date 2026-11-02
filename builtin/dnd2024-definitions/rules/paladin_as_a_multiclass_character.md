@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 53 -->
 
-•  Gain the following traits from the Core Paladin\
-Traits table: Hit Point Die, proficiency with Mar-\
-tial weapons, and training with Light and Medium\
-armor and Shields.\
-•  Gain the Paladin’s level 1 features, which are\
-listed in the Paladin Features table. See the multi-\
-classing rules in “Character Creation” to deter-\
-mine your available spell slots.\
+•  Gain the following traits from the Core Paladin Traits table: Hit Point Die, proficiency with Martial weapons, and training with Light and Medium armor and Shields.
+
+•  Gain the Paladin’s level 1 features, which are listed in the Paladin Features table. See the multiclassing rules in “Character Creation” to determine your available spell slots.
 
 ## Rule
 

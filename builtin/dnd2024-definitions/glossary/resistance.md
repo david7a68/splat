@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 187 -->
 
-If you have Resistance to a damage type, damage\
-of that type is halved against you (round down).\
-Resistance is applied only once to an instance of\
-damage. See also “Playing the Game” (“Damage and\
-Healing”).\
+If you have Resistance to a damage type, damage of that type is halved against you (round down). Resistance is applied only once to an instance of damage. See also “Playing the Game” (“Damage and Healing”).
 
 Original layout: [[../../srd-5.2.1/pages/187|page 187]].
 

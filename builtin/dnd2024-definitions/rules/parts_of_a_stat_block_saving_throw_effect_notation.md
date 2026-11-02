@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-If an effect forces a saving throw, the effect identi-\
-fies the kind of save required and then provides the\
-save’s DC, a description of which creatures make\
-the save, and an explanation of what happens on a\
-failed or successful save.\
-“Half damage only” on a successful save means\
-the target takes half as much damage (round down)\
-as targets that fail the save, while also ignoring all\
-other parts of the effect.\
+If an effect forces a saving throw, the effect identifies the kind of save required and then provides the save’s DC, a description of which creatures make the save, and an explanation of what happens on a failed or successful save.
+
+“Half damage only” on a successful save means the target takes half as much damage (round down) as targets that fail the save, while also ignoring all other parts of the effect.
 
 ## Rule
 

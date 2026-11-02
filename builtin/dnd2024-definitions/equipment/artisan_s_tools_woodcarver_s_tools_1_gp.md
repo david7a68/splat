@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 94 -->
 
-Ability:  Dexterity  Weight: 5 lb.\
+Ability: Dexterity Weight: 5 lb.\
 Utilize: Carve a pattern in wood (DC 10)\
-Craft: Club, Greatclub, Quarterstaff, Ranged weapons\
-(except Pistol, Musket, and Sling), Arcane Focus, Ar-\
-rows, Bolts, Druidic Focus, Ink Pen, Needles\
+Craft: Club, Greatclub, Quarterstaff, Ranged weapons (except Pistol, Musket, and Sling), Arcane Focus, Arrows, Bolts, Druidic Focus, Ink Pen, Needles
 
 ## Item
 

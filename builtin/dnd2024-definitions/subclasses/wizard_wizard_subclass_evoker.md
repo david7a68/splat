@@ -18,14 +18,9 @@ splat_sources:
 
 <!-- SRD page 82 -->
 
-Create Explosive Elemental Effects\
-Your studies focus on magic that creates powerful\
-elemental effects such as bitter cold, searing flame,\
-rolling thunder, crackling lightning, and burning\
-acid. Some Evokers find employment in military\
-forces, serving as artillery to blast armies from\
-afar. Others use their power to protect others, while\
-some seek their own gain.\
+### Create Explosive Elemental Effects
+
+Your studies focus on magic that creates powerful elemental effects such as bitter cold, searing flame, rolling thunder, crackling lightning, and burning acid. Some Evokers find employment in military forces, serving as artillery to blast armies from afar. Others use their power to protect others, while some seek their own gain.
 
 ## Rule group
 

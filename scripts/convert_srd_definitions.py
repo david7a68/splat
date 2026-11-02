@@ -72,11 +72,12 @@ def creature_fields(body):
     for short, score, modifier, save in re.findall(r'\b(Str|Dex|Con|Int|Wis|Cha)\s*(\d+)\s*([+-]\d+)\s*([+-]?\d+)', before):
         if (int(score)-10)//2 != int(modifier): raise ValueError('Ability modifier mismatch')
         stats[ABILITIES[short]] = {'value': int(score)}
-        # SAVE is a supplied total. Unsigned 2 means +2 under the user's ruling.
+        # SAVE is a supplied total.
         # Later bonuses apply to this total; ability/proficiency are not added again.
         stats['save_'+ABILITIES[short]] = {'value': int(save)}
     if len(stats) != 12: raise ValueError('Missing ability scores/saves')
-    for name, pattern in [('armor_class',r'\bAC (\d+)'),('max_hp',r'\bHP (\d+)(?!\d)'),('initiative',r'\bInitiative ([+-]\d+)')]:
+    # A summoned creature's AC depends on the spell's level, so there is no one number.
+    for name, pattern in [('armor_class',r'\bAC (\d+)\b(?! \+)'),('max_hp',r'\bHP (\d+)(?!\d)'),('initiative',r'\bInitiative ([+-]\d+)')]:
         m = re.search(pattern,before)
         if m: stats[name] = {'value': int(m[1])}
     # Variable stat blocks must not receive an arbitrary first HP alternative.
@@ -85,8 +86,13 @@ def creature_fields(body):
     shape = re.search(r'\b(Tiny|Small|Medium|Large|Huge|Gargantuan)(.*?) (Aberration|Beast|Celestial|Construct|Dragon|Elemental|Fey|Fiend|Giant|Humanoid|Monstrosity|Ooze|Plant|Undead)(.*?), ([^#]*?) AC',before)
     if not shape: raise ValueError('Missing creature type/size')
     description = {'size': shape[1].lower(), 'type': shape[3].lower(), 'alignment': shape[5]}
+    # `Celestial, Fey, or Fiend (Your Choice), Neutral`: the type is a choice, then the alignment.
+    if ', ' in shape[5]:
+        choices, description['alignment'] = shape[5].rsplit(', ',1)
+        description['type_options_text'] = shape[3]+', '+choices
     if shape[2]: description['size_options_text'] = shape[1]+shape[2]
-    if shape[4].strip(): description['tags_text'] = shape[4].strip()
+    # `Swarm of Tiny Beasts`: the type regex leaves the plural behind.
+    if shape[4].strip() not in ('','s'): description['tags_text'] = shape[4].strip()
     speed = re.search(r'Speed (.*?)(?:MOD SAVE|Str)',before)
     if speed:
         for mode, value in re.findall(r'(?:(Burrow|Climb|Fly|Swim) )?(\d+) ft\.',speed[1]):
@@ -97,6 +103,8 @@ def creature_fields(body):
         m = re.search(r'\b'+label+r' (.*?)(?=\b(?:'+'|'.join(labels)+r')\b|$)',before)
         if m: description[slug(label)+'_text'] = m[1].strip()
     if hp: description['hit_points_text'] = hp[1]
+    ac = re.search(r'\bAC (\d+ \+ .*?)(?= HP| Initiative)',before)
+    if ac: description['armor_class_text'] = ac[1]
     return {'splat_creature':description, 'splat_stats':stats, 'splat_health':{'zero_hp':'dnd2024:monster'}}
 
 
@@ -107,6 +115,8 @@ def item_fields(name,body):
     data = {'category':slug(category[1]) if category else 'adventuring_gear'}
     rarity = re.match(r'(?:Wondrous Item|Armor|Weapon|Staff|Rod|Wand|Ring|Potion|Scroll)(?: \([^)]*\))?, (Common|Uncommon|Very Rare|Rare|Legendary|Artifact|Rarity Varies|Varies)\b',header)
     if rarity: data['rarity'] = rarity[1].lower().replace(' ','_')
+    # `Rare (+1), Very Rare (+2), or Legendary (+3)`: one entry, several rarities.
+    if rarity and re.match(r'(?: \([^)]*\))?,? (?:or )?(?:Common|Uncommon|Very Rare|Rare|Legendary|Artifact)\b',header[rarity.end():]): data['rarity'] = 'varies'
     attune = re.search(r'Requires Attunement(?: by ([^)]+))?',header[rarity.end():].split(')',1)[0] if rarity and header[rarity.end():].lstrip().startswith('(Requires Attunement') else '')
     data['equipment'] = {'attunement':'required' if attune else 'none'}
     if attune and attune[1]: data['equipment']['attunement_requirement_text'] = attune[1]
@@ -158,6 +168,22 @@ def source_excerpt(context, span):
     return f'<!-- SRD page 94 -->\n\n{prose}\n\n<!-- SRD page {page} -->\n\n{table}'
 
 
+def tables_in_their_sections(lines):
+    """A wide table can print pages after the section that bears its name. Read it there."""
+    headed={'heading','subheading','entry'}
+    result=list(lines)
+    for caption in [l for l in lines if l['caption'] and l['band']%2==1]:
+        at=next(i for i,l in enumerate(result) if l is caption)
+        start=next((i for i in range(at-1,-1,-1) if result[i]['role'] in headed and result[i]['text']==caption['text'] and result[i]['page']>=caption['page']-3),None)
+        if start is None:continue
+        end=next(i for i in range(start+1,len(result)) if result[i]['role'] in headed)
+        if end>=at:continue
+        block=[l for l in result[at:] if l['page']==caption['page'] and l['band']==caption['band']]
+        rest=[l for l in result[end:] if not any(l is b for b in block)]
+        result=result[:end]+block+rest
+    return result
+
+
 def section_sources(lines):
     """Separate every heading/feature outside the already indexed named blocks.
 
@@ -165,7 +191,7 @@ Each line in these sections is assigned exactly once, including tables. This is
 an extraction inventory, not a claim that every table is semantically decoded.
 """
     normalized=[]
-    for line in lines:
+    for line in tables_in_their_sections(lines):
         if normalized and line['text'] in ['Open Hand','Sorcery'] and normalized[-1]['text'] in ['Monk Subclass: Warrior of the','Sorcerer Subclass: Draconic']:
             normalized[-1]={**normalized[-1], 'text':normalized[-1]['text']+' '+line['text']}
         else: normalized.append(line)
@@ -264,6 +290,17 @@ def equipment_tables():
                    'fields':{'splat_item':row}}
 
 
+def progression_markdown(name,keys,rows,printed):
+    label=lambda key:re.sub(r'spell slots (\d)',r'Level \1 Slots',key.replace('_',' ')).title()
+    header=['Level','Proficiency Bonus','Class Features']+[label(key) for key in keys]
+    table=['| '+' | '.join(header)+' |','|'+' --- |'*len(header)]
+    # The parser drops the unit from the Unarmored Movement column.
+    unit=lambda key,value:value+' ft.' if key=='unarmored_movement' and value!='—' else value
+    for row,cells in zip(rows,printed):
+        table.append('| '+' | '.join([cells[0],cells[1],row['features_text'],*map(unit,keys,cells[2:])])+' |')
+    return f'**{name} Features**\n\n'+'\n'.join(table)
+
+
 def progression_tables():
     """All 240 class progression rows, independent of feature prose conversion."""
     numeric = {
@@ -285,7 +322,7 @@ def progression_tables():
         for start,line in enumerate(lines):
             match=re.fullmatch(r'\s*('+'|'.join(CLASSES)+r') Features\s*',line)
             if not match:continue
-            name=match[1];rows=[]
+            name=match[1];rows=[];printed=[]
             for raw in lines[start+1:]:
                 m=re.match(r'\s*(\d+)\s+\+(\d)\s+(.*)',raw)
                 if m:
@@ -296,7 +333,7 @@ def progression_tables():
                     row={'level':int(level),'proficiency_bonus':int(pb),'features_text':features}
                     for key,value in zip(numeric[name],values):
                         row[key]=0 if value=='—' else int(value) if re.fullmatch(r'[+]?\d+',value) else value.lower()
-                    rows.append(row)
+                    rows.append(row);printed.append([level,'+'+pb,*values])
                     if row['level']==20: break
                 elif rows and raw.strip() and 'System Reference Document' not in raw:
                     # Wrapped feature names contain no further numerical table cells.
@@ -309,36 +346,14 @@ def progression_tables():
             yield {'category':'table','name':name+' Progression','slug':slug(name)+'_progression',
                    'source':f'dnd2024:reference/pages/{page:03}','source_path':str(SOURCE/'source.txt'),
                    'source_sha256':digest((SOURCE/'source.txt').read_bytes()),'pages':[page],
-                   'body':'# '+name+' Progression\n\nFrom SRD 5.2.1 page '+str(page)+'.\n\n'+ '\n'.join(lines[start:])+'\n',
+                   'body':'# '+name+' Progression\n\n'+progression_markdown(name,numeric[name],rows,printed)+'\n',
                    'fields':{'splat_rule':{'mechanic':'dnd2024:class_progression','parameters':{'class':name.lower(),'rows':rows}}}}
-
-
-def deduplicate_source_tables(key, body, fields, boundaries):
-    def mapped(path):
-        value=fields
-        for part in path.split('/'):
-            if not isinstance(value,dict) or part not in value:return False
-            value=value[part]
-        return table_plan(path,value) is not None
-    boundary=boundaries.get(key)
-    if key.endswith('_spell_list') and mapped('splat_rule/parameters/spells'):
-        match=re.search(r'^Cantrips \(Level 0 .* Spells\)\\$',body,re.M)
-        if match:boundary={'table':'splat_rule/parameters/spells','start':match[0]}
-    if not boundary or not mapped(boundary['table']):return body
-    start=body.find(boundary['start'])
-    if start<0:raise ValueError('Source table boundary changed: '+key)
-    end_marker=boundary.get('end','Original layout:')
-    end=body.find(end_marker,start)
-    if end<0 and 'end' in boundary:raise ValueError('Source table end changed: '+key)
-    end=len(body) if end<0 else end
-    return body[:start].rstrip()+'\n\n'+body[end:].lstrip()
 
 
 def generate(lines, require_complete=True):
     researched = read_research()
     readings = yaml.safe_load(Path('scripts/srd_inputs/reading.yaml').read_text())
     registry = []
-    table_boundaries=yaml.safe_load(Path('scripts/srd_inputs/table_excerpts.yaml').read_text())
     missing = []
     contracts=yaml.load(CONTRACTS.read_text(),Loader=yaml.SafeLoader)
     proof={}
@@ -423,9 +438,10 @@ def generate(lines, require_complete=True):
         if required:front['splat_requires_mechanics']=required
         path=folder+'/'+s+'.md'
         body=source['body'].strip().replace('[[../pages/','[[../../srd-5.2.1/pages/')
-        if key == 'dnd2024:equipment/ammunition_varies':
-            body = body.split('| Type | Amount | Storage | Weight | Cost |')[0].rstrip() + '\n\nThe ammunition table below gives weight and cost per listed quantity. Storage is sold separately.\n'
-        body=deduplicate_source_tables(key,body,fields,table_boundaries)
+        # Print sets a class's table beside its text, so it can fall in another section.
+        if source['category']=='class' and f"**{source['name']} Features**" not in body:
+            table=next(t for t in sources if t['name']==source['name']+' Progression')
+            body+='\n\n'+table['body'].split('\n\n',1)[1].strip()
         outputs[path]=render_note(front, body, names, path)
         records.append({'key':key,'id':ident,'path':path,'source':origin,**conversion,'sha256':digest(outputs[path].encode())})
     if readings.keys() - keys:

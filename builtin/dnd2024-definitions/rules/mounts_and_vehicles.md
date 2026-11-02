@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-A mount can help you move more quickly through\
-the wilderness, but its primary purpose is to carry\
-gear that would otherwise slow you down. The\
-Mounts and Other Animals table shows each ani-\
-mal’s carrying capacity. See “Monsters” for the ani-\
-mals’ stat blocks.\
+A mount can help you move more quickly through the wilderness, but its primary purpose is to carry gear that would otherwise slow you down. The Mounts and Other Animals table shows each animal’s carrying capacity. See “Monsters” for the animals’ stat blocks.
 
 ## Rule
 

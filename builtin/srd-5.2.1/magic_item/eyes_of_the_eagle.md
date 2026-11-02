@@ -11,12 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [221
 
 <!-- SRD page 221 -->
 
-Wondrous Item, Uncommon\
-These crystal lenses fit over the eyes. While wear-\
-ing them, you have Advantage on Wisdom (Per-\
-ception) checks that rely on sight. In conditions of\
-clear visibility, you can make out details of even\
-extremely distant creatures and objects as small as\
-2 feet across.\
+Wondrous Item, Uncommon
+
+These crystal lenses fit over the eyes. While wearing them, you have Advantage on Wisdom (Perception) checks that rely on sight. In conditions of clear visibility, you can make out details of even extremely distant creatures and objects as small as 2 feet across.
 
 Original layout: [[../pages/221|page 221]].

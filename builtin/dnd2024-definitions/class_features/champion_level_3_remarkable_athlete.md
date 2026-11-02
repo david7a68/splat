@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 49 -->
 
-Thanks to your athleticism, you have Advantage on\
-Initiative rolls and Strength (Athletics) checks.\
-In addition, immediately after you score a Critical\
-Hit, you can move up to half your Speed without\
-provoking Opportunity Attacks.\
+Thanks to your athleticism, you have Advantage on Initiative rolls and Strength (Athletics) checks.
+
+In addition, immediately after you score a Critical Hit, you can move up to half your Speed without provoking Opportunity Attacks.
 
 ## Rule
 

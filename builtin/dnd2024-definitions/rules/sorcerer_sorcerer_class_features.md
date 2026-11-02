@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 64 -->
 
-As a Sorcerer, you gain the following class features\
-when you reach the specified Sorcerer levels. These\
-features are listed in the Sorcerer Features table.\
+As a Sorcerer, you gain the following class features when you reach the specified Sorcerer levels. These features are listed in the Sorcerer Features table.
 
 ## Rule
 

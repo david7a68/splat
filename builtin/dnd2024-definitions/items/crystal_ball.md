@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 216 -->
 
-Wondrous Item, Very Rare (Requires Attunement)\
-While touching this crystal orb, you can cast Scrying\
-(save DC 17) with it.\
+Wondrous Item, Very Rare (Requires Attunement)
+
+While touching this crystal orb, you can cast Scrying (save DC 17) with it.
 
 Original layout: [[../../srd-5.2.1/pages/216|page 216]].
 

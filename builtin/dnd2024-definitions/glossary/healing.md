@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 182 -->
 
-Healing is how you regain Hit Points. See also “Play-\
-ing the Game” (“Damage and Healing”).\
+Healing is how you regain Hit Points. See also “Playing the Game” (“Damage and Healing”).
 
 Original layout: [[../../srd-5.2.1/pages/182|page 182]].
 

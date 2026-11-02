@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [214
 
 <!-- SRD page 214 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-While wearing these bracers, you have proficiency\
-with the Longbow and Shortbow, and you gain a +2\
-bonus to damage rolls made with such weapons.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+While wearing these bracers, you have proficiency with the Longbow and Shortbow, and you gain a +2 bonus to damage rolls made with such weapons.
 
 Original layout: [[../pages/214|page 214]].

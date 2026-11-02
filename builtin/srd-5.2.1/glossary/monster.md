@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [185],
 
 <!-- SRD page 185 -->
 
-A monster is a creature controlled by the GM, even\
-if the creature is benevolent. See also “Creature” and\
-“NPC.”\
+A monster is a creature controlled by the GM, even if the creature is benevolent. See also “Creature” and “NPC.”
 
 Original layout: [[../pages/185|page 185]].

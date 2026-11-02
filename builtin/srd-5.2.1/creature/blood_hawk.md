@@ -21,22 +21,16 @@ Int 3 −4 −4 Wis 14 +2 +2 Cha 5 −3 −3\
 Skills Perception +6\
 Senses Passive Perception 16\
 Languages None\
-CR 1/8 (XP 25; PB +2)\
+CR 1/8 (XP 25; PB +2)
 
 <!-- SRD page 346 -->
 
-
 ### Traits
 
-Pack Tactics. The hawk has Advantage on an attack roll\
-against a creature if at least one of the hawk’s allies is\
-within 5 feet of the creature and the ally doesn’t have\
-the Incapacitated condition.\
+Pack Tactics. The hawk has Advantage on an attack roll against a creature if at least one of the hawk’s allies is within 5 feet of the creature and the ally doesn’t have the Incapacitated condition.
 
 ### Actions
 
-Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2)\
-Piercing damage, or 6 (1d8 + 2) Piercing damage if the\
-target is Bloodied.\
+Beak. Melee Attack Roll: +4, reach 5 ft. Hit: 4 (1d4 + 2) Piercing damage, or 6 (1d8 + 2) Piercing damage if the target is Bloodied.
 
 Original layout: [[../pages/345|page 345]], [[../pages/346|page 346]].

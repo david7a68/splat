@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 207 -->
 
-A sentient item communicates by sharing its emo-\
-tions, broadcasting its thoughts telepathically, or\
-speaking aloud. You can choose how it communi-\
-cates or roll on the Sentient Item’s Communication\
-table.\
+A sentient item communicates by sharing its emotions, broadcasting its thoughts telepathically, or speaking aloud. You can choose how it communicates or roll on the Sentient Item’s Communication table.
 
 ## Rule
 

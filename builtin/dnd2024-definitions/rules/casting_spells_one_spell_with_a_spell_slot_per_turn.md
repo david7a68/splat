@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 105 -->
 
-On a turn, you can expend only one spell slot to cast\
-a spell. This rule means you can’t, for example, cast\
-a spell with a spell slot using the Magic action and\
-another one using a Bonus Action on the same turn.\
+On a turn, you can expend only one spell slot to cast a spell. This rule means you can’t, for example, cast a spell with a spell slot using the Magic action and another one using a Bonus Action on the same turn.
 
 ## Rule
 

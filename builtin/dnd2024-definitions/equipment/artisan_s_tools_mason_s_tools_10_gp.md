@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 93 -->
 
-Ability: Strength   Weight: 8 lb.\
+Ability: Strength Weight: 8 lb.\
 Utilize: Chisel a symbol or hole in stone (DC 10)\
-Craft: Block and Tackle\
+Craft: Block and Tackle
 
 ## Item
 

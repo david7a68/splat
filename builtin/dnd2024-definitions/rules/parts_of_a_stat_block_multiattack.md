@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 257 -->
 
-Some creatures can make more than one attack\
-when they take the Attack action. Such creatures\
-have the Multiattack entry in the “Actions” section\
-of their stat block. This entry details the attacks a\
-creature can make, as well as any additional abili-\
-ties it can use, as part of the Attack action.\
+Some creatures can make more than one attack when they take the Attack action. Such creatures have the Multiattack entry in the “Actions” section of their stat block. This entry details the attacks a creature can make, as well as any additional abilities it can use, as part of the Attack action.
 
 ## Rule
 

@@ -28,12 +28,7 @@ splat_reading:
 
 <!-- SRD page 32 -->
 
-You gain a Bard subclass of your choice. The College\
-of Lore subclass is detailed after this class’s descrip-\
-tion. A subclass is a specialization that grants you\
-features at certain Bard levels. For the rest of your\
-career, you gain each of your subclass’s features\
-that are of your Bard level or lower.\
+You gain a Bard subclass of your choice. The College of Lore subclass is detailed after this class’s description. A subclass is a specialization that grants you features at certain Bard levels. For the rest of your career, you gain each of your subclass’s features that are of your Bard level or lower.
 
 ## Rule
 

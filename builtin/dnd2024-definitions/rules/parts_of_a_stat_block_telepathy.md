@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 256 -->
 
-Telepathy is a magical ability that allows a creature\
-to communicate mentally with another creature\
-within a specified range. See “Rules Glossary” for\
-more information.\
+Telepathy is a magical ability that allows a creature to communicate mentally with another creature within a specified range. See “Rules Glossary” for more information.
 
 ## Rule
 

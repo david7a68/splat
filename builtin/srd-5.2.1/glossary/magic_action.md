@@ -11,15 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [185],
 
 <!-- SRD page 185 -->
 
-When you take the Magic action, you cast a spell\
-that has a casting time of an action or use a feature\
-or magic item that requires a Magic action to be\
-activated.\
-If you cast a spell that has a casting time of 1 min-\
-ute or longer, you must take the Magic action on\
-each turn of that casting, and you must maintain\
-Concentration while you do so. If your Concentra-\
-tion is broken, the spell fails, but you don’t expend a\
-spell slot. See also “Concentration.”\
+When you take the Magic action, you cast a spell that has a casting time of an action or use a feature or magic item that requires a Magic action to be activated.
+
+If you cast a spell that has a casting time of 1 minute or longer, you must take the Magic action on each turn of that casting, and you must maintain Concentration while you do so. If your Concentration is broken, the spell fails, but you don’t expend a spell slot. See also “Concentration.”
 
 Original layout: [[../pages/185|page 185]].

@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 7 -->
 
-An attack roll determines whether an attack hits\
-a target. An attack roll hits if the roll equals or\
-exceeds the target’s Armor Class. Attack rolls usu-\
-ally occur in battle, described in “Combat” later in\
-“Playing the Game,” but the GM might also ask for\
-an attack roll in other situations, such as an archery\
-competition.\
+An attack roll determines whether an attack hits a target. An attack roll hits if the roll equals or exceeds the target’s Armor Class. Attack rolls usually occur in battle, described in “Combat” later in “Playing the Game,” but the GM might also ask for an attack roll in other situations, such as an archery competition.
 
 ## Rule
 

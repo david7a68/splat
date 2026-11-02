@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 250 -->
 
-Weapon (Any Simple or Martial), Rare\
-This magic weapon deals an extra 2d6 damage to\
-any creature it hits. This extra damage is of the\
-same type as the weapon’s normal damage.\
+Weapon (Any Simple or Martial), Rare
+
+This magic weapon deals an extra 2d6 damage to any creature it hits. This extra damage is of the same type as the weapon’s normal damage.
 
 Original layout: [[../../srd-5.2.1/pages/250|page 250]].
 

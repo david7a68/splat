@@ -18,11 +18,12 @@ splat_sources:
 
 <!-- SRD page 12 -->
 
-Monsters are the main perils characters face, but\
-other dangers await. “Rules Glossary” defines the\
-following hazards:\
-Burning Falling Suffocation\
-Dehydration Malnutrition\
+Monsters are the main perils characters face, but other dangers await. “Rules Glossary” defines the following hazards:
+
+|  |  |  |
+| --- | --- | --- |
+| Burning | Falling | Suffocation |
+| Dehydration | Malnutrition |  |
 
 ## Rule
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 103 -->
 
-To craft a nonmagical item, you need tools, raw ma-\
-terials, and time, each of which is detailed below. If\
-you meet the requirements, you make the item, and\
-you can use it or sell it at its normal price.\
+To craft a nonmagical item, you need tools, raw materials, and time, each of which is detailed below. If you meet the requirements, you make the item, and you can use it or sell it at its normal price.
 
 ## Rule
 

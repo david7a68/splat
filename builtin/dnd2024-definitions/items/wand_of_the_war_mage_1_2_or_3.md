@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 251 -->
 
-Wand, Uncommon (+1), Rare (+2), or Very Rare (+3)\
-(Requires Attunement by a Spellcaster)\
-While holding this wand, you gain a bonus to spell\
-attack rolls determined by the wand’s rarity. In ad-\
-dition, you ignore Half Cover when making a spell\
-attack roll.\
+Wand, Uncommon (+1), Rare (+2), or Very Rare (+3) (Requires Attunement by a Spellcaster)
+
+While holding this wand, you gain a bonus to spell attack rolls determined by the wand’s rarity. In addition, you ignore Half Cover when making a spell attack roll.
 
 Original layout: [[../../srd-5.2.1/pages/251|page 251]].
 
@@ -34,7 +31,7 @@ Original layout: [[../../srd-5.2.1/pages/251|page 251]].
 | Field | Value |
 | --- | --- |
 | ` category ` | ` wand ` |
-| ` rarity ` | ` uncommon ` |
+| ` rarity ` | ` varies ` |
 
 ### Equipment
 

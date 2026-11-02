@@ -18,12 +18,11 @@ splat_sources:
 
 <!-- SRD page 236 -->
 
-Potion, Rare\
-When you drink this potion, you gain the effect of\
-the Detect Thoughts spell (save DC 13) for 10 min-\
-utes (no Concentration required).\
-This potion’s dense, purple liquid has an ovoid\
-cloud of pink floating in it.\
+Potion, Rare
+
+When you drink this potion, you gain the effect of the Detect Thoughts spell (save DC 13) for 10 minutes (no Concentration required).
+
+This potion’s dense, purple liquid has an ovoid cloud of pink floating in it.
 
 Original layout: [[../../srd-5.2.1/pages/236|page 236]].
 

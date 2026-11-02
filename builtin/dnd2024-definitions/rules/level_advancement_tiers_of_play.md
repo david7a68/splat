@@ -18,20 +18,7 @@ splat_sources:
 
 <!-- SRD page 23 -->
 
-With each new level, characters acquire new ca-\
-pabilities that equip them to handle greater chal-\
-lenges. As characters advance in level, the tone of\
-the game also changes, and the stakes of the cam-\
-paign get higher. It’s helpful to think of a character’s\
-(and a campaign’s) arc in terms of four tiers of play,\
-
-<!-- SRD page 24 -->
-
-describing the journey from a level 1 character just\
-beginning an adventuring career to the epic heights\
-of level 20. These tiers don’t have any rules associ-\
-ated with them; they point to the fact that the play\
-experience evolves as characters gain levels.\
+With each new level, characters acquire new capabilities that equip them to handle greater challenges. As characters advance in level, the tone of the game also changes, and the stakes of the campaign get higher. It’s helpful to think of a character’s (and a campaign’s) arc in terms of four tiers of play, describing the journey from a level 1 character just beginning an adventuring career to the epic heights of level 20. These tiers don’t have any rules associated with them; they point to the fact that the play experience evolves as characters gain levels.
 
 ## Rule
 

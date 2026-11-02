@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 61 -->
 
-•  Gain all the traits in the Core Rogue Traits table.\
-•  Gain the Rogue’s level 1 features, which are listed\
-in the Rogue Features table.\
+•  Gain all the traits in the Core Rogue Traits table.
+
+•  Gain the Rogue’s level 1 features, which are listed in the Rogue Features table.
 
 ## Rule
 

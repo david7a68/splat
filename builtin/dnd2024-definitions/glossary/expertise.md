@@ -18,15 +18,11 @@ splat_sources:
 
 <!-- SRD page 182 -->
 
-Expertise is a feature that enhances your use of a\
-skill proficiency. When you make an ability check\
-with a skill proficiency in which you have Expertise,\
-your Proficiency Bonus is doubled for that check un-\
-less the bonus is doubled by another feature.\
-If you gain Expertise, you gain it in one skill in\
-which you have proficiency. You can’t have Exper-\
-tise in the same skill proficiency more than once.\
-See also “Playing the Game” (“Proficiency”).\
+Expertise is a feature that enhances your use of a skill proficiency. When you make an ability check with a skill proficiency in which you have Expertise, your Proficiency Bonus is doubled for that check unless the bonus is doubled by another feature.
+
+If you gain Expertise, you gain it in one skill in which you have proficiency. You can’t have Expertise in the same skill proficiency more than once.
+
+See also “Playing the Game” (“Proficiency”).
 
 Original layout: [[../../srd-5.2.1/pages/182|page 182]].
 

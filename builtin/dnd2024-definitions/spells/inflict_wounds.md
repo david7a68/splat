@@ -22,12 +22,11 @@ Level 1 Necromancy (Cleric)\
 Casting Time: Action\
 Range: Touch\
 Components: V, S\
-Duration: Instantaneous\
-A creature you touch makes a Constitution saving\
-throw, taking 2d10 Necrotic damage on a failed save\
-or half as much damage on a successful one.\
-Using a Higher-Level Spell Slot. The damage in-\
-creases by 1d10 for each spell slot level above 1.\
+Duration: Instantaneous
+
+A creature you touch makes a Constitution saving throw, taking 2d10 Necrotic damage on a failed save or half as much damage on a successful one.
+
+Using a Higher-Level Spell Slot. The damage increases by 1d10 for each spell slot level above 1.
 
 Original layout: [[../../srd-5.2.1/pages/143|page 143]].
 

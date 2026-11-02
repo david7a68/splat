@@ -28,12 +28,11 @@ Int 2 −4 −4 Wis 14 +2 +2 Cha 6 −2 −2\
 Skills Perception +6\
 Senses Passive Perception 16\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Actions
 
-Talons. Melee Attack Roll: +5, reach 5 ft. Hit: 1 Slash-\
-ing damage.\
+Talons. Melee Attack Roll: +5, reach 5 ft. Hit: 1 Slashing damage.
 
 Original layout: [[../../srd-5.2.1/pages/355|page 355]].
 

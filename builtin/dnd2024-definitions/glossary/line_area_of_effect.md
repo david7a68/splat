@@ -18,12 +18,9 @@ splat_sources:
 
 <!-- SRD page 184 -->
 
-A Line is an area of effect that extends from a point\
-of origin in a straight path along its length and cov-\
-ers an area defined by its width. The effect that cre-\
-ates a Line specifies its length and width.\
-A Line’s point of origin isn’t included in the area of\
-effect unless its creator decides otherwise.\
+A Line is an area of effect that extends from a point of origin in a straight path along its length and covers an area defined by its width. The effect that creates a Line specifies its length and width.
+
+A Line’s point of origin isn’t included in the area of effect unless its creator decides otherwise.
 
 Original layout: [[../../srd-5.2.1/pages/184|page 184]].
 

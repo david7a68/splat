@@ -103,11 +103,10 @@ Str 2 −4 −4 Dex 15 +2 +2 Con 8 −1 −1\
 Int 2 −4 −4 Wis 12 +1 +1 Cha 4 −3 −3\
 Senses Blindsight 60 ft.; Passive Perception 11\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Actions
 
-Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing\
-damage.\
+Bite. Melee Attack Roll: +4, reach 5 ft. Hit: 1 Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/345|page 345]].

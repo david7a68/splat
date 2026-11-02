@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 43 -->
 
-You gain the Ability Score Improvement feat (see\
-“Feats”) or another feat of your choice for which you\
-qualify. You gain this feature again at Druid levels 8,\
-12, and 16.\
+You gain the Ability Score Improvement feat (see “Feats”) or another feat of your choice for which you qualify. You gain this feature again at Druid levels 8, 12, and 16.
 
 ## Rule
 

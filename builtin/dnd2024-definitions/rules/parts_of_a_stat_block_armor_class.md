@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 254 -->
 
-A monster’s Armor Class (AC) includes its natural\
-armor, Dexterity, gear, and other defenses. See\
-“Playing the Game” for information on Armor Class.\
+A monster’s Armor Class (AC) includes its natural armor, Dexterity, gear, and other defenses. See “Playing the Game” for information on Armor Class.
 
 ## Rule
 

@@ -18,18 +18,11 @@ splat_sources:
 
 <!-- SRD page 104 -->
 
-When a spellcaster casts a spell using a slot that is\
-of a higher level than the spell, the spell takes on\
-the higher level for that casting. For instance, if a\
-Wizard casts Magic Missile using a level 2 slot, that\
-Magic Missile is level 2. Effectively, the spell expands\
-to fill the slot it is put into.\
+When a spellcaster casts a spell using a slot that is of a higher level than the spell, the spell takes on the higher level for that casting. For instance, if a Wizard casts Magic Missile using a level 2 slot, that Magic Missile is level 2. Effectively, the spell expands to fill the slot it is put into.
 
 <!-- SRD page 105 -->
 
-Some spells, such as Magic Missile and Cure\
-Wounds, have more powerful effects when cast at a\
-higher level, as detailed in a spell’s description.\
+Some spells, such as Magic Missile and Cure Wounds, have more powerful effects when cast at a higher level, as detailed in a spell’s description.
 
 ## Rule
 

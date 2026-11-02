@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 12 -->
 
-Travelers in wagons, carriages, or other land vehi-\
-cles choose a pace as normal. Characters in a water-\
-borne vessel are limited to the speed of the vessel,\
-and they don’t choose a travel pace. Depending on\
-the vessel and the size of the crew, ships might be\
-able to travel for up to 24 hours per day. “Equip-\
-ment” includes vehicles for sale.\
+Travelers in wagons, carriages, or other land vehicles choose a pace as normal. Characters in a waterborne vessel are limited to the speed of the vessel, and they don’t choose a travel pace. Depending on the vessel and the size of the crew, ships might be able to travel for up to 24 hours per day. “Equipment” includes vehicles for sale.
 
 ## Rule
 

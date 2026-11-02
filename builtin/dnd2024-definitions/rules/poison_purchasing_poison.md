@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 197 -->
 
-In some settings, laws prohibit the possession and\
-use of poison, but an illicit dealer or unscrupulous\
-apothecary might keep a hidden stash. Characters\
-with criminal contacts might be able to acquire poi-\
-son easily. Other characters might have to make ex-\
-tensive inquiries and pay bribes before they acquire\
-the poison they seek.\
+In some settings, laws prohibit the possession and use of poison, but an illicit dealer or unscrupulous apothecary might keep a hidden stash. Characters with criminal contacts might be able to acquire poison easily. Other characters might have to make extensive inquiries and pay bribes before they acquire the poison they seek.
 
 ## Rule
 

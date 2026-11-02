@@ -27,19 +27,15 @@ Str 8 −1 −1 Dex 14 +2 +2 Con 11 +0 +0\
 Int 4 −3 −3 Wis 12 +1 +1 Cha 6 −2 −2\
 Senses Passive Perception 11\
 Languages None\
-CR 0 (XP 10; PB +2)\
+CR 0 (XP 10; PB +2)
 
 ### Traits
 
-Pack Tactics. The baboon has Advantage on an attack\
-roll against a creature if at least one of the baboon’s\
-allies is within 5 feet of the creature and the ally doesn’t\
-have the Incapacitated condition.\
+Pack Tactics. The baboon has Advantage on an attack roll against a creature if at least one of the baboon’s allies is within 5 feet of the creature and the ally doesn’t have the Incapacitated condition.
 
 ### Actions
 
-Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 − 1)\
-Piercing damage.\
+Bite. Melee Attack Roll: +1, reach 5 ft. Hit: 1 (1d4 − 1) Piercing damage.
 
 Original layout: [[../../srd-5.2.1/pages/345|page 345]].
 

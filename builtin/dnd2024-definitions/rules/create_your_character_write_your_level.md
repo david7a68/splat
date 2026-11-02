@@ -18,17 +18,11 @@ splat_sources:
 
 <!-- SRD page 19 -->
 
-Write your character’s level on your character\
-sheet. Typically, a character starts at level 1 and\
-advances in level by adventuring and gaining Expe-\
-rience Points (XP).\
-Write Your XP. Also record your Experience\
-Points. A level 1 character has 0 XP.\
-Starting at a Higher Level. Your GM might start\
-you at a higher level. If you start at level 3 or higher,\
-write your chosen subclass on your character sheet.\
-See the “Starting at Higher Levels” section later in\
-“Character Creation” for more information.\
+Write your character’s level on your character sheet. Typically, a character starts at level 1 and advances in level by adventuring and gaining Experience Points (XP).
+
+Write Your XP. Also record your Experience Points. A level 1 character has 0 XP.
+
+Starting at a Higher Level. Your GM might start you at a higher level. If you start at level 3 or higher, write your chosen subclass on your character sheet. See the “Starting at Higher Levels” section later in “Character Creation” for more information.
 
 ## Rule
 

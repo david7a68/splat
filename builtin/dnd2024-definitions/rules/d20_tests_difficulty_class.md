@@ -18,18 +18,16 @@ splat_sources:
 
 <!-- SRD page 6 -->
 
-The Difficulty Class of an ability check represents\
-the task’s difficulty. The more difficult the task,\
-the higher its DC. The rules provide DCs for certain\
-checks, but the GM ultimately sets them. The Typi-\
-cal Difficulty Classes table presents a range of pos-\
-sible DCs for ability checks.\
-Typical Difficulty Classes\
-Task Difficulty DC Task Difficulty DC\
-Very easy 5 Very hard 25\
-Easy 10 Nearly impossible 30\
-Medium 15\
-Hard 20\
+The Difficulty Class of an ability check represents the task’s difficulty. The more difficult the task, the higher its DC. The rules provide DCs for certain checks, but the GM ultimately sets them. The Typical Difficulty Classes table presents a range of possible DCs for ability checks.
+
+**Typical Difficulty Classes**
+
+| Task Difficulty | DC | Task Difficulty | DC |
+| --- | --- | --- | --- |
+| Very easy | 5 | Very hard | 25 |
+| Easy | 10 | Nearly impossible | 30 |
+| Medium | 15 |  |  |
+| Hard | 20 |  |  |
 
 ## Rule
 

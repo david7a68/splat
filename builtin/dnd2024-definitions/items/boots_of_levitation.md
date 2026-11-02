@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 213 -->
 
-Wondrous Item, Rare (Requires Attunement)\
-While you wear these boots, you can cast Levitate\
-on yourself.\
+Wondrous Item, Rare (Requires Attunement)
+
+While you wear these boots, you can cast Levitate on yourself.
 
 Original layout: [[../../srd-5.2.1/pages/213|page 213]].
 

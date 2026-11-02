@@ -18,16 +18,9 @@ splat_sources:
 
 <!-- SRD page 42 -->
 
-You know Druidic, the secret language of Druids.\
-While learning this ancient tongue, you also un-\
-locked the magic of communicating with animals;\
-you always have the Speak with Animals spell\
-prepared.\
-You can use Druidic to leave hidden messages. You\
-and others who know Druidic automatically spot\
-such a message. Others spot the message’s presence\
-with a successful DC 15 Intelligence (Investigation)\
-check but can’t decipher it without magic.\
+You know Druidic, the secret language of Druids. While learning this ancient tongue, you also unlocked the magic of communicating with animals; you always have the Speak with Animals spell prepared.
+
+You can use Druidic to leave hidden messages. You and others who know Druidic automatically spot such a message. Others spot the message’s presence with a successful DC 15 Intelligence (Investigation) check but can’t decipher it without magic.
 
 ## Rule
 

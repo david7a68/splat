@@ -18,16 +18,9 @@ splat_sources:
 
 <!-- SRD page 205 -->
 
-A magic weapon is typically a magical version of a\
-weapon from “Equipment.” Some magic weapons\
-specify the type of weapon they are in their de-\
-scriptions, such as a Longsword or Longbow. If no\
-weapon type is specified, you may choose the type\
-or determine it randomly.\
-Ammunition. If a magic weapon has the Ammu-\
-nition property, ammunition fired from it is consid-\
-ered magical for the purpose of any rule that cares\
-whether a weapon is magical or not.\
+A magic weapon is typically a magical version of a weapon from “Equipment.” Some magic weapons specify the type of weapon they are in their descriptions, such as a Longsword or Longbow. If no weapon type is specified, you may choose the type or determine it randomly.
+
+Ammunition. If a magic weapon has the Ammunition property, ammunition fired from it is considered magical for the purpose of any rule that cares whether a weapon is magical or not.
 
 ## Rule
 

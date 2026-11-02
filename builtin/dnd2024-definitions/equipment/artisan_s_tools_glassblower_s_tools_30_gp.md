@@ -19,9 +19,8 @@ splat_sources:
 <!-- SRD page 93 -->
 
 Ability: Intelligence Weight: 5 lb.\
-Utilize: Discern what a glass object held in the past 24\
-hours (DC 15)\
-Craft: Glass Bottle, Magnifying Glass, Spyglass, Vial\
+Utilize: Discern what a glass object held in the past 24 hours (DC 15)\
+Craft: Glass Bottle, Magnifying Glass, Spyglass, Vial
 
 ## Item
 

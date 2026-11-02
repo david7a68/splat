@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 30 -->
 
-The extra damage of your Brutal Strike increases to\
-2d10. In addition, you can use two different Brutal\
-Strike effects whenever you use your Brutal Strike\
-feature.\
+The extra damage of your Brutal Strike increases to 2d10. In addition, you can use two different Brutal Strike effects whenever you use your Brutal Strike feature.
 
 ## Rule
 

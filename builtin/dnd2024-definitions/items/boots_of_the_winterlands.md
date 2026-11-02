@@ -18,15 +18,13 @@ splat_sources:
 
 <!-- SRD page 214 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-These furred boots are snug and feel warm. While\
-wearing them, you gain the following benefits.\
-Cold Resistance. You have Resistance to Cold\
-damage and can tolerate temperatures of 0 degrees\
-Fahrenheit or lower without any additional\
-protection.\
-Winter Strider. You ignore Difficult Terrain cre-\
-ated by ice or snow.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+These furred boots are snug and feel warm. While wearing them, you gain the following benefits.
+
+Cold Resistance. You have Resistance to Cold damage and can tolerate temperatures of 0 degrees Fahrenheit or lower without any additional protection.
+
+Winter Strider. You ignore Difficult Terrain created by ice or snow.
 
 Original layout: [[../../srd-5.2.1/pages/214|page 214]].
 

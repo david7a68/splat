@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 202 -->
 
-Use the following guidelines to create a combat en-\
-counter of a desired level of difficulty.\
+Use the following guidelines to create a combat encounter of a desired level of difficulty.
 
 ## Rule
 

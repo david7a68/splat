@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 193 -->
 
-Cursed magic items are created deliberately or\
-originate as the result of supernatural events. Such\
-items are detailed in “Magic Items.”\
+Cursed magic items are created deliberately or originate as the result of supernatural events. Such items are detailed in “Magic Items.”
 
 ## Rule
 

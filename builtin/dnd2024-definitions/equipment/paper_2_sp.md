@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-One sheet of Paper can hold about 250 handwritten\
-words.\
+One sheet of Paper can hold about 250 handwritten words.
 
 ## Item
 

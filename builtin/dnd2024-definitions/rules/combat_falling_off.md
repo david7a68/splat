@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 16 -->
 
-If an effect is about to move your mount against its\
-will while you’re on it, you must succeed on a DC 10\
-Dexterity saving throw or fall off, landing with the\
-Prone condition (see “Rules Glossary”) in an unoc-\
-cupied space within 5 feet of the mount.\
-While mounted, you must make the same save if\
-you’re knocked Prone or the mount is.\
+If an effect is about to move your mount against its will while you’re on it, you must succeed on a DC 10 Dexterity saving throw or fall off, landing with the Prone condition (see “Rules Glossary”) in an unoccupied space within 5 feet of the mount.
+
+While mounted, you must make the same save if you’re knocked Prone or the mount is.
 
 ## Rule
 

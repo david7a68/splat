@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 59 -->
 
-You gain a Ranger subclass of your choice. The\
-Hunter subclass is detailed after this class’s de-\
-scription. A subclass is a specialization that grants\
-you features at certain Ranger levels. For the rest\
-of your career, you gain each of your subclass’s fea-\
-tures that are of your Ranger level or lower.\
+You gain a Ranger subclass of your choice. The Hunter subclass is detailed after this class’s description. A subclass is a specialization that grants you features at certain Ranger levels. For the rest of your career, you gain each of your subclass’s features that are of your Ranger level or lower.
 
 ## Rule
 

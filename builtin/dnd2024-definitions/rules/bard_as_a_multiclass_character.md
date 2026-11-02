@@ -18,15 +18,9 @@ splat_sources:
 
 <!-- SRD page 31 -->
 
-•  Gain the following traits from the Core Bard\
-Traits table: Hit Point Die, proficiency in one skill\
-of your choice, proficiency with one Musical In-\
-strument of your choice, and training with Light\
-armor.\
-•  Gain the Bard’s level 1 features, which are listed\
-in the Bard Features table. See the multiclassing\
-rules in “Character Creation” to determine your\
-available spell slots.\
+•  Gain the following traits from the Core Bard Traits table: Hit Point Die, proficiency in one skill of your choice, proficiency with one Musical Instrument of your choice, and training with Light armor.
+
+•  Gain the Bard’s level 1 features, which are listed in the Bard Features table. See the multiclassing rules in “Character Creation” to determine your available spell slots.
 
 ## Rule
 

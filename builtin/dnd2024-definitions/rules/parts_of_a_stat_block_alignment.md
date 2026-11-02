@@ -18,16 +18,9 @@ splat_sources:
 
 <!-- SRD page 254 -->
 
-The alignment specified in a monster’s stat block is\
-a default suggestion of how to roleplay the monster,\
-inspired by its traditional role in the game or real-\
-world folklore. Change a monster’s alignment to\
-suit your storytelling needs. The Neutral alignment,\
-in particular, is an invitation for you to consider\
-whether an individual leans toward one of the other\
-alignments.\
-“Character Creation” describes the nine align-\
-ments and unaligned creatures.\
+The alignment specified in a monster’s stat block is a default suggestion of how to roleplay the monster, inspired by its traditional role in the game or real-world folklore. Change a monster’s alignment to suit your storytelling needs. The Neutral alignment, in particular, is an invitation for you to consider whether an individual leans toward one of the other alignments.
+
+“Character Creation” describes the nine alignments and unaligned creatures.
 
 ## Rule
 

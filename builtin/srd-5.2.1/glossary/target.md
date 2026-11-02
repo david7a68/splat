@@ -11,9 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [190],
 
 <!-- SRD page 190 -->
 
-A target is the creature or object targeted by an\
-attack roll, forced to make a saving throw by an\
-effect, or selected to receive the effects of a spell or\
-another phenomenon.\
+A target is the creature or object targeted by an attack roll, forced to make a saving throw by an effect, or selected to receive the effects of a spell or another phenomenon.
 
 Original layout: [[../pages/190|page 190]].

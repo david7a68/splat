@@ -29,21 +29,17 @@ Skills Stealth +6\
 Gear Leather Armor, Scimitar, Shield, Shortbow\
 Senses Darkvision 60 ft.; Passive Perception 9\
 Languages Common, Goblin\
-CR 1/4 (XP 50; PB +2)\
+CR 1/4 (XP 50; PB +2)
 
 ### Actions
 
-Scimitar. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6\
-+ 2) Slashing damage, plus 2 (1d4) Slashing damage if\
-the attack roll had Advantage.\
-Shortbow. Ranged Attack Roll: +4, range 80/320 ft.\
-Hit: 5 (1d6 + 2) Piercing damage, plus 2 (1d4) Piercing\
-damage if the attack roll had Advantage.\
+Scimitar. Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Slashing damage, plus 2 (1d4) Slashing damage if the attack roll had Advantage.
+
+Shortbow. Ranged Attack Roll: +4, range 80/320 ft. Hit: 5 (1d6 + 2) Piercing damage, plus 2 (1d4) Piercing damage if the attack roll had Advantage.
 
 ### Bonus Actions
 
-Nimble Escape. The goblin takes the Disengage or\
-Hide action.\
+Nimble Escape. The goblin takes the Disengage or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/290|page 290]].
 

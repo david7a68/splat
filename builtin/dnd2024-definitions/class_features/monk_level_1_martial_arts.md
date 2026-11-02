@@ -18,51 +18,19 @@ splat_sources:
 
 <!-- SRD page 50 -->
 
-Your practice of martial arts gives you mastery of\
-combat styles that use your Unarmed Strike and\
-Monk weapons, which are the following:\
-•  Simple Melee weapons\
-•  Martial Melee weapons that have the Light\
-property\
-You gain the following benefits while you are un-\
-armed or wielding only Monk weapons and you ar-\
-en’t wearing armor or wielding a Shield.\
-Bonus Unarmed Strike. You can make an Un-\
-armed Strike as a Bonus Action.\
-Martial Arts Die. You can roll 1d6 in place of the\
-normal damage of your Unarmed Strike or Monk\
-weapons. This die changes as you gain Monk levels,\
-as shown in the Martial Arts column of the Monk\
-Features table.\
-Dexterous Attacks. You can use your Dexterity\
-modifier instead of your Strength modifier for the\
-attack and damage rolls of your Unarmed Strikes\
-and Monk weapons. In addition, when you use the\
-Grapple or Shove option of your Unarmed Strike,\
-you can use your Dexterity modifier instead of your\
-Strength modifier to determine the save DC.\
-Martial Focus Unarmored\
-Arts Points Movement\
-1d6 — —\
-1d6 2 +10 ft.\
-1d6 3 +10 ft.\
-1d6 4 +10 ft.\
-1d8 5 +10 ft.\
-1d8 6 +15 ft.\
-1d8 7 +15 ft.\
-1d8 8 +15 ft.\
-1d8 9 +15 ft.\
-1d8 10 +20 ft.\
-1d10 11 +20 ft.\
-1d10 12 +20 ft.\
-1d10 13 +20 ft.\
-1d10 14 +25 ft.\
-1d10 15 +25 ft.\
-1d10 16 +25 ft.\
-1d12 17 +25 ft.\
-1d12 18 +30 ft.\
-1d12 19 +30 ft.\
-1d12 20 +30 ft.\
+Your practice of martial arts gives you mastery of combat styles that use your Unarmed Strike and Monk weapons, which are the following:
+
+•  Simple Melee weapons
+
+•  Martial Melee weapons that have the Light property
+
+You gain the following benefits while you are unarmed or wielding only Monk weapons and you aren’t wearing armor or wielding a Shield.
+
+Bonus Unarmed Strike. You can make an Unarmed Strike as a Bonus Action.
+
+Martial Arts Die. You can roll 1d6 in place of the normal damage of your Unarmed Strike or Monk weapons. This die changes as you gain Monk levels, as shown in the Martial Arts column of the Monk Features table.
+
+Dexterous Attacks. You can use your Dexterity modifier instead of your Strength modifier for the attack and damage rolls of your Unarmed Strikes and Monk weapons. In addition, when you use the Grapple or Shove option of your Unarmed Strike, you can use your Dexterity modifier instead of your Strength modifier to determine the save DC.
 
 ## Rule
 

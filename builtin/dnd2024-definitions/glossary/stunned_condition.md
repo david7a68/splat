@@ -18,14 +18,13 @@ splat_sources:
 
 <!-- SRD page 189 -->
 
-While you have the Stunned condition, you experi-\
-ence the following effects.\
-Incapacitated. You have the Incapacitated\
-condition.\
-Saving Throws Affected. You automatically fail\
-Strength and Dexterity saving throws.\
-Attacks Affected. Attack rolls against you have\
-Advantage.\
+While you have the Stunned condition, you experience the following effects.
+
+Incapacitated. You have the Incapacitated condition.
+
+Saving Throws Affected. You automatically fail Strength and Dexterity saving throws.
+
+Attacks Affected. Attack rolls against you have Advantage.
 
 Original layout: [[../../srd-5.2.1/pages/189|page 189]].
 

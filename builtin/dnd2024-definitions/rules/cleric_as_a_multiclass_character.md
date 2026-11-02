@@ -18,13 +18,9 @@ splat_sources:
 
 <!-- SRD page 36 -->
 
-•  Gain the following traits from the Core Cleric\
-Traits table: Hit Point Die and training with Light\
-and Medium armor and Shields.\
-•  Gain the Cleric’s level 1 features, which are listed\
-in the Cleric Features table. See the multiclassing\
-rules in “Character Creation” to determine your\
-available spell slots.\
+•  Gain the following traits from the Core Cleric Traits table: Hit Point Die and training with Light and Medium armor and Shields.
+
+•  Gain the Cleric’s level 1 features, which are listed in the Cleric Features table. See the multiclassing rules in “Character Creation” to determine your available spell slots.
 
 ## Rule
 

@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 207 -->
 
-A sentient magic item has an alignment. Its creator\
-or nature might suggest an alignment. Otherwise,\
-pick an alignment or roll on the Sentient Item’s\
-Alignment table.\
+A sentient magic item has an alignment. Its creator or nature might suggest an alignment. Otherwise, pick an alignment or roll on the Sentient Item’s Alignment table.
 
 ## Rule
 

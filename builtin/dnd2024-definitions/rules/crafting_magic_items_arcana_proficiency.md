@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 206 -->
 
-To craft a magic item, you and any assistants must\
-have proficiency in the Arcana skill.\
+To craft a magic item, you and any assistants must have proficiency in the Arcana skill.
 
 ## Rule
 

@@ -18,16 +18,9 @@ splat_sources:
 
 <!-- SRD page 79 -->
 
-You have achieved such mastery over certain spells\
-that you can cast them at will. Choose a level 1 and\
-a level 2 spell in your spellbook that have a casting\
-time of an action. You always have those spells pre-\
-pared, and you can cast them at their lowest level\
-without expending a spell slot. To cast either spell at\
-a higher level, you must expend a spell slot.\
-Whenever you finish a Long Rest, you can study\
-your spellbook and replace one of those spells with\
-an eligible spell of the same level from the book.\
+You have achieved such mastery over certain spells that you can cast them at will. Choose a level 1 and a level 2 spell in your spellbook that have a casting time of an action. You always have those spells prepared, and you can cast them at their lowest level without expending a spell slot. To cast either spell at a higher level, you must expend a spell slot.
+
+Whenever you finish a Long Rest, you can study your spellbook and replace one of those spells with an eligible spell of the same level from the book.
 
 ## Rule
 

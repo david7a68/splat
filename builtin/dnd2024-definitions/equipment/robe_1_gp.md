@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 99 -->
 
-A Robe has vocational or ceremonial significance.\
-Some events and locations admit only people wear-\
-ing a Robe bearing certain colors or symbols.\
+A Robe has vocational or ceremonial significance. Some events and locations admit only people wearing a Robe bearing certain colors or symbols.
 
 ## Item
 

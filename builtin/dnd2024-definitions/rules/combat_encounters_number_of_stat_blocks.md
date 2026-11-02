@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 203 -->
 
-The best combat encounters often pair one kind of\
-creature with another, such as fire giants paired\
-with hell hounds. Be mindful of the number of stat\
-blocks you need to run the encounter. Referencing\
-more than two or three stat blocks for a single en-\
-counter can be daunting, particularly if the crea-\
-tures are complex.\
+The best combat encounters often pair one kind of creature with another, such as fire giants paired with hell hounds. Be mindful of the number of stat blocks you need to run the encounter. Referencing more than two or three stat blocks for a single encounter can be daunting, particularly if the creatures are complex.
 
 ## Rule
 

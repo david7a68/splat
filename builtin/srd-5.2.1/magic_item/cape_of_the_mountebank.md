@@ -11,14 +11,10 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [215
 
 <!-- SRD page 215 -->
 
-Wondrous Item, Rare\
-This cape smells faintly of brimstone. While wear-\
-ing it, you can use it to cast Dimension Door as a\
-Magic action. This property can’t be used again\
-until the next dawn.\
-When you teleport with that spell, you leave be-\
-hind a cloud of smoke. The space you left is Lightly\
-Obscured by that smoke until the end of your\
-next turn.\
+Wondrous Item, Rare
+
+This cape smells faintly of brimstone. While wearing it, you can use it to cast Dimension Door as a Magic action. This property can’t be used again until the next dawn.
+
+When you teleport with that spell, you leave behind a cloud of smoke. The space you left is Lightly Obscured by that smoke until the end of your next turn.
 
 Original layout: [[../pages/215|page 215]].

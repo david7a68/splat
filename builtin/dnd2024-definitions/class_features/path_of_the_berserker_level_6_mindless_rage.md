@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 30 -->
 
-You have Immunity to the Charmed and Fright-\
-ened conditions while your Rage is active. If you’re\
-Charmed or Frightened when you enter your Rage,\
-the condition ends on you.\
+You have Immunity to the Charmed and Frightened conditions while your Rage is active. If you’re Charmed or Frightened when you enter your Rage, the condition ends on you.
 
 ## Rule
 

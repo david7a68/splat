@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 191 -->
 
-A weapon attack is an attack roll made with a\
-weapon. See also “Weapon.”\
+A weapon attack is an attack roll made with a weapon. See also “Weapon.”
 
 Original layout: [[../../srd-5.2.1/pages/191|page 191]].
 

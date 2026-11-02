@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 93 -->
 
-Artisan’s Tools are each focused on crafting items\
-and pursuing a trade. Each of these tools requires a\
-separate proficiency.\
+Artisan’s Tools are each focused on crafting items and pursuing a trade. Each of these tools requires a separate proficiency.
 
 ## Rule
 

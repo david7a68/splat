@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 41 -->
 
-•  Gain all the traits in the Core Druid Traits table.\
-•  Gain the Druid’s level 1 features, which are listed\
-in the Druid Features table.\
+•  Gain all the traits in the Core Druid Traits table.
+
+•  Gain the Druid’s level 1 features, which are listed in the Druid Features table.
 
 ## Rule
 

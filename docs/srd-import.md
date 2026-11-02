@@ -21,10 +21,21 @@ source; they do not yet have separate notes for every named feature.
 
 The PDF is unchanged. `source.txt` is the complete Poppler layout extraction.
 Each page note preserves that page's text and spacing in a fenced block, with
-trailing whitespace removed. Named excerpts use column reading order and hard
-line breaks. They retain printed hyphenation. Tables in those excerpts can lose
-alignment; the page notes and PDF provide the layout reference. The importer
-does not interpret prose as mechanics or execute embedded text.
+trailing whitespace removed. `transcription_patches.json` lists the only exceptions:
+printing errors corrected in the page notes and named notes, with the reason for
+each. Verification applies this list when it compares page notes with `source.txt`. Named excerpts are for reading. They use column
+reading order, one line per printed paragraph, and Markdown tables built from
+the PDF's table cells. A table that spans both columns is read where it stands.
+A line-end hyphen stays only for a real compound such as `5-foot-wide`. Stat
+block and spell header lines keep hard line breaks. The page notes and PDF
+provide the layout reference. The importer does not interpret prose as mechanics
+or execute embedded text.
+
+To change the importer, run `devenv shell -- bash scripts/regenerate_srd.sh`. It
+regenerates the SRD and the definitions in place, then moves the `source_sha256`
+pins in the reviewed specs from the committed notes to the new ones. It reports
+each note whose words changed, and those need a review against the PDF. Commit
+the specs and the notes together.
 
 ## Source-reference schema extension
 

@@ -18,9 +18,9 @@ splat_sources:
 
 <!-- SRD page 74 -->
 
-Prerequisite: Level 7+ Warlock\
-You can cast Speak with Dead without expending a\
-spell slot.\
+Prerequisite: Level 7+ Warlock
+
+You can cast Speak with Dead without expending a spell slot.
 
 ## Rule
 

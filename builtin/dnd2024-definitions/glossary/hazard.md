@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 182 -->
 
-A hazard is an environmental danger. See also\
-“Burning,” “Dehydration,” “Falling,” “Malnutrition,”\
-and “Suffocation.”\
+A hazard is an environmental danger. See also “Burning,” “Dehydration,” “Falling,” “Malnutrition,” and “Suffocation.”
 
 Original layout: [[../../srd-5.2.1/pages/182|page 182]].
 

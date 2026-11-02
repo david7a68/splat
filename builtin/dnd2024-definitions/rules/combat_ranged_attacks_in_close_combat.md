@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 15 -->
 
-Aiming a ranged attack is more difficult when a foe\
-is next to you. When you make a ranged attack roll\
-with a weapon, a spell, or some other means, you\
-have Disadvantage on the roll if you are within 5\
-feet of an enemy who can see you and doesn’t have\
-the Incapacitated condition (see “Rules Glossary”).\
+Aiming a ranged attack is more difficult when a foe is next to you. When you make a ranged attack roll with a weapon, a spell, or some other means, you have Disadvantage on the roll if you are within 5 feet of an enemy who can see you and doesn’t have the Incapacitated condition (see “Rules Glossary”).
 
 ## Rule
 

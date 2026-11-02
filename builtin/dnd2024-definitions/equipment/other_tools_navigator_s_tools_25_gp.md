@@ -18,9 +18,8 @@ splat_sources:
 
 <!-- SRD page 94 -->
 
-Ability: Wisdom   Weight: 2 lb.\
-Utilize: Plot a course (DC 10), or determine position by\
-stargazing (DC 15)\
+Ability: Wisdom Weight: 2 lb.\
+Utilize: Plot a course (DC 10), or determine position by stargazing (DC 15)
 
 ## Item
 

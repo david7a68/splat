@@ -18,45 +18,23 @@ splat_sources:
 
 <!-- SRD page 54 -->
 
-You can channel divine energy directly from the\
-Outer Planes, using it to fuel magical effects. You\
-start with one such effect: Divine Sense, which is\
-described below. Other Paladin features give addi-\
-tional Channel Divinity effect options. Each time\
-you use this class’s Channel Divinity, you choose\
-which effect from this class to create.\
-You can use this class’s Channel Divinity twice.\
-You regain one of its expended uses when you finish\
-a Short Rest, and you regain all expended uses when\
-you finish a Long Rest. You gain an additional use\
-when you reach Paladin level 11.\
-BrEakinG your oatH\
-A Paladin tries to hold to the highest standards of\
-conduct, but even the most dedicated are fallible.\
-Sometimes a Paladin transgresses their oath.\
-A Paladin who has broken a vow typically seeks\
-absolution, spending an all-night vigil as a sign of pen-\
-itence or undertaking a fast. After a rite of forgive-\
-ness, the Paladin starts fresh.\
-If your Paladin unrepentantly violates their oath,\
-talk to your GM. Your Paladin should probably take a\
-more appropriate subclass or even abandon the class\
-and adopt another one.\
+You can channel divine energy directly from the Outer Planes, using it to fuel magical effects. You start with one such effect: Divine Sense, which is described below. Other Paladin features give additional Channel Divinity effect options. Each time you use this class’s Channel Divinity, you choose which effect from this class to create.
+
+You can use this class’s Channel Divinity twice. You regain one of its expended uses when you finish a Short Rest, and you regain all expended uses when you finish a Long Rest. You gain an additional use when you reach Paladin level 11.
+
+### Breaking Your Oath
+
+A Paladin tries to hold to the highest standards of conduct, but even the most dedicated are fallible. Sometimes a Paladin transgresses their oath.
+
+A Paladin who has broken a vow typically seeks absolution, spending an all-night vigil as a sign of penitence or undertaking a fast. After a rite of forgiveness, the Paladin starts fresh.
+
+If your Paladin unrepentantly violates their oath, talk to your GM. Your Paladin should probably take a more appropriate subclass or even abandon the class and adopt another one.
 
 <!-- SRD page 55 -->
 
-If a Channel Divinity effect requires a saving\
-throw, the DC equals the spell save DC from this\
-class’s Spellcasting feature.\
-Divine Sense. As a Bonus Action, you can open\
-your awareness to detect Celestials, Fiends, and\
-Undead. For the next 10 minutes or until you have\
-the Incapacitated condition, you know the location\
-of any creature of those types within 60 feet of\
-yourself, and you know its creature type. Within\
-the same radius, you also detect the presence of any\
-place or object that has been consecrated or dese-\
-crated, as with the Hallow spell.\
+If a Channel Divinity effect requires a saving throw, the DC equals the spell save DC from this class’s Spellcasting feature.
+
+Divine Sense. As a Bonus Action, you can open your awareness to detect Celestials, Fiends, and Undead. For the next 10 minutes or until you have the Incapacitated condition, you know the location of any creature of those types within 60 feet of yourself, and you know its creature type. Within the same radius, you also detect the presence of any place or object that has been consecrated or desecrated, as with the Hallow spell.
 
 ## Rule
 

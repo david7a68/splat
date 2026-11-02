@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 72 -->
 
-When you use your Magical Cunning feature, you\
-regain all your expended Pact Magic spell slots.\
+When you use your Magical Cunning feature, you regain all your expended Pact Magic spell slots.
 
 ## Rule
 

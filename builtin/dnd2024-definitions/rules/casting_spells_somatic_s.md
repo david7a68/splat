@@ -18,10 +18,7 @@ splat_sources:
 
 <!-- SRD page 105 -->
 
-A Somatic component is a forceful gesticulation\
-or an intricate set of gestures. A spellcaster must\
-use at least one of their hands to perform these\
-movements.\
+A Somatic component is a forceful gesticulation or an intricate set of gestures. A spellcaster must use at least one of their hands to perform these movements.
 
 ## Rule
 

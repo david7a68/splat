@@ -18,11 +18,9 @@ splat_sources:
 
 <!-- SRD page 198 -->
 
-Injury Poison\
-A creature subjected to Wyvern Poison makes a DC\
-14 Constitution saving throw, taking 24 (7d6) Poi-\
-son damage on a failed save or half as much damage\
-on a successful one.\
+Injury Poison
+
+A creature subjected to Wyvern Poison makes a DC 14 Constitution saving throw, taking 24 (7d6) Poison damage on a failed save or half as much damage on a successful one.
 
 ## Rule
 

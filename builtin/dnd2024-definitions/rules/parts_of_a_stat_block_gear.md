@@ -18,22 +18,11 @@ splat_sources:
 
 <!-- SRD page 255 -->
 
-Monsters have proficiency with their equipment. If\
-a monster has equipment that can be given away or\
-retrieved, the items are listed in the Gear entry. The\
-monster’s stat block might include special flour-\
-ishes that happen when the monster uses an item,\
-and the stat block might ignore the rules in “Equip-\
-ment” for that item. When used by someone else, a\
-retrievable item uses its “Equipment” rules, ignor-\
-ing any special flourishes in the stat block.\
-The Gear entry doesn’t necessarily list all of a\
-monster’s equipment. For example, a monster that\
-wears clothes is assumed to be dressed appropri-\
-ately, and those clothes aren’t in this entry.\
-Equipment mentioned outside the Gear entry is\
-considered to be supernatural or highly specialized,\
-and it is unusable when the monster is defeated.\
+Monsters have proficiency with their equipment. If a monster has equipment that can be given away or retrieved, the items are listed in the Gear entry. The monster’s stat block might include special flourishes that happen when the monster uses an item, and the stat block might ignore the rules in “Equipment” for that item. When used by someone else, a retrievable item uses its “Equipment” rules, ignoring any special flourishes in the stat block.
+
+The Gear entry doesn’t necessarily list all of a monster’s equipment. For example, a monster that wears clothes is assumed to be dressed appropriately, and those clothes aren’t in this entry.
+
+Equipment mentioned outside the Gear entry is considered to be supernatural or highly specialized, and it is unusable when the monster is defeated.
 
 ## Rule
 

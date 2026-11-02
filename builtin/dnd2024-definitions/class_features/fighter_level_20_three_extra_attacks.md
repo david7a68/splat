@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 48 -->
 
-You can attack four times instead of once whenever\
-you take the Attack action on your turn.\
+You can attack four times instead of once whenever you take the Attack action on your turn.
 
 ## Rule
 

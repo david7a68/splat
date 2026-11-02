@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 97 -->
 
-An Explorer’s Pack contains the following items:\
-Backpack, Bedroll, 2 flasks of Oil, 10 days of Ra-\
-tions, Rope, Tinderbox, 10 Torches, and Waterskin.\
+An Explorer’s Pack contains the following items: Backpack, Bedroll, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin.
 
 ## Item
 

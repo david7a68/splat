@@ -20,42 +20,30 @@ splat_sources:
 
 Large Celestial, Fey, or Fiend (Your Choice), Neutral\
 AC 10 + 1 per spell level\
-HP 5 + 10 per spell level (the steed has a number of Hit\
-Dice [d10s] equal to the spell’s level)\
+HP 5 + 10 per spell level (the steed has a number of Hit Dice [d10s] equal to the spell’s level)\
 Speed 60 ft., Fly 60 ft. (requires level 4+ spell)\
 MOD SAVE MOD SAVE MOD SAVE\
-Str 18 +4 +4 Dex 12 +1 +1 Con14 +2 +2\
+Str 18 +4 +4 Dex 12 +1 +1 Con 14 +2 +2\
 Int 6 −2 −2 Wis 12 +1 +1 Cha 8 −1 −1\
 Senses Passive Perception 11\
 Languages Telepathy 1 mile (works only with you)\
-CR None (XP 0; PB equals your Proficiency Bonus)\
+CR None (XP 0; PB equals your Proficiency Bonus)
 
 ### Traits
 
-Life Bond. When you regain Hit Points from a level 1+\
-spell, the steed regains the same number of Hit Points if\
-you’re within 5 feet of it.\
+Life Bond. When you regain Hit Points from a level 1+ spell, the steed regains the same number of Hit Points if you’re within 5 feet of it.
 
 ### Actions
 
-Otherworldly Slam. Melee Attack Roll: Bonus equals\
-your spell attack modifier, reach 5 ft. Hit: 1d8 plus the\
-spell’s level of Radiant (Celestial), Psychic (Fey), or Ne-\
-crotic (Fiend) damage.\
+Otherworldly Slam. Melee Attack Roll: Bonus equals your spell attack modifier, reach 5 ft. Hit: 1d8 plus the spell’s level of Radiant (Celestial), Psychic (Fey), or Necrotic (Fiend) damage.
 
 ### Bonus Actions
 
-Fell Glare (Fiend Only; Recharges after a Long Rest).\
-Wisdom Saving Throw: DC equals your spell save DC,\
-one creature within 60 feet the steed can see. Failure:\
-The target has the Frightened condition until the end of\
-your next turn.\
-Fey Step (Fey Only; Recharges after a Long Rest). The\
-steed teleports, along with its rider, to an unoccupied\
-space of your choice up to 60 feet away from itself.\
-Healing Touch (Celestial Only; Recharges after a Long\
-Rest). One creature within 5 feet of the steed regains a\
-number of Hit Points equal to 2d8 plus the spell’s level.\
+Fell Glare (Fiend Only; Recharges after a Long Rest). Wisdom Saving Throw: DC equals your spell save DC, one creature within 60 feet the steed can see. Failure: The target has the Frightened condition until the end of your next turn.
+
+Fey Step (Fey Only; Recharges after a Long Rest). The steed teleports, along with its rider, to an unoccupied space of your choice up to 60 feet away from itself.
+
+Healing Touch (Celestial Only; Recharges after a Long Rest). One creature within 5 feet of the steed regains a number of Hit Points equal to 2d8 plus the spell’s level.
 
 Original layout: [[../../srd-5.2.1/pages/131|page 131]].
 
@@ -67,12 +55,14 @@ Original layout: [[../../srd-5.2.1/pages/131|page 131]].
 | --- | --- |
 | ` size ` | ` large ` |
 | ` type ` | ` celestial ` |
-| ` alignment ` | ` Fey, or Fiend (Your Choice), Neutral ` |
+| ` alignment ` | ` Neutral ` |
+| ` type_options_text ` | ` Celestial, Fey, or Fiend (Your Choice) ` |
 | ` movement_text ` | ` 60 ft., Fly 60 ft. (requires level 4+ spell) ` |
 | ` senses_text ` | ` Passive Perception 11 ` |
 | ` languages_text ` | ` Telepathy 1 mile (works only with you) ` |
 | ` cr_text ` | ` None (XP 0; PB equals your Proficiency Bonus) ` |
 | ` hit_points_text ` | ` 5 + 10 per spell level (the steed has a number of Hit Dice [d10s] equal to the spell’s level) ` |
+| ` armor_class_text ` | ` 10 + 1 per spell level ` |
 
 ## Abilities
 
@@ -93,7 +83,6 @@ Original layout: [[../../srd-5.2.1/pages/131|page 131]].
 
 | Key | value | unit |
 | --- | --- | --- |
-| ` armor_class ` | ` 10 ` |  |
 | ` speed ` | ` 60 ` | ` ft ` |
 | ` fly_speed ` | ` 60 ` | ` ft ` |
 

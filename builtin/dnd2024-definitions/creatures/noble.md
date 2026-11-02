@@ -29,18 +29,15 @@ Skills Deception +5, Insight +4, Persuasion +5\
 Gear Breastplate, Rapier\
 Senses Passive Perception 12\
 Languages Common plus two other languages\
-CR 1/8 (XP 25; PB +2)\
+CR 1/8 (XP 25; PB +2)
 
 ### Actions
 
-Rapier. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d8\
-+ 1) Piercing damage.\
+Rapier. Melee Attack Roll: +3, reach 5 ft. Hit: 5 (1d8 + 1) Piercing damage.
 
 ### Reactions
 
-Parry. Trigger: The noble is hit by a melee attack roll\
-while holding a weapon. Response: The noble adds 2\
-to its AC against that attack, possibly causing it to miss.\
+Parry. Trigger: The noble is hit by a melee attack roll while holding a weapon. Response: The noble adds 2 to its AC against that attack, possibly causing it to miss.
 
 Original layout: [[../../srd-5.2.1/pages/312|page 312]].
 

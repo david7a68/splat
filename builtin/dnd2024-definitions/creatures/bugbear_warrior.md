@@ -29,23 +29,17 @@ Skills Stealth +6, Survival +2\
 Gear Hide Armor, Light Hammers (3)\
 Senses Darkvision 60 ft.; Passive Perception 10\
 Languages Common, Goblin\
-CR 1 (XP 200; PB +2)\
+CR 1 (XP 200; PB +2)
 
 ### Traits
 
-Abduct. The bugbear needn’t spend extra movement to\
-move a creature it is grappling.\
+Abduct. The bugbear needn’t spend extra movement to move a creature it is grappling.
 
 ### Actions
 
-Grab. Melee Attack Roll: +4, reach 10 ft. Hit: 9 (2d6\
-+ 2) Bludgeoning damage. If the target is a Medium\
-or smaller creature, it has the Grappled condition (es-\
-cape DC 12).\
-Light Hammer. Melee or Ranged Attack Roll: +4 (with\
-Advantage if the target is Grappled by the bugbear),\
-reach 10 ft. or range 20/60 ft. Hit: 9 (3d4 + 2) Blud-\
-geoning damage.\
+Grab. Melee Attack Roll: +4, reach 10 ft. Hit: 9 (2d6 + 2) Bludgeoning damage. If the target is a Medium or smaller creature, it has the Grappled condition (escape DC 12).
+
+Light Hammer. Melee or Ranged Attack Roll: +4 (with Advantage if the target is Grappled by the bugbear), reach 10 ft. or range 20/60 ft. Hit: 9 (3d4 + 2) Bludgeoning damage.
 
 Original layout: [[../../srd-5.2.1/pages/272|page 272]].
 

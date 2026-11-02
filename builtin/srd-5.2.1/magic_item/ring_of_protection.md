@@ -11,8 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [238
 
 <!-- SRD page 238 -->
 
-Ring, Rare (Requires Attunement)\
-You gain a +1 bonus to Armor Class and saving\
-throws while wearing this ring.\
+Ring, Rare (Requires Attunement)
+
+You gain a +1 bonus to Armor Class and saving throws while wearing this ring.
 
 Original layout: [[../pages/238|page 238]].

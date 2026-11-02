@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 59 -->
 
-Taking damage can’t break your Concentration on\
-Hunter’s Mark.\
+Taking damage can’t break your Concentration on Hunter’s Mark.
 
 ## Rule
 

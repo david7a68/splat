@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [181],
 
 <!-- SRD page 181 -->
 
-An area with Dim Light is Lightly Obscured. See\
-also “Lightly Obscured” and “Playing the Game”\
-(“Exploration”).\
+An area with Dim Light is Lightly Obscured. See also “Lightly Obscured” and “Playing the Game” (“Exploration”).
 
 Original layout: [[../pages/181|page 181]].

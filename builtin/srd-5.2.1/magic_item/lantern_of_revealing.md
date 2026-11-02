@@ -11,16 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [228
 
 <!-- SRD page 228 -->
 
-Wondrous Item, Uncommon\
-While lit, this hooded lantern burns for 6 hours on 1\
-pint of oil, shedding Bright Light in a 30-foot radius\
-and Dim Light for an additional 30 feet. Invisible\
-creatures and objects are visible as long as they are\
-in the lantern’s Bright Light. You can take a Utilize\
+Wondrous Item, Uncommon
 
-<!-- SRD page 229 -->
-
-action to lower the hood, reducing the lantern’s light\
-to Dim Light in a 5-foot radius.\
+While lit, this hooded lantern burns for 6 hours on 1 pint of oil, shedding Bright Light in a 30-foot radius and Dim Light for an additional 30 feet. Invisible creatures and objects are visible as long as they are in the lantern’s Bright Light. You can take a Utilize action to lower the hood, reducing the lantern’s light to Dim Light in a 5-foot radius.
 
 Original layout: [[../pages/228|page 228]], [[../pages/229|page 229]].

@@ -18,37 +18,27 @@ splat_sources:
 
 <!-- SRD page 202 -->
 
-Every creature has an XP value in its stat block.\
-When you add a creature to your combat encounter,\
-deduct its XP from your XP budget to determine\
-how many XP you have left to spend. Spend as much\
-of your XP budget as you can without going over. It’s\
-OK if you have a few unspent XP left over. Examples\
-are given below:\
-Example 1. A low-difficulty encounter for four level\
-1 characters has an XP budget of 50 × 4, for a total\
-of 200 XP. With that, you could build any of the fol-\
-lowing encounters:\
-•   1  Bugbear Warrior (200 XP)\
-•   2  Giant Wasps (100 XP each), for 200 XP total\
-•   6  Giant Rats (25 XP each), for 150 XP total\
-Example 2. A moderate-difficulty encounter for\
-five level 3 characters has an XP budget of 225 × 5,\
-for a total of 1,125 XP. With that, you could build\
-either of these encounters:\
-•   2  Druids (450 XP each) and 9 Stirges (25 XP\
-each), for 1,125 XP total\
-•   1  Wight (700 XP), 1 Warhorse Skeleton (100 XP),\
-and 6 Skeletons (50 XP each), for 1,100 XP total\
+Every creature has an XP value in its stat block. When you add a creature to your combat encounter, deduct its XP from your XP budget to determine how many XP you have left to spend. Spend as much of your XP budget as you can without going over. It’s OK if you have a few unspent XP left over. Examples are given below:
+
+Example 1. A low-difficulty encounter for four level 1 characters has an XP budget of 50 × 4, for a total of 200 XP. With that, you could build any of the following encounters:
+
+•   1  Bugbear Warrior (200 XP)
+
+•   2  Giant Wasps (100 XP each), for 200 XP total
+
+•   6  Giant Rats (25 XP each), for 150 XP total
+
+Example 2. A moderate-difficulty encounter for five level 3 characters has an XP budget of 225 × 5, for a total of 1,125 XP. With that, you could build either of these encounters:
+
+•   2  Druids (450 XP each) and 9 Stirges (25 XP each), for 1,125 XP total
+
+•   1  Wight (700 XP), 1 Warhorse Skeleton (100 XP), and 6 Skeletons (50 XP each), for 1,100 XP total
 
 <!-- SRD page 203 -->
 
-Example 3. A high-difficulty encounter for six level\
-15 characters has an XP budget of 7,800 × 6, for a\
-total of 46,800 XP. With that, you could build this\
-encounter:\
-•   2  Adult Red Dragons (18,000 XP each) and 2 Fire\
-Giants (5,000 XP each), for 46,000 XP total\
+Example 3. A high-difficulty encounter for six level 15 characters has an XP budget of 7,800 × 6, for a total of 46,800 XP. With that, you could build this encounter:
+
+•   2  Adult Red Dragons (18,000 XP each) and 2 Fire Giants (5,000 XP each), for 46,000 XP total
 
 ## Rule
 

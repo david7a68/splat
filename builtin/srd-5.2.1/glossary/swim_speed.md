@@ -11,8 +11,6 @@ splat_reference: {"source": "SRD 5.2.1", "category": "glossary", "pages": [189],
 
 <!-- SRD page 189 -->
 
-A Swim Speed can be used to swim without expend-\
-ing the extra movement normally associated with\
-swimming. See also “Swimming” and “Speed.”\
+A Swim Speed can be used to swim without expending the extra movement normally associated with swimming. See also “Swimming” and “Speed.”
 
 Original layout: [[../pages/189|page 189]].

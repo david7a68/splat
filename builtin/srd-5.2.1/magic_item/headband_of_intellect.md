@@ -11,9 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [225
 
 <!-- SRD page 225 -->
 
-Wondrous Item, Uncommon (Requires Attunement)\
-Your Intelligence is 19 while you wear this head-\
-band. It has no effect on you if your Intelligence is\
-19 or higher without it.\
+Wondrous Item, Uncommon (Requires Attunement)
+
+Your Intelligence is 19 while you wear this headband. It has no effect on you if your Intelligence is 19 or higher without it.
 
 Original layout: [[../pages/225|page 225]].

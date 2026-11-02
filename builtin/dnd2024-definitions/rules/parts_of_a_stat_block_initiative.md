@@ -18,18 +18,9 @@ splat_sources:
 
 <!-- SRD page 254 -->
 
-The Initiative entry specifies the monster’s Initia-\
-tive modifier followed by the monster’s Initiative\
-score in parentheses. Use the modifier when you\
-roll to determine a monster’s Initiative. A monster’s\
-Initiative modifier is typically equal to its Dexterity\
-modifier, but some monsters have additional mod-\
-ifiers, such as Proficiency Bonus, applied to that\
-number.\
-If you don’t want to roll a monster’s Initiative, use\
-the Initiative score as the monster’s Initiative in\
-combat. Initiative is further detailed in “Playing the\
-Game.”\
+The Initiative entry specifies the monster’s Initiative modifier followed by the monster’s Initiative score in parentheses. Use the modifier when you roll to determine a monster’s Initiative. A monster’s Initiative modifier is typically equal to its Dexterity modifier, but some monsters have additional modifiers, such as Proficiency Bonus, applied to that number.
+
+If you don’t want to roll a monster’s Initiative, use the Initiative score as the monster’s Initiative in combat. Initiative is further detailed in “Playing the Game.”
 
 ## Rule
 

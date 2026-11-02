@@ -18,7 +18,7 @@ splat_sources:
 
 <!-- SRD page 100 -->
 
-A Vial holds up to 4 ounces.\
+A Vial holds up to 4 ounces.
 
 ## Item
 

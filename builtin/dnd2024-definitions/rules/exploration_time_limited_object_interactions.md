@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 12 -->
 
-When time is short, such as in combat, interactions\
-with objects are limited: one free interaction per\
-turn. That interaction must occur during a crea-\
-ture’s movement or action. Any additional inter-\
-actions require the Utilize action, as explained in\
-“Combat” later in “Playing the Game.”\
+When time is short, such as in combat, interactions with objects are limited: one free interaction per turn. That interaction must occur during a creature’s movement or action. Any additional interactions require the Utilize action, as explained in “Combat” later in “Playing the Game.”
 
 ## Rule
 

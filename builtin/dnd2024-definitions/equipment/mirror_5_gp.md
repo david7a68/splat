@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 98 -->
 
-A handheld steel Mirror is useful for personal cos-\
-metics but also for peeking around corners and re-\
-flecting light as a signal.\
+A handheld steel Mirror is useful for personal cosmetics but also for peeking around corners and reflecting light as a signal.
 
 ## Item
 

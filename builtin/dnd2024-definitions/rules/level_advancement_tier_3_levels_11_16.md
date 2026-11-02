@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 24 -->
 
-In tier 3, characters have reached a level of power\
-that makes them special among adventurers. At\
-level 11, many spell casters learn reality-altering\
-spells. Other characters gain features that allow\
-them to make more attacks or to do more impres-\
-sive things with those attacks. These adventurers\
-often confront threats to whole regions.\
+In tier 3, characters have reached a level of power that makes them special among adventurers. At level 11, many spell casters learn reality-altering spells. Other characters gain features that allow them to make more attacks or to do more impressive things with those attacks. These adventurers often confront threats to whole regions.
 
 ## Rule
 

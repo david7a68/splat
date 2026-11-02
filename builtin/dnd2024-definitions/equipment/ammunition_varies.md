@@ -22,7 +22,13 @@ Ammunition is required by a weapon that has the Ammunition property. A weapon’
 
 <!-- SRD page 96 -->
 
-The ammunition table below gives weight and cost per listed quantity. Storage is sold separately.
+| Type | Amount | Storage | Weight | Cost |
+| --- | --- | --- | --- | --- |
+| Arrows | 20 | Quiver | 1 lb. | 1 GP |
+| Bolts | 20 | Case | 1½ lb. | 1 GP |
+| Bullets, Firearm | 10 | Pouch | 2 lb. | 3 GP |
+| Bullets, Sling | 20 | Pouch | 1½ lb. | 4 CP |
+| Needles | 50 | Pouch | 1 lb. | 1 GP |
 
 ## Item
 

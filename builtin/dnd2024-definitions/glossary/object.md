@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 185 -->
 
-An object is a nonliving, distinct thing. Composite\
-things, like buildings, comprise more than one ob-\
-ject. See also “Breaking Objects.”\
+An object is a nonliving, distinct thing. Composite things, like buildings, comprise more than one object. See also “Breaking Objects.”
 
 Original layout: [[../../srd-5.2.1/pages/185|page 185]].
 

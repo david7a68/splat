@@ -18,12 +18,11 @@ splat_sources:
 
 <!-- SRD page 220 -->
 
-Potion, Rare\
-When you drink this potion, you are cured of all\
-magical contagions. In addition, the following con-\
-ditions end on you: Blinded, Deafened, Paralyzed,\
-and Poisoned.\
-The clear, red liquid has tiny bubbles of light in it.\
+Potion, Rare
+
+When you drink this potion, you are cured of all magical contagions. In addition, the following conditions end on you: Blinded, Deafened, Paralyzed, and Poisoned.
+
+The clear, red liquid has tiny bubbles of light in it.
 
 Original layout: [[../../srd-5.2.1/pages/220|page 220]].
 

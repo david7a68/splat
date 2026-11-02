@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 20 -->
 
-To determine your character’s ability scores, you\
-first generate a set of six numbers using the instruc-\
-tions below and then assign them to your six abili-\
-ties. “Playing the Game” explains what each ability\
-means.\
+To determine your character’s ability scores, you first generate a set of six numbers using the instructions below and then assign them to your six abilities. “Playing the Game” explains what each ability means.
 
 ## Rule
 

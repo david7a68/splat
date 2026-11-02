@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 72 -->
 
-Eldritch Invocation options appear in alphabetical\
-order.\
+Eldritch Invocation options appear in alphabetical order.
 
 ## Rule
 

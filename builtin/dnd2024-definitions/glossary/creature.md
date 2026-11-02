@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 179 -->
 
-Any being in the game, including a player’s charac-\
-ter, is a creature. See also “Creature Type.”\
+Any being in the game, including a player’s character, is a creature. See also “Creature Type.”
 
 Original layout: [[../../srd-5.2.1/pages/179|page 179]].
 

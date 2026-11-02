@@ -18,10 +18,9 @@ splat_sources:
 
 <!-- SRD page 72 -->
 
-Prerequisite: Level 12+ Warlock, Thirsting Blade\
-Invocation\
-The Extra Attack of your Thirsting Blade invocation\
-confers two extra attacks rather than one.\
+Prerequisite: Level 12+ Warlock, Thirsting Blade Invocation
+
+The Extra Attack of your Thirsting Blade invocation confers two extra attacks rather than one.
 
 ## Rule
 

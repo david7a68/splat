@@ -11,12 +11,10 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [242
 
 <!-- SRD page 242 -->
 
-Rod, Legendary (Requires Attunement)\
-The rod has 5 charges. While you hold it, you can\
-cast one of the following spells from it: Heal (ex-\
-pends 1 charge) or Resurrection (expends 5 charges).\
-The rod regains 1 expended charge daily at dawn.\
-If you expend the last charge, roll 1d20. On a 1, the\
-rod disappears in a harmless burst of radiance.\
+Rod, Legendary (Requires Attunement)
+
+The rod has 5 charges. While you hold it, you can cast one of the following spells from it: Heal (expends 1 charge) or Resurrection (expends 5 charges).
+
+The rod regains 1 expended charge daily at dawn. If you expend the last charge, roll 1d20. On a 1, the rod disappears in a harmless burst of radiance.
 
 Original layout: [[../pages/242|page 242]].

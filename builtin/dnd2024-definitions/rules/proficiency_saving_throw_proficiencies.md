@@ -18,17 +18,9 @@ splat_sources:
 
 <!-- SRD page 9 -->
 
-Proficiency in a saving throw lets a character add\
-their Proficiency Bonus to saves that use a partic-\
-ular ability. For example, proficiency in Wisdom\
-saves lets you add your Proficiency Bonus to your\
-Wisdom saves. Some monsters also have saving\
-throw proficiencies, as noted in their stat blocks.\
-Each class gives proficiency in at least two saving\
-throws, representing that class’s training in evading\
-or resisting certain threats. Wizards, for example,\
-are proficient in Intelligence and Wisdom saves;\
-they train to resist mental assault.\
+Proficiency in a saving throw lets a character add their Proficiency Bonus to saves that use a particular ability. For example, proficiency in Wisdom saves lets you add your Proficiency Bonus to your Wisdom saves. Some monsters also have saving throw proficiencies, as noted in their stat blocks.
+
+Each class gives proficiency in at least two saving throws, representing that class’s training in evading or resisting certain threats. Wizards, for example, are proficient in Intelligence and Wisdom saves; they train to resist mental assault.
 
 ## Rule
 

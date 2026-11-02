@@ -18,20 +18,9 @@ splat_sources:
 
 <!-- SRD page 25 -->
 
-You gain the Hit Points from your new class as de-\
-scribed for levels after 1. You gain the level 1 Hit\
-Points for a class only when your total character\
-level is 1.\
-Add together the Hit Dice granted by all your\
-classes to form your pool of Hit Dice. If these dice\
-are the same die type, you can pool them together.\
-For example, both the Fighter and the Paladin have\
-a d10 Hit Die, so if you are a level 5 Fighter / level 5\
-Paladin, you have ten d10 Hit Dice. If your classes\
-give you Hit Dice of different types, track them sep-\
-arately. If you are a level 5 Cleric / level 5 Paladin,\
-for example, you have five d8 Hit Dice and five d10\
-Hit Dice.\
+You gain the Hit Points from your new class as described for levels after 1. You gain the level 1 Hit Points for a class only when your total character level is 1.
+
+Add together the Hit Dice granted by all your classes to form your pool of Hit Dice. If these dice are the same die type, you can pool them together. For example, both the Fighter and the Paladin have a d10 Hit Die, so if you are a level 5 Fighter / level 5 Paladin, you have ten d10 Hit Dice. If your classes give you Hit Dice of different types, track them separately. If you are a level 5 Cleric / level 5 Paladin, for example, you have five d8 Hit Dice and five d10 Hit Dice.
 
 ## Rule
 

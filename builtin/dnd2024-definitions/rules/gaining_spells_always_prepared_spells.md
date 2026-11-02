@@ -18,11 +18,7 @@ splat_sources:
 
 <!-- SRD page 104 -->
 
-Certain features might give you a spell that you\
-always have prepared. If you also have a list of pre-\
-pared spells that you can change, a spell that you\
-always have prepared doesn’t count against the\
-number of spells on that list.\
+Certain features might give you a spell that you always have prepared. If you also have a list of prepared spells that you can change, a spell that you always have prepared doesn’t count against the number of spells on that list.
 
 ## Rule
 

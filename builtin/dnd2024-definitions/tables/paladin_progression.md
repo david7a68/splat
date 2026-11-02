@@ -16,36 +16,30 @@ splat_sources:
 
 ## Source text
 
-From SRD 5.2.1 page 53.
+**Paladin Features**
 
-     Paladin Features
-              Proficiency                                        Channel    Prepared    —Spell Slots per Spell Level—
-      Level     Bonus       Class Features                       Divinity    Spells     1      2      3      4       5
-        1         +2        Lay On Hands, Spellcasting,            —           2        2     —      —      —        —
-                            Weapon Mastery
-        2         +2        Fighting Style, Paladin’s Smite        —           3        2     —      —      —        —
-        3         +2        Channel Divinity, Paladin Subclass      2          4        3     —      —      —        —
-        4         +2        Ability Score Improvement               2          5        3     —      —      —        —
-        5         +3        Extra Attack, Faithful Steed            2          6        4      2     —      —        —
-        6         +3        Aura of Protection                      2          6        4      2     —      —        —
-        7         +3        Subclass feature                        2          7        4      3     —      —        —
-        8         +3        Ability Score Improvement               2          7        4      3     —      —        —
-        9         +4        Abjure Foes                             2          9        4      3      2     —        —
-       10         +4        Aura of Courage                         2          9        4      3      2     —        —
-       11         +4        Radiant Strikes                         3          10       4      3      3     —        —
-       12         +4        Ability Score Improvement               3          10       4      3      3     —        —
-       13         +5        —                                       3          11       4      3      3      1       —
-       14         +5        Restoring Touch                         3          11       4      3      3      1       —
-       15         +5        Subclass feature                        3          12       4      3      3      2       —
-       16         +5        Ability Score Improvement               3          12       4      3      3      2       —
-       17         +6        —                                       3          14       4      3      3      3       1
-       18         +6        Aura Expansion                          3          14       4      3      3      3       1
-       19         +6        Epic Boon                               3          15       4      3      3      3       2
-       20         +6        Subclass feature                        3          15       4      3      3      3       2
-
-
-
-53   System Reference Document 5.2.1
+| Level | Proficiency Bonus | Class Features | Channel Divinity | Prepared Spells | Level 1 Slots | Level 2 Slots | Level 3 Slots | Level 4 Slots | Level 5 Slots |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | +2 | Lay On Hands, Spellcasting, Weapon Mastery | — | 2 | 2 | — | — | — | — |
+| 2 | +2 | Fighting Style, Paladin’s Smite | — | 3 | 2 | — | — | — | — |
+| 3 | +2 | Channel Divinity, Paladin Subclass | 2 | 4 | 3 | — | — | — | — |
+| 4 | +2 | Ability Score Improvement | 2 | 5 | 3 | — | — | — | — |
+| 5 | +3 | Extra Attack, Faithful Steed | 2 | 6 | 4 | 2 | — | — | — |
+| 6 | +3 | Aura of Protection | 2 | 6 | 4 | 2 | — | — | — |
+| 7 | +3 | Subclass feature | 2 | 7 | 4 | 3 | — | — | — |
+| 8 | +3 | Ability Score Improvement | 2 | 7 | 4 | 3 | — | — | — |
+| 9 | +4 | Abjure Foes | 2 | 9 | 4 | 3 | 2 | — | — |
+| 10 | +4 | Aura of Courage | 2 | 9 | 4 | 3 | 2 | — | — |
+| 11 | +4 | Radiant Strikes | 3 | 10 | 4 | 3 | 3 | — | — |
+| 12 | +4 | Ability Score Improvement | 3 | 10 | 4 | 3 | 3 | — | — |
+| 13 | +5 | — | 3 | 11 | 4 | 3 | 3 | 1 | — |
+| 14 | +5 | Restoring Touch | 3 | 11 | 4 | 3 | 3 | 1 | — |
+| 15 | +5 | Subclass feature | 3 | 12 | 4 | 3 | 3 | 2 | — |
+| 16 | +5 | Ability Score Improvement | 3 | 12 | 4 | 3 | 3 | 2 | — |
+| 17 | +6 | — | 3 | 14 | 4 | 3 | 3 | 3 | 1 |
+| 18 | +6 | Aura Expansion | 3 | 14 | 4 | 3 | 3 | 3 | 1 |
+| 19 | +6 | Epic Boon | 3 | 15 | 4 | 3 | 3 | 3 | 2 |
+| 20 | +6 | Subclass feature | 3 | 15 | 4 | 3 | 3 | 3 | 2 |
 
 ## Rule
 

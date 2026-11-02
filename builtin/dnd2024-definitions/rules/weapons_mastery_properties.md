@@ -18,16 +18,11 @@ splat_sources:
 
 <!-- SRD page 90 -->
 
-Each weapon has a mastery property, which is us-\
-able only by a character who has a feature, such as\
-Weapon Mastery, that unlocks the property for the\
-character. The properties are defined below.\
-iMprovisEd wEapons\
-If you use an object—such as a table leg, frying pan,\
-or bottle—as a makeshift weapon, see “Improvised\
-Weapons” in “Rules Glossary.” Also see those rules\
-if you wield a weapon in an unusual way, such as using\
-a Ranged weapon to make a melee attack.\
+Each weapon has a mastery property, which is usable only by a character who has a feature, such as Weapon Mastery, that unlocks the property for the character. The properties are defined below.
+
+### Improvised Weapons
+
+If you use an object—such as a table leg, frying pan, or bottle—as a makeshift weapon, see “Improvised Weapons” in “Rules Glossary.” Also see those rules if you wield a weapon in an unusual way, such as using a Ranged weapon to make a melee attack.
 
 ## Rule
 

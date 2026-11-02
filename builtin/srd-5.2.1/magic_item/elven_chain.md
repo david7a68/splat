@@ -11,10 +11,8 @@ splat_reference: {"source": "SRD 5.2.1", "category": "magic_item", "pages": [220
 
 <!-- SRD page 220 -->
 
-Armor (Chain Mail or Chain Shirt), Rare\
-You gain a +1 bonus to Armor Class while you wear\
-this armor. You are considered trained with this ar-\
-mor even if you lack training with Medium or Heavy\
-armor.\
+Armor (Chain Mail or Chain Shirt), Rare
+
+You gain a +1 bonus to Armor Class while you wear this armor. You are considered trained with this armor even if you lack training with Medium or Heavy armor.
 
 Original layout: [[../pages/220|page 220]].

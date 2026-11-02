@@ -18,13 +18,7 @@ splat_sources:
 
 <!-- SRD page 192 -->
 
-A group of characters can travel overland at a Nor-\
-mal, Fast, or Slow pace, as described in “Playing the\
-Game.” During any journey stage, the predominant\
-terrain determines the characters’ maximum travel\
-pace, as shown in the Maximum Pace column of the\
-Travel Terrain table. Certain factors can affect a\
-group’s travel pace.\
+A group of characters can travel overland at a Normal, Fast, or Slow pace, as described in “Playing the Game.” During any journey stage, the predominant terrain determines the characters’ maximum travel pace, as shown in the Maximum Pace column of the Travel Terrain table. Certain factors can affect a group’s travel pace.
 
 ## Rule
 

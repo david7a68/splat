@@ -21,20 +21,18 @@ Int 2 −4 −4 Wis 12 +1 +1 Cha 4 −3 −3\
 Skills Perception +3\
 Senses Passive Perception 13\
 Languages None\
-CR 4 (XP 1,100; PB +2)\
+CR 4 (XP 1,100; PB +2)
 
 ### Traits
 
-Hold Breath. The hippopotamus can hold its breath for\
-10 minutes.\
+Hold Breath. The hippopotamus can hold its breath for 10 minutes.
 
 <!-- SRD page 356 -->
 
-
 ### Actions
 
-Multiattack. The hippopotamus makes two Bite attacks.\
-Bite. Melee Attack Roll: +7, reach 5 ft. Hit: 16 (2d10 +\
-5) Piercing damage.\
+Multiattack. The hippopotamus makes two Bite attacks.
+
+Bite. Melee Attack Roll: +7, reach 5 ft. Hit: 16 (2d10 + 5) Piercing damage.
 
 Original layout: [[../pages/355|page 355]], [[../pages/356|page 356]].

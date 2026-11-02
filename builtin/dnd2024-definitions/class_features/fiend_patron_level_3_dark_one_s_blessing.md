@@ -18,12 +18,7 @@ splat_sources:
 
 <!-- SRD page 76 -->
 
-When you reduce an enemy to 0 Hit Points, you gain\
-Temporary Hit Points equal to your Charisma mod-\
-ifier plus your Warlock level (minimum of 1 Tempo-\
-rary Hit Point). You also gain this benefit if someone\
-else reduces an enemy within 10 feet of you to 0 Hit\
-Points.\
+When you reduce an enemy to 0 Hit Points, you gain Temporary Hit Points equal to your Charisma modifier plus your Warlock level (minimum of 1 Temporary Hit Point). You also gain this benefit if someone else reduces an enemy within 10 feet of you to 0 Hit Points.
 
 ## Rule
 

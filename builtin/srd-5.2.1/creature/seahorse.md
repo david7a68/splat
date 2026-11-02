@@ -21,17 +21,14 @@ Int 1 −5 −5 Wis 10 +0 +0 Cha 2 −4 −4\
 Skills Perception +2, Stealth +5\
 Senses Passive Perception 12\
 Languages None\
-CR 0 (XP 0; PB +2)\
+CR 0 (XP 0; PB +2)
 
 ### Traits
 
-Water Breathing. The seahorse can breathe only\
-underwater.\
+Water Breathing. The seahorse can breathe only underwater.
 
 ### Actions
 
-Bubble Dash. While underwater, the seahorse moves\
-up to its Swim Speed without provoking Opportu-\
-nity Attacks.\
+Bubble Dash. While underwater, the seahorse moves up to its Swim Speed without provoking Opportunity Attacks.
 
 Original layout: [[../pages/361|page 361]].

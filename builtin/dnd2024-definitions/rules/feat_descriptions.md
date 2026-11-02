@@ -18,9 +18,7 @@ splat_sources:
 
 <!-- SRD page 87 -->
 
-The feats that follow are organized by category—\
-Origin, General, Fighting Style, or Epic Boon—and\
-alphabetized in each category.\
+The feats that follow are organized by category— Origin, General, Fighting Style, or Epic Boon—and alphabetized in each category.
 
 ## Rule
 

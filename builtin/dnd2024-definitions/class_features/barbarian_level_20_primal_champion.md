@@ -18,8 +18,7 @@ splat_sources:
 
 <!-- SRD page 30 -->
 
-You embody primal power. Your Strength and Con-\
-stitution scores increase by 4, to a maximum of 25.\
+You embody primal power. Your Strength and Constitution scores increase by 4, to a maximum of 25.
 
 ## Rule
 

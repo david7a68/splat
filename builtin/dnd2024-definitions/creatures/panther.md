@@ -28,17 +28,15 @@ Int 3 −4 −4 Wis 14 +2 +2 Cha 7 −2 −2\
 Skills Perception +4, Stealth +7\
 Senses Darkvision 60 ft.; Passive Perception 14\
 Languages None\
-CR 1/4 (XP 50; PB +2)\
+CR 1/4 (XP 50; PB +2)
 
 ### Actions
 
-Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3)\
-Slashing damage.\
+Rend. Melee Attack Roll: +5, reach 5 ft. Hit: 6 (1d6 + 3) Slashing damage.
 
 ### Bonus Actions
 
-Nimble Escape. The panther takes the Disengage or\
-Hide action.\
+Nimble Escape. The panther takes the Disengage or Hide action.
 
 Original layout: [[../../srd-5.2.1/pages/358|page 358]].
 

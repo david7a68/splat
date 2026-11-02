@@ -18,28 +18,13 @@ splat_sources:
 
 <!-- SRD page 196 -->
 
-Exposure to mental stress can cause prolonged ef-\
-fects. Consider the following possibilities.\
-Short-Term Effects. The character has the Fright-\
-ened, Incapacitated, or Stunned condition for 1d10\
-minutes. This condition might be accompanied by\
-alarming behavior or hallucinations. These effects\
-can be suppressed with the Calm Emotions spell or\
-removed by the Lesser Restoration spell.\
-Long-Term Effects. The character has Disad-\
-vantage on some or all ability checks for 1d10 × 10\
-hours, stemming from an unwillingness or inability\
-to exert a particular set of abilities. The character\
-might feel enervated and unable to exert much\
-Strength, for example, or become so suspicious of\
-others that Charisma checks are more difficult.\
-These effects can be suppressed with the Calm\
-Emotions spell or removed by the Lesser Restoration\
-spell.\
-Indefinite Effects. An indefinite effect is a long-\
-term effect (see above) that lasts until removed by a\
-Greater Restoration spell. It can be suppressed by a\
-Calm Emotions spell.\
+Exposure to mental stress can cause prolonged effects. Consider the following possibilities.
+
+Short-Term Effects. The character has the Frightened, Incapacitated, or Stunned condition for 1d10 minutes. This condition might be accompanied by alarming behavior or hallucinations. These effects can be suppressed with the Calm Emotions spell or removed by the Lesser Restoration spell.
+
+Long-Term Effects. The character has Disadvantage on some or all ability checks for 1d10 × 10 hours, stemming from an unwillingness or inability to exert a particular set of abilities. The character might feel enervated and unable to exert much Strength, for example, or become so suspicious of others that Charisma checks are more difficult. These effects can be suppressed with the Calm Emotions spell or removed by the Lesser Restoration spell.
+
+Indefinite Effects. An indefinite effect is a long-term effect (see above) that lasts until removed by a Greater Restoration spell. It can be suppressed by a Calm Emotions spell.
 
 ## Rule
 
