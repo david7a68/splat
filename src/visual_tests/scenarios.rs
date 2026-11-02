@@ -2318,6 +2318,8 @@ pub mod gallery {
         d.click(MESSAGES);
         d.state("messages", Sizes::AllAndHiDpi);
         d.goal("see every part of the design system");
+        d.click("Markdown");
+        d.state("markdown", Sizes::AllAndHiDpi);
         d.click(COMPONENTS);
         let temp = crate::design::temp_hp_text(5);
         for _ in 0..30 {

@@ -213,6 +213,8 @@ fn walk<'t>(
         .filter_map(|child| scroll_surface(&child.accesskit_node()))
         .collect();
     let parent_is_window = node.accesskit_node().role() == Role::Window;
+    // The surfaces already behind us. A surface comes after its own content.
+    let mut passed = 0;
     for child in node.children() {
         let scope = if depth == 0 {
             child.accesskit_node().id().0
@@ -222,15 +224,20 @@ fn walk<'t>(
         let inner = if surfaces.is_empty() {
             clip
         } else {
-            // Content is a sibling of the surface, and overlaps it.
+            // Content is a sibling of the surface, and overlaps it. Scrolled content also
+            // passes behind other areas on the page, which do not clip it.
             let bounds = extent(&child);
-            surfaces
+            surfaces[passed..]
                 .iter()
+                .chain(&surfaces[..passed])
                 .find(|surface| surface.intersects(bounds))
                 .map_or(clip, |surface| {
                     Some(clip.map_or(*surface, |outer| outer.intersect(*surface)))
                 })
         };
+        if scroll_surface(&child.accesskit_node()).is_some() {
+            passed += 1;
+        }
         visit(&child, scope, inner, parent_is_window, &surfaces);
         walk(&child, scope, inner, depth + 1, visit);
     }
@@ -893,6 +900,60 @@ mod tests {
         let mut cut = control("Save", at(10.0, 10.0, 80.0, 30.0));
         cut.clip = Some(at(0.0, 0.0, 50.0, 300.0));
         assert!(checks_for(&[cut]).contains(&"clipped".to_owned()));
+    }
+
+    /// A long scrolled note passes behind a smaller scroll area above it. Its own area clips
+    /// it, so what shows of it does not touch the other area's content.
+    #[test]
+    fn scrolled_content_is_clipped_by_its_own_area_and_not_one_it_passes_behind() {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(400.0, 400.0))
+            .build_state(
+                |ctx, _: &mut crate::Splat| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("above")
+                            .max_height(100.0)
+                            .max_width(200.0)
+                            .show(ui, |ui| {
+                                ui.add_sized(egui::vec2(200.0, 40.0), egui::Button::new("Above"));
+                                ui.set_min_height(600.0);
+                            });
+                        egui::ScrollArea::vertical()
+                            .id_salt("below")
+                            .vertical_scroll_offset(200.0)
+                            .show(ui, |ui| {
+                                ui.add_sized(egui::vec2(360.0, 900.0), egui::Button::new("Below"));
+                            });
+                    });
+                },
+                crate::Splat::default(),
+            );
+        harness.run_steps(3);
+        let found = controls(&harness);
+        let below = found
+            .iter()
+            .find(|control| control.name == "Below")
+            .unwrap();
+        let area = below.clip.expect("in a scroll area");
+        assert!(
+            below.rect.top() < area.top(),
+            "the test needs it scrolled up: {below:?}"
+        );
+        assert!(
+            area.width() > 300.0 && area.top() > 100.0,
+            "its own area, not the narrow one above: {area:?}"
+        );
+        assert!(!checks_for(&found).contains(&"clipped".to_owned()));
+        let above = found
+            .iter()
+            .find(|control| control.name == "Above")
+            .unwrap();
+        let above_shown = above.rect.intersect(above.clip.expect("in a scroll area"));
+        assert!(
+            !below.rect.intersect(area).intersects(above_shown),
+            "what shows of them does not touch"
+        );
     }
 
     /// Painted text has no node for the other checks to find, so this reads the shapes.

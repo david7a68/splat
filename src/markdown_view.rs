@@ -36,6 +36,8 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let mut code = false;
     let mut strong = false;
     let mut italic = false;
+    let mut struck = false;
+    let mut quotes = 0_usize;
     let mut lists: Vec<Option<u64>> = Vec::new();
     let mut table: Option<Vec<Vec<String>>> = None;
     let mut figures: Vec<std::path::PathBuf> = Vec::new();
@@ -191,6 +193,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             Event::End(TagEnd::Strong) => strong = false,
             Event::Start(Tag::Emphasis) => italic = true,
             Event::End(TagEnd::Emphasis) => italic = false,
+            Event::Start(Tag::Strikethrough) => struck = true,
+            Event::End(TagEnd::Strikethrough) => struck = false,
+            Event::Start(Tag::BlockQuote(_)) => quotes += 1,
+            Event::End(TagEnd::BlockQuote(_)) => quotes = quotes.saturating_sub(1),
             Event::Start(Tag::List(start)) => lists.push(start),
             Event::End(TagEnd::List(_)) => {
                 lists.pop();
@@ -239,6 +245,18 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     ..Default::default()
                 },
             ),
+            Event::Code(text) if !dense && heading.is_none() => job.append(
+                &text,
+                0.0,
+                egui::TextFormat {
+                    font_id: Type::Mono.font(ui),
+                    // Mono's own line puts code on the baseline of the serif beside it.
+                    line_height: Some(Type::Mono.line()),
+                    color: colors().text,
+                    background: design::reader::inline_code_fill(),
+                    ..Default::default()
+                },
+            ),
             Event::Text(text) | Event::Code(text) => {
                 let role = if code {
                     Type::Mono
@@ -257,7 +275,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     } else {
                         Type::ProseStrong
                     }
-                } else if italic && !dense {
+                } else if (italic || quotes > 0) && !dense {
                     Type::ProseItalic
                 } else {
                     prose
@@ -267,6 +285,11 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 if matches!(role, Type::ProseStrong | Type::ProseItalic) && heading.is_none() {
                     font_id.size = prose.size();
                 }
+                let color = if in_link {
+                    colors().accent
+                } else {
+                    colors().text
+                };
                 job.append(
                     &text,
                     0.0,
@@ -277,10 +300,11 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                         } else {
                             prose.line()
                         }),
-                        color: if in_link {
-                            colors().accent
+                        color,
+                        strikethrough: if struck {
+                            egui::Stroke::new(1.0, color)
                         } else {
-                            colors().text
+                            egui::Stroke::NONE
                         },
                         ..Default::default()
                     },
@@ -472,6 +496,50 @@ mod tests {
             "*A map* [image](https://a/map.png) and *a lost one* ([image](https://a/lost.png))."
         );
         assert_eq!(local_figure_links(text, |_| false), text);
+    }
+
+    /// The Reader's parts of a note, painted.
+    fn painted(markdown: &str) -> Vec<std::sync::Arc<egui::Galley>> {
+        let context = egui::Context::default();
+        let output = context.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| show(ui, markdown));
+        });
+        output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn format_of(galleys: &[std::sync::Arc<egui::Galley>], words: &str) -> egui::TextFormat {
+        galleys
+            .iter()
+            .flat_map(|galley| {
+                galley
+                    .job
+                    .sections
+                    .iter()
+                    .filter(|part| &galley.job.text[part.byte_range.clone()] == words)
+                    .map(|part| part.format.clone())
+            })
+            .next()
+            .unwrap_or_else(|| panic!("no words {words:?}"))
+    }
+
+    #[test]
+    fn code_and_struck_words_show_in_the_reader() {
+        let galleys = painted("Roll `1d20` ~~old~~ now\n");
+        let code = format_of(&galleys, "1d20");
+        assert_eq!(code.font_id.family, egui::FontFamily::Monospace);
+        assert_ne!(code.background, egui::Color32::TRANSPARENT);
+        assert_ne!(format_of(&galleys, "old").strikethrough, egui::Stroke::NONE);
+        assert_eq!(
+            format_of(&galleys, " now").strikethrough,
+            egui::Stroke::NONE
+        );
     }
     #[test]
     fn inventory_reader_shows_names_without_exposing_storage_ids() {
