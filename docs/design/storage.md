@@ -82,6 +82,30 @@ One manifest directly in each registered owner root identifies that owner.
 Its filename is freely chosen; its kind identifies whether it is a package or
 campaign manifest. No particular on-disk location has been selected or created.
 
+## Package art
+
+A package can hold a note named `Art Index.md` directly in its root. The note has one JSON
+block. It is a note and not a `.json` file because a vault sync can leave out other file types.
+
+```json
+{
+  "splat_art": 1,
+  "entries": { "dnd2024:creatures/goblin_warrior": "Creatures/goblin-warrior.webp" },
+  "links": { "https://media.dndbeyond.com/map.png": "Figures/map.webp" }
+}
+```
+
+`entries` gives an image for an entry key. The Reader shows it above the entry
+wherever the entry appears. `links` gives a local image for a link in a note. The
+note shows the image in place of the link. Paths are relative to the package root and
+cannot leave it. Images are WebP, PNG, or JPEG.
+
+Keys can name entries in any package, so one art package can serve the built-in SRD
+and every book without a change to their notes. Art does not join a package's
+content: a campaign's selections and dependencies do not affect it. If two packages
+offer art for one target, the package registered first wins. An image file that is not
+present yet is ignored, until the next start, so a sync in progress causes no errors.
+
 ## Frontmatter ownership
 
 All top-level properties managed by Splat use the `splat_` prefix, keeping them

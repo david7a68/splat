@@ -169,9 +169,11 @@ impl Party {
             }
             return;
         }
-        let list_width = (ui.available_width() * 0.42).clamp(330.0, 520.0);
+        // Each row gives its portrait this much, and keeps the same room for its text.
+        let list_width =
+            (ui.available_width() * 0.42 + ROW_PORTRAIT + design::S).clamp(376.0, 566.0);
         let mut selected = self.reader.selected.clone();
-        design::Column::left("party_members", list_width, 330.0..=640.0)
+        design::Column::left("party_members", list_width, 376.0..=686.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
                 right: design::M as i8,
@@ -188,7 +190,9 @@ impl Party {
                         ui.spacing_mut().item_spacing.y = 0.0;
                         for m in &self.reader.members {
                             let record = self.reader.sheets.get(&m.id);
-                            if member_row(ui, m, record, selected.as_ref() == Some(&m.id)).clicked()
+                            let portrait = self.portrait(record);
+                            let is_selected = selected.as_ref() == Some(&m.id);
+                            if member_row(ui, m, record, portrait.as_deref(), is_selected).clicked()
                             {
                                 selected = Some(m.id.clone());
                                 self.search.clear();
@@ -266,6 +270,10 @@ impl Party {
         }
     }
 
+    fn portrait(&self, record: Option<&EntitySnapshot>) -> Option<std::path::PathBuf> {
+        crate::party_sync::portrait_path(self.reader.local_scope()?, record?)
+    }
+
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
         let Some(id) = &self.reader.selected.clone() else {
@@ -322,7 +330,15 @@ impl Party {
             }
         }
         if let Some(record) = self.combat.record().or_else(|| self.reader.sheets.get(id)) {
+            let portrait = self.portrait(Some(record));
             ui.horizontal(|ui| {
+                if let Some(path) = &portrait {
+                    let (rect, _) = ui.allocate_exact_size(
+                        egui::Vec2::splat(SHEET_PORTRAIT),
+                        egui::Sense::empty(),
+                    );
+                    crate::art::portrait(ui, rect, Some(path), &record.definition.splat_name);
+                }
                 ui.label(
                     Type::Display
                         .rich(ui, &record.definition.splat_name)
@@ -483,6 +499,8 @@ fn class_line(record: &EntitySnapshot) -> String {
 const AC_WIDTH: f32 = 34.0;
 const HP_WIDTH: f32 = 112.0;
 const MEMBER_ROW: f32 = 54.0;
+const ROW_PORTRAIT: f32 = 38.0;
+pub const SHEET_PORTRAIT: f32 = 56.0;
 
 fn member_header(ui: &mut egui::Ui) {
     let c = colors();
@@ -518,6 +536,7 @@ fn member_row(
     ui: &mut egui::Ui,
     member: &crate::party_sync::Member,
     record: Option<&EntitySnapshot>,
+    portrait: Option<&std::path::Path>,
     selected: bool,
 ) -> egui::Response {
     let c = colors();
@@ -567,15 +586,20 @@ fn member_row(
         let painter = ui.painter();
         let hp_right = rect.right() - design::S;
         let line = rect.top() + 18.0;
-        let room = rect.width() - HP_WIDTH - AC_WIDTH - 2.0 * design::S;
-        let title = design::one_line(ui, &member.name, Type::Name.font(ui), c.text, room);
-        painter.galley(
-            egui::pos2(rect.left() + design::S, line - 10.0),
-            title,
-            c.text,
+        let picture = egui::Rect::from_center_size(
+            egui::pos2(
+                rect.left() + design::S + ROW_PORTRAIT / 2.0,
+                rect.center().y,
+            ),
+            egui::Vec2::splat(ROW_PORTRAIT),
         );
+        crate::art::portrait(ui, picture, portrait, &member.name);
+        let text_left = picture.right() + design::S;
+        let room = hp_right - HP_WIDTH - AC_WIDTH - design::S - text_left;
+        let title = design::one_line(ui, &member.name, Type::Name.font(ui), c.text, room);
+        painter.galley(egui::pos2(text_left, line - 10.0), title, c.text);
         let mut job = egui::text::LayoutJob::default();
-        job.wrap.max_width = rect.width() - HP_WIDTH - design::M;
+        job.wrap.max_width = rect.right() - HP_WIDTH - design::M - text_left;
         job.wrap.max_rows = 1;
         let small = Type::Small.font(ui);
         job.append(
@@ -616,11 +640,7 @@ fn member_row(
             );
         }
         let second = ui.fonts_mut(|fonts| fonts.layout_job(job));
-        painter.galley(
-            egui::pos2(rect.left() + design::S, rect.bottom() - 22.0),
-            second,
-            c.muted,
-        );
+        painter.galley(egui::pos2(text_left, rect.bottom() - 22.0), second, c.muted);
         design::number(
             painter,
             hp_right - HP_WIDTH,

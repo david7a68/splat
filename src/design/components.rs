@@ -1140,6 +1140,25 @@ pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&m
         .inner
 }
 
+/// An image at full size, within the window. Returns true when the DM closes it, by a click
+/// or Escape.
+pub fn image_viewer(ctx: &egui::Context, name: &str, uri: &str) -> bool {
+    let viewport = ctx.content_rect();
+    let response = egui::Modal::new(Id::new("image_viewer"))
+        .backdrop_color(Color32::from_black_alpha(200))
+        .frame(egui::Frame::new())
+        .show(ctx, |ui| {
+            let image = egui::Image::from_uri(uri)
+                .fit_to_original_size(1.0)
+                .max_size(viewport.size() - vec2(XXL * 2.0, XXL * 2.0))
+                .sense(Sense::click());
+            let response = ui.add(image).on_hover_text(name);
+            response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, name));
+            response.clicked()
+        });
+    response.should_close() || response.inner
+}
+
 /// The width of a panel beside a page: Lookup, or the run's side panel.
 pub fn side_panel_width(available: f32) -> f32 {
     (available * 0.36).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)

@@ -169,6 +169,14 @@ fn content(
     links: &dyn Links,
 ) -> Option<usize> {
     let mut open_link = None;
+    if let Some(entry) = entry
+        && let Some(path) = entry
+            .key
+            .as_deref()
+            .and_then(|key| crate::art::entry_art(ui.ctx(), key))
+    {
+        crate::art::hero(ui, &path, &entry.name);
+    }
     if let Some(reading) = reading {
         open_link = reading_view(ui, reading, links);
     }

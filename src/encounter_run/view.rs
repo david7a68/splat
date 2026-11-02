@@ -1765,6 +1765,17 @@ impl Run {
                 temporary_hp: p.temporary_hp,
                 conditions: p.conditions.clone(),
             };
+            if let Some(path) = self
+                .storage
+                .as_ref()
+                .and_then(|storage| crate::party_sync::portrait_path(storage.campaign, record))
+            {
+                let (rect, _) = ui.allocate_exact_size(
+                    egui::Vec2::splat(crate::party::SHEET_PORTRAIT),
+                    egui::Sense::empty(),
+                );
+                crate::art::portrait(ui, rect, Some(&path), &record.definition.splat_name);
+            }
             let freshness = crate::party::freshness(record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
             // While sync reads this sheet, the copy's age says nothing about these values.

@@ -22,6 +22,8 @@ use std::{
 use uuid::Uuid;
 const MAX_RESPONSE: u64 = 16 * 1024 * 1024;
 const INTERVAL: Duration = Duration::from_secs(15);
+const PORTRAIT_HOSTS: &[&str] = &["www.dndbeyond.com", "media.dndbeyond.com"];
+const PORTRAIT_RETRY: Duration = Duration::from_secs(60 * 60);
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Member {
@@ -108,6 +110,84 @@ fn get(client: &Client, session: &Session, url: &str, website: bool) -> Result<V
             .send()
             .map_err(|_| Failure::from("Could not reach D&D Beyond. The local copy was kept."))?,
     )
+}
+/// The address to download a portrait from. Sheet data names the address, so only D&D
+/// Beyond's own hosts are accepted. The request carries no session.
+fn portrait_request(url: &str) -> Option<String> {
+    let mut url = reqwest::Url::parse(url).ok()?;
+    let trusted = url.scheme() == "https"
+        && url
+            .host_str()
+            .is_some_and(|host| PORTRAIT_HOSTS.contains(&host));
+    trusted.then(|| {
+        url.set_query(Some("width=512&height=512&fit=crop&quality=90"));
+        url.into()
+    })
+}
+/// Download a character's portrait if the cache does not have it yet. After a failure, the
+/// same address waits before another attempt. Returns false while it waits, as nothing changed.
+fn store_portrait(
+    client: &Client,
+    gate: &Mutex<bool>,
+    failures: &Mutex<BTreeMap<String, Instant>>,
+    local: Uuid,
+    record: &EntitySnapshot,
+) -> Result<bool, String> {
+    let Some(url) = record.portrait_url() else {
+        return Ok(true);
+    };
+    let (remote, id) = (&record.source.campaign_id, &record.source.character_id);
+    let cache = crate::hermetic::character_cache()?;
+    if cache.portrait_path(local, remote, id, url)?.exists() {
+        return Ok(true);
+    }
+    let waiting = failures
+        .lock()
+        .ok()
+        .and_then(|failures| failures.get(url).copied())
+        .is_some_and(|failed| failed.elapsed() < PORTRAIT_RETRY);
+    if waiting {
+        return Ok(false);
+    }
+    let failed = || {
+        if let Ok(mut failures) = failures.lock() {
+            failures.insert(url.to_owned(), Instant::now());
+        }
+        format!(
+            "No portrait saved for {}. The download failed.",
+            record.definition.splat_name
+        )
+    };
+    let request = portrait_request(url).ok_or_else(failed)?;
+    let bytes = client
+        .get(request)
+        .send()
+        .map_err(|_| failed())
+        .and_then(|reply| response(reply).map_err(|_| failed()))?;
+    // A slow download must not write into a campaign the DM has left.
+    if let Ok(active) = gate.lock()
+        && *active
+    {
+        cache
+            .save_portrait(local, remote, id, url, &bytes)
+            .map_err(|_| failed())?;
+    }
+    Ok(true)
+}
+/// The cached portrait of a character, if there is one.
+pub fn portrait_path(local: Uuid, record: &EntitySnapshot) -> Option<std::path::PathBuf> {
+    let source = &record.source;
+    crate::hermetic::character_cache()
+        .and_then(|cache| {
+            cache.portrait_path(
+                local,
+                &source.campaign_id,
+                &source.character_id,
+                record.portrait_url().ok_or("No portrait.")?,
+            )
+        })
+        .ok()
+        .filter(|path| path.exists())
 }
 pub fn roster(bytes: &[u8]) -> Result<Vec<Member>, Failure> {
     #[derive(Deserialize)]
@@ -207,6 +287,7 @@ pub enum Stored {
     Roster,
     Sheet(String),
     CampaignCopy(String),
+    Portrait(String),
 }
 fn save_campaign_copy(
     record: &EntitySnapshot,
@@ -221,6 +302,7 @@ fn save_campaign_copy(
 }
 #[derive(Default)]
 pub struct Reader {
+    portrait_failures: Arc<Mutex<BTreeMap<String, Instant>>>,
     scope: Option<Scope>,
     pending: Option<Receiver<Event>>,
     gate: Arc<Mutex<bool>>,
@@ -457,6 +539,7 @@ impl Reader {
         self.next = Some(Instant::now() + INTERVAL);
         let ctx = ctx.clone();
         let gate = self.gate.clone();
+        let failures = self.portrait_failures.clone();
         thread::spawn(move || {
             let run = || -> Result<(), Failure> {
                 let client = client()?;
@@ -497,6 +580,7 @@ impl Reader {
                         .into_iter()
                         .collect()
                 };
+                let mut portraits = Vec::new();
                 for id in members {
                     if gate.lock().map_or(true, |active| !*active) {
                         break;
@@ -520,6 +604,11 @@ impl Reader {
                             let _ = tx.send(Event::CampaignCopy(id.clone(), saved));
                         }
                     }
+                    if let Ok(record) = &result
+                        && record.portrait_url().is_some()
+                    {
+                        portraits.push(record.clone());
+                    }
                     if tx.send(Event::Sheet(id, Box::new(result))).is_err() {
                         break;
                     }
@@ -527,6 +616,20 @@ impl Reader {
                     if failure {
                         break;
                     } // Do not hammer an unavailable or rate-limited service.
+                }
+                // After the sheets, so that a slow image never holds a sheet back.
+                for record in portraits {
+                    if gate.lock().map_or(true, |active| !*active) {
+                        break;
+                    }
+                    let stored = store_portrait(&client, &gate, &failures, scope.local, &record);
+                    if let Some(result) =
+                        stored.map_or_else(|e| Some(Err(e)), |done| done.then_some(Ok(())))
+                    {
+                        let what = Stored::Portrait(record.source.character_id.clone());
+                        let _ = tx.send(Event::Stored(what, result));
+                    }
+                    ctx.request_repaint();
                 }
                 Ok(())
             };
@@ -565,7 +668,7 @@ impl Reader {
                     self.conflicts
                         .retain(|id, _| members.iter().any(|m| &m.id == id));
                     self.warnings.retain(|what, _| match what {
-                        Stored::Sheet(id) | Stored::CampaignCopy(id) => {
+                        Stored::Sheet(id) | Stored::CampaignCopy(id) | Stored::Portrait(id) => {
                             members.iter().any(|m| &m.id == id)
                         }
                         Stored::SavedSheets | Stored::Roster => true,
@@ -693,6 +796,25 @@ fn member(record: &EntitySnapshot) -> Member {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn portraits_come_only_from_dnd_beyond_over_https() {
+        assert_eq!(
+            portrait_request("https://www.dndbeyond.com/avatars/1/2/a.jpeg?width=150&height=150")
+                .as_deref(),
+            Some(
+                "https://www.dndbeyond.com/avatars/1/2/a.jpeg?width=512&height=512&fit=crop&quality=90"
+            )
+        );
+        for url in [
+            "http://www.dndbeyond.com/avatars/a.jpeg",
+            "https://www.dndbeyond.com.evil.example/a.jpeg",
+            "https://example.com/a.jpeg",
+            "file:///etc/passwd",
+            "not a url",
+        ] {
+            assert_eq!(portrait_request(url), None, "{url}");
+        }
+    }
     #[test]
     fn roster_rejects_duplicate_and_invalid_ids() {
         assert!(

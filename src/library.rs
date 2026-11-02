@@ -496,6 +496,9 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
 fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, String> {
     let mut all = load(None)?;
     for module in modules {
+        if let Err(error) = splat::content::art::ArtIndex::default().add_package(&module.path) {
+            all.diagnostics.push(format!("{}: {error}", module.name));
+        }
         match load(Some(module)) {
             Ok(package) => {
                 all.notes.extend(package.notes);
