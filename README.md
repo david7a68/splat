@@ -354,8 +354,7 @@ steps stand in the way.
 
 The row and card of a creature with changes say `Changed`, and the card lists each base and changed
 value. The run applies name, maximum HP, AC, initiative bonus, side and conditions. Attacks and speed
-are stat block text, so their changes stay on the card, and attack and damage bonuses also stay on
-the row, for you to add. These changes are saved with the run, so editing the file later does not
+are stat block text, so their changes stay on the card and on the row during combat, for you to add. These changes are saved with the run, so editing the file later does not
 change it.
 
 The combat log records changes. **Undo** names the last action and restores up to 100

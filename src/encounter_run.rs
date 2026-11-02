@@ -7,7 +7,7 @@ use serde_yaml_ng::{Mapping, Value};
 use splat::{
     content::{
         Entry,
-        overrides::{Base, Overrides, Resolved, condition_names},
+        overrides::{Base, Overrides, Resolved, condition_names, same_condition},
     },
     execution::dice::{Dice, Random},
 };
@@ -142,7 +142,7 @@ impl Participant {
         let mut base = Base::of(&entry, &side);
         let resolved = overrides
             .resolve_for(&entry, &side)
-            .map_err(|error| format!("{key}: {error}"))?;
+            .map_err(|error| format!("{key} ({}): {error}", entry.name))?;
         let mut initial = entry
             .fields
             .get("splat_initial")
@@ -181,7 +181,7 @@ impl Participant {
             .unwrap_or_default();
         base.conditions = conditions.clone();
         for condition in &overrides.conditions {
-            if !conditions.iter().any(|c| c.eq_ignore_ascii_case(condition)) {
+            if !conditions.iter().any(|c| same_condition(c, condition)) {
                 conditions.push(condition.clone());
             }
         }
@@ -240,7 +240,7 @@ impl Participant {
         member
             .overrides
             .resolve_for(&member.entry, &group.side)
-            .map_err(|error| format!("{}: {error}", group.name))?;
+            .map_err(|error| format!("{} ({}): {error}", group.name, member.entry.name))?;
         let mut participant = Self::with_overrides(
             key,
             group.side.clone(),
@@ -512,12 +512,27 @@ impl Run {
         for p in &participants {
             *counts.entry(p.name.clone()).or_insert(0) += 1;
         }
+        // A name that is already unique stays. A number never lands on one, because a field's
+        // id comes from a name, and an override can name a creature `Goblin 2`.
+        let mut used: std::collections::BTreeSet<String> = counts
+            .iter()
+            .filter(|(_, count)| **count == 1)
+            .map(|(name, _)| name.clone())
+            .collect();
         let mut seen = BTreeMap::new();
         for p in &mut participants {
-            let count = seen.entry(p.name.clone()).or_insert(0);
-            *count += 1;
             if counts[&p.name] > 1 {
-                p.name = format!("{} {}", p.name, count);
+                let count = seen.entry(p.name.clone()).or_insert(0);
+                let mut name;
+                loop {
+                    *count += 1;
+                    name = format!("{} {}", p.name, count);
+                    if !used.contains(&name) {
+                        break;
+                    }
+                }
+                used.insert(name.clone());
+                p.name = name;
             }
         }
         let seed = u64::from_le_bytes(
@@ -3741,6 +3756,33 @@ mod tests {
         assert_eq!(run.state.participants[5].hp, Some(20), "its own HP");
     }
     #[test]
+    fn a_display_name_cannot_share_a_number_given_to_a_duplicate() {
+        let entry = creature();
+        let slot = |key: &str, overrides: &Overrides| {
+            Participant::with_overrides(
+                key.into(),
+                "enemies".into(),
+                entry.clone(),
+                &Mapping::new(),
+                overrides,
+                true,
+            )
+            .unwrap()
+        };
+        let plain = Overrides::default();
+        let run = Run::new(
+            "Clash".into(),
+            vec![
+                slot("a", &plain),
+                slot("b", &plain),
+                slot("c", &changed("{name: Guard 2}")),
+            ],
+            String::new(),
+        )
+        .unwrap();
+        assert_eq!(names(&run, 0..3), vec!["Guard 1", "Guard 3", "Guard 2"]);
+    }
+    #[test]
     fn names_in_one_addition_never_match_each_other_and_huge_numbers_do_not_overflow() {
         let mut run = run();
         run.apply(Command::AddGroup(
@@ -4196,8 +4238,8 @@ mod tests {
         );
         assert_eq!(changes.base.side, "enemies");
         assert_eq!(
-            changes.overrides.table_bonuses(),
-            vec!["Attack +1", "Damage +1"]
+            changes.overrides.table_bonuses(&changes.base),
+            vec!["Attack +1", "Damage +1", "Speed 40 ft"]
         );
         // What sync compares with is where the participant began.
         assert_eq!(p.started.as_ref().unwrap().hp, Some(30));

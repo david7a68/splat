@@ -110,7 +110,7 @@ impl EncounterGroup {
             .filter(|members| !members.is_empty())
             .ok_or("This group is empty. Add at least one creature.")?;
         Ok(Self {
-            side: side.to_owned(),
+            side: side.trim().to_owned(),
             members: members
                 .iter()
                 .enumerate()

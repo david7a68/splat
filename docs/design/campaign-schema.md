@@ -126,7 +126,7 @@ as if this section did not exist.
 | `initiative_bonus` | `{set: n}` or `{add: n}` | Applies. The result must be from -1000 to 1000 |
 | `attack_bonus` | `{add: n}` | Cannot apply: attacks are stat block text. Shown on the card and on a live row |
 | `damage_bonus` | `{add: n}` | Cannot apply, for the same reason. Shown on the card and on a live row |
-| `speed` | `{set: n}` or `{add: n}` | Cannot apply to text. Shown on the card. The result must be from 0 to 1000 |
+| `speed` | `{set: n}` or `{add: n}` | Cannot apply to text. Shown on the card and on a live row. The result must be from 0 to 1000 |
 | `side` | Text | Replaces the side. In a roster, it must be a side of that encounter. The editor sets a slot's side on its row, so this field is for a note, and the form shows it only when a note has given one |
 | `conditions` | List of names | Added to the starting conditions. One already there is not added twice. A name repeated in this list is an error |
 | `note` | Text | Shown on the card |

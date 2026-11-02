@@ -17,7 +17,7 @@ use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
     Entry,
     encounter_group::{EncounterGroup, MAX_COUNT},
-    overrides::{BY_HAND, Base, Change, MAX_NAME, Overrides, condition_names},
+    overrides::{BY_HAND, Base, Change, MAX_NAME, Overrides, condition_names, same_condition},
 };
 use std::{fs, sync::Arc};
 use uuid::Uuid;
@@ -309,9 +309,9 @@ pub(super) fn load(
                     .ok()
                     .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
                 else {
-                    problems.push(format!(
-                        "{what}: this creature is unavailable. Check the packages this campaign uses."
-                    ));
+                    problems.push(
+                        "Unavailable creature: check the packages this campaign uses.".to_owned(),
+                    );
                     unavailable = unavailable.saturating_add(member.count);
                     continue;
                 };
@@ -472,14 +472,16 @@ pub(super) fn show_changes(
     entry: &Entry,
     side: &str,
     starting: Option<&Mapping>,
+    form_open: bool,
 ) {
     if block.is_empty() {
         return;
     }
     match Overrides::parse(block) {
         Ok(overrides) => {
-            // First, with the form open or closed: a number below may be one that cannot stand.
-            if let Err(error) = overrides.resolve_for(entry, side) {
+            // First, because a number below may be one that cannot stand. An open form says it
+            // under its own heading, which is where opening it scrolls to.
+            if !form_open && let Err(error) = overrides.resolve_for(entry, side) {
                 design::message(ui, Tone::Error, &error);
             }
             let mut base = Base::of(entry, side);
@@ -638,11 +640,17 @@ pub(super) fn overrides_form(
     {
         heading.scroll_to_me(Some(egui::Align::Min));
     }
+    if let Err(error) = overrides.resolve_for(entry, side) {
+        design::message(ui, Tone::Error, &error);
+    }
     text_row(ui, "Display name", &mut overrides.name, &entry.name);
-    overrides.name = overrides
-        .name
-        .take()
-        .map(|name| name.trim_start().chars().take(MAX_NAME).collect());
+    // Only a name just typed: opening the form must not edit what a note holds.
+    if overrides.name != before.name {
+        overrides.name = overrides
+            .name
+            .take()
+            .map(|name| name.trim_start().chars().take(MAX_NAME).collect());
+    }
     // A linked character's sheet decides these. One already here can still be cleared.
     if !linked || overrides.max_hp.is_some() {
         change_row(
@@ -766,10 +774,7 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
         if response.changed() {
             let mut seen = Vec::<String>::new();
             for name in text.split(',').map(str::trim).filter(|n| !n.is_empty()) {
-                if !seen
-                    .iter()
-                    .any(|other| other.to_lowercase() == name.to_lowercase())
-                {
+                if !seen.iter().any(|other| same_condition(other, name)) {
                     seen.push(name.to_owned());
                 }
             }
@@ -1081,7 +1086,11 @@ fn members(
                 |entry| entry.name.clone(),
             );
             let button = format!("Overrides for {name}");
-            let name = shown_name(&member.overrides, name);
+            let name = if entry.is_some() {
+                shown_name(&member.overrides, name)
+            } else {
+                name
+            };
             let detail = entry
                 .and_then(|entry| {
                     let creature = snapshot.creatures.iter().find(|c| c.id == entry.id)?;
@@ -1165,7 +1174,7 @@ fn members(
                 .on_hover_text(member.creature.label());
             }
             if let Some(entry) = entry {
-                show_changes(ui, &member.overrides, entry, &side, None);
+                show_changes(ui, &member.overrides, entry, &side, None, is_open);
                 if is_open {
                     overrides_form(ui, &mut member.overrides, entry, &side, None);
                 }
@@ -1324,7 +1333,7 @@ mod tests {
         .unwrap();
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let problem = snapshot.groups[0].problem.clone().unwrap();
-        assert!(problem.contains("Member 1"), "{problem}");
+        assert!(problem.contains("Unavailable creature"), "{problem}");
         assert!(snapshot.issues.iter().any(|issue| issue.contains("Stray")));
     }
 

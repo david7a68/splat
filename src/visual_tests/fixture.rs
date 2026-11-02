@@ -441,7 +441,7 @@ fn write_groups(
         root,
         &format!("Encounter Groups/{GROUP_LOST}.md"),
         &format!(
-            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_LOST}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {}}}\n  - creature: {{id: {}}}\n    overrides: {{max_hp: {{add: -50}}}}\n---\n",
+            "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: encounter_group\nsplat_name: {GROUP_LOST}\nsplat_encounter_group:\n  side: enemies\n  members:\n  - creature: {{id: {}}}\n  - creature: {{id: {}}}\n    overrides: {{max_hp: {{add: -50}}}}\n  - creature: {{key: 'dnd2024:creatures/goblin_warrior'}}\n---\n",
             stable_id("visual:group:lost"),
             stable_id("visual:group:lost:creature"),
             module_entry_id("cinder_wolf"),
