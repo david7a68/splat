@@ -10,7 +10,7 @@ fn main() {
     }
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         println!(
-            "Usage: verify-content [--executable | --definitions [--require-converted] | [--with-builtin] DIRECTORY ...]\nNo arguments: verify embedded SRD completeness.\n--definitions: verify the full catalogue and report conversion/engine gaps.\n--require-converted: fail if semantic conversion remains incomplete.\n--executable: additionally compile the converted mechanics.\nDirectories: check marked notes together for structure and references. --with-builtin resolves shared SRD dependencies. Read-only; no simulation."
+            "Usage: verify-content [--executable | --definitions [--require-converted] | --check-characters CACHE_DIRECTORY | [--with-builtin] DIRECTORY ...]\nNo arguments: verify embedded SRD completeness.\n--definitions: verify the full catalogue and report conversion/engine gaps.\n--require-converted: fail if semantic conversion remains incomplete.\n--executable: additionally compile the converted mechanics.\n--check-characters: compare cached D&D Beyond characters with the SRD rules; fail on a difference or a choice the rules do not allow. An unset choice is reported but is not a failure.\nDirectories: check marked notes together for structure and references. --with-builtin resolves shared SRD dependencies. Read-only; no simulation."
         );
         return;
     }
@@ -25,6 +25,14 @@ fn main() {
         {
             std::process::exit(1);
         }
+        return;
+    }
+    if args.first().is_some_and(|arg| arg == "--check-characters") {
+        let [_, directory] = args.as_slice() else {
+            eprintln!("--check-characters takes one directory");
+            std::process::exit(2);
+        };
+        check_characters(Path::new(directory));
         return;
     }
     let report = if args == ["--executable"] {
@@ -100,6 +108,55 @@ fn main() {
         serde_json::to_string_pretty(&report).expect("Report is serializable")
     );
     if !report.errors.is_empty() {
+        std::process::exit(1);
+    }
+}
+
+/// Read-only: prints one review per cached character. Character records are `.json` files, so a
+/// `.json` file that cannot be read counts as a failure. A run that checks nothing also fails.
+fn check_characters(directory: &Path) {
+    use splat::character::{EntitySnapshot, check};
+    let mut failures = 0;
+    let mut reviewed = 0;
+    let mut stack = vec![directory.to_owned()];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            let children = std::fs::read_dir(&path).expect("Cache directory is readable");
+            stack.extend(children.flatten().map(|child| child.path()));
+            continue;
+        }
+        if path.extension().is_none_or(|extension| extension != "json") {
+            continue;
+        }
+        let result = std::fs::read(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| {
+                serde_json::from_slice::<EntitySnapshot>(&bytes).map_err(|e| e.to_string())
+            })
+            .and_then(|record| {
+                let entry = record.entry()?;
+                check::review(&record, &entry)
+            });
+        let file = path.display().to_string();
+        let line = match result {
+            Ok(review) => {
+                reviewed += 1;
+                failures += review.count(check::FindingKind::Differs)
+                    + review.count(check::FindingKind::InvalidChoice);
+                serde_json::json!({"file": file, "review": review})
+            }
+            Err(message) => {
+                failures += 1;
+                serde_json::json!({"file": file, "error": message})
+            }
+        };
+        println!("{line}");
+    }
+    if reviewed == 0 {
+        eprintln!("No character records found in {}", directory.display());
+        std::process::exit(1);
+    }
+    if failures > 0 {
         std::process::exit(1);
     }
 }
