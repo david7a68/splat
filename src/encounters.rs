@@ -212,6 +212,7 @@ struct Creature {
     party: bool,
 }
 const ROSTER_MAX_WIDTH: f32 = 860.0;
+const ADD_PANE: &str = "encounter_add";
 const ADD_PANE_MAX_WIDTH: f32 = 640.0;
 const RESULT_ROW: f32 = 40.0;
 /// A result's stats, each in its own place, so that they can be compared down the list. The
@@ -1317,7 +1318,7 @@ impl Encounters {
             .max(ui.available_width() - ROSTER_MAX_WIDTH)
             .min(ADD_PANE_MAX_WIDTH);
         design::Column::right(
-            "encounter_add",
+            ADD_PANE,
             width,
             design::PANEL_MIN_WIDTH..=ADD_PANE_MAX_WIDTH,
         )
@@ -1340,8 +1341,10 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                // A name stays near its controls, however wide the window.
-                ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
+                // A name stays near its controls in a wide window, until the DM moves the panel.
+                if !design::column_dragged(ui.ctx(), ADD_PANE) {
+                    ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
+                }
                 Self::roster_pane(ui, draft, snapshot, focus_search, expanded);
             });
     }

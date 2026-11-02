@@ -32,6 +32,16 @@ pub fn column_widths(ctx: &Context) -> BTreeMap<String, f32> {
     })
 }
 
+/// Whether the DM has chosen this column's width. A page that holds its content to a
+/// comfortable width beside a natural column lets it reach a column the DM moved.
+pub fn column_dragged(ctx: &Context, id: &str) -> bool {
+    ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<Widths>(widths_id())
+            .0
+            .contains_key(id)
+    })
+}
+
 pub struct Column {
     id: &'static str,
     side: Side,
@@ -192,7 +202,9 @@ mod tests {
         harness.step();
         assert_eq!(width.get(), NATURAL);
         assert!(column_widths(&harness.ctx).is_empty());
+        assert!(!column_dragged(&harness.ctx, "c"));
         drag(&mut harness, pos2(NATURAL, 200.0), pos2(260.0, 200.0));
+        assert!(column_dragged(&harness.ctx, "c"));
         assert_eq!(width.get(), 260.0);
         assert_eq!(column_widths(&harness.ctx)["c"], 260.0);
     }

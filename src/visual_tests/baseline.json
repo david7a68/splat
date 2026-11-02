@@ -2,7 +2,7 @@
   "violations": {
     "accessible-name/egui-chrome": {
       "campaign-content": 66,
-      "column-resize": 64,
+      "column-resize": 81,
       "dialogs": 37,
       "empty": 18,
       "encounter-build": 37,
@@ -44,7 +44,7 @@
     },
     "target-size/egui-chrome": {
       "campaign-content": 66,
-      "column-resize": 64,
+      "column-resize": 81,
       "dialogs": 36,
       "empty": 18,
       "encounter-build": 37,
@@ -83,7 +83,7 @@
       "see a partial package selection": 1
     },
     "column-resize": {
-      "resize the columns and go on working": 19
+      "resize the columns and go on working": 20
     },
     "dialogs": {
       "ask to close with unsaved changes": 8,

@@ -115,7 +115,7 @@ pub(super) fn sync_status(state: SyncState) -> Status<'static> {
     }
 }
 
-/// The roster keeps its capped width. The panel uses the rest deliberately.
+/// Until the DM drags it, the panel leaves the roster its capped width and uses the rest.
 fn panel_width(ui: &egui::Ui) -> f32 {
     design::side_panel_width(ui.ctx().content_rect().width())
         .max(ui.available_width() - design::RUN_LARGE.max_width - GUTTER)
@@ -453,6 +453,16 @@ impl Run {
         ui.add_space(design::XS);
     }
 
+    /// Beside a panel the roster reaches it, wherever the DM drags it. Alone, it keeps its cap.
+    fn roster_width(&self, ui: &egui::Ui) -> f32 {
+        let room = ui.available_width() - GUTTER;
+        if self.hide_panel {
+            room.min(design::RUN_LARGE.max_width)
+        } else {
+            room
+        }
+    }
+
     // ---- Live -------------------------------------------------------------------
 
     fn live_view(&mut self, ui: &mut egui::Ui) -> bool {
@@ -471,10 +481,7 @@ impl Run {
             .frame(egui::Frame::new())
             .show_inside(ui, |ui| {
                 // A panel's own width is fixed, so the cap needs an inner layout.
-                let size = vec2(
-                    (ui.available_width() - GUTTER).min(design::RUN_LARGE.max_width),
-                    ui.available_height(),
-                );
+                let size = vec2(self.roster_width(ui), ui.available_height());
                 ui.allocate_ui_with_layout(size, Layout::top_down(Align::LEFT), |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     // The rows' scale decides the header's size, and needs only a close
@@ -2034,10 +2041,7 @@ impl Run {
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
             .show_inside(ui, |ui| {
-                let size = vec2(
-                    (ui.available_width() - GUTTER).min(design::RUN_LARGE.max_width),
-                    ui.available_height(),
-                );
+                let size = vec2(self.roster_width(ui), ui.available_height());
                 ui.allocate_ui_with_layout(size, Layout::top_down(Align::LEFT), |ui| {
                     closed = self.setup_body(ui);
                 });
