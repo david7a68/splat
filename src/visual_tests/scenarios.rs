@@ -2656,3 +2656,309 @@ pub mod nav_table {
         );
     }
 }
+
+/// W11: notes, templates and a timeline that stands apart from them.
+pub mod session_notes {
+    use super::*;
+    const TITLE: &str = "Ash on the Road";
+    const ADD_DAY: &str = "Add Day";
+    const ADD_LONG_REST: &str = "Add Long rest";
+    const ADD_TRAVEL: &str = "Add Travel";
+    const ADD_EVENT: &str = "Add Event";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        d.expect("No session notes yet");
+        d.state("sessions-empty", Sizes::Default);
+        d.check_tab_order("sessions-empty");
+
+        d.begin_task();
+        d.click("New session");
+        d.state("session-form", Sizes::Default);
+        d.type_into("Session title", TITLE);
+        d.click("Create session");
+        d.expect(&format!("Session 1: {TITLE}"));
+        d.goal_within("T11.1", "start a titled session from a template", 4);
+        d.state("session-write", Sizes::AllAndHiDpi);
+        let filled = d
+            .editor_text()
+            .is_some_and(|text| text.contains("Recap of last time") && text.contains(TITLE));
+        d.observe(
+            "T11.1",
+            filled,
+            "The new note holds the template, filled in",
+        );
+
+        d.type_into_editor("\nThe road was covered in ash, and the wolves followed us.\n");
+        d.press_ctrl(Key::S);
+        d.expect("Saved");
+        d.state("session-written", Sizes::Default);
+
+        d.click("Read");
+        d.state("session-read", Sizes::All);
+
+        // A rest, on the session's own page, with no step away from it.
+        d.click("Events");
+        d.state("session-events-empty", Sizes::Default);
+        d.begin_task();
+        d.click(ADD_LONG_REST);
+        d.goal_within("T11.2", "put a long rest on the timeline", 2);
+        d.expect("Long rest");
+        d.click(ADD_TRAVEL);
+        d.click(ADD_EVENT);
+        d.state("session-events", Sizes::Default);
+        d.click("Add to notes: Long rest");
+        d.click("Write");
+        let linked = d
+            .editor_text()
+            .is_some_and(|text| text.contains("[[Timeline#^"));
+        d.observe(
+            "T11.4",
+            linked,
+            "An event adds a link to the session's notes",
+        );
+        d.press_ctrl(Key::S);
+        d.click("Read");
+        d.expect("ON THE TIMELINE");
+        d.state("session-read-linked", Sizes::Default);
+        let reads_as_words = !d.visible_text("[[Timeline");
+        d.observe(
+            "T11.4",
+            reads_as_words,
+            "The Reader shows the link as its words",
+        );
+
+        // The timeline is a place of its own, with every kind of event.
+        d.click(NAV_TIMELINE);
+        d.expect("Long rest");
+        d.state("timeline-session-events", Sizes::All);
+        d.check_tab_order("timeline");
+        d.click(ADD_DAY);
+        d.type_text("Harvest Eve");
+        // A day opens what follows it, so move it to the top.
+        for _ in 0..3 {
+            d.click("Move earlier");
+        }
+        d.state("timeline-day-added", Sizes::All);
+        d.click_containing("Long rest · Session 1");
+        d.expect("REFERENCE");
+        d.replace_text_in("Title", "Rest at the mill");
+        d.type_into("Where", "Old mill");
+        d.press_ctrl(Key::S);
+        d.expect("Copy reference");
+        d.click("Copy reference");
+        d.expect("Copied");
+        d.expect("MENTIONED IN");
+        d.state("timeline-event", Sizes::AllAndHiDpi);
+        d.observe(
+            "T11.4",
+            d.has_containing(&format!("Session 1: {TITLE}")),
+            "An event lists the session notes that link to it",
+        );
+        d.click("Rests");
+        d.state("timeline-filtered", Sizes::Default);
+        d.click("All");
+        d.click("Remove this event");
+        d.expect("Undo remove");
+        d.state("timeline-removed", Sizes::Default);
+        d.click("Undo remove");
+        d.expect("Rest at the mill");
+
+        // Back to the note from the event, and the file is readable outside Splat.
+        d.click_containing("Rest at the mill");
+        d.click("Open this session");
+        d.expect(&format!("Session 1: {TITLE}"));
+
+        d.click("Templates");
+        d.expect("Standard session");
+        d.state("templates-built-in", Sizes::All);
+        d.click("Customize this template");
+        d.expect("This campaign");
+        d.state("templates-own", Sizes::Default);
+        d.click("New template");
+        d.type_into("Template name", "Downtime");
+        d.state("templates-new", Sizes::Default);
+        d.click("Create template");
+        d.expect("Downtime");
+        d.click("Delete this template");
+        d.expect("Undo delete");
+        d.state("templates-deleted", Sizes::Default);
+        d.click("Undo delete");
+        d.expect("Downtime");
+
+        d.click("Folder");
+        d.expect("Session folder");
+        d.state("session-folder", Sizes::Default);
+        d.click("Notes");
+
+        // T11.3: a run puts itself on the timeline, in the session that is open.
+        go_encounters(d);
+        resume_run(d, RUN);
+        d.click(NAV_TIMELINE);
+        d.expect(RUN);
+        d.state("timeline-with-run", Sizes::All);
+        d.observe(
+            "T11.3",
+            d.has_containing(&format!("{RUN} · Encounter")),
+            "An encounter run put itself on the timeline, with no step from the DM",
+        );
+        d.goal("use the timeline during a run");
+    }
+}
+
+/// W12: record a session, and process it later with the DM's chosen services.
+pub mod session_recording {
+    use super::*;
+    use crate::recording::Health;
+
+    const TITLE: &str = "The Bridge";
+    const RECORDING: &str = "19-00";
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        new_session(d, TITLE);
+
+        // A stale input stops here, rather than record from another microphone.
+        d.app_mut().processing.simulate_input("gone.mic");
+        d.settle();
+        d.observe(
+            "T11.5",
+            d.is_disabled("Record this session"),
+            "A chosen input that is gone blocks recording",
+        );
+        d.app_mut().processing.simulate_input("table.mic");
+        d.settle();
+
+        // T11.5: nothing records without a stated step.
+        d.click("Record this session");
+        d.expect("Start recording");
+        d.state("record-consent", Sizes::Default);
+        d.observe(
+            "T11.5",
+            d.has_containing("Tell everyone at the table"),
+            "Recording starts only after the DM is told to tell the table",
+        );
+        d.click("Start recording");
+        d.expect("Stop recording");
+        d.expect("Waiting for sound");
+        d.state("recording-starting", Sizes::Default);
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Hearing);
+        d.settle();
+        d.expect("Hearing sound");
+        d.state("recording-hearing", Sizes::AllAndHiDpi);
+
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Silent);
+        d.settle();
+        d.expect("Silent. Check the input");
+        d.state("recording-silent", Sizes::Default);
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stalled);
+        d.settle();
+        d.expect("The file stopped growing");
+        d.state("recording-stalled", Sizes::Default);
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Hearing);
+        d.settle();
+
+        // The microphone's state stays in view on another page.
+        go_library(d);
+        d.observe(
+            "T11.5",
+            d.has_containing("Rec 00:00:00") && d.has_containing("Recording"),
+            "Recording, with its time, stays in the rail on other pages",
+        );
+        d.state("recording-on-another-page", Sizes::Default);
+        // A close does not end it by surprise.
+        d.request_close();
+        d.expect("Keep recording");
+        d.state("recording-close-prompt", Sizes::Default);
+        d.click("Keep recording");
+        d.expect("Stop recording");
+        d.click("Stop recording");
+        d.expect("Recording saved");
+
+        d.click("Recordings (1)");
+        d.expect(RECORDING);
+        d.observe(
+            "T11.5",
+            d.has_containing("Not processed"),
+            "Stop keeps the recording in the session",
+        );
+        d.state("recording-saved-no-key", Sizes::Default);
+
+        // T11.6: the default services are named, and what is missing is said.
+        d.observe(
+            "T11.6",
+            d.has_containing("Save an API key for the speech service"),
+            "Process states what is missing before it can run",
+        );
+        d.click("Open Settings");
+        d.expect("Speech service");
+        d.state("processing-settings", Sizes::All);
+        d.observe(
+            "T11.6",
+            d.field_text("LLM model").as_deref() == Some("gpt-6.1-sol")
+                && d.field_text("Speech model").as_deref() == Some("gpt-transcribe"),
+            "The defaults are Sol through the Codex CLI, after OpenAI's gpt-transcribe",
+        );
+        d.click("Use Anthropic for the LLM");
+        d.state("processing-settings-anthropic", Sizes::Default);
+        d.click("Use Codex CLI, GPT-6.1 Sol for the LLM");
+        d.click("Account and campaigns");
+
+        d.app_mut().processing.simulate_keys();
+        d.settle();
+        d.click(NAV_SESSIONS);
+        d.expect("Process sends the audio to api.openai.com");
+        d.state("recording-ready", Sizes::Default);
+        d.observe(
+            "T11.6",
+            d.has_containing("notes go to Codex (gpt-6.1-sol) twice"),
+            "The page says where the audio and the words will go",
+        );
+        d.click_containing("Process:");
+        d.expect("Processing finished");
+
+        // T11.7: a marker is a suggestion until the DM adds it.
+        d.expect("EVENTS MARKED IN THIS RECORDING: 2");
+        d.state("recording-processed", Sizes::AllAndHiDpi);
+        d.click(NAV_TIMELINE);
+        d.observe(
+            "T11.7",
+            d.has("Nothing on the timeline yet"),
+            "Markers do not reach the timeline by themselves",
+        );
+        d.click(NAV_SESSIONS);
+        d.click_containing("Add to timeline: Rest at the mill");
+        d.expect("On the timeline");
+        d.state("marker-added", Sizes::Default);
+        d.click_containing("Review notes:");
+        d.expect("Restored");
+        d.state("second-pass-review", Sizes::Default);
+        d.click_containing("Clean transcript:");
+        d.expect("Long rest: Rest at the mill");
+        d.state("marked-transcript", Sizes::All);
+        d.click_containing("Summary:");
+        d.state("recording-summary", Sizes::Default);
+        d.click(NAV_TIMELINE);
+        d.observe(
+            "T11.7",
+            d.has_containing("Rest at the mill"),
+            "A marker the DM adds is on the timeline, with its place and length",
+        );
+        d.click(NAV_SESSIONS);
+
+        d.click_containing("Delete recording:");
+        d.expect("Keep the recording");
+        d.state("recording-delete", Sizes::Default);
+        d.click("Delete recording");
+        d.expect("Recording deleted.");
+        d.goal("record a session and process it");
+    }
+}

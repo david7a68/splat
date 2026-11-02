@@ -39,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 26] = [
+const SCENARIOS: [(&str, Seed, Script); 28] = [
     (
         "library-browse",
         Seed::Empty,
@@ -126,6 +126,16 @@ const SCENARIOS: [(&str, Seed, Script); 26] = [
         Seed::Campaign,
         scenarios::run_edge_states::run,
     ),
+    (
+        "session-notes",
+        Seed::Campaign,
+        scenarios::session_notes::run,
+    ),
+    (
+        "session-recording",
+        Seed::Campaign,
+        scenarios::session_recording::run,
+    ),
 ];
 
 impl crate::Splat {
@@ -137,6 +147,7 @@ impl crate::Splat {
             || self.encounters.busy()
             || self.party.busy()
             || self.lookup.busy()
+            || self.sessions.busy()
             || self.copy_dialog.as_ref().is_some_and(|d| d.busy())
     }
 }

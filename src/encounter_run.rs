@@ -820,6 +820,19 @@ impl Run {
             name: self.name.clone(),
         }
     }
+    /// What the timeline records about this run.
+    pub fn timeline_fact(&self) -> crate::timeline::RunFact {
+        crate::timeline::RunFact {
+            id: self.id,
+            name: self.name.clone(),
+            round: self.state.round,
+            state: match &self.state.phase {
+                Phase::Setup => crate::timeline::RunState::Setup,
+                Phase::Running => crate::timeline::RunState::Running,
+                Phase::Ended { outcome } => crate::timeline::RunState::Ended(outcome.clone()),
+            },
+        }
+    }
     /// The strip's Next turn, usable from any page.
     pub fn next_turn(&mut self) {
         if let Err(error) = self.apply(Command::Next) {

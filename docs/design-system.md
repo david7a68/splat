@@ -91,6 +91,7 @@ has a word, an icon, or a shape, and `src/design/tokens.rs` tests the contrast p
 | Line | `hairline rule field_border` | Decorative rules, and the 3:1 field edge |
 | Text | `text muted faint disabled` | Primary, secondary, tertiary |
 | Accent | `accent accent_fill accent_hover on_accent focus` | Focus also has a 2 px ring |
+| Recording | `recording` | `Recording` with its time and a record icon, in the rail on every page |
 | Turn | `turn.current turn.next` | The word `Turn` and a bar; the word `Next` |
 | HP | `hp.healthy damaged bloodied zero temp unknown track` | Numbers tinted by state, a bar under them, `Bloodied`, a neutral mark with `0 HP` (a skull would be a verdict, and death is the DM's ruling), `+5` with a shield and a strip above the bar, `?` |
 | Participant | `participant.absent concentrating condition` | `Absent`, `Conc`, each condition by name |
@@ -203,6 +204,22 @@ the panel, those words open the second line instead, so that a name is never cut
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view. Each turn scrolls to show the current row and the next.
 - **Strip:** on other pages, a line with the turn, any conflict, `Back to run` and `Next turn`.
+
+## Sessions and the timeline
+
+Notes are Markdown in the campaign's folder, and Sessions has the Library's two voices: a source editor in
+monospace, and the one Reader. A draft saves two seconds after the last edit, because at the table nobody
+stops to press Save. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
+
+The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
+a word for each kind. A day opens with a rule, as a heading does, and numbers itself. It has no card and no
+colour for kinds, because a kind is not a state. An event's detail sits beside the list, with the same width
+rule as Lookup.
+
+A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
+While it records, the rail keeps the word and the time in view on every page, and the session's page says what
+the recorder hears: `Hearing sound`, `Silent. Check the input`, or `The file stopped growing`. Words from an LLM
+are marked as a draft, the second pass's changes can be read, and a marker in a transcript has `Add`, not an automatic place on the timeline.
 
 ## The catalogue
 

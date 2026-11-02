@@ -146,6 +146,36 @@ or leave combat. Phases have independent triggers and can overlap.
 An event or condition that causes a planned change in an encounter, once by
 default or repeatedly when explicitly configured.
 
+**Session**:
+One meeting of the table, with its notes in a Markdown file in the campaign's folder.
+
+**Session template**:
+Markdown a new session's notes start from, built in or owned by the campaign.
+
+**Timeline**:
+The campaign's record of what happened in the story, in order. It stands apart from any session.
+
+**Timeline event**:
+One encounter, rest, travel interval, day or other major event on the timeline, with a stable
+ID that a note can refer to. It can belong to a session.
+
+**Timeline reference**:
+A link to one timeline event, `[[Timeline#^id|words]]`. Splat and Obsidian both follow it.
+
+**Recording**:
+Audio of a session, captured by the host's recorder and kept beside the campaign's notes.
+
+**Raw transcript**:
+The words of a recording as the speech service heard them. Nothing changes it later.
+
+**Clean transcript**:
+A raw transcript with its errors corrected and its events marked by an LLM, then checked against
+the raw words by a second pass.
+
+**Event marker**:
+A suggestion in a transcript, written by an LLM, that a timeline event starts there. It reaches
+the timeline only when the DM adds it.
+
 **Encounter sequence**:
 A series of encounters with explicit elapsed time and rests, across which
 participants retain their HP, resources, inventory, and ongoing effects.

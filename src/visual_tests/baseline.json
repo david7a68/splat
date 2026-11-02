@@ -1,5 +1,8 @@
 {
   "violations": {
+    "accessible-name": {
+      "session-recording": 3
+    },
     "accessible-name/egui-chrome": {
       "campaign-content": 12,
       "dialogs": 1,
@@ -22,12 +25,17 @@
       "run-roster-conflict": 2,
       "run-sync-conflict": 6,
       "run-sync-states": 5,
+      "session-notes": 8,
+      "session-recording": 10,
       "signed-in": 7
     },
     "no-overlap/egui-chrome": {
       "dialogs": 4,
       "library-author": 2,
       "library-scope": 5
+    },
+    "target-size": {
+      "session-recording": 3
     },
     "target-size/egui-chrome": {
       "campaign-content": 12,
@@ -49,6 +57,8 @@
       "run-roster-conflict": 2,
       "run-sync-conflict": 6,
       "run-sync-states": 5,
+      "session-notes": 8,
+      "session-recording": 10,
       "signed-in": 7
     }
   },
@@ -176,6 +186,14 @@
     },
     "run-sync-states": {
       "show every sync state": 1
+    },
+    "session-notes": {
+      "T11.1: start a titled session from a template": 4,
+      "T11.2: put a long rest on the timeline": 1,
+      "use the timeline during a run": 40
+    },
+    "session-recording": {
+      "record a session and process it": 28
     },
     "settings": {
       "edit a campaign's details": 5,

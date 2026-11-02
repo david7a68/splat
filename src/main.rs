@@ -18,7 +18,11 @@ mod party;
 mod party_stream;
 mod party_sync;
 mod persistence;
+mod processing;
+mod recording;
+mod sessions;
 mod settings;
+mod timeline;
 mod ui_state;
 #[cfg(test)]
 mod visual_tests;
@@ -46,6 +50,7 @@ fn main() -> eframe::Result {
 struct Splat {
     page: Page,
     campaign_tab: CampaignTab,
+    settings_tab: SettingsTab,
     started: bool,
     confirm_close: bool,
     discard_on_close: bool,
@@ -58,6 +63,12 @@ struct Splat {
     party: party::Party,
     encounters: encounters::Encounters,
     lookup: lookup::Lookup,
+    sessions: sessions::page::Sessions,
+    timeline: timeline::Book,
+    timeline_page: timeline::page::TimelinePage,
+    processing: processing::settings::ProcessingSettings,
+    /// What the open run last told the timeline.
+    run_fact: Option<timeline::RunFact>,
     ui_store: ui_state::Store,
     tab_direction: Option<egui::FocusDirection>,
     step_past: Option<(egui::Id, egui::FocusDirection)>,
@@ -70,6 +81,7 @@ impl Default for Splat {
         Self {
             page: Page::default(),
             campaign_tab: CampaignTab::default(),
+            settings_tab: SettingsTab::default(),
             started: false,
             confirm_close: false,
             discard_on_close: false,
@@ -82,6 +94,11 @@ impl Default for Splat {
             party: Default::default(),
             encounters: Default::default(),
             lookup: Default::default(),
+            sessions: Default::default(),
+            timeline: Default::default(),
+            timeline_page: Default::default(),
+            processing: Default::default(),
+            run_fact: None,
             ui_store: ui_state::Store::user(),
             tab_direction: None,
             step_past: None,
@@ -105,6 +122,8 @@ enum Page {
     Run,
     #[default]
     Encounters,
+    Sessions,
+    Timeline,
     Party,
     Library,
     Campaign,
@@ -116,6 +135,8 @@ impl Page {
         match self {
             Self::Run => "Run",
             Self::Encounters => "Encounters",
+            Self::Sessions => "Sessions",
+            Self::Timeline => "Timeline",
             Self::Party => "Party",
             Self::Library => "Library",
             Self::Campaign => "Campaign",
@@ -125,6 +146,8 @@ impl Page {
     fn from_name(name: &str) -> Option<Self> {
         [
             Self::Encounters,
+            Self::Sessions,
+            Self::Timeline,
             Self::Party,
             Self::Library,
             Self::Campaign,
@@ -141,6 +164,13 @@ enum CampaignTab {
     Packages,
     RunSettings,
     Link,
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+enum SettingsTab {
+    #[default]
+    Account,
+    Recording,
 }
 
 impl Splat {
@@ -244,6 +274,10 @@ impl Splat {
     fn blocked_switch(&self) -> Option<&'static str> {
         if self.encounters.has_run() {
             Some("Close the run to change campaigns.")
+        } else if self.sessions.recording() {
+            Some("Stop the recording to change campaigns.")
+        } else if self.sessions.busy_with_edit() || self.timeline.not_saved() {
+            Some("Resolve the unsaved session file to change campaigns.")
         } else if self.campaign_content.dirty()
             || self.encounters.dirty()
             || self.library.campaign_draft()
@@ -302,6 +336,20 @@ impl Splat {
                 Page::Run,
             ));
         }
+        for item in self.sessions.not_saved() {
+            items.push((item, Page::Sessions));
+        }
+        if self.timeline.not_saved() {
+            items.push(("The timeline is not saved.".to_owned(), Page::Timeline));
+        }
+        if let Some(label) = self.sessions.recording_label() {
+            items.push((
+                format!(
+                    "{label} is recording. Closing stops it, and what is recorded so far is kept."
+                ),
+                Page::Sessions,
+            ));
+        }
         items
     }
 
@@ -313,7 +361,15 @@ impl Splat {
             return;
         }
         let only_sync = items.len() == 1 && !self.encounters.pending_sync_names().is_empty();
-        let (title, keep_label, discard_label, advice) = if only_sync {
+        let only_recording = items.len() == 1 && self.sessions.recording();
+        let (title, keep_label, discard_label, advice) = if only_recording {
+            (
+                "Recording in progress",
+                "Keep recording",
+                "Stop and close",
+                "Nothing is lost either way.",
+            )
+        } else if only_sync {
             (
                 "Sync has not finished",
                 "Return to run",
@@ -403,14 +459,18 @@ impl Splat {
                         self.page = Page::Run;
                     }
                 }
+                let recording = self.sessions.recording_detail();
                 for (page, icon) in [
                     (Page::Encounters, icons::ENCOUNTERS),
+                    (Page::Sessions, icons::SESSIONS),
+                    (Page::Timeline, icons::TIMELINE),
                     (Page::Party, icons::PARTY),
                     (Page::Library, icons::LIBRARY),
                     (Page::Campaign, icons::CAMPAIGN),
                 ] {
                     let current = self.visible_page() == Some(page);
-                    if design::nav_item(ui, icon, page.name(), None, current).clicked() {
+                    let detail = recording.as_deref().filter(|_| page == Page::Sessions);
+                    if design::nav_item(ui, icon, page.name(), detail, current).clicked() {
                         self.page = page;
                     }
                 }
@@ -475,6 +535,20 @@ impl Splat {
                     color: c.document.unsaved,
                 });
             }
+        }
+        if self.sessions.recording() {
+            statuses.push(Status {
+                icon: icons::RECORD,
+                word: "Recording",
+                color: c.recording,
+            });
+        }
+        if self.sessions.processing() {
+            statuses.push(Status {
+                icon: icons::AUDIO,
+                word: "Processing audio",
+                color: c.connection.busy,
+            });
         }
         if self.party.sync_stopped {
             statuses.push(Status {
@@ -615,9 +689,28 @@ impl Splat {
                 design::page_header(
                     ui,
                     "Settings",
-                    Some("Your D&D Beyond account and your campaign list"),
+                    Some("Your D&D Beyond account, your campaign list, and session recording"),
                     |_| {},
                 );
+                design::segmented(
+                    ui,
+                    &mut self.settings_tab,
+                    &[
+                        (SettingsTab::Account, "Account and campaigns"),
+                        (SettingsTab::Recording, "Recording and processing"),
+                    ],
+                );
+                if self.settings_tab == SettingsTab::Recording {
+                    egui::ScrollArea::vertical()
+                        .id_salt("recording_settings")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.add_space(design::S);
+                            ui.set_max_width(design::FORM_WIDTH + design::XXL);
+                            self.processing.show(ui);
+                        });
+                    return;
+                }
                 let blocked = self.blocked_switch();
                 egui::ScrollArea::vertical()
                     .id_salt("settings_page")
@@ -664,6 +757,28 @@ impl Splat {
                             list(ui, &mut self.campaigns, &mut self.dndbeyond);
                         }
                     });
+            }
+            Page::Sessions => {
+                if active.is_some() {
+                    self.sessions.show(ui, &self.processing, &mut self.timeline);
+                } else {
+                    self.no_campaign(ui, "No campaign to keep notes for yet");
+                }
+            }
+            Page::Timeline => {
+                if let Some(campaign) = &active {
+                    let links = self.sessions.links();
+                    let current = self.sessions.current();
+                    self.timeline_page.show(
+                        ui,
+                        &mut self.timeline,
+                        &campaign.name,
+                        &links,
+                        current,
+                    );
+                } else {
+                    self.no_campaign(ui, "No campaign, so no timeline yet");
+                }
             }
             Page::Library => {
                 self.library.show(ui, &mut self.campaigns);
@@ -826,6 +941,23 @@ impl Splat {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Link;
         }
+        if std::mem::take(&mut self.sessions.wants_processing_settings) {
+            self.page = Page::Settings;
+            self.settings_tab = SettingsTab::Recording;
+        }
+        if let Some(id) = self.sessions.wants_event.take() {
+            self.timeline_page.reveal(&id, &self.timeline);
+            self.page = Page::Timeline;
+        }
+        if let Some(session) = self.timeline_page.open_session.take() {
+            self.sessions.open(session);
+            self.page = Page::Sessions;
+        }
+        if let Some(root) = self.sessions.manifest_changed.take() {
+            self.campaign_content.refresh_destination(&root);
+            self.encounters.refresh_content(ctx, &self.campaigns, &root);
+            self.timeline.open(None);
+        }
         if let Some(source) = self.library.copy.take() {
             self.copy_dialog = Some(copy_dialog::CopyDialog::new(source, &self.campaigns, ctx));
         }
@@ -842,15 +974,22 @@ impl eframe::App for Splat {
         if !self.started {
             self.start();
         }
-        if ctx.input(|i| i.viewport().close_requested())
-            && (self.library.dirty()
+        if ctx.input(|i| i.viewport().close_requested()) {
+            // An edit in its pause before saving is saved now, not reported as a loss.
+            self.sessions.flush();
+            self.timeline.save();
+            if (self.library.dirty()
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()
-                || self.encounters.pending_sync())
-            && !self.discard_on_close
-        {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            self.confirm_close = true;
+                || self.encounters.pending_sync()
+                || self.sessions.recording()
+                || self.sessions.busy_with_edit()
+                || self.timeline.not_saved())
+                && !self.discard_on_close
+            {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.confirm_close = true;
+            }
         }
         if self.confirm_close {
             self.close_prompt(ctx);
@@ -864,6 +1003,16 @@ impl eframe::App for Splat {
         self.lookup.poll(ctx, &self.campaigns);
         self.encounters.poll(ctx, &self.campaigns);
         self.lookup.library_draft = self.library.dirty();
+        self.processing.poll(ctx);
+        let open = self.campaigns.active_campaign();
+        self.sessions.poll(ctx, open.as_ref(), &mut self.timeline);
+        let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
+        if fact != self.run_fact {
+            if let Some(fact) = &fact {
+                self.timeline.record_run(fact, self.sessions.current());
+            }
+            self.run_fact = fact;
+        }
         let modal = self.copy_dialog.is_some()
             || self.confirm_close
             || ctx.memory(|memory| memory.top_modal_layer()).is_some();

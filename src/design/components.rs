@@ -952,6 +952,15 @@ pub fn draft_discarded(ui: &mut Ui) -> bool {
     pressed
 }
 
+/// A message with one action beside it. Returns true when the action is used.
+pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) -> bool {
+    message(ui, tone, text);
+    Action::quiet(action)
+        .density(Density::Read)
+        .show(ui)
+        .clicked()
+}
+
 /// A focused dialog. Only the brief's three modal tasks use this. Escape is the caller's.
 pub fn dialog<R>(ctx: &egui::Context, id: &str, title: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
     let c = colors();
