@@ -135,9 +135,11 @@ pub struct Tables {
 }
 
 impl Tables {
-    /// Read `(path, body)` notes in the order given. The first good table for a key wins.
+    /// Read `(path, body)` notes in the order given. The first table for a key decides it, so
+    /// a bad one gives its warning and no later table takes its place by surprise.
     pub fn read<'a>(notes: impl IntoIterator<Item = (&'a str, &'a str)>) -> Self {
         let mut tables = Self::default();
+        let mut seen = std::collections::HashSet::new();
         for (path, body) in notes {
             for (marker, rows) in marked_tables(body) {
                 let Ok((key, dice)) = marker else {
@@ -150,7 +152,7 @@ impl Tables {
                 } else {
                     continue;
                 };
-                if slot.is_some() {
+                if !seen.insert(key.clone()) {
                     continue;
                 }
                 match table_rows(&dice, &rows) {
@@ -271,7 +273,17 @@ mod tests {
     }
 
     #[test]
-    fn the_first_good_table_wins_and_other_keys_are_left_alone() {
+    fn the_first_table_decides_its_key_even_when_it_is_bad() {
+        let bad = "<!-- splat:rolls key=npc-name dice=1d6 -->\n\n| d6 | Name |\n|---|---|\n| 1 | Tally |\n";
+        let good = "<!-- splat:rolls key=npc-name dice=1d2 -->\n\n| d2 | Name |\n|---|---|\n| 1-2 | Later |\n";
+        let tables = Tables::read([("A.md", bad), ("B.md", good)]);
+        assert_eq!(tables.problems.len(), 1);
+        let npc = generate(&tables, &mut Random::seeded(3)).unwrap();
+        assert!(NAMES.contains(&npc.name.as_str()), "{}", npc.name);
+    }
+
+    #[test]
+    fn the_first_table_wins_and_other_keys_are_left_alone() {
         let one = "<!-- splat:rolls key=npc-name dice=1d2 -->\n\n| d2 | Name |\n|---|---|\n| 1-2 | First |\n";
         let two = "<!-- splat:rolls key=npc-name dice=1d2 -->\n\n| d2 | Name |\n|---|---|\n| 1-2 | Second |\n\n<!-- splat:rolls key=gifts dice=1d2 -->\n\n| d2 | Gift |\n|---|---|\n| 1-2 | Knife |\n";
         let tables = Tables::read([("A.md", one), ("B.md", two)]);
