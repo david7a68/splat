@@ -1907,6 +1907,7 @@ impl Run {
                             && let Some(total) = total
                         {
                             command = Some(Command::Initiative(index, Some(total)));
+                            self.return_focus = self.lookup_open;
                         }
                     });
                 } else {
@@ -2177,7 +2178,7 @@ impl Run {
                     .state
                     .participants
                     .iter()
-                    .position(|p| p.initiative.is_none());
+                    .position(|p| p.initiative.is_none() && p.present);
                 if self.focus_field.is_none() {
                     self.return_focus = self.lookup_open;
                 }

@@ -23,10 +23,10 @@
       "run-restart": 6,
       "run-roster-conflict": 3,
       "run-sync-conflict": 6,
-      "run-sync-states": 5,
+      "run-sync-states": 4,
       "session-notes": 21,
       "session-recording": 19,
-      "signed-in": 7
+      "signed-in": 8
     },
     "no-overlap/egui-chrome": {
       "dialogs": 4,
@@ -55,10 +55,10 @@
       "run-restart": 6,
       "run-roster-conflict": 3,
       "run-sync-conflict": 6,
-      "run-sync-states": 5,
+      "run-sync-states": 4,
       "session-notes": 21,
       "session-recording": 18,
-      "signed-in": 7
+      "signed-in": 8
     }
   },
   "task_cost": {
