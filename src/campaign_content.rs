@@ -472,9 +472,7 @@ impl CampaignContent {
             document.selections.remove(i);
         }
         design::rule(ui);
-        egui::SidePanel::left("campaign_modules")
-            .resizable(false)
-            .exact_width(236.0)
+        design::Column::left("campaign_modules", 236.0, 180.0..=420.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
                 right: design::M as i8,

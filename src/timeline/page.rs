@@ -816,16 +816,18 @@ impl TimelinePage {
             return;
         }
         let width = design::side_panel_width(ui.available_width());
-        egui::SidePanel::right("timeline_detail_panel")
-            .resizable(false)
-            .exact_width(width)
+        design::Column::panel("timeline_detail_panel", width)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::M as i8,
+                left: design::S as i8,
                 ..Default::default()
             }))
             .show_inside(ui, |ui| self.detail(ui, book, sessions));
         egui::CentralPanel::default()
-            .frame(egui::Frame::new())
+            // The panel's drag handle lies on this edge, so the rows stop short of it.
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
+                right: design::S as i8,
+                ..Default::default()
+            }))
             .show_inside(ui, |ui| self.list(ui, book, sessions));
     }
 }

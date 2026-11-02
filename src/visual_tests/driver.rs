@@ -523,6 +523,28 @@ impl<'a> Driver<'a> {
         self.film_result(caption);
     }
 
+    /// Drag a column's edge sideways, halfway down the window.
+    pub fn drag_column_edge(&mut self, from: f32, to: f32) {
+        let y = self.window.1 / 2.0;
+        let (start, end) = (egui::pos2(from, y), egui::pos2(to, y));
+        self.harness.hover_at(start);
+        self.harness.step();
+        for (pos, pressed) in [(start, true), (end, true), (end, false)] {
+            self.harness.hover_at(pos);
+            self.harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            self.harness.step();
+        }
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        self.settle();
+        self.film_result("Drag a column's edge");
+    }
+
     fn is_control(node: &Found) -> bool {
         !node.disabled && !matches!(node.role, Role::Label | Role::TextRun)
     }

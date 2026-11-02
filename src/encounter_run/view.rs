@@ -458,9 +458,8 @@ impl Run {
         let mut closed = false;
         let width = panel_width(ui);
         if !self.hide_panel {
-            egui::SidePanel::right("run_panel")
-                .resizable(false)
-                .exact_width(width)
+            design::Column::panel("run_panel", width)
+                .page_keeps(design::RUN_LIST_KEEPS)
                 .frame(side_frame())
                 .show_inside(ui, |ui| self.side_panel(ui));
         }
@@ -2011,9 +2010,8 @@ impl Run {
         let mut closed = false;
         let width = panel_width(ui);
         if !self.hide_panel {
-            egui::SidePanel::right("run_setup_panel")
-                .resizable(false)
-                .exact_width(width)
+            design::Column::panel("run_setup_panel", width)
+                .page_keeps(design::RUN_LIST_KEEPS)
                 .frame(side_frame())
                 .show_inside(ui, |ui| self.setup_panel(ui));
         }
@@ -2603,9 +2601,8 @@ impl Run {
         // Beside a panel, the final state comes first.
         if !self.hide_panel {
             let width = design::side_panel_width(ui.ctx().content_rect().width());
-            egui::SidePanel::right("run_ended_log")
-                .resizable(false)
-                .exact_width(width)
+            design::Column::panel("run_ended_log", width)
+                .page_keeps(design::RUN_LIST_KEEPS)
                 .frame(side_frame())
                 .show_inside(ui, |ui| {
                     // With choices to make, they have the column, and the log waits behind a
@@ -2635,7 +2632,11 @@ impl Run {
                 });
         }
         egui::CentralPanel::default()
-            .frame(egui::Frame::new())
+            // The panel's drag handle lies on this edge, so the rows stop short of it.
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
+                right: design::S as i8,
+                ..egui::Margin::ZERO
+            }))
             .show_inside(ui, |ui| {
                 design::group_label(ui, "Final state");
                 let scale = RunScale::fit(

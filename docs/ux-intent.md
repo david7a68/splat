@@ -352,6 +352,7 @@ entry, sync conflicts (the table must not stop), lookup, errors, confirmation me
 | Encounter draft | Yes, **and through a data refresh** | Warn on close | Lost on `Reload` |
 | Party: member, page, filter | Yes | Member | Navigation yes |
 | Active campaign | Yes | Yes | Yes |
+| Column widths the DM dragged | Yes | Yes | Yes |
 
 ## 4. Per-screen intent
 

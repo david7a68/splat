@@ -173,9 +173,7 @@ impl Party {
         }
         let list_width = (ui.available_width() * 0.42).clamp(330.0, 520.0);
         let mut selected = self.reader.selected.clone();
-        egui::SidePanel::left("party_members")
-            .resizable(false)
-            .exact_width(list_width)
+        design::Column::left("party_members", list_width, 330.0..=640.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
                 right: design::M as i8,

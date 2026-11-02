@@ -1302,22 +1302,26 @@ impl Encounters {
         let width = design::side_panel_width(ui.ctx().content_rect().width())
             .max(ui.available_width() - ROSTER_MAX_WIDTH)
             .min(ADD_PANE_MAX_WIDTH);
-        egui::SidePanel::right("encounter_add")
-            .resizable(false)
-            .exact_width(width)
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::M as i8,
-                right: 0,
-                top: design::S as i8,
-                bottom: 0,
-            }))
-            .show_inside(ui, |ui| {
-                Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
-            });
+        design::Column::right(
+            "encounter_add",
+            width,
+            design::PANEL_MIN_WIDTH..=ADD_PANE_MAX_WIDTH,
+        )
+        .page_keeps(design::RUN_LIST_KEEPS)
+        .frame(egui::Frame::new().inner_margin(egui::Margin {
+            left: design::S as i8,
+            right: 0,
+            top: design::S as i8,
+            bottom: 0,
+        }))
+        .show_inside(ui, |ui| {
+            Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
+        });
         egui::CentralPanel::default()
+            // The panel's drag handle lies on this edge, so the roster stops short of it.
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
-                right: 0,
+                right: design::S as i8,
                 top: design::S as i8,
                 bottom: 0,
             }))

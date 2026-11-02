@@ -5,7 +5,8 @@ Built with Rust and egui (eframe). The design system is in [docs/design-system.m
 The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Sessions**, **Timeline**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry and opens
 beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
-state, and the app reopens on the last page or the open run. Simulation is later work.
+state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
+change its width. The app keeps that width after a restart. Simulation is later work.
 
 ## Development
 

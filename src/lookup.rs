@@ -331,9 +331,8 @@ impl Lookup {
 
     pub fn show(&mut self, ctx: &egui::Context) {
         let width = design::side_panel_width(ctx.content_rect().width());
-        egui::SidePanel::right("lookup")
-            .resizable(false)
-            .exact_width(width)
+        design::Column::panel("lookup", width)
+            .page_keeps(design::PANEL_LEAVES_PAGE)
             .frame(
                 egui::Frame::new()
                     .fill(colors().page)
