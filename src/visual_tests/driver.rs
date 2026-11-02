@@ -65,6 +65,8 @@ pub struct Driver<'a> {
     pointer: Option<egui::Pos2>,
     /// The current state has already been on screen long enough to read.
     held: bool,
+    /// Each top-level page the app showed, with the interaction count when it appeared.
+    pub page_trail: Vec<(u32, String)>,
     pub outcome: Outcome,
 }
 
@@ -195,6 +197,7 @@ impl<'a> Driver<'a> {
             video,
             pointer: None,
             held: false,
+            page_trail: Vec::new(),
             outcome: Outcome {
                 violations: Vec::new(),
                 passes: Vec::new(),
@@ -392,6 +395,10 @@ impl<'a> Driver<'a> {
                 quiet + 1
             };
             if quiet >= 3 {
+                let page = self.current_page();
+                if self.page_trail.last().is_none_or(|(_, last)| *last != page) {
+                    self.page_trail.push((self.interactions, page));
+                }
                 return;
             }
             assert!(
@@ -403,6 +410,14 @@ impl<'a> Driver<'a> {
                 std::thread::sleep(Duration::from_millis(5));
             }
         }
+    }
+
+    /// The top-level page the app is showing now.
+    pub fn current_page(&self) -> String {
+        self.harness
+            .state()
+            .visible_page()
+            .map_or_else(String::new, |page| page.name().to_owned())
     }
 
     /// Every node in the tree, with the part of it that can be seen.
@@ -662,7 +677,40 @@ impl<'a> Driver<'a> {
         let rect = self.aim(&format!("the row of {name:?}"), |node| {
             node.name.starts_with(&prefix) && Self::is_control(node)
         });
-        self.click_rect(rect, &format!("Click: {name}"));
+        // On the name, where a person aims. A row's second line has links of its own.
+        let name_at = egui::pos2(rect.left() + 80.0, rect.top() + 12.0);
+        let target = egui::Rect::from_center_size(name_at, egui::Vec2::splat(4.0));
+        self.click_rect(target, &format!("Click: {name}"));
+    }
+
+    /// Ctrl+click a run row, to add it to the targets of one amount.
+    pub fn ctrl_click_row(&mut self, name: &str) {
+        let prefix = format!("{name},");
+        let rect = self.aim(&format!("the row of {name:?}"), |node| {
+            node.name.starts_with(&prefix) && Self::is_control(node)
+        });
+        let pos = egui::pos2(rect.left() + 80.0, rect.top() + 12.0);
+        let held = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        self.harness.hover_at(pos);
+        self.harness.step();
+        self.harness.input_mut().modifiers = held;
+        for pressed in [true, false] {
+            self.harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: held,
+            });
+        }
+        self.harness.step();
+        self.harness.input_mut().modifiers = egui::Modifiers::NONE;
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        self.settle();
     }
 
     /// Every text painted inside this rect and whole: not cut to an ellipsis, and not

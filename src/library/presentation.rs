@@ -14,6 +14,7 @@ pub(crate) enum Section {
     Rules,
     Glossary,
     Encounters,
+    World,
     Other,
 }
 
@@ -27,6 +28,7 @@ impl Section {
         ("Characters", &[Self::Characters]),
         ("Game rules", &[Self::Rules, Self::Glossary]),
         ("Preparation", &[Self::Encounters]),
+        ("Campaign", &[Self::World]),
         ("", &[Self::Other]),
     ];
 
@@ -40,6 +42,7 @@ impl Section {
             Self::Rules => "Rules",
             Self::Glossary => "Glossary",
             Self::Encounters => "Encounters",
+            Self::World => "World",
             Self::Other => "Other entries",
         }
     }
@@ -55,6 +58,7 @@ impl Section {
             "glossary" => Self::Glossary,
             "rule" | "rule_group" | "effect" | "table" => Self::Rules,
             "encounter" | "encounter_group" | "sequence" | "strategy" | "seed" => Self::Encounters,
+            "world" => Self::World,
             _ => Self::Other,
         }
     }
@@ -73,6 +77,13 @@ pub(crate) fn category(entry: &Entry) -> &str {
 pub(crate) fn subtitle(entry: &Entry) -> String {
     if entry.kind == "package" {
         return "About this package".into();
+    }
+    if entry.kind == "world" {
+        let kind = crate::world::type_label(crate::world::world_type(entry));
+        return match crate::world::status(entry) {
+            "" => kind,
+            status => format!("{kind} · {status}"),
+        };
     }
     let category = category(entry).replace('_', " ");
     let mut category = {

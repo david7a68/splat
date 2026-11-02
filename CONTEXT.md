@@ -147,6 +147,12 @@ encounter; not a roster, whose participants one encounter always starts with; no
 rules together; and not an initiative group, which shares a turn order position.
 _Avoid_: Team, wave, spawn group
 
+**Made-up creature**:
+A creature the DM names and gives HP while a run is open, with no note behind it. It joins
+as an encounter group's members do, and it lives only in that run's saved state. It is not a
+campaign creature, and it does not become one.
+_Avoid_: Temporary creature, custom monster
+
 **Override**:
 An explicit change an encounter roster slot or encounter group member builds in to
 one creature, such as a custom name or extra HP. It belongs to that slot or member,
@@ -163,8 +169,38 @@ or leave combat. Phases have independent triggers and can overlap.
 An event or condition that causes a planned change in an encounter, once by
 default or repeatedly when explicitly configured.
 
+**World**:
+The fictional setting of a campaign, as notes and entries.
+_Avoid_: Setting, which is confused with app settings.
+
+**World note**:
+A plain Markdown file in a campaign that Splat reads and does not own. Its path is its identity.
+
+**World entry**:
+A note with a Splat identity that represents something in the world.
+
+**NPC**:
+A world entry for a person the DM plays. It can point at a stat block, and it is not a creature entry.
+
+**Location**:
+A world entry for a place. Locations can be inside other locations.
+
+**Roll table**:
+An existing Markdown table that a marker makes rollable.
+
+**Campaign clock**:
+The one count of standard hours, computed from the timeline, whatever world the party is on.
+
 **Session**:
 One meeting of the table, with its notes in a Markdown file in the campaign's folder.
+
+**Session plan**:
+The encounters a session's note links to under its plan, with what has happened so far. The note holds the
+plan, so that Obsidian sees it too.
+
+**Carried state**:
+Each player's HP and temporary HP from the last fight of the session being played, which the next run starts
+from. A long rest the DM marks starts everyone at full instead.
 
 **Session template**:
 Markdown a new session's notes start from, built in or owned by the campaign.

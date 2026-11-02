@@ -296,7 +296,18 @@ An encounter group is added by the DM. Splat records it. It does not decide that
 to a creature is never hidden: the editor and the card show the old value, the new value, and what the DM must
 add by hand.
 
-**Done well:** T13.1 to T13.6.
+A creature can also arrive with nothing prepared. The DM finds it in the campaign, or names it and types its
+HP, and it follows the same initiative rules as a group. A creature made up this way stays in that one run.
+
+**Done well:** T13.1 to T13.7, T14.6.
+
+### W14. Run the evening from one page
+**Trigger:** the DM sits down at the table, or a fight ends. **Goal:** the next thing to do is on the page already: the
+recap, the plan, the note, the rest to record. **Context:** table. **Frequency:** every session. The session's page holds
+the plan, so that a DM never chooses between Encounters, Timeline and the note in the gap between two fights. A measured
+evening is in `artifacts/dm-audit/README.md`.
+
+**Done well:** T12.0 to T12.9, and T14.1 to T14.5.
 
 ## 3. Information architecture
 
@@ -376,7 +387,7 @@ These describe need, not layout. Screens can merge or split.
 | **Encounters** | What can I run, and what is in progress? | Start or resume a run | Runs in progress with date; templates; roster summary | Run history, new encounter | Scanning | No campaign; loading; load error; no encounters; unreadable run; content issues |
 | **Encounter editor** | Is this roster what I want? | Add participant, save | Roster with side and key stats, and each change with its base value; creature results with CR, HP, AC | Overrides, initiative group, reorder, notes | Scanning | New; dirty; saved; validation error; external change; unavailable creature; party-slot binding; needs repair; no party copies; no search results |
 | **Group editor** | Is this set of creatures what I want to add? | Add creature, save | Members with counts, and each change with its base value; default side; notes | Overrides, reorder | Scanning | New; dirty; saved; empty; unavailable creature; invalid change |
-| **Run: groups** | Who can arrive now, and what do they add? | Add, or drag to the list | Each group's name, members, count, XP | Notes, a typed total | Scanning | No groups; a group that cannot be added, with its reason; XP not known 
+| **Run: arrivals** | Who can arrive now, and what do they add? | Add one creature, add a group, or drag a group to the list | Each group's name, members, count, XP | Notes, a typed total | Scanning | No groups; a group that cannot be added, with its reason; XP not known 
 | **Library: browse/read** | What does this say? | Search, read | Title, type, summary, body; related links | Engine support, source, technical details | Reading | Loading; load error; no results; empty section; invalid note; read-only; unavailable link; validation messages |
 | **Library: author** | Is my entry correct and saved? | `Save` | Editor text; parse and validation errors; save state | `Copy to…`, `Discard changes`, `New entry`, packages | Reading | Clean; dirty; saved; invalid note; duplicate identity; external change; name clash; built-in read-only |
 | **Lookup** (new) | What does this say, right now? | Type, read | Result name, type; entry text | Open in Library | Glanceable to reading | No results; loading first time; draft elsewhere does not block |
@@ -561,12 +572,34 @@ reading the code, not from a test run.
 | T11.6 | Process states what is missing, and where audio and words go, before anything is sent. A failure stays in view on every page | session-recording | state | New |
 | T11.7 | A marker reaches the timeline only when the DM adds it. What the second pass changed can be read | session-recording | state | New |
 | T11.8 | A note during a run in ≤ 2, beside the roster, in the session being played | session-notes | cost, view | New |
+| T14.1 | A plain note reads in Splat, with no change to the file | world | state | New |
+| T14.2 | A link in a note opens the note it names, as in Obsidian | world | state | New |
+| T14.3 | A marked table rolls, with a typed result as well, and its row shows | world | state | New |
+| T14.4 | A rule found by its heading, beside a run, in ≤ 2 | world | cost, view | New |
+| T14.5 | A new NPC joins the fight, and the run stays on screen | world | state | New |
 | T13.1 | The run's group panel lists each group's members and total XP | encounter-groups | state | New |
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |
 | T13.4 | Dragging a group onto the initiative list adds every member | encounter-groups | state | New |
 | T13.5 | A run offers its encounter's groups and those for any encounter, and adds its own in ≤ 1, in setup and in combat. The Encounters page keeps an encounter's own groups in a closed section | encounter-owned-groups | cost, state | New |
 | T13.6 | An encounter's editor shows each of its groups in a frame of its own, and builds a new one there, with no other page. It saves with the encounter | encounter-owned-groups | state | New |
+| T13.7 | One creature, made up or found, joins the running fight from the Arrivals panel. A made-up creature says what it needs, and copies get numbered names | run-add-creature | cost, state | New |
+| T12.1 | A planned fight starts from the session in 1, and Close run comes back there in 1. The plan is words in the note | session-plan | cost, state | New |
+| T12.2 | A new run starts each player from the last fight of the session, says so, and goes back to the sheets in 1. A long rest the DM marks starts everyone at full | session-plan | cost, state | New |
+| T12.3 | One amount on several targets, with half for those who saved, in 2 once chosen, and one step of undo | session-plan | cost, state | New |
+| T12.4 | Dice roll beside the amount in ≤ 3, with the stat block in view | session-plan | cost, view | New |
+| T12.5 | Escape selects the current turn. A fight's final HP reads in the plan in 1 | session-plan | cost, state | New |
+| T12.6 | A new session shows what the last one left, with nothing to open | session-plan | state | New |
+| T12.7 | Setup and Prep show the read-aloud text. Technical details are closed | session-plan | state | New |
+| T12.8 | A condition's rule opens from its word on the row, and is gone again, in 2 | session-plan | cost | New |
+| T12.9 | Lookup finds words in a session note and keeps the run in view | session-plan | state, view | New |
+| T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
+| T14.2 | A wrong initiative is corrected during combat, as one step of undo, and the current turn stays | session-plan | state | New |
+| T14.3 | Exhaustion is one level with a control, and each step replaces the last | session-plan | state | New |
+| T14.4 | A fight planned a second time can start a second time | session-plan | state | New |
+| T14.5 | After a restart, Close run goes to the page the run began on, in the session the DM chose | session-plan | state | New |
+| T14.6 | A group is assembled in the session's plan, with the note beside it. It is linked in the plan when saved, and comes first in the run's Arrivals panel. With a fight open, its row goes to that panel in 1 | session-plan-groups | cost, state | New |
+| T14.1 | An interrupted run says Resume, and can be deleted with one step of undo. Ended runs are in the history | session-plan | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

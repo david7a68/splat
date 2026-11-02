@@ -2,11 +2,11 @@
   "violations": {
     "accessible-name/egui-chrome": {
       "campaign-content": 70,
-      "column-resize": 99,
+      "column-resize": 100,
       "dialogs": 37,
       "empty": 18,
-      "encounter-build": 45,
-      "encounter-groups": 69,
+      "encounter-build": 49,
+      "encounter-groups": 70,
       "encounter-history": 10,
       "encounter-owned-groups": 58,
       "encounter-run": 53,
@@ -14,12 +14,13 @@
       "library-author": 68,
       "library-browse": 85,
       "library-scope": 9,
-      "library-to-encounter": 21,
+      "library-to-encounter": 22,
       "nav-state": 26,
       "party": 42,
       "party-from-run": 26,
       "prep-to-table": 27,
       "run-absent-player": 24,
+      "run-add-creature": 35,
       "run-edge-states": 16,
       "run-folder-defect": 1,
       "run-large-roster": 20,
@@ -32,11 +33,14 @@
       "run-roster-conflict": 39,
       "run-sync-conflict": 30,
       "run-sync-states": 25,
-      "session-notes": 138,
+      "session-notes": 137,
+      "session-plan": 108,
+      "session-plan-groups": 47,
       "session-recording": 106,
       "settings": 17,
       "signed-in": 53,
-      "typed-sync-number": 8
+      "typed-sync-number": 8,
+      "world": 20
     },
     "clipped": {
       "column-resize": 9
@@ -51,11 +55,11 @@
     },
     "target-size/egui-chrome": {
       "campaign-content": 70,
-      "column-resize": 99,
+      "column-resize": 100,
       "dialogs": 36,
       "empty": 18,
-      "encounter-build": 45,
-      "encounter-groups": 69,
+      "encounter-build": 49,
+      "encounter-groups": 70,
       "encounter-history": 10,
       "encounter-owned-groups": 57,
       "encounter-run": 52,
@@ -63,12 +67,13 @@
       "library-author": 67,
       "library-browse": 85,
       "library-scope": 8,
-      "library-to-encounter": 21,
+      "library-to-encounter": 22,
       "nav-state": 26,
       "party": 42,
       "party-from-run": 26,
       "prep-to-table": 27,
       "run-absent-player": 24,
+      "run-add-creature": 35,
       "run-edge-states": 16,
       "run-folder-defect": 1,
       "run-large-roster": 20,
@@ -81,11 +86,14 @@
       "run-roster-conflict": 39,
       "run-sync-conflict": 30,
       "run-sync-states": 25,
-      "session-notes": 138,
+      "session-notes": 137,
+      "session-plan": 108,
+      "session-plan-groups": 47,
       "session-recording": 105,
       "settings": 17,
       "signed-in": 53,
-      "typed-sync-number": 8
+      "typed-sync-number": 8,
+      "world": 20
     }
   },
   "task_cost": {
@@ -116,7 +124,7 @@
     "encounter-groups": {
       "T13.2: add a group to the running fight, rolling once": 1,
       "add a group during setup": 5,
-      "add groups by a total and by dragging": 14,
+      "add groups by a total and by dragging": 13,
       "make an encounter group": 14
     },
     "encounter-owned-groups": {
@@ -166,7 +174,7 @@
       "set up state on three pages": 10
     },
     "nav-table": {
-      "walk section 3's table": 22
+      "walk section 3's table": 21
     },
     "party": {
       "change character": 1,
@@ -190,6 +198,10 @@
     "run-absent-player": {
       "bring a player back with no initiative": 3,
       "set their initiative by keyboard": 2
+    },
+    "run-add-creature": {
+      "add a creature made up at the table to a running fight": 11,
+      "add two of a campaign's creatures to a running fight": 9
     },
     "run-edge-states": {
       "record a long effect": 6,
@@ -244,6 +256,19 @@
       "T11.8: take a note during a run": 2,
       "use the timeline during a run": 79
     },
+    "session-plan": {
+      "T12.0: make a creature your own": 5,
+      "T12.1: go back from a finished fight": 1,
+      "T12.1: start a planned fight from the session": 1,
+      "T12.2: go back to the sheets' HP": 1,
+      "T12.5: read how a fight ended": 1,
+      "T12.8: read a condition's rule from its row": 2,
+      "damage several targets, once they are chosen": 2,
+      "roll dice beside the stat block": 3
+    },
+    "session-plan-groups": {
+      "assemble a group in the session's plan": 15
+    },
     "session-recording": {
       "record a session and process it": 77
     },
@@ -255,6 +280,9 @@
     },
     "signed-in": {
       "see the remote campaign list": 2
+    },
+    "world": {
+      "T14.4: find a rule by its heading, beside a run": 2
     }
   }
 }

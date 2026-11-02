@@ -10,6 +10,8 @@ use splat::character::{ABILITIES, EntitySnapshot};
 use std::time::Duration;
 #[derive(Default)]
 pub struct Party {
+    /// HP from the fights of the session being played, when there are any.
+    pub tonight: Option<crate::encounter_run::Carry>,
     reader: Reader,
     page: usize,
     search: String,
@@ -166,6 +168,21 @@ impl Party {
         self.reader.sheets.get(id)
     }
 
+    /// Where tonight's fights left this character, if they did.
+    fn tonight_values(&self, record: &EntitySnapshot) -> Option<(i64, i64)> {
+        let carry = self.tonight.as_ref()?;
+        carry
+            .values
+            .get(&record.definition.splat_id)
+            .copied()
+            .or_else(|| {
+                carry
+                    .full
+                    .then(|| (record.stat("max_hp"), 0))
+                    .and_then(|(hp, temp)| Some((hp?, temp)))
+            })
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let c = colors();
         let can_refresh = if session.is_none() {
@@ -296,9 +313,26 @@ impl Party {
             }
             return;
         }
+        if let Some(carry) = &self.tonight {
+            let mut parts = Vec::new();
+            if carry.full || !carry.values.is_empty() {
+                parts.push(format!(
+                    "HP here is from tonight's fights, as of {}.",
+                    carry.from
+                ));
+            }
+            if !carry.missing.is_empty() {
+                parts.push(format!(
+                    "Could not read the run of {}.",
+                    carry.missing.join(", ")
+                ));
+            }
+            let words = parts.join(" ");
+            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(c.muted)).wrap());
+        }
         // Each row gives its portrait this much, and keeps the same room for its text.
         let portrait_room = ROW_PORTRAIT + 2.0 * design::S;
-        let list_width = (ui.available_width() * 0.42 + portrait_room).clamp(384.0, 574.0);
+        let list_width = (ui.available_width() * 0.46 + portrait_room).clamp(384.0, 624.0);
         let mut selected = self.reader.selected.clone();
         design::Column::left("party_members", list_width, 384.0..=694.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -319,7 +353,16 @@ impl Party {
                             let record = self.reader.sheets.get(&m.id);
                             let portrait = self.portrait(record);
                             let is_selected = selected.as_ref() == Some(&m.id);
-                            if member_row(ui, m, record, portrait.as_deref(), is_selected).clicked()
+                            let from_fights = record.and_then(|record| self.tonight_values(record));
+                            if member_row(
+                                ui,
+                                m,
+                                record,
+                                portrait.as_deref(),
+                                from_fights,
+                                is_selected,
+                            )
+                            .clicked()
                             {
                                 selected = Some(m.id.clone());
                                 self.search.clear();
@@ -538,7 +581,21 @@ impl Party {
             .id_salt((id, self.page))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                sheet_page(ui, record, self.page, &self.search, None);
+                // One person has one HP on this page: the list's, while tonight's fights count.
+                let live = self
+                    .tonight_values(record)
+                    .map(|(hp, temporary_hp)| LiveValues {
+                        hp: Some(hp),
+                        max_hp: record.stat("max_hp"),
+                        temporary_hp,
+                        conditions: record
+                            .initial
+                            .conditions
+                            .iter()
+                            .filter_map(|condition| condition["name"].as_str().map(str::to_owned))
+                            .collect(),
+                    });
+                sheet_page(ui, record, self.page, &self.search, live.as_ref());
                 if self.page == 0 {
                     ui.add_space(design::M);
                     design::quiet_section(ui, "Source & parity", |ui| {
@@ -723,12 +780,50 @@ const MEMBER_ROW: f32 = 54.0;
 const ROW_PORTRAIT: f32 = 38.0;
 pub const SHEET_PORTRAIT: f32 = 56.0;
 
+/// What a DM asks of the whole party at once. Columns are for comparing, so they get the room
+/// a name can spare, and a narrow list says the same on its second line.
+const COMPARE: [(&str, &str); 3] = [("PER", "Per"), ("INS", "Ins"), ("DC", "DC")];
+const COMPARE_WIDTH: f32 = 30.0;
+const COMPARE_FROM: f32 = 480.0;
+
+/// The right edge of one compare column, in the header and in a row.
+fn compare_right(hp_right: f32, at: usize) -> f32 {
+    hp_right - HP_WIDTH - AC_WIDTH - (2 - at) as f32 * COMPARE_WIDTH
+}
+
+fn compare_values(record: Option<&EntitySnapshot>) -> [String; 3] {
+    let Some(record) = record else {
+        return ["—"; 3].map(str::to_owned);
+    };
+    let dc = array(&record.character.casting["saveDcs"])
+        .iter()
+        .filter_map(|value| value["value"].as_i64())
+        .max()
+        .map_or_else(|| "—".to_owned(), |dc| dc.to_string());
+    [
+        val(record, "passive_perception"),
+        val(record, "passive_insight"),
+        dc,
+    ]
+}
+
 fn member_header(ui: &mut egui::Ui) {
     let c = colors();
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 18.0), egui::Sense::hover());
     let font = Type::Label.font(ui);
     let hp_right = rect.right() - design::S;
+    if rect.width() >= COMPARE_FROM {
+        for (at, (word, _)) in COMPARE.iter().enumerate() {
+            ui.painter().text(
+                egui::pos2(compare_right(hp_right, at), rect.center().y),
+                egui::Align2::RIGHT_CENTER,
+                *word,
+                font.clone(),
+                c.muted,
+            );
+        }
+    }
     ui.painter().text(
         egui::pos2(rect.left() + design::S, rect.center().y),
         egui::Align2::LEFT_CENTER,
@@ -758,9 +853,11 @@ fn member_row(
     member: &crate::party_sync::Member,
     record: Option<&EntitySnapshot>,
     portrait: Option<&std::path::Path>,
+    from_fights: Option<(i64, i64)>,
     selected: bool,
 ) -> egui::Response {
     let c = colors();
+    let compare = compare_values(record);
     let level = record.map(|r| r.character.level).or(member.level);
     let classes = record.map_or_else(String::new, |r| {
         r.character
@@ -788,12 +885,20 @@ fn member_row(
     if record.is_none() {
         summary = "No local copy yet".into();
     }
-    let hp = record.map(|r| r.initial.hp);
+    let hp = from_fights
+        .map(|(hp, _)| hp)
+        .or_else(|| record.map(|r| r.initial.hp));
     let max_hp = record.and_then(|r| r.stat("max_hp"));
     let ac = record.and_then(|r| r.stat("armor_class"));
-    let temp = record.map_or(0, |r| r.initial.temporary_hp);
+    let temp = from_fights.map_or_else(|| record.map_or(0, |r| r.initial.temporary_hp), |v| v.1);
+    let compared = COMPARE
+        .iter()
+        .zip(&compare)
+        .map(|((_, word), value)| format!("{word} {value}"))
+        .collect::<Vec<_>>()
+        .join(" · ");
     let name = format!(
-        "{} · {summary} · HP {}/{} · AC {}{}",
+        "{} · {summary} · {compared} · HP {}/{} · AC {}{}",
         member.name,
         hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
         max_hp.map_or_else(|| "?".to_owned(), |n| n.to_string()),
@@ -803,7 +908,10 @@ fn member_row(
             .map(|c| format!(" · {c}"))
             .collect::<String>(),
     );
-    design::row(ui, MEMBER_ROW, selected, &name, |ui, rect| {
+    // A narrow list has no room for columns, so the same numbers take a line of their own.
+    let wide = ui.available_width() >= COMPARE_FROM;
+    let height = if wide { MEMBER_ROW } else { MEMBER_ROW + 16.0 };
+    design::row(ui, height, selected, &name, |ui, rect| {
         let painter = ui.painter();
         let hp_right = rect.right() - design::S;
         let line = rect.top() + 18.0;
@@ -816,9 +924,22 @@ fn member_row(
         );
         crate::art::portrait(ui, picture, portrait, &member.name, None);
         let text_left = picture.right() + design::S;
-        let room = hp_right - HP_WIDTH - AC_WIDTH - design::S - text_left;
+        let columns = if wide { 3.0 * COMPARE_WIDTH } else { 0.0 };
+        let room = hp_right - HP_WIDTH - AC_WIDTH - columns - design::S - text_left;
         let title = design::one_line(ui, &member.name, Type::Name.font(ui), c.text, room);
         painter.galley(egui::pos2(text_left, line - 10.0), title, c.text);
+        if wide {
+            for (at, value) in compare.iter().enumerate() {
+                design::number(
+                    painter,
+                    compare_right(hp_right, at),
+                    line,
+                    value,
+                    &Type::Numeral.font(ui),
+                    c.muted,
+                );
+            }
+        }
         let mut job = egui::text::LayoutJob::default();
         job.wrap.max_width = rect.right() - HP_WIDTH - design::M - text_left;
         job.wrap.max_rows = 1;
@@ -861,7 +982,20 @@ fn member_row(
             );
         }
         let second = ui.fonts_mut(|fonts| fonts.layout_job(job));
-        painter.galley(egui::pos2(text_left, rect.bottom() - 22.0), second, c.muted);
+        painter.galley(
+            egui::pos2(text_left, rect.top() + MEMBER_ROW - 22.0),
+            second,
+            c.muted,
+        );
+        if !wide {
+            painter.text(
+                egui::pos2(text_left, rect.top() + MEMBER_ROW - 6.0),
+                egui::Align2::LEFT_TOP,
+                &compared,
+                small.clone(),
+                c.muted,
+            );
+        }
         design::number(
             painter,
             hp_right - HP_WIDTH,

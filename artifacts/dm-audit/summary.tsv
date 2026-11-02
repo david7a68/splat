@@ -1,0 +1,69 @@
+Phase totals
+phase	tasks	transitions	interactions	nav	sub	panel	find	do
+before	7	5	34	5	0	1	8	20
+during	27	7	180	8	2	11	40	119
+after	7	1	17	1	5	0	1	10
+
+Tasks
+phase	task	transitions	interactions	overhead	path
+before	Start tonight's session note	1	4	1	Encounters > Session
+before	Recall what happened last session, and where the story stands	0	1	1	Session > 
+before	Compare the party's passive Perception, to plan an ambush	1	1	1	Session > Party
+before	Build tonight's encounter	2	15	9	Party > Session > Encounters
+before	Make the boss your own: copy it, change it, and swap it in	0	6	0	Encounters > 
+before	Write the read-aloud text and tactics for the encounter	0	3	0	Encounters > 
+before	Back to the session plan, with tonight's encounter in it	1	4	2	Encounters > Session
+during	Start recording	0	2	0	Session > 
+during	Read last session's recap aloud	0	1	1	Session > 
+during	A player asks who Captain Varra is	0	3	3	Session > 
+during	Note what the party decides	0	2	1	Session > 
+during	The party travels for half a day: record it	0	1	0	Session > 
+during	Ambush: read the read-aloud text and start the fight	1	12	1	Session > Run
+during	Combat: round 1	0	32	8	Run > 
+during	A player casts Fireball: read the spell	0	3	3	Run > 
+during	Fireball hits three enemies: apply half to one, full to two	0	6	3	Run > 
+during	A wolf frightens Oren: mark the condition	0	3	2	Run > 
+during	What does Frightened do?	0	2	2	Run > 
+during	Iselle starts concentrating: mark it	0	2	1	Run > 
+during	Combat: round 2	0	32	8	Run > 
+during	Check Iselle's spell save DC and spell list	0	3	3	Run > 
+during	Roll a save for a monster	0	4	0	Run > 
+during	On a player's turn, read a monster's reaction	0	2	2	Run > 
+during	A player asks what the miller said last session	0	3	3	Run > 
+during	Note a moment beside the fight	0	3	2	Run > 
+during	Combat: round 3	0	32	8	Run > 
+during	A wolf is dead: take it out of the order	0	2	1	Run > 
+during	End the fight	1	4	1	Run > Session
+during	Record a short rest	0	1	0	Session > 
+during	Next fight: start it, with the party as it stands	1	1	1	Session > Run
+during	Next fight: roll and begin	0	11	0	Run > 
+during	Next fight: end it after a short exchange	1	3	1	Run > Session
+during	The players start a fight you did not plan, and then talk their way out	3	9	6	Session > Encounters > Run > Session
+during	Stop recording	0	1	0	Session > 
+after	Review how the fight went: log and final HP	0	1	1	Session > 
+after	Say where the fight happened	0	4	1	Session > 
+after	Process the recording and read the summary	0	4	3	Session > 
+after	Add a suggested event to the timeline	0	1	0	Session > 
+after	Write the wrap-up in the note	0	4	1	Session > 
+after	Link the fight in the note	0	2	0	Session > 
+after	Check the party's HP for next time	1	1	1	Session > Party
+
+Blocked
+
+Facts
+before / Compare the party's passive Perception, to plan an ambush: Party compares without opening a sheet: true
+before / Make the boss your own: copy it, change it, and swap it in: the roster has a row for the copy: true
+before / Back to the session plan, with tonight's encounter in it: the plan offers tonight's fight: true
+during / Open the app at the table: the app reopened on Session
+during / Note what the party decides: the words reached the note: true
+during / Ambush: read the read-aloud text and start the fight: setup shows the read-aloud text: true
+during / Fireball hits three enemies: apply half to one, full to two: one step of undo for all three: true
+during / Roll a save for a monster: the roll is beside the amount, with the stat block or sheet in view: true
+during / A player asks what the miller said last session: Lookup finds last session's notes: true
+during / End the fight: after the fight, the page is Session
+during / Next fight: start it, with the party as it stands: Kestrel at the end of the last fight: [Kestrel Dunmoor, party, HP 7/41, Temp 0, AC 15, Initiative 21, Current turn, Bloodied, Poisoned]. At setup of the next: [Kestrel Dunmoor · HP 7/41 · Bloodied · Poisoned]
+during / The players start a fight you did not plan, and then talk their way out: the improvised run is open: Run
+during / The players start a fight you did not plan, and then talk their way out: closing it comes back to: Session
+after / Stop recording: the app reopened on Session
+after / Review how the fight went: log and final HP: final HP reads in place: true
+after / Check the party's HP for next time: Kestrel on Party after the evening: [Kestrel Dunmoor · Level 5 Rogue · Per 11 · Ins 11 · DC — · HP 7/41 · AC 15 · Poisoned]

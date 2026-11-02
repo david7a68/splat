@@ -189,6 +189,15 @@ moves the rarely wanted sections (source, engine support, technical details) to 
 has one place whatever the entry holds, and the scroll bar has the pane's edge. Printed labels on an
 entry form one table, closed by a rule. A dice expression does not break across lines.
 
+## The session's plan
+
+The Session page is a list the DM works down, beside the note. A row is an icon, a link and a second line, with one action on
+the right. A row opens in place, and its fields use the same form parts as the Timeline page. The first fight to come has
+the primary button and the others the secondary, so the eye goes to the next thing to do. The word for a fight is **Start
+fight**, on this page and on Encounters. Add buttons stay at the foot of the plan, and a message opens above them, so
+that they do not move under the pointer. A fight's row lists the party first, with HP right-aligned in the run's tints, and
+everyone else behind one word. In a page narrower than 720 px, the plan and the note have a tab each.
+
 ## The live run
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,
@@ -244,11 +253,9 @@ a line.
   `Next turn`.
 - **Setup:** `Everyone is ready.` is green only with nothing left to do. It says who is absent and
   how many are tied. `Undo` is in the footer here, far from `Begin combat`, and in the header once
-  combat runs, where it is wanted every turn. A total set during combat is set once, and only Undo
-  takes it back: a limit accepted because the case is rare, and a way to set it again would add a
-  saved field and a second way to move someone in the order. `Mark present` puts the keyboard in
-  that field, so letter keys wait for Escape, and digits and Enter set a total there. The same limit
-  covers that case.
+  combat runs, where it is wanted every turn. `Record` can correct a total during combat: the row
+  moves, and the current turn stays. `Mark present` puts the keyboard in that field, so letter keys
+  wait for Escape, and digits and Enter set a total there.
 - **Changed:** a creature with overrides has `Changed` on its second line, then anything the
   run cannot apply, such as `Attack +1` or `Speed 40 ft`, because the DM needs it at the table. A setup
   row has the word `Changed` only. Its card lists each
@@ -260,8 +267,9 @@ a line.
 - **Encounter editor:** each of the encounter's groups has a frame below the roster, with its name,
   side, members and notes. The frame that takes the search's results has an accent outline, and
   `Add to` above the search names it. The Encounters page keeps these groups in one closed section.
-- **Groups:** a tab beside the stat block lists the encounter's own groups, then the groups for any
-  encounter, with members, count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
+- **Arrivals:** a tab beside the stat block adds one creature, found or made up, in two fixed rows of
+  fields. Below it, the tab lists the encounter's own groups, then those in tonight's plan, then the
+  others for any encounter, with members, count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
   outline while one is held. Each group also has a field for a total, blank to roll, and an `Add`
   button that the keyboard reaches. No step asks for confirmation, because Undo names the addition.
 

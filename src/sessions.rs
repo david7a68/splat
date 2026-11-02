@@ -20,8 +20,8 @@ use uuid::Uuid;
 
 const FOLDER_FIELD: &str = "splat_session_storage";
 pub const DEFAULT_FOLDER: &str = "Sessions";
-const TEMPLATES: &str = "Templates";
-const RECORDINGS: &str = "Recordings";
+pub(crate) const TEMPLATES: &str = "Templates";
+pub(crate) const RECORDINGS: &str = "Recordings";
 const SAVE_AFTER: Duration = Duration::from_secs(2);
 
 /// The folder's name as the manifest gives it.
@@ -80,7 +80,7 @@ pub fn save_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
 }
 
 /// The frontmatter block with its fences, and the body after it.
-fn split_note(text: &str) -> Option<(&str, &str)> {
+pub(crate) fn split_note(text: &str) -> Option<(&str, &str)> {
     let start = text.strip_prefix('\u{feff}').unwrap_or(text);
     let newline = if start.starts_with("---\r\n") {
         "\r\n"
@@ -216,7 +216,7 @@ pub fn unreadable_notes(folder: &Path) -> Vec<String> {
 }
 
 /// What a file name cannot hold, in any common file system.
-fn file_safe(text: &str) -> String {
+pub(crate) fn file_safe(text: &str) -> String {
     text.chars()
         .filter(|c| {
             !matches!(
@@ -631,6 +631,162 @@ pub fn without_own_heading(body: &str, note: &Note) -> String {
     lines.collect::<String>().trim_start().to_owned()
 }
 
+/// A note's headings with something under them, for reading. A template leaves headings the
+/// DM never filled, and a page of empty headings hides the few words there are.
+pub fn without_empty_sections(text: &str) -> String {
+    let level = |line: &str| {
+        let hashes = line.chars().take_while(|c| *c == '#').count();
+        (hashes > 0 && line[hashes..].starts_with(' ')).then_some(hashes)
+    };
+    let mut lines: Vec<&str> = text.lines().collect();
+    // A heading whose only subheading was empty is empty too, so this goes until nothing changes.
+    loop {
+        let empty = (0..lines.len()).find(|&at| {
+            level(lines[at]).is_some_and(|own| {
+                lines[at + 1..]
+                    .iter()
+                    .find(|next| !next.trim().is_empty())
+                    .is_none_or(|next| level(next).is_some_and(|other| other <= own))
+            })
+        });
+        let Some(at) = empty else {
+            break;
+        };
+        lines.remove(at);
+    }
+    let mut kept = String::new();
+    let mut blank = true;
+    for line in lines {
+        let is_blank = line.trim().is_empty();
+        if !(is_blank && blank) {
+            kept.push_str(line);
+            kept.push('\n');
+        }
+        blank = is_blank;
+    }
+    format!("{}\n", kept.trim_end())
+}
+
+/// The words under one `## heading`, up to the next heading of that level.
+pub fn section_text(body: &str, heading: &str) -> Option<String> {
+    let mut lines = body.lines();
+    lines.find(|line| line.trim_end().strip_prefix("## ") == Some(heading))?;
+    let words = lines
+        .take_while(|line| !line.starts_with("## "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let words = words.trim();
+    (!words.is_empty()).then(|| words.to_owned())
+}
+
+/// Every name in a note's `[[links]]`, in order, without timeline references. A name linked
+/// twice comes twice: a plan can hold the same fight again.
+pub fn each_linked_name(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("[[") {
+        rest = &rest[start + 2..];
+        let Some(end) = rest.find("]]") else {
+            break;
+        };
+        let inner = &rest[..end];
+        let name = inner.split('|').next().unwrap_or(inner).trim();
+        if !name.is_empty() && !name.starts_with("Timeline#") {
+            names.push(name.to_owned());
+        }
+        rest = &rest[end + 2..];
+    }
+    names
+}
+
+/// The names in a note's `[[links]]`, once each.
+pub fn linked_names(text: &str) -> Vec<String> {
+    let mut names = each_linked_name(text);
+    let mut seen = std::collections::BTreeSet::new();
+    names.retain(|name| seen.insert(name.clone()));
+    names
+}
+
+/// A note's `[[links]]` as the words a reader expects, not as markup.
+pub fn plain_links(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("[[") {
+        out.push_str(&rest[..start]);
+        rest = &rest[start + 2..];
+        let Some(end) = rest.find("]]") else {
+            out.push_str("[[");
+            break;
+        };
+        let inner = &rest[..end];
+        out.push_str(inner.rsplit('|').next().unwrap_or(inner).trim());
+        rest = &rest[end + 2..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Add a line to a note's plan: under `Plan for tonight`, or where other words go.
+pub fn insert_in_plan(body: &mut String, words: &str) {
+    const PLAN: &str = "## Plan for tonight";
+    let Some(at) = body
+        .match_indices(PLAN)
+        .find(|(at, _)| *at == 0 || body[..*at].ends_with('\n'))
+        .map(|(at, _)| at + PLAN.len())
+    else {
+        insert_in_note(body, words);
+        return;
+    };
+    let end = body[at..]
+        .find("\n## ")
+        .map_or(body.len(), |next| at + next);
+    let kept = body[..end].trim_end().len();
+    let rest = body[end..].to_owned();
+    body.truncate(kept);
+    body.push_str(if kept == at { "\n\n" } else { "\n" });
+    body.push_str(words.trim());
+    body.push('\n');
+    body.push_str(&rest);
+}
+
+/// The links to a thing that has a new name, whatever their case. Returns whether any changed.
+pub fn rename_links(body: &mut String, old: &str, new: &str) -> bool {
+    let mut renamed = String::with_capacity(body.len());
+    let mut rest = body.as_str();
+    let mut changed = false;
+    while let Some(start) = rest.find("[[") {
+        let (before, after) = rest.split_at(start + 2);
+        renamed.push_str(before);
+        rest = after;
+        let Some(end) = after.find(['|', ']']) else {
+            break;
+        };
+        let (name, tail) = after.split_at(end);
+        if name.trim().eq_ignore_ascii_case(old)
+            && (tail.starts_with('|') || tail.starts_with("]]"))
+        {
+            renamed.push_str(new);
+            rest = tail;
+            changed = true;
+        }
+    }
+    renamed.push_str(rest);
+    *body = renamed;
+    changed
+}
+
+/// The same for a note that is not open. Its frontmatter and its other words stay as they are.
+pub fn rename_links_in_file(path: &Path, old: &str, new: &str) -> Result<bool, String> {
+    let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let (front, body) = split_note(&text).unwrap_or(("", &text));
+    let mut renamed = body.to_owned();
+    if !rename_links(&mut renamed, old, new) {
+        return Ok(false);
+    }
+    replace_file(path, &format!("{front}{renamed}"))?;
+    Ok(true)
+}
+
 /// A long text, divided at its time headings, so that each part can be read alone.
 pub fn parts_of(text: &str) -> Vec<(String, String)> {
     let mut parts: Vec<(String, String)> = Vec::new();
@@ -859,6 +1015,43 @@ impl Draft {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_name_follows_every_link_and_leaves_other_words() {
+        let mut body =
+            "- [[Ash Pack]]\n- [[Ash Pack|the pack]]\nAsh Pack is not a link.\n- [[Ash Packs]]\n"
+                .to_owned();
+        assert!(rename_links(&mut body, "Ash Pack", "Cinder Pack"));
+        assert_eq!(
+            body,
+            "- [[Cinder Pack]]\n- [[Cinder Pack|the pack]]\nAsh Pack is not a link.\n- [[Ash Packs]]\n"
+        );
+        assert!(!rename_links(&mut body, "Ash Pack", "Other"));
+    }
+
+    #[test]
+    fn a_new_name_follows_a_link_of_any_case_and_a_link_left_open_stays() {
+        let mut body = "- [[ash pack]]\n- [[ASH PACK|them]]\n[[Ash Pack".to_owned();
+        assert!(rename_links(&mut body, "Ash Pack", "Cinder Pack"));
+        assert_eq!(
+            body,
+            "- [[Cinder Pack]]\n- [[Cinder Pack|them]]\n[[Ash Pack"
+        );
+    }
+
+    #[test]
+    fn a_note_not_open_keeps_its_frontmatter_and_its_words_through_a_rename() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Session 1.md");
+        let text = "---\nsession_title: '[[Ash Pack]]'\n---\n\nWords.\n- [[Ash Pack]]\n";
+        fs::write(&path, text).unwrap();
+        assert!(rename_links_in_file(&path, "Ash Pack", "Cinder Pack").unwrap());
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "---\nsession_title: '[[Ash Pack]]'\n---\n\nWords.\n- [[Cinder Pack]]\n"
+        );
+        assert!(!rename_links_in_file(&path, "Ash Pack", "Other").unwrap());
+    }
 
     fn new_note<'a>(number: u32, title: &'a str, template: &'a str) -> NewNote<'a> {
         NewNote {
@@ -1233,6 +1426,61 @@ mod tests {
         // A heading the DM wrote stays, and so does a date line under it.
         let own = "# Our night\n\n2026-11-01\n";
         assert_eq!(without_own_heading(own, &note), own);
+    }
+
+    #[test]
+    fn reading_leaves_out_empty_headings_and_keeps_filled_ones() {
+        let text = "## Recap\n\n\n## Plan\n\nGo north.\n\n## People\n\n### Friends\n\n## Loot\n\n";
+        assert_eq!(without_empty_sections(text), "## Plan\n\nGo north.\n");
+        // A heading whose subheading has words is not empty.
+        assert_eq!(
+            without_empty_sections("## People\n\n### Friends\n\nHobb.\n"),
+            "## People\n\n### Friends\n\nHobb.\n"
+        );
+    }
+
+    #[test]
+    fn a_section_is_found_by_its_heading() {
+        let body = "## What happened\n\nA fight.\n\n## Open threads\n\nWho burned the ropes?\n";
+        assert_eq!(section_text(body, "What happened").unwrap(), "A fight.");
+        assert_eq!(
+            section_text(body, "Open threads").unwrap(),
+            "Who burned the ropes?"
+        );
+        assert_eq!(
+            section_text("## What happened\n\n\n", "What happened"),
+            None
+        );
+        assert_eq!(section_text(body, "Loot"), None);
+    }
+
+    #[test]
+    fn links_are_read_as_names_and_as_words() {
+        let text =
+            "See [[Ashfall Crossing]], [[Hobb|the miller]] and [[Timeline#^t-1|Day 1]]. [[Hobb]]";
+        assert_eq!(linked_names(text), vec!["Ashfall Crossing", "Hobb"]);
+        assert_eq!(
+            each_linked_name(text),
+            vec!["Ashfall Crossing", "Hobb", "Hobb"]
+        );
+        assert_eq!(
+            plain_links("See [[Ashfall Crossing]] and [[Hobb|the miller]], [[open"),
+            "See Ashfall Crossing and the miller, [[open"
+        );
+    }
+
+    #[test]
+    fn a_plan_line_goes_under_the_plan_heading() {
+        let mut body = "## Plan for tonight\n\n\n\n## What happened\n\n".to_owned();
+        insert_in_plan(&mut body, "[[A]]");
+        insert_in_plan(&mut body, "[[B]]");
+        assert_eq!(
+            body,
+            "## Plan for tonight\n\n[[A]]\n[[B]]\n\n## What happened\n\n"
+        );
+        let mut other = "## Next time\n\n".to_owned();
+        insert_in_plan(&mut other, "[[A]]");
+        assert!(other.contains("[[A]]"));
     }
 
     #[test]

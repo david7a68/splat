@@ -13,7 +13,7 @@ use std::{
 
 pub const ART_FILE: &str = "Art Index.md";
 const MAX_FILE: u64 = 64 * 1024 * 1024;
-const FORMATS: &[&str] = &["webp", "png", "jpg", "jpeg"];
+pub const FORMATS: &[&str] = &["webp", "png", "jpg", "jpeg"];
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

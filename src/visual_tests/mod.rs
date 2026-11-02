@@ -16,6 +16,7 @@
 //! - `SPLAT_VISUAL_VIDEO=1`, with captures on, also encodes one video per scenario
 //!   with ffmpeg, into the output folder's `video/`.
 mod compare;
+mod dm_audit;
 mod driver;
 mod ergonomics;
 mod fixture;
@@ -39,7 +40,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 37] = [
+const SCENARIOS: [(&str, Seed, Script); 41] = [
     (
         "library-browse",
         Seed::Empty,
@@ -146,6 +147,7 @@ const SCENARIOS: [(&str, Seed, Script); 37] = [
         Seed::Campaign,
         scenarios::session_notes::run,
     ),
+    ("world", Seed::World, scenarios::world::run),
     (
         "session-recording",
         Seed::Campaign,
@@ -171,6 +173,17 @@ const SCENARIOS: [(&str, Seed, Script); 37] = [
         "run-no-groups",
         Seed::Campaign,
         scenarios::run_no_groups::run,
+    ),
+    ("session-plan", Seed::Campaign, scenarios::session_plan::run),
+    (
+        "session-plan-groups",
+        Seed::Groups,
+        scenarios::session_plan_groups::run,
+    ),
+    (
+        "run-add-creature",
+        Seed::Groups,
+        scenarios::run_add_creature::run,
     ),
     // Last, as a scenario's place in this list seeds its dice.
     (
