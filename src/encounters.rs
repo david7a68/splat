@@ -497,11 +497,6 @@ impl Encounters {
             .simulate_read(name, more_damage);
     }
 
-    #[cfg(test)]
-    pub fn sync_of(&self, name: &str) -> &crate::combat_sync::CombatSync {
-        self.run.as_ref().expect("an open run").sync_of(name)
-    }
-
     /// Running syncs react to the session from now on, as real ones do.
     #[cfg(test)]
     pub fn simulate_session_end(&mut self) {

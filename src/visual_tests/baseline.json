@@ -27,7 +27,7 @@
       "session-notes": 21,
       "session-recording": 19,
       "signed-in": 12,
-      "typed-sync-number": 2
+      "typed-sync-number": 1
     },
     "no-overlap/egui-chrome": {
       "dialogs": 4,
@@ -61,7 +61,7 @@
       "session-notes": 21,
       "session-recording": 18,
       "signed-in": 12,
-      "typed-sync-number": 2
+      "typed-sync-number": 1
     }
   },
   "task_cost": {

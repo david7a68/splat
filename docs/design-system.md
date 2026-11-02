@@ -226,13 +226,6 @@ a line.
   close` or `Resolve first`.
 - **Side panel:** the title, then tabs that hold one place. Death saves and a conflict's two
   choices go under the tabs. While sync is stopped, those two choices are off, with the reason.
-- **Sheet numbers:** a number in the sync panel, and `Current HP` under `Correct HP`, counts at
-  each key, so no way of leaving loses it. It goes to the sheet after the DM leaves the field. While
-  the DM is in the field or drags it, that character has no read and no write, with no time limit,
-  as a limit would send part of a number. So an idle field keeps that character's reads waiting.
-  The row says `Sync pending` if something is typed. Escape puts back the value from when the DM
-  came in. A number in the panel reaches the row when the DM leaves, with one line in the Log, and
-  `Correct HP` makes one Undo step for one number.
 - **Overflow:** when rows still cannot fit, a line under the list says how many are above
   and below, with any `Conflict`, `0 HP` and `Bloodied` among them. A row cut by the edge
   counts as out of view, and is not painted. Each turn scrolls to show the current row and the next.
