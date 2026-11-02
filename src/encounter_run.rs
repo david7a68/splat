@@ -3728,7 +3728,7 @@ mod tests {
         use egui_kittest::kittest::{NodeT, Queryable};
         harness
             .get_all_by_label("Current HP")
-            .find(|node| node.accesskit_node().role() != egui::accesskit::Role::CheckBox)
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::SpinButton)
             .expect("the field")
             .click();
         harness.run_steps(3);
@@ -3815,7 +3815,7 @@ mod tests {
         harness.run_steps(3);
         harness
             .get_all_by_label("Maximum HP")
-            .find(|node| node.accesskit_node().role() != egui::accesskit::Role::CheckBox)
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::SpinButton)
             .expect("the field")
             .click();
         harness.run_steps(3);
