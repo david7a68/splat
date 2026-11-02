@@ -215,7 +215,9 @@ the panel, those words open the second line instead, so that a name is never cut
   run cannot apply, such as `Attack +1`, because the DM needs it for the roll. Its card lists each
   change at the top of the stat block's tab, so no tab moves, as `Maximum HP: 33 → 43 (+10)`. What
   the run cannot apply comes first, in larger type, and says `add by hand`. A line then says that the
-  stat block below is as printed. A side of its own also has its word on the row.
+  stat block below is as printed. The list scrolls with the stat block, and each participant keeps
+  its own place in it. A side of its own also has its word on a live row. In setup, a row gives
+  the side when it has room, and Record gives it always.
 - **Groups:** a tab beside the stat block lists the campaign's encounter groups, with members,
   count and total XP. A group's name is a handle to drag onto the list, and the list takes an accent
   outline while one is held. Each group also has a field for a total, blank to roll, and an `Add`

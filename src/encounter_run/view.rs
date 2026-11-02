@@ -1702,6 +1702,34 @@ impl Run {
         let c = colors();
         ui.add_space(design::XS);
         ui.label(Type::Heading.rich(ui, "Encounter groups").color(c.text));
+        let Some(groups) = self.groups.clone() else {
+            ui.add(
+                egui::Label::new(
+                    Type::Body
+                        .rich(
+                            ui,
+                            "This campaign's groups have not loaded yet. If this stays, the Encounters page says why.",
+                        )
+                        .color(c.muted),
+                )
+                .wrap(),
+            );
+            return;
+        };
+        if groups.is_empty() {
+            ui.add(
+                egui::Label::new(
+                    Type::Body
+                        .rich(
+                            ui,
+                            "No encounter groups yet. Make them on the Encounters page, with New group.",
+                        )
+                        .color(c.muted),
+                )
+                .wrap(),
+            );
+            return;
+        }
         ui.add(
             egui::Label::new(
                 Type::Small
@@ -1722,39 +1750,21 @@ impl Run {
             .log
             .last()
             .filter(|line| line.starts_with(super::GROUP_ADDED))
+            .filter(|_| {
+                self.history_labels
+                    .last()
+                    .is_some_and(|label| label.starts_with("add "))
+            })
         {
-            design::message(ui, Tone::Success, line);
+            let short: String = line.chars().take(super::GROUP_LINE_LIMIT).collect();
+            let shown = if short.len() < line.len() {
+                format!("{short}… The Log has the rest.")
+            } else {
+                short
+            };
+            design::message(ui, Tone::Success, &shown);
         }
-        let Some(groups) = self.groups.clone() else {
-            ui.add_space(design::S);
-            ui.add(
-                egui::Label::new(
-                    Type::Body
-                        .rich(
-                            ui,
-                            "This campaign's groups have not loaded yet. If this stays, the Encounters page says why.",
-                        )
-                        .color(c.muted),
-                )
-                .wrap(),
-            );
-            return;
-        };
-        if groups.is_empty() {
-            ui.add_space(design::S);
-            ui.add(
-                egui::Label::new(
-                    Type::Body
-                        .rich(
-                            ui,
-                            "No encounter groups yet. Make them on the Encounters page, with New group.",
-                        )
-                        .color(c.muted),
-                )
-                .wrap(),
-            );
-            return;
-        }
+        design::rule(ui);
         let mut add = None;
         egui::ScrollArea::vertical()
             .id_salt("run_groups")
@@ -1779,7 +1789,7 @@ impl Run {
         let c = colors();
         ui.add_space(design::XS);
         let name = &group.name;
-        let creatures: u64 = group.members.iter().map(|member| member.count).sum();
+        let creatures = group.creature_count();
         let grip = ui.allocate_response(
             vec2(ui.available_width(), Density::Read.control()),
             egui::Sense::DRAG,
@@ -1806,7 +1816,7 @@ impl Run {
                 "{} · Total XP {}{}",
                 design::count(creatures as usize, "creature", "creatures"),
                 group.xp,
-                if group.xp_unknown.is_empty() {
+                if group.xp_unknown.is_empty() && group.unavailable == 0 {
                     ""
                 } else {
                     " or more"
@@ -1820,15 +1830,22 @@ impl Run {
         if grip.dragged() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
             if let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) {
-                ui.ctx()
-                    .layer_painter(egui::LayerId::new(egui::Order::Tooltip, grip.id))
-                    .text(
-                        pointer + vec2(design::M, 0.0),
-                        Align2::LEFT_CENTER,
-                        format!("{} {name}", icons::ADD),
-                        Type::Strong.font(ui),
-                        c.accent,
-                    );
+                // On a surface of its own, because the list under it is full of words.
+                let painter = ui
+                    .ctx()
+                    .layer_painter(egui::LayerId::new(egui::Order::Tooltip, grip.id));
+                let galley = painter.layout_no_wrap(
+                    format!("{} {name}", icons::ADD),
+                    Type::Strong.font(ui),
+                    c.accent,
+                );
+                let place = pointer + vec2(design::M, -galley.size().y / 2.0);
+                painter.rect_filled(
+                    Rect::from_min_size(place, galley.size()).expand(design::XS),
+                    design::RADIUS_CONTROL,
+                    c.raised,
+                );
+                painter.galley(place, galley, c.accent);
             }
         }
         for member in &group.members {
@@ -1858,6 +1875,23 @@ impl Run {
                 );
             }
             ui.add(egui::Label::new(line).wrap());
+        }
+        if group.unavailable > 0 {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!(
+                                "{} × {} Unavailable creature",
+                                group.unavailable,
+                                icons::WARN
+                            ),
+                        )
+                        .color(c.result.warning),
+                )
+                .wrap(),
+            );
         }
         let mut facts = vec![format!("Side: {}", style::human_label(&group.side))];
         if !group.xp_unknown.is_empty() {
@@ -1890,7 +1924,15 @@ impl Run {
             let total = text.parse::<i64>().ok();
             let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
             // By side, a group can join its side's initiative with no roll.
-            let may_roll = self.initiative.grouping != Grouping::BySide;
+            let leader = group.leader();
+            let joins_side = self.initiative.grouping == Grouping::BySide
+                && leader.as_ref().is_some_and(|leader| {
+                    self.state
+                        .participants
+                        .iter()
+                        .any(|p| p.npc && p.side == leader.side && p.initiative.is_some())
+                });
+            let may_roll = !joins_side;
             let label = match total {
                 Some(total) => format!("Add at {total}"),
                 None if may_roll => "Add and roll".to_owned(),
@@ -1898,7 +1940,7 @@ impl Run {
             };
             let blocked = group.problem.as_deref().or((total.is_none()
                 && may_roll
-                && group.leader_bonus().is_none())
+                && leader.is_some_and(|leader| leader.initiative_bonus.is_none()))
             .then_some("The first member has no initiative bonus. Type a total."));
             add = Action::secondary(&label)
                 .icon(icons::ADD)
@@ -2053,7 +2095,7 @@ impl Run {
                 );
                 crate::art::portrait(ui, rect, Some(&path), &record.definition.splat_name, None);
             }
-            changes_block(ui, p, true);
+            changes_block(ui, p, false);
             let freshness = crate::party::freshness(record, self.connected);
             // The sheet is older than what the DM just set here, so say which is which.
             // While sync reads this sheet, the copy's age says nothing about these values.
@@ -2102,7 +2144,9 @@ impl Run {
             );
         }
         egui::ScrollArea::vertical()
-            .id_salt(("run_reference", definition.id))
+            // By participant: copies of one creature can differ, and each card opens on its own
+            // changes, not at the place the last copy was left.
+            .id_salt(("run_reference", &p.key))
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 changes_block(ui, p, true);
@@ -2497,19 +2541,13 @@ impl Run {
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
         let p = &self.state.participants[index];
-        // A change takes the place of the side here. The side is on the row's card.
-        let marked = if p.changes.is_some() {
-            format!("{} Changed", icons::CHANGED)
-        } else {
-            p.side.clone()
-        };
-        let detail = format!(
-            "{}{marked} · HP {}/{} · AC {}",
-            if p.present { "" } else { "Absent · " },
+        let numbers = format!(
+            "HP {}/{} · AC {}",
             display(p.hp),
             display(p.max_hp),
             display(p.armor_class)
         );
+        let absent = if p.present { "" } else { "Absent · " };
         let selected = self.panel == Panel::Record && self.selected == index;
         let (name, npc, mode, bonus, initiative, present) = (
             &p.name,
@@ -2534,6 +2572,21 @@ impl Run {
             };
             let actions = 72.0 + 76.0 + 28.0 + presence_slot + 4.0 * design::XS;
             let name_width = (ui.available_width() - actions).max(110.0);
+            let side = &p.side;
+            let plain = format!("{absent}{side} · {numbers}");
+            // The side stays when the row has room. Record says it when the row has not.
+            let detail = if p.changes.is_none() {
+                plain
+            } else {
+                let changed = format!("{} Changed", icons::CHANGED);
+                let both = format!("{absent}{side} · {changed} · {numbers}");
+                let font = Type::Small.font(ui);
+                if design::number_width(ui, &both, &font) + 2.0 * design::S <= name_width {
+                    both
+                } else {
+                    format!("{absent}{changed} · {numbers}")
+                }
+            };
             let response = ui
                 .allocate_ui(vec2(name_width, row), |ui| {
                     design::two_line_row(ui, row, selected, name, &detail)
@@ -2686,7 +2739,13 @@ impl Run {
                         .rich(ui, &self.state.participants[self.selected].name)
                         .color(colors().text),
                 );
-                changes_block(ui, &self.state.participants[self.selected], false);
+                let p = &self.state.participants[self.selected];
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("Side: {}", style::human_label(&p.side)))
+                        .color(colors().muted),
+                );
+                changes_block(ui, p, false);
                 self.record_tab(ui, self.selected);
             }
             Panel::Log => self.log_tab(ui),
@@ -3056,7 +3115,7 @@ pub(crate) fn change_rows(ui: &mut egui::Ui, rows: &[Row]) {
         add(" → ", c.muted);
         add(&row.changed, c.participant.changed);
         if row.by_hand {
-            add(" · add by hand", c.result.warning);
+            add(" ·\u{a0}add\u{a0}by\u{a0}hand", c.result.warning);
         }
         ui.add(egui::Label::new(job).wrap());
     }

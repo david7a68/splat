@@ -17,7 +17,7 @@ use serde_yaml_ng::{Mapping, Value};
 use splat::content::{
     Entry,
     encounter_group::{EncounterGroup, MAX_COUNT},
-    overrides::{BY_HAND, Base, Change, MAX_NAME, Overrides},
+    overrides::{BY_HAND, Base, Change, MAX_NAME, Overrides, condition_names},
 };
 use std::{fs, sync::Arc};
 use uuid::Uuid;
@@ -207,7 +207,7 @@ impl GroupDraft {
                 .map_err(&named)?;
             if resolved.max_hp.is_none() {
                 return Err(named(
-                    "this creature has no maximum HP, so a run cannot add it. Give it a max_hp override."
+                    "this creature has no maximum HP, so a run cannot add it. Set it in this member's overrides."
                         .into(),
                 ));
             }
@@ -299,7 +299,8 @@ pub(super) fn load(
         .filter_map(|e| {
             let group = EncounterGroup::of(&e.entry).ok()?;
             let mut members = Vec::new();
-            let mut problem = None;
+            let mut problems = Vec::new();
+            let mut unavailable = 0_u64;
             let (mut xp, mut xp_unknown) = (0_u64, Vec::new());
             for (index, member) in group.members.iter().enumerate() {
                 let what = format!("Member {}", index + 1);
@@ -308,9 +309,10 @@ pub(super) fn load(
                     .ok()
                     .and_then(|id| Some((id, creatures.iter().find(|c| c.id == id)?)))
                 else {
-                    problem.get_or_insert(format!(
+                    problems.push(format!(
                         "{what}: this creature is unavailable. Check the packages this campaign uses."
                     ));
+                    unavailable = unavailable.saturating_add(member.count);
                     continue;
                 };
                 let entry = &catalogue.entries[&id].entry;
@@ -321,15 +323,13 @@ pub(super) fn load(
                     match &resolved {
                         Err(error) => Some(format!("{what} ({}): {error}", entry.name)),
                         Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
-                            "{what}: {} has no maximum HP. Give this member a max_hp override.",
+                            "{what}: {} has no maximum HP. Set it in this member's overrides.",
                             entry.name
                         )),
                         Ok(_) => None,
                     }
                 };
-                if let Some(issue) = issue {
-                    problem.get_or_insert(issue);
-                }
+                problems.extend(issue);
                 match creature_xp(entry) {
                     Some(each) => xp = u64::saturating_add(xp, each.saturating_mul(member.count)),
                     None => xp_unknown.push(entry.name.clone()),
@@ -349,7 +349,8 @@ pub(super) fn load(
                 notes: e.entry.body.trim().to_owned(),
                 xp,
                 xp_unknown,
-                problem,
+                unavailable,
+                problem: (!problems.is_empty()).then(|| problems.join(" ")),
             }))
         })
         .collect();
@@ -394,14 +395,13 @@ pub(super) fn list(
                         egui::Label::new(Type::Strong.rich(ui, &group.name).color(colors().text))
                             .truncate(),
                     );
-                    let count: u64 = group.members.iter().map(|member| member.count).sum();
                     let mut summary = format!(
                         "{} · {} · XP {}",
-                        design::count(count as usize, "creature", "creatures"),
+                        design::count(group.creature_count() as usize, "creature", "creatures"),
                         design::reader::human_label(&group.side),
                         group.xp
                     );
-                    if !group.xp_unknown.is_empty() {
+                    if !group.xp_unknown.is_empty() || group.unavailable > 0 {
                         summary.push_str(" or more");
                     }
                     if group
@@ -441,13 +441,51 @@ pub(super) fn list(
     open
 }
 
+/// The line under a creature's name in an editor, with the values this block gives it.
+pub(super) fn shown_detail(
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+    creature: &Creature,
+) -> String {
+    Overrides::parse(block)
+        .ok()
+        .filter(|overrides| !overrides.is_empty())
+        .and_then(|overrides| overrides.resolve_for(entry, side).ok())
+        .map_or_else(
+            || creature.detail.clone(),
+            |resolved| super::creature_detail(entry, creature.party, Some(&resolved)),
+        )
+}
+
+const FORM_OPENED: &str = "override_form_opened";
+
+/// The form can open below the fold, so the next frame scrolls to it.
+pub(super) fn show_form_when_it_opens(ui: &egui::Ui) {
+    ui.data_mut(|data| data.insert_temp(egui::Id::new(FORM_OPENED), true));
+}
+
 /// A slot's or member's changes, out in the open, with the values they replace.
-pub(super) fn show_changes(ui: &mut egui::Ui, block: &Mapping, entry: &Entry, side: &str) {
+pub(super) fn show_changes(
+    ui: &mut egui::Ui,
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+    starting: Option<&Mapping>,
+) {
     if block.is_empty() {
         return;
     }
     match Overrides::parse(block) {
         Ok(overrides) => {
+            // First, with the form open or closed: a number below may be one that cannot stand.
+            if let Err(error) = overrides.resolve_for(entry, side) {
+                design::message(ui, Tone::Error, &error);
+            }
+            let mut base = Base::of(entry, side);
+            if let Some(conditions) = starting.and_then(|starting| starting.get("conditions")) {
+                base.conditions = condition_names(conditions);
+            }
             design::status(
                 ui,
                 Status {
@@ -456,7 +494,7 @@ pub(super) fn show_changes(ui: &mut egui::Ui, block: &Mapping, entry: &Entry, si
                     color: colors().participant.changed,
                 },
             );
-            let rows = overrides.rows(&Base::of(entry, side));
+            let rows = overrides.rows(&base);
             change_rows(ui, &rows);
             if rows.iter().any(|row| row.by_hand) {
                 ui.add(
@@ -586,7 +624,7 @@ pub(super) fn overrides_form(
     let before = overrides.clone();
     let linked = entry.fields.contains_key("splat_external");
     ui.add_space(design::XS);
-    design::group_label(
+    let heading = design::group_label(
         ui,
         if sides.is_some() {
             "Overrides, for this encounter only"
@@ -594,12 +632,19 @@ pub(super) fn overrides_form(
             "Overrides, for this group only"
         },
     );
+    if ui
+        .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(FORM_OPENED)))
+        .is_some()
+    {
+        heading.scroll_to_me(Some(egui::Align::Min));
+    }
     text_row(ui, "Display name", &mut overrides.name, &entry.name);
     overrides.name = overrides
         .name
         .take()
-        .map(|name| name.chars().take(MAX_NAME).collect());
-    if !linked {
+        .map(|name| name.trim_start().chars().take(MAX_NAME).collect());
+    // A linked character's sheet decides these. One already here can still be cleared.
+    if !linked || overrides.max_hp.is_some() {
         change_row(
             ui,
             "Maximum HP",
@@ -682,15 +727,12 @@ pub(super) fn overrides_form(
         }
         None => text_row(ui, "Side", &mut overrides.side, side),
     }
-    if !linked {
+    if !linked || !overrides.conditions.is_empty() {
         conditions_row(ui, &mut overrides.conditions);
     }
     text_row(ui, "Note", &mut overrides.note, "Why this creature differs");
     if overrides != before {
         *block = overrides.to_mapping();
-    }
-    if let Err(error) = overrides.resolve_for(entry, side) {
-        design::message(ui, Tone::Error, &error);
     }
 }
 
@@ -724,7 +766,10 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
         if response.changed() {
             let mut seen = Vec::<String>::new();
             for name in text.split(',').map(str::trim).filter(|n| !n.is_empty()) {
-                if !seen.iter().any(|other| other.eq_ignore_ascii_case(name)) {
+                if !seen
+                    .iter()
+                    .any(|other| other.to_lowercase() == name.to_lowercase())
+                {
                     seen.push(name.to_owned());
                 }
             }
@@ -1038,8 +1083,11 @@ fn members(
             let button = format!("Overrides for {name}");
             let name = shown_name(&member.overrides, name);
             let detail = entry
-                .and_then(|entry| snapshot.creatures.iter().find(|c| c.id == entry.id))
-                .map_or("", |creature| creature.detail.as_str());
+                .and_then(|entry| {
+                    let creature = snapshot.creatures.iter().find(|c| c.id == entry.id)?;
+                    Some(shown_detail(&member.overrides, entry, &side, creature))
+                })
+                .unwrap_or_default();
             let key = format!("member_{index}");
             let is_open = expanded.as_deref() == Some(key.as_str());
             ui.horizontal(|ui| {
@@ -1063,19 +1111,28 @@ fn members(
                     } else {
                         ui.add_space(Density::Read.control());
                     }
-                    if Action::quiet("Overrides")
+                    // With no creature, there is nothing for a change to change.
+                    if entry.is_none() {
+                        ui.add_space(0.0);
+                    } else if Action::quiet("Overrides")
                         .density(Density::Read)
                         .name(&button)
                         .selected(is_open)
                         .show(ui)
                         .clicked()
                     {
-                        *expanded = if is_open { None } else { Some(key.clone()) };
+                        *expanded = if is_open {
+                            None
+                        } else {
+                            show_form_when_it_opens(ui);
+                            Some(key.clone())
+                        };
                     }
                     ui.add_space(design::XS);
                     let count =
                         ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT));
                     design::named(ui, &count, &format!("How many of {name}"));
+                    ui.add_space(design::XS);
                     ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
                     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                         ui.spacing_mut().item_spacing.y = 0.0;
@@ -1099,17 +1156,16 @@ fn members(
                 });
             });
             if entry.is_none() {
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, member.creature.label())
-                            .color(colors().muted),
-                    )
-                    .wrap(),
-                );
+                // The reference is on hover: it is what a repair needs, and not a word to read.
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    "This campaign cannot find this creature. Check the packages it uses, or remove this member.",
+                )
+                .on_hover_text(member.creature.label());
             }
             if let Some(entry) = entry {
-                show_changes(ui, &member.overrides, entry, &side);
+                show_changes(ui, &member.overrides, entry, &side, None);
                 if is_open {
                     overrides_form(ui, &mut member.overrides, entry, &side, None);
                 }
@@ -1241,7 +1297,7 @@ mod tests {
             serde_yaml_ng::from_str("{add: -10}").unwrap(),
         );
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert!(error.contains("Member 1 (Scout): max_hp"), "{error}");
+        assert!(error.contains("Member 1 (Scout): Maximum HP"), "{error}");
         draft.setup.members[0].overrides.clear();
         draft.setup.members[0]
             .overrides
