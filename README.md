@@ -174,6 +174,10 @@ session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens
 Each event has a reference such as `[[Timeline#^t-1a2b3c4d5e|Rest at the mill]]`. Paste it in any note: it is a block
 link in Obsidian, and Splat lists the notes that link to an event.
 
+In the Reader, bold words such as `**Docket**` are links to Lookup. A unique matching name opens
+directly. Otherwise, Lookup shows a search for those words. Bold text inside an explicit link
+keeps that link's destination.
+
 ### Recording
 
 **Record** on a session uses the host's recorder (`pw-record`, then `parecord`, then `arecord`) to write 16 kHz mono WAV

@@ -23,6 +23,11 @@ pub fn take_note_link(ctx: &egui::Context) -> Option<String> {
     ctx.data_mut(|data| data.remove_temp::<String>(clicked_id()))
 }
 
+/// Plain bold words pressed in the Reader, for Lookup to open or search.
+pub fn take_lookup_link(ctx: &egui::Context) -> Option<String> {
+    ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("markdown_clicked_lookup")))
+}
+
 /// Ask the next draw to scroll to this heading. `None` ends the request.
 pub fn want_heading(ctx: &egui::Context, heading: Option<String>) {
     ctx.data_mut(|data| match heading {
@@ -69,11 +74,12 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let mut heading = None;
     let mut inventory_table = false;
     let mut target = Targets::default();
-    let mut note_link: Option<(usize, String)> = None;
+    let mut link = None;
+    let mut strong_link = None;
     let mut rolls = None;
     let mut in_link = false;
     let mut code = false;
-    let mut strong = false;
+    let mut strong = 0_usize;
     let mut italic = false;
     let mut struck = false;
     let mut quotes = 0_usize;
@@ -100,6 +106,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
         ) {
             rolls = None;
         }
+        if matches!(event, Event::Code(_) | Event::Start(Tag::Image { .. })) {
+            strong_link = None;
+        }
         match event {
             Event::Html(ref text) if text.trim().starts_with("<!-- splat:inventory") => {
                 inventory_table = true;
@@ -109,6 +118,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
             }
             Event::Text(ref text) if in_figure && &**text == "image" => {}
             Event::Start(Tag::Link { dest_url, .. }) if table.is_none() => {
+                // An explicit destination wins over the bold words around it.
+                strong_link = None;
+                in_link = true;
                 // A link to an image with a local copy shows the image instead of opening a page.
                 let local = crate::art::link_art(&ctx, &dest_url)
                     .or_else(|| dest_url.strip_prefix(FILE_LINK).map(Into::into));
@@ -118,23 +130,18 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     continue;
                 }
                 if let Some(note) = dest_url.strip_prefix(NOTE_LINK) {
-                    note_link = Some((job.text.len(), note.to_owned()));
-                    in_link = true;
+                    link = Some((job.text.len(), LinkTarget::Note(note.to_owned())));
                     continue;
                 }
-                if target.url.is_some() {
-                    flush(ui, &mut job, &mut target);
-                }
                 if dest_url.starts_with("https://") || dest_url.starts_with("http://") {
-                    target.url = Some(dest_url.into_string());
-                    in_link = true;
+                    link = Some((job.text.len(), LinkTarget::Url(dest_url.into_string())));
                 }
             }
             Event::End(TagEnd::Link) => {
                 in_link = false;
                 in_figure = false;
-                if let Some((start, note)) = note_link.take() {
-                    target.notes.push((start..job.text.len(), note));
+                if let Some((start, destination)) = link.take() {
+                    target.links.push((start..job.text.len(), destination));
                 }
             }
             Event::Start(Tag::Table(_)) => {
@@ -260,8 +267,34 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 flush(ui, &mut job, &mut target);
                 code = false;
             }
-            Event::Start(Tag::Strong) => strong = true,
-            Event::End(TagEnd::Strong) => strong = false,
+            Event::Start(Tag::Strong) => {
+                strong += 1;
+                if strong == 1 {
+                    strong_link = (!in_link && heading.is_none() && table.is_none())
+                        .then_some(job.text.len());
+                }
+            }
+            Event::End(TagEnd::Strong) => {
+                strong = strong.saturating_sub(1);
+                if strong == 0
+                    && let Some(start) = strong_link.take()
+                {
+                    let words = job.text[start..].trim();
+                    if !words.is_empty() {
+                        for section in &mut job.sections {
+                            if section.byte_range.start >= start {
+                                section.format.color = colors().accent;
+                                if section.format.strikethrough != egui::Stroke::NONE {
+                                    section.format.strikethrough.color = colors().accent;
+                                }
+                            }
+                        }
+                        target
+                            .links
+                            .push((start..job.text.len(), LinkTarget::Lookup(words.to_owned())));
+                    }
+                }
+            }
             Event::Start(Tag::Emphasis) => italic = true,
             Event::End(TagEnd::Emphasis) => italic = false,
             Event::Start(Tag::Strikethrough) => struck = true,
@@ -340,7 +373,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                         }
                         _ => Type::ProseStrong,
                     }
-                } else if strong {
+                } else if strong > 0 {
                     if dense {
                         Type::StatLabel
                     } else {
@@ -356,7 +389,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 if matches!(role, Type::ProseStrong | Type::ProseItalic) && heading.is_none() {
                     font_id.size = prose.size();
                 }
-                let color = if in_link {
+                let color = if link.is_some() {
                     colors().accent
                 } else {
                     colors().text
@@ -536,17 +569,20 @@ fn display_field_value(value: &str) -> String {
 /// What the words waiting to be drawn link to.
 #[derive(Default)]
 struct Targets {
-    /// The whole block opens this page.
-    url: Option<String>,
-    /// These words open these notes. A note can have many, in one paragraph.
-    notes: Vec<(std::ops::Range<usize>, String)>,
+    links: Vec<(std::ops::Range<usize>, LinkTarget)>,
 }
 
-/// A paragraph with links to notes stays one paragraph, and only its links can be pressed.
-fn draw_with_note_links(
+enum LinkTarget {
+    Note(String),
+    Lookup(String),
+    Url(String),
+}
+
+/// A paragraph stays one paragraph, and only its links can be pressed.
+fn draw_with_links(
     ui: &mut egui::Ui,
     job: LayoutJob,
-    notes: Vec<(std::ops::Range<usize>, String)>,
+    links: Vec<(std::ops::Range<usize>, LinkTarget)>,
 ) {
     let text = job.text.clone();
     let (position, galley, response) = egui::Label::new(job)
@@ -563,11 +599,21 @@ fn draw_with_note_links(
         .char_indices()
         .nth(at)
         .map_or(text.len(), |(byte, _)| byte);
-    if let Some((_, note)) = notes.iter().find(|(range, _)| range.contains(&byte)) {
+    if let Some((_, destination)) = links.iter().find(|(range, _)| range.contains(&byte)) {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        if let LinkTarget::Url(url) = destination {
+            response.clone().on_hover_text(url);
+        }
         if response.clicked() {
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(clicked_id(), note.clone()));
+            match destination {
+                LinkTarget::Note(note) => ui
+                    .ctx()
+                    .data_mut(|data| data.insert_temp(clicked_id(), note.clone())),
+                LinkTarget::Lookup(words) => ui.ctx().data_mut(|data| {
+                    data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
+                }),
+                LinkTarget::Url(url) => ui.ctx().open_url(egui::OpenUrl::new_tab(url)),
+            }
         }
     }
 }
@@ -576,33 +622,127 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
     if job.is_empty() {
         return;
     }
-    let notes = std::mem::take(&mut target.notes);
-    if !notes.is_empty() {
-        // A web link in the same words must not carry over to the next paragraph.
-        target.url = None;
-        draw_with_note_links(ui, std::mem::take(job), notes);
+    let links = std::mem::take(&mut target.links);
+    if !links.is_empty() {
+        draw_with_links(ui, std::mem::take(job), links);
         ui.add_space(design::S);
         return;
     }
-    let label = egui::Label::new(std::mem::take(job)).wrap();
-    if let Some(url) = target.url.take() {
-        if ui
-            .add(label.sense(egui::Sense::click()))
-            .on_hover_text(&url)
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .clicked()
-        {
-            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
-        }
-    } else {
-        ui.add(label);
-    }
+    ui.add(egui::Label::new(std::mem::take(job)).wrap());
     ui.add_space(design::S);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Click the first letter of these words in the actual laid-out paragraph.
+    fn click_words(markdown: &str, words: &str) -> (Option<String>, Option<String>, Vec<String>) {
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let draw = |ctx: &egui::Context| {
+            egui::CentralPanel::default().show(ctx, |ui| show(ui, markdown));
+        };
+        let output = context.run(egui::RawInput::default(), draw);
+        let pointer = output
+            .shapes
+            .iter()
+            .find_map(|shape| {
+                let egui::Shape::Text(text) = &shape.shape else {
+                    return None;
+                };
+                let byte = text.galley.job.text.find(words)?;
+                let at = text.galley.job.text[..byte].chars().count();
+                let cursor = |at| {
+                    text.galley
+                        .pos_from_cursor(egui::text::CCursor::new(at))
+                        .center()
+                };
+                Some(text.pos + ((cursor(at).to_vec2() + cursor(at + 1).to_vec2()) / 2.0))
+            })
+            .unwrap_or_else(|| panic!("no words {words:?}"));
+        let mut urls = Vec::new();
+        for pressed in [true, false] {
+            let output = context.run(
+                egui::RawInput {
+                    events: vec![
+                        egui::Event::PointerMoved(pointer),
+                        egui::Event::PointerButton {
+                            pos: pointer,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                    ..Default::default()
+                },
+                draw,
+            );
+            for command in output.platform_output.commands {
+                if let egui::OutputCommand::OpenUrl(url) = command {
+                    urls.push(url.url);
+                }
+            }
+        }
+        (take_note_link(&context), take_lookup_link(&context), urls)
+    }
+
+    #[test]
+    fn plain_bold_names_open_lookup_and_plain_words_do_not() {
+        let markdown = "- **Docket** speaks to **Advocate Ulul**.\n";
+        assert_eq!(
+            click_words(markdown, "Docket"),
+            (None, Some("Docket".into()), vec![])
+        );
+        assert_eq!(
+            click_words(markdown, "Advocate Ulul"),
+            (None, Some("Advocate Ulul".into()), vec![])
+        );
+        assert_eq!(click_words(markdown, "speaks"), (None, None, vec![]));
+        assert_eq!(
+            click_words("__Véldo & Sons__ arrive.", "Sons"),
+            (None, Some("Véldo & Sons".into()), vec![])
+        );
+        assert_eq!(
+            click_words("**Docket __the clerk__ arrives**.", "arrives"),
+            (None, Some("Docket the clerk arrives".into()), vec![])
+        );
+    }
+
+    #[test]
+    fn explicit_links_keep_their_targets_inside_bold_text() {
+        for markdown in [
+            "**[the clerk](splat-note:Docket)**",
+            "[**the clerk**](splat-note:Docket)",
+        ] {
+            assert_eq!(
+                click_words(markdown, "the clerk"),
+                (Some("Docket".into()), None, vec![])
+            );
+        }
+        let markdown = "**Docket** reads [**the rules**](https://example.com).";
+        assert_eq!(
+            click_words(markdown, "the rules"),
+            (None, None, vec!["https://example.com".into()])
+        );
+        assert_eq!(click_words(markdown, "reads"), (None, None, vec![]));
+        assert_eq!(
+            click_words(markdown, "Docket"),
+            (None, Some("Docket".into()), vec![])
+        );
+    }
+
+    #[test]
+    fn headings_and_code_do_not_become_lookup_links() {
+        for markdown in [
+            "## **Docket**\n",
+            "`**Docket**`",
+            "```\n**Docket**\n```",
+            "**`Docket`**",
+        ] {
+            assert_eq!(click_words(markdown, "Docket"), (None, None, vec![]));
+        }
+    }
 
     #[test]
     fn brackets_go_only_from_links_with_a_local_image() {
@@ -619,6 +759,7 @@ mod tests {
     /// The Reader's parts of a note, painted.
     fn painted(markdown: &str) -> Vec<std::sync::Arc<egui::Galley>> {
         let context = egui::Context::default();
+        design::theme::install(&context);
         let output = context.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| show(ui, markdown));
         });
@@ -645,6 +786,19 @@ mod tests {
             })
             .next()
             .unwrap_or_else(|| panic!("no words {words:?}"))
+    }
+
+    #[test]
+    fn bold_lookup_links_keep_their_weight_and_only_links_get_link_color() {
+        let galleys = painted("**Docket** speaks. **Read [the rules](https://example.com)**.");
+        let name = format_of(&galleys, "Docket");
+        assert_eq!(
+            name.font_id.family,
+            egui::FontFamily::Name(design::FAMILY_SERIF_SEMIBOLD.into())
+        );
+        assert_eq!(name.color, colors().accent);
+        assert_eq!(format_of(&galleys, "Read ").color, colors().text);
+        assert_eq!(format_of(&galleys, "the rules").color, colors().accent);
     }
 
     #[test]

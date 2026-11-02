@@ -774,6 +774,25 @@ impl Lookup {
         found.is_some()
     }
 
+    /// Bold prose opens a unique name, or leaves the choice to the DM in Lookup.
+    pub fn open_words(&mut self, words: &str) {
+        let found = self.index.as_ref().and_then(|index| {
+            let wanted = words.to_lowercase();
+            let mut matches = index
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| item.lower == wanted);
+            let (position, _) = matches.next()?;
+            matches.next().is_none().then_some(position)
+        });
+        if let Some(position) = found {
+            self.open_position(position);
+        } else {
+            self.search_for(words);
+        }
+    }
+
     pub fn toggle(&mut self) {
         self.written_stale = true;
         self.open = !self.open;
@@ -1314,6 +1333,34 @@ mod tests {
         };
         lookup.open_id(Uuid::new_v4());
         assert!(lookup.query.is_empty());
+    }
+
+    #[test]
+    fn bold_words_open_a_unique_note_and_search_missing_or_ambiguous_names() {
+        let (_dir, campaign) = campaign_with(&[
+            ("NPCs/Docket.md", "The clerk.\n"),
+            ("A/Twin.md", "One.\n"),
+            ("B/Twin.md", "Two.\n"),
+        ]);
+        let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).unwrap());
+        let mut lookup = Lookup {
+            index: Some(index.clone()),
+            query: "old search".into(),
+            ..Default::default()
+        };
+        lookup.open_words("docket");
+        assert!(lookup.open);
+        assert!(lookup.query.is_empty());
+        assert!(!lookup.results_open);
+        assert_eq!(
+            lookup.current,
+            index.position(world::note_id("NPCs/Docket.md"))
+        );
+        for words in ["Twin", "Unknown name"] {
+            lookup.open_words(words);
+            assert!(lookup.open && lookup.results_open);
+            assert_eq!(lookup.query, words);
+        }
     }
 
     fn campaign_with(notes: &[(&str, &str)]) -> (tempfile::TempDir, Campaign) {
