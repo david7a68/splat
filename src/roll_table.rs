@@ -2,6 +2,7 @@
 //! effect by itself. The Markdown reader draws the control, and the app decides whose dice roll.
 use crate::design::{self, Action, Density, Tone, Type, colors};
 use eframe::egui;
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use splat::content::ROLLS_MARKER;
 use splat::execution::dice::{Dice, Random};
 
@@ -45,6 +46,9 @@ impl TableRoll {
     }
 }
 
+/// A marker's key and dice, or why it has none, and the table's rows.
+pub type MarkedTable = (Result<(String, String), String>, Vec<Vec<String>>);
+
 /// The key and dice of a `splat:rolls` marker.
 pub fn rolls_marker(html: &str) -> Option<Result<(String, String), String>> {
     let inner = html.trim().strip_prefix(ROLLS_MARKER)?;
@@ -61,6 +65,54 @@ pub fn rolls_marker(html: &str) -> Option<Result<(String, String), String>> {
         (Some(key), Some(dice)) => Ok((key, dice)),
         _ => Err("This roll table's marker needs key= and dice=.".to_owned()),
     })
+}
+
+/// Each marked table in a note, with its marker and its rows, heading row first. A marker
+/// belongs to the table right after it, as the reader draws it.
+pub fn marked_tables(body: &str) -> Vec<MarkedTable> {
+    let mut found = Vec::new();
+    let mut marker = None;
+    let mut rows: Option<Vec<Vec<String>>> = None;
+    for event in Parser::new_ext(body, Options::ENABLE_TABLES) {
+        match event {
+            Event::Html(ref text) if rolls_marker(text).is_some() => marker = rolls_marker(text),
+            Event::Start(
+                Tag::Paragraph
+                | Tag::Heading { .. }
+                | Tag::List(_)
+                | Tag::CodeBlock(_)
+                | Tag::BlockQuote(_),
+            ) if rows.is_none() => marker = None,
+            Event::Start(Tag::Table(_)) => rows = Some(Vec::new()),
+            Event::Start(Tag::TableHead | Tag::TableRow) => {
+                if let Some(rows) = &mut rows {
+                    rows.push(Vec::new());
+                }
+            }
+            Event::Start(Tag::TableCell) => {
+                if let Some(row) = rows.as_mut().and_then(|rows| rows.last_mut()) {
+                    row.push(String::new());
+                }
+            }
+            Event::Text(ref text) | Event::Code(ref text) => {
+                if let Some(cell) = rows
+                    .as_mut()
+                    .and_then(|rows| rows.last_mut())
+                    .and_then(|row| row.last_mut())
+                {
+                    cell.push_str(text);
+                }
+            }
+            Event::End(TagEnd::Table) => {
+                if let (Some(marker), Some(rows)) = (marker.take(), rows.take()) {
+                    found.push((marker, rows));
+                }
+                rows = None;
+            }
+            _ => {}
+        }
+    }
+    found
 }
 
 fn parse_range(cell: &str) -> Option<(i64, i64)> {
@@ -235,6 +287,18 @@ mod tests {
             }],
         };
         assert_eq!(roll_alone(&roll).unwrap(), "gifts: 4, typed. A potion");
+    }
+
+    #[test]
+    fn a_marker_finds_the_table_right_after_it_and_no_later_one() {
+        let note = "<!-- splat:rolls key=gifts dice=1d2 -->\n\n| d2 | Gift |\n|---|---|\n| 1 | A `knife` |\n| 2 | A net |\n\nWords.\n\n| Plain | Table |\n|---|---|\n| a | b |\n\n<!-- splat:rolls key=lost dice=1d2 -->\n\nWords break the link.\n\n| d2 | Lost |\n|---|---|\n| 1-2 | c |\n";
+        let found = marked_tables(note);
+        assert_eq!(found.len(), 1);
+        let (marker, rows) = &found[0];
+        assert_eq!(marker, &Ok(("gifts".to_owned(), "1d2".to_owned())));
+        assert_eq!(rows.len(), 3, "the heading row and two more");
+        assert_eq!(rows[1], ["1", "A knife"]);
+        assert_eq!(table_rows("1d2", rows).unwrap()[1].text, "A net");
     }
 
     #[test]

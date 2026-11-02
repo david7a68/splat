@@ -16,6 +16,7 @@ mod library;
 mod lookup;
 mod markdown_source;
 mod markdown_view;
+mod npc_generator;
 mod party;
 mod party_stream;
 mod party_sync;
@@ -1358,6 +1359,10 @@ impl Splat {
 
     /// Requests that cross pages: read beside a draft, or open an entry where it lives.
     fn route(&mut self, ctx: &egui::Context) {
+        if let Some(words) = markdown_view::take_lookup_link(ctx) {
+            self.notes_give_way();
+            self.lookup.open_words(&words);
+        }
         if let Some(id) = self
             .library
             .peek

@@ -418,6 +418,23 @@ fn frontmatter(id: Uuid, name: &str, kind: &str) -> Result<String, String> {
 
 /// A new NPC or location from a name typed at the table. Nothing else is required.
 pub fn create_entry(campaign: &Campaign, name: &str, kind: &str) -> Result<Uuid, String> {
+    create_with_details(campaign, name, kind, "")
+}
+
+/// A new NPC from the generator, with its attributes as the note's text.
+pub fn create_generated(
+    campaign: &Campaign,
+    npc: &crate::npc_generator::Generated,
+) -> Result<Uuid, String> {
+    create_with_details(campaign, &npc.name, "npc", &npc.details())
+}
+
+fn create_with_details(
+    campaign: &Campaign,
+    name: &str,
+    kind: &str,
+    details: &str,
+) -> Result<Uuid, String> {
     let name = name.trim();
     let stem = sessions::file_safe(name);
     if stem.is_empty() {
@@ -434,7 +451,11 @@ pub fn create_entry(campaign: &Campaign, name: &str, kind: &str) -> Result<Uuid,
         return Err(format!("{relative} already exists."));
     }
     let id = crate::hermetic::new_uuid();
-    let text = format!("{}\n# {name}\n", frontmatter(id, name, kind)?);
+    let mut text = format!("{}\n# {name}\n", frontmatter(id, name, kind)?);
+    if !details.is_empty() {
+        text.push('\n');
+        text.push_str(details);
+    }
     fs::create_dir_all(campaign.path.join(folder)).map_err(|e| e.to_string())?;
     write_note(&campaign.path, &relative, None, &text)?;
     Ok(id)
@@ -1060,5 +1081,34 @@ mod tests {
         assert_eq!(status(&entry), "dead");
         assert_eq!(world_type(&entry), "npc", "the rest of the entry stays");
         assert!(text.ends_with("# Ashori: Deepcut\n"), "the body stays");
+    }
+
+    #[test]
+    fn a_generated_npc_saves_its_attributes_and_never_replaces_a_note() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let npc = crate::npc_generator::Generated {
+            name: "Tally".into(),
+            attributes: ["Ink".into(), "Bored".into(), "A clean writ".into()],
+        };
+        let id = create_generated(&campaign, &npc).unwrap();
+        let path = "NPCs/Tally.md";
+        let text = fs::read_to_string(dir.path().join(path)).unwrap();
+        let entry = Entry::parse(path, &text).unwrap();
+        assert_eq!(entry.id, id);
+        assert_eq!(world_type(&entry), "npc");
+        assert_eq!(status(&entry), "alive");
+        assert!(text.ends_with(
+            "# Tally\n\n- **Look:** Ink\n- **Manner:** Bored\n- **Want:** A clean writ\n"
+        ));
+        let again = create_generated(&campaign, &npc).unwrap_err();
+        assert!(again.contains("already exists"), "{again}");
+        assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), text);
     }
 }

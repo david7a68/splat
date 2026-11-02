@@ -321,6 +321,19 @@ impl ContentIndex {
         self.items.iter().position(|item| item.lower == wanted)
     }
 
+    /// The campaign's tables for the NPC generator, from its world notes and entries. Paths
+    /// decide which comes first, so the result does not depend on how the index was built.
+    pub fn npc_tables(&self) -> crate::npc_generator::Tables {
+        let mut notes: Vec<(&str, &str)> = self
+            .items
+            .iter()
+            .filter(|item| item.is_world_note() || (item.private && item.entry.kind == "world"))
+            .map(|item| (item.entry.path.as_str(), item.entry.body.as_str()))
+            .collect();
+        notes.sort_unstable();
+        crate::npc_generator::Tables::read(notes)
+    }
+
     /// Who links to each note or entry, and who names each world entry in whole words.
     fn find_mentions(&self) -> HashMap<Uuid, Vec<usize>> {
         let mut found: HashMap<Uuid, Vec<usize>> = HashMap::new();
@@ -625,6 +638,10 @@ pub struct Lookup {
     campaign: Option<Campaign>,
     pub reader: Reader,
     create_error: Option<String>,
+    /// What the generator rolled, until the DM saves it or lets it go.
+    generated: Option<crate::npc_generator::Generated>,
+    /// Campaign tables the generator could not use.
+    generator_problems: Vec<String>,
     /// A check of the campaign's files, away from the frame.
     checking: Option<mpsc::Receiver<u64>>,
     was_focused: bool,
@@ -755,6 +772,25 @@ impl Lookup {
             self.open_position(position);
         }
         found.is_some()
+    }
+
+    /// Bold prose opens a unique name, or leaves the choice to the DM in Lookup.
+    pub fn open_words(&mut self, words: &str) {
+        let found = self.index.as_ref().and_then(|index| {
+            let wanted = words.to_lowercase();
+            let mut matches = index
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| item.lower == wanted);
+            let (position, _) = matches.next()?;
+            matches.next().is_none().then_some(position)
+        });
+        if let Some(position) = found {
+            self.open_position(position);
+        } else {
+            self.search_for(words);
+        }
     }
 
     pub fn toggle(&mut self) {
@@ -946,22 +982,55 @@ impl Lookup {
             }
         }
         // Outside the results, because a new name can also match unrelated prose.
-        if let Some(campaign) = self.campaign.clone().filter(|_| !query.is_empty()) {
+        if let Some(campaign) = self.campaign.clone() {
             let mut made = None;
+            let mut generate = false;
             ui.horizontal_wrapped(|ui| {
-                for (label, kind) in [("New NPC", "npc"), ("New location", "location")] {
-                    if Action::quiet(label)
-                        .icon(icons::ADD)
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    {
-                        made = Some(world::create_entry(&campaign, &self.query, kind));
+                if !query.is_empty() {
+                    for (label, kind) in [("New NPC", "npc"), ("New location", "location")] {
+                        if Action::quiet(label)
+                            .icon(icons::ADD)
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                        {
+                            made = Some(world::create_entry(&campaign, &self.query, kind));
+                        }
                     }
                 }
+                generate = self.generated.is_none()
+                    && Action::quiet("Generate NPC")
+                        .icon(icons::DICE)
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
             });
+            let mut reroll = generate;
+            if let Some(npc) = &self.generated {
+                let (saved, again, discard) = generated_card(ui, npc, &self.generator_problems);
+                reroll = again;
+                if saved {
+                    made = Some(world::create_generated(&campaign, npc));
+                }
+                if discard {
+                    self.generated = None;
+                    self.create_error = None;
+                }
+            }
+            if reroll {
+                let tables = index.npc_tables();
+                match crate::npc_generator::roll(&tables) {
+                    Ok(npc) => {
+                        self.generated = Some(npc);
+                        self.create_error = None;
+                    }
+                    Err(error) => self.create_error = Some(error),
+                }
+                self.generator_problems = tables.problems;
+            }
             match made {
                 Some(Ok(id)) => {
+                    self.generated = None;
                     self.create_error = None;
                     self.query.clear();
                     self.results_open = false;
@@ -1204,6 +1273,46 @@ impl Lookup {
     }
 }
 
+/// What the generator rolled, with its choices. Returns save, reroll and discard.
+fn generated_card(
+    ui: &mut egui::Ui,
+    npc: &crate::npc_generator::Generated,
+    problems: &[String],
+) -> (bool, bool, bool) {
+    design::group_label(ui, "Generated NPC");
+    ui.add(egui::Label::new(Type::Strong.rich(ui, &npc.name).color(colors().text)).wrap());
+    for (label, text) in crate::npc_generator::ATTRIBUTES.iter().zip(&npc.attributes) {
+        ui.add(
+            egui::Label::new(
+                Type::Body
+                    .rich(ui, format!("{label}: {text}"))
+                    .color(colors().text),
+            )
+            .wrap(),
+        );
+    }
+    for problem in problems {
+        design::message(ui, Tone::Warning, problem);
+    }
+    let (mut saved, mut again, mut discard) = (false, false, false);
+    ui.horizontal_wrapped(|ui| {
+        saved = Action::primary("Save NPC")
+            .density(Density::Read)
+            .show(ui)
+            .clicked();
+        again = Action::secondary("Reroll")
+            .icon(icons::DICE)
+            .density(Density::Read)
+            .show(ui)
+            .clicked();
+        discard = Action::quiet("Discard")
+            .density(Density::Read)
+            .show(ui)
+            .clicked();
+    });
+    (saved, again, discard)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1231,6 +1340,34 @@ mod tests {
         };
         lookup.open_id(Uuid::new_v4());
         assert!(lookup.query.is_empty());
+    }
+
+    #[test]
+    fn bold_words_open_a_unique_note_and_search_missing_or_ambiguous_names() {
+        let (_dir, campaign) = campaign_with(&[
+            ("NPCs/Docket.md", "The clerk.\n"),
+            ("A/Twin.md", "One.\n"),
+            ("B/Twin.md", "Two.\n"),
+        ]);
+        let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).unwrap());
+        let mut lookup = Lookup {
+            index: Some(index.clone()),
+            query: "old search".into(),
+            ..Default::default()
+        };
+        lookup.open_words("docket");
+        assert!(lookup.open);
+        assert!(lookup.query.is_empty());
+        assert!(!lookup.results_open);
+        assert_eq!(
+            lookup.current,
+            index.position(world::note_id("NPCs/Docket.md"))
+        );
+        for words in ["Twin", "Unknown name"] {
+            lookup.open_words(words);
+            assert!(lookup.open && lookup.results_open);
+            assert_eq!(lookup.query, words);
+        }
     }
 
     fn campaign_with(notes: &[(&str, &str)]) -> (tempfile::TempDir, Campaign) {
@@ -1315,6 +1452,31 @@ mod tests {
         // Who links to a note is listed on it.
         let verori = index.position(world::note_id("Powers/Verori.md")).unwrap();
         assert_eq!(index.mentions_of(index.items[verori].entry.id), [at]);
+    }
+
+    #[test]
+    fn the_generator_reads_world_notes_and_not_session_notes() {
+        let table = |name: &str| {
+            format!(
+                "<!-- splat:rolls key=npc-name dice=1d2 -->\n\n| d2 | Name |\n|---|---|\n| 1-2 | {name} |\n"
+            )
+        };
+        let session = format!(
+            "---\nsession_id: {}\nsession_title: ''\nsession_date: 2026-01-01\nsession_number: 1\n---\n\n{}",
+            Uuid::new_v4(),
+            table("Session Name")
+        );
+        let world = table("World Name");
+        let (_dir, campaign) = campaign_with(&[
+            ("Sessions/Session 1.md", session.as_str()),
+            ("NPC Tables.md", world.as_str()),
+        ]);
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let tables = index.npc_tables();
+        let npc =
+            crate::npc_generator::generate(&tables, &mut splat::execution::dice::Random::seeded(1))
+                .unwrap();
+        assert_eq!(npc.name, "World Name");
     }
 
     #[test]

@@ -182,6 +182,9 @@ A note with a Splat identity that represents something in the world.
 **NPC**:
 A world entry for a person the DM plays. It can point at a stat block, and it is not a creature entry.
 
+**NPC generator**:
+A Lookup action that rolls a name and three attributes (look, manner, want) from the campaign's marked tables or built-in lists. Nothing is written until the DM saves the result as an NPC.
+
 **Location**:
 A world entry for a place. Locations can be inside other locations.
 
