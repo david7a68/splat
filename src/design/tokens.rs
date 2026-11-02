@@ -153,7 +153,7 @@ pub const DARK: Colors = Colors {
     },
     side: Side {
         party: rgb(0xCFC6B4),
-        enemies: rgb(0xE89AA6),
+        enemies: rgb(0xE8926F),
         other: rgb(0xB4C08F),
     },
     sync: Sync {
@@ -598,6 +598,7 @@ mod tests {
             ),
             ("enemies, damaged", c.side.enemies, c.hp.damaged),
             ("bloodied, conflict", c.hp.bloodied, c.sync.conflict),
+            ("enemies, conflict", c.side.enemies, c.sync.conflict),
             ("side, condition", c.side.enemies, c.participant.condition),
             ("temp, healthy", c.hp.temp, c.hp.healthy),
         ] {

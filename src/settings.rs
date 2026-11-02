@@ -95,6 +95,14 @@ impl Settings {
         self.busy
     }
 
+    /// A session past its end, so that the next frame ends it by the real path.
+    #[cfg(test)]
+    pub fn simulate_session_expiry(&mut self) {
+        self.simulated = None;
+        self.refresh_error = None;
+        self.session = Some(Session::for_test(Duration::ZERO, Duration::ZERO));
+    }
+
     #[cfg(test)]
     pub fn simulate(&mut self, account: Account) {
         let session = || {
@@ -149,6 +157,10 @@ impl Settings {
         } else {
             Account::NotConnected
         }
+    }
+
+    pub fn refresh_failing(&self) -> bool {
+        self.account() == Account::RefreshFailing
     }
 
     pub fn connecting(&self) -> bool {

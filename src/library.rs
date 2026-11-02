@@ -827,7 +827,7 @@ impl Library {
             // Beside what it changes, not across the page from it.
             self.scope_menu(ui, compact, campaigns);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_enabled_ui(locked.is_none(), |ui| {
+                design::locked(ui, locked, |ui| {
                     ui.menu_button("Packages", |ui| {
                         if ui.button("Reload the Library").clicked() {
                             reload = true;
@@ -1613,7 +1613,25 @@ impl Library {
         self.message = None;
     }
 
+    /// In a wide window, the reader and its margin sit together in the pane, with the scroll
+    /// bar beside them rather than across an empty band.
     fn editor(&mut self, ui: &mut egui::Ui, subtitle: &str) {
+        let spare = ui.available_width() - view::WIDE_READER;
+        if spare <= 0.0 {
+            self.editor_pane(ui, subtitle);
+            return;
+        }
+        ui.horizontal_top(|ui| {
+            ui.add_space(spare / 2.0);
+            let size = egui::vec2(view::WIDE_READER, ui.available_height());
+            ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_max_width(view::WIDE_READER);
+                self.editor_pane(ui, subtitle);
+            });
+        });
+    }
+
+    fn editor_pane(&mut self, ui: &mut egui::Ui, subtitle: &str) {
         let Some(i) = self.selected else {
             ui.label(
                 Type::Body

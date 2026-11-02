@@ -852,7 +852,7 @@ impl Sessions {
                         .wrap(),
                     );
                 }
-                
+
             });
         if let (Some(link), Some(draft), Some(session)) = (insert, &mut self.draft, session) {
             if !draft.body.ends_with('\n') {

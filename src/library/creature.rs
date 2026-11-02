@@ -48,11 +48,15 @@ fn size(entry: &Entry) -> Option<&str> {
 }
 
 pub(super) fn supports(entry: &Entry, sections: &[presentation::ReadingSection<'_>]) -> bool {
-    entry.kind == "creature"
-        && entry.fields.contains_key("splat_stats")
+    has_stats(entry)
         && sections
             .iter()
             .any(|section| section.title == "Source text")
+}
+
+/// A creature with stats, from the book or written by hand, has a stat block at its head.
+pub(super) fn has_stats(entry: &Entry) -> bool {
+    entry.kind == "creature" && entry.fields.contains_key("splat_stats")
 }
 
 /// Remove only source rows represented by the styled values. Unknown prose stays.
@@ -239,9 +243,8 @@ fn cell(ui: &mut egui::Ui, width: f32, text: &str, role: Type, color: egui::Colo
         .galley(egui::pos2(left, rect.top()), galley, color);
 }
 
-/// Armor class, hit points and initiative, under capital labels.
-fn vitals(ui: &mut egui::Ui, entry: &Entry) {
-    let c = colors();
+/// Armor class, hit points and initiative, under capital labels. Only what the entry has.
+fn vital_rows(entry: &Entry) -> Vec<(&'static str, String)> {
     let hp = field(entry, "hit_points_text")
         .map(str::to_owned)
         .or_else(|| {
@@ -250,15 +253,25 @@ fn vitals(ui: &mut egui::Ui, entry: &Entry) {
                     .map(|text| text.trim_end_matches('\\').trim().to_owned())
             })
         })
-        .unwrap_or_else(|| value(entry, "max_hp"));
-    let initiative = stat(entry, "initiative").map_or_else(|| "—".into(), design::signed);
+        .or_else(|| stat(entry, "max_hp").map(|hp| hp.to_string()));
+    [
+        (
+            "ARMOR CLASS",
+            stat(entry, "armor_class").map(|ac| ac.to_string()),
+        ),
+        ("HIT POINTS", hp),
+        ("INITIATIVE", stat(entry, "initiative").map(design::signed)),
+    ]
+    .into_iter()
+    .filter_map(|(label, text)| text.map(|text| (label, text)))
+    .collect()
+}
+
+fn vitals(ui: &mut egui::Ui, entry: &Entry) {
+    let c = colors();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(design::L, 2.0);
-        for (label, text) in [
-            ("ARMOR CLASS", value(entry, "armor_class")),
-            ("HIT POINTS", hp),
-            ("INITIATIVE", initiative),
-        ] {
+        for (label, text) in vital_rows(entry) {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 ui.label(Type::Label.rich(ui, label).color(c.muted));
@@ -316,12 +329,8 @@ fn detail(entry: &Entry, key: &str) -> Option<String> {
     Some(movement.join(", "))
 }
 
-pub(super) fn show(
-    ui: &mut egui::Ui,
-    entry: &Entry,
-    sections: &[presentation::ReadingSection<'_>],
-    mut spell_links: impl FnMut(&mut egui::Ui, &str),
-) {
+/// Identity, vitals, abilities and details: what the entry has, and no empty cells.
+pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry) {
     ui.add_space(design::S);
     let identity = [size(entry), field(entry, "type"), field(entry, "alignment")]
         .into_iter()
@@ -377,6 +386,15 @@ pub(super) fn show(
     heavy_rule(ui);
     ui.add_space(design::S);
     ui.spacing_mut().item_spacing.y = design::XS;
+}
+
+pub(super) fn show(
+    ui: &mut egui::Ui,
+    entry: &Entry,
+    sections: &[presentation::ReadingSection<'_>],
+    mut spell_links: impl FnMut(&mut egui::Ui, &str),
+) {
+    stat_head(ui, entry);
     for section in sections {
         if section.title == "Source text" {
             let body = without_line(section.body, hit_points_line(entry));
@@ -401,6 +419,20 @@ pub(super) fn show(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_hand_written_creature_reads_as_a_stat_block_with_only_what_it_has() {
+        let text = "---\nsplat_schema: 1\nsplat_id: 8f4a2f8e-41f0-4c4a-9d4c-0a7a1a1b2c3d\nsplat_kind: creature\nsplat_name: Varra\nsplat_creature: {size: medium}\nsplat_stats:\n  max_hp: {value: 52}\n  armor_class: {value: 16}\n---\n\n# Varra\n\n## Actions\n\nLongsword. Melee Attack Roll: +5.\n";
+        let entry = Entry::parse("Notes/Varra.md", text).unwrap();
+        assert!(has_stats(&entry));
+        assert_eq!(
+            vital_rows(&entry),
+            vec![
+                ("ARMOR CLASS", "16".to_string()),
+                ("HIT POINTS", "52".to_string())
+            ]
+        );
+    }
 
     #[test]
     fn custom_prose_around_structured_data_is_preserved() {

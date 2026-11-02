@@ -35,6 +35,8 @@ pub struct Item {
     lower: String,
     pub subtitle: String,
     pub owner: String,
+    /// Written for this campaign, not from a package.
+    private: bool,
     pub section: presentation::Section,
     builtin: bool,
     from_sheet: bool,
@@ -48,6 +50,19 @@ pub struct ContentIndex {
     by_key: HashMap<String, usize>,
     spells: Vec<usize>,
     pub errors: Vec<String>,
+}
+
+impl Item {
+    /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
+    fn origin(&self) -> u8 {
+        if self.from_sheet {
+            2
+        } else if self.private {
+            0
+        } else {
+            1
+        }
+    }
 }
 
 impl ContentIndex {
@@ -87,6 +102,7 @@ impl ContentIndex {
                 lower: e.entry.name.to_lowercase(),
                 subtitle: presentation::subtitle(&e.entry),
                 owner: owner_name(e.owner, e.private),
+                private: e.private,
                 section: presentation::Section::for_entry(&e.entry),
                 builtin: Some(e.owner) == builtin,
                 from_sheet: from_sheet(&e.entry),
@@ -135,15 +151,7 @@ impl ContentIndex {
                 } else {
                     return None;
                 };
-                // Among equal matches: the DM's own entry, then the book, then a sheet's copy.
-                let origin = if item.from_sheet {
-                    2
-                } else if item.owner.starts_with("Campaign") {
-                    0
-                } else {
-                    1
-                };
-                Some((rank, origin, index))
+                Some((rank, item.origin(), index))
             })
             .collect();
         found.sort_unstable();
@@ -562,6 +570,20 @@ impl Lookup {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_package_named_campaign_is_not_the_dms_own_entry() {
+        let mut item = ContentIndex::load(&[], None).unwrap().items.remove(0);
+        item.owner = "Campaign Companion".into();
+        item.private = false;
+        item.from_sheet = false;
+        assert_eq!(item.origin(), 1, "a package ranks with the book");
+        item.owner = "Campaign · Emberfall".into();
+        item.private = true;
+        assert_eq!(item.origin(), 0, "the DM's own entry ranks first");
+        item.from_sheet = true;
+        assert_eq!(item.origin(), 2, "a sheet's copy ranks last");
+    }
 
     #[test]
     fn opening_an_entry_from_elsewhere_clears_the_old_search() {

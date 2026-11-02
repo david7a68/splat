@@ -39,7 +39,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 28] = [
+const SCENARIOS: [(&str, Seed, Script); 29] = [
     (
         "library-browse",
         Seed::Empty,
@@ -127,6 +127,11 @@ const SCENARIOS: [(&str, Seed, Script); 28] = [
         scenarios::run_edge_states::run,
     ),
     (
+        "run-long-names",
+        Seed::Campaign,
+        scenarios::run_long_names::run,
+    ),
+    (
         "session-notes",
         Seed::Campaign,
         scenarios::session_notes::run,
@@ -147,6 +152,7 @@ impl crate::Splat {
             || self.encounters.busy()
             || self.party.busy()
             || self.lookup.busy()
+            || self.dndbeyond.busy()
             || self.sessions.busy()
             || self.copy_dialog.as_ref().is_some_and(|d| d.busy())
     }
@@ -229,6 +235,11 @@ fn output_directory() -> (PathBuf, bool) {
 }
 
 /// Only files this suite writes. The folder can be one the caller chose.
+/// A partial run replaces only its own captures.
+fn is_selected(scenario: &str) -> bool {
+    selected().iter().any(|(name, ..)| *name == scenario)
+}
+
 fn clear_old_captures(directory: &Path) {
     let names = [
         "ergonomics.json",
@@ -241,7 +252,11 @@ fn clear_old_captures(directory: &Path) {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or_default();
-        names.contains(&name) || (name.ends_with(".png") && name.contains("__"))
+        names.contains(&name)
+            || (name.ends_with(".png")
+                && name
+                    .split_once("__")
+                    .is_some_and(|(scenario, _)| is_selected(scenario)))
     };
     for file in fs::read_dir(directory).into_iter().flatten().flatten() {
         if is_ours(&file.path()) {
@@ -253,7 +268,12 @@ fn clear_old_captures(directory: &Path) {
         .flatten()
         .flatten()
     {
-        if file.path().extension().is_some_and(|e| e == "mp4") {
+        let path = file.path();
+        let stem = path
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        if path.extension().is_some_and(|e| e == "mp4") && is_selected(stem) {
             fs::remove_file(file.path()).expect("clear old video");
         }
     }

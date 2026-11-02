@@ -428,7 +428,11 @@ pub enum SyncState {
     Conflict,
     ReadOnly,
     Error,
+    /// The session ended under a running sync. It needs a connection and `Sync party`.
+    Stopped,
 }
+
+const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then have not been sent. Connect in Settings, then select Sync party.";
 
 #[derive(Default)]
 pub struct CombatSync {
@@ -444,6 +448,7 @@ pub struct CombatSync {
     refresh_only: bool,
     pub error: Option<String>,
     pub updated: bool,
+    session_lost: bool,
     /// Never talks to D&D Beyond. It only shows the state it was given.
     #[cfg(test)]
     simulated: bool,
@@ -522,12 +527,42 @@ impl CombatSync {
         self.gate = None;
         self.enabled = false;
     }
+    /// The session ended. This sync stops, and says so until the DM starts it again.
+    pub fn session_ended(&mut self) {
+        #[cfg(test)]
+        if self.simulated {
+            return;
+        }
+        if self.enabled {
+            self.stop();
+            self.error = Some(SESSION_LOST.into());
+            self.session_lost = true;
+        }
+    }
+    pub fn session_lost(&self) -> bool {
+        self.session_lost
+    }
+    /// Changes D&D Beyond has not confirmed: on their way, or stranded by a lost session.
+    pub fn unconfirmed(&self) -> bool {
+        (self.enabled && (self.busy() || self.dirty())) || self.stranded()
+    }
+    /// A lost session left these changes unsent. Nothing here can send them.
+    pub fn stranded(&self) -> bool {
+        self.session_lost && self.dirty()
+    }
+    /// Let this sync react to the session, as a real one does.
+    #[cfg(test)]
+    pub fn stop_simulating(&mut self) {
+        self.simulated = false;
+    }
     pub fn ready(&self) -> bool {
         self.enabled && self.remote.is_some()
     }
     pub fn state(&self) -> SyncState {
         if !self.blocked.is_empty() {
             SyncState::Conflict
+        } else if self.session_lost {
+            SyncState::Stopped
         } else if self.error.is_some() {
             SyncState::Error
         } else if !self.enabled {
@@ -556,6 +591,7 @@ impl CombatSync {
         self.blocked.clear();
         self.next = None;
         self.error = None;
+        self.session_lost = false;
     }
     pub fn busy(&self) -> bool {
         self.pending.is_some()
@@ -595,6 +631,10 @@ impl CombatSync {
         // Test builds have no route to D&D Beyond. A signed-in test stays on its first read.
         if cfg!(test) {
             let _ = (ctx, &session, epoch, campaign, id);
+            return;
+        }
+        // Its words and unsent changes stay until the DM starts it again.
+        if self.session_lost {
             return;
         }
         let scope = (epoch, campaign.to_owned(), id.to_owned());

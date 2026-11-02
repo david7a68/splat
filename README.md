@@ -38,6 +38,7 @@ D&D Beyond.
 
 ```sh
 devenv shell -- visual-test iter-0
+devenv shell -- visual-test work --only run-lookup,party
 ```
 
 This also writes to `artifacts/screenshots/iter-0/`: a PNG for each state at 960x640,
@@ -48,7 +49,8 @@ the host's `ffmpeg` and `montage`.
 
 - `SPLAT_VISUAL_ENFORCE=strict` fails on any violation. `report` never fails on a check.
 - `SPLAT_VISUAL_UPDATE_BASELINE=1` rewrites the baseline after a full run.
-- `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios.
+- `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
+  party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
 
 The `gallery` scenario captures every design token and component. `src/design/lint.rs` fails on raw

@@ -126,6 +126,12 @@ pub struct DndBeyond {
 }
 
 impl DndBeyond {
+    /// A list is on its way, so what is on screen is due to change.
+    #[cfg(test)]
+    pub fn busy(&self) -> bool {
+        self.pending.is_some()
+    }
+
     pub fn begin_frame(&mut self) {
         if !self.visible_last_frame {
             self.requested_visible_link = None;
@@ -238,8 +244,15 @@ impl DndBeyond {
                     ui.label("No campaigns returned for this account.");
                 }
                 for remote in &self.campaigns {
+                    let added = local.linked_elsewhere(&remote.id);
+                    let label = if added {
+                        format!("{} · Added", remote.name)
+                    } else {
+                        remote.name.clone()
+                    };
                     if ui
-                        .button(format!("{} · {}", remote.name, remote.id))
+                        .add_enabled(!added, egui::Button::new(label))
+                        .on_disabled_hover_text("This campaign is already in your list.")
                         .clicked()
                     {
                         local.start_import(&remote.id, &remote.name);

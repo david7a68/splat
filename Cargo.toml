@@ -32,3 +32,8 @@ egui_kittest = { version = "0.33", features = ["wgpu", "eframe"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 ab_glyph = "0.2"
 epaint_default_fonts = "0.33"
+
+# Dependencies only: the app's own code stays debuggable. Parsing, hashing and painting all
+# run in dependencies, and they are most of the time the tests take.
+[profile.dev.package."*"]
+opt-level = 2

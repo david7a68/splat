@@ -354,6 +354,8 @@ pub struct Encounters {
     focus_name: bool,
     focus_search: bool,
     editor_pane: EditorPane,
+    /// The DM asked to go back to the open run, from its row in the list.
+    pub wants_run: bool,
     expanded: Option<String>,
 }
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -394,6 +396,24 @@ impl Encounters {
             .as_mut()
             .expect("an open run")
             .simulate_sync_state(name, state);
+    }
+
+    /// A participant under another name. No fixture has a name this long.
+    #[cfg(test)]
+    pub fn simulate_rename(&mut self, name: &str, to: &str) {
+        self.run
+            .as_mut()
+            .expect("an open run")
+            .simulate_rename(name, to);
+    }
+
+    /// Running syncs react to the session from now on, as real ones do.
+    #[cfg(test)]
+    pub fn simulate_session_end(&mut self) {
+        self.run
+            .as_mut()
+            .expect("an open run")
+            .stop_simulating_sync();
     }
 
     /// Show an error line. An empty message clears it.
@@ -835,6 +855,7 @@ impl Encounters {
         let mut open_path = None;
         let mut run_path = None;
         let mut resume = None;
+        let back_to_run = std::cell::Cell::new(false);
         let two_columns = ui.available_width() >= 640.0;
         if snapshot.encounters.is_empty() && snapshot.runs.is_empty() {
             let mut create = false;
@@ -862,6 +883,17 @@ impl Encounters {
             let heading = format!("Saved runs ({})", snapshot.runs.len());
             ui.label(Type::Heading.rich(ui, heading).color(colors().text));
             design::rule(ui);
+            let open_run = self
+                .run
+                .as_ref()
+                .and_then(|run| run.path().map(std::path::Path::to_path_buf));
+            if open_run.is_some() {
+                design::message(
+                    ui,
+                    Tone::Info,
+                    "A run is open. Close it to start or edit another.",
+                );
+            }
             if snapshot.runs.is_empty() {
                 ui.label(
                     Type::Body
@@ -892,15 +924,21 @@ impl Encounters {
                         ui.horizontal(|ui| {
                             ui.set_min_height(Density::Scan.row());
                             // At the table, picking up the interrupted run comes first.
-                            let action = if info.finished {
+                            let open = open_run.as_deref() == Some(info.path.as_path());
+                            let action = if open {
+                                Action::primary("Back to this run")
+                            } else if info.finished {
                                 Action::secondary("Resume").density(Density::Read)
                             } else {
                                 Action::primary("Resume")
                             };
-                            if info.readable
-                                && action.blocked(self.start_blocked()).show(ui).clicked()
-                            {
-                                *resume = Some(info.path.clone());
+                            let blocked = (!open).then(|| self.start_blocked()).flatten();
+                            if info.readable && action.blocked(blocked).show(ui).clicked() {
+                                if open {
+                                    back_to_run.set(true);
+                                } else {
+                                    *resume = Some(info.path.clone());
+                                }
                             }
                             let color = if info.finished {
                                 colors().muted
@@ -995,6 +1033,7 @@ impl Encounters {
                     template_list(ui, &mut open_path, &mut run_path);
                 }
             });
+        self.wants_run |= back_to_run.get();
         if let Some(path) = resume {
             match crate::encounter_run::Run::open(&path, active.id) {
                 Ok(run) => {
@@ -1073,6 +1112,15 @@ impl Encounters {
                         icon: icons::DRAFT,
                         word: "Unsaved",
                         color: colors().document.unsaved,
+                    },
+                );
+            } else if saved_note.is_none() {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::OK,
+                        word: "No changes",
+                        color: colors().muted,
                     },
                 );
             } else if let Some(note) = &saved_note {
@@ -1175,11 +1223,13 @@ impl Encounters {
         let draft = self.draft.as_mut().expect("the editor has a draft");
         let mut pane = self.editor_pane;
         if compact {
+            // The count stays on screen, so that Add shows a result on the other tab.
+            let roster = format!("Roster ({})", draft.setup.roster.len());
             design::segmented(
                 ui,
                 &mut pane,
                 &[
-                    (EditorPane::Roster, "Roster"),
+                    (EditorPane::Roster, roster.as_str()),
                     (EditorPane::Add, "Add participants"),
                 ],
             );
@@ -1368,12 +1418,10 @@ impl Encounters {
                                     {
                                         *peek = Some(c.id);
                                     }
-                                    if Action::secondary("Add")
+                                    let added = c.party && on_roster(draft, c.id);
+                                    if Action::secondary(if added { "In roster" } else { "Add" })
                                         .density(Density::Read)
-                                        .blocked_if(
-                                            c.party && on_roster(draft, c.id),
-                                            "Already on the roster.",
-                                        )
+                                        .blocked_if(added, "Already on the roster.")
                                         .show(ui)
                                         .clicked()
                                     {
@@ -1610,7 +1658,8 @@ impl Encounters {
         };
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         ui.add_space(design::S);
-        ui.add_enabled_ui(!draft_open, |ui| {
+        let closed_while = draft_open.then_some("Save or discard the open encounter first.");
+        design::locked(ui, closed_while, |ui| {
             design::text_field(
                 ui,
                 "Run folder",
@@ -1675,7 +1724,10 @@ impl Encounters {
                     );
                     self.discarded_options = None;
                     ui.add_space(design::XL);
-                    if Action::destructive("Discard settings changes").show(ui).clicked() {
+                    if Action::destructive("Discard settings changes")
+                        .show(ui)
+                        .clicked()
+                    {
                         self.discarded_options = Some(std::mem::replace(
                             &mut snapshot.options,
                             snapshot.saved_options.clone(),

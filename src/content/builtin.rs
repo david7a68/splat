@@ -3,7 +3,10 @@ use super::{Diagnostic, Entry, Report, validate};
 use include_dir::{Dir, include_dir};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::OnceLock,
+};
 
 static SRD: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/builtin/srd-5.2.1");
 pub const SOURCE_URL: &str =
@@ -47,6 +50,13 @@ pub struct Package {
 /// The source bytes are embedded, so loading needs no network or working directory.
 pub fn source_file(path: &str) -> Option<&'static [u8]> {
     SRD.get_file(path).map(|file| file.contents())
+}
+
+/// The checked entries, parsed and hashed once per process. The bytes are embedded, so they
+/// cannot change while the app runs. Callers get their own copy.
+pub fn entries() -> Vec<Entry> {
+    static ENTRIES: OnceLock<Vec<Entry>> = OnceLock::new();
+    ENTRIES.get_or_init(|| load().entries).clone()
 }
 
 pub fn load() -> Package {
