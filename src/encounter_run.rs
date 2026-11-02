@@ -12,7 +12,7 @@ use splat::{
     execution::dice::{Dice, Random},
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -266,6 +266,36 @@ impl Participant {
         });
         Ok(participant)
     }
+    /// Begin from where the last fight left this player, not from their sheet. Returns what
+    /// the sheet would have given, if that is different.
+    pub fn carry_over(&mut self, carry: &Carry) -> Option<(Option<i64>, i64)> {
+        if !self.definition.fields.contains_key("splat_external") {
+            return None;
+        }
+        let from_a_fight = carry.values.get(&self.definition.id).copied();
+        let (hp, temp) = match from_a_fight {
+            Some(values) => values,
+            None if carry.full => (self.max_hp?, 0),
+            None => return None,
+        };
+        let hp = self.max_hp.map_or(hp, |max| hp.min(max));
+        let sheet = (self.hp, self.temporary_hp);
+        if sheet == (Some(hp), temp) {
+            return None;
+        }
+        self.hp = Some(hp);
+        self.temporary_hp = temp;
+        // After a fight, what it began with, so that sync reads this as the start and not as the
+        // DM's edit: a first read takes the sheet's value, as it does for any value left alone.
+        // Full HP from a rest is the DM's ruling, so a sheet that differs is a conflict to settle.
+        if from_a_fight.is_some()
+            && let Some(started) = &mut self.started
+        {
+            started.hp = Some(hp);
+            started.temp = temp;
+        }
+        Some(sheet)
+    }
     fn health_known(&self) -> bool {
         matches!((self.hp, self.max_hp), (Some(hp), Some(max)) if max > 0 && hp >= 0 && hp <= max)
     }
@@ -290,6 +320,21 @@ struct State {
     log: Vec<String>,
     random: Random,
 }
+/// Each carried player's place in the roster, and HP and temporary HP from their sheet.
+type SheetValues = Vec<(usize, Option<i64>, i64)>;
+/// HP that came from the last fight, not from the sheets.
+struct CarriedHp {
+    from: String,
+    sheets: SheetValues,
+    /// Fights whose runs could not be read, so their HP is not here.
+    missing: Vec<String>,
+}
+/// The last roll, beside the dice.
+struct LastRoll {
+    total: String,
+    /// The log line behind the total.
+    line: String,
+}
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
@@ -304,6 +349,13 @@ pub(crate) struct Run {
     /// What each history step did, for a named Undo.
     history_labels: Vec<String>,
     selected: usize,
+    /// More targets for one amount, beside the selected row. Never saved.
+    also: BTreeSet<usize>,
+    /// The targets that take half of a damage amount, for a save.
+    halved: BTreeSet<usize>,
+    /// Never saved.
+    carried: Option<CarriedHp>,
+    last_roll: Option<LastRoll>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
     condition: String,
@@ -385,6 +437,8 @@ const GROUP_ADDED: &str = "Encounter group ";
 const GROUP_LINE_LIMIT: usize = 200;
 /// What a saved run may hold. A larger one does not open again.
 const MAX_PARTICIPANTS: usize = 2000;
+/// Where a run's own text ends. Saved runs hold both parts in one string.
+pub(crate) const SETUP_HEADING: &str = "## Setup (DM reference)";
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
 const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
@@ -439,6 +493,8 @@ enum Command {
     Roll(String),
     /// Add every member of an encounter group, on this total, or by rolling.
     AddGroup(Arc<RunGroup>, Option<i64>),
+    /// One amount on several targets, as one step of undo.
+    Several(Vec<Command>),
 }
 /// A d20 for initiative, with the bonus and the roll mode. Returns the die and the total.
 fn roll_initiative(random: &mut Random, bonus: i64, mode: i8) -> Result<(i64, i64), String> {
@@ -562,11 +618,15 @@ impl Run {
             history: Vec::new(),
             history_labels: Vec::new(),
             selected: 0,
+            also: BTreeSet::new(),
+            halved: BTreeSet::new(),
+            carried: None,
+            last_roll: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),
-            dice: "1d20".into(),
-            outcome: "Undecided".into(),
+            dice: String::new(),
+            outcome: String::new(),
             error: None,
             confirm_close: false,
             setup_details,
@@ -606,6 +666,60 @@ impl Run {
             groups: None,
             group_totals: BTreeMap::new(),
         })
+    }
+    /// Opened for this fight and closed again with nothing done.
+    pub fn untouched_setup(&self) -> bool {
+        self.state.phase == Phase::Setup
+            && self.history.is_empty()
+            && !self.reopened
+            && !self.undo_stopped
+    }
+    /// HP came from the last fight, not from the sheets, and the log says so.
+    pub fn note_carry(&mut self, carry: &Carry, sheets: SheetValues) {
+        // A fight that cannot be read carries nothing, and the log must not say it did.
+        if !sheets.is_empty() {
+            self.state
+                .log
+                .push(format!("Party HP carried over from {}.", carry.from));
+        }
+        self.carried = Some(CarriedHp {
+            from: carry.from.clone(),
+            sheets,
+            missing: carry.missing.clone(),
+        });
+        self.dirty = true;
+    }
+    /// The carried values that still differ from the sheets, as one step back to the sheets.
+    fn back_to_sheets(&self) -> Option<(String, Command)> {
+        let carried = self.carried.as_ref()?;
+        let mut commands = Vec::new();
+        for (index, hp, temp) in &carried.sheets {
+            let p = self.state.participants.get(*index)?;
+            // Sync is reading the sheet itself, and these values may be older than that.
+            let reading = self.syncs.get(index).is_some_and(|sync| sync.ready());
+            if !reading && (p.hp, p.temporary_hp) != (*hp, *temp) {
+                commands.push(Command::Health(*index, *hp, p.max_hp));
+                commands.push(Command::TempHp(*index, *temp));
+            }
+        }
+        (!commands.is_empty()).then(|| (carried.from.clone(), Command::Several(commands)))
+    }
+    /// The fights whose HP could not be read, in words.
+    fn carry_missing(&self) -> Option<String> {
+        let carried = self.carried.as_ref()?;
+        (!carried.missing.is_empty()).then(|| {
+            format!(
+                "Could not read the run of {}, so that fight's HP did not carry over.",
+                carried.missing.join(", ")
+            )
+        })
+    }
+    /// The read-aloud text and notes, and the setup's technical details, if a run has them.
+    fn prep(&self) -> (&str, Option<&str>) {
+        match self.setup_details.split_once(SETUP_HEADING) {
+            Some((prep, technical)) => (prep.trim(), Some(technical.trim())),
+            None => (self.setup_details.trim(), None),
+        }
     }
     fn current(&self) -> Option<usize> {
         (self.state.phase == Phase::Running).then(|| self.state.order[self.state.cursor])
@@ -913,6 +1027,15 @@ impl Run {
             Command::AddGroup(group, total) => {
                 Self::join_group(&mut next, &group, total, self.initiative.grouping)?
             }
+            Command::Several(commands) => {
+                let mut lines = commands
+                    .into_iter()
+                    .map(|command| Self::participant_command(&mut next, command))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let last = lines.pop().ok_or("Choose a target first.")?;
+                next.log.append(&mut lines);
+                last
+            }
             other => Self::participant_command(&mut next, other)?,
         };
         next.log.push(label);
@@ -925,6 +1048,9 @@ impl Run {
         self.last_initiative = initiative_edit;
         if follow_turn && let Some(current) = self.current() {
             self.selected = current;
+            // Whichever way the turn moved, targets chosen for it no longer stand.
+            self.also.clear();
+            self.halved.clear();
         }
         self.dirty = true;
         self.error = None;
@@ -1127,6 +1253,7 @@ impl Run {
             self.dirty = true;
             self.error = None;
             self.last_initiative = None;
+            self.last_roll = None;
         }
     }
     /// Undo can take away an encounter group, and these all hold a participant's place.
@@ -1208,6 +1335,41 @@ impl Run {
             Command::Note(i, _) => format!("note on {}", name(i)),
             Command::Roll(expression) => format!("{expression} roll"),
             Command::AddGroup(group, _) => format!("add {}", group.name),
+            Command::Several(commands) => {
+                let word = match commands.first() {
+                    Some(Command::Health(..)) => return "HP from the sheets".to_owned(),
+                    Some(Command::Heal(_, amount)) => format!("{amount} healing to"),
+                    Some(Command::TempHp(_, amount)) => format!("{amount} temporary HP on"),
+                    Some(Command::Damage(_, amount)) => {
+                        // The largest amount, so a half does not misname the step.
+                        let most = commands
+                            .iter()
+                            .filter_map(|command| match command {
+                                Command::Damage(_, amount) => Some(*amount),
+                                _ => None,
+                            })
+                            .max()
+                            .unwrap_or(*amount);
+                        format!("{most} damage to")
+                    }
+                    _ => "a change to".to_owned(),
+                };
+                let halves = commands
+                    .iter()
+                    .filter_map(|command| match command {
+                        Command::Damage(_, amount) => Some(*amount),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                let most = halves.iter().copied().max().unwrap_or(0);
+                let half = halves.iter().filter(|amount| **amount < most).count();
+                let saved = if half > 0 {
+                    format!(", half for {half}")
+                } else {
+                    String::new()
+                };
+                format!("{word} {} participants{saved}", commands.len())
+            }
         }
     }
     fn undo_label(&self) -> String {
@@ -1296,6 +1458,8 @@ impl Run {
     pub fn review_conflict(&mut self) {
         if let Some(index) = self.first_sync_in(crate::combat_sync::SyncState::Conflict) {
             self.selected = index;
+            self.also.clear();
+            self.halved.clear();
             self.scroll_to_selected = true;
             // Its controls are in the side panel, which Lookup covers.
             self.close_lookup = true;
@@ -2041,11 +2205,15 @@ impl Run {
             dirty: false,
             history: Vec::new(),
             history_labels: Vec::new(),
+            also: BTreeSet::new(),
+            halved: BTreeSet::new(),
+            carried: None,
+            last_roll: None,
             amount: String::new(),
             condition: String::new(),
             note: String::new(),
-            dice: "1d20".into(),
-            outcome: "Undecided".into(),
+            dice: String::new(),
+            outcome: String::new(),
             error: None,
             confirm_close: false,
             syncs: BTreeMap::new(),
@@ -2097,7 +2265,7 @@ impl Run {
                 match Self::open(&path, campaign) {
                     Ok(run) => {
                         let (status, finished) = match run.state.phase {
-                            Phase::Setup => ("Preparing", false),
+                            Phase::Setup => ("Setup", false),
                             Phase::Running => ("In progress", false),
                             Phase::Ended { .. } => ("Ended", true),
                         };
@@ -2121,6 +2289,7 @@ impl Run {
                                 )),
                             ),
                             finished,
+                            begun: run.state.phase != Phase::Setup,
                             readable: true,
                         });
                     }
@@ -2130,6 +2299,7 @@ impl Run {
                             label: format!("Unreadable run: {name}"),
                             encounter: String::new(),
                             finished: false,
+                            begun: false,
                             readable: false,
                             path,
                         });
@@ -2148,7 +2318,88 @@ pub struct SavedRunInfo {
     pub encounter: String,
     pub label: String,
     pub finished: bool,
+    /// Combat began. A setup that was closed has nothing to go back to.
+    pub begun: bool,
     pub readable: bool,
+}
+
+/// Where the party stands between fights in one session.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Carry {
+    /// The fight or the rest it comes from, in words.
+    pub from: String,
+    /// A long rest the DM said restored everyone. A later fight's values still come first.
+    pub full: bool,
+    /// HP and temporary HP, by the character's identity.
+    pub values: BTreeMap<Uuid, (i64, i64)>,
+    /// Fights whose runs could not be read.
+    pub missing: Vec<String>,
+}
+
+/// One fight after the fact: how each participant ended, and what the log says.
+pub struct FightSummary {
+    /// Combat ended, so these are the final values. A run can also be closed mid-fight.
+    pub ended: bool,
+    pub rows: Vec<FightRow>,
+    pub log: Vec<String>,
+}
+
+pub struct FightRow {
+    pub name: String,
+    pub player: bool,
+    pub hp: Option<i64>,
+    pub max_hp: Option<i64>,
+    pub temporary_hp: i64,
+    pub conditions: Vec<String>,
+    pub present: bool,
+}
+
+/// A saved run's file, within the size limit.
+fn read_saved(path: &Path, campaign: Uuid) -> Result<SavedRun, String> {
+    if fs::metadata(path).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
+        return Err("Saved run exceeds the size limit.".into());
+    }
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let saved: SavedRun =
+        serde_json::from_slice(&bytes).map_err(|e| format!("Invalid saved run: {e}"))?;
+    if saved.version != 1 || saved.campaign != campaign {
+        return Err("Unsupported run version or wrong campaign.".into());
+    }
+    Ok(saved)
+}
+
+/// How the players stood when this run was last saved.
+pub fn party_at_end(path: &Path, campaign: Uuid) -> Result<BTreeMap<Uuid, (i64, i64)>, String> {
+    Ok(read_saved(path, campaign)?
+        .state
+        .participants
+        .iter()
+        .filter(|p| p.definition.fields.contains_key("splat_external"))
+        .filter_map(|p| Some((p.definition.id, (p.hp?, p.temporary_hp))))
+        .collect())
+}
+
+/// A finished or interrupted fight, to read in place.
+pub fn fight_summary(path: &Path, campaign: Uuid) -> Result<FightSummary, String> {
+    let state = read_saved(path, campaign)?.state;
+    Ok(FightSummary {
+        ended: matches!(state.phase, Phase::Ended { .. }),
+        rows: state
+            .order
+            .iter()
+            .filter_map(|index| state.participants.get(*index))
+            .map(|p| FightRow {
+                name: p.name.clone(),
+                player: p.definition.fields.contains_key("splat_external"),
+                hp: p.hp,
+                max_hp: p.max_hp,
+                temporary_hp: p.temporary_hp,
+                conditions: p.conditions.clone(),
+                present: p.present,
+            })
+            .collect(),
+        log: state.log.iter().rev().cloned().collect(),
+    })
 }
 
 /// A UTC date and time, so two runs saved on one day can be told apart.
@@ -3553,6 +3804,159 @@ mod tests {
         assert_eq!(run.undo_label(), format!("Undo: 7 damage to {name}"));
         run.undo();
         assert_eq!(run.undo_label(), "Undo: begin combat");
+    }
+    #[test]
+    fn one_amount_on_several_targets_is_one_step_and_half_rounds_down() {
+        let mut run = run();
+        begin(&mut run);
+        run.state
+            .participants
+            .iter_mut()
+            .for_each(|p| p.temporary_hp = 0);
+        let hp: Vec<_> = run.state.participants.iter().map(|p| p.hp).collect();
+        run.selected = 0;
+        run.also.insert(1);
+        run.halved.insert(1);
+        let steps = run.history.len();
+        let lines = run.state.log.len();
+        run.apply(run.amount_command(5, Command::Damage)).unwrap();
+        assert_eq!(run.history.len(), steps + 1);
+        assert_eq!(run.state.log.len(), lines + 2);
+        assert_eq!(run.state.participants[0].hp, hp[0].map(|n| (n - 5).max(0)));
+        assert_eq!(run.state.participants[1].hp, hp[1].map(|n| (n - 2).max(0)));
+        assert_eq!(
+            run.undo_label(),
+            "Undo: 5 damage to 2 participants, half for 1"
+        );
+        run.undo();
+        assert_eq!(run.state.participants[0].hp, hp[0]);
+        assert_eq!(run.state.participants[1].hp, hp[1]);
+        // Half is for a save. Healing goes to every target in full.
+        run.also.insert(1);
+        run.halved.insert(1);
+        match run.amount_command(5, Command::Heal) {
+            Command::Several(commands) => assert!(
+                commands
+                    .iter()
+                    .all(|command| matches!(command, Command::Heal(_, 5)))
+            ),
+            _ => panic!("two targets are one step"),
+        }
+    }
+    #[test]
+    fn a_turn_that_moves_from_another_page_lets_go_of_the_targets() {
+        let mut run = run();
+        begin(&mut run);
+        run.also.insert(1);
+        run.halved.insert(1);
+        run.next_turn();
+        assert!(run.also.is_empty() && run.halved.is_empty());
+        // Even if the two meet, one target takes one amount.
+        run.selected = 1;
+        run.also.insert(1);
+        run.also.insert(0);
+        assert_eq!(run.targets().iter().filter(|at| **at == 1).count(), 1);
+    }
+    #[test]
+    fn a_setup_with_nothing_done_is_untouched_until_sync_changes_it() {
+        let mut run = run();
+        assert!(run.untouched_setup());
+        run.undo_stopped = true;
+        assert!(!run.untouched_setup());
+    }
+    #[test]
+    fn a_ctrl_click_on_the_selected_row_gives_the_selection_to_another_target() {
+        let mut run = run();
+        run.selected = 0;
+        run.toggle_target(1);
+        assert!(run.also.contains(&1));
+        run.toggle_target(0);
+        assert_eq!(run.selected, 1);
+        assert!(run.also.is_empty());
+    }
+    #[test]
+    fn the_prep_tab_separates_a_runs_words_from_its_setup() {
+        let mut run = run();
+        run.setup_details = format!("Ash falls.\n\n{SETUP_HEADING}\n\n```yaml\nroster: []\n```");
+        let (prep, technical) = run.prep();
+        assert_eq!(prep, "Ash falls.");
+        assert!(technical.unwrap().contains("roster"));
+        // An older save, or a run with no setup, has only words.
+        run.setup_details = "Only words.".into();
+        assert_eq!(run.prep(), ("Only words.", None));
+    }
+    #[test]
+    fn a_player_starts_from_the_last_fight_and_the_sheet_is_one_step_back() {
+        let id = Uuid::new_v4();
+        let entry = Entry::parse(
+            "Hero.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Hero\nsplat_creature: {{size: medium}}\nsplat_external: {{provider: test}}\nsplat_stats:\n  max_hp: {{value: 41}}\nsplat_initial:\n  hp: 11\n---\n"
+            ),
+        )
+        .unwrap();
+        let mut hero =
+            Participant::new("hero".into(), "party".into(), entry, &Mapping::new(), true).unwrap();
+        let carry = Carry {
+            from: "the bridge".into(),
+            full: false,
+            values: BTreeMap::from([(id, (7, 2))]),
+            missing: Vec::new(),
+        };
+        assert_eq!(hero.carry_over(&carry), Some((Some(11), 0)));
+        assert_eq!((hero.hp, hero.temporary_hp), (Some(7), 2));
+        // A value the same as the sheet has nothing to say.
+        assert_eq!(hero.carry_over(&carry), None);
+        let rested = Carry {
+            from: "the long rest".into(),
+            full: true,
+            values: BTreeMap::new(),
+            missing: vec!["the shrine".into()],
+        };
+        hero.carry_over(&rested);
+        assert_eq!((hero.hp, hero.temporary_hp), (Some(41), 0));
+        // A ruling is not what the sheet began with, so sync treats it as the DM's value.
+        assert_eq!(hero.started.as_ref().and_then(|s| s.hp), Some(7));
+
+        let mut run = Run::new("Next".into(), vec![hero], String::new()).unwrap();
+        run.note_carry(&rested, vec![(0, Some(11), 0)]);
+        assert!(run.carry_missing().unwrap().contains("the shrine"));
+        assert!(run.state.log.last().unwrap().contains("carried over"));
+        let (from, back) = run.back_to_sheets().unwrap();
+        assert_eq!(from, "the long rest");
+        run.apply(back).unwrap();
+        assert_eq!(run.state.participants[0].hp, Some(11));
+        assert_eq!(run.undo_label(), "Undo: HP from the sheets");
+        assert!(run.back_to_sheets().is_none());
+        run.undo();
+        assert_eq!(run.state.participants[0].hp, Some(41));
+    }
+    #[test]
+    fn a_monster_does_not_carry_anything() {
+        let id = Uuid::new_v4();
+        let entry = Entry::parse(
+            "Wolf.md",
+            &format!(
+                "---\nsplat_schema: 1\nsplat_id: {id}\nsplat_kind: creature\nsplat_name: Wolf\nsplat_creature: {{size: medium}}\nsplat_stats:\n  max_hp: {{value: 11}}\n---\n"
+            ),
+        )
+        .unwrap();
+        let mut wolf = Participant::new(
+            "wolf".into(),
+            "enemies".into(),
+            entry,
+            &Mapping::new(),
+            true,
+        )
+        .unwrap();
+        let carry = Carry {
+            from: "the bridge".into(),
+            full: true,
+            values: BTreeMap::from([(id, (1, 0))]),
+            missing: Vec::new(),
+        };
+        assert_eq!(wolf.carry_over(&carry), None);
+        assert_eq!(wolf.hp, Some(11));
     }
     #[test]
     fn initiative_digits_merge_into_one_undo_step() {

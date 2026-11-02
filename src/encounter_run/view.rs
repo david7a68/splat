@@ -2,8 +2,8 @@
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
-    Command, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run, display,
-    mode_label,
+    Command, LastRoll, MAX_FROM_SHEET, NOBODY_PRESENT, Panel, Participant, PartySync, Phase, Run,
+    display, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -25,6 +25,7 @@ use uuid::Uuid;
 struct GroupDrag(Uuid);
 
 const AMOUNT: &str = "Amount";
+const READ_ALOUD: &str = "Read-aloud and notes";
 const SHEET_PAGES: [(usize, &str); 5] = [
     (0, "Overview"),
     (1, "Actions"),
@@ -34,6 +35,10 @@ const SHEET_PAGES: [(usize, &str); 5] = [
 ];
 /// Two lines of controls in a frame.
 const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
+/// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
+const DOCK_ALL_WORDS_FROM: f32 = 500.0;
+/// A roll's result has its place before there is one, so that nothing moves when it comes.
+const DICE_RESULT_WIDTH: f32 = 32.0;
 const FOOTER_HEIGHT: f32 = 28.0 + 7.0;
 const GUTTER: f32 = design::M;
 /// Room for the note under a long roster, past the scroll area's clip margin.
@@ -160,10 +165,12 @@ fn side_mark(painter: &egui::Painter, center: egui::Pos2, side: &str, size: f32)
 }
 
 /// The run's keyboard commands.
-const KEYS: [(&str, &str); 9] = [
+const KEYS: [(&str, &str); 11] = [
     ("N", "Next turn"),
-    ("Enter", "Damage the selected row by the amount"),
-    ("Shift+Enter", "Heal the selected row by the amount"),
+    ("Enter", "Damage the selected rows by the amount"),
+    ("Shift+Enter", "Heal the selected rows by the amount"),
+    ("Ctrl+click", "Add a row to the targets of one amount"),
+    ("Escape", "Select the current turn again"),
     ("U or Ctrl+Z", "Undo"),
     ("Up, Down", "Select another row"),
     ("A", "Focus the amount"),
@@ -212,6 +219,8 @@ impl Run {
                 if follow {
                     self.scroll_to_selected = true;
                     self.amount.clear();
+                    self.clear_targets();
+                    self.last_roll = None;
                     if self.panel == Panel::Conditions {
                         self.panel = Panel::Reference;
                     }
@@ -220,7 +229,64 @@ impl Run {
         }
     }
 
+    fn clear_targets(&mut self) {
+        self.also.clear();
+        self.halved.clear();
+    }
+
+    /// Add or take back one row, for one amount on several targets.
+    pub(super) fn toggle_target(&mut self, index: usize) {
+        if index == self.selected {
+            if let Some(next) = self.also.pop_first() {
+                self.selected = next;
+            }
+            self.halved.remove(&index);
+        } else if !self.also.remove(&index) {
+            self.also.insert(index);
+        } else {
+            self.halved.remove(&index);
+        }
+        // One target has no half to choose, and a chip that is gone must not still count.
+        if self.also.is_empty() {
+            self.halved.clear();
+        }
+        self.amount.clear();
+        self.focus_amount = true;
+    }
+
+    /// The selected row and every other target, in turn order, as the log reads.
+    pub(super) fn targets(&self) -> Vec<usize> {
+        let mut targets: Vec<usize> = self
+            .also
+            .iter()
+            .copied()
+            .filter(|index| *index != self.selected)
+            .collect();
+        targets.push(self.selected);
+        targets.sort_by_key(|index| self.state.order.iter().position(|at| at == index));
+        targets
+    }
+
+    /// The same step on the selected row and on every other target, as one step of undo. Half
+    /// is for damage, and it rounds down.
+    pub(super) fn amount_command(&self, amount: i64, make: fn(usize, i64) -> Command) -> Command {
+        if self.also.is_empty() {
+            return make(self.selected, amount);
+        }
+        let halves = matches!(make(0, 0), Command::Damage(..));
+        Command::Several(
+            self.targets()
+                .into_iter()
+                .map(|index| {
+                    let half = halves && self.halved.contains(&index);
+                    make(index, if half { amount / 2 } else { amount })
+                })
+                .collect(),
+        )
+    }
+
     fn select(&mut self, index: usize) {
+        self.clear_targets();
         if self.selected != index {
             self.selected = index;
             self.condition.clear();
@@ -301,6 +367,15 @@ impl Run {
         if self.back_out_on_escape(ui) {
             return;
         }
+        // Back to whose turn it is, after a look at someone else.
+        if let Some(current) = self.current()
+            && (self.selected != current || !self.also.is_empty())
+            && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
+        {
+            self.select(current);
+            self.panel = Panel::Reference;
+            return;
+        }
         // Next turn puts the focus in Amount, and the DM may still be typing a search.
         let letters = !self.lookup_open;
         let plain = Modifiers::NONE;
@@ -361,13 +436,10 @@ impl Run {
             self.focus_amount = true;
         }
         if let Some(amount) = self.amount.parse::<i64>().ok().filter(|_| enter || heal) {
-            let index = self.selected;
-            self.run_command(if heal {
-                Command::Heal(index, amount)
-            } else {
-                Command::Damage(index, amount)
-            });
+            let make = if heal { Command::Heal } else { Command::Damage };
+            self.run_command(self.amount_command(amount, make));
             self.amount.clear();
+            self.clear_targets();
             self.follow_with_keyboard();
         }
         if conditions {
@@ -855,6 +927,7 @@ impl Run {
         }
         let list_height = if overflow { room - OVERFLOW_LINE } else { room };
         let mut clicked = None;
+        let mut rule = None;
         // A changed window size must not leave the selected row out of view.
         let resized = (room - self.roster_height).abs() > 1.0;
         self.roster_height = room;
@@ -871,7 +944,7 @@ impl Run {
                 let mut selected_rect = None;
                 let mut next_rect = None;
                 for (&index, layout) in order.iter().zip(&layouts) {
-                    let selected = self.selected == index;
+                    let selected = self.selected == index || self.also.contains(&index);
                     let p = &self.state.participants[index];
                     let sync = self.sync_word(index);
                     let turn = TurnMark::of(index, current, next_up);
@@ -885,9 +958,26 @@ impl Run {
                     let rect = response.rect;
                     spans.push((rect.top() - origin, rect.bottom() - origin, index));
                     if response.clicked() {
-                        clicked = Some(index);
+                        clicked = Some((index, ui.input(|i| i.modifiers.command)));
                     }
-                    if selected {
+                    // Whoever the DM asks about is the one they are about to change.
+                    if let Some(position) =
+                        condition_links(ui, rect, &p.key, layout, scale, self.content.as_deref())
+                    {
+                        rule = Some(position);
+                        clicked = Some((index, false));
+                    }
+                    // More than a fill says a row is one of several targets.
+                    if selected && !self.also.is_empty() {
+                        ui.painter().text(
+                            pos2(rect.left() + design::M, rect.center().y),
+                            Align2::CENTER_CENTER,
+                            icons::OK,
+                            Type::Heading.font(ui),
+                            colors().accent,
+                        );
+                    }
+                    if self.selected == index {
                         selected_rect = Some(rect);
                     }
                     if turn == TurnMark::Next {
@@ -907,8 +997,13 @@ impl Run {
                 }
             });
         self.overflow_note(ui, &output, &spans);
-        if let Some(index) = clicked {
-            self.select(index);
+        match clicked {
+            Some((index, true)) => self.toggle_target(index),
+            Some((index, false)) => self.select(index),
+            None => {}
+        }
+        if rule.is_some() {
+            self.lookup_request = rule;
         }
     }
 
@@ -1002,19 +1097,21 @@ impl Run {
             ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
             let value = self.amount.parse::<i64>().ok();
             let empty = value.is_none().then_some("Type an amount first.");
+            // The narrowest dock keeps every word by giving up the hint and an icon.
+            let narrow = ui.available_width() < DOCK_ALL_WORDS_FROM;
             ui.horizontal(|ui| {
-                self.amount_field(ui);
+                self.amount_field(ui, if narrow { 68.0 } else { 84.0 });
                 if Action::secondary("Damage")
                     .density(Density::Glance)
-                    .key("Enter")
+                    .key(if narrow { "" } else { "Enter" })
                     .hint("Apply damage. Temporary HP absorbs it first.")
                     .blocked(empty)
                     .show(ui)
                     .clicked()
                 {
-                    command = value.map(|n| Command::Damage(index, n));
+                    command = value.map(|n| self.amount_command(n, Command::Damage));
                 }
-                ui.add_space(design::M);
+                ui.add_space(if narrow { design::XS } else { design::M });
                 if Action::quiet("Heal")
                     .density(Density::Glance)
                     .hint("Heal (Shift+Enter)")
@@ -1022,10 +1119,10 @@ impl Run {
                     .show(ui)
                     .clicked()
                 {
-                    command = value.map(|n| Command::Heal(index, n));
+                    command = value.map(|n| self.amount_command(n, Command::Heal));
                 }
-                if Action::quiet("Temp HP")
-                    .icon(icons::TEMP_HP)
+                if Action::quiet(if narrow { "Temp" } else { "Temp HP" })
+                    .icon(if narrow { "" } else { icons::TEMP_HP })
                     .density(Density::Glance)
                     .name("Replace temporary HP")
                     .hint("Replace temporary HP with this amount")
@@ -1033,9 +1130,16 @@ impl Run {
                     .show(ui)
                     .clicked()
                 {
-                    command = value.map(|n| Command::TempHp(index, n));
+                    command = value.map(|n| self.amount_command(n, Command::TempHp));
                 }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    self.dice(ui, narrow);
+                });
             });
+            if !self.also.is_empty() {
+                self.target_chips(ui);
+                return;
+            }
             let p = &self.state.participants[index];
             ui.horizontal(|ui| {
                 ui.set_min_height(28.0);
@@ -1114,13 +1218,115 @@ impl Run {
         if let Some(command) = command {
             let applied = matches!(
                 command,
-                Command::Damage(..) | Command::Heal(..) | Command::TempHp(..)
+                Command::Damage(..) | Command::Heal(..) | Command::TempHp(..) | Command::Several(_)
             );
             self.run_command(command);
             if applied {
                 self.amount.clear();
+                self.clear_targets();
                 self.follow_with_keyboard();
             }
+        }
+    }
+
+    /// In place of the one row's actions: who takes this amount, and who takes half.
+    fn target_chips(&mut self, ui: &mut egui::Ui) {
+        let c = colors();
+        let targets = self.targets();
+        ui.horizontal(|ui| {
+            ui.set_min_height(28.0);
+            let word = if ui.available_width() < DOCK_ALL_WORDS_FROM {
+                "Half for:".to_owned()
+            } else {
+                format!("{} targets · half for:", targets.len())
+            };
+            ui.label(Type::Small.rich(ui, word).color(c.muted));
+            egui::ScrollArea::horizontal()
+                .id_salt("run_targets")
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        for index in targets {
+                            let name = &self.state.participants[index].name;
+                            let half = self.halved.contains(&index);
+                            let word = if half {
+                                format!("{name} ½")
+                            } else {
+                                name.clone()
+                            };
+                            if Action::quiet(&word)
+                                .name(&format!("Half damage: {name}"))
+                                .density(Density::Read)
+                                .hint("This target saved, so it takes half, rounded down.")
+                                .selected(half)
+                                .show(ui)
+                                .clicked()
+                            {
+                                if half {
+                                    self.halved.remove(&index);
+                                } else {
+                                    self.halved.insert(index);
+                                }
+                                self.focus_amount = true;
+                            }
+                        }
+                    });
+                });
+        });
+    }
+
+    /// Beside the amount, so the stat block that asks for the roll stays in view. Laid out
+    /// right to left: the result, then the button, then the field.
+    fn dice(&mut self, ui: &mut egui::Ui, narrow: bool) {
+        ui.spacing_mut().item_spacing.x = design::XS;
+        ui.allocate_ui_with_layout(
+            vec2(DICE_RESULT_WIDTH, Density::Read.control()),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.set_width(DICE_RESULT_WIDTH);
+                if let Some(roll) = &self.last_roll {
+                    ui.label(
+                        Type::Heading
+                            .rich(ui, format!("= {}", roll.total))
+                            .color(colors().text),
+                    )
+                    .on_hover_text(&roll.line);
+                }
+            },
+        );
+        let pressed = Action::secondary(if narrow { "" } else { "Roll" })
+            .icon(icons::DICE)
+            .name("Roll dice")
+            .density(Density::Read)
+            .hint("Roll this expression. The result goes in the log.")
+            .show(ui)
+            .clicked();
+        let width = if narrow { 60.0 } else { 72.0 };
+        let field = design::text_input(ui, "Dice", &mut self.dice, "1d20", width);
+        if field.gained_focus() {
+            design::focus_and_select(ui, field.id, &self.dice);
+        }
+        if pressed || (field.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter))) {
+            let expression = if self.dice.trim().is_empty() {
+                "1d20".to_owned()
+            } else {
+                self.dice.trim().to_owned()
+            };
+            let before = self.state.log.len();
+            self.run_command(Command::Roll(expression));
+            self.last_roll = (self.state.log.len() > before)
+                .then(|| self.state.log.last().cloned())
+                .flatten()
+                .map(|line| LastRoll {
+                    total: line
+                        .rsplit(" = ")
+                        .next()
+                        .unwrap_or_default()
+                        .trim_end_matches('.')
+                        .to_owned(),
+                    line,
+                });
+            self.follow_with_keyboard();
         }
     }
 
@@ -1169,14 +1375,14 @@ impl Run {
         })
     }
 
-    fn amount_field(&mut self, ui: &mut egui::Ui) {
+    fn amount_field(&mut self, ui: &mut egui::Ui, width: f32) {
         self.take_words_for_note(ui);
         let response = design::number_field(
             ui,
             AMOUNT,
             &mut self.amount,
             AMOUNT,
-            84.0,
+            width,
             Density::Glance.control(),
         );
         self.amount.retain(|d| d.is_ascii_digit());
@@ -1296,7 +1502,8 @@ impl Run {
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
             if self.ending {
-                let field = design::text_input(ui, "Outcome", &mut self.outcome, "Outcome", 120.0);
+                let field =
+                    design::text_input(ui, "Outcome", &mut self.outcome, "Outcome, if any", 160.0);
                 if std::mem::take(&mut self.focus_outcome) {
                     field.request_focus();
                 }
@@ -1690,10 +1897,34 @@ impl Run {
     }
 
     fn notes_tab(&self, ui: &mut egui::Ui) {
+        let (prep, technical) = self.prep();
         egui::ScrollArea::vertical()
             .id_salt("run_encounter_notes")
             .auto_shrink([false, false])
-            .show(ui, |ui| style::markdown(ui, &self.setup_details));
+            .show(ui, |ui| {
+                if prep.is_empty() {
+                    ui.add(
+                        egui::Label::new(
+                            Type::Body
+                                .rich(
+                                    ui,
+                                    "No read-aloud text or notes yet. Add them when you edit the encounter.",
+                                )
+                                .color(colors().muted),
+                        )
+                        .wrap(),
+                    );
+                } else {
+                    design::group_label(ui, READ_ALOUD);
+                    style::markdown(ui, prep);
+                }
+                if let Some(technical) = technical {
+                    ui.add_space(design::M);
+                    design::quiet_section(ui, "Technical details", |ui| {
+                        style::markdown(ui, technical);
+                    });
+                }
+            });
     }
 
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
@@ -2313,23 +2544,6 @@ impl Run {
 
     fn log_tab(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        if self.state.phase == Phase::Running {
-            let mut roll = false;
-            ui.horizontal(|ui| {
-                design::text_input(ui, "Dice", &mut self.dice, "1d20", 72.0);
-                roll = Action::secondary("Roll")
-                    .icon(icons::DICE)
-                    .name("Roll dice")
-                    .density(Density::Read)
-                    .hint("Roll this expression. The result goes in the log.")
-                    .show(ui)
-                    .clicked();
-            });
-            if roll {
-                let dice = self.dice.clone();
-                self.run_command(Command::Roll(dice));
-            }
-        }
         egui::ScrollArea::vertical()
             .id_salt("run_log")
             .auto_shrink([false, false])
@@ -2461,6 +2675,19 @@ impl Run {
         });
         design::rule(ui);
         self.error_line(ui);
+        if let Some(words) = self.carry_missing() {
+            design::message(ui, Tone::Warning, &words);
+        }
+        if let Some((from, back)) = self.back_to_sheets()
+            && design::message_with_action(
+                ui,
+                Tone::Info,
+                &format!("Party HP carries over from {from}."),
+                "Use the sheets' HP",
+            )
+        {
+            command = Some(back);
+        }
         // Opening beside a panel, the DM can be typing there, and a digit is not an initiative.
         if std::mem::take(&mut self.focus_first_missing) && !self.lookup_open {
             self.focus_field = self
@@ -2495,7 +2722,12 @@ impl Run {
         ui.add_space(design::XS);
         ui.horizontal(|ui| {
             if self.closing {
-                closed = self.close_confirmation(ui, "The run stays saved as Preparing.");
+                let note = if self.untouched_setup() {
+                    "Nothing was done, so no run is kept."
+                } else {
+                    "The run stays saved, in setup."
+                };
+                closed = self.close_confirmation(ui, note);
             } else {
                 if Action::quiet("Close run")
                     .density(Density::Read)
@@ -2541,13 +2773,25 @@ impl Run {
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
         let p = &self.state.participants[index];
-        let numbers = format!(
-            "HP {}/{} · AC {}",
-            display(p.hp),
-            display(p.max_hp),
-            display(p.armor_class)
-        );
+        // What the DM weighs before a fight: who is hurt, and what is still on them.
+        let mut numbers = format!("HP {}/{}", display(p.hp), display(p.max_hp),);
         let absent = if p.present { "" } else { "Absent · " };
+        if p.temporary_hp > 0 {
+            numbers.push_str(&format!(" +{}", p.temporary_hp));
+        }
+        // A changed creature's AC may be part of what changed.
+        if p.changes.is_some() {
+            numbers.push_str(&format!(" · AC {}", display(p.armor_class)));
+        }
+        if let Some((_, word, _)) = hp_word(p) {
+            numbers.push_str(&format!(" · {word}"));
+        }
+        // A changed row has its change to say, and no room left for these.
+        if p.changes.is_none() {
+            for condition in &p.conditions {
+                numbers.push_str(&format!(" · {condition}"));
+            }
+        }
         let selected = self.panel == Panel::Record && self.selected == index;
         let (name, npc, mode, bonus, initiative, present) = (
             &p.name,
@@ -2572,14 +2816,19 @@ impl Run {
             };
             let actions = 72.0 + 76.0 + 28.0 + presence_slot + 4.0 * design::XS;
             let name_width = (ui.available_width() - actions).max(110.0);
-            let side = &p.side;
-            let plain = format!("{absent}{side} · {numbers}");
+            // A side word only for those who are not the party, because that is the common case.
+            let side = if p.side == "party" {
+                String::new()
+            } else {
+                format!("{} · ", p.side)
+            };
+            let plain = format!("{absent}{side}{numbers}");
             // The side stays when the row has room. Record says it when the row has not.
             let detail = if p.changes.is_none() {
                 plain
             } else {
                 let changed = format!("{} Changed", icons::CHANGED);
-                let both = format!("{absent}{side} · {changed} · {numbers}");
+                let both = format!("{absent}{side}{changed} · {numbers}");
                 let font = Type::Small.font(ui);
                 if design::number_width(ui, &both, &font) + 2.0 * design::S <= name_width {
                     both
@@ -2732,7 +2981,21 @@ impl Run {
         design::rule(ui);
         self.sync_block(ui);
         match self.panel {
-            Panel::Reference | Panel::Conditions | Panel::Keys => self.turn_order_preview(ui),
+            Panel::Reference | Panel::Conditions | Panel::Keys => {
+                // What the DM reads to the table comes before anyone rolls.
+                let (prep, _) = self.prep();
+                if !prep.is_empty() {
+                    design::group_label(ui, READ_ALOUD);
+                    let room = ui.available_height() * 0.4;
+                    egui::ScrollArea::vertical()
+                        .id_salt("run_setup_prep")
+                        .max_height(room)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| style::markdown(ui, prep));
+                    design::rule(ui);
+                }
+                self.turn_order_preview(ui);
+            }
             Panel::Record => {
                 ui.label(
                     Type::Heading
@@ -3243,6 +3506,8 @@ struct RowLayout {
     /// The name at this row's width. A long name wraps and the row grows.
     name: Arc<Galley>,
     second_line: Option<Arc<Galley>>,
+    /// Where each condition is on the second line, in characters.
+    condition_spans: Vec<(String, std::ops::Range<usize>)>,
     /// The row has no room for a state column. Its state and sync words open the second
     /// line, so that the name stays whole.
     inline_state: bool,
@@ -3339,6 +3604,7 @@ impl RowLayout {
                 );
             }
             first = false;
+            let start = job.text.chars().count();
             job.append(
                 text,
                 0.0,
@@ -3348,6 +3614,7 @@ impl RowLayout {
                     ..Default::default()
                 },
             );
+            start..job.text.chars().count()
         };
         if inline_state {
             if let Some((icon, word, color)) = hp_word(p) {
@@ -3370,9 +3637,11 @@ impl RowLayout {
                 c.participant.concentrating,
             );
         }
-        for condition in &p.conditions {
-            add(condition, c.participant.condition);
-        }
+        let condition_spans = p
+            .conditions
+            .iter()
+            .map(|condition| (condition.clone(), add(condition, c.participant.condition)))
+            .collect();
         // A side of its own needs its word: a name and a number can look like another side's.
         if !["party", "enemies"].contains(&p.side.as_str()) {
             add(&style::human_label(&p.side), c.side.other);
@@ -3409,6 +3678,7 @@ impl RowLayout {
             even: 0.0,
             bar_inset,
             second_line,
+            condition_spans,
             inline_state,
             tight,
             fit,
@@ -3418,6 +3688,14 @@ impl RowLayout {
             temp_right,
             hp_right,
         }
+    }
+
+    /// The top of the second line in a row at this place.
+    fn second_y(&self, scale: RunScale, rect: Rect) -> f32 {
+        rect.top()
+            + self.line_y(scale, rect.height())
+            + self.name_line(scale) / 2.0
+            + self.name_extra()
     }
 
     fn name_line(&self, scale: RunScale) -> f32 {
@@ -3474,6 +3752,66 @@ impl RowLayout {
     }
 }
 
+/// Each official condition on a row opens its rule, beside the run. Returns the entry the
+/// DM asked for. Words the DM typed for another effect have no rule to open.
+fn condition_links(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    key: &str,
+    layout: &RowLayout,
+    scale: RunScale,
+    content: Option<&crate::lookup::ContentIndex>,
+) -> Option<usize> {
+    let (galley, content) = (layout.second_line.as_ref()?, content?);
+    // Lines that wrap have no room for one target each, and Lookup still finds a rule.
+    if galley.rows.len() > 1 {
+        return None;
+    }
+    let origin = pos2(rect.left() + layout.name_left, layout.second_y(scale, rect));
+    let mut opened = None;
+    for (position, (condition, span)) in layout.condition_spans.iter().enumerate() {
+        let Some(entry) = content.condition_rule(condition) else {
+            continue;
+        };
+        let start = galley.pos_from_cursor(egui::text::CCursor::new(span.start));
+        let end = galley.pos_from_cursor(egui::text::CCursor::new(span.end));
+        let word = Rect::from_min_max(start.min, pos2(end.left(), start.bottom()))
+            .translate(origin.to_vec2());
+        // The words are smaller than a target may be, so the target grows, inside its row.
+        let bottom = (word.center().y + 12.0).min(rect.bottom());
+        let target =
+            Rect::from_min_max(pos2(word.left(), bottom - 24.0), pos2(word.right(), bottom));
+        let id = ui.id().with(("condition_rule", key, position));
+        let response = ui
+            .interact(target, id, egui::Sense::click())
+            .on_hover_text(format!("Read the rule for {condition}"))
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
+        let name = format!("Rule: {condition}");
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), &name)
+        });
+        ui.painter().hline(
+            word.x_range(),
+            word.bottom(),
+            Stroke::new(
+                1.0,
+                if response.hovered() {
+                    colors().focus
+                } else {
+                    colors().participant.condition.gamma_multiply(0.5)
+                },
+            ),
+        );
+        if response.has_focus() {
+            design::focus_ring(ui, target);
+        }
+        if response.clicked() {
+            opened = Some(entry);
+        }
+    }
+    opened
+}
+
 fn paint_row(
     ui: &egui::Ui,
     rect: Rect,
@@ -3490,7 +3828,7 @@ fn paint_row(
     let name_line = layout.name_line(scale);
     let second_height = scale.condition + 2.0;
     let line_y = rect.top() + layout.line_y(scale, rect.height());
-    let second_y = line_y + name_line / 2.0 + layout.name_extra();
+    let second_y = layout.second_y(scale, rect);
     // The current row uses a stronger fill, so its dim text is muted, never faint.
     let dim = if current {
         c.muted
@@ -3672,20 +4010,35 @@ fn paint_row(
     );
 }
 
+/// A number that can be unknown. The word `Unknown` is its own control, away from the value,
+/// so that a click meant for the number cannot lose it.
 fn optional_number(
     ui: &mut egui::Ui,
     label: &str,
     value: &mut Option<i64>,
     range: std::ops::RangeInclusive<i64>,
 ) {
-    let mut known = value.is_some();
-    if ui.checkbox(&mut known, label).changed() {
-        *value = known.then(|| *range.start().max(&0));
-    }
+    ui.label(Type::Body.rich(ui, label).color(colors().text));
     if let Some(n) = value {
         let response = ui.add(egui::DragValue::new(n).range(range));
         design::named(ui, &response, label);
+        if Action::quiet("Unknown")
+            .name(&format!("Mark {label} unknown"))
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
+        {
+            *value = None;
+        }
     } else {
         ui.label(Type::Small.rich(ui, "Unknown").color(colors().muted));
+        if Action::quiet("Enter")
+            .name(&format!("Enter {label}"))
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
+        {
+            *value = Some(*range.start().max(&0));
+        }
     }
 }

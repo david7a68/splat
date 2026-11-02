@@ -499,6 +499,13 @@ pub fn inspect(
                 continue;
             }
             let overlap = first_shown.intersect(shown(second));
+            // A link inside a row is the row's second target, and it is meant to be on top.
+            let nested = |inner: &Control, outer: &Control| {
+                inner.role == Role::Link && outer.rect.contains_rect(inner.rect)
+            };
+            if nested(first, second) || nested(second, first) {
+                continue;
+            }
             if overlap.width() > OVERLAP_TOLERANCE && overlap.height() > OVERLAP_TOLERANCE {
                 report(
                     "no-overlap",

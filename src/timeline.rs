@@ -102,6 +102,9 @@ pub struct Event {
     /// The marker this came from, so that a rename does not offer it again.
     #[serde(default, skip_serializing_if = "is_empty")]
     pub marker: String,
+    /// The DM said this long rest brought everyone back to full. It records their ruling.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub restores: bool,
 }
 
 impl Event {
@@ -132,6 +135,38 @@ impl Event {
         }
         parts.join(" · ")
     }
+}
+
+/// What the party's state comes from in one session, as far as the timeline can say.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PartyState {
+    /// A long rest the DM marked brought everyone back.
+    pub rested: bool,
+    /// The fights since then, oldest first: each run, and its name. A player not in the last
+    /// fight stands where an earlier one left them.
+    pub fights: Vec<(Uuid, String)>,
+}
+
+/// One session's events in order. A marked rest wipes out what came before it.
+pub fn party_state(events: &[Event], session: Option<Uuid>) -> PartyState {
+    let mut state = PartyState::default();
+    if session.is_none() {
+        return state;
+    }
+    for (event, day) in events.iter().zip(day_numbers(events)) {
+        if event.session != session {
+            continue;
+        }
+        if let Some(run) = event.run {
+            state.fights.push((run, event.label(day)));
+        } else if event.kind == Kind::LongRest && event.restores {
+            state = PartyState {
+                rested: true,
+                fights: Vec::new(),
+            };
+        }
+    }
+    state
 }
 
 /// What a run tells the timeline. A new value of this means something changed.
@@ -622,6 +657,7 @@ impl Book {
                 session,
                 run: None,
                 marker: String::new(),
+                restores: false,
             },
         );
         self.touch();
@@ -1053,6 +1089,47 @@ mod tests {
         let other = book.add(Kind::Travel, session);
         book.event_mut(&other).unwrap().title = "To Emberfall".into();
         assert!(book.event_of_marker(&marker.key("another night")).is_none());
+    }
+
+    #[test]
+    fn the_partys_state_follows_the_last_fight_or_a_rest_after_it() {
+        let session = Some(Uuid::new_v4());
+        let event = |kind, run, restores| Event {
+            id: new_id(),
+            kind,
+            title: "A".into(),
+            duration: String::new(),
+            place: String::new(),
+            notes: String::new(),
+            result: String::new(),
+            session,
+            run,
+            marker: String::new(),
+            restores,
+        };
+        let first = Uuid::new_v4();
+        let mut events = vec![event(Kind::ShortRest, None, false)];
+        assert_eq!(party_state(&events, session), PartyState::default());
+        events.push(event(Kind::Encounter, Some(first), false));
+        assert_eq!(party_state(&events, session).fights.len(), 1);
+        // A rest that restored nobody changes nothing.
+        events.push(event(Kind::LongRest, None, false));
+        assert_eq!(party_state(&events, session).fights.len(), 1);
+        // A marked rest wipes out the fights before it, and later fights count from it.
+        events.push(event(Kind::LongRest, None, true));
+        let rested = party_state(&events, session);
+        assert!(rested.rested && rested.fights.is_empty());
+        let second = Uuid::new_v4();
+        events.push(event(Kind::Encounter, Some(second), false));
+        let state = party_state(&events, session);
+        assert!(state.rested);
+        assert_eq!(state.fights[0].0, second);
+        // Another session's fight, or none, has nothing to say about this one.
+        assert_eq!(party_state(&events, None), PartyState::default());
+        assert_eq!(
+            party_state(&events, Some(Uuid::new_v4())),
+            PartyState::default()
+        );
     }
 
     #[test]

@@ -299,6 +299,14 @@ add by hand.
 
 **Done well:** T13.1 to T13.4.
 
+### W14. Run the evening from one page
+**Trigger:** the DM sits down at the table, or a fight ends. **Goal:** the next thing to do is on the page already: the
+recap, the plan, the note, the rest to record. **Context:** table. **Frequency:** every session. The session's page holds
+the plan, so that a DM never chooses between Encounters, Timeline and the note in the gap between two fights. A measured
+evening is in `artifacts/dm-audit/README.md`.
+
+**Done well:** T12.0 to T12.9, and T14.1.
+
 ## 3. Information architecture
 
 ### Current model
@@ -564,6 +572,17 @@ reading the code, not from a test run.
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |
 | T13.4 | Dragging a group onto the initiative list adds every member | encounter-groups | state | New |
+| T12.1 | A planned fight starts from the session in 1, and Close run comes back there in 1. The plan is words in the note | session-plan | cost, state | New |
+| T12.2 | A new run starts each player from the last fight of the session, says so, and goes back to the sheets in 1. A long rest the DM marks starts everyone at full | session-plan | cost, state | New |
+| T12.3 | One amount on several targets, with half for those who saved, in 2 once chosen, and one step of undo | session-plan | cost, state | New |
+| T12.4 | Dice roll beside the amount in ≤ 3, with the stat block in view | session-plan | cost, view | New |
+| T12.5 | Escape selects the current turn. A fight's final HP reads in the plan in 1 | session-plan | cost, state | New |
+| T12.6 | A new session shows what the last one left, with nothing to open | session-plan | state | New |
+| T12.7 | Setup and Prep show the read-aloud text. Technical details are closed | session-plan | state | New |
+| T12.8 | A condition's rule opens from its word on the row, and is gone again, in 2 | session-plan | cost | New |
+| T12.9 | Lookup finds words in a session note and keeps the run in view | session-plan | state, view | New |
+| T12.0 | A creature made the campaign's own in ≤ 7, with no page change. Party compares passive scores with no sheet open. A Library save after an encounter save is not a conflict | session-plan | cost, state | New |
+| T14.1 | Saved runs say View or Resume, and a run can be removed, with one step of undo | session-plan | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |
 | G3 | No dead nav items | nav-state **new** | state | Fail |

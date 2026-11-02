@@ -8,7 +8,7 @@ pub const NAV_SETTINGS: &str = "Settings";
 pub const NAV_PARTY: &str = "Party";
 pub const NAV_ENCOUNTERS: &str = "Encounters";
 pub const NAV_LOOKUP: &str = "Lookup";
-pub const NAV_SESSIONS: &str = "Sessions";
+pub const NAV_SESSIONS: &str = "Session";
 pub const NAV_TIMELINE: &str = "Timeline";
 pub const TAB_ENTRIES: &str = "Campaign entries";
 pub const TAB_PACKAGES: &str = "Packages";
@@ -39,10 +39,9 @@ pub const CLOSE_RUN: &str = "Close run";
 pub const CLOSE_NOW: &str = "Close now";
 pub const NEW_ENCOUNTER: &str = "New encounter";
 pub const SAVE_ENCOUNTER: &str = "Save encounter";
-pub const RUN_ENCOUNTER: &str = "Run encounter";
+pub const RUN_ENCOUNTER: &str = "Start fight";
 pub const EDIT_ENCOUNTER: &str = "Edit";
 pub const FIND_CREATURE: &str = "Find a creature or party member";
-pub const ADD_PARTY: &str = "Add party";
 pub const ADD: &str = "Add";
 
 pub fn go_library(d: &mut Driver<'_>) {
@@ -70,6 +69,33 @@ pub fn new_session(d: &mut Driver<'_>, title: &str) {
     d.expect(&format!("Session 1: {title}"));
 }
 
+/// The session's plan, which shares a tab with the note in a wide window.
+pub fn show_plan(d: &mut Driver<'_>) {
+    if d.has("Plan") {
+        d.click("Plan");
+    }
+}
+
+/// The session's note, ready to type in.
+pub fn write_note(d: &mut Driver<'_>) {
+    if d.has("Note") {
+        d.click("Note");
+    }
+    if d.has("Write") {
+        d.click("Write");
+    }
+}
+
+/// The session's note, as a reader.
+pub fn read_note(d: &mut Driver<'_>) {
+    if d.has("Note") {
+        d.click("Note");
+    }
+    if d.has("Read") {
+        d.click("Read");
+    }
+}
+
 pub fn go_party(d: &mut Driver<'_>) {
     d.click(NAV_PARTY);
 }
@@ -91,7 +117,7 @@ pub fn resume_run_from_cold_start(d: &mut Driver<'_>) {
 }
 
 pub fn resume_run(d: &mut Driver<'_>, name: &str) {
-    d.click_beside(name, RESUME);
+    d.click_beside(&format!("{name} · Round"), RESUME);
     d.expect(&format!("{RUN_HEADING}{name}"));
 }
 

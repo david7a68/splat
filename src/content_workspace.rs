@@ -148,6 +148,17 @@ impl Catalogue {
         id.filter(|id| self.entries.contains_key(id))
             .ok_or_else(|| format!("Unavailable content: {reference}"))
     }
+    /// An entry's file as it was read, to copy from. A built-in entry has no file on disk.
+    pub fn text_of(&self, id: Uuid) -> Option<String> {
+        self.files
+            .get(&id)
+            .map(|(_, text)| text.clone())
+            .or_else(|| {
+                content::definitions::source_file(&self.entries.get(&id)?.entry.path)
+                    .map(str::to_owned)
+            })
+    }
+
     pub fn resolve_ref(&self, reference: &EntryRef) -> Result<Uuid, String> {
         self.resolve(&reference.reference()?)
     }
@@ -731,6 +742,40 @@ pub fn check_destination(root: &Path, id: Uuid, private: bool) -> Result<(), Str
     Ok(())
 }
 
+/// A note's text, with each line that refers to the note itself now referring to another id.
+fn own_references_to(text: &str, entry: &Entry, new_id: Uuid) -> String {
+    let own_id = entry.id.to_string();
+    let quoted = |value: &str| {
+        [
+            value.to_owned(),
+            format!("\"{value}\""),
+            format!("'{value}'"),
+        ]
+    };
+    text.split_inclusive('\n')
+        .map(|line| {
+            let trimmed = line.trim_end();
+            let body = trimmed.trim_start();
+            let (marker, field) = body
+                .strip_prefix("- ")
+                .map_or(("", body), |rest| ("- ", rest));
+            let own = field.strip_prefix("key: ").is_some_and(|value| {
+                entry
+                    .key
+                    .as_ref()
+                    .is_some_and(|key| quoted(key).iter().any(|form| form == value))
+            }) || field
+                .strip_prefix("id: ")
+                .is_some_and(|value| quoted(&own_id).iter().any(|form| form == value));
+            if !own {
+                return line.to_owned();
+            }
+            let indent = &trimmed[..trimmed.len() - body.len()];
+            format!("{indent}{marker}id: {new_id}{}", &line[trimmed.len()..])
+        })
+        .collect()
+}
+
 #[derive(Clone)]
 pub struct CopySource {
     pub entry: Entry,
@@ -771,9 +816,9 @@ impl CopyPlan {
         while let Some(entry) = queue.pop_front() {
             for reference in content::required_references(&entry)? {
                 let id = catalogue.resolve(&reference)?;
-                // A single-entry copy cannot safely rewrite arbitrary self-references in Markdown tables.
+                // Its own structured references follow the copy, below.
                 if id == source.entry.id {
-                    return Err("This entry refers to itself. Update the self-reference explicitly before making an independent copy.".into());
+                    continue;
                 }
                 let dependency = &catalogue.entries[&id];
                 if dependency.private && destination_campaign != Some(dependency.owner) {
@@ -788,10 +833,14 @@ impl CopyPlan {
                 }
             }
         }
+        let new_id = Uuid::new_v4();
+        // A were-creature's curse makes more of this creature, and the copy's makes more of the
+        // copy. Prose that only names the original keeps its words.
+        let source_text = own_references_to(&source.text, &source.entry, new_id);
         let mut text = patch_fields(
-            &source.text,
+            &source_text,
             &[
-                ("splat_id", Some(Uuid::new_v4().to_string().into())),
+                ("splat_id", Some(new_id.to_string().into())),
                 ("splat_key", None),
                 ("splat_name", Some(name.trim().into())),
                 (
@@ -1058,6 +1107,58 @@ mod tests {
                 .ends_with("External note")
         );
     }
+    #[test]
+    fn a_built_in_that_names_itself_copies_and_the_copy_names_the_copy() {
+        let catalogue = Catalogue::load(&[], None).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        // The entries a were-creature's curse, or a spell's own effect, makes refer to themselves.
+        for key in [
+            "creatures/werewolf",
+            "creatures/wererat",
+            "creatures/weretiger",
+            "creatures/wereboar",
+            "creatures/werebear",
+            "creatures/ochre_jelly",
+            "creatures/black_pudding",
+            "creatures/shadow",
+            "spells/foresight",
+        ] {
+            let key = format!("dnd2024:{key}");
+            let indexed = catalogue
+                .entries
+                .values()
+                .find(|e| e.entry.key.as_deref() == Some(key.as_str()))
+                .unwrap_or_else(|| panic!("{key} is built in"));
+            let name = &indexed.entry.name;
+            let source = CopySource {
+                entry: indexed.entry.clone(),
+                text: catalogue.text_of(indexed.entry.id).unwrap(),
+                root: None,
+                campaign: None,
+            };
+            let plan = CopyPlan::prepare(
+                &source,
+                temp.path(),
+                None,
+                &format!("{name} copy"),
+                "",
+                &catalogue,
+            )
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+            let copy = Entry::parse(&plan.relative, &plan.text).unwrap();
+            assert_ne!(copy.id, indexed.entry.id);
+            let own_key = indexed.entry.key.clone().unwrap();
+            let references = content::required_references(&copy).unwrap();
+            assert!(
+                !references.iter().any(|reference| match reference {
+                    Reference::Key(key) => *key == own_key,
+                    Reference::Id(id) => *id == indexed.entry.id,
+                }),
+                "{name} still refers to the original"
+            );
+        }
+    }
+
     #[test]
     fn independent_copy_keeps_original_and_blocks_private_transitive_dependencies() {
         let temp = tempfile::tempdir().unwrap();

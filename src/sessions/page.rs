@@ -3,19 +3,23 @@
 use super::{
     DEFAULT_FOLDER, Draft, DraftState, NewNote, Note, Recording, Template, body_of, create_note,
     create_template, delete_recording, folder as session_folder, folder_setting,
-    fresh_line_in_note, insert_in_note, list_notes, list_recordings, list_templates,
-    nested_in_note, new_recording_path, parts_of, recording_title, save_folder, unreadable_notes,
-    update_details, without_own_heading,
+    fresh_line_in_note, insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings,
+    list_templates, nested_in_note, new_recording_path, parts_of, plain_links, recording_title,
+    save_folder, section_text, unreadable_notes, update_details, without_empty_sections,
+    without_own_heading,
 };
 use crate::{
     credentials::{self, KeySlot},
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    encounter_run::{FightSummary, fight_summary},
+    encounters::PlanFight,
+    lookup::{Written, WrittenIn},
     markdown_view,
     persistence::Campaign,
     processing::{self, Job, Request, settings::ProcessingSettings},
     recording::{Health, Recorder},
     timeline::{
-        self, Book,
+        self, Book, Kind,
         page::{SessionLink, problems, quick_add, undo_removed},
     },
 };
@@ -34,6 +38,19 @@ const LIST_WIDTH: f32 = 216.0;
 const LIST_WIDTHS: std::ops::RangeInclusive<f32> = 170.0..=420.0;
 const STATUS_WIDTH: f32 = 128.0;
 const TWO_COLUMNS_FROM: f32 = 640.0;
+/// The plan and the note stand side by side from here.
+const PLAN_BESIDE_NOTE_FROM: f32 = 720.0;
+const PLAN_WIDTH: f32 = 330.0;
+/// Room in the plan for the widest action on a row.
+const PLAN_ACTION: f32 = 112.0;
+/// The kinds a session adds by one press. A fight has its own control, for what it can name.
+const PLAN_KINDS: [Kind; 5] = [
+    Kind::Day,
+    Kind::LongRest,
+    Kind::ShortRest,
+    Kind::Travel,
+    Kind::Event,
+];
 /// About 80 characters of source. A template keeps its shape in a wide window.
 const EDITOR_WIDTH: f32 = 680.0;
 const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
@@ -50,10 +67,27 @@ enum View {
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Tab {
     #[default]
-    Write,
-    Read,
-    Events,
+    Plan,
+    /// In a narrow page, the note has its own tab. In a wide one, it stands beside the plan.
+    Note,
     Recordings,
+}
+
+/// What the rest of the app tells this page about fights.
+pub struct Plan<'a> {
+    pub fights: &'a [PlanFight],
+    /// Why no fight can start now.
+    pub blocked: Option<&'a str>,
+    pub run_directory: Option<PathBuf>,
+    pub open_run: Option<Uuid>,
+}
+
+/// What the previous session left, for the top of this one.
+struct LastTime {
+    id: Uuid,
+    label: String,
+    what_happened: Option<String>,
+    open_threads: Option<String>,
 }
 
 /// The new-session form, or the same fields for a session that exists.
@@ -141,6 +175,16 @@ pub struct Sessions {
     folder_saved: bool,
     view: View,
     tab: Tab,
+    /// The list of sessions stands beside this one, and it already gives the date.
+    list_beside: bool,
+    /// The note shows as a reader. A new or current session opens for writing.
+    reading_note: bool,
+    /// The event open in place in the plan.
+    open_event: Option<String>,
+    /// The fight behind the open event, read once.
+    fight: Option<(Uuid, Result<FightSummary, String>)>,
+    /// What the session before the selected one left, read once for each selection.
+    last_time: Option<(Uuid, Option<LastTime>)>,
     notes: Vec<Note>,
     unreadable: Vec<String>,
     mentions: BTreeMap<Uuid, Vec<String>>,
@@ -203,6 +247,116 @@ pub struct Sessions {
     /// The DM asked to see the session this is about.
     pub wants_sessions_page: bool,
     pub wants_event: Option<String>,
+    /// The encounter to start, by its path.
+    pub wants_fight: Option<String>,
+    pub wants_new_fight: bool,
+    pub wants_back_to_run: bool,
+    /// A saved run to open, to read in full.
+    pub wants_saved_run: Option<PathBuf>,
+    /// A name in a note's link to read in Lookup.
+    pub wants_lookup: Option<String>,
+}
+
+/// Words that wrap at the width they are given.
+fn wrapped_words(ui: &mut egui::Ui, kind: Type, words: impl Into<String>, color: Color32) {
+    ui.add(egui::Label::new(kind.rich(ui, words).color(color)).wrap());
+}
+
+/// One row of a session's plan: an icon and words, then the action at the end. The action has
+/// one height either way, so that the rows below never move.
+fn plan_row(
+    ui: &mut egui::Ui,
+    widths: &[f32],
+    icon: &str,
+    mut words: impl FnMut(&mut egui::Ui),
+    mut action: impl FnMut(&mut egui::Ui),
+) {
+    design::table_row(ui, widths, design::S, |ui, cell| {
+        if cell == 0 {
+            ui.horizontal_top(|ui| {
+                ui.label(Type::Body.rich(ui, icon).color(colors().muted));
+                ui.vertical(&mut words);
+            });
+        } else {
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), Density::Read.control()),
+                egui::Layout::right_to_left(egui::Align::Center),
+                &mut action,
+            );
+        }
+    });
+}
+
+/// One column of the wide page, the full height of the page.
+fn page_column(ui: &mut egui::Ui, width: f32, height: f32, add: impl FnOnce(&mut egui::Ui)) {
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, height),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
+            ui.set_width(width);
+            ui.set_min_height(height);
+            add(ui);
+        },
+    );
+}
+
+/// A note's words as a reader sees them: links as words, and no empty headings.
+fn words_to_read(body: &str, book: &Book) -> String {
+    without_empty_sections(&plain_links(&timeline::for_reading(body, &book.events)))
+}
+
+/// The fields of one event, in place in a session's plan. Returns whether any changed.
+fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
+    let mut changed = design::text_field(ui, "Title", &mut event.title, None, None).changed();
+    if event.kind != Kind::Day {
+        changed |= design::text_field(ui, "How long", &mut event.duration, None, None).changed();
+    }
+    changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
+    design::field(ui, "Notes", None, None, |ui| {
+        let response = ui.add(
+            egui::TextEdit::multiline(&mut event.notes)
+                .desired_width(ui.available_width() - 2.0 * design::S)
+                .desired_rows(2)
+                .margin(egui::vec2(design::S, design::S)),
+        );
+        design::named(ui, &response, "Notes on this event");
+        changed |= response.changed();
+    });
+    changed
+}
+
+/// One row of a fight's final HP. Numbers line up, in the colours the run gives them.
+fn fight_row(ui: &mut egui::Ui, row: &crate::encounter_run::FightRow, widths: &[f32]) {
+    let c = colors();
+    design::table_row(ui, widths, design::S, |ui, cell| {
+        if cell == 0 {
+            let mut words = row.name.clone();
+            if !row.present {
+                words.push_str(" · Absent");
+            }
+            for condition in &row.conditions {
+                words.push_str(" · ");
+                words.push_str(condition);
+            }
+            wrapped_words(ui, Type::Body, words, c.text);
+        } else {
+            let known = |n: Option<i64>| n.map_or_else(|| "?".to_owned(), |n| n.to_string());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                ui.label(
+                    Type::Numeral
+                        .rich(ui, format!("{}/{}", known(row.hp), known(row.max_hp)))
+                        .color(design::hp_color(design::hp_state(row.hp, row.max_hp))),
+                );
+                if row.temporary_hp > 0 {
+                    ui.label(
+                        Type::Numeral
+                            .rich(ui, design::temp_hp_text(row.temporary_hp))
+                            .color(c.hp.temp),
+                    );
+                }
+            });
+        }
+    });
 }
 
 /// Read and a transcript use the width of `Write`'s text, so a note keeps its line breaks
@@ -666,7 +820,7 @@ impl Sessions {
         self.list_only = false;
         // Words that could not be saved stay on screen, with the choice of what to do.
         if self.draft.as_ref().is_some_and(Draft::needs_attention) {
-            self.tab = Tab::Write;
+            self.write_in_note();
             return;
         }
         // Already open, so there is nothing to read again.
@@ -684,6 +838,9 @@ impl Sessions {
             .and_then(|note| Draft::open(&note.path).ok());
         self.reading = None;
         self.added = None;
+        self.open_event = None;
+        self.fight = None;
+        self.reading_note = session != self.current();
         if self.notice_session.is_none() {
             self.notice = None;
         }
@@ -1435,7 +1592,7 @@ impl Sessions {
                     if form.editing.is_none() {
                         self.say_where_the_run_stays(id);
                     }
-                    self.tab = Tab::Write;
+                    self.write_in_note();
                     // A new session is for typing in, under What happened.
                     self.focus_notes = form.editing.is_none();
                     return;
@@ -1564,10 +1721,6 @@ impl Sessions {
             self.list_only = false;
             self.select(Some(id));
         }
-    }
-
-    fn write_tab(&mut self, ui: &mut egui::Ui) {
-        self.note_editor(ui, false);
     }
 
     /// The one editor of a session's note, on the page and in the panel beside any page.
@@ -1729,7 +1882,10 @@ impl Sessions {
     }
 
     pub fn return_focus_to_note(&mut self) {
-        let in_page_editor = self.on_page && self.tab == Tab::Write && self.note_had_focus;
+        let in_page_editor = self.on_page
+            && !self.reading_note
+            && self.tab != Tab::Recordings
+            && self.note_had_focus;
         self.refocus_note = self.notes_open || in_page_editor;
     }
 
@@ -1758,7 +1914,7 @@ impl Sessions {
             self.focus_notes = true;
             if on_this_page {
                 self.view = View::Notes;
-                self.tab = Tab::Write;
+                self.write_in_note();
             }
         }
     }
@@ -1853,7 +2009,8 @@ impl Sessions {
             || draft.body.clone(),
             |note| without_own_heading(&draft.body, note),
         );
-        let text = timeline::for_reading(&body, &book.events);
+        let text = words_to_read(&body, book);
+        let names = linked_names(&draft.body);
         let linked = timeline::referenced_ids(&draft.body);
         let days = timeline::day_numbers(&book.events);
         let session = self.selected;
@@ -1878,33 +2035,463 @@ impl Sessions {
                             }
                         }
                     }
+                    if !names.is_empty() {
+                        ui.add_space(design::L);
+                        design::group_label(ui, "Linked in this note");
+                        for name in names {
+                            if design::link(ui, &name).clicked() {
+                                self.wants_lookup = Some(name);
+                            }
+                        }
+                    }
                 });
             });
     }
 
-    fn events_tab(&mut self, ui: &mut egui::Ui, book: &mut Book) {
+    /// Show the note, ready for words.
+    fn write_in_note(&mut self) {
+        self.tab = Tab::Note;
+        self.reading_note = false;
+    }
+
+    /// The note, as one view: words to write, or the same words to read.
+    fn note_pane(&mut self, ui: &mut egui::Ui, book: &Book) {
+        ui.horizontal(|ui| {
+            design::group_label(ui, "Notes");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (word, icon) = if self.reading_note {
+                    ("Write", icons::EDIT)
+                } else {
+                    ("Read", icons::DOCUMENT)
+                };
+                if Action::quiet(word)
+                    .icon(icon)
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.reading_note = !self.reading_note;
+                }
+            });
+        });
+        if self.reading_note {
+            self.read_tab(ui, book);
+        } else {
+            self.note_editor(ui, false);
+        }
+    }
+
+    /// A run closed, so what was read of any fight may be out of date.
+    pub fn forget_fight(&mut self) {
+        self.fight = None;
+    }
+
+    /// A note's link that no entry answers to. Saying so is better than a link that does nothing.
+    pub fn no_entry_named(&mut self, name: &str) {
+        self.notice = Some((Tone::Info, format!("No entry is named {name}.")));
+        self.notice_session = None;
+    }
+
+    /// Words at the end of the plan in this session's note, so that the file holds the plan.
+    pub fn add_to_plan(&mut self, name: &str) {
+        let (Some(draft), Some(session)) = (&mut self.draft, self.selected) else {
+            return;
+        };
+        insert_in_plan(&mut draft.body, &format!("- [[{name}]]"));
+        draft.edited();
+        self.mentions
+            .insert(session, timeline::referenced_ids(&draft.body));
+    }
+
+    /// Everything the DM wrote, for Lookup. The open note gives the words not yet saved.
+    pub fn written(&self, book: &Book) -> Vec<Written> {
+        let mut written: Vec<Written> = self
+            .notes
+            .iter()
+            .filter_map(|note| {
+                let body = if self.selected == Some(note.id) {
+                    self.draft.as_ref().map(|draft| draft.body.clone())
+                } else {
+                    fs::read_to_string(&note.path)
+                        .ok()
+                        .map(|text| body_of(&text).to_owned())
+                }?;
+                let body = without_own_heading(&body, note);
+                Some(Written {
+                    title: note.label(),
+                    detail: format!("Session note · {}", note.date),
+                    text: words_to_read(&body, book),
+                    place: WrittenIn::Session(note.id),
+                })
+            })
+            .collect();
+        let days = timeline::day_numbers(&book.events);
+        written.extend(book.events.iter().zip(&days).map(|(event, day)| {
+            let summary = event.summary(None);
+            Written {
+                title: event.label(*day),
+                detail: if summary.is_empty() {
+                    "Timeline".to_owned()
+                } else {
+                    format!("Timeline · {summary}")
+                },
+                text: [
+                    event.place.as_str(),
+                    event.result.as_str(),
+                    event.notes.as_str(),
+                ]
+                .into_iter()
+                .filter(|part| !part.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+                place: WrittenIn::Event(event.id.clone()),
+            }
+        }));
+        written
+    }
+
+    /// What the session before this one left: where the DM picks up the thread.
+    fn last_time_block(&mut self, ui: &mut egui::Ui, book: &Book) {
+        let Some(selected) = self.selected else {
+            return;
+        };
+        if self.last_time.as_ref().map(|(id, _)| *id) != Some(selected) {
+            let previous = self
+                .notes
+                .iter()
+                .position(|note| note.id == selected)
+                .and_then(|at| self.notes.get(at + 1));
+            let found = previous.map(|note| {
+                let text = fs::read_to_string(&note.path).unwrap_or_default();
+                let body = plain_links(&timeline::for_reading(body_of(&text), &book.events));
+                LastTime {
+                    id: note.id,
+                    label: note.label(),
+                    what_happened: section_text(&body, "What happened"),
+                    open_threads: section_text(&body, "Open threads")
+                        .or_else(|| section_text(&body, "Next time")),
+                }
+            });
+            self.last_time = Some((selected, found));
+        }
+        let Some((_, Some(last))) = &self.last_time else {
+            return;
+        };
+        let c = colors();
+        let days = timeline::day_numbers(&book.events);
+        let last_event = book
+            .events
+            .iter()
+            .zip(&days)
+            .rev()
+            .find(|(event, _)| event.session == Some(last.id))
+            .map(|(event, day)| event.label(*day));
+        let preview = last
+            .open_threads
+            .as_deref()
+            .or(last.what_happened.as_deref())
+            .and_then(|words| words.lines().find(|line| !line.trim().is_empty()))
+            .unwrap_or("Nothing written yet.");
+        let response = design::section(ui, format!("Last time: {}", last.label), |ui| {
+            for (heading, words) in [
+                ("What happened", &last.what_happened),
+                ("Open threads", &last.open_threads),
+            ] {
+                if let Some(words) = words {
+                    design::group_label(ui, heading);
+                    markdown_view::show_compact(ui, words);
+                }
+            }
+            if let Some(event) = &last_event {
+                design::group_label(ui, "Last on the timeline");
+                ui.label(Type::Body.rich(ui, event).color(c.text));
+            }
+        });
+        if response.fully_closed() {
+            ui.add(egui::Label::new(Type::Body.rich(ui, preview).color(c.text)).truncate());
+        }
+    }
+
+    /// The session as a list, top to bottom: what happened, then what is still to come. It
+    /// replaces a walk between Encounters, Timeline and the note.
+    fn plan_pane(&mut self, ui: &mut egui::Ui, book: &mut Book, plan: &Plan<'_>) {
         let c = colors();
         let session = self.selected;
         problems(ui, book);
         if let Some(words) = self.not_being_played("These go to") {
             design::message(ui, Tone::Warning, &words);
-        } else if let Some(words) = self.current_dated()
+        } else if self.reading_note
+            && let Some(words) = self.current_dated()
             && design::message_with_action(ui, Tone::Warning, &words, "Play this one")
         {
             self.play_this_one();
         }
-        // Stay here. At the table, a rest is one press, and its details can wait.
-        let added = quick_add(ui, book, session);
-        let days = timeline::day_numbers(&book.events);
-        if let Some(id) = &added {
-            let index = book.events.iter().position(|event| event.id == *id);
-            self.added = Some(Added {
-                id: id.clone(),
-                label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
-                at: Instant::now(),
-                count: book.events.len(),
+        let word = if session == self.current() {
+            "Tonight"
+        } else {
+            "This session"
+        };
+        design::group_label(ui, word);
+        let mut added = None;
+        // Always in reach, however long the list. A message opens above these buttons, so that
+        // they do not move under the pointer that just pressed one.
+        egui::TopBottomPanel::bottom(egui::Id::new(("session_plan_add", session)))
+            .resizable(false)
+            .show_separator_line(false)
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
+                top: design::XS as i8,
+                ..Default::default()
+            }))
+            .show_inside(ui, |ui| {
+                self.plan_messages(ui, book, session);
+                // Stay here. At the table, a rest is one press, and its details can wait.
+                added = quick_add(ui, book, session, &PLAN_KINDS, |ui| {
+                    self.fight_menu(ui, plan);
+                });
+                if let Some(id) = &added {
+                    let days = timeline::day_numbers(&book.events);
+                    let index = book.events.iter().position(|event| event.id == *id);
+                    self.added = Some(Added {
+                        id: id.clone(),
+                        label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
+                        at: Instant::now(),
+                        count: book.events.len(),
+                    });
+                }
             });
+        let days = timeline::day_numbers(&book.events);
+        let body = self
+            .draft
+            .as_ref()
+            .map_or_else(String::new, |draft| draft.body.clone());
+        // A fight in the note's plan that has not happened yet in this session.
+        let planned: Vec<&PlanFight> = linked_names(&body)
+            .iter()
+            .filter_map(|name| {
+                plan.fights
+                    .iter()
+                    .find(|fight| fight.name.eq_ignore_ascii_case(name))
+            })
+            .filter(|fight| {
+                !book.events.iter().any(|event| {
+                    event.session == session
+                        && event.run.is_some()
+                        && event.title.eq_ignore_ascii_case(&fight.name)
+                })
+            })
+            .collect();
+        let mut insert = None;
+        let mut remove = None;
+        let mut toggle = None;
+        let mut changed = false;
+        let open_event = self.open_event.clone();
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new())
+            .show_inside(ui, |ui| {
+        egui::ScrollArea::vertical()
+            .id_salt(("session_plan", session))
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                let width = ui.available_width() - design::M;
+                let widths = [width - PLAN_ACTION - design::S, PLAN_ACTION];
+                let mut any = false;
+                for at in 0..book.events.len() {
+                    if book.events[at].session != session {
+                        continue;
+                    }
+                    any = true;
+                    let day = days.get(at).copied().unwrap_or(0);
+                    let event = &mut book.events[at];
+                    let label = event.label(day);
+                    let summary = event.summary(None);
+                    let linked = body.contains(&format!("^{}", event.id));
+                    let is_open = open_event.as_ref() == Some(&event.id);
+                    let running = event.run.is_some() && event.run == plan.open_run;
+                    let link = timeline::reference(event, day);
+                    ui.push_id(event.id.clone(), |ui| {
+                        plan_row(
+                            ui,
+                            &widths,
+                            event.kind.icon(),
+                            |ui| {
+                                if design::wrapped_link(ui, &label).clicked() {
+                                    toggle = Some(event.id.clone());
+                                }
+                                if !summary.is_empty() {
+                                    wrapped_words(ui, Type::Small, &summary, c.muted);
+                                }
+                                if event.kind == Kind::LongRest {
+                                    if event.restores {
+                                        ui.horizontal(|ui| {
+                                            design::status(
+                                                ui,
+                                                Status {
+                                                    icon: icons::OK,
+                                                    word: "Everyone at full",
+                                                    color: c.document.saved,
+                                                },
+                                            );
+                                            if Action::quiet("Undo")
+                                                .name("Undo everyone to full")
+                                                .density(Density::Read)
+                                                .show(ui)
+                                                .clicked()
+                                            {
+                                                event.restores = false;
+                                                changed = true;
+                                            }
+                                        });
+                                    } else if Action::secondary("Everyone to full")
+                                        .icon(icons::LONG_REST)
+                                        .density(Density::Read)
+                                        .hint("The next fight starts everyone at full HP. It records your ruling.")
+                                        .show(ui)
+                                        .clicked()
+                                    {
+                                        event.restores = true;
+                                        changed = true;
+                                    }
+                                }
+                            },
+                            |ui| {
+                                if running {
+                                    if Action::primary("Back to run")
+                                        .density(Density::Read)
+                                        .show(ui)
+                                        .clicked()
+                                    {
+                                        self.wants_back_to_run = true;
+                                    }
+                                } else if linked {
+                                    design::status(
+                                        ui,
+                                        Status {
+                                            icon: icons::OK,
+                                            word: "In notes",
+                                            color: c.document.saved,
+                                        },
+                                    );
+                                } else if Action::quiet("Add to notes")
+                                    .name(&format!("Add to notes: {label}"))
+                                    .density(Density::Read)
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    insert = Some(link.clone());
+                                }
+                            },
+                        );
+                        if is_open {
+                            if running {
+                                // What the file holds now would be gone at the next hit.
+                                self.fight = None;
+                                wrapped_words(
+                                    ui,
+                                    Type::Small,
+                                    "This fight is running. Its final HP shows here when it ends.",
+                                    c.muted,
+                                );
+                            } else if let Some(run) = event.run {
+                                self.fight_block(ui, run, plan);
+                            }
+                            // A fight's row is for how it ended. Its details wait behind a word.
+                            if event.run.is_some() {
+                                design::quiet_section(ui, "Details", |ui| {
+                                    changed |= event_fields(ui, event);
+                                });
+                            } else {
+                                changed |= event_fields(ui, event);
+                            }
+                            ui.horizontal(|ui| {
+                                if design::link(ui, "Open on the timeline").clicked() {
+                                    self.wants_event = Some(event.id.clone());
+                                }
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if Action::quiet("Remove")
+                                            .name("Remove this event")
+                                            .density(Density::Read)
+                                            .blocked_if(running, "This run is open. Close it first.")
+                                            .show(ui)
+                                            .clicked()
+                                        {
+                                            remove = Some(event.id.clone());
+                                        }
+                                    },
+                                );
+                            });
+                            design::rule(ui);
+                        }
+                    });
+                }
+                for (position, fight) in planned.iter().enumerate() {
+                    any = true;
+                    ui.push_id(&fight.path, |ui| {
+                        plan_row(
+                            ui,
+                            &widths,
+                            icons::ENCOUNTERS,
+                            |ui| {
+                                wrapped_words(ui, Type::Strong, &fight.name, c.text);
+                                wrapped_words(ui, Type::Small, &fight.summary, c.muted);
+                            },
+                            |ui| {
+                                let action = if position == 0 {
+                                    Action::primary("Start fight")
+                                } else {
+                                    Action::secondary("Start fight")
+                                };
+                                if action
+                                    .icon(icons::RUN)
+                                    .name(&format!("Start fight: {}", fight.name))
+                                    .density(Density::Read)
+                                    .blocked(plan.blocked)
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    self.wants_fight = Some(fight.path.clone());
+                                }
+                            },
+                        );
+                    });
+                }
+                if added.is_some() {
+                    ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
+                }
+                if !any {
+                    wrapped_words(
+                        ui,
+                        Type::Body,
+                        "Nothing here yet. Add a fight to the plan, or record a rest or a journey. A fight you start adds itself.",
+                        c.muted,
+                    );
+                }
+            });
+            });
+        if changed {
+            book.touch();
         }
+        if let Some(id) = toggle {
+            self.fight = None;
+            self.open_event = (self.open_event.as_ref() != Some(&id)).then_some(id);
+        }
+        if let Some(id) = remove {
+            book.remove(&id);
+            self.open_event = None;
+        }
+        if let (Some(link), Some(draft), Some(session)) = (insert, &mut self.draft, session) {
+            insert_in_note(&mut draft.body, &link);
+            draft.edited();
+            self.added = None;
+            self.mentions
+                .insert(session, timeline::referenced_ids(&draft.body));
+        }
+    }
+
+    /// What can be undone in the plan: the event just added or just removed.
+    fn plan_messages(&mut self, ui: &mut egui::Ui, book: &mut Book, session: Option<Uuid>) {
+        let days = timeline::day_numbers(&book.events);
         // It goes at the DM's next edit, or soon, so that it cannot undo the wrong thing.
         if let Some(just) = &self.added {
             let current = book
@@ -1932,98 +2519,107 @@ impl Sessions {
                 book.remove(&id);
                 self.added = None;
             }
-        } else if !undo_removed(ui, book) {
-            // Its line stays reserved, so that the rows below do not move under the pointer.
-            ui.add_space(Density::Read.control() + ui.spacing().item_spacing.y);
+        } else {
+            undo_removed(ui, book);
         }
-        ui.add_space(design::XS);
-        let days = timeline::day_numbers(&book.events);
-        let mut insert = None;
-        let body = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
-        egui::ScrollArea::vertical()
-            .id_salt(("session_events", session))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                let action = 104.0;
-                let widths = [ui.available_width() - action - design::XL, action];
-                let mut any = false;
-                for (event, day) in book.events.iter().zip(&days) {
-                    if event.session != session {
-                        continue;
-                    }
-                    any = true;
-                    let label = event.label(*day);
-                    let linked = body.contains(&format!("^{}", event.id));
-                    design::table_row(ui, &widths, design::S, |ui, cell| {
-                        if cell == 0 {
-                            ui.horizontal_top(|ui| {
-                                ui.label(Type::Body.rich(ui, event.kind.icon()).color(c.muted));
-                                ui.vertical(|ui| {
-                                    if design::wrapped_link(ui, &label).clicked() {
-                                        self.wants_event = Some(event.id.clone());
-                                    }
-                                    let summary = event.summary(None);
-                                    if !summary.is_empty() {
-                                        ui.add(
-                                            egui::Label::new(
-                                                Type::Small.rich(ui, summary).color(c.muted),
-                                            )
-                                            .wrap(),
-                                        );
-                                    }
-                                });
-                            });
-                        } else {
-                            // One height either way, so that the rows below never move.
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(ui.available_width(), Density::Read.control()),
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if linked {
-                                        design::status(
-                                            ui,
-                                            Status {
-                                                icon: icons::OK,
-                                                word: "In notes",
-                                                color: c.document.saved,
-                                            },
-                                        );
-                                    } else if Action::quiet("Add to notes")
-                                        .name(&format!("Add to notes: {label}"))
-                                        .density(Density::Read)
-                                        .show(ui)
-                                        .clicked()
-                                    {
-                                        insert = Some(timeline::reference(event, *day));
-                                    }
-                                },
-                            );
+    }
+
+    /// Add a fight to the plan: one the campaign has, or a new one.
+    fn fight_menu(&mut self, ui: &mut egui::Ui, plan: &Plan<'_>) {
+        let response = Action::secondary("Fight")
+            .icon(icons::ENCOUNTERS)
+            .name("Add a fight")
+            .density(Density::Read)
+            .show(ui);
+        egui::Popup::menu(&response).show(|ui| {
+            for fight in plan.fights {
+                if ui.selectable_label(false, &fight.name).clicked() {
+                    self.add_to_plan(&fight.name);
+                }
+            }
+            if !plan.fights.is_empty() {
+                ui.separator();
+            }
+            if Action::quiet("New encounter")
+                .density(Density::Read)
+                .blocked(plan.blocked)
+                .show(ui)
+                .clicked()
+            {
+                self.wants_new_fight = true;
+            }
+        });
+    }
+
+    /// How a fight ended, in place: final HP and the log, with no run to reopen.
+    fn fight_block(&mut self, ui: &mut egui::Ui, run: Uuid, plan: &Plan<'_>) {
+        let c = colors();
+        let path = plan
+            .run_directory
+            .as_ref()
+            .map(|directory| directory.join(format!("{run}.json")));
+        if self.fight.as_ref().map(|(id, _)| *id) != Some(run) {
+            let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
+            let result = match (&path, campaign) {
+                (Some(path), Some(campaign)) => fight_summary(path, campaign),
+                _ => Err("The run folder is not available.".to_owned()),
+            };
+            self.fight = Some((run, result));
+        }
+        let Some((_, result)) = &self.fight else {
+            return;
+        };
+        match result {
+            Err(error) => {
+                design::message(
+                    ui,
+                    Tone::Info,
+                    &format!("This fight's run cannot be read. {error}"),
+                );
+            }
+            Ok(summary) => {
+                design::group_label(
+                    ui,
+                    if summary.ended {
+                        "Final HP"
+                    } else {
+                        "HP when it stopped"
+                    },
+                );
+                let width = ui.available_width() - design::M;
+                let widths = [width - 88.0 - design::S, 88.0];
+                for row in summary.rows.iter().filter(|row| row.player) {
+                    fight_row(ui, row, &widths);
+                }
+                let others: Vec<_> = summary.rows.iter().filter(|row| !row.player).collect();
+                if !others.is_empty() {
+                    let title = format!("Everyone else ({})", others.len());
+                    design::quiet_section(ui, &title, |ui| {
+                        for row in others {
+                            fight_row(ui, row, &widths);
                         }
                     });
                 }
-                if added.is_some() {
-                    ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
+                design::quiet_section(ui, "Log", |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt(("fight_log", run))
+                        .max_height(160.0)
+                        .show(ui, |ui| {
+                            for line in &summary.log {
+                                wrapped_words(ui, Type::Small, line, c.muted);
+                            }
+                        });
+                });
+                if let Some(path) = path
+                    && Action::quiet("View the whole run")
+                        .density(Density::Read)
+                        .blocked(plan.blocked)
+                        .show(ui)
+                        .clicked()
+                {
+                    self.wants_saved_run = Some(path);
                 }
-                if !any {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Body
-                                .rich(
-                                    ui,
-                                    "No event belongs to this session yet. Add one above. An encounter run adds itself.",
-                                )
-                                .color(c.muted),
-                        )
-                        .wrap(),
-                    );
-                }
-            });
-        if let (Some(link), Some(draft), Some(session)) = (insert, &mut self.draft, session) {
-            insert_in_note(&mut draft.body, &link);
-            draft.edited();
-            self.added = None;
-            self.mentions
-                .insert(session, timeline::referenced_ids(&draft.body));
+            }
         }
     }
 
@@ -2630,7 +3226,13 @@ impl Sessions {
         }
     }
 
-    fn session_pane(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings, book: &mut Book) {
+    fn session_pane(
+        &mut self,
+        ui: &mut egui::Ui,
+        settings: &ProcessingSettings,
+        book: &mut Book,
+        plan: &Plan<'_>,
+    ) {
         let c = colors();
         let Some(note) = self
             .selected
@@ -2689,7 +3291,9 @@ impl Sessions {
                 ui.add(egui::Label::new(Type::Title.rich(ui, note.label()).color(c.text)).wrap());
             });
         });
-        ui.label(Type::Small.rich(ui, &note.date).color(c.muted));
+        if !self.list_beside {
+            ui.label(Type::Small.rich(ui, &note.date).color(c.muted));
+        }
         self.record_line(ui, settings);
         if let Some(draft) = &mut self.draft {
             Self::draft_problem(ui, draft);
@@ -2726,42 +3330,71 @@ impl Sessions {
             );
         }
         let today = self.today();
-        if self.tab == Tab::Write
+        let writing = self.tab != Tab::Recordings && !self.reading_note;
+        if writing
             && self.selected == self.current()
             && let Some(words) = dated_before_today(&note, &today)
             && design::message_with_action(ui, Tone::Warning, &words, "Play this one")
         {
             self.play_this_one();
         }
-        if self.tab == Tab::Write
-            && let Some(words) = self.not_being_played("You are writing in")
-        {
+        if writing && let Some(words) = self.not_being_played("You are writing in") {
             design::message(ui, Tone::Warning, &words);
         }
+        self.last_time_block(ui, book);
         let recordings = format!("Recordings ({})", self.recordings.len());
-        let tab_changed = design::segmented(
-            ui,
-            &mut self.tab,
+        let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM;
+        // In a wide page, the note is on the plan's tab, so there is no second one to choose.
+        let mut shown = if beside && self.tab == Tab::Note {
+            Tab::Plan
+        } else {
+            self.tab
+        };
+        let tabs: &[(Tab, &str)] = if beside {
             &[
-                (Tab::Write, "Write"),
-                (Tab::Read, "Read"),
-                (Tab::Events, "Events"),
+                (Tab::Plan, "Plan and notes"),
                 (Tab::Recordings, recordings.as_str()),
-            ],
-        );
-        if tab_changed {
+            ]
+        } else {
+            &[
+                (Tab::Plan, "Plan"),
+                (Tab::Note, "Note"),
+                (Tab::Recordings, recordings.as_str()),
+            ]
+        };
+        if design::segmented(ui, &mut shown, tabs) {
+            self.tab = shown;
             self.clear_success();
         }
         ui.add_space(design::XS);
-        match self.tab {
-            Tab::Write => self.write_tab(ui),
-            Tab::Read => self.read_tab(ui, book),
-            Tab::Events => self.events_tab(ui, book),
-            Tab::Recordings => self.recordings_tab(ui, settings, book),
+        match shown {
+            Tab::Plan if beside => {
+                let height = ui.available_height();
+                let note_width = ui.available_width() - PLAN_WIDTH - design::L;
+                ui.horizontal_top(|ui| {
+                    ui.spacing_mut().item_spacing.x = design::L;
+                    page_column(ui, PLAN_WIDTH, height, |ui| {
+                        self.plan_pane(ui, book, plan);
+                    });
+                    page_column(ui, note_width, height, |ui| self.note_pane(ui, book));
+                });
+            }
+            Tab::Plan => self.plan_pane(ui, book, plan),
+            Tab::Note => self.note_pane(ui, book),
+            Tab::Recordings => {
+                ui.set_max_width(ui.available_width().min(EDITOR_WIDTH + design::XL));
+                self.recordings_tab(ui, settings, book);
+            }
         }
     }
 
-    fn notes_view(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings, book: &mut Book) {
+    fn notes_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        settings: &ProcessingSettings,
+        book: &mut Book,
+        plan: &Plan<'_>,
+    ) {
         if !self.unreadable.is_empty() {
             design::message(
                 ui,
@@ -2798,7 +3431,8 @@ impl Sessions {
             return;
         }
         // Beside Lookup at a small window, two columns would crush the session.
-        if ui.available_width() < TWO_COLUMNS_FROM {
+        self.list_beside = ui.available_width() >= TWO_COLUMNS_FROM;
+        if !self.list_beside {
             if self.list_only && self.form.is_none() {
                 self.list_pane(ui);
             } else {
@@ -2817,7 +3451,7 @@ impl Sessions {
                         .auto_shrink([false, false])
                         .show(ui, |ui| self.show_form(ui));
                 } else {
-                    self.session_pane(ui, settings, book);
+                    self.session_pane(ui, settings, book, plan);
                 }
             }
             return;
@@ -2840,7 +3474,7 @@ impl Sessions {
                         .auto_shrink([false, false])
                         .show(ui, |ui| self.show_form(ui));
                 } else {
-                    self.session_pane(ui, settings, book);
+                    self.session_pane(ui, settings, book, plan);
                 }
             });
     }
@@ -3200,7 +3834,13 @@ impl Sessions {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings, book: &mut Book) {
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        settings: &ProcessingSettings,
+        book: &mut Book,
+        plan: &Plan<'_>,
+    ) {
         let campaign = self
             .campaign
             .as_ref()
@@ -3210,7 +3850,7 @@ impl Sessions {
         let empty = self.notes.is_empty();
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut stop = false;
-        design::page_header(ui, "Sessions", Some(&campaign), |ui| {
+        design::page_header(ui, "Session", Some(&campaign), |ui| {
             let list_alone = self.list_only && ui.ctx().content_rect().width() < 1500.0;
             if self.live.is_some() && (self.view != View::Notes || in_form || list_alone || empty) {
                 stop = Action::destructive("Stop recording")
@@ -3253,7 +3893,7 @@ impl Sessions {
             return;
         }
         match self.view {
-            View::Notes => self.notes_view(ui, settings, book),
+            View::Notes => self.notes_view(ui, settings, book, plan),
             View::Templates => self.templates_view(ui),
             View::Folder => self.folder_view(ui, book),
         }

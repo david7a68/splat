@@ -185,6 +185,15 @@ numbers, or of a name and a number, become a table. `presentation::reading_tests
 rules over every built-in note, so a fault cannot come back unseen. A window wide enough
 moves the rarely wanted sections (source, engine support, technical details) to a margin.
 
+## The session's plan
+
+The Session page is a list the DM works down, beside the note. A row is an icon, a link and a second line, with one action on
+the right. A row opens in place, and its fields use the same form parts as the Timeline page. The first fight to come has
+the primary button and the others the secondary, so the eye goes to the next thing to do. The word for a fight is **Start
+fight**, on this page and on Encounters. Add buttons stay at the foot of the plan, and a message opens above them, so
+that they do not move under the pointer. A fight's row lists the party first, with HP right-aligned in the run's tints, and
+everyone else behind one word. In a page narrower than 720 px, the plan and the note have a tab each.
+
 ## The live run
 
 The roster is the screen. Every row has fixed columns: initiative, side mark, name, AC,

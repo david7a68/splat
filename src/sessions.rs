@@ -631,6 +631,115 @@ pub fn without_own_heading(body: &str, note: &Note) -> String {
     lines.collect::<String>().trim_start().to_owned()
 }
 
+/// A note's headings with something under them, for reading. A template leaves headings the
+/// DM never filled, and a page of empty headings hides the few words there are.
+pub fn without_empty_sections(text: &str) -> String {
+    let level = |line: &str| {
+        let hashes = line.chars().take_while(|c| *c == '#').count();
+        (hashes > 0 && line[hashes..].starts_with(' ')).then_some(hashes)
+    };
+    let mut lines: Vec<&str> = text.lines().collect();
+    // A heading whose only subheading was empty is empty too, so this goes until nothing changes.
+    loop {
+        let empty = (0..lines.len()).find(|&at| {
+            level(lines[at]).is_some_and(|own| {
+                lines[at + 1..]
+                    .iter()
+                    .find(|next| !next.trim().is_empty())
+                    .is_none_or(|next| level(next).is_some_and(|other| other <= own))
+            })
+        });
+        let Some(at) = empty else {
+            break;
+        };
+        lines.remove(at);
+    }
+    let mut kept = String::new();
+    let mut blank = true;
+    for line in lines {
+        let is_blank = line.trim().is_empty();
+        if !(is_blank && blank) {
+            kept.push_str(line);
+            kept.push('\n');
+        }
+        blank = is_blank;
+    }
+    format!("{}\n", kept.trim_end())
+}
+
+/// The words under one `## heading`, up to the next heading of that level.
+pub fn section_text(body: &str, heading: &str) -> Option<String> {
+    let mut lines = body.lines();
+    lines.find(|line| line.trim_end().strip_prefix("## ") == Some(heading))?;
+    let words = lines
+        .take_while(|line| !line.starts_with("## "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let words = words.trim();
+    (!words.is_empty()).then(|| words.to_owned())
+}
+
+/// The names in a note's `[[links]]`, in order, without timeline references.
+pub fn linked_names(text: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("[[") {
+        rest = &rest[start + 2..];
+        let Some(end) = rest.find("]]") else {
+            break;
+        };
+        let inner = &rest[..end];
+        let name = inner.split('|').next().unwrap_or(inner).trim();
+        if !name.is_empty() && !name.starts_with("Timeline#") && !names.iter().any(|n| n == name) {
+            names.push(name.to_owned());
+        }
+        rest = &rest[end + 2..];
+    }
+    names
+}
+
+/// A note's `[[links]]` as the words a reader expects, not as markup.
+pub fn plain_links(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("[[") {
+        out.push_str(&rest[..start]);
+        rest = &rest[start + 2..];
+        let Some(end) = rest.find("]]") else {
+            out.push_str("[[");
+            break;
+        };
+        let inner = &rest[..end];
+        out.push_str(inner.rsplit('|').next().unwrap_or(inner).trim());
+        rest = &rest[end + 2..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Add a line to a note's plan: under `Plan for tonight`, or where other words go.
+pub fn insert_in_plan(body: &mut String, words: &str) {
+    const PLAN: &str = "## Plan for tonight";
+    let Some(at) = body
+        .match_indices(PLAN)
+        .find(|(at, _)| *at == 0 || body[..*at].ends_with('\n'))
+        .map(|(at, _)| at + PLAN.len())
+    else {
+        insert_in_note(body, words);
+        return;
+    };
+    let end = body[at..]
+        .find("\n## ")
+        .map_or(body.len(), |next| at + next);
+    let kept = body[..end].trim_end().len();
+    let rest = body[end..].to_owned();
+    body.truncate(kept);
+    body.push_str(if kept == at { "\n\n" } else { "\n" });
+    body.push_str(words.trim());
+    body.push('\n');
+    body.push_str(&rest);
+}
+
 /// A long text, divided at its time headings, so that each part can be read alone.
 pub fn parts_of(text: &str) -> Vec<(String, String)> {
     let mut parts: Vec<(String, String)> = Vec::new();
@@ -1233,6 +1342,57 @@ mod tests {
         // A heading the DM wrote stays, and so does a date line under it.
         let own = "# Our night\n\n2026-11-01\n";
         assert_eq!(without_own_heading(own, &note), own);
+    }
+
+    #[test]
+    fn reading_leaves_out_empty_headings_and_keeps_filled_ones() {
+        let text = "## Recap\n\n\n## Plan\n\nGo north.\n\n## People\n\n### Friends\n\n## Loot\n\n";
+        assert_eq!(without_empty_sections(text), "## Plan\n\nGo north.\n");
+        // A heading whose subheading has words is not empty.
+        assert_eq!(
+            without_empty_sections("## People\n\n### Friends\n\nHobb.\n"),
+            "## People\n\n### Friends\n\nHobb.\n"
+        );
+    }
+
+    #[test]
+    fn a_section_is_found_by_its_heading() {
+        let body = "## What happened\n\nA fight.\n\n## Open threads\n\nWho burned the ropes?\n";
+        assert_eq!(section_text(body, "What happened").unwrap(), "A fight.");
+        assert_eq!(
+            section_text(body, "Open threads").unwrap(),
+            "Who burned the ropes?"
+        );
+        assert_eq!(
+            section_text("## What happened\n\n\n", "What happened"),
+            None
+        );
+        assert_eq!(section_text(body, "Loot"), None);
+    }
+
+    #[test]
+    fn links_are_read_as_names_and_as_words() {
+        let text =
+            "See [[Ashfall Crossing]], [[Hobb|the miller]] and [[Timeline#^t-1|Day 1]]. [[Hobb]]";
+        assert_eq!(linked_names(text), vec!["Ashfall Crossing", "Hobb"]);
+        assert_eq!(
+            plain_links("See [[Ashfall Crossing]] and [[Hobb|the miller]], [[open"),
+            "See Ashfall Crossing and the miller, [[open"
+        );
+    }
+
+    #[test]
+    fn a_plan_line_goes_under_the_plan_heading() {
+        let mut body = "## Plan for tonight\n\n\n\n## What happened\n\n".to_owned();
+        insert_in_plan(&mut body, "[[A]]");
+        insert_in_plan(&mut body, "[[B]]");
+        assert_eq!(
+            body,
+            "## Plan for tonight\n\n[[A]]\n[[B]]\n\n## What happened\n\n"
+        );
+        let mut other = "## Next time\n\n".to_owned();
+        insert_in_plan(&mut other, "[[A]]");
+        assert!(other.contains("[[A]]"));
     }
 
     #[test]

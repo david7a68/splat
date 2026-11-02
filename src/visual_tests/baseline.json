@@ -5,7 +5,7 @@
       "column-resize": 95,
       "dialogs": 37,
       "empty": 18,
-      "encounter-build": 37,
+      "encounter-build": 41,
       "encounter-groups": 68,
       "encounter-run": 53,
       "gallery": 20,
@@ -13,7 +13,7 @@
       "library-browse": 85,
       "library-scope": 9,
       "library-to-encounter": 19,
-      "nav-state": 24,
+      "nav-state": 26,
       "party": 42,
       "party-from-run": 25,
       "prep-to-table": 27,
@@ -24,13 +24,14 @@
       "run-long-names": 26,
       "run-lookup": 36,
       "run-no-groups": 2,
-      "run-overrides": 31,
+      "run-overrides": 32,
       "run-restart": 20,
       "run-resume": 7,
       "run-roster-conflict": 19,
       "run-sync-conflict": 28,
       "run-sync-states": 21,
-      "session-notes": 138,
+      "session-notes": 137,
+      "session-plan": 98,
       "session-recording": 106,
       "settings": 17,
       "signed-in": 41
@@ -50,7 +51,7 @@
       "column-resize": 95,
       "dialogs": 36,
       "empty": 18,
-      "encounter-build": 37,
+      "encounter-build": 41,
       "encounter-groups": 68,
       "encounter-run": 52,
       "gallery": 20,
@@ -58,7 +59,7 @@
       "library-browse": 85,
       "library-scope": 8,
       "library-to-encounter": 19,
-      "nav-state": 24,
+      "nav-state": 26,
       "party": 42,
       "party-from-run": 25,
       "prep-to-table": 27,
@@ -69,13 +70,14 @@
       "run-long-names": 26,
       "run-lookup": 36,
       "run-no-groups": 2,
-      "run-overrides": 31,
+      "run-overrides": 32,
       "run-restart": 20,
       "run-resume": 7,
       "run-roster-conflict": 19,
       "run-sync-conflict": 28,
       "run-sync-states": 21,
-      "session-notes": 138,
+      "session-notes": 137,
+      "session-plan": 98,
       "session-recording": 105,
       "settings": 17,
       "signed-in": 41
@@ -155,7 +157,7 @@
       "set up state on three pages": 10
     },
     "nav-table": {
-      "walk section 3's table": 22
+      "walk section 3's table": 21
     },
     "party": {
       "change character": 1,
@@ -228,6 +230,16 @@
       "T11.2: put a long rest on the timeline": 1,
       "T11.8: take a note during a run": 2,
       "use the timeline during a run": 79
+    },
+    "session-plan": {
+      "T12.0: make a creature your own": 5,
+      "T12.1: go back from a finished fight": 1,
+      "T12.1: start a planned fight from the session": 1,
+      "T12.2: go back to the sheets' HP": 1,
+      "T12.5: read how a fight ended": 1,
+      "T12.8: read a condition's rule from its row": 2,
+      "damage several targets, once they are chosen": 2,
+      "roll dice beside the stat block": 3
     },
     "session-recording": {
       "record a session and process it": 77

@@ -165,6 +165,14 @@ default or repeatedly when explicitly configured.
 **Session**:
 One meeting of the table, with its notes in a Markdown file in the campaign's folder.
 
+**Session plan**:
+The encounters a session's note links to under its plan, with what has happened so far. The note holds the
+plan, so that Obsidian sees it too.
+
+**Carried state**:
+Each player's HP and temporary HP from the last fight of the session being played, which the next run starts
+from. A long rest the DM marks starts everyone at full instead.
+
 **Session template**:
 Markdown a new session's notes start from, built in or owned by the campaign.
 

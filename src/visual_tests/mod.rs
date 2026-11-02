@@ -16,6 +16,7 @@
 //! - `SPLAT_VISUAL_VIDEO=1`, with captures on, also encodes one video per scenario
 //!   with ffmpeg, into the output folder's `video/`.
 mod compare;
+mod dm_audit;
 mod driver;
 mod ergonomics;
 mod fixture;
@@ -39,7 +40,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 34] = [
+const SCENARIOS: [(&str, Seed, Script); 35] = [
     (
         "library-browse",
         Seed::Empty,
@@ -162,6 +163,7 @@ const SCENARIOS: [(&str, Seed, Script); 34] = [
         Seed::Campaign,
         scenarios::run_no_groups::run,
     ),
+    ("session-plan", Seed::Campaign, scenarios::session_plan::run),
 ];
 
 impl crate::Splat {

@@ -61,8 +61,11 @@ struct Draft {
     source: String,
     name: String,
     setup: Setup,
+    /// What the DM reads to the table, and their notes: the note's own text.
+    body: String,
     saved_name: String,
     saved_setup: Setup,
+    saved_body: String,
 }
 impl Draft {
     fn new() -> Self {
@@ -78,7 +81,9 @@ impl Draft {
             name: name.clone(),
             saved_name: name,
             setup: Setup::default(),
+            body: String::new(),
             saved_setup: Setup::default(),
+            saved_body: String::new(),
         }
     }
     fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
@@ -99,13 +104,18 @@ impl Draft {
             name: entry.name,
             saved_setup: setup.clone(),
             setup,
+            body: entry.body.trim().to_owned(),
+            saved_body: entry.body.trim().to_owned(),
         })
     }
     fn dirty(&self) -> bool {
-        self.baseline.is_none() || self.name != self.saved_name || self.setup != self.saved_setup
+        self.baseline.is_none()
+            || self.name != self.saved_name
+            || self.setup != self.saved_setup
+            || self.body != self.saved_body
     }
     fn text(&self) -> Result<String, String> {
-        patch_fields(
+        let text = patch_fields(
             &self.source,
             &[
                 ("splat_name", Some(self.name.clone().into())),
@@ -114,7 +124,13 @@ impl Draft {
                     Some(serde_yaml_ng::to_value(&self.setup).map_err(|e| e.to_string())?),
                 ),
             ],
-        )
+        )?;
+        // Words the DM did not touch keep their exact form.
+        Ok(if self.body == self.saved_body {
+            text
+        } else {
+            with_body(&text, &self.body)
+        })
     }
     fn add(&mut self, id: Uuid, party: bool) {
         self.setup.roster.push(Slot {
@@ -158,6 +174,7 @@ impl Draft {
         self.baseline = Some(text);
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
+        self.saved_body = self.body.clone();
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), String> {
@@ -235,6 +252,160 @@ impl Draft {
                 "starting HP {hp} is above the changed maximum of {max}."
             )));
         }
+        Ok(())
+    }
+}
+/// A note's text with another body after its frontmatter.
+fn with_body(text: &str, body: &str) -> String {
+    let front = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let skipped = text.len() - front.len();
+    let end = front.strip_prefix("---").and_then(|rest| {
+        rest.match_indices("\n---")
+            .find(|(at, _)| {
+                rest[at + 4..]
+                    .chars()
+                    .next()
+                    .is_none_or(|c| c == '\n' || c == '\r')
+            })
+            .map(|(at, _)| skipped + 3 + at + 4)
+    });
+    let Some(end) = end else {
+        return text.to_owned();
+    };
+    format!("{}\n\n{}\n", &text[..end], body.trim_end())
+}
+
+/// A row of a mapped table: `` | ` key ` | ` value ` | ``. Returns false if it has no such row.
+fn set_table_value(text: &mut String, key: &str, value: &str) -> bool {
+    let start = format!("| ` {key} ` | ` ");
+    let Some(at) = text.find(&start) else {
+        return false;
+    };
+    let from = at + start.len();
+    let Some(length) = text[from..].find(" `") else {
+        return false;
+    };
+    text.replace_range(from..from + length, value);
+    true
+}
+
+/// What the DM asked of the creature open beside the roster.
+enum CreatureStep {
+    Save,
+    Close,
+}
+
+/// What the DM can change on a creature, as they typed it.
+#[derive(Clone, PartialEq)]
+struct CreatureFields {
+    name: String,
+    hp: String,
+    armor_class: String,
+    body: String,
+}
+
+/// A creature the DM made their own, open beside the roster.
+struct CreatureEditor {
+    path: String,
+    baseline: String,
+    fields: CreatureFields,
+    saved: CreatureFields,
+    error: Option<String>,
+    focus: bool,
+}
+impl CreatureEditor {
+    fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
+        let text = fs::read_to_string(note_path(root, path)?).map_err(|e| e.to_string())?;
+        let entry = Entry::parse(path, &text)?;
+        let stat = |name: &str| {
+            entry
+                .fields
+                .get("splat_stats")
+                .and_then(|stats| stats.get(name))
+                .and_then(|stat| stat.get("value"))
+                .and_then(Value::as_i64)
+                .map_or_else(String::new, |n| n.to_string())
+        };
+        let fields = CreatureFields {
+            hp: stat("max_hp"),
+            armor_class: stat("armor_class"),
+            body: entry.body.trim().to_owned(),
+            name: entry.name,
+        };
+        Ok(Self {
+            path: path.to_owned(),
+            baseline: text,
+            saved: fields.clone(),
+            fields,
+            error: None,
+            focus: true,
+        })
+    }
+    fn dirty(&self) -> bool {
+        self.saved != self.fields
+    }
+    fn text(&self) -> Result<String, String> {
+        let CreatureFields {
+            name,
+            hp,
+            armor_class,
+            body,
+        } = &self.fields;
+        if name.trim().is_empty() {
+            return Err("Enter a name.".into());
+        }
+        let number = |text: &str, word: &str| {
+            text.trim()
+                .parse::<u32>()
+                .map_err(|_| format!("{word} must be a whole number."))
+        };
+        let new_hp = number(hp, "Hit points")?;
+        let new_armor_class = number(armor_class, "Armor class")?;
+        let mut body = body.clone();
+        // A number the DM left alone stays as it is, and so does any edit to the text. The stats
+        // of an imported creature are rows in its text. Other notes hold them above.
+        let mut above = Vec::new();
+        if *hp != self.saved.hp {
+            if !set_table_value(&mut body, "max_hp", &new_hp.to_string()) {
+                above.push(("max_hp", new_hp));
+            }
+            // Its dice no longer give this number, so they go with the old one.
+            set_table_value(&mut body, "hit_points_text", &new_hp.to_string());
+        }
+        if *armor_class != self.saved.armor_class
+            && !set_table_value(&mut body, "armor_class", &new_armor_class.to_string())
+        {
+            above.push(("armor_class", new_armor_class));
+        }
+        let mut changes = vec![("splat_name", Some(name.trim().into()))];
+        if !above.is_empty() {
+            let entry = Entry::parse(&self.path, &self.baseline)?;
+            let mut stats = entry
+                .fields
+                .get("splat_stats")
+                .and_then(Value::as_mapping)
+                .cloned()
+                .unwrap_or_default();
+            for (key, value) in above {
+                let mut stat = stats
+                    .get(key)
+                    .and_then(Value::as_mapping)
+                    .cloned()
+                    .unwrap_or_default();
+                stat.insert("value".into(), value.into());
+                stats.insert(key.into(), Value::Mapping(stat));
+            }
+            changes.push(("splat_stats", Some(Value::Mapping(stats))));
+        }
+        let text = patch_fields(&self.baseline, &changes)?;
+        Ok(with_body(&text, &body))
+    }
+    fn save(&mut self, root: &std::path::Path) -> Result<(), String> {
+        let text = self.text()?;
+        Entry::parse(&self.path, &text)?;
+        write_note(root, &self.path, Some(&self.baseline), &text)?;
+        self.baseline = text;
+        self.saved = self.fields.clone();
         Ok(())
     }
 }
@@ -473,6 +644,26 @@ pub struct Encounters {
     group_draft: Option<GroupDraft>,
     /// The group draft `Discard changes` last dropped, for one step of undo.
     discarded_group: Option<GroupDraft>,
+    /// A creature made the campaign's own, with its text open beside the roster.
+    creature: Option<CreatureEditor>,
+    /// A saved run the DM removed, for one step of undo.
+    removed_run: Option<(std::path::PathBuf, Vec<u8>)>,
+    /// The open encounter came from the Session page, and goes back there.
+    pub from_session: bool,
+    /// A new encounter joins the session's plan when it is first saved.
+    plan_on_save: bool,
+    pub saved_for_plan: Option<String>,
+    pub wants_session: bool,
+    /// The run just opened began on the Session page, by way of this editor.
+    pub run_from_session: bool,
+    /// Where the party stands after the last fight of the session being played.
+    pub carry: Option<crate::encounter_run::Carry>,
+}
+/// One encounter, as a session's plan offers it.
+pub struct PlanFight {
+    pub name: String,
+    pub path: String,
+    pub summary: String,
 }
 #[derive(Clone, Copy, Default, PartialEq)]
 enum EditorPane {
@@ -480,10 +671,12 @@ enum EditorPane {
     Roster,
     Add,
 }
+const START_FIGHT: &str = "Start fight";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
+const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
 impl Encounters {
     #[cfg(test)]
     pub fn busy(&self) -> bool {
@@ -598,6 +791,85 @@ impl Encounters {
             .map(|d| d.name.clone())
             .or_else(|| self.group_draft.as_ref().map(GroupDraft::name))
     }
+    /// Every encounter the campaign has, for a session's plan.
+    pub fn plan_fights(&self) -> Vec<PlanFight> {
+        self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
+            snapshot
+                .encounters
+                .iter()
+                .map(|(path, name)| PlanFight {
+                    name: name.clone(),
+                    path: path.clone(),
+                    summary: snapshot
+                        .encounter_summaries
+                        .get(path)
+                        .cloned()
+                        .unwrap_or_default(),
+                })
+                .collect()
+        })
+    }
+    /// The folder that holds this campaign's saved runs.
+    pub fn run_directory(&self, active: &Campaign) -> Option<std::path::PathBuf> {
+        self.snapshot.as_ref()?.options.directory(active).ok()
+    }
+    /// Why no fight can start now, in words.
+    pub fn plan_blocked(&self) -> Option<&'static str> {
+        self.start_blocked().or(self
+            .pending
+            .is_some()
+            .then_some("Still reading this campaign."))
+    }
+    /// Reopen a saved run, to read it or go on with it.
+    pub fn open_saved_run(&mut self, path: &std::path::Path, active: &Campaign) {
+        // Opening another would drop the open one, with its undo and any unsent sync.
+        if self.has_run() {
+            self.error = Some(BLOCKED_BY_RUN.to_owned());
+            return;
+        }
+        match crate::encounter_run::Run::open(path, active.id) {
+            Ok(run) => {
+                self.run = Some(run);
+                self.go_to_run = true;
+                self.error = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+    /// A new encounter from a session's plan. It joins the plan, and back leads there.
+    pub fn new_from_plan(&mut self) {
+        self.start_new_draft();
+        self.from_session = true;
+        self.plan_on_save = true;
+    }
+    fn start_new_draft(&mut self) {
+        let mut draft = Draft::new();
+        // Nearly every fight has the party in it, so nearly every draft starts that way.
+        if let Some(snapshot) = &self.snapshot {
+            for creature in snapshot.creatures.iter().filter(|c| c.party) {
+                draft.add(creature.id, true);
+            }
+        }
+        self.draft = Some(draft);
+        self.focus_name = true;
+        self.error = None;
+        self.message = None;
+        self.from_session = false;
+        self.plan_on_save = false;
+        self.creature = None;
+    }
+    /// Start a fight from a saved encounter, with no editor left open.
+    pub fn run_path(&mut self, path: &str, active: &Campaign, modules: &[Module]) {
+        self.creature = None;
+        match Draft::open(&active.path, path) {
+            Ok(d) => {
+                self.draft = Some(d);
+                self.open_run(active, modules);
+                self.draft = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
     /// Add a freshly copied creature to the open draft.
     pub fn add_to_draft(&mut self, id: Uuid) {
         if let Some(draft) = &mut self.draft {
@@ -623,8 +895,15 @@ impl Encounters {
         }
     }
     pub fn draft_dirty(&self) -> bool {
+        self.encounter_dirty() || self.creature_dirty()
+    }
+    /// The encounter itself has unsaved changes, apart from any creature open beside it.
+    pub fn encounter_dirty(&self) -> bool {
         self.draft.as_ref().is_some_and(Draft::dirty)
             || self.group_draft.as_ref().is_some_and(GroupDraft::dirty)
+    }
+    pub fn creature_dirty(&self) -> bool {
+        self.creature.as_ref().is_some_and(CreatureEditor::dirty)
     }
     pub fn pending_sync_names(&self) -> Vec<String> {
         self.run
@@ -637,6 +916,7 @@ impl Encounters {
             .is_some_and(crate::encounter_run::Run::pending_sync)
     }
     fn reload(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
+        self.creature = None;
         // A discarded draft belongs to its campaign. Undo must not save it into another.
         if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
             self.discarded = None;
@@ -717,6 +997,13 @@ impl Encounters {
     }
     /// Ctrl+S on this page saves the open encounter.
     pub fn save_shortcut(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+        if self.creature.as_ref().is_some_and(CreatureEditor::dirty)
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
+            && let Some(active) = campaigns.active_campaign()
+        {
+            self.save_creature(&active, campaigns.modules());
+            return;
+        }
         if self.draft_dirty()
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
             && let Some(active) = campaigns.active_campaign()
@@ -738,6 +1025,9 @@ impl Encounters {
                 self.error = None;
                 self.message = Some("Encounter saved.".into());
                 let (path, name) = (draft.path.clone(), draft.name.clone());
+                if std::mem::take(&mut self.plan_on_save) {
+                    self.saved_for_plan = Some(name.clone());
+                }
                 let summary = roster_summary(&draft.setup);
                 if let Some(s) = &mut self.snapshot {
                     s.encounters.retain(|(p, _)| p != &path);
@@ -747,6 +1037,217 @@ impl Encounters {
                 }
             }
             Err(e) => self.error = Some(e),
+        }
+    }
+    /// Make the creature on this row the campaign's own: a copy, swapped in, and open beside
+    /// the roster. A creature that is already its own only opens.
+    fn make_it_yours(&mut self, slot: usize, active: &Campaign, modules: &[Module]) {
+        if self.creature_dirty() {
+            self.error = Some(BLOCKED_BY_CREATURE.to_owned());
+            return;
+        }
+        let result = (|| -> Result<CreatureEditor, String> {
+            let snapshot = self
+                .snapshot
+                .as_ref()
+                .ok_or("Still reading this campaign.")?;
+            let draft = self.draft.as_ref().ok_or("No encounter is open.")?;
+            let reference = draft.setup.roster[slot]
+                .creature
+                .as_ref()
+                .ok_or("This row has no creature.")?;
+            let id = snapshot.catalogue.resolve_ref(reference)?;
+            let indexed = &snapshot.catalogue.entries[&id];
+            if indexed.private && indexed.owner == active.id {
+                return CreatureEditor::open(&active.path, &indexed.entry.path);
+            }
+            let text = snapshot
+                .catalogue
+                .text_of(id)
+                .ok_or("This creature's text is not available.")?;
+            let source = crate::content_workspace::CopySource {
+                entry: indexed.entry.clone(),
+                text,
+                root: None,
+                campaign: None,
+            };
+            let base = format!("{} copy", indexed.entry.name);
+            let name = (1..1000)
+                .map(|n| {
+                    if n == 1 {
+                        base.clone()
+                    } else {
+                        format!("{base} {n}")
+                    }
+                })
+                .find(|name| {
+                    note_path(&active.path, &format!("{name}.md")).is_ok_and(|p| !p.exists())
+                })
+                .ok_or("Too many copies of this creature.")?;
+            let plan = crate::content_workspace::CopyPlan::prepare(
+                &source,
+                &active.path,
+                Some(active.id),
+                &name,
+                "",
+                &snapshot.catalogue,
+            )?;
+            let copy = plan.save()?;
+            let path = copy.path.clone();
+            let draft = self.draft.as_mut().ok_or("No encounter is open.")?;
+            draft.setup.roster[slot].creature = Some(EntryRef::id(copy.id));
+            CreatureEditor::open(&active.path, &path)
+        })();
+        match result {
+            Ok(editor) => {
+                self.creature = Some(editor);
+                self.editor_pane = EditorPane::Add;
+                self.reload_snapshot(active, modules);
+                self.saved = true;
+                self.error = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+    /// Read the campaign again now: a row must not show a new creature as unavailable.
+    fn reload_snapshot(&mut self, active: &Campaign, modules: &[Module]) {
+        match Snapshot::load(active, modules) {
+            // Run settings being edited are the DM's, and this read must not drop them.
+            Ok(mut snapshot) => {
+                if let Some(old) = self.snapshot.take() {
+                    snapshot.options = old.options;
+                    snapshot.saved_options = old.saved_options;
+                    snapshot.campaign_text = old.campaign_text;
+                }
+                self.snapshot = Some(snapshot);
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+    /// The DM did what the message asked, so it goes.
+    fn clear_creature_block(&mut self) {
+        if self.error.as_deref() == Some(BLOCKED_BY_CREATURE) {
+            self.error = None;
+        }
+    }
+    fn save_creature(&mut self, active: &Campaign, modules: &[Module]) {
+        let Some(editor) = &mut self.creature else {
+            return;
+        };
+        match editor.save(&active.path) {
+            Ok(()) => {
+                self.creature = None;
+                self.clear_creature_block();
+                self.reload_snapshot(active, modules);
+                self.saved = true;
+                self.focus_search = true;
+            }
+            Err(e) => editor.error = Some(e),
+        }
+    }
+    /// Beside the roster, in place of the search. It says what this creature is, and only the
+    /// numbers a DM most often changes have fields of their own.
+    fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
+        let dirty = editor.dirty();
+        let (mut save, mut close) = (false, false);
+        ui.label(
+            Type::Heading
+                .rich(ui, "This campaign's creature")
+                .color(colors().text),
+        );
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                close = if dirty {
+                    Action::destructive("Discard changes").name("Discard creature changes")
+                } else {
+                    Action::quiet("Done").name("Done with this creature")
+                }
+                .density(Density::Read)
+                .show(ui)
+                .clicked();
+                save = Action::primary("Save creature")
+                    .density(Density::Read)
+                    .key("Ctrl+S")
+                    .blocked_if(!dirty, "No changes to save.")
+                    .show(ui)
+                    .clicked();
+            });
+        });
+        if let Some(error) = &editor.error {
+            design::message(ui, Tone::Error, error);
+        }
+        // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
+        let name = design::field(ui, "Name", None, None, |ui| {
+            let width = ui.available_width() - 2.0 * design::S;
+            design::text_input(ui, "Name", &mut editor.fields.name, "Name", width)
+        });
+        if std::mem::take(&mut editor.focus) {
+            design::focus_and_select(ui, name.id, &editor.fields.name);
+        }
+        ui.horizontal(|ui| {
+            design::field(ui, "Hit points", None, None, |ui| {
+                design::number_field(
+                    ui,
+                    "Hit points",
+                    &mut editor.fields.hp,
+                    "HP",
+                    56.0,
+                    Density::Read.control(),
+                );
+            });
+            design::field(ui, "Armor class", None, None, |ui| {
+                design::number_field(
+                    ui,
+                    "Armor class",
+                    &mut editor.fields.armor_class,
+                    "AC",
+                    56.0,
+                    Density::Read.control(),
+                );
+            });
+        });
+        // The file's source, closed until wanted: the common changes have fields above.
+        design::quiet_section(ui, "Its text, as Markdown", |ui| {
+            let room = ui.available_height();
+            egui::ScrollArea::vertical()
+                .id_salt("creature_text")
+                .max_height(room)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    let response = ui.add(
+                        egui::TextEdit::multiline(&mut editor.fields.body)
+                            .font(egui::TextStyle::Monospace)
+                            .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                            .margin(egui::vec2(design::S, design::S)),
+                    );
+                    design::named(ui, &response, "Creature text");
+                });
+        });
+        if save {
+            Some(CreatureStep::Save)
+        } else {
+            close.then_some(CreatureStep::Close)
+        }
+    }
+    /// What the roster and the creature beside it asked for, once neither pane is borrowed.
+    fn after_panes(
+        &mut self,
+        step: Option<CreatureStep>,
+        make_yours: Option<usize>,
+        active: &Campaign,
+        modules: &[Module],
+    ) {
+        match step {
+            Some(CreatureStep::Save) => self.save_creature(active, modules),
+            Some(CreatureStep::Close) => {
+                self.creature = None;
+                self.clear_creature_block();
+                self.focus_search = true;
+            }
+            None => {}
+        }
+        if let Some(slot) = make_yours {
+            self.make_it_yours(slot, active, modules);
         }
     }
     fn start_run(
@@ -768,6 +1269,8 @@ impl Encounters {
         let snapshot = Snapshot::load(campaign, modules)?;
         fresh.validate(&snapshot)?;
         let mut participants = Vec::new();
+        // What each carried value would have been from the sheet, by place in the roster.
+        let mut sheets = Vec::new();
         for slot in &fresh.setup.roster {
             let reference = slot
                 .creature
@@ -798,6 +1301,13 @@ impl Encounters {
             if let Some(role) = slot.controller.get("role").and_then(Value::as_str) {
                 participant.npc = role != "player";
             }
+            // A starting HP written in the encounter is a decision, and it stays.
+            if !slot.initial.contains_key("hp")
+                && let Some(carry) = &self.carry
+                && let Some(sheet) = participant.carry_over(carry)
+            {
+                sheets.push((participants.len(), sheet.0, sheet.1));
+            }
             participants.push(participant);
         }
         let setup = serde_yaml_ng::to_string(&fresh.setup).map_err(|e| e.to_string())?;
@@ -806,8 +1316,9 @@ impl Encounters {
             fresh.name,
             participants,
             format!(
-                "{}\n\n## Setup (DM reference)\n\nPhases, assumptions, completion conditions, and limits are resolved manually.\n\n```yaml\n{setup}\n```",
-                entry.body
+                "{}\n\n{}\n\nPhases, assumptions, completion conditions, and limits are resolved manually.\n\n```yaml\n{setup}\n```",
+                entry.body,
+                crate::encounter_run::SETUP_HEADING,
             ),
         )?;
         run.configure_storage(
@@ -815,6 +1326,13 @@ impl Encounters {
             &snapshot.options.directory(campaign)?,
             snapshot.options.initiative,
         )?;
+        if let Some(carry) = self
+            .carry
+            .as_ref()
+            .filter(|carry| !sheets.is_empty() || !carry.missing.is_empty())
+        {
+            run.note_carry(carry, sheets);
+        }
         Ok(run)
     }
     pub fn tick_sync(
@@ -863,17 +1381,14 @@ impl Encounters {
         if !run.show(ui) {
             return false;
         }
-        self.run = None;
-        if let Some(s) = &mut self.snapshot {
-            match s
-                .options
-                .directory(active)
-                .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id))
-            {
-                Ok(runs) => s.runs = runs,
-                Err(e) => self.error = Some(e),
-            }
+        // A setup nobody touched holds nothing. It would only be a line to remove later.
+        if run.untouched_setup()
+            && let Some(path) = run.path()
+        {
+            let _ = fs::remove_file(path);
         }
+        self.run = None;
+        self.refresh_runs(active);
         true
     }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
@@ -915,6 +1430,8 @@ impl Encounters {
     fn start_blocked(&self) -> Option<&'static str> {
         if self.has_run() {
             Some(BLOCKED_BY_RUN)
+        } else if self.creature_dirty() {
+            Some(BLOCKED_BY_CREATURE)
         } else if self.draft_dirty() {
             Some(BLOCKED_BY_DRAFT)
         } else {
@@ -924,7 +1441,8 @@ impl Encounters {
 
     /// One step back from `Discard changes`. Undo is the guard, so no dialog is needed.
     fn discard_undo(&mut self, ui: &mut egui::Ui) {
-        if self.draft_dirty() {
+        // A creature's changes are not this encounter's, and leave its undo alone.
+        if self.encounter_dirty() {
             self.discarded = None;
         }
         if self.discarded.is_some() && design::draft_discarded(ui) {
@@ -952,6 +1470,31 @@ impl Encounters {
         }
     }
 
+    /// One step back from removing a run. Undo is the guard, so no dialog is needed.
+    /// One step back from removing a run. It lives in the page's header, so the rows below do
+    /// not move under the pointer that just removed one.
+    fn undo_removed_run(&mut self, active: &Campaign) {
+        if let Some((path, bytes)) = self.removed_run.take() {
+            if let Err(e) = fs::write(&path, bytes) {
+                self.error = Some(format!("The run could not be put back: {e}"));
+            }
+            self.refresh_runs(active);
+        }
+    }
+
+    fn refresh_runs(&mut self, active: &Campaign) {
+        if let Some(s) = &mut self.snapshot {
+            match s
+                .options
+                .directory(active)
+                .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id))
+            {
+                Ok(runs) => s.runs = runs,
+                Err(e) => self.error = Some(e),
+            }
+        }
+    }
+
     fn list_view(&mut self, ui: &mut egui::Ui, active: &Campaign, campaigns: &Campaigns) {
         let loading = self.pending.is_some();
         let blocked = self.start_blocked();
@@ -959,6 +1502,8 @@ impl Encounters {
         let mut new = false;
         let mut new_group = false;
         let mut reload = false;
+        let mut undo_remove = false;
+        let removed = self.removed_run.is_some();
         // With nothing here yet, the page's one action is in its body.
         let empty = self
             .snapshot
@@ -992,12 +1537,20 @@ impl Encounters {
                 .hint("Read encounters and runs from disk again")
                 .show(ui)
                 .clicked();
+            if removed {
+                undo_remove = Action::quiet("Undo remove")
+                    .icon(icons::UNDO)
+                    .hint("Put back the run you just removed.")
+                    .show(ui)
+                    .clicked();
+                ui.label(Type::Small.rich(ui, "Run removed.").color(colors().muted));
+            }
         });
+        if undo_remove {
+            self.undo_removed_run(active);
+        }
         if new {
-            self.draft = Some(Draft::new());
-            self.focus_name = true;
-            self.error = None;
-            self.message = None;
+            self.start_new_draft();
             return;
         }
         if new_group {
@@ -1045,6 +1598,7 @@ impl Encounters {
         let mut resume = None;
         let open_group = std::cell::Cell::new(None);
         let back_to_run = std::cell::Cell::new(false);
+        let remove_run = std::cell::RefCell::new(None);
         let two_columns = ui.available_width() >= 640.0;
         if empty {
             let mut create = false;
@@ -1070,8 +1624,7 @@ impl Encounters {
                 },
             );
             if create {
-                self.draft = Some(Draft::new());
-                self.focus_name = true;
+                self.start_new_draft();
             }
             if create_group {
                 self.group_draft = Some(GroupDraft::new());
@@ -1125,12 +1678,15 @@ impl Encounters {
                             ui.set_min_height(Density::Scan.row());
                             // At the table, picking up the interrupted run comes first.
                             let open = open_run.as_deref() == Some(info.path.as_path());
+                            // An ended fight is there to read. A setup nobody began waits quietly.
                             let action = if open {
                                 Action::primary("Back to this run")
                             } else if info.finished {
-                                Action::secondary("Resume").density(Density::Read)
-                            } else {
+                                Action::secondary("View").density(Density::Read)
+                            } else if info.begun {
                                 Action::primary("Resume")
+                            } else {
+                                Action::secondary("Resume").density(Density::Read)
                             };
                             let blocked = (!open).then(|| self.start_blocked()).flatten();
                             if info.readable && action.blocked(blocked).show(ui).clicked() {
@@ -1140,22 +1696,48 @@ impl Encounters {
                                     *resume = Some(info.path.clone());
                                 }
                             }
-                            let color = if info.finished {
-                                colors().muted
-                            } else {
-                                colors().text
-                            };
-                            let response = ui.add(
-                                egui::Label::new(Type::Body.rich(ui, &info.label).color(color))
-                                    .wrap(),
+                            // The words take what is left. Remove keeps one column, at the end.
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if !open
+                                        && design::icon_button(
+                                            ui,
+                                            icons::REMOVE,
+                                            &format!(
+                                                "Remove run: {} · {}",
+                                                info.encounter, info.label
+                                            ),
+                                        )
+                                        .clicked()
+                                    {
+                                        *remove_run.borrow_mut() = Some(info.path.clone());
+                                    }
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            let color = if info.finished {
+                                                colors().muted
+                                            } else {
+                                                colors().text
+                                            };
+                                            let response = ui.add(
+                                                egui::Label::new(
+                                                    Type::Body.rich(ui, &info.label).color(color),
+                                                )
+                                                .wrap(),
+                                            );
+                                            // The group heading shows the encounter. The tree needs it too.
+                                            design::named(
+                                                ui,
+                                                &response,
+                                                &format!("{} · {}", info.encounter, info.label),
+                                            );
+                                            response.on_hover_text(info.path.display().to_string());
+                                        },
+                                    );
+                                },
                             );
-                            // The group heading shows the encounter. The tree needs it too.
-                            design::named(
-                                ui,
-                                &response,
-                                &format!("{} · {}", info.encounter, info.label),
-                            );
-                            response.on_hover_text(info.path.display().to_string());
                         });
                     });
                 }
@@ -1196,7 +1778,7 @@ impl Encounters {
                             }
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if Action::secondary("Run encounter")
+                            if Action::secondary(START_FIGHT)
                                 .icon(icons::RUN)
                                 .density(Density::Read)
                                 .blocked(self.start_blocked())
@@ -1228,13 +1810,13 @@ impl Encounters {
             .show(ui, |ui| {
                 if two_columns {
                     ui.columns(2, |columns| {
-                        run_list(&mut columns[0], &mut resume);
-                        template_list(&mut columns[1], &mut open_path, &mut run_path);
+                        template_list(&mut columns[0], &mut open_path, &mut run_path);
+                        run_list(&mut columns[1], &mut resume);
                     });
                 } else {
-                    run_list(ui, &mut resume);
-                    ui.add_space(design::L);
                     template_list(ui, &mut open_path, &mut run_path);
+                    ui.add_space(design::L);
+                    run_list(ui, &mut resume);
                 }
             });
         self.go_to_run |= back_to_run.get();
@@ -1248,20 +1830,26 @@ impl Encounters {
                 Err(e) => self.error = Some(e),
             }
         }
-        if let Some(path) = resume {
-            match crate::encounter_run::Run::open(&path, active.id) {
-                Ok(run) => {
-                    self.run = Some(run);
-                    self.go_to_run = true;
-                    self.error = None;
-                }
-                Err(e) => self.error = Some(e),
+        if let Some(path) = remove_run.into_inner() {
+            let removed = fs::read(&path).and_then(|bytes| {
+                fs::remove_file(&path)?;
+                Ok(bytes)
+            });
+            match removed {
+                Ok(bytes) => self.removed_run = Some((path, bytes)),
+                Err(e) => self.error = Some(format!("The run could not be removed: {e}")),
             }
+            self.refresh_runs(active);
+        }
+        if let Some(path) = resume {
+            self.open_saved_run(&path, active);
         }
         if let Some(path) = open_path {
             match Draft::open(&active.path, &path) {
                 Ok(d) => {
                     self.draft = Some(d);
+                    self.from_session = false;
+                    self.plan_on_save = false;
                     self.error = None;
                     self.message = None;
                 }
@@ -1269,14 +1857,7 @@ impl Encounters {
             }
         }
         if let Some(path) = run_path {
-            match Draft::open(&active.path, &path) {
-                Ok(d) => {
-                    self.draft = Some(d);
-                    self.open_run(active, campaigns.modules());
-                    self.draft = None;
-                }
-                Err(e) => self.error = Some(e),
-            }
+            self.run_path(&path, active, campaigns.modules());
         }
     }
 
@@ -1292,7 +1873,8 @@ impl Encounters {
     }
 
     fn editor_view(&mut self, ui: &mut egui::Ui, active: &Campaign, campaigns: &Campaigns) {
-        let dirty = self.draft_dirty();
+        let dirty = self.encounter_dirty();
+        let creature_dirty = self.creature_dirty();
         let mut back = false;
         let mut save = false;
         let mut discard = false;
@@ -1306,6 +1888,8 @@ impl Encounters {
         let saved_note = self.message.clone();
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
+        let focus_search_after_name = &mut self.focus_search;
+        let from_session = self.from_session;
         let mut title = |ui: &mut egui::Ui, width: f32| {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft_ref.name)
@@ -1318,6 +1902,10 @@ impl Encounters {
             design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
             if std::mem::take(focus_name) {
                 design::focus_and_select(ui, response.id, &draft_ref.name);
+            }
+            // The next thing to do after a name is to find what the party fights.
+            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                *focus_search_after_name = true;
             }
             if dirty {
                 design::status(
@@ -1351,16 +1939,26 @@ impl Encounters {
         };
         let mut actions = |ui: &mut egui::Ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                run_it = Action::primary("Run encounter")
-                    .icon(icons::RUN)
-                    .blocked(
-                        has_run
-                            .then_some(BLOCKED_BY_RUN)
-                            .or(dirty.then_some("Save the encounter before starting a run."))
-                            .or(loading.then_some("Still reading this campaign.")),
-                    )
-                    .show(ui)
-                    .clicked();
+                // The next thing to do carries the weight: Save while there are changes.
+                run_it = if dirty {
+                    Action::secondary(START_FIGHT)
+                } else {
+                    Action::primary(START_FIGHT)
+                }
+                .icon(icons::RUN)
+                .blocked(
+                    has_run
+                        .then_some(BLOCKED_BY_RUN)
+                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                        .or(loading.then_some("Still reading this campaign.")),
+                )
+                .hint(if dirty {
+                    "Save this encounter and start a run."
+                } else {
+                    "Start a run of this encounter."
+                })
+                .show(ui)
+                .clicked();
                 // The next thing to do carries the weight: Save while there are changes.
                 save = if dirty {
                     Action::primary("Save encounter")
@@ -1374,15 +1972,27 @@ impl Encounters {
                 // Away from Save, because they are never meant to be pressed by the same hand.
                 ui.add_space(design::XL);
                 if dirty {
-                    discard = Action::destructive("Discard changes").show(ui).clicked();
+                    discard = Action::destructive("Discard changes")
+                        .blocked(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                        .show(ui)
+                        .clicked();
                 }
             });
         };
+        let (back_word, back_name) = if from_session {
+            ("Session", "Back to session")
+        } else {
+            ("Encounters", "Back to encounters")
+        };
         let back_action = |ui: &mut egui::Ui| {
-            Action::quiet("Encounters")
+            Action::quiet(back_word)
                 .icon(icons::BACK)
-                .name("Back to encounters")
-                .blocked_if(dirty, "Save or discard this encounter first.")
+                .name(back_name)
+                .blocked(
+                    dirty
+                        .then_some("Save or discard this encounter first.")
+                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE)),
+                )
                 .show(ui)
                 .clicked()
         };
@@ -1407,10 +2017,19 @@ impl Encounters {
             self.draft = None;
             self.message = None;
             self.error = None;
+            self.creature = None;
+            self.wants_session = std::mem::take(&mut self.from_session);
+            self.plan_on_save = false;
             return;
         }
         if discard {
+            self.creature = None;
+            self.plan_on_save = false;
             let draft = self.draft.take().expect("the editor has a draft");
+            // A new draft has nothing to go back to, so it is no longer the session's.
+            if draft.baseline.is_none() {
+                self.from_session = false;
+            }
             if draft.baseline.is_some() {
                 match Draft::open(&active.path, &draft.path) {
                     Ok(d) => self.draft = Some(d),
@@ -1425,7 +2044,19 @@ impl Encounters {
             self.save_draft(active, campaigns.modules());
         }
         if run_it {
-            self.open_run(active, campaigns.modules());
+            if dirty {
+                self.save_draft(active, campaigns.modules());
+            }
+            if !self.draft_dirty() {
+                self.open_run(active, campaigns.modules());
+                // A fight started from the session goes back there, not to this editor.
+                if self.from_session && self.run.is_some() {
+                    self.draft = None;
+                    self.from_session = false;
+                    self.run_from_session = true;
+                    return;
+                }
+            }
         }
         self.discard_undo(ui);
         if let Some(e) = &self.error {
@@ -1435,6 +2066,9 @@ impl Encounters {
             crate::design::spinner(ui);
             return;
         };
+        let mut make_yours = None;
+        let mut creature_step = None;
+        let open_creature = self.creature.is_some();
         let draft = self.draft.as_mut().expect("the editor has a draft");
         let mut pane = self.editor_pane;
         if compact {
@@ -1445,7 +2079,14 @@ impl Encounters {
                 &mut pane,
                 &[
                     (EditorPane::Roster, roster.as_str()),
-                    (EditorPane::Add, "Add participants"),
+                    (
+                        EditorPane::Add,
+                        if open_creature {
+                            "This creature"
+                        } else {
+                            "Add participants"
+                        },
+                    ),
                 ],
             );
             self.editor_pane = pane;
@@ -1457,12 +2098,14 @@ impl Encounters {
         if compact {
             match pane {
                 EditorPane::Roster => {
-                    Self::roster_pane(ui, draft, snapshot, focus_search, expanded);
+                    Self::roster_pane(ui, draft, snapshot, focus_search, expanded, &mut make_yours);
                 }
-                EditorPane::Add => {
-                    Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
-                }
+                EditorPane::Add => match &mut self.creature {
+                    Some(editor) => creature_step = Self::creature_pane(ui, editor),
+                    None => Self::add_pane(ui, draft, snapshot, search, focus_search, peek),
+                },
             }
+            self.after_panes(creature_step, make_yours, active, campaigns.modules());
             return;
         }
         // In a wide window the roster keeps a name near its controls, and the two panes
@@ -1470,6 +2113,7 @@ impl Encounters {
         let width = design::side_panel_width(ui.ctx().content_rect().width())
             .max(ui.available_width() - ROSTER_MAX_WIDTH)
             .min(ADD_PANE_MAX_WIDTH);
+        let creature = &mut self.creature;
         design::Column::right(
             ADD_PANE,
             width,
@@ -1482,8 +2126,9 @@ impl Encounters {
             top: design::S as i8,
             bottom: 0,
         }))
-        .show_inside(ui, |ui| {
-            Self::add_pane(ui, draft, snapshot, search, focus_search, peek);
+        .show_inside(ui, |ui| match creature {
+            Some(editor) => creature_step = Self::creature_pane(ui, editor),
+            None => Self::add_pane(ui, draft, snapshot, search, focus_search, peek),
         });
         egui::CentralPanel::default()
             // The panel's drag handle lies on this edge, so the roster stops short of it.
@@ -1498,8 +2143,9 @@ impl Encounters {
                 if !design::column_dragged(ui.ctx(), ADD_PANE) {
                     ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
                 }
-                Self::roster_pane(ui, draft, snapshot, focus_search, expanded);
+                Self::roster_pane(ui, draft, snapshot, focus_search, expanded, &mut make_yours);
             });
+        self.after_panes(creature_step, make_yours, active, campaigns.modules());
     }
 
     fn add_pane(
@@ -1678,6 +2324,7 @@ impl Encounters {
         snapshot: &Snapshot,
         focus_search: &mut bool,
         expanded: &mut Option<String>,
+        make_yours: &mut Option<usize>,
     ) {
         ui.label(
             Type::Heading
@@ -1696,7 +2343,17 @@ impl Encounters {
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                Self::roster(ui, draft, snapshot, focus_search, expanded);
+                Self::roster(ui, draft, snapshot, focus_search, expanded, make_yours);
+                ui.add_space(design::M);
+                design::group_label(ui, "Read-aloud and notes");
+                let response = ui.add(
+                    egui::TextEdit::multiline(&mut draft.body)
+                        .hint_text("What you read to the table, then your tactics. The run shows this before the first roll.")
+                        .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                        .desired_rows(5)
+                        .margin(egui::vec2(design::S, design::S)),
+                );
+                design::named(ui, &response, "Read-aloud and notes");
             });
     }
 
@@ -1706,6 +2363,7 @@ impl Encounters {
         snapshot: &Snapshot,
         focus_search: &mut bool,
         expanded: &mut Option<String>,
+        make_yours: &mut Option<usize>,
     ) {
         let sides: Vec<_> = draft
             .setup
@@ -1745,6 +2403,10 @@ impl Encounters {
                     .map_or_else(String::new, |(creature, entry)| {
                         groups::shown_detail(&slot.overrides, entry, &slot.side, creature)
                     });
+                // Its side says it is the party's, and the name has the room.
+                let detail = detail
+                    .strip_prefix("Party copy · ")
+                    .map_or_else(|| detail.clone(), str::to_owned);
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
                 ui.horizontal(|ui| {
                     ui.set_min_height(Density::Glance.row());
@@ -1756,6 +2418,15 @@ impl Encounters {
                         }
                         if design::icon_button(ui, icons::COPY, "Duplicate").clicked() {
                             duplicate = Some(i);
+                        }
+                        // A sheet belongs to its player. Every other creature can be changed.
+                        let sheet = resolved
+                            .and_then(|id| snapshot.creatures.iter().find(|c| c.id == id))
+                            .is_none_or(|c| c.party);
+                        if sheet {
+                            ui.add_space(Density::Read.control());
+                        } else if design::icon_button(ui, icons::EDIT, "Make it yours").clicked() {
+                            *make_yours = Some(i);
                         }
                         if i + 1 < count {
                             if design::icon_button(ui, icons::MOVE_DOWN, "Move down").clicked() {
@@ -2124,6 +2795,27 @@ mod tests {
         );
         assert!(d.dirty());
     }
+    #[test]
+    fn a_body_is_replaced_and_the_frontmatter_stays() {
+        let text = "---\nsplat_name: A\nsplat_note: \"a\\n---b\"\n---\n\nOld words.\n";
+        assert_eq!(
+            with_body(text, "New words."),
+            "---\nsplat_name: A\nsplat_note: \"a\\n---b\"\n---\n\nNew words.\n"
+        );
+        assert_eq!(with_body("no frontmatter", "New"), "no frontmatter");
+    }
+
+    #[test]
+    fn a_stat_row_changes_and_a_missing_one_is_said() {
+        let mut text = "| ` armor_class ` | ` 11 ` |  |\n| ` max_hp ` | ` 68 ` |  |\n".to_owned();
+        assert!(set_table_value(&mut text, "max_hp", "90"));
+        assert_eq!(
+            text,
+            "| ` armor_class ` | ` 11 ` |  |\n| ` max_hp ` | ` 90 ` |  |\n"
+        );
+        assert!(!set_table_value(&mut text, "speed", "30"));
+    }
+
     #[test]
     fn invalid_roster_and_missing_creature_cannot_overwrite_saved_encounter() {
         let dir = tempfile::tempdir().unwrap();

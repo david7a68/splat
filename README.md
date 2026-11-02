@@ -2,9 +2,9 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
-The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Sessions**, **Timeline**, **Party**,
-**Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry and opens
-beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
+The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Session**, **Timeline**, **Party**,
+**Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
+opens beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
 change its width. The app keeps that width after a restart. Simulation is later work.
 
@@ -147,7 +147,22 @@ late responses cannot apply an old name to a new link.
 
 ## Sessions and the timeline
 
-**Sessions** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
+**Session** is the page for tonight. Beside the note, a plan lists what has happened in this session, then the fights
+still to come. **Fight** adds a saved encounter to the plan, or starts a new one, as a line such as `- [[Bridge Ambush]]`
+under `Plan for tonight` in the note, so the file holds the plan. **Start fight** goes straight to setup, and **Close run**
+comes back to the page the run began on. A row opens in place: a fight shows its final HP and log, and any event has its
+title, length, place and notes. Add buttons stay at the foot of the plan. At the top, **Last time** shows what the previous note says happened and what it left open.
+In a narrow window, the plan and the note have a tab each. **Read** and **Write** turn the note between its two forms, and
+Read leaves out headings with nothing under them.
+
+During a session, a new run starts each player from where the fights so far left them, and setup says so. A player who
+missed the last fight stands where an earlier one left them. If a fight's run cannot be read, setup says that too. **Use the sheets'
+HP** goes back to the sheets, as one step of undo. **Everyone to full** on a long rest records your ruling that the next fight
+starts everyone at full HP. Party shows the same HP, and says where it came from. A starting HP written in the encounter
+wins over both. With sync on, a first read still takes the sheet's value for HP from a fight. Full HP from a rest is your ruling, so a sheet that differs is a conflict to settle. Conditions do
+not carry over.
+
+**Session** holds session notes and session templates, as Markdown in the campaign's session folder (`Sessions`
 by default, and you can change it there). **Timeline** holds every encounter, rest, travel interval, day and other
 major event in story order, in `Timeline.md` in the same folder. The list in its frontmatter is the record, and Splat
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
@@ -311,7 +326,7 @@ creature is refused with a message. See [the schema](docs/design/campaign-schema
 
 ### Running an encounter as DM
 
-Choose **Run encounter** beside a saved encounter. The run takes
+Choose **Start fight** beside a saved encounter. The run takes
 an independent copy of each creature's stats and starting state. Refreshing Party
 or editing content does not change an existing run. Repeated creatures have
 numbered names and separate HP, conditions, and notes.
@@ -324,13 +339,14 @@ rounds. Absent participants keep their state and initiative when they return.
 Participants at zero HP stay in turn order until you mark them absent.
 
 Click a row, type an amount, and press Enter to apply final damage. **Heal** and
-**Temp HP** are beside it. **Conditions** lists the official conditions, one click
-each. The side panel holds the stat block or sheet, **Record** (HP corrections, death
+**Temp HP** are beside it. Ctrl+click adds more rows for one amount, as one step of undo, and a chip beside each name
+gives it half, rounded down, for a save. **Conditions** lists the official conditions, one click
+each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Record** (HP corrections, death
 saves, notes, sync), **Log**, encounter **Notes**, and **Groups**. A spell named in a stat block opens
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
-phases, and completion conditions. **Log** has a dice control that accepts expressions
-such as `2d6 + 3`.
+phases, and completion conditions. The dice field beside the amount accepts expressions
+such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log.
 
 | Key | Command |
 |---|---|
@@ -338,6 +354,8 @@ such as `2d6 + 3`.
 | `Enter`, `Shift+Enter` | Damage or heal by the typed amount |
 | `U`, `Ctrl+Z` | Undo |
 | `↑`, `↓` | Select another row |
+| `Ctrl+click` | Add a row to the targets of one amount |
+| `Escape` | Select the current turn again |
 | `A` | Focus the amount |
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
@@ -360,9 +378,9 @@ change it.
 The combat log records changes. **Undo** names the last action and restores up to 100
 prior actions, including turn changes, dice rolls, and manual endings in the current session.
 **End encounter** records a manual ending and your outcome. Runs save automatically
-after changes; **Close run** asks once, then returns to Encounters. The app reopens an open
+after changes; **Close run** asks once, then returns to the page the run began on. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **Saved runs** on Encounters,
-grouped by encounter and with dates, has **Resume** for the others. Run changes never
+grouped by encounter and with dates, has **Resume** for an interrupted run, **View** for an ended one, and a button to remove one, with one step of undo. Run changes never
 write to templates or character copies.
 
 ### Run storage and campaign initiative
