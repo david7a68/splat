@@ -109,11 +109,19 @@ pub(crate) fn subtitle(entry: &Entry) -> String {
     category
 }
 
-/// The same line above a reader whose title has lost the level the list's name still has.
-pub(crate) fn reading_subtitle(entry: &Entry, subtitle: &str) -> String {
-    match class_level(entry) {
-        Some(level) => format!("{subtitle} · Level {level}"),
-        None => subtitle.to_owned(),
+/// The same line above a reader whose title has lost the level the list's name still has. The
+/// level goes with the entry's own words, before the owner's and anything after them.
+pub(crate) fn reading_subtitle(entry: &Entry, listed: &str) -> String {
+    let Some(level) = class_level(entry) else {
+        return listed.to_owned();
+    };
+    let own = self::subtitle(entry);
+    match listed.strip_prefix(own.as_str()) {
+        Some(rest) if rest.is_empty() || rest.starts_with(" · ") => {
+            format!("{own} · Level {level}{rest}")
+        }
+        // Words from before an edit to the entry, which do not start with its words now.
+        _ => format!("{listed} · Level {level}"),
     }
 }
 
@@ -662,6 +670,20 @@ mod reading_tests {
         assert_eq!(
             reading_subtitle(&entry, "Class feature · Bard"),
             "Class feature · Bard · Level 3"
+        );
+        // A package's name stays last, and what tells two entries apart stays after it.
+        let listed = subtitle(&entry);
+        assert_eq!(
+            reading_subtitle(&entry, &format!("{listed} · Ashen Marches")),
+            format!("{listed} · Level 3 · Ashen Marches")
+        );
+        assert_eq!(
+            reading_subtitle(&entry, &format!("{listed} · Ashen Marches · p. 7")),
+            format!("{listed} · Level 3 · Ashen Marches · p. 7")
+        );
+        assert_eq!(
+            reading_subtitle(&entry, &listed),
+            format!("{listed} · Level 3")
         );
     }
 

@@ -3,7 +3,8 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 use super::{
     Command, LastRoll, MAX_FROM_SHEET, NOBODY_PRESENT, NOTICE_IN_HEADER, NOTICE_IN_HEADER_SHORT,
-    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, TypedHealth, display, mode_label,
+    NOTICE_LEAST, Panel, Participant, PartySync, Phase, Run, SYNC_WAITS, TypedHealth, display,
+    mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -2702,7 +2703,7 @@ impl Run {
                 let p = &self.state.participants[index];
                 let mut hp = p.hp;
                 let mut max = p.max_hp;
-                design::group_label(ui, "Correct HP");
+                let heading = design::group_label(ui, "Correct HP");
                 let ready_sync = self.syncs.get(&index).filter(|sync| sync.ready());
                 let sheet_decides = ready_sync.is_some();
                 // With the sheet's maximum in force, a number over it is the maximum, as in the
@@ -2729,6 +2730,20 @@ impl Run {
                     if let Some(sync) = self.syncs.get_mut(&index) {
                         sync.note_outside_field(field);
                     }
+                }
+                // Beside the label, in a child that moves nothing. It is made in every frame, or
+                // egui would count it into the ids of the fields further down.
+                let beside = heading.rect.right_top() + vec2(design::S, 0.0);
+                let line = Rect::from_min_max(beside, pos2(ui.max_rect().right(), heading.rect.bottom()));
+                let mut words = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(line)
+                        .layout(Layout::left_to_right(Align::Center)),
+                );
+                if in_health_field.is_some()
+                    && self.syncs.get(&index).is_some_and(|sync| sync.enabled)
+                {
+                    words.label(Type::Small.rich(ui, SYNC_WAITS).color(colors().muted));
                 }
                 if sheet_decides {
                     ui.add(

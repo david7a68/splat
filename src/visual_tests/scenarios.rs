@@ -2328,7 +2328,7 @@ pub mod run_sync_conflict {
         );
         d.observe(
             "T7-2",
-            named && !d.has_containing(STEP_UNDO) && d.visible_text("No Undo since sync update"),
+            named && !d.has_containing(STEP_UNDO) && d.visible_text("No Undo since a sync value"),
             format!("The named step before the read ({STEP_UNDO}) has gone after it, and the button says why"),
         );
         // It stays through what the DM does next, and the DM dismisses it.
@@ -3637,12 +3637,16 @@ pub mod typed_sync_number {
     const MAX_HP: i64 = 62;
     const SHEET_HP: i64 = 58;
     const PANEL_HP: &str = "Current HP on the sheet";
+    const CORRECT_HP: &str = "Current HP";
+    const SYNC_WAITS: &str = "Sync waits";
+    const DEATH_SAVES: &str = "Death save successes";
     const RECORD: &str = "Record";
     const LOG: &str = "Log";
     const LOG_MARKED: &str = "Log, new message";
     const SYNC_SECTION: &str = "Combat sync";
     const RAIL_STOPPED: &str = "Party sync stopped";
-    const DROPPED: &str = "A change to Brannoch Vale had not reached D&D Beyond";
+    const DROPPED: &str = "D&D Beyond had not confirmed a change to Brannoch Vale";
+    const HOW_TO_KEEP: &str = "press Enter and wait for Synced before you open another character";
     const CLOSE_NAMES: &str = "D&D Beyond has not confirmed a change made on the Party page.";
     const REMOTE: &str = "Add from D&D Beyond";
     const ADD_REMOTE: &str = "Add Salt Road";
@@ -3713,6 +3717,20 @@ pub mod typed_sync_number {
             "F3-03",
             !in_field && value == Some(SHEET_HP) && d.row_hp(MEMBER) == Some(SHEET_HP),
             format!("In the field and out, with nothing typed: the value stays {value:?}"),
+        );
+
+        // In Correct HP with nothing typed, reads wait. The row still says Synced, so these
+        // words do, and they move nothing.
+        d.click(CORRECT_HP);
+        let says = d.visible_text(SYNC_WAITS);
+        let place = d.place_of(DEATH_SAVES);
+        d.press(Key::Enter);
+        let gone = !d.visible_text(SYNC_WAITS);
+        let stays = place.is_some() && d.place_of(DEATH_SAVES) == place;
+        d.observe(
+            "F5-03",
+            says && gone && stays,
+            format!("In Correct HP: says {SYNC_WAITS}: {says}. Out of it, the words go: {gone}, and the fields below stay: {stays}"),
         );
 
         typed_in_run(d, 45);
@@ -3854,13 +3872,14 @@ pub mod typed_sync_number {
         party_read(d, 44);
         go_party(d);
 
-        // Main's stated limit: another member opens at once, and what had not gone is dropped.
-        // The page says so.
+        // Main's PR #24 states this limit for a change "before it is sent". With the rule, no
+        // number goes while the DM is in the field, so for all that time this click drops it.
+        // Another member opens at once. The page says what went, and how to keep a change.
         type_in_field(d, 43);
         let first = d.app_mut().party.selected_member();
         d.click_containing(OTHER);
         let moved = d.app_mut().party.selected_member() != first;
-        let says = d.has_containing(DROPPED);
+        let says = d.has_containing(DROPPED) && d.has_containing(HOW_TO_KEEP);
         d.observe(
             "F4-03",
             moved && says,

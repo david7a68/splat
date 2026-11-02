@@ -562,9 +562,12 @@ maximum becomes the maximum, and the row and the log show it. A number in **Corr
 and one log line. A number in the panel is one log line, when you leave the field, and Undo ends at its
 first digit, as Undo stops wherever a value reached the run from **Record**.
 
-On **Party**, only the open character has a sync. If a change has not reached D&D Beyond when you open
-another character, it is dropped, and the page names whose it was until you dismiss the words. Closing the
-app says that D&D Beyond has not confirmed a change.
+On **Party**, only the open character has a sync. Opening another character drops what D&D Beyond has
+not confirmed. As no number goes while you are in a field, this is so for all the time you are in the
+field, not only in the moment before the number is sent: a click from the field on another character
+always drops the number you typed. A write already on its way can still arrive. The page names whose change
+it was until you dismiss the words. To keep a change, press Enter and wait for `Synced` before you open
+another character. Closing the app says that D&D Beyond has not confirmed a change.
 
 While sync reads a sheet, that sheet decides Maximum HP, and the field says so. Stop sync to change it
 in the run. A maximum set while sync was off stays until the next first read, where the notice and the

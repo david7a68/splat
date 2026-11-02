@@ -242,7 +242,8 @@ a line.
   choices go under the tabs. While sync is stopped, those two choices are off, with the reason.
 - **Sync number fields:** while the DM is in a field, or drags it, that character's sync starts
   no exchange, and takes in none that is on its way. The panel's line says `waits while you are
-  in a number field`. A number counts at each key and reaches the row at each key. egui ends a
+  in a number field`, and `Sync waits` shows beside `Correct HP` while the DM is in that field. It
+  takes no room, so nothing moves. A number counts at each key and reaches the row at each key. egui ends a
   focus when the field is not drawn or is off, so every way of leaving is covered, and the usual
   delay then runs. The fields have a stable id, so a block above them can come and go. Each number
   is one line in the Log, and one named Undo step in `Correct HP`.

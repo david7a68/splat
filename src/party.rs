@@ -287,7 +287,7 @@ impl Party {
         }
         if let Some(name) = &self.dropped_unsent {
             let words = format!(
-                "A change to {name} had not reached D&D Beyond. It was dropped when you opened another character. Open {name} and enter it again if you still want it."
+                "D&D Beyond had not confirmed a change to {name} when you opened another character, and Splat stopped sending it. Open {name}, and enter it again if it is not there. To keep a change, press Enter and wait for Synced before you open another character."
             );
             if design::message_with_action(ui, Tone::Warning, &words, "Dismiss") {
                 self.dropped_unsent = None;
@@ -373,7 +373,8 @@ impl Party {
         if selected != self.reader.selected
             && let Some(id) = selected
         {
-            // This page has one sync, for the open sheet. What it has not sent goes with it.
+            // This page has one sync, for the open sheet. What it has not sent goes with it. A
+            // write already on its way can still arrive, so the words do not say that it did not.
             if self.combat.unconfirmed()
                 && let Some(open) = &self.reader.selected
             {

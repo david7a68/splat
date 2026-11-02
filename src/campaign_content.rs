@@ -65,6 +65,37 @@ fn marked_line_job(
 /// What the campaign's choices pull in, in columns: first what this package holds, then
 /// the campaign's own, which need no choice. A row is never listed under a package that
 /// does not hold it.
+/// What this package holds, and the campaign's own. Another package's are its own.
+fn needed_here(
+    catalogue: &Catalogue,
+    closure: &Closure,
+    module: &crate::content_workspace::ModuleIndex,
+) -> usize {
+    closure
+        .required
+        .keys()
+        .filter(|id| {
+            let e = &catalogue.entries[*id];
+            e.private || e.owner == module.id
+        })
+        .count()
+}
+
+/// The built-in package opens on what the chosen entries pull in, with the reasons.
+fn opening_listing(
+    catalogue: &Catalogue,
+    closure: &Closure,
+    module: &crate::content_workspace::ModuleIndex,
+) -> Listing {
+    if module.id == crate::content_workspace::builtin_manifest().id
+        && needed_here(catalogue, closure, module) > 0
+    {
+        Listing::Required
+    } else {
+        Listing::Entries
+    }
+}
+
 fn required_table(
     ui: &mut egui::Ui,
     catalogue: &Catalogue,
@@ -1072,26 +1103,13 @@ impl CampaignContent {
                             .color(c.muted),
                     );
                 });
-                // What this package holds, and the campaign's own. Another package's are its own.
-                let needed_here = closure
-                    .required
-                    .keys()
-                    .filter(|id| {
-                        let e = &catalogue.entries[*id];
-                        e.private || e.owner == module.id
-                    })
-                    .count();
-                let required_label = format!("Required dependencies ({needed_here})");
-                // The built-in package opens on what the chosen entries pull in, with the reasons.
-                let mut listing = self.listing.unwrap_or(
-                    if module.id == crate::content_workspace::builtin_manifest().id
-                        && !closure.required.is_empty()
-                    {
-                        Listing::Required
-                    } else {
-                        Listing::Entries
-                    },
+                let required_label = format!(
+                    "Required dependencies ({})",
+                    needed_here(catalogue, closure, module)
                 );
+                let mut listing = self
+                    .listing
+                    .unwrap_or_else(|| opening_listing(catalogue, closure, module));
                 let chosen = listing;
                 design::segmented(
                     ui,
@@ -1363,6 +1381,50 @@ mod tests {
         snapshot.document.selections.clear();
         frame(&mut content);
         assert_eq!(direct(&content), 0);
+    }
+
+    /// F5-04: the built-in package opens on `Required` only with something to list there.
+    #[test]
+    fn the_builtin_package_opens_on_required_only_if_it_has_required_entries() {
+        use crate::content_workspace::{IndexedEntry, builtin_manifest};
+        let mut catalogue = Catalogue::load(&[], None).unwrap();
+        let (&own, indexed) = catalogue
+            .entries
+            .iter()
+            .find(|(_, e)| e.owner == builtin_manifest().id)
+            .expect("a built-in entry");
+        let entry = indexed.entry.clone();
+        let third = uuid::Uuid::new_v4();
+        catalogue.entries.insert(
+            third,
+            IndexedEntry {
+                entry,
+                owner: uuid::Uuid::new_v4(),
+                private: false,
+            },
+        );
+        let builtin = catalogue
+            .modules
+            .iter()
+            .find(|m| m.id == builtin_manifest().id)
+            .expect("the built-in package");
+        let mut closure = Closure::default();
+        assert!(opening_listing(&catalogue, &closure, builtin) == Listing::Entries);
+        // The campaign's only required entry is in a third package.
+        closure.required.insert(third, Default::default());
+        assert_eq!(needed_here(&catalogue, &closure, builtin), 0);
+        assert!(opening_listing(&catalogue, &closure, builtin) == Listing::Entries);
+        closure.required.insert(own, Default::default());
+        assert_eq!(needed_here(&catalogue, &closure, builtin), 1);
+        assert!(opening_listing(&catalogue, &closure, builtin) == Listing::Required);
+        // Another package opens on its entries, whatever it needs.
+        let other = crate::content_workspace::ModuleIndex {
+            id: third,
+            name: "Ashen Marches".into(),
+            entries: Vec::new(),
+            private: false,
+        };
+        assert!(opening_listing(&catalogue, &closure, &other) == Listing::Entries);
     }
 
     #[test]

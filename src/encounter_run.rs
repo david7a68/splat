@@ -511,6 +511,7 @@ const MAX_PARTICIPANTS: usize = 2000;
 /// Where a run's own text ends. Saved runs hold both parts in one string.
 pub(crate) const SETUP_HEADING: &str = "## Setup (DM reference)";
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
+const SYNC_WAITS: &str = "Sync waits";
 const MAX_FROM_SHEET: &str =
     "Maximum HP comes from the D&D Beyond sheet while sync is on. Stop sync to change it here.";
 pub(crate) const NOBODY_PRESENT: &str =
@@ -1425,11 +1426,22 @@ impl Run {
                 .iter_mut()
                 .map(|p| std::mem::take(&mut p.combat_values))
                 .collect();
+            let was_ended = self.ended();
             self.state = previous;
             for (p, values) in self.state.participants.iter_mut().zip(confirmed) {
                 p.combat_values = values;
             }
             self.forget_removed_participants();
+            // Back in the fight, a sync stopped at its end for its error starts again, as the
+            // others do. What it holds unsent stays with it.
+            if was_ended && !self.ended() {
+                self.syncs.retain(|_, sync| {
+                    sync.enabled
+                        || sync.error.is_none()
+                        || sync.session_lost()
+                        || sync.unconfirmed()
+                });
+            }
             self.dirty = true;
             self.error = None;
             self.last_initiative = None;
@@ -1564,7 +1576,7 @@ impl Run {
         self.history_labels.last().map_or_else(
             || {
                 if self.undo_stopped {
-                    "No Undo since sync update".to_owned()
+                    "No Undo since a sync value".to_owned()
                 } else if self.reopened {
                     "No Undo since reopening".to_owned()
                 } else {
@@ -2081,6 +2093,12 @@ impl Run {
                     || sync.unconfirmed()
                     || sync.state() == crate::combat_sync::SyncState::Error
             });
+            // One kept for its words alone reads no more. The words stay, and the worker goes.
+            for sync in self.syncs.values_mut() {
+                if sync.state() == crate::combat_sync::SyncState::Error && !sync.unconfirmed() {
+                    sync.stop();
+                }
+            }
         } else if self.connected && self.keep_party_synced {
             self.start_party_sync(linked);
         }
@@ -2194,13 +2212,16 @@ impl Run {
             } else {
                 self.sync_shadows.remove(index);
             }
-            if let Some(typed) = self
-                .typed_panel
-                .take_if(|typed| typed.row == *index && !(sync.ready() && sync.in_field()))
-                && let Some(line) = typed.line
-            {
-                left_field.push((p.name.clone(), line));
-            }
+        }
+        // After the loop, as a row can skip its work in the loop, or have no sync left at all.
+        let syncs = &self.syncs;
+        if let Some(typed) = self.typed_panel.take_if(|typed| {
+            !syncs
+                .get(&typed.row)
+                .is_some_and(|sync| sync.ready() && sync.in_field())
+        }) && let (Some(line), Some(p)) = (typed.line, self.state.participants.get(typed.row))
+        {
+            left_field.push((p.name.clone(), line));
         }
         if undo_ended {
             self.end_undo();
@@ -3931,9 +3952,144 @@ mod tests {
         harness.get_by_label("Death save successes").click();
         harness.run_steps(3);
         assert!(harness.state().run.syncs[&0].in_field());
+        type_digits(&mut harness, "2");
+        assert_eq!(harness.state().run.state.participants[0].successes, 2);
+        assert!(harness.state().sent.is_empty(), "no exchange in the field");
         harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
         assert!(!harness.state().run.syncs[&0].in_field());
+        assert_eq!(harness.state().sent.len(), 1, "it goes after the DM leaves");
+    }
+    /// F5-03: while the DM is in this field the words say so, and they move nothing.
+    #[test]
+    fn correct_hp_says_that_sync_waits_and_moves_nothing() {
+        use egui_kittest::kittest::Queryable;
+        let mut harness = table();
+        let below = |harness: &egui_kittest::Harness<'static, TableRig>| {
+            harness.get_by_label("Death save successes").rect()
+        };
+        let place = below(&harness);
+        assert!(harness.query_by_label(SYNC_WAITS).is_none());
+        click_correct_hp(&mut harness);
+        assert!(harness.query_by_label(SYNC_WAITS).is_some(), "in the field");
+        assert_eq!(below(&harness), place, "no row or control moves");
+        type_digits(&mut harness, "45");
+        assert!(
+            harness.query_by_label(SYNC_WAITS).is_some(),
+            "with digits too"
+        );
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert!(
+            harness.query_by_label(SYNC_WAITS).is_none(),
+            "out of the field"
+        );
+        assert_eq!(below(&harness), place);
+        // The panel has its own words, and with sync off nothing waits.
+        click_panel_hp(&mut harness);
+        assert!(harness.query_by_label(SYNC_WAITS).is_none());
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        harness.state_mut().run.syncs.get_mut(&0).unwrap().stop();
+        click_correct_hp(&mut harness);
+        assert!(harness.query_by_label(SYNC_WAITS).is_none(), "sync is off");
+    }
+    /// F5-06: the line of a panel number goes out if its sync goes while the DM is in the field.
+    #[test]
+    fn a_panel_number_keeps_its_line_when_its_sync_is_dropped() {
+        let mut harness = table();
+        let lines = harness.state().run.state.log.len();
+        click_panel_hp(&mut harness);
+        type_digits(&mut harness, "45");
+        let state = harness.state_mut();
+        state.panel = false;
+        state.run.syncs.remove(&0);
+        harness.run_steps(3);
+        let run = &harness.state().run;
+        assert!(run.typed_panel.is_none(), "no later number can take it");
+        assert_eq!(run.state.log.len(), lines + 1);
+        assert!(run.state.log.last().unwrap().contains("55 → 45"));
+    }
+    /// F5-06: the same when the campaign's link changes, which skips the rest of the row's work.
+    #[test]
+    fn a_panel_number_keeps_its_line_when_the_link_changes() {
+        let mut harness = table();
+        let lines = harness.state().run.state.log.len();
+        click_panel_hp(&mut harness);
+        type_digits(&mut harness, "45");
+        let session = crate::auth::Session::for_test(
+            std::time::Duration::from_secs(3600),
+            std::time::Duration::from_secs(7200),
+        );
+        let run = &mut harness.state_mut().run;
+        run.tick_sync(&egui::Context::default(), Some(session), 1, Some("other"));
+        assert!(run.typed_panel.is_none(), "no later number can take it");
+        assert_eq!(run.state.log.len(), lines + 1);
+        assert!(run.state.log.last().unwrap().contains("55 → 45"));
+    }
+    /// F5-02: what the run recorded is its result, also for a row kept to say why it failed.
+    #[test]
+    fn a_sync_kept_for_its_error_on_an_ended_run_does_not_change_the_result() {
+        use crate::combat_sync::SyncState;
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        run.keep_party_synced();
+        connected_tick(&mut run);
+        read_sheet(&mut run, 60, 10);
+        run.syncs.get_mut(&0).unwrap().error = Some("Could not read.".into());
+        run.notice = None;
+        run.apply(Command::End("Won".into())).unwrap();
+        connected_tick(&mut run);
+        let sync = &run.syncs[&0];
+        let (enabled, busy, state, unconfirmed) =
+            (sync.enabled, sync.busy(), sync.state(), sync.unconfirmed());
+        let (hp, lines) = (run.state.participants[0].hp, run.state.log.len());
+
+        // The worker has gone, so no read comes. Were one to land, the fight would still stand.
+        read_sheet(&mut run, 60, 25);
+        assert_eq!(run.state.participants[0].hp, hp, "the sheet's later change");
+        assert_eq!(run.state.log.len(), lines, "no line about it");
+        assert!(run.notice.is_none(), "no notice about it");
+
+        assert!(!enabled && !busy, "no worker and no retry");
+        assert_eq!(state, SyncState::Error, "the row still says why");
+        assert!(!unconfirmed, "so it holds no close");
+    }
+    /// F5-02: Undo takes the fight back, and sync with it, as for the rows that had no error.
+    #[test]
+    fn undo_of_the_end_starts_a_sync_stopped_for_its_error() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        run.keep_party_synced();
+        connected_tick(&mut run);
+        read_sheet(&mut run, 60, 10);
+        run.syncs.get_mut(&0).unwrap().error = Some("Could not read.".into());
+        run.apply(Command::End("Won".into())).unwrap();
+        connected_tick(&mut run);
+        assert!(!run.syncs[&0].enabled);
+        run.undo();
+        connected_tick(&mut run);
+        let sync = &run.syncs[&0];
+        assert!(sync.enabled && sync.error.is_none());
+    }
+    /// F5-02: with something to send, the error row keeps its worker, as a close waits for it.
+    #[test]
+    fn an_error_row_with_a_change_unsent_keeps_its_sync_on_an_ended_run() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        run.keep_party_synced();
+        connected_tick(&mut run);
+        read_sheet(&mut run, 60, 10);
+        run.state.participants[0].hp = Some(30);
+        connected_tick(&mut run);
+        run.syncs.get_mut(&0).unwrap().error = Some("Could not write.".into());
+        run.apply(Command::End("Won".into())).unwrap();
+        connected_tick(&mut run);
+        let sync = &run.syncs[&0];
+        assert!(sync.enabled && sync.unconfirmed());
     }
     fn connected_tick(run: &mut Run) {
         let session = crate::auth::Session::for_test(
@@ -4306,7 +4462,7 @@ mod tests {
         assert_eq!(run.state.participants[0].hp, Some(max - 2));
         // Nothing to take back under another name, and the notice says what happened.
         assert!(run.history.is_empty());
-        assert_eq!(run.undo_label(), "No Undo since sync update");
+        assert_eq!(run.undo_label(), "No Undo since a sync value");
         let notice = run.notice.clone().unwrap().full;
         let change = format!("HP {} → {}", max - 9, max - 2);
         assert!(notice.contains(&change), "{notice}");
@@ -5103,7 +5259,7 @@ mod tests {
         run.apply(Command::Next).unwrap();
         run.note_sheet_update(&[("Guard 1".to_owned(), "Guard 1 HP 20 → 17".to_owned())]);
         assert!(run.history.is_empty());
-        assert_eq!(run.undo_label(), "No Undo since sync update");
+        assert_eq!(run.undo_label(), "No Undo since a sync value");
         assert!(
             run.notice
                 .as_ref()
@@ -5188,7 +5344,7 @@ mod tests {
             Some("Undo: 1 damage")
         );
         reopened.note_sheet_update(&[("Guard 1".to_owned(), "Guard 1 HP 20 → 17".to_owned())]);
-        assert_eq!(reopened.undo_label(), "No Undo since sync update");
+        assert_eq!(reopened.undo_label(), "No Undo since a sync value");
     }
     /// L8-5: the log says what is true of a participant with no initiative.
     #[test]
