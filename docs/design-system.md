@@ -216,8 +216,8 @@ the panel, those words open the second line instead, so that a name is never cut
 
 Notes are Markdown in the campaign's folder. `Write` styles the source as it is typed, in the Reader's faces: a heading
 is large, has the Reader's rule, and `*these words*` are italic. Markup stays in view in the plain face and `faint`, so the
-file is exactly what was typed and Obsidian reads the same text. Lines break at the Reader's measure and the box fits them,
-so a note keeps its shape between the two views. `Read` is the one Reader. The gallery's `Markdown` sheet shows both from one note. A draft saves two seconds after the last edit, because at the
+file is exactly what was typed and Obsidian reads the same text. The box fills its column, and `Read` uses the same width,
+so a note keeps its line breaks between the two views. A session's notes, events and recordings follow the column, because these are the DM's own working pages. The books' rules prose keeps `READER_MEASURE`. `Read` is the one Reader. The gallery's `Markdown` sheet shows both from one note. A draft saves two seconds after the last edit, because at the
 table nobody stops to press Save. A file changed elsewhere stops saving and asks, as in "Keeping a draft".
 
 The timeline is a ledger, not a chart. It is one column in story order, with a hairline spine and an icon and
