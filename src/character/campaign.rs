@@ -1,5 +1,6 @@
 //! Generated campaign content. Preflight every note before replacing any of the bundle.
 use super::EntitySnapshot;
+use super::campaign_package::{self, Destinations};
 use crate::content::{Entry, Reference};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 const MARKER: &str = "\n<!-- splat-generated-sha256:";
-const PERSONAL_NOTES: &str =
+pub(super) const PERSONAL_NOTES: &str =
     "\n## Personal notes\n\nThis section is kept when the sheet refreshes.\n";
 /// A file that changes during a save sends the save back to read it again. Another Splat writer
 /// is the usual cause, and it finishes in moments.
@@ -82,7 +83,15 @@ impl EntitySnapshot {
             .join(format!("{}.md", self.definition.splat_id))
     }
     pub fn save_campaign_copy(&self, campaign: &Path) -> Result<PathBuf, CampaignCopyError> {
-        self.publish(campaign, OnEdits::Stop)?;
+        self.save_campaign_copy_to(campaign, &Destinations::default())
+    }
+    /// Saves this copy, with its definitions routed to these destinations.
+    pub fn save_campaign_copy_to(
+        &self,
+        campaign: &Path,
+        destinations: &Destinations,
+    ) -> Result<PathBuf, CampaignCopyError> {
+        self.publish(campaign, destinations, OnEdits::Stop)?;
         Ok(self.campaign_path(campaign))
     }
     /// Saves this copy over local edits, with the same checks and order as any save. The bytes
@@ -92,11 +101,19 @@ impl EntitySnapshot {
         &self,
         campaign: &Path,
     ) -> Result<Vec<PathBuf>, CampaignCopyError> {
-        self.publish(campaign, OnEdits::Archive)
+        self.overwrite_campaign_copy_to(campaign, &Destinations::default())
+    }
+    pub fn overwrite_campaign_copy_to(
+        &self,
+        campaign: &Path,
+        destinations: &Destinations,
+    ) -> Result<Vec<PathBuf>, CampaignCopyError> {
+        self.publish(campaign, destinations, OnEdits::Archive)
     }
     fn publish(
         &self,
         campaign: &Path,
+        destinations: &Destinations,
         on_edits: OnEdits,
     ) -> Result<Vec<PathBuf>, CampaignCopyError> {
         self.validate()?;
@@ -105,7 +122,7 @@ impl EntitySnapshot {
         }
         let mut archived = Vec::new();
         for _ in 0..ATTEMPTS {
-            if self.publish_once(campaign, on_edits, &mut archived)? {
+            if self.publish_once(campaign, destinations, on_edits, &mut archived)? {
                 return Ok(archived);
             }
         }
@@ -115,13 +132,15 @@ impl EntitySnapshot {
     fn publish_once(
         &self,
         campaign: &Path,
+        destinations: &Destinations,
         on_edits: OnEdits,
         archived: &mut Vec<PathBuf>,
     ) -> Result<bool, CampaignCopyError> {
+        let _saving = campaign_package::saving();
         let root = campaign.join("Characters").join("D&D Beyond");
         let mut staged = Vec::new();
-        for note in self.content_notes()? {
-            let path = root.join(note.relative_path);
+        let routed = campaign_package::route(campaign, destinations, self.content_notes()?)?;
+        for (path, markdown) in routed.notes {
             let previous = match fs::read_to_string(&path) {
                 Ok(text) => Some(text),
                 Err(e) if e.kind() == ErrorKind::NotFound => None,
@@ -135,7 +154,7 @@ impl EntitySnapshot {
                 return Err(conflict(&path));
             }
             let notes = copy.map_or(PERSONAL_NOTES, |copy| copy.notes);
-            let text = stamped(&note.markdown, notes);
+            let text = stamped(&markdown, notes);
             staged.push(Note {
                 path,
                 previous,
@@ -148,6 +167,24 @@ impl EntitySnapshot {
             .map(|note| Entry::parse(&note.path.to_string_lossy(), &note.text))
             .collect::<Result<Vec<_>, _>>()?;
         let formers = retire_plan(self, campaign, &root, &staged, &planned, on_edits)?;
+        // A file that moved since it was read sends the save back to read it again.
+        for write in &routed.shared {
+            if fs::read_to_string(&write.path).ok().as_ref() != Some(&write.previous) {
+                return Ok(false);
+            }
+            stage(&write.path, write.text.as_bytes())?
+                .persist(&write.path)
+                .map_err(|_| "Could not update a package note.")?;
+        }
+        if let Some((previous, text)) = &routed.manifest {
+            let path = campaign.join(campaign_package::FOLDER).join("Package.md");
+            if fs::read_to_string(&path).ok() != *previous {
+                return Ok(false);
+            }
+            stage(&path, text.as_bytes())?
+                .persist(&path)
+                .map_err(|_| "Could not save the campaign package.")?;
+        }
         // Dependencies precede the creature. A filesystem failure may leave updated dependencies,
         // but never a new creature whose dependency files have not yet been published.
         for note in staged {
@@ -216,7 +253,11 @@ fn retire_plan(
 ) -> Result<Vec<Former>, CampaignCopyError> {
     let mut formers = Vec::new();
     let mut candidates = BTreeMap::new();
-    for relative in super::rules::retired_shared_paths(record)? {
+    let mut retired: BTreeSet<_> = super::rules::retired_shared_paths(record)?
+        .into_iter()
+        .collect();
+    retired.extend(campaign_package::former_paths(root, record));
+    for relative in retired {
         let path = root.join(relative);
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
@@ -341,12 +382,12 @@ fn conflict(path: &Path) -> CampaignCopyError {
 }
 /// A note's generated words and personal notes, and whether its checksum holds. A note with no
 /// readable checksum is all generated words, with the first personal notes.
-struct Parts<'a> {
-    generated: &'a str,
-    notes: &'a str,
-    intact: bool,
+pub(super) struct Parts<'a> {
+    pub generated: &'a str,
+    pub notes: &'a str,
+    pub intact: bool,
 }
-fn parts(text: &str) -> Parts<'_> {
+pub(super) fn parts(text: &str) -> Parts<'_> {
     if let Some((generated, tail)) = text.rsplit_once(MARKER)
         && let Some((hash, notes)) = tail.split_once(" -->\n")
     {
@@ -382,11 +423,14 @@ fn same_but_read_time(previous: &str, next: &str) -> bool {
 fn checksum(generated: &str) -> String {
     format!("{:x}", Sha256::digest(generated.as_bytes()))
 }
-fn stamped(generated: &str, notes: &str) -> String {
+pub(super) fn stamped(generated: &str, notes: &str) -> String {
     format!("{generated}{MARKER}{} -->\n{notes}", checksum(generated))
 }
 /// A temporary file beside `path`, holding `bytes` on disk, ready to persist.
-fn stage(path: &Path, bytes: &[u8]) -> Result<tempfile::NamedTempFile, CampaignCopyError> {
+pub(super) fn stage(
+    path: &Path,
+    bytes: &[u8],
+) -> Result<tempfile::NamedTempFile, CampaignCopyError> {
     let parent = path.parent().ok_or("Invalid campaign copy path")?;
     fs::create_dir_all(parent).map_err(|_| "Could not create campaign character folder.")?;
     let mut temp =
@@ -398,7 +442,7 @@ fn stage(path: &Path, bytes: &[u8]) -> Result<tempfile::NamedTempFile, CampaignC
 }
 /// Keeps `text` in the first archive name that holds it or is unused, and never overwrites an
 /// archive. These names do not end in `.md`, so the content reader skips them.
-fn archive_copy(path: &Path, text: &str) -> Result<PathBuf, CampaignCopyError> {
+pub(super) fn archive_copy(path: &Path, text: &str) -> Result<PathBuf, CampaignCopyError> {
     let base = path.with_extension("md.splat-archive");
     let mut temp = None;
     for archive in std::iter::once(base.clone())
@@ -452,10 +496,14 @@ mod tests {
         fs::write(&path, &text).unwrap();
         (path, text, id)
     }
+    fn routed_notes(record: &EntitySnapshot, campaign: &Path) -> Vec<(PathBuf, String)> {
+        let notes = record.content_notes().unwrap();
+        campaign_package::route(campaign, &Destinations::default(), notes)
+            .unwrap()
+            .notes
+    }
     fn dependency_path(record: &EntitySnapshot, campaign: &Path) -> PathBuf {
-        campaign
-            .join("Characters/D&D Beyond")
-            .join(record.content_notes().unwrap().remove(0).relative_path)
+        routed_notes(record, campaign).remove(0).0
     }
     fn custom_entry_requiring(campaign: &Path, id: uuid::Uuid) {
         fs::write(campaign.join("Custom.md"), format!("---\nsplat_schema: 1\nsplat_id: {}\nsplat_name: Custom rule\nsplat_kind: rule\nsplat_rule: {{}}\nsplat_requires:\n- id: {id}\n---\n", uuid::Uuid::new_v4())).unwrap();
@@ -577,26 +625,14 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let record = super::super::tests::sample();
         record.save_campaign_copy(root.path()).unwrap();
-        let notes = record.content_notes().unwrap();
-        for note in &notes {
-            let path = root
-                .path()
-                .join("Characters/D&D Beyond")
-                .join(&note.relative_path);
+        let notes = routed_notes(&record, root.path());
+        for (path, _) in &notes {
             fs::write(path, "Edited note").unwrap();
         }
         let archived = record.overwrite_campaign_copy(root.path()).unwrap();
         assert_eq!(archived.len(), notes.len());
-        for note in &notes {
-            let path = root
-                .path()
-                .join("Characters/D&D Beyond")
-                .join(&note.relative_path);
-            assert!(
-                fs::read_to_string(path)
-                    .unwrap()
-                    .starts_with(&note.markdown)
-            );
+        for (path, markdown) in &notes {
+            assert!(fs::read_to_string(path).unwrap().starts_with(markdown));
         }
         record.save_campaign_copy(root.path()).unwrap();
     }

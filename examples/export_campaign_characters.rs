@@ -1,9 +1,10 @@
-//! Publish cached party records without contacting D&D Beyond.
+//! Publish cached party records without contacting D&D Beyond. New definitions go to the campaign
+//! package. List the folders of the packages that sheets refer to, so validation can find them.
 use splat::{character::Cache, content::Entry};
 fn main() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 3 {
-        return Err("Usage: export_campaign_characters <local-campaign-uuid> <ddb-campaign-id> <absolute-campaign-folder>".into());
+    if args.len() < 3 {
+        return Err("Usage: export_campaign_characters <local-campaign-uuid> <ddb-campaign-id> <absolute-campaign-folder> [package-folder...]".into());
     }
     let local = args[0]
         .parse()
@@ -22,7 +23,13 @@ fn main() -> Result<(), String> {
         }
         println!("{}: {}", record.definition.splat_name, path.display());
     }
-    let (entries, errors) = splat::content::read_directory(&root.join("Characters/D&D Beyond"))?;
+    let (mut entries, mut errors) = splat::content::read_directory(root)?;
+    let local = entries.len();
+    for package in &args[3..] {
+        let (more, more_errors) = splat::content::read_directory(std::path::Path::new(package))?;
+        entries.extend(more);
+        errors.extend(more_errors);
+    }
     let report = splat::content::validate_with_builtin(&entries)?;
     if !errors.is_empty() || !report.errors.is_empty() {
         return Err(format!(
@@ -38,8 +45,7 @@ fn main() -> Result<(), String> {
         .map(Vec::len)
         .sum();
     println!(
-        "Validated {} local content entries against the shared catalogue; {gaps} conversion gaps.",
-        entries.len()
+        "Validated {local} local content entries against the shared catalogue; {gaps} conversion gaps."
     );
     Ok(())
 }

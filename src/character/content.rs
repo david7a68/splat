@@ -8,6 +8,8 @@ use crate::content::character::{
 pub struct ContentNote {
     pub relative_path: String,
     pub markdown: String,
+    /// The D&D Beyond definitions it holds, as `feature:ID`, `action:ID`, `item:KEY` or `spell:ID`.
+    pub sources: Vec<String>,
 }
 fn prose(value: &Value) -> String {
     super::description_text(string(value))
@@ -35,6 +37,18 @@ pub(super) fn reference_id(record: &EntitySnapshot, kind: &str, source: &str) ->
         "dndbeyond:character:{}:{kind}:{source}",
         record.source.character_id
     ))
+}
+/// The D&D Beyond ID of an item. An item with no key has none: it cannot be told from another.
+pub(super) fn item_identity(definition: &Value) -> Option<String> {
+    let key = string(&definition["definitionKey"]);
+    (!key.is_empty()).then(|| format!("item:{key}"))
+}
+/// The D&D Beyond ID of a spell, with the fallbacks that give the spell its local identity.
+pub(super) fn spell_identity(definition: &Value) -> String {
+    let source = id(&definition["id"])
+        .or_else(|| definition["definitionKey"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| string(&definition["name"]).to_owned());
+    format!("spell:{source}")
 }
 fn note(fields: Value, body: &str) -> Result<String, String> {
     Ok(format!(
@@ -357,6 +371,7 @@ impl EntitySnapshot {
         fields["splat_actions"] = actions;
         let folder = format!("Definitions/{}", self.definition.splat_id);
         let mut definitions = BTreeMap::new();
+        let mut definition_sources = BTreeMap::new();
         let mut inventory = BTreeMap::<Option<String>, Vec<String>>::new();
         let mut details = json!({});
         let mut source_ids = BTreeSet::new();
@@ -449,6 +464,9 @@ impl EntitySnapshot {
             {
                 return Err(format!("Conflicting source definitions for {}", item.name));
             }
+            if let Some(identity) = item_identity(d) {
+                definition_sources.insert(def_id, identity);
+            }
         }
         fields["splat_inventory_details"] = details;
         for spell in &self.character.spells {
@@ -513,11 +531,13 @@ impl EntitySnapshot {
             {
                 return Err(format!("Conflicting spell definitions for {name}"));
             }
+            definition_sources.insert(def_id, spell_identity(d));
         }
         for (uuid, markdown) in definitions {
             notes.push(ContentNote {
                 relative_path: format!("{folder}/{uuid}.md"),
                 markdown,
+                sources: definition_sources.remove(&uuid).into_iter().collect(),
             });
         }
         fields["splat_character"] = serde_json::to_value(&sheet).map_err(|e| e.to_string())?;
@@ -710,6 +730,7 @@ impl EntitySnapshot {
             body.push_str(&format!("- {}\n", g.reason));
         }
         notes.push(ContentNote {
+            sources: Vec::new(),
             relative_path: format!("{}.md", self.definition.splat_id),
             markdown: note(fields, &body)?,
         });

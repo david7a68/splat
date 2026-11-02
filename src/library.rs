@@ -526,7 +526,9 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
         let owner = Owner::Campaign(campaign.clone());
         match content::read_directory(&campaign.path) {
             Ok((entries, errors)) => {
-                for entry in entries.into_iter().filter(|e| e.kind != "campaign") {
+                for entry in entries.into_iter().filter(|e| {
+                    e.kind != "campaign" && !splat::character::campaign_package::is_manifest(e)
+                }) {
                     let text = fs::read_to_string(note_path(&campaign.path, &entry.path)?)
                         .map_err(|e| e.to_string())?;
                     all.notes.push(Note {

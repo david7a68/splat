@@ -3,6 +3,7 @@
 pub mod build;
 mod cache;
 mod campaign;
+pub mod campaign_package;
 pub mod check;
 mod content;
 mod presentation;
