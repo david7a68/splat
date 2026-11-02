@@ -188,7 +188,10 @@ impl Run {
         // note. The roll goes on to the first empty field.
         let keeps_keyboard = matches!(
             command,
-            Command::Initiative(..) | Command::Health(..) | Command::Bonus(..) | Command::RollNpcs
+            Command::Initiative(..)
+                | Command::Health(..)
+                | Command::Bonus(..)
+                | Command::RollNpcs(_)
         );
         match self.apply(command) {
             Err(error) => self.error = Some(error),
@@ -2057,6 +2060,9 @@ impl Run {
             None
         };
         let mut command = None;
+        let default_roll = self.initiative.grouping;
+        let default_hint = format!("Campaign default: {}", default_roll.label());
+        let roll_choices = self.roll_choices();
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), 44.0),
             Layout::right_to_left(Align::Center),
@@ -2070,13 +2076,26 @@ impl Run {
                 {
                     command = Some(Command::Begin);
                 }
-                if Action::secondary("Roll NPC initiative")
-                    .icon(icons::DICE)
-                    .density(Density::Glance)
-                    .show(ui)
-                    .clicked()
-                {
-                    command = Some(Command::RollNpcs);
+                let roll = design::split_action(
+                    ui,
+                    Action::secondary("Roll NPCs")
+                        .name("Roll NPC initiative")
+                        .icon(icons::DICE)
+                        .density(Density::Glance)
+                        .hint(&default_hint),
+                    "Roll NPC initiative another way",
+                    |ui| {
+                        ui.label(Type::Small.rich(ui, "This roll only").color(colors().muted));
+                        for mode in &roll_choices {
+                            let item = ui.selectable_label(*mode == default_roll, mode.label());
+                            if item.clicked() {
+                                command = Some(Command::RollNpcs(*mode));
+                            }
+                        }
+                    },
+                );
+                if roll.clicked() {
+                    command = Some(Command::RollNpcs(default_roll));
                 }
                 ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
@@ -2170,7 +2189,7 @@ impl Run {
             if matches!(command, Command::Begin) {
                 self.panel = Panel::Reference;
             }
-            let rolled = matches!(command, Command::RollNpcs);
+            let rolled = matches!(command, Command::RollNpcs(_));
             self.run_command(command);
             // Next is the first player still without a number.
             if rolled {
@@ -2411,7 +2430,7 @@ impl Run {
                     .rich(
                         ui,
                         format!(
-                            "{} · {}",
+                            "Default NPC roll: {} · {}",
                             self.initiative.grouping.label(),
                             if self.initiative.roster_ties {
                                 "Roster order breaks ties"

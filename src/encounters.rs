@@ -1709,19 +1709,13 @@ impl Encounters {
                 Some("Relative to the campaign folder, or an absolute path."),
                 None,
             );
-            design::field(ui, "Initiative rule", None, None, |ui| {
+            design::field(ui, "Roll NPC initiative", None, None, |ui| {
                 let combo = egui::ComboBox::from_id_salt("campaign_initiative")
                     .icon(design::combo_icon)
-                    .width(ui.available_width().min(280.0))
+                    .width(ui.available_width().min(320.0))
                     .selected_text(snapshot.options.initiative.grouping.label())
                     .show_ui(ui, |ui| {
-                        use crate::encounter_settings::Grouping;
-                        for mode in [
-                            Grouping::Identical,
-                            Grouping::Individual,
-                            Grouping::BySide,
-                            Grouping::Explicit,
-                        ] {
+                        for mode in crate::encounter_settings::Grouping::ALL {
                             ui.selectable_value(
                                 &mut snapshot.options.initiative.grouping,
                                 mode,
@@ -1729,7 +1723,7 @@ impl Encounters {
                             );
                         }
                     });
-                design::named(ui, &combo.response, "Initiative rule");
+                design::named(ui, &combo.response, "Roll NPC initiative");
             });
             ui.checkbox(
                 &mut snapshot.options.initiative.roster_ties,
@@ -1737,7 +1731,7 @@ impl Encounters {
             );
             ui.label(
                 Type::Small
-                    .rich(ui, "Side and explicit groups use the first NPC's bonus and roll mode. Players keep their entered initiative.")
+                    .rich(ui, "This is the default for the roll in run setup, which can change it for one roll. Side and encounter groups use the first NPC's bonus and roll mode. Players keep their entered initiative.")
                     .color(colors().muted),
             );
             let changed = snapshot.options != snapshot.saved_options;

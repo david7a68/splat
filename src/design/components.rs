@@ -468,6 +468,39 @@ impl<'a> Action<'a> {
     }
 }
 
+/// An action with a default, and a caret beside it that opens a menu of the other ways
+/// to do it. A click in the menu closes it. The response is the action's own.
+pub fn split_action(
+    ui: &mut Ui,
+    action: Action<'_>,
+    menu_name: &str,
+    menu: impl FnOnce(&mut Ui),
+) -> Response {
+    let caret = Action {
+        height: action.height,
+        blocked: action.blocked,
+        ..Action::secondary(icons::DOWN)
+            .name(menu_name)
+            .hint(menu_name)
+    };
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = HAIRLINE_WIDTH;
+        // The caret stays on the right in either direction of layout.
+        let (response, caret) = if ui.layout().prefer_right_to_left() {
+            let caret = caret.show(ui);
+            (action.show(ui), caret)
+        } else {
+            let response = action.show(ui);
+            (response, caret.show(ui))
+        };
+        egui::Popup::menu(&caret)
+            .align(egui::RectAlign::BOTTOM_END)
+            .show(menu);
+        response
+    })
+    .inner
+}
+
 /// A square button with one icon. The word is the accessible name and the tooltip.
 pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
     let (rect, response) =
