@@ -4581,9 +4581,20 @@ pub mod encounter_groups {
         // A group that cannot be added says why, in the editor, and its change says why.
         d.click(&format!("Edit group {GROUP_LOST}"));
         d.expect("Unavailable creature");
+        d.observe(
+            "T13.3",
+            d.in_view_containing("cannot find this creature")
+                && d.in_view_containing("would become -28")
+                && !d.has("Overrides for Unavailable creature"),
+            "The editor says why a creature is unavailable, and that a change cannot stand",
+        );
         d.state("group-unavailable-creature", Sizes::Default);
         d.click("Overrides for Cinder Wolf");
-        d.expect("would become -28");
+        d.observe(
+            "T13.3",
+            d.in_view_containing("would become -28"),
+            "A change that cannot stand says so in view, with its form open or closed",
+        );
         d.state("group-invalid-change", Sizes::Default);
         d.click("Back to encounters");
 
@@ -4624,6 +4635,14 @@ pub mod encounter_groups {
             d.is_disabled(&add_group(GROUP_LOST)),
             "A group that cannot be added has no working Add button",
         );
+        d.observe(
+            "T13.1",
+            d.visible_text("2 creatures · Total XP 200 or more")
+                && d.has_containing("Unavailable creature")
+                && d.has_containing("Member 1:")
+                && d.has_containing("Member 2 (Cinder Wolf):"),
+            "A group counts a creature it cannot find, and gives every reason it cannot be added",
+        );
         d.begin_task();
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
@@ -4633,7 +4652,9 @@ pub mod encounter_groups {
         // Undo names it, and takes the whole group back.
         d.expect("Undo: add Goblin Wave");
         d.click_containing("Undo: add Goblin Wave");
-        let gone = !d.has_containing(FIRST_GOBLIN);
+        let gone = !roster_places(d)
+            .iter()
+            .any(|(name, _)| name.contains("Goblin Warrior"));
         d.observe("T13.2", gone, "Undo removes every member of an added group");
 
         // A typed total, as players give one.
@@ -4651,8 +4672,9 @@ pub mod encounter_groups {
         d.state("group-added-with-a-total", Sizes::Default);
         d.observe(
             "T13.2",
-            d.has_containing("Encounter group Rival Team added"),
-            "The panel says who arrived, and at what total, until the next step",
+            d.has_containing("Encounter group Rival Team added")
+                && d.has_containing("Initiative 14, entered by the DM"),
+            "The panel says who arrived, and at what total",
         );
 
         // The card of a creature that arrived: where it came from, and its changes.
@@ -4663,6 +4685,7 @@ pub mod encounter_groups {
         d.click(GROUPS_TAB);
 
         // The same group again, by dragging it onto the initiative list.
+        let rows_before = roster_places(d).len();
         let list = roster_places(d)
             .first()
             .map(|(_, rect)| *rect)
@@ -4676,10 +4699,26 @@ pub mod encounter_groups {
         d.expect(FIRST_GOBLIN);
         d.observe(
             "T13.4",
-            d.has_containing(FIRST_GOBLIN) && d.has_containing("Goblin Warrior 3"),
-            "Dragging a group onto the initiative list adds all its members",
+            roster_places(d).len() == rows_before + 3,
+            "Dragging a group onto the initiative list adds each member once",
         );
         d.state("group-added-by-dragging", Sizes::Default);
+
+        // A side of its own, on the current row. The next step also ends the panel's line.
+        d.click(NEXT_TURN);
+        d.observe(
+            "T13.2",
+            !d.has_containing("Encounter group "),
+            "The panel's line about an addition ends with the next step",
+        );
+        for _ in 0..25 {
+            if current_participant(d).as_deref() == Some(RIVAL_NAME) {
+                break;
+            }
+            d.click(NEXT_TURN);
+        }
+        d.expect(RIVAL_NAME);
+        d.state("a-named-side-on-its-turn", Sizes::Default);
         d.goal("add groups by a total and by dragging");
 
         // Setup has the same panel.
@@ -4717,7 +4756,9 @@ pub mod run_overrides {
         d.observe(
             "T13.3",
             d.has_containing(BASE_AND_CHANGED)
-                && d.has_containing("Attack bonus: As printed → +1 on each attack · add by hand")
+                && d.has_containing("Attack bonus: As printed → +1 on each attack")
+                && d.has_containing("add\u{a0}by\u{a0}hand")
+                && d.has_containing("Speed: 30 ft → 40 ft")
                 && d.has_containing("Changed for this encounter"),
             "The card shows the base and changed values, and says what to add by hand",
         );
@@ -4732,7 +4773,11 @@ pub mod run_overrides {
             FIRST_SLOT,
             "Options: starting HP, temporary HP, initiative group and overrides",
         );
-        d.expect("Maximum HP: how it changes");
+        d.observe(
+            "T13.3",
+            d.in_view("Maximum HP: how it changes"),
+            "Opening a slot's overrides brings the form into view, however low the slot is",
+        );
         d.state("slot-changes-open", Sizes::All);
         d.click("Back to encounters");
 

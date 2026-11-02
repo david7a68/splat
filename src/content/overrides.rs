@@ -64,6 +64,40 @@ pub struct Base {
     pub armor_class: Option<i64>,
     pub initiative_bonus: Option<i64>,
     pub speed: Option<i64>,
+    /// What the creature starts with before these changes add to it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<String>,
+}
+/// The names in a list of starting conditions, as a note can hold them.
+pub fn condition_names(value: &Value) -> Vec<String> {
+    value
+        .as_sequence()
+        .map(|items| {
+            items
+                .iter()
+                .map(|v| {
+                    v.as_str()
+                        .or_else(|| v.get("name").and_then(Value::as_str))
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| {
+                            serde_yaml_ng::to_string(v)
+                                .unwrap_or_default()
+                                .trim()
+                                .to_owned()
+                        })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+/// The first whole number in text such as `30 ft., Fly 80 ft.`.
+fn leading_number(text: &str) -> Option<i64> {
+    let digits: String = text
+        .trim_start()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
 }
 impl Base {
     pub fn of(entry: &Entry, side: &str) -> Self {
@@ -81,7 +115,29 @@ impl Base {
             max_hp: stat("max_hp").filter(|hp| *hp > 0),
             armor_class: stat("armor_class"),
             initiative_bonus: stat("initiative"),
-            speed: stat("speed"),
+            // A creature can have its speed only in its text.
+            speed: stat("speed")
+                .or_else(|| {
+                    entry
+                        .fields
+                        .get("splat_creature")?
+                        .get("movement_text")?
+                        .as_str()
+                        .and_then(leading_number)
+                })
+                .or_else(|| {
+                    entry
+                        .body
+                        .lines()
+                        .find_map(|line| line.trim_start().strip_prefix("Speed "))
+                        .and_then(leading_number)
+                }),
+            conditions: entry
+                .fields
+                .get("splat_initial")
+                .and_then(|initial| initial.get("conditions"))
+                .map(condition_names)
+                .unwrap_or_default(),
         }
     }
 }
@@ -315,7 +371,10 @@ impl Overrides {
                 return Ok(value);
             };
             let changed = change.apply(value).ok_or_else(|| {
-                format!("{field}: {} has no value to add to. Use set.", base.name)
+                format!(
+                    "{field}: {} has no value to add to. Set a value instead.",
+                    base.name
+                )
             })?;
             if !(low..=high).contains(&changed) {
                 return Err(format!(
@@ -331,22 +390,16 @@ impl Overrides {
                 .as_deref()
                 .map_or_else(|| base.name.clone(), |name| name.trim().to_owned()),
             side: self.side.clone().unwrap_or_else(|| base.side.clone()),
-            max_hp: number("max_hp", self.max_hp, base.max_hp, 1, MAX_HP)?,
-            armor_class: number(
-                "armor_class",
-                self.armor_class,
-                base.armor_class,
-                0,
-                MAX_STAT,
-            )?,
+            max_hp: number("Maximum HP", self.max_hp, base.max_hp, 1, MAX_HP)?,
+            armor_class: number("AC", self.armor_class, base.armor_class, 0, MAX_STAT)?,
             initiative_bonus: number(
-                "initiative_bonus",
+                "Initiative bonus",
                 self.initiative_bonus,
                 base.initiative_bonus,
                 -MAX_STAT,
                 MAX_STAT,
             )?,
-            speed: number("speed", self.speed, base.speed, 0, MAX_STAT)?,
+            speed: number("Speed", self.speed, base.speed, 0, MAX_STAT)?,
         })
     }
 
@@ -356,13 +409,13 @@ impl Overrides {
         if entry.fields.contains_key("splat_external") {
             if self.max_hp.is_some() {
                 return Err(format!(
-                    "max_hp: D&D Beyond sets the maximum HP of {}.",
+                    "Maximum HP: D&D Beyond sets the maximum HP of {}.",
                     entry.name
                 ));
             }
             if !self.conditions.is_empty() {
                 return Err(format!(
-                    "conditions: D&D Beyond sets the conditions of {}.",
+                    "Starting conditions: D&D Beyond sets the conditions of {}.",
                     entry.name
                 ));
             }
@@ -442,8 +495,20 @@ impl Overrides {
         if !self.conditions.is_empty() {
             rows.push(Row {
                 label: "Starting conditions",
-                base: "None".into(),
-                changed: self.conditions.join(", "),
+                base: if base.conditions.is_empty() {
+                    "None".into()
+                } else {
+                    base.conditions.join(", ")
+                },
+                changed: {
+                    let mut all = base.conditions.clone();
+                    for condition in &self.conditions {
+                        if !all.iter().any(|c| c.eq_ignore_ascii_case(condition)) {
+                            all.push(condition.clone());
+                        }
+                    }
+                    all.join(", ")
+                },
                 by_hand: false,
             });
         }
@@ -529,6 +594,7 @@ mod tests {
             armor_class: Some(15),
             initiative_bonus: Some(2),
             speed: Some(30),
+            conditions: Vec::new(),
         }
     }
     fn parsed(text: &str) -> Overrides {
@@ -591,7 +657,7 @@ mod tests {
     fn a_change_that_leaves_a_stat_invalid_names_the_creature() {
         let error = parsed("{max_hp: {add: -10}}").resolve(&base()).unwrap_err();
         assert!(
-            error.contains("max_hp") && error.contains("Goblin"),
+            error.contains("Maximum HP") && error.contains("Goblin"),
             "{error}"
         );
         let unknown = Base {
@@ -662,6 +728,40 @@ mod tests {
         assert_eq!(row("Speed").changed, "40 ft (+10)");
         assert!(row("Speed").by_hand);
         assert_eq!(row("Side").base, "enemies");
+    }
+
+    #[test]
+    fn a_card_shows_what_conditions_a_creature_starts_with_and_ends_with() {
+        let mut poisoned = base();
+        poisoned.conditions = vec!["Poisoned".into()];
+        let rows = parsed("{conditions: [Prone, poisoned]}").rows(&poisoned);
+        assert_eq!(rows[0].base, "Poisoned");
+        assert_eq!(rows[0].changed, "Poisoned, Prone");
+        assert_eq!(
+            parsed("{conditions: [Prone]}").rows(&base())[0].base,
+            "None"
+        );
+    }
+
+    #[test]
+    fn a_speed_only_in_text_is_still_a_base_value() {
+        let creature = |extra: &str, body: &str| {
+            Entry::parse(
+                "c.md",
+                &format!(
+                    "---\nsplat_schema: 1\nsplat_id: {}\nsplat_kind: creature\nsplat_name: C\nsplat_creature: {{{extra}}}\n---\n\n{body}\n",
+                    Uuid::new_v4()
+                ),
+            )
+            .unwrap()
+        };
+        let speed = |entry: Entry| Base::of(&entry, "enemies").speed;
+        assert_eq!(
+            speed(creature("movement_text: 40 ft., Fly 80 ft.", "")),
+            Some(40)
+        );
+        assert_eq!(speed(creature("", "Speed 30 ft.")), Some(30));
+        assert_eq!(speed(creature("", "No such line.")), None);
     }
 
     #[test]

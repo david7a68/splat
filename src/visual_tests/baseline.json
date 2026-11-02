@@ -103,7 +103,7 @@
     "encounter-groups": {
       "T13.2: add a group to the running fight, rolling once": 1,
       "add a group during setup": 5,
-      "add groups by a total and by dragging": 10,
+      "add groups by a total and by dragging": 14,
       "make an encounter group": 14
     },
     "encounter-run": {

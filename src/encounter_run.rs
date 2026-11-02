@@ -7,7 +7,7 @@ use serde_yaml_ng::{Mapping, Value};
 use splat::{
     content::{
         Entry,
-        overrides::{Base, Overrides},
+        overrides::{Base, Overrides, Resolved, condition_names},
     },
     execution::dice::{Dice, Random},
 };
@@ -93,15 +93,24 @@ pub(crate) struct RunGroup {
     pub xp: u64,
     /// The creatures with no XP in their entry, so that the total is not read as complete.
     pub xp_unknown: Vec<String>,
-    /// Why this group cannot be added now.
+    /// How many creatures the note names that this campaign cannot find.
+    pub unavailable: u64,
+    /// Every reason this group cannot be added now.
     pub problem: Option<String>,
 }
 impl RunGroup {
     /// The first member's bonus decides a shared roll, as it does for any initiative group.
-    pub(crate) fn leader_bonus(&self) -> Option<i64> {
+    pub(crate) fn leader(&self) -> Option<Resolved> {
         let member = self.members.first()?;
         let base = Base::of(&member.entry, &self.side);
-        member.overrides.resolve(&base).ok()?.initiative_bonus
+        member.overrides.resolve(&base).ok()
+    }
+    /// Every creature the note names, whether or not it can be found now.
+    pub(crate) fn creature_count(&self) -> u64 {
+        self.members
+            .iter()
+            .map(|member| member.count)
+            .fold(self.unavailable, u64::saturating_add)
     }
 }
 #[cfg(test)]
@@ -130,7 +139,7 @@ impl Participant {
         overrides: &Overrides,
         present: bool,
     ) -> Result<Self, String> {
-        let base = Base::of(&entry, &side);
+        let mut base = Base::of(&entry, &side);
         let resolved = overrides
             .resolve_for(&entry, &side)
             .map_err(|error| format!("{key}: {error}"))?;
@@ -168,24 +177,9 @@ impl Participant {
         let temporary_hp = number("temporary_hp")?.unwrap_or(0);
         let mut conditions: Vec<String> = initial
             .get("conditions")
-            .and_then(Value::as_sequence)
-            .map(|items| {
-                items
-                    .iter()
-                    .map(|v| {
-                        v.as_str()
-                            .or_else(|| v.get("name").and_then(Value::as_str))
-                            .map(str::to_owned)
-                            .unwrap_or_else(|| {
-                                serde_yaml_ng::to_string(v)
-                                    .unwrap_or_default()
-                                    .trim()
-                                    .to_owned()
-                            })
-                    })
-                    .collect()
-            })
+            .map(condition_names)
             .unwrap_or_default();
+        base.conditions = conditions.clone();
         for condition in &overrides.conditions {
             if !conditions.iter().any(|c| c.eq_ignore_ascii_case(condition)) {
                 conditions.push(condition.clone());
@@ -257,7 +251,7 @@ impl Participant {
         )?;
         let max = participant.max_hp.ok_or_else(|| {
             format!(
-                "{}: {} has no maximum HP. Give this member a max_hp override.",
+                "{}: {} has no maximum HP. Set it in this member's overrides.",
                 group.name, member.entry.name
             )
         })?;
@@ -387,6 +381,8 @@ enum Panel {
 }
 /// How an added group's log line starts. The group panel shows that line while it is the last.
 const GROUP_ADDED: &str = "Encounter group ";
+/// What the group panel says of an addition before it points to the Log.
+const GROUP_LINE_LIMIT: usize = 200;
 /// What a saved run may hold. A larger one does not open again.
 const MAX_PARTICIPANTS: usize = 2000;
 const DISK_CONFLICT: &str = "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe in memory, and saving has stopped until you choose.";
@@ -464,7 +460,12 @@ fn number_in_name(name: &str, base: &str) -> Option<u64> {
     if name == base {
         return Some(1);
     }
-    name.strip_prefix(base)?.strip_prefix(' ')?.parse().ok()
+    // A number this large is part of the name. Nothing can count on from it.
+    name.strip_prefix(base)?
+        .strip_prefix(' ')?
+        .parse()
+        .ok()
+        .filter(|number: &u64| *number < 1 << 53)
 }
 /// Numbered names, as the run gives duplicates when it starts. Names already in the fight
 /// stay as the table knows them, so new creatures go on from the highest number.
@@ -3615,6 +3616,7 @@ mod tests {
             notes: String::new(),
             xp: 0,
             xp_unknown: Vec::new(),
+            unavailable: 0,
             problem: None,
         })
     }
@@ -3760,7 +3762,7 @@ mod tests {
             group_of(
                 "Huge",
                 "enemies",
-                vec![(creature(), 2, changed("{name: X 18446744073709551615}"))],
+                vec![(creature(), 1, changed("{name: X 18446744073709551615}"))],
             ),
             Some(3),
         ))
@@ -3774,6 +3776,7 @@ mod tests {
             Some(3),
         ))
         .unwrap();
+        assert_eq!(names(&run, 6..8), vec!["X 18446744073709551615", "X"]);
     }
     #[test]
     fn numbers_go_on_from_names_already_in_the_fight_and_a_lone_name_stays_plain() {
@@ -4104,7 +4107,7 @@ mod tests {
                 vec![(creature(), 1, changed("{max_hp: {add: -20}}"))],
             ),
             Some(4),
-            "max_hp",
+            "Maximum HP",
         );
         // A saved run holds at most so many, so a run cannot grow past what it can reopen.
         check(&mut run, guard_group("Many", 1997), Some(4), "2000");
@@ -4291,7 +4294,7 @@ mod tests {
         );
     }
     #[test]
-    fn the_run_card_and_panel_show_changes_and_groups_in_every_phase() {
+    fn the_run_card_and_panel_draw_with_changes_and_groups_in_setup_and_in_combat() {
         let ctx = egui::Context::default();
         let mut run = run();
         run.groups = Some(Arc::new(vec![mixed_group(), guard_group("Wave", 2)]));

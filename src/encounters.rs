@@ -9,7 +9,10 @@ use crate::{
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
-use splat::content::{Entry, overrides::Overrides};
+use splat::content::{
+    Entry,
+    overrides::{Overrides, Resolved},
+};
 use std::{collections::BTreeSet, fs, sync::Arc, sync::mpsc};
 use uuid::Uuid;
 
@@ -289,7 +292,8 @@ fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
     });
 }
 
-fn creature_detail(entry: &Entry, party: bool) -> String {
+/// `changed` holds this creature's values when a slot or member changes them.
+fn creature_detail(entry: &Entry, party: bool, changed: Option<&Resolved>) -> String {
     let stat = |name: &str| {
         entry
             .fields
@@ -319,10 +323,10 @@ fn creature_detail(entry: &Entry, party: bool) -> String {
     if let Some(cr) = cr {
         parts.push(format!("CR {cr}"));
     }
-    if let Some(hp) = stat("max_hp") {
+    if let Some(hp) = changed.map_or_else(|| stat("max_hp"), |changed| changed.max_hp) {
         parts.push(format!("HP {hp}"));
     }
-    if let Some(ac) = stat("armor_class") {
+    if let Some(ac) = changed.map_or_else(|| stat("armor_class"), |changed| changed.armor_class) {
         parts.push(format!("AC {ac}"));
     }
     parts.join(" · ")
@@ -387,7 +391,7 @@ impl Snapshot {
                     id: *id,
                     name: e.entry.name.clone(),
                     lower: e.entry.name.to_lowercase(),
-                    detail: creature_detail(&e.entry, party),
+                    detail: creature_detail(&e.entry, party, None),
                     source: match (party, e.private) {
                         (true, _) => None,
                         (false, true) => Some("Campaign".to_owned()),
@@ -1726,10 +1730,20 @@ impl Encounters {
                             slot.party_slot.as_deref().unwrap_or(&slot.key)
                         )
                     });
-                let name = groups::shown_name(&slot.overrides, name);
+                let name = if resolved.is_some() {
+                    groups::shown_name(&slot.overrides, name)
+                } else {
+                    name
+                };
+                let definition = resolved
+                    .and_then(|id| snapshot.catalogue.entries.get(&id))
+                    .map(|e| &e.entry);
                 let detail = resolved
                     .and_then(|id| snapshot.creatures.iter().find(|c| c.id == id))
-                    .map_or("", |c| c.detail.as_str());
+                    .zip(definition)
+                    .map_or_else(String::new, |(creature, entry)| {
+                        groups::shown_detail(&slot.overrides, entry, &slot.side, creature)
+                    });
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
                 ui.horizontal(|ui| {
                     ui.set_min_height(Density::Glance.row());
@@ -1766,6 +1780,7 @@ impl Encounters {
                             *expanded = if is_open {
                                 None
                             } else {
+                                groups::show_form_when_it_opens(ui);
                                 Some(slot.key.clone())
                             };
                         }
@@ -1797,7 +1812,7 @@ impl Encounters {
                             if !detail.is_empty() {
                                 ui.add(
                                     egui::Label::new(
-                                        Type::Small.rich(ui, detail).color(colors().muted),
+                                        Type::Small.rich(ui, &detail).color(colors().muted),
                                     )
                                     .truncate(),
                                 );
@@ -1805,11 +1820,14 @@ impl Encounters {
                         });
                     });
                 });
-                let definition = resolved
-                    .and_then(|id| snapshot.catalogue.entries.get(&id))
-                    .map(|e| &e.entry);
                 if let Some(entry) = definition {
-                    groups::show_changes(ui, &slot.overrides, entry, &slot.side);
+                    groups::show_changes(
+                        ui,
+                        &slot.overrides,
+                        entry,
+                        &slot.side,
+                        Some(&slot.initial),
+                    );
                 }
                 if is_open {
                     ui.horizontal_wrapped(|ui| {
