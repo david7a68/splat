@@ -1736,7 +1736,10 @@ impl Run {
     }
 
     pub(super) fn toggle_party_sync(&mut self) {
-        match self.party_sync_plan() {
+        let plan = self.party_sync_plan();
+        self.keep_party_synced = matches!(plan, PartySync::Start(_));
+        self.dirty = true;
+        match plan {
             PartySync::Stop(indexes) => {
                 for index in indexes {
                     self.syncs.entry(index).or_default().stop();
@@ -1761,7 +1764,7 @@ impl Run {
         let names: Vec<(usize, String)> = self
             .syncs
             .iter()
-            .filter(|(_, sync)| sync.enabled && (sync.busy() || sync.dirty()))
+            .filter(|(_, sync)| sync.enabled && sync.unconfirmed())
             .filter_map(|(index, _)| {
                 Some((*index, self.state.participants.get(*index)?.name.clone()))
             })
@@ -1793,6 +1796,7 @@ impl Run {
                     .clicked()
                 {
                     sync.stop();
+                    self.dirty = true;
                 }
             });
         }
@@ -2534,7 +2538,10 @@ impl Run {
                 }
                 if p.definition.fields.contains_key("splat_external") {
                     design::group_label(ui, "D&D Beyond combat sync");
-                    ui.push_id(index, |ui| self.syncs.entry(index).or_default().show(ui));
+                    let sync = self.syncs.entry(index).or_default();
+                    let was = sync.enabled;
+                    ui.push_id(index, |ui| sync.show(ui));
+                    self.dirty |= was != sync.enabled;
                 }
             });
         if let Some(command) = command {

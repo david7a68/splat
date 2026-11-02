@@ -385,11 +385,8 @@ fn exchange(
                 );
                 continue;
             }
+            // A sheet this session cannot edit: the run keeps its value, and nothing goes.
             if !remote.can_edit {
-                problems.insert(
-                    key.clone(),
-                    "This session cannot edit the character (canEdit is false).".into(),
-                );
                 continue;
             }
             let changes = match mutations(&remote, key, target) {
@@ -434,7 +431,7 @@ pub enum SyncState {
     NotSent,
 }
 
-const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings, then select Sync party. Splat reads the sheet first, and asks before it replaces a value you changed.";
+const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings. Sync party then starts again, if it was on. Splat reads the sheet first, and asks before it replaces a value you changed.";
 /// Groups the run holds as its own values, so a saved run keeps them.
 const KEPT_BY_THE_RUN: [&str; 3] = ["hp", "death", "conditions"];
 const DIFFER_AFTER_READ: &str =
@@ -474,6 +471,9 @@ pub struct CombatSync {
     unsent: Groups,
     /// A first read arrived, and the run has not compared it with its values yet.
     first_read: bool,
+    /// Unsent HP, death saves and conditions also last until the next first read. A run holds
+    /// those itself. The Party page does not, so without this they would be lost there.
+    keeps_all_unsent: bool,
     /// Never talks to D&D Beyond. It only shows the state it was given.
     #[cfg(test)]
     simulated: bool,
@@ -550,13 +550,27 @@ impl CombatSync {
     pub fn session_lost(&self) -> bool {
         self.session_lost
     }
-    /// Changes D&D Beyond has not confirmed: on their way, or stranded with sync off.
+    /// Changes D&D Beyond has not confirmed: on their way, or stranded with sync off. A read
+    /// with nothing to send does not count, or sync that is always on would hold a close.
     pub fn unconfirmed(&self) -> bool {
-        (self.enabled && (self.busy() || self.dirty())) || self.stranded()
+        !self.read_only() && ((self.enabled && (self.writing() || self.dirty())) || self.stranded())
+    }
+    /// This session cannot edit the sheet, so a value that differs is the run's own to keep.
+    pub fn read_only(&self) -> bool {
+        self.remote.as_ref().is_some_and(|remote| !remote.can_edit)
+    }
+    pub fn keep_all_unsent(&mut self) {
+        self.keeps_all_unsent = true;
+    }
+    fn writing(&self) -> bool {
+        match (&self.pending, &self.remote) {
+            (Some(pending), Some(remote)) => pending.sent != remote.groups,
+            _ => false,
+        }
     }
     /// Sync is off, by the session or by the DM, and these changes have not gone.
     pub fn stranded(&self) -> bool {
-        !self.enabled && self.dirty()
+        !self.enabled && self.dirty() && !self.read_only()
     }
     /// Off, with a read to compare the run's values with.
     pub fn stopped_after_read(&self) -> bool {
@@ -570,7 +584,7 @@ impl CombatSync {
         self.desired
             .iter()
             .filter(|(key, value)| {
-                !KEPT_BY_THE_RUN.contains(&key.as_str())
+                (self.keeps_all_unsent || !KEPT_BY_THE_RUN.contains(&key.as_str()))
                     && self.remote.as_ref().and_then(|r| r.groups.get(*key)) != Some(*value)
             })
             .map(|(key, value)| (key.clone(), value.clone()))
@@ -721,6 +735,7 @@ impl CombatSync {
             }
         }
         let pending_edits = self.dirty()
+            && !self.read_only()
             && self.desired.iter().any(|(k, v)| {
                 !self.blocked.contains_key(k)
                     && self.remote.as_ref().and_then(|r| r.groups.get(k)) != Some(v)
@@ -788,6 +803,12 @@ impl CombatSync {
     /// how the next read can tell the DM's changes from the sheet's.
     fn enter_scope(&mut self, scope: (u64, String, String)) {
         let enabled = self.enabled;
+        let keeps_all_unsent = self.keeps_all_unsent;
+        // What this character's sheet held says nothing about another character's.
+        let same_character = self
+            .scope
+            .as_ref()
+            .is_none_or(|old| old.1 == scope.1 && old.2 == scope.2);
         self.keep_unsent();
         let unsent = std::mem::take(&mut self.unsent);
         let matched = self
@@ -798,9 +819,12 @@ impl CombatSync {
         self.stop();
         *self = Self::default();
         self.enabled = enabled;
+        self.keeps_all_unsent = keeps_all_unsent;
         self.scope = Some(scope);
-        self.matched = matched;
-        self.unsent = unsent;
+        if same_character {
+            self.matched = matched;
+            self.unsent = unsent;
+        }
     }
     /// True once for each first read, for the run to compare with its own values.
     pub fn take_first_read(&mut self) -> bool {
@@ -954,11 +978,17 @@ impl CombatSync {
                     let busy = self.busy().then_some("Wait for the current sheet read.");
                     let max = self.max_hp().unwrap_or(0);
                     let sheet = self.remote.as_ref().and_then(|r| r.groups.get(&key));
+                    let read_only = self.read_only();
                     let (use_label, keep_label) = (
                         format!("Use {} from D&D Beyond", short_value(&key, sheet, max)),
                         format!(
-                            "Keep {}, send to D&D Beyond",
-                            short_value(&key, self.desired.get(&key), max)
+                            "Keep {}, {}",
+                            short_value(&key, self.desired.get(&key), max),
+                            if read_only {
+                                "in Splat only"
+                            } else {
+                                "send to D&D Beyond"
+                            }
                         ),
                     );
                     if Action::secondary(&use_label)
@@ -970,10 +1000,11 @@ impl CombatSync {
                     {
                         self.use_remote(&key);
                     }
-                    let writable = self
-                        .remote
-                        .as_ref()
-                        .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
+                    let writable = read_only
+                        || self
+                            .remote
+                            .as_ref()
+                            .is_some_and(|r| r.can_edit && r.groups.contains_key(&key));
                     if Action::secondary(&keep_label)
                         .name("Keep Splat values and retry")
                         .density(Density::Read)
@@ -1279,6 +1310,81 @@ mod tests {
         }
     }
     #[test]
+    fn a_sheet_this_session_cannot_edit_keeps_the_runs_value_and_holds_nothing_up() {
+        let mut read_only = remote();
+        read_only.can_edit = false;
+        let mut sync = CombatSync::default();
+        sync.enabled = true;
+        sync.remote = Some(read_only.clone());
+        sync.desired = read_only.groups.clone();
+        sync.desired.get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
+        assert!(sync.dirty());
+        assert!(
+            !sync.unconfirmed(),
+            "nothing is on its way, so a close can go"
+        );
+        assert_eq!(sync.state(), SyncState::ReadOnly);
+        // A read leaves it alone.
+        let sent = sync.desired.clone();
+        sync.accept(
+            Outcome {
+                remote: read_only.clone(),
+                blocked: BTreeMap::new(),
+            },
+            &sent,
+        );
+        assert_eq!(sync.desired["hp"]["removedHitPoints"], 8);
+        assert!(sync.blocked.is_empty());
+        // The sheet changes too: the DM chooses, and can keep their value here.
+        let mut changed = read_only;
+        changed.groups.get_mut("hp").unwrap()["removedHitPoints"] = 12.into();
+        sync.accept(
+            Outcome {
+                remote: changed.clone(),
+                blocked: BTreeMap::new(),
+            },
+            &sent,
+        );
+        assert_eq!(sync.state(), SyncState::Conflict);
+        sync.keep_local("hp");
+        sync.accept(
+            Outcome {
+                remote: changed,
+                blocked: BTreeMap::new(),
+            },
+            &sent,
+        );
+        assert_eq!(sync.state(), SyncState::ReadOnly);
+        assert_eq!(sync.desired["hp"]["removedHitPoints"], 8);
+    }
+    #[test]
+    fn unsent_values_stay_with_their_character() {
+        let mut sync = CombatSync::default();
+        sync.keep_all_unsent();
+        sync.enabled = true;
+        sync.enter_scope((1, "1".into(), "123".into()));
+        sync.remote = Some(remote());
+        sync.desired = remote().groups;
+        sync.desired.get_mut("slots").unwrap()["level1"] = 9.into();
+        sync.enter_scope((1, "1".into(), "456".into()));
+        assert!(sync.unsent.is_empty(), "these are the other character's");
+        assert_eq!(sync.take_matched(), None);
+    }
+    #[test]
+    fn the_party_page_keeps_an_unsent_hp_change_across_a_restart() {
+        let mut sync = CombatSync::default();
+        sync.keep_all_unsent();
+        sync.enabled = true;
+        sync.remote = Some(remote());
+        sync.desired = remote().groups;
+        sync.desired.get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
+        sync.stop();
+        sync.start();
+        sync.accept_read(remote());
+        assert_eq!(sync.conflict_keys(), ["hp"]);
+        assert_eq!(sync.desired["hp"]["removedHitPoints"], 8);
+    }
+    #[test]
     fn exact_hp_payload_preserves_untouched_damage_when_only_temp_hp_changes() {
         let r = remote();
         let mut desired = r.groups.clone();
@@ -1321,7 +1427,7 @@ mod tests {
             exchange(&mut fake, Some(&old), &target, &BTreeSet::new(), false)
                 .unwrap()
                 .blocked
-                .contains_key("hp")
+                .is_empty()
         );
         assert!(fake.writes.is_empty());
         let mut changed = old.clone();
@@ -1471,6 +1577,24 @@ mod tests {
         assert_eq!(sync.desired["hp"]["removedHitPoints"], 8);
         assert!(sync.blocked.is_empty());
         assert!(sync.dirty());
+    }
+    #[test]
+    fn a_read_with_nothing_to_send_does_not_hold_a_close_and_a_write_does() {
+        let old = remote();
+        let mut sync = CombatSync::default();
+        sync.enabled = true;
+        sync.desired = old.groups.clone();
+        sync.remote = Some(old.clone());
+        let (_tx, rx) = mpsc::channel();
+        sync.pending = Some(Pending {
+            receiver: rx,
+            sent: old.groups.clone(),
+        });
+        assert!(sync.busy() && !sync.unconfirmed());
+        let mut sent = old.groups.clone();
+        sent.get_mut("hp").unwrap()["removedHitPoints"] = 8.into();
+        sync.pending.as_mut().unwrap().sent = sent;
+        assert!(sync.unconfirmed(), "the DM's change is on its way");
     }
     #[test]
     fn a_new_session_keeps_what_was_last_matched() {

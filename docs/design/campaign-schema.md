@@ -103,6 +103,10 @@ by these field definitions.
 `splat_encounter` contains `roster`, `sides`, `assumptions`, `completion`, `limits`,
 and optional `phases`, `containers`, `objects`, and `strategies`.
 
+An encounter's optional `combat_sync` defaults to true. With it true, linked party members start
+from their D&D Beyond sheets and the run stays matched with them. With it false, they start from
+their saved copies and `initial`, and the run sends nothing.
+
 Roster is an ordered array of `{key, creature: EntryRef | party_slot: key,
 side, controller, initial?, overrides?, initial_presence?, initiative_group?, health_policy?}`. Exactly one
 source is present. `initial_presence` defaults active; pending phase arrivals

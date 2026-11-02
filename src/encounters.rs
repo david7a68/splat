@@ -4,6 +4,7 @@ use crate::{
     content_workspace::{CampaignDocument, Catalogue, EntryRef, patch_fields},
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
     library::{note_path, write_note},
+    party::Party,
     persistence::{Campaign, Module},
 };
 use eframe::egui;
@@ -44,8 +45,18 @@ struct Setup {
     assumptions: Value,
     completion: Value,
     limits: Value,
+    /// The party's sheets decide its starting values, and the run stays matched with them. An
+    /// encounter says so only when it turns this off, so older notes do not change.
+    #[serde(default = "sync_by_default", skip_serializing_if = "is_true")]
+    combat_sync: bool,
     #[serde(flatten)]
     extra: Mapping,
+}
+fn sync_by_default() -> bool {
+    true
+}
+fn is_true(value: &bool) -> bool {
+    *value
 }
 fn yaml(text: &str) -> Value {
     serde_yaml_ng::from_str(text).expect("static YAML")
@@ -420,6 +431,8 @@ struct Creature {
     party: bool,
     /// A character whose sheet is on D&D Beyond. A sheet cannot be two participants.
     linked: bool,
+    /// The D&D Beyond character a party copy is of.
+    character: Option<String>,
 }
 const ROSTER_MAX_WIDTH: f32 = 860.0;
 const ADD_PANE: &str = "encounter_add";
@@ -502,6 +515,19 @@ fn creature_detail(entry: &Entry, party: bool, changed: Option<&Resolved>) -> St
     }
     parts.join(" · ")
 }
+/// The sheet of the party member in this roster slot, if the slot holds one.
+fn slot_sheet<'a>(
+    slot: &Slot,
+    snapshot: &Snapshot,
+    party: &'a Party,
+) -> Option<&'a splat::character::EntitySnapshot> {
+    let id = snapshot
+        .catalogue
+        .resolve_ref(slot.creature.as_ref()?)
+        .ok()?;
+    let creature = snapshot.creatures.iter().find(|c| c.id == id)?;
+    party.sheet(creature.character.as_deref()?)
+}
 fn roster_summary(setup: &Setup) -> String {
     let side = |slot: &&Slot| {
         slot.overrides
@@ -571,6 +597,14 @@ impl Snapshot {
                     },
                     party,
                     linked: e.entry.fields.contains_key("splat_external"),
+                    character: e
+                        .entry
+                        .fields
+                        .get("splat_external")
+                        .and_then(|external| external.get("character_id"))
+                        .and_then(Value::as_str)
+                        .filter(|_| party)
+                        .map(str::to_owned),
                 }
             })
             .collect();
@@ -674,6 +708,7 @@ enum EditorPane {
 const START_FIGHT: &str = "Start fight";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
+const SYNC_OPTION: &str = "Sync party with D&D Beyond";
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -1278,6 +1313,14 @@ impl Encounters {
                 .ok_or("Party-slot bindings are not supported by this runner yet.")?;
             let id = snapshot.catalogue.resolve_ref(reference)?;
             let entry = snapshot.catalogue.entries[&id].entry.clone();
+            // A synced player's sheet decides these, so the run starts from its copy of the sheet.
+            let synced =
+                fresh.setup.combat_sync && snapshot.creatures.iter().any(|c| c.id == id && c.party);
+            let starting = if synced {
+                Mapping::new()
+            } else {
+                slot.initial.clone()
+            };
             let present = match slot.extra.get("initial_presence").and_then(Value::as_str) {
                 None | Some("active") => true,
                 Some("absent" | "removed") => false,
@@ -1289,7 +1332,7 @@ impl Encounters {
                 slot.key.clone(),
                 slot.side.clone(),
                 entry,
-                &slot.initial,
+                &starting,
                 &overrides,
                 present,
             )?;
@@ -1326,6 +1369,9 @@ impl Encounters {
             &snapshot.options.directory(campaign)?,
             snapshot.options.initiative,
         )?;
+        if fresh.setup.combat_sync && campaign.dndbeyond_campaign_id.is_some() {
+            run.keep_party_synced();
+        }
         if let Some(carry) = self
             .carry
             .as_ref()
@@ -1391,7 +1437,7 @@ impl Encounters {
         self.refresh_runs(active);
         true
     }
-    pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
+    pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, party: &Party) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
             return;
@@ -1417,7 +1463,7 @@ impl Encounters {
                 self.editor_pane = EditorPane::Add;
             }
         } else if self.draft.is_some() {
-            self.editor_view(ui, &active, campaigns);
+            self.editor_view(ui, &active, campaigns, party);
             // What was just read may be what the DM adds next, so the results stay in view.
             if self.peek.is_some() {
                 self.editor_pane = EditorPane::Add;
@@ -1872,7 +1918,13 @@ impl Encounters {
         }
     }
 
-    fn editor_view(&mut self, ui: &mut egui::Ui, active: &Campaign, campaigns: &Campaigns) {
+    fn editor_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        campaigns: &Campaigns,
+        party: &Party,
+    ) {
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
         let mut back = false;
@@ -2095,10 +2147,19 @@ impl Encounters {
         let focus_search = &mut self.focus_search;
         let peek = &mut self.peek;
         let expanded = &mut self.expanded;
+        let linked = active.dndbeyond_campaign_id.is_some();
         if compact {
             match pane {
                 EditorPane::Roster => {
-                    Self::roster_pane(ui, draft, snapshot, focus_search, expanded, &mut make_yours);
+                    Self::roster_pane(
+                        ui,
+                        draft,
+                        snapshot,
+                        focus_search,
+                        expanded,
+                        linked.then_some(party),
+                        &mut make_yours,
+                    );
                 }
                 EditorPane::Add => match &mut self.creature {
                     Some(editor) => creature_step = Self::creature_pane(ui, editor),
@@ -2143,7 +2204,15 @@ impl Encounters {
                 if !design::column_dragged(ui.ctx(), ADD_PANE) {
                     ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
                 }
-                Self::roster_pane(ui, draft, snapshot, focus_search, expanded, &mut make_yours);
+                Self::roster_pane(
+                    ui,
+                    draft,
+                    snapshot,
+                    focus_search,
+                    expanded,
+                    linked.then_some(party),
+                    &mut make_yours,
+                );
             });
         self.after_panes(creature_step, make_yours, active, campaigns.modules());
     }
@@ -2187,7 +2256,7 @@ impl Encounters {
         if Action::secondary("Add party")
             .icon(icons::PARTY)
             .blocked(if !any_party {
-                Some("No saved party copies. Refresh Party first.")
+                Some("No saved party copies yet. Connect to D&D Beyond in Settings.")
             } else if missing.is_empty() {
                 Some("The whole party is on the roster.")
             } else {
@@ -2324,6 +2393,7 @@ impl Encounters {
         snapshot: &Snapshot,
         focus_search: &mut bool,
         expanded: &mut Option<String>,
+        linked_party: Option<&Party>,
         make_yours: &mut Option<usize>,
     ) {
         ui.label(
@@ -2331,6 +2401,11 @@ impl Encounters {
                 .rich(ui, format!("Roster ({})", draft.setup.roster.len()))
                 .color(colors().text),
         );
+        if let Some(party) = linked_party {
+            Self::sync_option(ui, draft, snapshot, party);
+        }
+        // Without a link there is no sheet to sync with, whatever the note says.
+        let live = linked_party.filter(|_| draft.setup.combat_sync);
         if draft.setup.roster.is_empty() {
             ui.add_space(design::S);
             ui.label(
@@ -2343,7 +2418,7 @@ impl Encounters {
             .id_salt("encounter_editor")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                Self::roster(ui, draft, snapshot, focus_search, expanded, make_yours);
+                Self::roster(ui, draft, snapshot, focus_search, expanded, live, make_yours);
                 ui.add_space(design::M);
                 design::group_label(ui, "Read-aloud and notes");
                 let response = ui.add(
@@ -2357,12 +2432,37 @@ impl Encounters {
             });
     }
 
+    /// Whether this encounter uses the party as D&D Beyond has it now. With it on, the DM sees
+    /// what the party has left while they choose what to put against it.
+    fn sync_option(ui: &mut egui::Ui, draft: &mut Draft, snapshot: &Snapshot, party: &Party) {
+        ui.checkbox(&mut draft.setup.combat_sync, SYNC_OPTION);
+        let words = if draft.setup.combat_sync {
+            "The party starts with the HP and conditions on their sheets. The run and D&D Beyond stay matched."
+        } else {
+            "The party starts from their saved copies and the starting values here. Nothing in this encounter reaches D&D Beyond, unless you select Sync party in the run."
+        };
+        ui.add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap());
+        if !draft.setup.combat_sync {
+            return;
+        }
+        let sheets: Vec<_> = draft
+            .setup
+            .roster
+            .iter()
+            .filter_map(|slot| slot_sheet(slot, snapshot, party))
+            .collect();
+        if let Some(line) = crate::party::party_line(&sheets, party.connected()) {
+            ui.add(egui::Label::new(Type::Small.rich(ui, line).color(colors().text)).wrap());
+        }
+    }
+
     fn roster(
         ui: &mut egui::Ui,
         draft: &mut Draft,
         snapshot: &Snapshot,
         focus_search: &mut bool,
         expanded: &mut Option<String>,
+        live: Option<&Party>,
         make_yours: &mut Option<usize>,
     ) {
         let sides: Vec<_> = draft
@@ -2397,12 +2497,28 @@ impl Encounters {
                 let definition = resolved
                     .and_then(|id| snapshot.catalogue.entries.get(&id))
                     .map(|e| &e.entry);
-                let detail = resolved
-                    .and_then(|id| snapshot.creatures.iter().find(|c| c.id == id))
-                    .zip(definition)
-                    .map_or_else(String::new, |(creature, entry)| {
-                        groups::shown_detail(&slot.overrides, entry, &slot.side, creature)
-                    });
+                let creature =
+                    resolved.and_then(|id| snapshot.creatures.iter().find(|c| c.id == id));
+                let synced = live.is_some() && creature.is_some_and(|c| c.party);
+                let detail = live
+                    .zip(creature)
+                    .and_then(|(party, creature)| party.sheet(creature.character.as_deref()?))
+                    .map_or_else(
+                        || {
+                            creature.zip(definition).map_or_else(
+                                String::new,
+                                |(creature, entry)| {
+                                    groups::shown_detail(
+                                        &slot.overrides,
+                                        entry,
+                                        &slot.side,
+                                        creature,
+                                    )
+                                },
+                            )
+                        },
+                        |record| crate::party::SheetNow::of(record).line(),
+                    );
                 // Its side says it is the party's, and the name has the room.
                 let detail = detail
                     .strip_prefix("Party copy · ")
@@ -2482,12 +2598,11 @@ impl Encounters {
                                 .truncate(),
                             );
                             if !detail.is_empty() {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, &detail).color(colors().muted),
-                                    )
-                                    .truncate(),
+                                // What a player has left is the reason to look, so all of it shows.
+                                let line = egui::Label::new(
+                                    Type::Small.rich(ui, &detail).color(colors().muted),
                                 );
+                                ui.add(if synced { line.wrap() } else { line.truncate() });
                             }
                         });
                     });
@@ -2524,7 +2639,14 @@ impl Encounters {
                                 slot.extra.insert("initiative_group".into(), group.into());
                             }
                         }
-                        for (field, label) in [("hp", "Starting HP"), ("temporary_hp", "Temp HP")] {
+                        // A synced player's sheet decides these. The values wait here in case
+                        // the DM turns sync off.
+                        let overrides: &[_] = if synced {
+                            &[]
+                        } else {
+                            &[("hp", "Starting HP"), ("temporary_hp", "Temp HP")]
+                        };
+                        for &(field, label) in overrides {
                             let mut enabled = slot.initial.contains_key(field);
                             if ui.checkbox(&mut enabled, label).changed() {
                                 if enabled {
@@ -2550,7 +2672,11 @@ impl Encounters {
                         Type::Small
                             .rich(
                                 ui,
-                                "With a value off, the creature's own starting state applies.",
+                                if synced {
+                                    "D&D Beyond decides this player's HP while this encounter syncs."
+                                } else {
+                                    "With a value off, the creature's own starting state applies."
+                                },
                             )
                             .color(colors().muted),
                     );
@@ -2905,7 +3031,8 @@ mod tests {
                     ..Default::default()
                 },
                 |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| editor.show(ui, &campaigns));
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| editor.show(ui, &campaigns, &Party::default()));
                 },
             );
             assert!(!output.shapes.is_empty());
@@ -3148,5 +3275,73 @@ mod tests {
         assert_ne!(plain, digest(&d.setup));
         d.setup.roster[0].overrides.clear();
         assert_eq!(plain, digest(&d.setup));
+    }
+    #[test]
+    fn combat_sync_is_on_unless_an_encounter_says_off_and_older_notes_do_not_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let id = creature(dir.path(), "Hero", true);
+        let mut draft = Draft::new();
+        draft.add(id, true);
+        assert!(draft.setup.combat_sync);
+        draft.save(&campaign, &[]).unwrap();
+        let path = dir.path().join(&draft.path);
+        assert!(!fs::read_to_string(&path).unwrap().contains("combat_sync"));
+        assert!(
+            Draft::open(dir.path(), &draft.path)
+                .unwrap()
+                .setup
+                .combat_sync
+        );
+
+        draft.setup.combat_sync = false;
+        assert!(draft.dirty());
+        draft.save(&campaign, &[]).unwrap();
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("combat_sync: false")
+        );
+        assert!(
+            !Draft::open(dir.path(), &draft.path)
+                .unwrap()
+                .setup
+                .combat_sync
+        );
+    }
+    #[test]
+    fn a_synced_player_starts_from_the_sheet_and_every_other_slot_from_the_encounter() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let hero = creature(dir.path(), "Hero", true);
+        let monster = creature(dir.path(), "Monster", false);
+        let mut draft = Draft::new();
+        draft.add(hero, true);
+        draft.add(monster, false);
+        for slot in &mut draft.setup.roster {
+            slot.initial.insert("hp".into(), 7.into());
+        }
+        draft.save(&campaign, &[]).unwrap();
+        let mut editor = Encounters {
+            active: Some(campaign.clone()),
+            draft: Some(draft),
+            ..Default::default()
+        };
+        let run = editor.start_run(&campaign, &[]).unwrap();
+        assert!(run.keeps_party_synced());
+        assert_eq!(
+            run.hp_of(0),
+            None,
+            "the sheet decides, so the override waits"
+        );
+        assert_eq!(run.hp_of(1), Some(7));
+
+        let draft = editor.draft.as_mut().unwrap();
+        draft.setup.combat_sync = false;
+        draft.save(&campaign, &[]).unwrap();
+        let run = editor.start_run(&campaign, &[]).unwrap();
+        assert!(!run.keeps_party_synced());
+        assert_eq!(run.hp_of(0), Some(7), "with sync off, the override applies");
+        assert_eq!(run.hp_of(1), Some(7));
     }
 }

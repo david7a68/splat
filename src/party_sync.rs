@@ -1,4 +1,5 @@
-//! Read-only API transport and visibility-scoped synchronization for the Party viewer.
+//! Read-only API transport and the background reads that keep every party sheet current,
+//! whichever page is showing, from the time Splat connects to D&D Beyond.
 use crate::auth::Session;
 use eframe::egui;
 use reqwest::{
@@ -22,6 +23,11 @@ use std::{
 use uuid::Uuid;
 const MAX_RESPONSE: u64 = 16 * 1024 * 1024;
 const INTERVAL: Duration = Duration::from_secs(15);
+/// The longest any sheet goes without a read, even if the stream reports nothing.
+const SAFETY_READ: Duration = Duration::from_secs(60);
+/// D&D Beyond can announce a change before its computed sheet has it, so a changed sheet is
+/// read this many times.
+const READS_OF_A_CHANGE: u8 = 2;
 const PORTRAIT_HOSTS: &[&str] = &["www.dndbeyond.com", "media.dndbeyond.com"];
 const PORTRAIT_RETRY: Duration = Duration::from_secs(60 * 60);
 #[derive(Clone, Deserialize)]
@@ -327,12 +333,17 @@ pub struct Reader {
     reconnect_at: Option<Instant>,
     stream_failures: u32,
     refresh_requested: bool,
+    /// The Party page shows. With the stream down, only then is a 15-second read worth its cost.
+    pub on_page: bool,
+    /// A read found a character with no copy before. Whoever lists the party should look again.
+    pub new_copy: bool,
+    /// Members the stream says changed, each with the reads still owed.
+    changed: BTreeMap<String, u8>,
     followup: Option<Instant>,
     last_check: Option<Instant>,
     cooldown: Option<Instant>,
     next: Option<Instant>,
     last_roster: Option<Instant>,
-    visible: bool,
     backoff: u32,
     cache_loaded: bool,
 }
@@ -350,7 +361,6 @@ impl Reader {
         epoch: u64,
         campaign: Option<(Uuid, String, std::path::PathBuf)>,
         connected: bool,
-        visible: bool,
     ) {
         let scope = campaign.map(|(local, remote, path)| Scope {
             epoch,
@@ -369,21 +379,6 @@ impl Reader {
             *self = next;
             self.load_cache(ctx);
         }
-        if !visible && self.visible {
-            if let Ok(mut gate) = self.gate.lock() {
-                *gate = false;
-            }
-            self.stream = None;
-            self.stream_open = false;
-            self.pending = None;
-            self.forcing.clear();
-            self.gate = Arc::new(Mutex::new(true));
-        }
-        if visible && !self.visible {
-            self.next = None;
-            self.refresh_requested = true;
-        }
-        self.visible = visible;
         self.poll();
     }
     pub fn local_scope(&self) -> Option<Uuid> {
@@ -429,9 +424,6 @@ impl Reader {
             self.load_cache(ctx);
             return;
         }
-        if !self.visible {
-            return;
-        }
         if let Some(session) = session.as_ref() {
             if self.stream.is_none()
                 && self.reconnect_at.is_none_or(|t| t <= Instant::now())
@@ -443,37 +435,29 @@ impl Reader {
                     ctx,
                 ));
             }
+            let events: Vec<_> = self
+                .stream
+                .as_ref()
+                .map_or_else(Vec::new, |stream| stream.rx.try_iter().collect());
             let mut closed = false;
-            if let Some(stream) = &self.stream {
-                while let Ok(event) = stream.rx.try_recv() {
-                    match event {
-                        crate::party_stream::Event::Open => {
-                            self.stream_open = true;
-                            self.stream_failures = 0;
-                            self.refresh_requested = true;
-                            self.next = None;
-                        }
-                        crate::party_stream::Event::Closed => {
-                            closed = true;
-                            self.stream_open = false;
-                            self.stream_failures = self.stream_failures.saturating_add(1);
-                            self.reconnect_at = Some(
-                                Instant::now()
-                                    + Duration::from_secs(2u64.pow(self.stream_failures.min(5))),
-                            );
-                        }
-                        crate::party_stream::Event::Changed(id) => {
-                            if self.selected.as_ref() == Some(&id) || id == "*" {
-                                self.refresh_requested = true;
-                                self.next = Some(Instant::now() + Duration::from_millis(750));
-                                self.followup = Some(Instant::now() + Duration::from_secs(5));
-                            } else if !self.members.iter().any(|m| m.id == id) {
-                                self.last_roster = None;
-                                self.refresh_requested = true;
-                                self.next = None;
-                            }
-                        }
+            for event in events {
+                match event {
+                    crate::party_stream::Event::Open => {
+                        self.stream_open = true;
+                        self.stream_failures = 0;
+                        self.refresh_requested = true;
+                        self.next = None;
                     }
+                    crate::party_stream::Event::Closed => {
+                        closed = true;
+                        self.stream_open = false;
+                        self.stream_failures = self.stream_failures.saturating_add(1);
+                        self.reconnect_at = Some(
+                            Instant::now()
+                                + Duration::from_secs(2u64.pow(self.stream_failures.min(5))),
+                        );
+                    }
+                    crate::party_stream::Event::Changed(id) => self.note_change(&id),
                 }
             }
             if closed {
@@ -489,21 +473,49 @@ impl Reader {
             return;
         }
         if let Some(session) = session {
+            // Each check can come an interval late, and every sheet is still read each minute.
             let roster = self
                 .last_roster
-                .is_none_or(|t| t.elapsed() >= Duration::from_secs(60));
+                .is_none_or(|t| t.elapsed() + INTERVAL >= SAFETY_READ);
             self.refresh(session, ctx, roster);
         }
+    }
+    /// The stream says a sheet changed. `*` means it could be any of them. Any member's change
+    /// is read, because a page other than Party may be showing that member.
+    fn note_change(&mut self, id: &str) {
+        let everyone = id == "*";
+        if everyone || self.members.iter().any(|m| m.id == id) {
+            for member in &self.members {
+                if everyone || member.id == id {
+                    self.changed.insert(member.id.clone(), READS_OF_A_CHANGE);
+                }
+            }
+            self.refresh_requested = true;
+            self.next = Some(Instant::now() + Duration::from_millis(750));
+            self.followup = Some(Instant::now() + Duration::from_secs(5));
+        } else {
+            self.last_roster = None;
+            self.refresh_requested = true;
+            self.next = None;
+        }
+    }
+    /// The members to read for a change, with one read fewer owed for each.
+    fn take_changed(&mut self) -> Vec<String> {
+        let changed = self.changed.keys().cloned().collect();
+        self.changed.retain(|_, owed| {
+            *owed -= 1;
+            *owed > 0
+        });
+        changed
     }
     fn wants_refresh(&self, now: Instant) -> bool {
         let safety_due = self
             .last_check
-            .is_none_or(|t| now.duration_since(t) >= Duration::from_secs(300));
-        self.visible
-            && self.pending.is_none()
+            .is_none_or(|t| now.duration_since(t) >= SAFETY_READ);
+        self.pending.is_none()
             && self.cooldown.is_none_or(|t| t <= now)
             && self.next.is_none_or(|t| t <= now)
-            && (self.refresh_requested || !self.stream_open || safety_due)
+            && (self.refresh_requested || (!self.stream_open && self.on_page) || safety_due)
     }
     pub fn refresh(&mut self, session: Session, ctx: &egui::Context, full: bool) {
         // Test builds have no route to D&D Beyond. A signed-in test keeps its saved sheets.
@@ -529,6 +541,7 @@ impl Reader {
         };
         let selected = self.selected.clone();
         let full = full || selected.is_none();
+        let changed = self.take_changed();
         let force = std::mem::take(&mut self.force);
         self.forcing = force.clone();
         let (tx, rx) = mpsc::channel();
@@ -575,6 +588,7 @@ impl Reader {
                     force
                         .iter()
                         .cloned()
+                        .chain(changed)
                         .chain(selected)
                         .collect::<BTreeSet<_>>()
                         .into_iter()
@@ -701,7 +715,7 @@ impl Reader {
                         if let Some(m) = self.members.iter_mut().find(|m| m.id == id) {
                             *m = member(&record);
                         }
-                        self.sheets.insert(id, record);
+                        self.new_copy |= self.sheets.insert(id, record).is_none();
                         self.backoff = 0;
                     }
                     Err(e) => {
@@ -840,7 +854,7 @@ mod tests {
         assert!(computed(br#"{"foundCharacters":[{"characterId":13}]}"#, "12").is_err());
     }
     #[test]
-    fn hiding_or_switching_campaign_closes_workers_and_discards_late_replies() {
+    fn switching_campaign_closes_workers_and_discards_late_replies() {
         let mut reader = Reader::default();
         let ctx = egui::Context::default();
         let id = Uuid::new_v4();
@@ -851,29 +865,43 @@ mod tests {
             path: "/unused".into(),
             connected: true,
         });
-        reader.visible = true;
         reader.gate = Arc::new(Mutex::new(true));
         let gate = reader.gate.clone();
         let (tx, rx) = mpsc::channel();
         reader.pending = Some(rx);
-        reader.sync(
-            &ctx,
-            1,
-            Some((id, "12".into(), "/unused".into())),
-            true,
-            false,
-        );
+        reader.sync(&ctx, 1, Some((id, "13".into(), "/unused".into())), true);
         assert!(!*gate.lock().unwrap());
         assert!(
             tx.send(Event::Stored(Stored::Roster, Err("late".into())))
                 .is_err()
         );
-        assert!(!reader.visible);
+    }
+    #[test]
+    fn a_change_to_any_member_is_read_twice_whichever_is_selected() {
+        let mut reader = Reader::default();
+        let member = |id: &str| Member {
+            id: id.into(),
+            name: id.into(),
+            level: None,
+        };
+        reader.members = vec![member("12"), member("13"), member("14")];
+        reader.selected = Some("12".into());
+        reader.note_change("13");
+        assert!(reader.refresh_requested);
+        assert_eq!(reader.take_changed(), ["13"]);
+        assert_eq!(reader.take_changed(), ["13"]);
+        assert!(reader.take_changed().is_empty());
+        reader.note_change("*");
+        assert_eq!(reader.take_changed(), ["12", "13", "14"]);
+        // Someone new: the roster is read, and no sheet is owed yet.
+        reader.take_changed();
+        reader.note_change("99");
+        assert!(reader.take_changed().is_empty());
+        assert!(reader.last_roster.is_none());
     }
     #[test]
     fn a_warning_stays_until_the_same_thing_saves_and_force_reads_at_once() {
         let mut reader = Reader::default();
-        reader.visible = true;
         reader.stream_open = true;
         reader.last_check = Some(Instant::now());
         let path = PathBuf::from("/campaign/note.md");
@@ -905,14 +933,13 @@ mod tests {
         assert!(reader.warnings.is_empty());
     }
     #[test]
-    fn stream_driven_refresh_obeys_visibility_debounce_and_rate_limits() {
+    fn stream_driven_refresh_obeys_debounce_and_rate_limits() {
         let now = Instant::now();
         let mut reader = Reader::default();
-        reader.visible = true;
         reader.stream_open = true;
         reader.last_check = Some(now);
         assert!(!reader.wants_refresh(now + Duration::from_secs(15)));
-        assert!(reader.wants_refresh(now + Duration::from_secs(300)));
+        assert!(reader.wants_refresh(now + SAFETY_READ));
         reader.select("12".into());
         assert!(reader.wants_refresh(now));
         reader.next = Some(now + Duration::from_millis(750));
@@ -922,13 +949,16 @@ mod tests {
         reader.next = None;
         assert!(!reader.wants_refresh(now + Duration::from_secs(60)));
         assert!(reader.wants_refresh(now + Duration::from_secs(120)));
-        reader.visible = false;
-        assert!(!reader.wants_refresh(now + Duration::from_secs(121)));
-        reader.visible = true;
         reader.cooldown = None;
         reader.refresh_requested = false;
         reader.stream_open = false;
-        assert!(reader.wants_refresh(now));
+        // The stream is down. Away from the page, a sheet waits for the safety read.
+        reader.next = Some(now);
+        reader.last_check = Some(now);
+        assert!(!reader.wants_refresh(now + INTERVAL));
+        assert!(reader.wants_refresh(now + SAFETY_READ));
+        reader.on_page = true;
+        assert!(reader.wants_refresh(now + INTERVAL));
     }
     #[test]
     #[ignore = "Uses the desktop keyring and active campaign, and writes authorized local character cache"]

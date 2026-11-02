@@ -423,6 +423,12 @@ impl Splat {
                 Page::Run,
             ));
         }
+        if self.party.unconfirmed() {
+            items.push((
+                "D&D Beyond has not confirmed a change made on the Party page.".to_owned(),
+                Page::Party,
+            ));
+        }
         if let Some(name) = self.encounters.run_not_saved() {
             items.push((
                 format!("Run \u{201c}{name}\u{201d} could not be saved."),
@@ -771,6 +777,13 @@ impl Splat {
                 color: c.sync.pending,
             });
         }
+        if self.party.sync_conflict() {
+            statuses.push(Status {
+                icon: icons::WARN,
+                word: "Party sync conflict",
+                color: c.sync.conflict,
+            });
+        }
         statuses
     }
 
@@ -1066,7 +1079,7 @@ impl Splat {
             Page::Encounters => {
                 if active.is_some() {
                     self.encounters.save_shortcut(ui.ctx(), &self.campaigns);
-                    self.encounters.show(ui, &self.campaigns);
+                    self.encounters.show(ui, &self.campaigns, &self.party);
                 } else {
                     self.no_campaign(ui, "No campaign to prepare yet");
                 }
@@ -1341,6 +1354,7 @@ impl eframe::App for Splat {
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()
                 || self.encounters.pending_sync()
+                || self.party.unconfirmed()
                 || self.sessions.recording()
                 || self.sessions.processing()
                 || self.sessions.busy_with_edit()
@@ -1439,9 +1453,15 @@ impl eframe::App for Splat {
                     .clone()
                     .map(|remote| (c.id, remote, c.path.clone()))
             }),
-            session.is_some(),
+            session.clone(),
             self.page == Page::Party,
         );
+        if std::mem::take(&mut self.party.new_copies)
+            && let Some(campaign) = &active
+        {
+            self.encounters
+                .refresh_content(ctx, &self.campaigns, &campaign.path);
+        }
         self.encounters
             .tick_sync(ctx, session, epoch, active.as_ref());
         self.sessions.on_page = self.page == Page::Sessions;

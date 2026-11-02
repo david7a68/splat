@@ -373,6 +373,8 @@ pub(crate) struct Run {
     focus_amount: bool,
     roster_height: f32,
     sync_to_restore: Vec<String>,
+    /// Sync starts by itself for each linked player, and again after a connection comes back.
+    keep_party_synced: bool,
     connected: bool,
     /// Test builds have no session. This lets the party-sync control be exercised.
     simulate_connection: bool,
@@ -638,6 +640,7 @@ impl Run {
             focus_amount: false,
             roster_height: 0.0,
             sync_to_restore: Vec::new(),
+            keep_party_synced: false,
             connected: false,
             simulate_connection: false,
             scroll_to_selected: false,
@@ -1529,6 +1532,32 @@ impl Run {
     pub fn restore_sync(&mut self, keys: &[String]) {
         self.sync_to_restore = keys.to_vec();
     }
+    /// The encounter asks for the party to stay synced, or the DM asked for it in this run.
+    pub fn keep_party_synced(&mut self) {
+        self.keep_party_synced = true;
+        self.dirty = true;
+    }
+    /// A linked player with no sync starts one, and one the lost connection stopped starts
+    /// again. A sync the DM stopped for one player stays stopped. Each first read asks before it
+    /// replaces a value the DM changed.
+    fn start_party_sync(&mut self, linked: Option<&str>) {
+        for index in self.linked_participants() {
+            let in_campaign = remote_identity(&self.state.participants[index])
+                .is_some_and(|(campaign, _)| linked == Some(campaign.as_str()));
+            if in_campaign && self.syncs.get(&index).is_none_or(|s| s.session_lost()) {
+                self.syncs.entry(index).or_default().start();
+            }
+        }
+    }
+    /// Players whose sync the DM stopped. A reopened run must not start these again.
+    fn stopped_players(&self) -> Vec<String> {
+        self.syncs
+            .iter()
+            .filter(|(_, sync)| !sync.enabled && !sync.session_lost() && sync.error.is_none())
+            .filter_map(|(index, _)| self.state.participants.get(*index))
+            .map(|p| p.key.clone())
+            .collect()
+    }
     fn resume_restored_sync(&mut self) {
         let keys = std::mem::take(&mut self.sync_to_restore);
         for index in self.linked_participants() {
@@ -1749,6 +1778,9 @@ fn local_group(
 /// the sheet's values stand.
 fn hold_local_changes(p: &mut Participant, sync: &mut crate::combat_sync::CombatSync) {
     let matched = sync.take_matched().filter(|matched| !matched.is_empty());
+    let last_read = matched
+        .clone()
+        .or_else(|| Some(p.combat_values.clone()).filter(|values| !values.is_empty()));
     let changed = match (matched, &p.started) {
         (Some(matched), _) => groups_that_differ(p, &matched, p.max_hp),
         (None, Some(started)) if p.combat_values.is_empty() => {
@@ -1772,7 +1804,15 @@ fn hold_local_changes(p: &mut Participant, sync: &mut crate::combat_sync::Combat
                 .and_then(|t| local_group(p, group, t, max))
                 .filter(|local| sheet.get(group.key()) != Some(local))
         {
-            sync.hold_conflict(group.key(), local);
+            // Only the run changed, and the sheet cannot be sent to: there is nothing to settle.
+            let sheet_same = last_read
+                .as_ref()
+                .is_some_and(|read| read.get(group.key()) == sheet.get(group.key()));
+            if sync.read_only() && sheet_same {
+                sync.note_while_stopped(group.key(), local);
+            } else {
+                sync.hold_conflict(group.key(), local);
+            }
         }
     }
 }
@@ -1817,6 +1857,14 @@ impl Run {
         }
         if self.connected && !self.sync_to_restore.is_empty() {
             self.resume_restored_sync();
+        }
+        if matches!(self.state.phase, Phase::Ended { .. }) {
+            // What the run recorded is its result. A later change to a sheet is not part of it.
+            // A sync with work to finish stays until it is done.
+            self.syncs
+                .retain(|_, sync| !sync.enabled || sync.unconfirmed());
+        } else if self.connected && self.keep_party_synced {
+            self.start_party_sync(linked);
         }
         let mut identities = std::collections::BTreeSet::new();
         let mut changes = Vec::new();
@@ -1960,6 +2008,11 @@ struct SavedRun {
     initiative: Initiative,
     state: State,
     setup_details: String,
+    /// Saves from before this choice load with it off. The DM can start sync from the run.
+    #[serde(default)]
+    keep_party_synced: bool,
+    #[serde(default)]
+    stopped_players: Vec<String>,
 }
 struct Storage {
     path: PathBuf,
@@ -2017,6 +2070,7 @@ impl Run {
         self.save()
     }
     pub fn save(&mut self) -> Result<(), String> {
+        let stopped_players = self.stopped_players();
         let Some(storage) = &mut self.storage else {
             return Err("This run has no save location.".into());
         };
@@ -2031,6 +2085,8 @@ impl Run {
             initiative: self.initiative.clone(),
             state: self.state.clone(),
             setup_details: self.setup_details.clone(),
+            keep_party_synced: self.keep_party_synced,
+            stopped_players,
         };
         let bytes = serde_json::to_vec_pretty(&saved).map_err(|e| e.to_string())?;
         let parent = storage.path.parent().ok_or("Invalid run location")?;
@@ -2185,6 +2241,14 @@ impl Run {
         {
             return Err("Saved run state is invalid; its file has not been changed.".into());
         }
+        let syncs = saved
+            .state
+            .participants
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| saved.stopped_players.contains(&p.key))
+            .map(|(index, _)| (index, crate::combat_sync::CombatSync::default()))
+            .collect();
         Ok(Self {
             id: saved.id,
             name: saved.name,
@@ -2216,7 +2280,7 @@ impl Run {
             outcome: String::new(),
             error: None,
             confirm_close: false,
-            syncs: BTreeMap::new(),
+            syncs,
             sync_shadows: BTreeMap::new(),
             panel: Panel::default(),
             closing: false,
@@ -2224,6 +2288,7 @@ impl Run {
             focus_amount: true,
             roster_height: 0.0,
             sync_to_restore: Vec::new(),
+            keep_party_synced: saved.keep_party_synced,
             connected: false,
             simulate_connection: false,
             scroll_to_selected: true,
@@ -2437,6 +2502,12 @@ impl Run {
     pub fn participant_stats(&self, index: usize) -> (String, Option<i64>, bool) {
         let p = &self.state.participants[index];
         (p.name.clone(), p.max_hp, p.present)
+    }
+    pub fn keeps_party_synced(&self) -> bool {
+        self.keep_party_synced
+    }
+    pub fn hp_of(&self, index: usize) -> Option<i64> {
+        self.state.participants[index].hp
     }
     pub fn simulate_connection(&mut self) {
         self.simulate_connection = true;
@@ -2913,6 +2984,144 @@ mod tests {
             crate::combat_sync::SyncState::Conflict,
             "the running sync keeps its conflict"
         );
+    }
+    #[test]
+    fn a_run_that_keeps_the_party_synced_starts_by_itself_and_respects_a_stop() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        linked(&mut run, 1, "22");
+        let (campaign, _) = remote_identity(&run.state.participants[0]).unwrap();
+        let ctx = egui::Context::default();
+        let session = || {
+            let hour = std::time::Duration::from_secs(3600);
+            Some(crate::auth::Session::for_test(hour, hour))
+        };
+        run.keep_party_synced();
+
+        run.tick_sync(&ctx, None, 1, Some(&campaign));
+        assert!(run.syncs.is_empty(), "no connection, so nothing to start");
+        run.tick_sync(&ctx, session(), 1, Some("another campaign"));
+        assert!(run.syncs.is_empty(), "only this campaign's players");
+
+        run.tick_sync(&ctx, session(), 1, Some(&campaign));
+        assert_eq!(run.syncs[&0].state(), SyncState::FirstRead);
+        assert_eq!(run.syncs[&1].state(), SyncState::FirstRead);
+        assert!(!run.syncs.contains_key(&2), "a creature has no sheet");
+
+        // The DM stopped one player. A later frame does not start it again.
+        run.syncs.get_mut(&1).unwrap().stop();
+        run.tick_sync(&ctx, session(), 1, Some(&campaign));
+        assert!(!run.syncs[&1].enabled);
+
+        // A lost connection comes back, and only what it stopped starts again.
+        run.tick_sync(&ctx, None, 1, Some(&campaign));
+        assert!(run.syncs[&0].session_lost());
+        run.tick_sync(&ctx, session(), 2, Some(&campaign));
+        assert!(run.syncs[&0].enabled && !run.syncs[&0].session_lost());
+        assert!(!run.syncs[&1].enabled);
+
+        // Stop for the whole party holds, as far as a later frame goes.
+        run.syncs.get_mut(&1).unwrap().start();
+        run.toggle_party_sync();
+        assert!(!run.keeps_party_synced());
+        run.tick_sync(&ctx, session(), 2, Some(&campaign));
+        assert!(!run.syncs[&0].enabled && !run.syncs[&1].enabled);
+    }
+    fn test_session() -> Option<crate::auth::Session> {
+        let hour = std::time::Duration::from_secs(3600);
+        Some(crate::auth::Session::for_test(hour, hour))
+    }
+    #[test]
+    fn a_stop_for_one_player_lasts_after_the_run_reopens() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut first = run();
+        linked(&mut first, 0, "11");
+        linked(&mut first, 1, "22");
+        let (remote, _) = remote_identity(&first.state.participants[0]).unwrap();
+        first
+            .configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        first.keep_party_synced();
+        let ctx = egui::Context::default();
+        first.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        first.syncs.get_mut(&1).unwrap().stop();
+        first.save().unwrap();
+
+        let path = first.path().unwrap().to_path_buf();
+        let mut reopened = Run::open(&path, campaign).unwrap();
+        reopened.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(reopened.syncs[&0].enabled, "still on for the other player");
+        assert!(!reopened.syncs[&1].enabled, "the DM's stop holds");
+    }
+    #[test]
+    fn a_finished_run_keeps_its_results_and_undoing_the_end_syncs_again() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        let (remote, _) = remote_identity(&run.state.participants[0]).unwrap();
+        run.keep_party_synced();
+        let ctx = egui::Context::default();
+        run.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(run.syncs[&0].enabled);
+
+        run.apply(Command::End("Won".into())).unwrap();
+        run.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(run.syncs.is_empty(), "no read can change the result");
+
+        run.undo();
+        run.tick_sync(&ctx, test_session(), 1, Some(&remote));
+        assert!(run.syncs[&0].enabled);
+    }
+    #[test]
+    fn a_read_only_sheet_leaves_the_runs_value_alone_at_a_first_read() {
+        use crate::combat_sync::CombatSync;
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        let (remote, _) = remote_identity(&run.state.participants[0]).unwrap();
+        let sheet = serde_json::json!({
+            "id": 11,
+            "removedHitPoints": 3,
+            "temporaryHitPoints": 3,
+            "deathSaves": {"successCount": 1, "failCount": 0},
+            "conditions": [{"id": 11, "level": null}],
+        });
+        let mut last = CombatSync::default();
+        last.enabled = true;
+        last.simulate_sheet(11, 20, &sheet);
+        run.state.participants[0].combat_values = last.values().clone();
+        run.state.participants[0].hp = Some(10);
+        let mut sync = CombatSync::default();
+        sync.enabled = true;
+        sync.simulate_sheet(11, 20, &sheet);
+        run.syncs.insert(0, sync);
+
+        run.tick_sync(&egui::Context::default(), test_session(), 1, Some(&remote));
+
+        assert_eq!(run.syncs[&0].state(), SyncState::ReadOnly);
+        assert_eq!(run.state.participants[0].hp, Some(10));
+        assert!(run.close_block().is_none());
+    }
+    #[test]
+    fn keeping_the_party_synced_is_saved_and_older_saves_load_with_it_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Uuid::new_v4();
+        let mut first = run();
+        first
+            .configure_storage(campaign, dir.path(), Initiative::default())
+            .unwrap();
+        first.keep_party_synced();
+        first.save().unwrap();
+        let path = first.path().unwrap().to_path_buf();
+        assert!(Run::open(&path, campaign).unwrap().keeps_party_synced());
+
+        let text = fs::read_to_string(&path).unwrap();
+        let mut older: serde_json::Value = serde_json::from_str(&text).unwrap();
+        older.as_object_mut().unwrap().remove("keep_party_synced");
+        fs::write(&path, serde_json::to_vec(&older).unwrap()).unwrap();
+        assert!(!Run::open(&path, campaign).unwrap().keeps_party_synced());
     }
     #[test]
     fn a_session_that_ends_stops_each_sync_says_so_and_keeps_unsent_changes_counted() {

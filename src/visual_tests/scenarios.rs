@@ -609,6 +609,10 @@ pub mod encounter_build {
     const SAVED_NOTE: &str = "Encounter saved.";
     const SAVED_ENCOUNTER: &str = "Bridge Ambush";
     const SAVED_FIRST_SLOT: &str = "1. Brannoch Vale";
+    const SYNC_OPTION: &str = "Sync party with D&D Beyond";
+    const PARTY_NOW: &str = "Party now: HP";
+    const LIVE_ROW: &str = "HP 11/41 · Bloodied · AC 15 · Poisoned";
+    const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
     const READ: &str = "Read";
     const RESULT_NAME: &str = "Wolf";
@@ -771,6 +775,30 @@ pub mod encounter_build {
         d.expect(SAVED_FIRST_SLOT);
         d.state("saved-roster", Sizes::All);
         d.goal("open a saved encounter");
+        d.begin_task();
+
+        // T5.6: what the party has left is in view while the DM decides what to put against it.
+        let (option, together, row) = (
+            d.has(SYNC_OPTION),
+            d.visible_text(PARTY_NOW),
+            d.visible_text(LIVE_ROW),
+        );
+        d.observe(
+            "T5.6",
+            option && together && row,
+            format!(
+                "With sync on, the roster has the option: {option}. It says what the party has now, together: {together}. And for each row: {row}"
+            ),
+        );
+        d.click(SYNC_OPTION);
+        d.state("saved-roster-sync-off", Sizes::Default);
+        d.observe(
+            "T5.6",
+            d.visible_text(LOCAL_ONLY) && !d.visible_text(PARTY_NOW),
+            "With sync off, the roster says that nothing reaches D&D Beyond, and the live line goes",
+        );
+        d.click(SYNC_OPTION);
+        d.expect(PARTY_NOW);
     }
 }
 
@@ -3032,6 +3060,9 @@ pub mod signed_in {
     const OVERVIEW: &str = "Overview";
     const MEMBER: &str = "Brannoch Vale";
     const SYNC_SECTION: &str = "Combat sync";
+    const SYNC_ON: &str = "Combat sync · On";
+    const SYNC_OFF: &str = "Combat sync · Off";
+    const RAIL_STOPPED: &str = "Party sync stopped";
     const SYNC_TOGGLE: &str = "Sync combat stats with D&D Beyond";
     const STOPPED: &str = "Combat sync stopped";
     const FIRST_READ: &str = "First read";
@@ -3100,26 +3131,31 @@ pub mod signed_in {
         d.click(OVERVIEW);
         d.begin_task();
 
-        // T7.3: sync stops on leaving, and the DM hears of it where they look next.
+        // T7.3: sync is on from the time Splat connects, and leaving the page does not stop it.
+        let on = d.has_containing(SYNC_ON);
         d.click_containing(SYNC_SECTION);
-        d.click(SYNC_TOGGLE);
         d.state("party-sync-on", Sizes::Default);
         go_library(d);
-        let rail = d.visible_text("Party sync stopped");
+        let rail = !d.visible_text(RAIL_STOPPED);
         go_party(d);
-        let page = d.visible_text(STOPPED);
-        d.state("party-sync-stopped", Sizes::Default);
         d.observe(
             "T7.3",
-            rail && page,
-            format!("Leaving Party with sync on: the rail says so: {rail}. The page says so on return: {page}"),
+            on && rail && d.has_containing(SYNC_ON) && !d.has_containing(STOPPED),
+            format!(
+                "Connected, sync is on with no click: {on}. Leaving Party does not stop it, and the rail stays quiet: {rail}"
+            ),
         );
-        d.click("Dismiss this message");
+        // The DM can turn it off here, and it stays off.
+        d.click(SYNC_TOGGLE);
+        go_library(d);
+        go_party(d);
         d.observe(
             "T7.3",
-            !d.has_containing(STOPPED),
-            "The DM can dismiss the message",
+            d.has_containing(SYNC_OFF) && !d.has_containing(STOPPED),
+            "Turned off by the DM, sync stays off and nothing calls that a fault",
         );
+        d.click_containing(SYNC_SECTION);
+        d.click(SYNC_TOGGLE);
         d.begin_task();
 
         // A short network drop keeps the session, and says so.
@@ -3167,7 +3203,8 @@ pub mod signed_in {
             row.contains(NOT_SENT)
                 && d.row_words(NOTHING_TO_SEND).contains(STOPPED_ROW)
                 && d.visible_text(&format!("{MEMBER}: kept in Splat, not sent"))
-                && rail.contains(RAIL_OFFLINE),
+                && rail.contains(RAIL_OFFLINE)
+                && rail.contains(RAIL_STOPPED),
             format!(
                 "A session that ends during a run: the row says {row}, the header says so, and the rail says {rail}"
             ),
@@ -3190,12 +3227,13 @@ pub mod signed_in {
         let hp_in_run = d.row_hp(MEMBER);
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
-        d.click(SYNC_PARTY);
         let row = d.row_words(MEMBER);
         d.observe(
             "T3.3",
-            row.contains(FIRST_READ) && !d.visible_text(STOPPED_ROW),
-            format!("After a reconnect, Sync party starts the stopped rows again: {row}"),
+            row.contains(FIRST_READ)
+                && !d.visible_text(STOPPED_ROW)
+                && !d.rail_words().contains(RAIL_STOPPED),
+            format!("After a reconnect, the stopped rows start again with no click: {row}"),
         );
         // The sheet still holds what it held before the outage.
         d.app_mut().encounters.simulate_read(MEMBER, 0);
