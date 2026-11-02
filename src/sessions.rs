@@ -749,6 +749,16 @@ pub fn insert_in_plan(body: &mut String, words: &str) {
     body.push_str(&rest);
 }
 
+/// The links to a thing that has a new name. Returns whether any changed.
+pub fn rename_links(body: &mut String, old: &str, new: &str) -> bool {
+    let renamed = body
+        .replace(&format!("[[{old}]]"), &format!("[[{new}]]"))
+        .replace(&format!("[[{old}|"), &format!("[[{new}|"));
+    let changed = renamed != *body;
+    *body = renamed;
+    changed
+}
+
 /// A long text, divided at its time headings, so that each part can be read alone.
 pub fn parts_of(text: &str) -> Vec<(String, String)> {
     let mut parts: Vec<(String, String)> = Vec::new();
@@ -977,6 +987,19 @@ impl Draft {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_name_follows_every_link_and_leaves_other_words() {
+        let mut body =
+            "- [[Ash Pack]]\n- [[Ash Pack|the pack]]\nAsh Pack is not a link.\n- [[Ash Packs]]\n"
+                .to_owned();
+        assert!(rename_links(&mut body, "Ash Pack", "Cinder Pack"));
+        assert_eq!(
+            body,
+            "- [[Cinder Pack]]\n- [[Cinder Pack|the pack]]\nAsh Pack is not a link.\n- [[Ash Packs]]\n"
+        );
+        assert!(!rename_links(&mut body, "Ash Pack", "Other"));
+    }
 
     fn new_note<'a>(number: u32, title: &'a str, template: &'a str) -> NewNote<'a> {
         NewNote {

@@ -4577,7 +4577,7 @@ pub mod session_recording {
 pub mod encounter_groups {
     use super::*;
     const LIST_HEADING: &str = "Encounter groups (4)";
-    const GROUPS_TAB: &str = "Groups";
+    const GROUPS_TAB: &str = "Arrivals";
     const NEW_GROUP: &str = "New group";
     const SAVE_GROUP: &str = "Save group";
     const SAVED_NOTE: &str = "Group saved.";
@@ -4841,10 +4841,123 @@ pub mod run_no_groups {
 
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN);
-        d.click("Groups");
+        d.click("Arrivals");
         d.expect("No encounter groups yet");
         d.state("no-groups", Sizes::Default);
         d.goal("see that a campaign has no groups");
+    }
+}
+
+/// W13: one creature joins a fight with nothing prepared, made up or found.
+pub mod run_add_creature {
+    use super::*;
+    const FIELD: &str = "Find or name a creature";
+
+    pub fn run(d: &mut Driver<'_>) {
+        resume_run(d, RUN);
+        d.click("Arrivals");
+        d.expect(FIELD);
+        d.state("arrivals-empty", Sizes::All);
+        d.check_tab_order("run, arrivals panel");
+
+        d.type_into(FIELD, "Ghost of the Mill");
+        d.expect("Made up here");
+        d.observe(
+            "T13.5",
+            d.has_containing("Type its HP"),
+            "A creature made up with no HP says what it needs",
+        );
+        d.state("arrivals-made-up-needs-hp", Sizes::All);
+        d.type_into("New creature HP", "22");
+        d.type_into("New creature AC", "14");
+        d.type_into("New creature initiative total", "9");
+        d.state("arrivals-made-up-ready", Sizes::Default);
+        d.click("Add Ghost of the Mill to the initiative list");
+        d.expect("Added by hand: Ghost of the Mill");
+        d.state("arrivals-made-up-added", Sizes::All);
+        d.goal("add a creature made up at the table to a running fight");
+        d.click_row("Ghost of the Mill");
+        d.click("Stat block");
+        d.expect("Added by hand");
+        d.state("made-up-creature-sheet", Sizes::Default);
+        d.click("Arrivals");
+        d.expect(FIELD);
+        d.observe(
+            "T13.5",
+            d.has_containing("Ghost of the Mill") && d.has_containing("Initiative 9"),
+            "A made-up creature joins the running fight, and the panel says where it went",
+        );
+
+        d.type_into(FIELD, "wolf");
+        d.expect("Choose Wolf");
+        d.state("arrivals-found", Sizes::Default);
+        d.click("Choose Wolf");
+        d.type_into("New creature count", "2");
+        d.state("arrivals-found-chosen", Sizes::Default);
+        d.click("Add Wolf to the initiative list");
+        d.expect("Added by hand: Wolf");
+        d.goal("add two of a campaign's creatures to a running fight");
+        d.observe(
+            "T13.5",
+            d.has_containing("Wolf 1") && d.has_containing("Wolf 2"),
+            "Creatures found in the campaign join with numbered names",
+        );
+    }
+}
+
+/// W13 and W14: a group assembled in the session's plan is first in the run's panel.
+pub mod session_plan_groups {
+    use super::*;
+
+    pub fn run(d: &mut Driver<'_>) {
+        d.click(NAV_SESSIONS);
+        new_session(d, "The Crossing");
+        show_plan(d);
+        d.click("Add a group");
+        d.click("New group");
+        d.expect("Back to the plan");
+        d.type_text("Ash Pack");
+        d.state("plan-group-empty", Sizes::All);
+        d.observe(
+            "T14.6",
+            d.has_containing("Session 1: The Crossing"),
+            "Assembling a group stays on the session's page",
+        );
+        d.type_into(FIND_CREATURE, "wolf");
+        d.click_beside("Wolf", ADD);
+        d.click_beside("Wolf", ADD);
+        d.state("plan-group-assembled", Sizes::All);
+        d.click("Save group");
+        d.expect("Edit group Ash Pack");
+        d.state("plan-group-saved", Sizes::All);
+        d.goal("assemble a group in the session's plan");
+        d.observe(
+            "T14.6",
+            d.has_containing("2 creatures") && !d.has("Back to the plan"),
+            "A group saved from the plan is linked in it, with what it holds",
+        );
+
+        d.click("Add a group");
+        d.click(&format!("Plan {GROUP_RIVALS}"));
+        d.expect(&format!("Edit group {GROUP_RIVALS}"));
+        d.state("plan-with-groups", Sizes::Default);
+
+        d.click(&format!("Edit group {GROUP_RIVALS}"));
+        d.expect("Back to the plan");
+        d.state("plan-group-edit", Sizes::Default);
+        d.click("Back to the plan");
+        d.expect(&format!("Edit group {GROUP_RIVALS}"));
+
+        d.click(NAV_ENCOUNTERS);
+        resume_run(d, RUN);
+        d.click("Arrivals");
+        d.expect("IN TONIGHT'S PLAN");
+        d.state("arrivals-tonight-first", Sizes::All);
+        d.observe(
+            "T14.6",
+            d.has("OTHER GROUPS"),
+            "The groups in tonight's plan come first in the run's panel",
+        );
     }
 }
 

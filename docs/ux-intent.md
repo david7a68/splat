@@ -295,7 +295,10 @@ An encounter group is added by the DM. Splat records it. It does not decide that
 to a creature is never hidden: the editor and the card show the old value, the new value, and what the DM must
 add by hand.
 
-**Done well:** T13.1 to T13.4.
+A creature can also arrive with nothing prepared. The DM finds it in the campaign, or names it and types its
+HP, and it follows the same initiative rules as a group. A creature made up this way stays in that one run.
+
+**Done well:** T13.1 to T13.5, T14.6.
 
 ### W14. Run the evening from one page
 **Trigger:** the DM sits down at the table, or a fight ends. **Goal:** the next thing to do is on the page already: the
@@ -383,7 +386,7 @@ These describe need, not layout. Screens can merge or split.
 | **Encounters** | What can I run, and what is in progress? | Start or resume a run | Runs in progress with date; templates; roster summary | Run history, new encounter | Scanning | No campaign; loading; load error; no encounters; unreadable run; content issues |
 | **Encounter editor** | Is this roster what I want? | Add participant, save | Roster with side and key stats, and each change with its base value; creature results with CR, HP, AC | Overrides, initiative group, reorder, notes | Scanning | New; dirty; saved; validation error; external change; unavailable creature; party-slot binding; needs repair; no party copies; no search results |
 | **Group editor** | Is this set of creatures what I want to add? | Add creature, save | Members with counts, and each change with its base value; default side; notes | Overrides, reorder | Scanning | New; dirty; saved; empty; unavailable creature; invalid change |
-| **Run: groups** | Who can arrive now, and what do they add? | Add, or drag to the list | Each group's name, members, count, XP | Notes, a typed total | Scanning | No groups; a group that cannot be added, with its reason; XP not known 
+| **Run: arrivals** | Who can arrive now, and what do they add? | Add one creature, add a group, or drag a group to the list | Each group's name, members, count, XP | Notes, a typed total | Scanning | No groups; a group that cannot be added, with its reason; XP not known 
 | **Library: browse/read** | What does this say? | Search, read | Title, type, summary, body; related links | Engine support, source, technical details | Reading | Loading; load error; no results; empty section; invalid note; read-only; unavailable link; validation messages |
 | **Library: author** | Is my entry correct and saved? | `Save` | Editor text; parse and validation errors; save state | `Copy to…`, `Discard changes`, `New entry`, packages | Reading | Clean; dirty; saved; invalid note; duplicate identity; external change; name clash; built-in read-only |
 | **Lookup** (new) | What does this say, right now? | Type, read | Result name, type; entry text | Open in Library | Glanceable to reading | No results; loading first time; draft elsewhere does not block |
@@ -571,6 +574,7 @@ reading the code, not from a test run.
 | T13.2 | A group joins the running fight in ≤ 1 with a roll, or with a typed total. Undo removes every member | encounter-groups | cost, state | New |
 | T13.3 | A changed creature shows its base and changed values in the editor and on the run's card, marked as changed | encounter-groups, run-overrides | state | New |
 | T13.4 | Dragging a group onto the initiative list adds every member | encounter-groups | state | New |
+| T13.5 | One creature, made up or found, joins the running fight from the Arrivals panel. A made-up creature says what it needs, and copies get numbered names | run-add-creature | cost, state | New |
 | T12.1 | A planned fight starts from the session in 1, and Close run comes back there in 1. The plan is words in the note | session-plan | cost, state | New |
 | T12.2 | A new run starts each player from the last fight of the session, says so, and goes back to the sheets in 1. A long rest the DM marks starts everyone at full | session-plan | cost, state | New |
 | T12.3 | One amount on several targets, with half for those who saved, in 2 once chosen, and one step of undo | session-plan | cost, state | New |
@@ -585,6 +589,7 @@ reading the code, not from a test run.
 | T14.3 | Exhaustion is one level with a control, and each step replaces the last | session-plan | state | New |
 | T14.4 | A fight planned a second time can start a second time | session-plan | state | New |
 | T14.5 | After a restart, Close run goes to the page the run began on, in the session the DM chose | session-plan | state | New |
+| T14.6 | A group is assembled in the session's plan, with the note beside it. It is linked in the plan when saved, and comes first in the run's Arrivals panel | session-plan-groups | cost, state | New |
 | T14.1 | Saved runs say View or Resume, and a run can be removed, with one step of undo | session-plan | state | New |
 | G1 | Every disabled control states why, in text or a working tooltip | all | state | Fail |
 | G2 | Go through every top-level page and back: each page restores section 3 state | nav-state **new** | state | Fail |

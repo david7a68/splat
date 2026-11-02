@@ -560,6 +560,7 @@ struct Snapshot {
     campaign_text: String,
     runs: Vec<crate::encounter_run::SavedRunInfo>,
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
+    run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
 }
 impl Snapshot {
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
@@ -636,8 +637,22 @@ impl Snapshot {
         let options = crate::encounter_settings::Options::load(campaign, &catalogue)?;
         let runs = crate::encounter_run::Run::list(&options.directory(campaign)?, campaign.id)?;
         let groups = Arc::new(groups::load(&catalogue, &creatures, campaign.id));
+        let run_creatures = Arc::new(
+            creatures
+                .iter()
+                .filter(|creature| !creature.linked)
+                .filter_map(|creature| {
+                    Some(Arc::new(crate::encounter_run::RunCreature {
+                        entry: Arc::new(catalogue.entries.get(&creature.id)?.entry.clone()),
+                        lower: creature.lower.clone(),
+                        detail: creature.detail.clone(),
+                    }))
+                })
+                .collect(),
+        );
         Ok(Self {
             groups,
+            run_creatures,
             options: options.clone(),
             saved_options: options,
             campaign_text: document.text,
@@ -687,6 +702,12 @@ pub struct Encounters {
     /// A new encounter joins the session's plan when it is first saved.
     plan_on_save: bool,
     pub saved_for_plan: Option<String>,
+    /// A group's old and new name, after an edit from the plan that links it.
+    pub renamed_in_plan: Option<(String, String)>,
+    /// The names linked in tonight's plan, for an open run.
+    pub planned_groups: Vec<String>,
+    /// The open group draft goes back to the session's plan when it is saved.
+    group_in_plan: bool,
     pub wants_session: bool,
     /// The run just opened began on the Session page, by way of this editor.
     pub run_from_session: bool,
@@ -872,6 +893,58 @@ impl Encounters {
         }
     }
     /// A new encounter from a session's plan. It joins the plan, and back leads there.
+    /// Assemble a group where the plan is, with the session's note still beside it.
+    pub fn new_group_in_plan(&mut self) {
+        self.group_draft = Some(GroupDraft::new());
+        self.group_in_plan = true;
+        self.focus_name = true;
+        self.editor_pane = EditorPane::Add;
+        self.error = None;
+        self.message = None;
+    }
+    /// Returns false when the group cannot be read. Encounters says why.
+    pub fn open_group_in_plan(&mut self, path: &str, active: &Campaign) -> bool {
+        match GroupDraft::open(&active.path, path) {
+            Ok(draft) => {
+                self.group_draft = Some(draft);
+                self.group_in_plan = true;
+                self.editor_pane = EditorPane::Roster;
+                self.error = None;
+                self.message = None;
+                true
+            }
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
+        }
+    }
+    pub fn group_open_in_plan(&self) -> bool {
+        self.group_in_plan && self.group_draft.is_some()
+    }
+    /// The group editor, as a part of the session's page.
+    pub fn group_in_plan_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        campaigns: &Campaigns,
+    ) {
+        self.group_editor_view(ui, active, campaigns, true);
+    }
+    /// The campaign's groups, for a session's plan.
+    pub fn plan_groups(&self) -> Arc<Vec<Arc<crate::encounter_run::RunGroup>>> {
+        self.snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.groups.clone())
+            .unwrap_or_default()
+    }
+    /// Why a group cannot be assembled from the plan now.
+    pub fn plan_group_blocked(&self) -> Option<&'static str> {
+        self.draft_dirty().then_some(BLOCKED_BY_DRAFT).or(self
+            .snapshot
+            .is_none()
+            .then_some("Still reading this campaign."))
+    }
     pub fn new_from_plan(&mut self) {
         self.start_new_draft();
         self.from_session = true;
@@ -961,6 +1034,7 @@ impl Encounters {
         self.active = Some(campaign.clone());
         self.draft = None;
         self.group_draft = None;
+        self.group_in_plan = false;
         self.snapshot = None;
         self.error = None;
         self.refreshing = false;
@@ -1423,7 +1497,9 @@ impl Encounters {
         };
         if let Some(snapshot) = &self.snapshot {
             run.groups = Some(snapshot.groups.clone());
+            run.creatures = Some(snapshot.run_creatures.clone());
         }
+        run.planned.clone_from(&self.planned_groups);
         if !run.show(ui) {
             return false;
         }
@@ -1458,7 +1534,7 @@ impl Encounters {
             self.message = None;
         }
         if self.group_draft.is_some() {
-            self.group_editor_view(ui, &active, campaigns);
+            self.group_editor_view(ui, &active, campaigns, false);
             if self.peek.is_some() {
                 self.editor_pane = EditorPane::Add;
             }
@@ -1600,6 +1676,7 @@ impl Encounters {
             return;
         }
         if new_group {
+            self.group_in_plan = false;
             self.group_draft = Some(GroupDraft::new());
             self.focus_name = true;
             self.error = None;
@@ -1673,6 +1750,7 @@ impl Encounters {
                 self.start_new_draft();
             }
             if create_group {
+                self.group_in_plan = false;
                 self.group_draft = Some(GroupDraft::new());
                 self.focus_name = true;
             }
@@ -1869,6 +1947,7 @@ impl Encounters {
         if let Some(path) = open_group.take() {
             match GroupDraft::open(&active.path, &path) {
                 Ok(draft) => {
+                    self.group_in_plan = false;
                     self.group_draft = Some(draft);
                     self.error = None;
                     self.message = None;

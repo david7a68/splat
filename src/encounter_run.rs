@@ -1,6 +1,8 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
+mod ad_hoc;
 mod view;
 use crate::encounter_settings::{Grouping, Initiative};
+pub(crate) use ad_hoc::RunCreature;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -104,6 +106,26 @@ impl RunGroup {
         let member = self.members.first()?;
         let base = Base::of(&member.entry, &self.side);
         member.overrides.resolve(&base).ok()
+    }
+    /// How many, on which side, and what they are worth, in one line.
+    pub(crate) fn summary(&self) -> String {
+        let mut summary = format!(
+            "{} · {} · XP {}",
+            crate::design::count(self.creature_count() as usize, "creature", "creatures"),
+            crate::design::reader::human_label(&self.side),
+            self.xp
+        );
+        if !self.xp_unknown.is_empty() || self.unavailable > 0 {
+            summary.push_str(" or more");
+        }
+        if self
+            .members
+            .iter()
+            .any(|member| !member.overrides.is_empty())
+        {
+            summary.push_str(" · Changed");
+        }
+        summary
     }
     /// Every creature the note names, whether or not it can be found now.
     pub(crate) fn creature_count(&self) -> u64 {
@@ -422,6 +444,11 @@ pub(crate) struct Run {
     /// The campaign's encounter groups, as they read from disk, once they have been read. A
     /// run does not save these.
     pub groups: Option<Arc<Vec<Arc<RunGroup>>>>,
+    /// The campaign's creatures that can join a fight, once they have been read.
+    pub creatures: Option<Arc<Vec<Arc<RunCreature>>>>,
+    /// The names linked in tonight's plan. Those groups come first in the panel.
+    pub planned: Vec<String>,
+    ad_hoc: ad_hoc::AdHoc,
     /// The total typed beside each group in the panel, until it is used.
     group_totals: BTreeMap<Uuid, String>,
 }
@@ -438,6 +465,8 @@ enum Panel {
 }
 /// How an added group's log line starts. The group panel shows that line while it is the last.
 const GROUP_ADDED: &str = "Encounter group ";
+/// How one creature's log line starts, with no group to name.
+const ONE_ADDED: &str = "Added by hand: ";
 /// What the group panel says of an addition before it points to the Log.
 const GROUP_LINE_LIMIT: usize = 200;
 /// What a saved run may hold. A larger one does not open again.
@@ -498,6 +527,8 @@ enum Command {
     Roll(String),
     /// Add every member of an encounter group, on this total, or by rolling.
     AddGroup(Arc<RunGroup>, Option<i64>),
+    /// One line of creatures with no group behind them.
+    AddCreature(Arc<RunGroup>, Option<i64>),
     /// One amount on several targets, as one step of undo.
     Several(Vec<Command>),
 }
@@ -671,6 +702,9 @@ impl Run {
             focus_field: None,
             focus_first_missing: true,
             groups: None,
+            creatures: None,
+            planned: Vec::new(),
+            ad_hoc: ad_hoc::AdHoc::default(),
             group_totals: BTreeMap::new(),
         })
     }
@@ -819,7 +853,7 @@ impl Run {
         group: &RunGroup,
         total: Option<i64>,
         grouping: Grouping,
-    ) -> Result<String, String> {
+    ) -> Result<(String, String), String> {
         if let Some(problem) = &group.problem {
             return Err(format!("{}: {problem}", group.name));
         }
@@ -854,11 +888,7 @@ impl Run {
         if state.phase == Phase::Setup {
             Self::sort_initiative(state);
         }
-        Ok(format!(
-            "{GROUP_ADDED}{} added: {}. {initiative}.",
-            group.name,
-            names.join(", ")
-        ))
+        Ok((names.join(", "), initiative))
     }
     fn apply(&mut self, command: Command) -> Result<(), String> {
         if matches!(self.state.phase, Phase::Ended { .. }) {
@@ -1032,7 +1062,21 @@ impl Run {
                 format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total)
             }
             Command::AddGroup(group, total) => {
-                Self::join_group(&mut next, &group, total, self.initiative.grouping)?
+                let (added, initiative) =
+                    Self::join_group(&mut next, &group, total, self.initiative.grouping)?;
+                format!("{GROUP_ADDED}{} added: {added}. {initiative}.", group.name)
+            }
+            Command::AddCreature(group, total) => {
+                let first = next.participants.len();
+                let (added, initiative) =
+                    Self::join_group(&mut next, &group, total, self.initiative.grouping)?;
+                // There is no group to have arrived with.
+                for p in &mut next.participants[first..] {
+                    if let Some(from) = &mut p.added_from {
+                        from.group.clear();
+                    }
+                }
+                format!("{ONE_ADDED}{added}. {initiative}.")
             }
             Command::Several(commands) => {
                 let mut lines = commands
@@ -1343,7 +1387,9 @@ impl Run {
             Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
             Command::Note(i, _) => format!("note on {}", name(i)),
             Command::Roll(expression) => format!("{expression} roll"),
-            Command::AddGroup(group, _) => format!("add {}", group.name),
+            Command::AddGroup(group, _) | Command::AddCreature(group, _) => {
+                format!("add {}", group.name)
+            }
             Command::Several(commands) => {
                 let word = match commands.first() {
                     Some(Command::Health(..)) => return "HP from the sheets".to_owned(),
@@ -2326,6 +2372,9 @@ impl Run {
             focus_field: None,
             focus_first_missing: true,
             groups: None,
+            creatures: None,
+            planned: Vec::new(),
+            ad_hoc: ad_hoc::AdHoc::default(),
             group_totals: BTreeMap::new(),
         })
     }
@@ -4565,6 +4614,159 @@ mod tests {
         run.undo();
         assert_eq!(run.state.participants.len(), 3);
     }
+    fn known_wolf() -> Arc<RunCreature> {
+        let mut entry = creature();
+        entry.name = "Wolf".into();
+        Arc::new(RunCreature {
+            entry: Arc::new(entry),
+            lower: "wolf".into(),
+            detail: "A wolf".into(),
+        })
+    }
+    fn form(query: &str, hp: &str) -> ad_hoc::AdHoc {
+        ad_hoc::AdHoc {
+            query: query.into(),
+            hp: hp.into(),
+            ..Default::default()
+        }
+    }
+    fn add_from(run: &mut Run, form: &ad_hoc::AdHoc, known: &[Arc<RunCreature>]) {
+        let checked = form.check(known).unwrap();
+        run.apply(Command::AddCreature(form.group(checked), form.total()))
+            .unwrap();
+    }
+
+    #[test]
+    fn a_creature_made_up_at_the_table_joins_is_undone_and_stays_in_the_saved_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut run = run();
+        begin(&mut run);
+        let before = run.state.participants.len();
+        let mut ghost = form("  Ghost of the Mill ", "22");
+        ghost.ac = "14".into();
+        ghost.total = "9".into();
+        ghost.count = "2".into();
+        add_from(&mut run, &ghost, &[]);
+        let p = &run.state.participants[before];
+        assert_eq!(p.name, "Ghost of the Mill 1");
+        assert_eq!(
+            (p.hp, p.max_hp, p.armor_class),
+            (Some(22), Some(22), Some(14))
+        );
+        assert_eq!(p.initiative, Some(9));
+        assert_eq!(p.side, "enemies");
+        assert!(p.changes.is_none(), "nothing here replaces a stat block");
+        assert_eq!(p.added_from.as_ref().unwrap().group, "");
+        assert!(run.state.log.last().unwrap().starts_with(ONE_ADDED));
+        run.undo();
+        assert_eq!(run.state.participants.len(), before);
+        add_from(&mut run, &ghost, &[]);
+        let campaign = stored(&mut run, dir.path());
+        let reopened = close_and_reopen(&mut run, campaign);
+        let p = &reopened.state.participants[before + 1];
+        assert_eq!(p.name, "Ghost of the Mill 2");
+        assert_eq!(p.max_hp, Some(22));
+        assert_eq!(p.definition.name, "Ghost of the Mill");
+    }
+
+    #[test]
+    fn a_creature_found_in_the_campaign_keeps_its_values_unless_the_dm_types_others() {
+        let known = [known_wolf()];
+        let mut run = run();
+        begin(&mut run);
+        let before = run.state.participants.len();
+        // The whole name typed is the same as choosing it, and has what it needs.
+        let mut wolf = form("WOLF", "");
+        wolf.total = "5".into();
+        add_from(&mut run, &wolf, &known);
+        let p = &run.state.participants[before];
+        assert_eq!(p.max_hp, Some(20));
+        assert!(p.changes.is_none());
+        let mut changed = form("", "31");
+        changed.picked = Some(known[0].clone());
+        changed.ac = "9".into();
+        changed.total = "5".into();
+        add_from(&mut run, &changed, &known);
+        let p = run.state.participants.last().unwrap();
+        assert_eq!((p.max_hp, p.armor_class), (Some(31), Some(9)));
+        let changes = p.changes.as_ref().unwrap();
+        assert_eq!(
+            changes.base.max_hp,
+            Some(20),
+            "the change shows what it replaced"
+        );
+        // The same number the entry has is no change.
+        let mut same = form("", "20");
+        same.picked = Some(known[0].clone());
+        same.total = "5".into();
+        add_from(&mut run, &same, &known);
+        assert!(run.state.participants.last().unwrap().changes.is_none());
+    }
+
+    #[test]
+    fn a_search_shows_the_whole_name_first_then_names_that_start_with_it() {
+        let named = |name: &str| {
+            Arc::new(RunCreature {
+                entry: Arc::new(creature()),
+                lower: name.into(),
+                detail: String::new(),
+            })
+        };
+        let known = [
+            named("cinder wolf"),
+            named("dire wolf"),
+            named("wolf spider"),
+            named("wolf"),
+        ];
+        let found: Vec<_> = ad_hoc::matches_for(&known, "wolf")
+            .iter()
+            .map(|creature| creature.lower.as_str())
+            .collect();
+        assert_eq!(found, ["wolf", "wolf spider", "cinder wolf", "dire wolf"]);
+    }
+
+    #[test]
+    fn a_creature_form_says_what_it_still_needs() {
+        let known = [known_wolf()];
+        let error = |form: ad_hoc::AdHoc| form.check(&known).err().unwrap();
+        assert!(error(form("", "")).contains("Find or name"));
+        assert!(error(form("Ghost", "")).contains("Type its HP"));
+        assert!(error(form("Ghost", "0")).contains("HP must be"));
+        let mut many = form("Ghost", "5");
+        many.count = "0".into();
+        assert!(error(many).contains("Count must be"));
+        let mut armor = form("Ghost", "5");
+        armor.ac = "1001".into();
+        assert!(error(armor).contains("AC must be"));
+        let mut blank = creature();
+        blank.fields.clear();
+        let unknown = [Arc::new(RunCreature {
+            entry: Arc::new(blank),
+            lower: "blank".into(),
+            detail: String::new(),
+        })];
+        let mut no_hp = form("", "");
+        no_hp.picked = Some(unknown[0].clone());
+        let error = no_hp.check(&unknown).err().unwrap();
+        assert!(error.contains("no maximum HP"), "{error}");
+    }
+
+    #[test]
+    fn an_added_creature_counts_as_the_dms_step_and_follows_the_side_rule() {
+        let mut run = run();
+        run.initiative.grouping = Grouping::BySide;
+        begin(&mut run);
+        let side_total = run.state.participants[0].initiative;
+        let fact = run.timeline_fact();
+        add_from(&mut run, &form("Ghost", "5"), &[]);
+        assert!(run.timeline_fact().played_since(&fact));
+        assert_eq!(
+            run.state.participants.last().unwrap().initiative,
+            side_total,
+            "by side, it takes its side's initiative with no roll"
+        );
+    }
+
     #[test]
     fn a_saved_run_reopens_with_added_groups_and_their_changes() {
         let dir = tempfile::tempdir().unwrap();

@@ -2,7 +2,7 @@
 
 ## Update: what the design changes did
 
-Design changes A, B, D, E and F below are built. C, adding a participant to a live fight, was left out of this work. Encounter groups, which reached `main` at the same time, add a prepared group to a running fight, so they answer most of it. The same evening,
+Design changes A, B, D, E and F below are built. C, adding a participant to a live fight, is now built too. The run's Arrivals panel adds one creature, found or made up, and encounter groups add a prepared group. A group can also be assembled in the session's plan. The measured counts below do not include these flows. The same evening,
 measured again in the running app with the changes in place:
 
 | Phase | Transitions before | Transitions now | Interactions before | Interactions now |
@@ -151,7 +151,7 @@ These cost trust at the table. Fix them first. None needs a design change.
 | # | Finding | Evidence |
 |---|---|---|
 | L1 | **The next fight forgets the last one.** Kestrel ended a fight on 7 HP and began the next on 11. The closed run held the true value. One correction costs 6, and each further player 4, so a whole party costs 22. The DM must also remember the numbers. Sync may cover this for a linked party, but I could not test sync here. | `summary.tsv`, `16-during-second-setup`, `17-during-setup-record` |
-| L2 | **A live fight cannot grow.** No control adds a participant to a run (`Command` in `src/encounter_run.rs`). Reinforcements are common at a table, and the domain language has phases for them. Today the only route is a new run, with all HP and initiative typed again. | `summary.tsv` |
+| L2 | **A live fight could not grow (fixed: see the update above).** No control added a participant to a run when this audit ran (`Command` in `src/encounter_run.rs`). Reinforcements are common at a table, and the domain language has phases for them. Today the only route is a new run, with all HP and initiative typed again. | `summary.tsv` |
 | L3 | **No page holds "tonight".** The DM thinks in order: scene, fight, rest, scene. Those live on Sessions, Encounters and Timeline. 10 of the 12 transitions at the table are in the gaps between fights. | Path in section 2 |
 | L4 | **Lookup cannot find what the DM wrote.** "miller" gave no note. Leaving the fight to read last week's note cost 2 transitions and 9 interactions, all overhead. | `12-during-lookup-notes` |
 | L5 | **A fight ends on the wrong page.** Close run goes to Encounters, a prep page. The DM then needs Sessions to record a rest. | Path in section 2 |

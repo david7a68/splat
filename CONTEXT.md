@@ -146,6 +146,12 @@ encounter; not a roster, which one encounter owns; not a rule group, which enabl
 rules together; and not an initiative group, which shares a turn order position.
 _Avoid_: Team, wave, spawn group
 
+**Made-up creature**:
+A creature the DM names and gives HP while a run is open, with no note behind it. It joins
+as an encounter group's members do, and it lives only in that run's saved state. It is not a
+campaign creature, and it does not become one.
+_Avoid_: Temporary creature, custom monster
+
 **Override**:
 An explicit change an encounter roster slot or encounter group member builds in to
 one creature, such as a custom name or extra HP. It belongs to that slot or member,

@@ -5,8 +5,8 @@ use super::{
     create_template, delete_recording, each_linked_name, folder as session_folder, folder_setting,
     fresh_line_in_note, insert_in_note, insert_in_plan, linked_names, list_notes, list_recordings,
     list_templates, nested_in_note, new_recording_path, parts_of, plain_links, recording_title,
-    save_folder, section_text, unreadable_notes, update_details, without_empty_sections,
-    without_own_heading,
+    rename_links, save_folder, section_text, unreadable_notes, update_details,
+    without_empty_sections, without_own_heading,
 };
 use crate::{
     credentials::{self, KeySlot},
@@ -80,6 +80,12 @@ enum Tab {
 /// What the rest of the app tells this page about fights.
 pub struct Plan<'a> {
     pub fights: &'a [PlanFight],
+    pub groups: &'a [std::sync::Arc<crate::encounter_run::RunGroup>],
+    /// Why no group can be assembled now.
+    pub group_blocked: Option<&'a str>,
+    /// A group being assembled takes the plan's place, beside the note.
+    pub group_open: bool,
+    pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
     /// Why no fight can start now.
     pub blocked: Option<&'a str>,
     pub run_directory: Option<PathBuf>,
@@ -258,6 +264,13 @@ pub struct Sessions {
     /// The encounter to start, by its path.
     pub wants_fight: Option<String>,
     pub wants_new_fight: bool,
+    pub wants_new_group: bool,
+    /// The path of a group to edit in the plan.
+    pub wants_group: Option<String>,
+    group_search: String,
+    focus_group_search: bool,
+    /// What tonight's note links, kept while another session's note is open.
+    tonight_links: Option<(Uuid, Vec<String>)>,
     pub wants_back_to_run: bool,
     /// A saved run to open, to read in full.
     pub wants_saved_run: Option<PathBuf>,
@@ -293,6 +306,86 @@ fn plan_row(
             );
         }
     });
+}
+
+/// The words of one of the plan's add menus.
+struct PlanMenu<'a> {
+    word: &'a str,
+    icon: &'a str,
+    name: &'a str,
+    new: &'a str,
+    blocked: Option<&'a str>,
+    find: &'a str,
+    hint: &'a str,
+}
+
+enum MenuChoice {
+    New,
+    Named(String),
+}
+
+/// A button whose menu offers a new thing, then the campaign's, with a search when they are many.
+fn plan_menu(
+    ui: &mut egui::Ui,
+    menu: &PlanMenu<'_>,
+    names: &[&str],
+    search: &mut String,
+    focus: &mut bool,
+) -> Option<MenuChoice> {
+    let response = Action::secondary(menu.word)
+        .icon(menu.icon)
+        .name(menu.name)
+        .density(Density::Read)
+        .show(ui);
+    if response.clicked() {
+        *focus = true;
+    }
+    let mut choice = None;
+    egui::Popup::menu(&response)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            // A fixed place, whatever the list's length.
+            if Action::quiet(menu.new)
+                .icon(icons::ADD)
+                .density(Density::Read)
+                .blocked(menu.blocked)
+                .show(ui)
+                .clicked()
+            {
+                choice = Some(MenuChoice::New);
+                ui.close();
+            }
+            if names.len() > FIGHT_SEARCH_FROM {
+                let field =
+                    design::search_field(ui, menu.find, search, menu.hint, FIGHT_MENU_WIDTH);
+                if std::mem::take(focus) {
+                    field.request_focus();
+                }
+            }
+            ui.separator();
+            let query = search.trim().to_lowercase();
+            let mut chosen = None;
+            egui::ScrollArea::vertical()
+                .id_salt(menu.word)
+                .max_height(FIGHT_MENU_HEIGHT)
+                .show(ui, |ui| {
+                    for name in names {
+                        if name.to_lowercase().contains(&query) {
+                            let row = ui.selectable_label(false, *name);
+                            design::named(ui, &row, &format!("Plan {name}"));
+                            if row.clicked() {
+                                chosen = Some((*name).to_owned());
+                            }
+                        }
+                    }
+                });
+            if let Some(name) = chosen {
+                choice = Some(MenuChoice::Named(name));
+                search.clear();
+                ui.close();
+            }
+        });
+    choice
 }
 
 /// One column of the wide page, the full height of the page.
@@ -2120,6 +2213,33 @@ impl Sessions {
             .insert(session, timeline::referenced_ids(&draft.body));
     }
 
+    /// A saved group has a new name. The plan's link to it follows.
+    pub fn rename_in_plan(&mut self, old: &str, new: &str) {
+        let (Some(draft), Some(session)) = (&mut self.draft, self.selected) else {
+            return;
+        };
+        if rename_links(&mut draft.body, old, new) {
+            draft.edited();
+            self.mentions
+                .insert(session, timeline::referenced_ids(&draft.body));
+        }
+    }
+
+    /// The names tonight's note links, for the run. The note on screen gives its words not yet
+    /// saved. Another session's note on screen does not change what tonight's plan holds.
+    pub fn tonight_links(&mut self) -> Vec<String> {
+        let tonight = self.current();
+        if self.selected == tonight
+            && let (Some(id), Some(draft)) = (tonight, &self.draft)
+        {
+            self.tonight_links = Some((id, linked_names(&draft.body)));
+        }
+        self.tonight_links
+            .as_ref()
+            .filter(|(id, _)| Some(*id) == tonight)
+            .map_or_else(Vec::new, |(_, names)| names.clone())
+    }
+
     /// Everything the DM wrote, for Lookup. The open note gives the words not yet saved.
     pub fn written(&self, book: &Book) -> Vec<Written> {
         let mut written: Vec<Written> = self
@@ -2232,6 +2352,10 @@ impl Sessions {
     /// The session as a list, top to bottom: what happened, then what is still to come. It
     /// replaces a walk between Encounters, Timeline and the note.
     fn plan_pane(&mut self, ui: &mut egui::Ui, book: &mut Book, plan: &Plan<'_>) {
+        if plan.group_open {
+            (plan.group_editor.borrow_mut())(ui);
+            return;
+        }
         let c = colors();
         let session = self.selected;
         problems(ui, book);
@@ -2264,6 +2388,7 @@ impl Sessions {
                 // Stay here. At the table, a rest is one press, and its details can wait.
                 added = quick_add(ui, book, session, &PLAN_KINDS, |ui| {
                     self.fight_menu(ui, plan);
+                    self.group_menu(ui, plan);
                 });
                 if let Some(id) = &added {
                     let days = timeline::day_numbers(&book.events);
@@ -2301,6 +2426,16 @@ impl Sessions {
                 let waiting = *done == 0;
                 *done = done.saturating_sub(1);
                 waiting
+            })
+            .collect();
+        // A group is not played, so it stays in the plan however often it arrives.
+        let planned_groups: Vec<_> = linked_names(&body)
+            .iter()
+            .filter_map(|name| {
+                plan.groups
+                    .iter()
+                    .find(|group| group.name.eq_ignore_ascii_case(name))
+                    .cloned()
             })
             .collect();
         let mut insert = None;
@@ -2481,6 +2616,34 @@ impl Sessions {
                         );
                     });
                 }
+                for group in &planned_groups {
+                    any = true;
+                    ui.push_id(group.id, |ui| {
+                        plan_row(
+                            ui,
+                            &widths,
+                            icons::GROUP,
+                            |ui| {
+                                wrapped_words(ui, Type::Strong, &group.name, c.text);
+                                wrapped_words(ui, Type::Small, group.summary(), c.muted);
+                                if let Some(problem) = &group.problem {
+                                    wrapped_words(ui, Type::Small, problem, c.result.warning);
+                                }
+                            },
+                            |ui| {
+                                if Action::quiet("Edit")
+                                    .name(&format!("Edit group {}", group.name))
+                                    .density(Density::Read)
+                                    .blocked(plan.group_blocked)
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    self.wants_group = Some(group.path.clone());
+                                }
+                            },
+                        );
+                    });
+                }
                 if added.is_some() {
                     ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
                 }
@@ -2488,7 +2651,7 @@ impl Sessions {
                     wrapped_words(
                         ui,
                         Type::Body,
-                        "Nothing here yet. Add a fight to the plan, or record a rest or a journey. A fight you start adds itself.",
+                        "Nothing here yet. Add a fight or a group to the plan, or record a rest or a journey. A fight you start adds itself.",
                         c.muted,
                     );
                 }
@@ -2551,63 +2714,60 @@ impl Sessions {
 
     /// Add a fight to the plan: one the campaign has, or a new one.
     fn fight_menu(&mut self, ui: &mut egui::Ui, plan: &Plan<'_>) {
-        let response = Action::secondary("Fight")
-            .icon(icons::ENCOUNTERS)
-            .name("Add a fight")
-            .density(Density::Read)
-            .show(ui);
-        if response.clicked() {
-            self.focus_fight_search = true;
+        let names: Vec<&str> = plan
+            .fights
+            .iter()
+            .map(|fight| fight.name.as_str())
+            .collect();
+        let menu = PlanMenu {
+            word: "Fight",
+            icon: icons::ENCOUNTERS,
+            name: "Add a fight",
+            new: "New encounter",
+            blocked: plan.blocked,
+            find: "Find a fight",
+            hint: "Find a fight…",
+        };
+        match plan_menu(
+            ui,
+            &menu,
+            &names,
+            &mut self.fight_search,
+            &mut self.focus_fight_search,
+        ) {
+            Some(MenuChoice::New) => self.wants_new_fight = true,
+            Some(MenuChoice::Named(name)) => self.add_to_plan(&name),
+            None => {}
         }
-        egui::Popup::menu(&response)
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .show(|ui| {
-                // A fixed place, whatever the list's length.
-                if Action::quiet("New encounter")
-                    .icon(icons::ADD)
-                    .density(Density::Read)
-                    .blocked(plan.blocked)
-                    .show(ui)
-                    .clicked()
-                {
-                    self.wants_new_fight = true;
-                    ui.close();
-                }
-                if plan.fights.len() > FIGHT_SEARCH_FROM {
-                    let field = design::search_field(
-                        ui,
-                        "Find a fight",
-                        &mut self.fight_search,
-                        "Find a fight…",
-                        FIGHT_MENU_WIDTH,
-                    );
-                    if std::mem::take(&mut self.focus_fight_search) {
-                        field.request_focus();
-                    }
-                }
-                ui.separator();
-                let query = self.fight_search.trim().to_lowercase();
-                let mut chosen = None;
-                egui::ScrollArea::vertical()
-                    .id_salt("session_fight_menu")
-                    .max_height(FIGHT_MENU_HEIGHT)
-                    .show(ui, |ui| {
-                        for fight in plan.fights {
-                            if fight.name.to_lowercase().contains(&query) {
-                                let row = ui.selectable_label(false, &fight.name);
-                                design::named(ui, &row, &format!("Plan {}", fight.name));
-                                if row.clicked() {
-                                    chosen = Some(fight.name.clone());
-                                }
-                            }
-                        }
-                    });
-                if let Some(name) = chosen {
-                    self.add_to_plan(&name);
-                    self.fight_search.clear();
-                    ui.close();
-                }
-            });
+    }
+
+    /// Add a group to the plan: one the campaign has, or a new one assembled here.
+    fn group_menu(&mut self, ui: &mut egui::Ui, plan: &Plan<'_>) {
+        let names: Vec<&str> = plan
+            .groups
+            .iter()
+            .map(|group| group.name.as_str())
+            .collect();
+        let menu = PlanMenu {
+            word: "Group",
+            icon: icons::GROUP,
+            name: "Add a group",
+            new: "New group",
+            blocked: plan.group_blocked,
+            find: "Find a group",
+            hint: "Find a group…",
+        };
+        match plan_menu(
+            ui,
+            &menu,
+            &names,
+            &mut self.group_search,
+            &mut self.focus_group_search,
+        ) {
+            Some(MenuChoice::New) => self.wants_new_group = true,
+            Some(MenuChoice::Named(name)) => self.add_to_plan(&name),
+            None => {}
+        }
     }
 
     /// How a fight ended, in place: final HP and the log, with no run to reopen.

@@ -323,6 +323,9 @@ Saving a template does not execute rules or start a combat run.
 
 ### Encounter groups
 
+A session's plan can assemble a group in place: choose **Group**, then **New group**. The note stays
+beside the editor, and the saved group is linked in the plan. **Edit** on its row opens it again.
+
 An encounter group is a reusable, named set of creatures that you prepare once and add to a
 running encounter when it arrives. It is a note with `splat_kind: encounter_group`, saved under
 `Encounter Groups/` in the campaign folder, with its members and counts, a default side, and your
@@ -349,7 +352,7 @@ Click a row, type an amount, and press Enter to apply final damage. **Heal** and
 **Temp HP** are beside it. Ctrl+click adds more rows for one amount, as one step of undo, and the mark on each of those rows
 gives it half, rounded down, for a save. **Conditions** lists the official conditions, one click
 each, and a condition's word on a row opens its rule in Lookup. The side panel holds the stat block or sheet, **Record** (HP corrections, death
-saves, notes, sync), **Log**, encounter **Notes**, and **Groups**. A spell named in a stat block opens
+saves, notes, sync), **Log**, encounter **Notes**, and **Arrivals**. A spell named in a stat block opens
 in Lookup. Damage uses temporary HP first; healing stops at maximum HP. You resolve
 attacks, damage modifiers, condition effects, Concentration checks, death and recovery,
 phases, and completion conditions. The dice field beside the amount accepts expressions
@@ -367,7 +370,11 @@ such as `2d6 + 3`, and shows the total beside it. The roll also goes in the log.
 | `C` | Conditions |
 | `Ctrl+K` | Open or close Lookup. `Escape` also closes it |
 
-**Groups** lists the campaign's encounter groups, with their members and total XP. Drag a group's
+**Arrivals** adds what joins a fight after it starts. To add one creature, find it in the campaign,
+or type a new name and its HP to make one up. A value you type replaces the creature's own for this
+fight, and the card shows the change. A creature you make up stays in this run, and has no note.
+Below that, the panel lists the campaign's encounter groups, with their members and total XP. Groups
+that tonight's plan links come first. Drag a group's
 name onto the initiative list, or press its **Add** button. Type a total beside it to use that for every
 member, as players give theirs. Otherwise the campaign's rule decides: one shared roll with the first
 member's bonus (identical NPCs, or the encounter's initiative groups), a roll for each member

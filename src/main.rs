@@ -1048,10 +1048,23 @@ impl Splat {
             Page::Sessions => {
                 if let Some(campaign) = &active {
                     let fights = self.encounters.plan_fights();
+                    let groups = self.encounters.plan_groups();
+                    let blocked = self.encounters.plan_blocked();
+                    let group_blocked = self.encounters.plan_group_blocked();
+                    let group_open = self.encounters.group_open_in_plan();
+                    let run_directory = self.encounters.run_directory(campaign);
+                    let (encounters, campaigns) = (&mut self.encounters, &self.campaigns);
+                    let mut group_editor = |ui: &mut egui::Ui| {
+                        encounters.group_in_plan_view(ui, campaign, campaigns);
+                    };
                     let plan = sessions::page::Plan {
                         fights: &fights,
-                        blocked: self.encounters.plan_blocked(),
-                        run_directory: self.encounters.run_directory(campaign),
+                        groups: &groups,
+                        group_blocked,
+                        group_open,
+                        group_editor: std::cell::RefCell::new(&mut group_editor),
+                        blocked,
+                        run_directory,
                         open_run: self.run_fact.as_ref().map(|fact| fact.id),
                     };
                     self.sessions
@@ -1266,6 +1279,19 @@ impl Splat {
         if let Some(name) = self.encounters.saved_for_plan.take() {
             self.sessions.add_to_plan(&name);
         }
+        if let Some((old, new)) = self.encounters.renamed_in_plan.take() {
+            self.sessions.rename_in_plan(&old, &new);
+        }
+        if std::mem::take(&mut self.sessions.wants_new_group) {
+            self.encounters.new_group_in_plan();
+        }
+        if let Some(path) = self.sessions.wants_group.take()
+            && let Some(campaign) = &active
+            && !self.encounters.open_group_in_plan(&path, campaign)
+        {
+            self.page = Page::Encounters;
+        }
+        self.encounters.planned_groups = self.sessions.tonight_links();
         if std::mem::take(&mut self.encounters.wants_session) {
             self.page = Page::Sessions;
         }

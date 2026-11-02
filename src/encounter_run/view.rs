@@ -195,7 +195,7 @@ impl Run {
         false
     }
 
-    fn run_command(&mut self, command: Command) {
+    pub(super) fn run_command(&mut self, command: Command) {
         let follow = matches!(command, Command::Next | Command::Begin);
         // A field that reports each key keeps the keyboard, or the next digit lands in the
         // note. The roll goes on to the first empty field.
@@ -1906,7 +1906,7 @@ impl Run {
                                 (Panel::Record, "Record"),
                                 (Panel::Log, "Log"),
                                 (Panel::Encounter, "Prep"),
-                                (Panel::Groups, "Groups"),
+                                (Panel::Groups, "Arrivals"),
                             ],
                         );
                         design::rule(ui);
@@ -1927,7 +1927,7 @@ impl Run {
                     (Panel::Record, "Record"),
                     (Panel::Log, "Log"),
                     (Panel::Encounter, "Prep"),
-                    (Panel::Groups, "Groups"),
+                    (Panel::Groups, "Arrivals"),
                 ],
             );
             design::rule(ui);
@@ -1980,9 +1980,53 @@ impl Run {
 
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
     /// with its button, by the rule the campaign chose for initiative.
+    /// Whatever joins a fight after it starts: one creature, or a prepared group.
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
+        let mut add = None;
+        egui::ScrollArea::vertical()
+            .id_salt("run_groups")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.add_space(design::XS);
+                self.just_added(ui);
+                self.add_creature_form(ui);
+                design::rule(ui);
+                add = self.group_list(ui);
+            });
+        if let Some(id) = add {
+            self.add_group_from_panel(id);
+        }
+    }
+
+    /// The roll and where it placed them. Undo or a later step takes this away.
+    fn just_added(&self, ui: &mut egui::Ui) {
+        let added = self
+            .history_labels
+            .last()
+            .and_then(|label| label.strip_prefix("add "))
+            .map(|group| format!("{}{group} added: ", super::GROUP_ADDED));
+        let Some(start) = added else {
+            return;
+        };
+        if let Some(line) = self
+            .state
+            .log
+            .last()
+            .filter(|line| line.starts_with(&start) || line.starts_with(super::ONE_ADDED))
+        {
+            let short: String = line.chars().take(super::GROUP_LINE_LIMIT).collect();
+            let shown = if short.len() < line.len() {
+                format!("{short}… The Log has the rest.")
+            } else {
+                short
+            };
+            design::message(ui, Tone::Success, &shown);
+        }
+    }
+
+    /// Returns the group the DM chooses to add. Those in tonight's plan come first.
+    fn group_list(&mut self, ui: &mut egui::Ui) -> Option<Uuid> {
         let c = colors();
-        ui.add_space(design::XS);
         ui.label(Type::Heading.rich(ui, "Encounter groups").color(c.text));
         let Some(groups) = self.groups.clone() else {
             ui.add(
@@ -1996,7 +2040,7 @@ impl Run {
                 )
                 .wrap(),
             );
-            return;
+            return None;
         };
         if groups.is_empty() {
             ui.add(
@@ -2004,13 +2048,13 @@ impl Run {
                     Type::Body
                         .rich(
                             ui,
-                            "No encounter groups yet. Make them on the Encounters page, with New group.",
+                            "No encounter groups yet. Assemble one in a session's plan, or on the Encounters page, with New group.",
                         )
                         .color(c.muted),
                 )
                 .wrap(),
             );
-            return;
+            return None;
         }
         ui.add(
             egui::Label::new(
@@ -2026,44 +2070,38 @@ impl Run {
             )
             .wrap(),
         );
-        // The roll and where it placed them. Undo or a later step takes this away.
-        let added = self
-            .history_labels
-            .last()
-            .and_then(|label| label.strip_prefix("add "))
-            .map(|group| format!("{}{group} added: ", super::GROUP_ADDED));
-        if let Some(line) = self
-            .state
-            .log
-            .last()
-            .filter(|line| added.as_ref().is_some_and(|start| line.starts_with(start)))
-        {
-            let short: String = line.chars().take(super::GROUP_LINE_LIMIT).collect();
-            let shown = if short.len() < line.len() {
-                format!("{short}… The Log has the rest.")
-            } else {
-                short
-            };
-            design::message(ui, Tone::Success, &shown);
-        }
         design::rule(ui);
+        let in_plan = |group: &Arc<super::RunGroup>| {
+            self.planned
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&group.name))
+        };
+        let (planned, others): (Vec<_>, Vec<_>) = groups.iter().partition(|group| in_plan(group));
         let mut add = None;
-        egui::ScrollArea::vertical()
-            .id_salt("run_groups")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                for group in groups.iter() {
-                    ui.push_id(group.id, |ui| {
-                        if self.group_row(ui, group) {
-                            add = Some(group.id);
-                        }
-                    });
-                    design::rule(ui);
-                }
-            });
-        if let Some(id) = add {
-            self.add_group_from_panel(id);
+        for (heading, list) in [("In tonight's plan", &planned), ("Other groups", &others)] {
+            if !planned.is_empty() && !list.is_empty() {
+                design::group_label(ui, heading);
+            }
+            for group in list.iter() {
+                ui.push_id(group.id, |ui| {
+                    if self.group_row(ui, group) {
+                        add = Some(group.id);
+                    }
+                });
+                design::rule(ui);
+            }
         }
+        add
+    }
+
+    /// By side, a creature joins its side's initiative with no roll, when the side has one.
+    pub(super) fn joins_side(&self, side: &str) -> bool {
+        self.initiative.grouping == Grouping::BySide
+            && self
+                .state
+                .participants
+                .iter()
+                .any(|p| p.npc && p.side == side && p.initiative.is_some())
     }
 
     /// Returns true when the DM chooses to add this group.
@@ -2205,16 +2243,10 @@ impl Run {
             );
             let total = text.parse::<i64>().ok();
             let enter = response.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-            // By side, a group can join its side's initiative with no roll.
             let leader = group.leader();
-            let joins_side = self.initiative.grouping == Grouping::BySide
-                && leader.as_ref().is_some_and(|leader| {
-                    self.state
-                        .participants
-                        .iter()
-                        .any(|p| p.npc && p.side == leader.side && p.initiative.is_some())
-                });
-            let may_roll = !joins_side;
+            let may_roll = !leader
+                .as_ref()
+                .is_some_and(|leader| self.joins_side(&leader.side));
             let label = match total {
                 Some(total) => format!("Add at {total}"),
                 None if may_roll => "Add and roll".to_owned(),
@@ -3024,7 +3056,7 @@ impl Run {
                 (Panel::Record, "Record"),
                 (Panel::Log, "Log"),
                 (Panel::Encounter, "Prep"),
-                (Panel::Groups, "Groups"),
+                (Panel::Groups, "Arrivals"),
             ],
         );
         design::rule(ui);
@@ -3387,7 +3419,14 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
         ui.add(
             egui::Label::new(
                 Type::Small
-                    .rich(ui, format!("Arrived with {}", added.group))
+                    .rich(
+                        ui,
+                        if added.group.is_empty() {
+                            "Added by hand".to_owned()
+                        } else {
+                            format!("Arrived with {}", added.group)
+                        },
+                    )
                     .color(c.muted),
             )
             .wrap(),
