@@ -215,8 +215,6 @@ it is. **Context:** desk and table. **Frequency:** weekly at the desk, sometimes
 **Friction:**
 - Member cards show name, level, and class only (`src/party.rs:120-127`). To compare
   AC or HP, open each sheet.
-- Leaving Party stops its sync with no notice (`src/main.rs:197`, `src/party.rs:31-33`).
-  Run sync continues, so the two behave differently.
 - `Source & parity` holds technical data at the same level as `Overview` (`:245-252`).
 - New characters do not reach the builder until `Reload` (`README.md:196-197`).
 
@@ -536,13 +534,14 @@ reading the code, not from a test run.
 | T5.3 | Roster of 4 party, 2 + 1 monsters saved in ≤ 10 | encounter-build | cost | About 14 |
 | T5.4 | Creature results stay smooth at about 340 rows | encounter-build | state | Not virtualised |
 | T5.5 | Edit `Run folder` with no draft, click every enabled button: no panic | encounter-build | state | Panic expected |
+| T5.6 | With sync on, the roster shows what the party has now. With it off, the roster says nothing reaches D&D Beyond | encounter-build | state | Fail |
 | T6.1 | Prose line length ≤ 75 characters at 1200x800 and 1920x1080; reader usable at 960x640 | library-browse | view, look | 760 px cap |
 | T6.2 | Back after a link returns to the prior entry and scroll in 1 | library-browse | cost, state | Fail |
 | T6.3 | List scroll at 2,065 rows stays at or below today's median | library-browse | state | 2.3 ms debug |
 | T6.4 | One reader: same entry looks the same in Library, Lookup, and run | library-browse | look | Fail |
 | T7.1 | Open a participant's sheet from the run in ≤ 1, roster still visible | party-from-run **new** | cost, view | 4; hidden |
 | T7.2 | Freshness text is visible on every sheet state | party | state | Pass |
-| T7.3 | Leaving Party with sync on tells the DM what stopped | party | state | Fail |
+| T7.3 | Sync is on with no click, and leaving Party does not stop it. Only a lost connection does, and the rail says so | party | state | Fail |
 | T8.1 | Copy a Library entry to the campaign, then add it to an unsaved encounter draft, with no manual reload and no draft loss | library-to-encounter **new** | state, cost | Blocked, about 19 |
 | T8.2 | Read another entry while a draft is open | library-author | state | Fail |
 | T8.3 | Failed save (invalid note, external change, name clash) keeps the draft and states the fix | library-author | state | Pass |
