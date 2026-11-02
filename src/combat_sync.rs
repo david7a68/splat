@@ -2167,6 +2167,48 @@ mod tests {
         assert_eq!(state.sheet.writes.len(), 1);
         assert_eq!(state.sheet.writes[0].body["removedHitPoints"], dragged);
     }
+    /// A read that lands in a drag waits too, and the changed sheet then asks.
+    #[test]
+    fn a_read_landing_during_a_drag_waits_for_its_end() {
+        use egui_kittest::kittest::Queryable;
+        let mut harness = rig();
+        let job = harness.state_mut().sync.begin_exchange();
+        harness.run_steps(3);
+        let start = harness.get_by_label(HP_FIELD).rect().center();
+        harness.hover_at(start);
+        harness.run_steps(2);
+        harness.drag_at(start);
+        harness.run_steps(2);
+        harness.hover_at(start - egui::vec2(20.0, 0.0));
+        harness.run_steps(2);
+        let mut changed = remote();
+        changed.groups.get_mut("hp").unwrap()["removedHitPoints"] = 20.into();
+        job.reply
+            .send(Ok(Outcome {
+                remote: changed,
+                blocked: BTreeMap::new(),
+            }))
+            .unwrap();
+        harness.hover_at(start - egui::vec2(30.0, 0.0));
+        harness.run_steps(3);
+        let remote = harness.state().sync.remote.as_ref().unwrap();
+        assert_eq!(
+            remote.groups["hp"]["removedHitPoints"], 5,
+            "not applied yet"
+        );
+        harness.drop_at(start - egui::vec2(30.0, 0.0));
+        harness.run_steps(3);
+        assert_eq!(harness.state().sync.conflict_keys(), vec!["hp"]);
+    }
+    /// However long the DM stayed, the delay starts when they leave, with the read long overdue.
+    #[test]
+    fn the_delay_starts_on_leaving_with_a_read_overdue() {
+        let mut harness = rig();
+        type_21(&mut harness);
+        pass_time(&mut harness);
+        harness.key_press(egui::Key::Enter);
+        number_goes_out_after_the_delay(&mut harness);
+    }
     /// Nothing that ends a sync waits for a focus. A stop does not need the field to end.
     #[test]
     fn stop_and_a_session_end_do_not_wait_for_the_field() {
