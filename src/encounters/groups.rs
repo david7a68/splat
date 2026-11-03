@@ -36,7 +36,7 @@ const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
 /// The name of a roster slot's button, for the form it opens.
 pub(super) const SLOT_OPTIONS: &str =
-    "Options: starting HP, temporary HP, initiative group and overrides";
+    "Options: starting HP, temporary HP, initiative group and changes";
 
 fn one() -> u64 {
     1
@@ -57,6 +57,7 @@ struct GroupSetup {
     encounter: Option<EntryRef>,
     members: Vec<MemberDraft>,
 }
+#[derive(Clone)]
 pub(super) struct GroupDraft {
     path: String,
     baseline: Option<String>,
@@ -275,7 +276,7 @@ impl GroupDraft {
                 .map_err(&named)?;
             if resolved.max_hp.is_none() {
                 return Err(named(
-                    "this creature has no maximum HP, so a run cannot add it. Set it in this member's overrides."
+                    "this creature has no maximum HP, so a run cannot add it. Set it with this member’s Edit button."
                         .into(),
                 ));
             }
@@ -425,7 +426,7 @@ pub(super) fn load(
                             error.replace("1000000", "1,000,000").replace('-', "−")
                         )),
                         Ok(resolved) if resolved.max_hp.is_none() => Some(format!(
-                            "{what}: {} has no maximum HP. Set it in this member's overrides.",
+                            "{what}: {} has no maximum HP. Set it with this member’s Edit button.",
                             entry.name
                         )),
                         Ok(_) => None,
@@ -533,7 +534,6 @@ pub(super) fn list(
         .filter(|group| group.encounter.is_some() && group.encounter_name.is_none())
         .collect();
     let owned = snapshot.groups.len() - any.len() - orphans.len();
-    design::group_heading(ui, "Groups", any.len() + orphans.len());
     if snapshot.groups.is_empty() {
         ui.add(
             egui::Label::new(
@@ -644,7 +644,14 @@ pub(super) fn of_encounter(
         Type::Heading
             .rich(
                 ui,
-                format!("Groups for this encounter ({})", draft.groups.len()),
+                format!(
+                    "Groups for this encounter ({})",
+                    draft
+                        .groups
+                        .iter()
+                        .filter(|group| group.belongs_to(draft.id))
+                        .count()
+                ),
             )
             .color(colors().text),
     );
@@ -665,9 +672,13 @@ pub(super) fn of_encounter(
         groups,
         add_to,
         focus_group,
+        removed_group,
         ..
     } = draft;
     for (index, group) in groups.iter_mut().enumerate() {
+        if group.setup.encounter.as_ref().and_then(|owner| owner.id) != Some(this.0) {
+            continue;
+        }
         let path = group.path.clone();
         let adding = add_to.as_deref() == Some(path.as_str());
         ui.push_id(&path, |ui| {
@@ -683,17 +694,12 @@ pub(super) fn of_encounter(
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            // A saved group leaves by Belongs to. This one has no note yet.
-                            if group.baseline.is_none()
-                                && Action::quiet("Remove")
-                                    .density(Density::Read)
-                                    .name(&format!("Remove group {}", group.name))
-                                    .show(ui)
-                                    .clicked()
-                            {
-                                discard = Some(index);
-                            }
-                            if Action::secondary("Add creatures")
+                            super::row_menu(ui, &group.name, |ui| {
+                                if super::menu_action(ui, "Remove", None) {
+                                    discard = Some(index);
+                                }
+                            });
+                            if Action::quiet("Add creatures")
                                 .density(Density::Read)
                                 .name(&format!("Add creatures to {}", group.name))
                                 .selected(adding)
@@ -731,9 +737,30 @@ pub(super) fn of_encounter(
         });
     }
     if let Some(index) = discard {
-        let gone = groups.remove(index);
+        let gone = groups[index].clone();
         if add_to.as_deref() == Some(gone.path()) {
             *add_to = None;
+        }
+        if gone.baseline.is_some() {
+            groups[index].setup.encounter = None;
+        } else {
+            groups.remove(index);
+        }
+        *removed_group = Some((index, gone));
+    }
+    if let Some((_, removed)) = removed_group.as_ref() {
+        let words = if removed.baseline.is_some() {
+            "Group removed. Save makes it available for any encounter."
+        } else {
+            "New group removed."
+        };
+        if design::message_with_action(ui, Tone::Info, words, "Undo remove group") {
+            let (index, removed) = removed_group.take().expect("a removed group");
+            if let Some(group) = groups.iter_mut().find(|group| group.path == removed.path) {
+                *group = removed;
+            } else {
+                groups.insert(index.min(groups.len()), removed);
+            }
         }
     }
     if Action::secondary("New group for this encounter")
@@ -1010,9 +1037,9 @@ pub(super) fn overrides_form(
     let heading = design::group_label(
         ui,
         if sides.is_some() {
-            "Changes in this encounter"
+            "Changed for this encounter"
         } else {
-            "Changes in this group"
+            "Changed for this group"
         },
     );
     if ui
@@ -1078,43 +1105,32 @@ pub(super) fn overrides_form(
         Some(_) if overrides.side.is_none() => {}
         Some(sides) => {
             ui.horizontal(|ui| {
-                let (rect, _) = ui.allocate_exact_size(
-                    egui::vec2(LABEL_WIDTH, Density::Read.control()),
-                    egui::Sense::hover(),
+                ui.label(
+                    Type::Small
+                        .rich(ui, "Side, over the row’s")
+                        .color(colors().muted),
                 );
-                ui.painter().text(
-                    rect.left_center(),
-                    egui::Align2::LEFT_CENTER,
-                    "Side, over the row's",
-                    Type::Small.font(ui),
-                    colors().muted,
-                );
-                let shown = overrides.side.as_deref().unwrap_or("Same");
-                let combo = egui::ComboBox::from_id_salt("override_side")
-                    .icon(design::combo_icon)
-                    .width(120.0)
-                    .selected_text(design::reader::human_label(shown))
-                    .show_ui(ui, |ui| {
-                        if ui
-                            .selectable_label(overrides.side.is_none(), "Same")
-                            .clicked()
-                        {
-                            overrides.side = None;
-                        }
-                        for option in sides {
-                            let picked = overrides.side.as_deref() == Some(option.as_str());
-                            if ui
-                                .selectable_label(picked, design::reader::human_label(option))
-                                .clicked()
-                            {
-                                overrides.side = Some(option.clone());
-                            }
-                        }
-                    });
-                design::named(ui, &combo.response, "Changed side");
+                let mut changed = overrides.side.clone().unwrap_or_else(|| side.to_owned());
+                super::side_control(ui, "Changed side", &mut changed, sides);
+                overrides.side = Some(changed);
+                if Action::quiet("Same as row").show(ui).clicked() {
+                    overrides.side = None;
+                }
             });
         }
-        None => text_row(ui, "Side", &mut overrides.side, side),
+        None => {
+            ui.horizontal(|ui| {
+                ui.label(Type::Small.rich(ui, "Side").color(colors().muted));
+                let mut changed = overrides.side.clone().unwrap_or_else(|| side.to_owned());
+                super::side_control(ui, "Changed side", &mut changed, &[]);
+                if changed != overrides.side.as_deref().unwrap_or(side) {
+                    overrides.side = Some(changed);
+                }
+                if overrides.side.is_some() && Action::quiet("Same as group").show(ui).clicked() {
+                    overrides.side = None;
+                }
+            });
+        }
     }
     if !linked || !overrides.conditions.is_empty() {
         conditions_row(ui, &mut overrides.conditions);
@@ -1279,8 +1295,8 @@ impl Encounters {
         campaigns: &Campaigns,
         in_plan: bool,
     ) {
-        let has_run = self.has_run();
         let dirty = self.draft_dirty();
+        let has_run = self.has_run();
         // The Session page has no save of its own to give this key to.
         let save_key = in_plan
             && dirty
@@ -1297,63 +1313,50 @@ impl Encounters {
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let (mut back, mut save, mut discard) = (false, false, false);
-        // The title and its actions need more room than the panes do.
-        let two_rows = ui.available_width() < 1040.0;
-        let title = |ui: &mut egui::Ui, back: &mut bool, draft: &mut GroupDraft| {
-            *back = Action::quiet(back_word)
-                .icon(icons::BACK)
+        ui.horizontal(|ui| {
+            back = Action::quiet(icons::BACK)
                 .name(back_name)
+                .hint(back_word)
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)
                 .clicked();
-            let room = if two_rows { 150.0 } else { 450.0 };
-            let width = (ui.available_width() - room).clamp(120.0, 360.0);
+            let width = (ui.available_width() - design::S * 17.0).max(Density::Scan.control());
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft.name)
                     .id(design::focus_id(NAME_FIELD))
                     .desired_width(width)
                     .min_size(egui::vec2(0.0, Density::Scan.control()))
-                    .margin(egui::vec2(design::S, 5.0))
+                    .margin(egui::vec2(design::S, design::XS))
                     .font(Type::Heading.font(ui)),
             );
             design::named(ui, &response, &format!("Group name: {}", draft.name));
             if focus_name {
                 design::focus_and_select(ui, response.id, &draft.name);
             }
-        };
-        let actions = |ui: &mut egui::Ui, save: &mut bool, discard: &mut bool| {
-            let (icon, word, color) = if dirty {
-                (icons::DRAFT, "Unsaved", colors().document.unsaved)
-            } else if let Some(note) = &saved_note {
-                (icons::OK, note.as_str(), colors().document.saved)
-            } else {
-                (icons::OK, "No changes", colors().muted)
-            };
-            design::status(ui, Status { icon, word, color });
-            if dirty {
-                *discard = Action::quiet("Discard").show(ui).clicked();
-            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                *save = if dirty && !has_run {
+                save = if dirty && !has_run {
                     Action::primary("Save group")
                 } else {
                     Action::secondary("Save group")
                 }
                 .blocked_if(!dirty, "No changes to save.")
-                .key("Ctrl+S")
                 .show(ui)
                 .clicked();
             });
-        };
-        if two_rows {
-            ui.horizontal(|ui| title(ui, &mut back, draft));
-            ui.horizontal(|ui| actions(ui, &mut save, &mut discard));
-        } else {
-            ui.horizontal(|ui| {
-                title(ui, &mut back, draft);
-                actions(ui, &mut save, &mut discard);
-            });
-        }
+        });
+        ui.horizontal_wrapped(|ui| {
+            if dirty {
+                discard = Action::quiet("Discard").show(ui).clicked();
+            }
+            let (icon, word, color) = if dirty {
+                (icons::DRAFT, "Unsaved", colors().document.unsaved)
+            } else if let Some(note) = saved_note.as_deref() {
+                (icons::OK, note, colors().document.saved)
+            } else {
+                (icons::OK, "No changes", colors().muted)
+            };
+            design::status(ui, Status { icon, word, color });
+        });
         design::rule(ui);
         if back {
             self.close_group_in_plan();
@@ -1466,11 +1469,39 @@ fn add_pane(
         search,
         focus_search,
         peek,
-        &|_| false,
+        super::SearchRoster {
+            already: &|_| false,
+            members: Some(member_summary(draft, snapshot)),
+        },
     );
     if let Some((id, _)) = chosen {
         draft.add(id);
     }
+}
+
+pub(super) fn member_summary(draft: &GroupDraft, snapshot: &Snapshot) -> String {
+    if draft.setup.members.is_empty() {
+        return "No members yet".to_owned();
+    }
+    draft
+        .setup
+        .members
+        .iter()
+        .map(|member| {
+            let name = snapshot
+                .catalogue
+                .resolve_ref(&member.creature)
+                .ok()
+                .and_then(|id| snapshot.catalogue.entries.get(&id))
+                .map_or("Unavailable creature", |entry| entry.entry.name.as_str());
+            format!(
+                "{} × {}",
+                member.count,
+                shown_name(&member.overrides, name.to_owned())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn members_pane(
@@ -1497,7 +1528,7 @@ fn group_fields(
     ui.horizontal(|ui| {
         ui.label(Type::Small.rich(ui, SIDE_FIELD).color(colors().muted));
         let name = format!("{SIDE_FIELD} for {}", draft.name);
-        design::text_input(ui, &name, &mut draft.setup.side, DEFAULT_SIDE, 160.0);
+        super::side_control(ui, &name, &mut draft.setup.side, &[]);
     });
     if open.is_none() {
         ui.label(
@@ -1521,10 +1552,12 @@ fn group_fields(
             .color(color),
     );
     if draft.setup.members.is_empty() {
-        ui.label(
-            Type::Body
-                .rich(ui, "Add creatures from the list.")
-                .color(colors().muted),
+        design::empty_state(
+            ui,
+            icons::ENCOUNTERS,
+            "No members yet",
+            "Choose creatures in Add creatures.",
+            |_| {},
         );
     }
     members(ui, draft, snapshot, expanded);
@@ -1598,68 +1631,23 @@ fn members(
                 .unwrap_or_default();
             let key = format!("{path}:member_{index}");
             let is_open = expanded.as_deref() == Some(key.as_str());
+            ui.label(Type::Strong.rich(ui, format!("{}. {name}", index + 1)).color(colors().text)).on_hover_text(&name);
+            if !detail.is_empty() {
+                let response = ui.add(egui::Label::new(Type::Small.rich(ui, super::stat_line(&detail)).color(colors().muted)).wrap());
+                design::named(ui, &response, &detail);
+            }
             ui.horizontal(|ui| {
-                ui.set_min_height(Density::Glance.row());
+                ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
+                let count = ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT));
+                design::named(ui, &count, &format!("How many of {name}"));
+                if entry.is_some() && Action::quiet("Edit").density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
+                    *expanded = if is_open { None } else { show_form_when_it_opens(ui); Some(key.clone()) };
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 2.0;
-                    if design::icon_button(ui, icons::REMOVE, "Remove").clicked() {
-                        remove = Some(index);
-                    }
-                    if index + 1 < total {
-                        if design::icon_button(ui, icons::MOVE_DOWN, "Move down").clicked() {
-                            lower = Some(index);
-                        }
-                    } else {
-                        ui.add_space(Density::Read.control());
-                    }
-                    if index > 0 {
-                        if design::icon_button(ui, icons::MOVE_UP, "Move up").clicked() {
-                            raise = Some(index);
-                        }
-                    } else {
-                        ui.add_space(Density::Read.control());
-                    }
-                    // With no creature, there is nothing for a change to change.
-                    if entry.is_none() {
-                        ui.add_space(0.0);
-                    } else if Action::quiet("Overrides")
-                        .density(Density::Read)
-                        .name(&button)
-                        .selected(is_open)
-                        .show(ui)
-                        .clicked()
-                    {
-                        *expanded = if is_open {
-                            None
-                        } else {
-                            show_form_when_it_opens(ui);
-                            Some(key.clone())
-                        };
-                    }
-                    ui.add_space(design::XS);
-                    let count =
-                        ui.add(egui::DragValue::new(&mut member.count).range(1..=MAX_COUNT));
-                    design::named(ui, &count, &format!("How many of {name}"));
-                    ui.add_space(design::XS);
-                    ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
-                    ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        ui.add(
-                            egui::Label::new(
-                                Type::Strong
-                                    .rich(ui, format!("{}. {name}", index + 1))
-                                    .color(colors().text),
-                            )
-                            .truncate(),
-                        );
-                        if !detail.is_empty() {
-                            ui.add(
-                                egui::Label::new(
-                                    Type::Small.rich(ui, detail).color(colors().muted),
-                                )
-                                .truncate(),
-                            );
-                        }
+                    super::row_menu(ui, &name, |ui| {
+                        if super::menu_action(ui, "Move up", (index == 0).then_some("Already first.")) { raise = Some(index); }
+                        if super::menu_action(ui, "Move down", (index + 1 == total).then_some("Already last.")) { lower = Some(index); }
+                        if super::menu_action(ui, "Remove", None) { remove = Some(index); }
                     });
                 });
             });

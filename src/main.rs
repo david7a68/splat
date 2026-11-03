@@ -53,6 +53,57 @@ fn main() -> eframe::Result {
     )
 }
 
+/// The paused detail wraps below the Run label, at the same inset as an open run.
+fn paused_run_item(ui: &mut egui::Ui, detail: &str) -> egui::Response {
+    let c = colors();
+    let name = format!("Run · {detail}");
+    let label_inset = design::S * 3.0 + design::XS;
+    let detail = ui.painter().layout(
+        detail.to_owned(),
+        Type::Small.font(ui),
+        c.muted,
+        (ui.available_width() - label_inset - design::XS).max(design::S),
+    );
+    let height = (Type::Body.line() + detail.size().y + design::S)
+        .max(Density::Glance.control() + design::XS);
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), height),
+        egui::Sense::click(),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &name)
+    });
+    if ui.is_rect_visible(rect) {
+        if response.hovered() {
+            ui.painter()
+                .rect_filled(rect, design::RADIUS_CONTROL, c.hover);
+        }
+        ui.painter().text(
+            rect.min + egui::vec2(design::S + design::XS / 2.0, design::XS),
+            egui::Align2::LEFT_TOP,
+            icons::RUN,
+            Type::Body.font(ui),
+            c.muted,
+        );
+        ui.painter().text(
+            rect.min + egui::vec2(label_inset, design::XS),
+            egui::Align2::LEFT_TOP,
+            "Run",
+            Type::Body.font(ui),
+            c.muted,
+        );
+        ui.painter().galley(
+            rect.min + egui::vec2(label_inset, Type::Body.line() + design::XS),
+            detail,
+            c.muted,
+        );
+        if response.has_focus() {
+            design::focus_ring(ui, rect);
+        }
+    }
+    response
+}
+
 struct Splat {
     page: Page,
     campaign_tab: CampaignTab,
@@ -617,8 +668,33 @@ impl Splat {
                 ui.spacing_mut().interact_size.y = Density::Read.control();
                 self.campaigns.selector(ui, blocked);
             });
+            if self.encounters.draft_dirty() {
+                ui.add(
+                    egui::Label::new(
+                        Type::Small
+                            .rich(ui, "Save or discard the draft first")
+                            .color(c.muted),
+                    )
+                    .wrap(),
+                );
+            }
             ui.add_space(design::S);
-            if self.encounters.has_run() {
+            if !self.encounters.has_run() {
+                let paused = self.encounters.paused_run().map(|run| {
+                    let round = run
+                        .label
+                        .split(" · ")
+                        .find(|part| part.starts_with("Round "))
+                        .unwrap_or("Round 0");
+                    (run.path.clone(), format!("{round} · Paused"))
+                });
+                if let Some((path, detail)) = paused
+                    && paused_run_item(ui, &detail).clicked()
+                    && let Some(active) = self.campaigns.active_campaign()
+                {
+                    self.encounters.open_saved_run(&path, &active);
+                }
+            } else {
                 let strip = self.encounters.run().map(|run| run.strip());
                 let detail = strip.as_ref().map(|strip| {
                     if strip.running {

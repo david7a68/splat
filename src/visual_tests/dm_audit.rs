@@ -180,10 +180,13 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
     a.act(Do, "type the name", |d| d.type_text(TONIGHT));
     a.act(Do, "go on to the search", |d| d.press(Key::Enter));
     a.act(Find, "search: wolf", |d| d.type_text("wolf"));
-    a.act(Find, "read the Wolf stat block", |d| d.click_first("Read"));
+    a.act(Find, "read the Wolf stat block", |d| d.click("Wolf"));
     a.act(Panel, "close the stat block", |d| d.press(Key::Escape));
     a.act(Do, "add a Wolf", |d| d.click_first(ADD));
-    a.act(Do, "duplicate it", |d| d.click_below("6. ", "Duplicate"));
+    a.act(Do, "duplicate it", |d| {
+        d.click_below("6. ", "More actions for Wolf");
+        d.click("Duplicate");
+    });
     a.act(Find, "search: ogre", |d| {
         d.replace_text_in(FIND_CREATURE, "ogre");
     });
@@ -193,10 +196,11 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
 
     a.task("Make the boss your own: copy it, change it, and swap it in");
     a.act(Do, "Make it yours", |d| {
-        d.click_below("8. ", "Make it yours")
+        d.click_first("More actions for Ogre");
+        d.click("Make it yours");
     });
     a.act(Do, "change its hit points", |d| {
-        d.replace_text_in("Hit points", "90");
+        d.type_text("90");
     });
     a.act(Do, "save the creature", |d| d.press_ctrl(Key::S));
     a.click(Do, SAVE_ENCOUNTER);
