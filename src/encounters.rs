@@ -780,6 +780,14 @@ fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
     parts.join(" · ")
 }
 /// Keep a stat label with its value. A second line can break between facts.
+fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String {
+    let font = Type::Small.font(ui);
+    let reserved = design::number_width(ui, word, &font)
+        + design::number_width(ui, " · ", &font)
+        + design::XS * 2.0;
+    design::words_that_fit(ui, detail, &font, (width - reserved).max(0.0))
+}
+
 fn stat_line(text: &str) -> String {
     text.split(" · ")
         .map(|part| part.replace(' ', "\u{a0}"))
@@ -3557,14 +3565,15 @@ impl Encounters {
                                     ui.spacing_mut().interact_size.y = 0.0;
                                     ui.horizontal(|ui| {
                                         ui.spacing_mut().item_spacing.x = design::XS;
-                                        let change_width = design::number_width(ui, "Changed", &Type::Small.font(ui));
-                                        let budget = (ui.available_width() - change_width - design::S).max(0.0);
-                                        let fitted = design::words_that_fit(ui, &detail, &Type::Small.font(ui), budget);
+                                        let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side))).unwrap_or_else(|| "Changed".into());
+                                        let change_width = design::number_width(ui, &word, &Type::Small.font(ui));
+                                        let fitted = changed_detail(ui, &detail, &word, ui.available_width());
                                         let detail_rect = ui.label(Type::Small.rich(ui, stat_line(&fitted)).color(colors().muted)).on_hover_text(&detail).rect;
+                                        let separator = ui.label(Type::Small.rich(ui, " · ").color(colors().muted)).rect;
                                         // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
-                                        let at = egui::pos2(detail_rect.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
+                                        let at = egui::pos2(separator.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
                                         let mut inline = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(at, egui::vec2(change_width, design::XL))).layout(egui::Layout::top_down(egui::Align::Min)));
-                                        if design::small_link(&mut inline, "Changed").clicked() {
+                                        if design::small_link(&mut inline, &word).clicked() {
                                             groups::show_form_when_it_opens(ui);
                                             *expanded = Some(slot.key.clone());
                                         }
@@ -3842,6 +3851,9 @@ impl Encounters {
                     }
                 }
             });
+            if snapshot.options != snapshot.saved_options {
+                design::blocked_reason(ui, Some(draft_switch_reason()));
+            }
         });
         });
         if draft_open {
@@ -3910,6 +3922,27 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn changed_row_cuts_long_source_before_the_full_hand_change_link() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
+                let word = "Changed · 3 to add by hand";
+                for width in [280.0, 400.0] {
+                    let fitted = changed_detail(ui, detail, word, width);
+                    assert!(fitted.ends_with('…'), "{fitted}");
+                    assert!(!fitted.contains(word));
+                    let font = Type::Small.font(ui);
+                    let used = design::number_width(ui, &fitted, &font)
+                        + design::number_width(ui, word, &font)
+                        + design::number_width(ui, " · ", &font) + design::XS * 2.0;
+                    assert!(used <= width, "{used} exceeds {width}");
+                }
+            });
+        });
+    }
     #[test]
     fn roster_stats_use_the_search_order_and_keep_other_details_last() {
         assert_eq!(

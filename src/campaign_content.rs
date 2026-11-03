@@ -192,7 +192,29 @@ impl CampaignContent {
                 .iter()
                 .filter(|id| snapshot.catalogue.selectable(**id))
                 .count();
-            design::count(chosen, "entry chosen", "entries chosen")
+            let needed = snapshot
+                .closure
+                .1
+                .required
+                .keys()
+                .filter(|id| {
+                    !snapshot.closure.1.direct.contains(id)
+                        && snapshot.catalogue.selectable(**id)
+                        && snapshot.catalogue.entries.get(id).is_some_and(|entry| {
+                            snapshot
+                                .catalogue
+                                .modules
+                                .iter()
+                                .any(|module| !module.private && module.id == entry.owner)
+                        })
+                })
+                .count();
+            let chosen = design::count(chosen, "entry chosen", "entries chosen");
+            if needed == 0 {
+                chosen
+            } else {
+                format!("{chosen} · {needed} needed")
+            }
         })
     }
     /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.
@@ -632,6 +654,9 @@ impl CampaignContent {
                             }
                         });
                     });
+                    if draft != baseline {
+                        design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
+                    }
                 });
             }
         }
@@ -775,6 +800,9 @@ impl CampaignContent {
                 }
             }
         });
+        if document.selections != self.saved_selections {
+            design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
+        }
         if let Some(reason) = reason_below {
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

@@ -580,6 +580,7 @@ pub mod campaign_content {
     pub fn run(d: &mut Driver<'_>) {
         go_campaign(d);
         d.expect(PAGE_TITLE);
+        d.expect("2,069 entries chosen · 1 needed");
         d.click_starting("D&D 2024 · SRD");
         d.expect("Whole package, with future additions");
         d.state("packages-tab", Sizes::Default);
@@ -616,6 +617,12 @@ pub mod campaign_content {
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.expect(CHANGED);
         d.expect("Include future additions");
+        d.expect("2,070 entries chosen · 1 needed");
+        d.observe_both(
+            "iter-18-A-lock",
+            "A package draft states the campaign switch lock",
+            |d| d.visible_text(crate::encounters::draft_switch_reason()),
+        );
         d.state("selection-changed", Sizes::Default);
         d.click(DISCARD_SELECTION);
         d.goal("change and discard a selection");
@@ -729,6 +736,14 @@ pub mod campaign_content {
                 .is_some_and(|text| text.contains("splat_id")),
             "The repair is reachable without leaving the page",
         );
+        let draft = d.editor_text().unwrap() + "\nRepair draft.\n";
+        d.replace_text_in("Note text", &draft);
+        d.observe_both(
+            "iter-18-A-repair-lock",
+            "A repair draft states the campaign switch lock",
+            |d| d.visible_text(crate::encounters::draft_switch_reason()),
+        );
+        d.state("repair-dirty", Sizes::Default);
     }
 }
 
@@ -1355,6 +1370,15 @@ pub mod settings {
         d.goal("open settings");
 
         d.click("Connect…");
+        d.observe_both(
+            "iter-18-A-blocked",
+            "Connect keeps its reason beside the button",
+            |d| {
+                let button = d.place_of(CONNECT).unwrap();
+                let reason = d.place_of("Paste your session cookie first.").unwrap();
+                (button.left() - reason.right() - crate::design::S).abs() < 1.0
+            },
+        );
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.wait_for_text("Remember my D&D Beyond sign-in on this computer");
         d.observe_both("iter-13-U2", "Connect ends at the cookie field edge", |d| {
@@ -1390,11 +1414,18 @@ pub mod settings {
                         "iter-12-U3",
                         "The rail paints the full keyring warning",
                         |d| {
-                            d.nodes().iter().any(|node| {
-                                node.name.contains("Connected · not remembered")
-                                    && node.rect.left() < 100.0
-                                    && node.fully_in_view()
-                                    && d.painted_in(node.rect).contains("not remembered")
+                            let nodes = d.nodes();
+                            let connected = nodes
+                                .iter()
+                                .find(|node| node.name == "Connected" && node.rect.left() < 100.0);
+                            let detail = nodes.iter().find(|node| {
+                                node.name == "Not remembered" && node.rect.left() < 100.0
+                            });
+                            connected.zip(detail).is_some_and(|(first, second)| {
+                                first.fully_in_view()
+                                    && second.fully_in_view()
+                                    && (first.rect.left() - second.rect.left()).abs() < 1.0
+                                    && second.rect.top() >= first.rect.bottom()
                             })
                         },
                     );
@@ -1417,6 +1448,25 @@ pub mod settings {
 
         d.click(EDIT_DETAILS);
         d.expect(EDIT_FORM);
+        d.observe_both(
+            "iter-18-A-edges",
+            "Campaign fields and actions share their right edge",
+            |d| {
+                let name = d
+                    .nodes()
+                    .iter()
+                    .find(|node| {
+                        node.name == "Campaign name"
+                            && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .unwrap()
+                    .rect;
+                let browse = d.place_of("Browse…").unwrap();
+                let save = d.place_of("Save details").unwrap();
+                (name.right() - browse.right()).abs() < 1.0
+                    && (name.right() - save.right()).abs() < 1.0
+            },
+        );
         d.state("edit-campaign", Sizes::Default);
         d.click(CANCEL);
         d.click(REMOVE_CAMPAIGN);
@@ -1425,6 +1475,23 @@ pub mod settings {
         d.state("confirm-remove-campaign", Sizes::Default);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
+        d.click(EDIT_DETAILS);
+        let saved_name = d.field_text(EDIT_FORM).unwrap();
+        d.replace_text_in(EDIT_FORM, "Quiet Harbor revised");
+        d.click("Discard");
+        assert_eq!(
+            d.field_text(EDIT_FORM).as_deref(),
+            Some(saved_name.as_str())
+        );
+        d.state("campaign-details-discarded", Sizes::Default);
+        d.click("Undo discard of Campaign details");
+        assert_eq!(
+            d.field_text(EDIT_FORM).as_deref(),
+            Some("Quiet Harbor revised")
+        );
+        d.click("Discard");
+        d.click(CANCEL);
+        d.begin_task();
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
         d.click("Add from D&D Beyond");
@@ -2932,6 +2999,11 @@ pub mod run_folder_defect {
         go_campaign(d);
         d.click(TAB_RUN_SETTINGS);
         d.replace_text_in(RUN_FOLDER, "Elsewhere");
+        d.observe_both(
+            "iter-18-A-lock",
+            "Run settings state the campaign switch lock",
+            |d| d.visible_text(crate::encounters::draft_switch_reason()),
+        );
         d.state("run-folder-edited", Sizes::Default);
         d.goal("edit the run folder with no draft");
         // A panic ends this app, so the video stops first and nothing follows.
@@ -4097,7 +4169,9 @@ pub mod signed_in {
         d.click(LINK_TAB);
         d.observe(
             "Locked link",
-            d.visible_text(BLOCKED_REASON) && d.is_disabled(EDIT_DETAILS),
+            d.visible_text(BLOCKED_REASON)
+                && d.is_disabled(EDIT_DETAILS)
+                && d.is_disabled("Session folder"),
             "With a run open, the link tab states why it is locked, and its controls are",
         );
         d.state("link-tab-during-run", Sizes::Default);
@@ -5440,7 +5514,7 @@ pub mod session_recording {
         d.state("recording-hearing", Sizes::AllAndHiDpi);
         d.click_starting("Recordings");
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
-        d.expect("Recording 0:00 · Hearing sound");
+        d.expect("0:00 recorded · Hearing sound");
         d.state("recording-listed", Sizes::Default);
         let tabs_top = |d: &Driver<'_>| {
             d.place_of("Plan")
@@ -5505,7 +5579,7 @@ pub mod session_recording {
             .sessions
             .simulate_recorder_health(Health::Stalled);
         d.settle();
-        d.expect("Not saving audio after");
+        d.expect("Stopped saving after");
         d.state("recording-stalled", Sizes::Default);
         d.observe(
             "T11.5",
@@ -5514,8 +5588,7 @@ pub mod session_recording {
         );
         d.observe(
             "T11.5",
-            d.has_containing("Not saving audio after")
-                && d.has_containing("What was saved is kept"),
+            d.has_containing("Stopped saving after") && d.has_containing("What was saved is kept"),
             "The stalled row owns its reason and its recovery action",
         );
 
@@ -5540,6 +5613,7 @@ pub mod session_recording {
         // A close does not end it by surprise.
         d.request_close();
         d.expect("Keep recording");
+        assert_eq!(d.focused_name().as_deref(), Some("Keep recording"));
         d.state("recording-close-prompt", Sizes::Default);
         d.click("Keep recording");
         d.observe(
@@ -5568,6 +5642,14 @@ pub mod session_recording {
         );
         d.click("Save an OpenAI key in Settings");
         d.expect("SPEECH SERVICE");
+        d.expect("Before you can process: save an OpenAI key under Speech service.");
+        d.observe_both(
+            "iter-18-A-key",
+            "The speech key is focused and in view",
+            |d| {
+                d.focused_name().as_deref() == Some("Speech API key") && d.in_view("Speech API key")
+            },
+        );
         d.state("processing-settings", Sizes::All);
         d.observe(
             "T11.6",
@@ -5613,6 +5695,20 @@ pub mod session_recording {
         d.click(NAV_SESSIONS);
         d.expect("names to api.openai.com");
         d.state("recording-ready", Sizes::Default);
+        d.observe_both(
+            "iter-18-A-destination",
+            "The enabled Process action owns its measured help below",
+            |d| {
+                let nodes = d.nodes();
+                let button = nodes.iter().find(|n| n.name.starts_with("Process:"));
+                let help = nodes.iter().find(|n| n.name.starts_with("Process sends"));
+                button.zip(help).is_some_and(|(button, help)| {
+                    help.rect.top() >= button.rect.bottom()
+                        && help.rect.width() <= crate::design::READER_MEASURE
+                })
+            },
+        );
+        let recording_top = d.place_of("2026-01-01 19:00").unwrap().top() - tabs_top(d).unwrap();
         // Service help stays at the reader measure; recording rows keep the column.
         let notice = d.at_size(LARGE, |d| {
             d.nodes()
@@ -5637,9 +5733,14 @@ pub mod session_recording {
             .simulate_job(Progress::Transcribing { part: 3, of: 24 });
         d.settle();
         d.expect("Transcribing part 3 of 24");
+        assert_eq!(
+            d.place_of("2026-01-01 19:00").unwrap().top() - tabs_top(d).unwrap(),
+            recording_top
+        );
         d.state("processing-speech", Sizes::Default);
         d.request_close();
         d.expect("Continue processing goes on from there");
+        assert_eq!(d.focused_name().as_deref(), Some("Keep processing"));
         d.state("processing-close-prompt", Sizes::Default);
         d.click("Keep processing");
         d.app_mut()
@@ -5817,6 +5918,7 @@ pub mod session_recording {
         d.state("recording-row-menu", Sizes::All);
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
+        assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));
         d.state("recording-delete", Sizes::Default);
         d.click("Delete recording");
         d.expect("Recording deleted.");
@@ -6548,6 +6650,11 @@ pub mod run_overrides {
         open_saved_encounter(d, RUN_ARENA);
         d.expect(FIRST_SLOT);
         d.state("slot-with-changes", Sizes::All);
+        d.observe_both(
+            "iter-18-A-changes",
+            "The whole hand-change link stays in view",
+            |d| d.in_view("Changed · 3 to add by hand"),
+        );
         d.click_beside(
             FIRST_SLOT,
             "Options: starting HP, temporary HP, initiative group and changes",
@@ -6590,6 +6697,28 @@ pub mod run_add_creature {
     use super::*;
     const FIELD: &str = "Find or name a creature";
 
+    fn check_form(d: &mut Driver<'_>) {
+        d.observe_both(
+            "iter-18-A-arrivals",
+            "Arrivals rows start at the search edge and all fields fit",
+            |d| {
+                let search = d.place_of(FIELD).or_else(|| d.place_of("Wolf")).unwrap();
+                ["Count", "Total"].iter().all(|name| {
+                    d.place_of(name)
+                        .is_some_and(|r| (r.left() - search.left()).abs() < 1.0)
+                }) && [
+                    "New creature count",
+                    "New creature HP",
+                    "New creature AC",
+                    "New creature initiative total",
+                    "Side of the new creature",
+                ]
+                .iter()
+                .all(|name| d.in_view(name))
+            },
+        );
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         resume_run(d, RUN);
         fight_tab(d, "Arrivals");
@@ -6599,6 +6728,7 @@ pub mod run_add_creature {
 
         d.type_into(FIELD, "Ghost of the Mill");
         d.expect("Made up here");
+        check_form(d);
         d.observe(
             "T13.7",
             d.has_containing("Type its HP"),
@@ -6645,6 +6775,8 @@ pub mod run_add_creature {
 
         d.type_into(FIELD, "wolf");
         d.expect("Choose Wolf");
+        check_form(d);
+        assert!(!d.has_containing("Move Ghost of the Mill before"));
         d.state("arrivals-found", Sizes::Default);
         d.observe(
             "T13.7",
@@ -6653,6 +6785,8 @@ pub mod run_add_creature {
         );
         d.click("Choose Wolf");
         d.type_into("New creature count", "2");
+        check_form(d);
+        assert!(!d.has_containing("Move Ghost of the Mill before"));
         d.state("arrivals-found-chosen", Sizes::Default);
         d.click("Add Wolf to the initiative list");
         d.expect("Added by hand: Wolf");
@@ -6662,6 +6796,11 @@ pub mod run_add_creature {
             d.has_containing("Wolf 1") && d.has_containing("Wolf 2"),
             "Creatures found in the campaign join with numbered names",
         );
+        d.type_into(FIELD, "new arrival");
+        assert!(!d.has_containing("Added by hand: Wolf"));
+        d.clear_text_in(FIELD);
+        d.expect("Added by hand: Wolf");
+        d.begin_task();
     }
 }
 

@@ -984,6 +984,19 @@ pub(super) fn override_error(error: &str) -> String {
     out
 }
 
+pub(super) fn change_words(overrides: &Overrides, entry: &Entry, side: &str) -> String {
+    let count = overrides
+        .rows(&Base::of(entry, side))
+        .iter()
+        .filter(|row| row.by_hand)
+        .count();
+    if count == 0 {
+        "Changed".to_owned()
+    } else {
+        format!("Changed · {count} to add by hand")
+    }
+}
+
 pub(super) fn changes_link(
     ui: &mut egui::Ui,
     block: &Mapping,
@@ -997,12 +1010,7 @@ pub(super) fn changes_link(
     match Overrides::parse(block) {
         Ok(overrides) => {
             let rows = overrides.rows(&Base::of(entry, side));
-            let count = rows.iter().filter(|row| row.by_hand).count();
-            let word = if count == 0 {
-                "Changed".to_owned()
-            } else {
-                format!("Changed · {count} to add by hand")
-            };
+            let word = change_words(&overrides, entry, side);
             let clicked = design::link(ui, &word).clicked();
             if let Err(error) = overrides.resolve_for(entry, side) {
                 design::message(ui, Tone::Error, &override_error(&error));

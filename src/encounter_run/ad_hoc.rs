@@ -215,7 +215,6 @@ fn short_field(
     hint: &str,
     width: f32,
 ) -> bool {
-    ui.add_space(design::M);
     ui.label(Type::Small.rich(ui, word).color(colors().muted));
     ui.add_space(design::XS);
     let response = design::number_field(ui, name, text, hint, width, Density::Read.control());
@@ -353,7 +352,9 @@ impl Run {
                 "1",
                 44.0,
             );
+            ui.add_space(design::M);
             enter |= short_field(ui, "HP", "New creature HP", &mut form.hp, &hp_hint, 64.0);
+            ui.add_space(design::M);
             enter |= short_field(ui, "AC", "New creature AC", &mut form.ac, &ac_hint, 52.0);
         });
         let sides = self.sides_to_join();
@@ -367,6 +368,7 @@ impl Run {
                 "Roll",
                 56.0,
             );
+            ui.add_space(design::M);
             ui.label(Type::Small.rich(ui, "Side").color(c.muted));
             let chosen = self.ad_hoc.side().to_owned();
             let combo = egui::ComboBox::from_id_salt("ad_hoc_side")
