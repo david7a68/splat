@@ -53,57 +53,6 @@ fn main() -> eframe::Result {
     )
 }
 
-/// The paused detail wraps below the Run label, at the same inset as an open run.
-fn paused_run_item(ui: &mut egui::Ui, detail: &str) -> egui::Response {
-    let c = colors();
-    let name = format!("Run · {detail}");
-    let label_inset = design::S * 3.0 + design::XS;
-    let detail = ui.painter().layout(
-        detail.to_owned(),
-        Type::Small.font(ui),
-        c.muted,
-        (ui.available_width() - label_inset - design::XS).max(design::S),
-    );
-    let height = (Type::Body.line() + detail.size().y + design::S)
-        .max(Density::Glance.control() + design::XS);
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(ui.available_width(), height),
-        egui::Sense::click(),
-    );
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &name)
-    });
-    if ui.is_rect_visible(rect) {
-        if response.hovered() {
-            ui.painter()
-                .rect_filled(rect, design::RADIUS_CONTROL, c.hover);
-        }
-        ui.painter().text(
-            rect.min + egui::vec2(design::S + design::XS / 2.0, design::XS),
-            egui::Align2::LEFT_TOP,
-            icons::RUN,
-            Type::Body.font(ui),
-            c.muted,
-        );
-        ui.painter().text(
-            rect.min + egui::vec2(label_inset, design::XS),
-            egui::Align2::LEFT_TOP,
-            "Run",
-            Type::Body.font(ui),
-            c.muted,
-        );
-        ui.painter().galley(
-            rect.min + egui::vec2(label_inset, Type::Body.line() + design::XS),
-            detail,
-            c.muted,
-        );
-        if response.has_focus() {
-            design::focus_ring(ui, rect);
-        }
-    }
-    response
-}
-
 struct Splat {
     page: Page,
     campaign_tab: CampaignTab,
@@ -671,40 +620,26 @@ impl Splat {
             ui.label(Type::Title.rich(ui, "Splat").color(c.text));
             ui.add_space(design::XS);
             let blocked = self.blocked_switch();
-            ui.add_enabled_ui(blocked.is_none(), |ui| {
-                ui.spacing_mut().interact_size.y = Density::Read.control();
-                self.campaigns.selector(ui, blocked);
-            });
-            if self.sessions.recording()
-                && let Some(reason) = blocked
-            {
-                ui.label(Type::Small.rich(ui, reason).color(c.muted));
-            }
-            if self.encounters.draft_dirty() {
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, "Save or discard the draft first")
-                            .color(c.muted),
-                    )
-                    .wrap(),
-                );
-            }
+            ui.spacing_mut().interact_size.y = Density::Read.control();
+            self.campaigns.selector(ui, blocked);
             ui.add_space(design::S);
             if !self.encounters.has_run() {
+                let fights = self.encounters.paused_run_count();
                 let paused = self.encounters.paused_run().map(|run| {
-                    let round = run
-                        .label
-                        .split(" · ")
-                        .find(|part| part.starts_with("Round "))
-                        .unwrap_or("Round 0");
-                    (run.path.clone(), format!("{round} · Paused"))
+                    (
+                        run.path.clone(),
+                        run.encounter.clone(),
+                        crate::encounters::run_state_word(run, false),
+                    )
                 });
-                if let Some((path, detail)) = paused
-                    && paused_run_item(ui, &detail).clicked()
-                    && let Some(active) = self.campaigns.active_campaign()
+                if let Some((path, name, state)) = paused
+                    && design::paused_run_nav(ui, fights, &name, &state).clicked()
                 {
-                    self.encounters.open_saved_run(&path, &active);
+                    if fights > 1 {
+                        self.page = Page::Encounters;
+                    } else if let Some(active) = self.campaigns.active_campaign() {
+                        self.encounters.open_saved_run(&path, &active);
+                    }
                 }
             } else {
                 let strip = self.encounters.run().map(|run| run.strip());
@@ -712,7 +647,7 @@ impl Splat {
                     if strip.running {
                         format!("Round {}", strip.round)
                     } else {
-                        "Not in combat".to_owned()
+                        "Setup".to_owned()
                     }
                 });
                 if design::nav_item(
@@ -748,7 +683,22 @@ impl Splat {
             }
             // Push the rest down in tree order, so Tab still follows reading order.
             let statuses = self.statuses(connection);
-            let status_height = statuses.len() as f32 * (Type::Small.line() + 2.0)
+            let status_height = statuses
+                .iter()
+                .map(|state| {
+                    ui.painter()
+                        .layout(
+                            format!("{} {}", state.icon, state.word),
+                            Type::Small.font(ui),
+                            state.color,
+                            ui.available_width(),
+                        )
+                        .size()
+                        .y
+                        .max(Type::Small.line())
+                        + 2.0
+                })
+                .sum::<f32>()
                 + if self.sessions.recording() {
                     Density::Read.control()
                 } else {
@@ -778,7 +728,7 @@ impl Splat {
                 self.page = Page::Sessions;
             }
             for state in statuses {
-                design::status(ui, state);
+                design::wrapped_status(ui, state);
             }
             // Words that could not be saved lead to where the DM can choose.
             for (lost, word, target) in [
@@ -949,6 +899,8 @@ impl Splat {
                 },
                 word: if self.settings.connection_failed() {
                     "Connection failed"
+                } else if self.settings.signed_out() {
+                    "Signed out of D&D Beyond"
                 } else {
                     "Not connected"
                 },
@@ -1033,7 +985,7 @@ impl Splat {
         if self.party.sync_stopped {
             statuses.push(Status {
                 icon: icons::SYNC_OFF,
-                word: "Party sync stopped",
+                word: "Sync stopped",
                 color: c.sync.pending,
             });
         }
@@ -1227,16 +1179,12 @@ impl Splat {
         let (_, session) = self.settings.campaign_session();
         match self.page {
             Page::Settings => {
-                design::page_header(
-                    ui,
-                    "Settings",
-                    Some(&design::count(
-                        self.campaigns.all().len(),
-                        "campaign",
-                        "campaigns",
-                    )),
-                    |_| {},
-                );
+                let context = if self.settings_tab == SettingsTab::Recording {
+                    self.processing.context().to_owned()
+                } else {
+                    design::count(self.campaigns.all().len(), "campaign", "campaigns")
+                };
+                design::page_header(ui, "Settings", Some(&context), |_| {});
                 let tab_changed = design::segmented(
                     ui,
                     &mut self.settings_tab,
@@ -1250,10 +1198,12 @@ impl Splat {
                 }
                 design::rule(ui);
                 if self.settings_tab == SettingsTab::Recording {
+                    let clip = ui.available_rect_before_wrap().intersect(ui.clip_rect());
                     egui::ScrollArea::vertical()
                         .id_salt("recording_settings")
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
+                            ui.set_clip_rect(ui.clip_rect().intersect(clip));
                             ui.add_space(design::L);
                             ui.set_max_width(design::FORM_WIDTH + design::XXL);
                             self.processing.show(ui);
@@ -1265,7 +1215,7 @@ impl Splat {
                     .id_salt("settings_page")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.add_space(design::S);
+                        ui.add_space(design::L);
                         let account = |ui: &mut egui::Ui, settings: &mut settings::Settings| {
                             settings.show(ui);
                         };
@@ -1273,9 +1223,6 @@ impl Splat {
                             |ui: &mut egui::Ui,
                              campaigns: &mut campaigns::Campaigns,
                              dndbeyond: &mut dndbeyond::DndBeyond| {
-                                if let Some(reason) = blocked {
-                                    design::message(ui, Tone::Info, reason);
-                                }
                                 design::locked(ui, blocked, |ui| {
                                     campaigns.show(ui, session.clone(), dndbeyond);
                                 });

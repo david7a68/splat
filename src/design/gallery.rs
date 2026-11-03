@@ -153,7 +153,7 @@ pub fn components(ui: &mut egui::Ui) {
                 ("Blocked", 3),
             ] {
                 ui.vertical(|ui| {
-                    ui.set_max_width(140.0);
+                    ui.set_max_width(if sample == 3 { 260.0 } else { 140.0 });
                     ui.label(Type::Small.rich(ui, state).color(c.muted));
                     match sample {
                         0 => {
@@ -166,10 +166,10 @@ pub fn components(ui: &mut egui::Ui) {
                             let _ = action(label).density(Density::Read).show(ui);
                         }
                         _ => {
-                            let _ = action(label)
-                                .blocked(Some("Blocked for a stated reason."))
-                                .show(ui);
-                            blocked_reason(ui, Some("Blocked for a stated reason."));
+                            ui.horizontal(|ui| {
+                                blocked_reason(ui, Some("Wait for the save."));
+                                let _ = action(label).blocked(Some("Wait for the save.")).show(ui);
+                            });
                         }
                     }
                 });
@@ -230,19 +230,64 @@ pub fn components(ui: &mut egui::Ui) {
         }
     });
     group_heading(ui, "Ready to run", 2);
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.label(Type::Name.rich(ui, "Bridge Ambush"));
+                ui.label(
+                    Type::Small
+                        .rich(ui, "2 wolves · Captain Varra")
+                        .color(c.muted),
+                );
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                row_menu(ui, "Bridge Ambush", |ui| {
+                    let _ = ui.button("Remove…");
+                });
+                let _ = Action::quiet("Edit").show(ui);
+                let _ = Action::secondary("Start fight").show(ui);
+            });
+        });
+    });
     ui.horizontal(|ui| {
         let _ = status_link(
             ui,
             Status {
                 icon: icons::RUN,
-                word: "Running · Round 2",
+                word: "Round 2",
                 color: c.sync.matching,
             },
         );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            row_menu(ui, "Bridge Ambush", |ui| {
-                let _ = ui.button("Remove…");
-            });
+    });
+    design_group(ui, "One cause, one sentence");
+    ui.horizontal(|ui| {
+        status(
+            ui,
+            Status {
+                icon: icons::DRAFT,
+                word: "Unsaved",
+                color: c.document.unsaved,
+            },
+        );
+        blocked_reason(ui, Some("Save or discard to change packages."));
+    });
+    ui.horizontal(|ui| {
+        let _ = Action::secondary("Packages")
+            .blocked(Some("Save or discard to change packages."))
+            .show(ui);
+        ui.add_space(L);
+        blocked_reason(ui, Some("Paste your session cookie first."));
+        let _ = Action::secondary("Connect")
+            .blocked(Some("Paste your session cookie first."))
+            .show(ui);
+    });
+    design_group(ui, "Paused runs");
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.set_width(RAIL_WIDTH);
+            let _ = paused_run_nav(ui, 1, "Bridge Ambush", "Round 2");
+            let _ = paused_run_nav(ui, 2, "", "");
         });
     });
     design_group(ui, "HP");
@@ -305,6 +350,15 @@ pub fn messages(ui: &mut egui::Ui) {
     message(ui, Tone::Success, "Saved.");
     message(ui, Tone::Warning, "This changed on disk.");
     message(ui, Tone::Error, "This could not be saved. State the fix.");
+    ui.scope(|ui| {
+        ui.set_max_width(360.0);
+        let _ = message_with_action(
+            ui,
+            Tone::Info,
+            "The party has full HP after this long rest. Every changed value is kept for undo.",
+            "Undo long rest",
+        );
+    });
     design_group(ui, "Sections");
     let _ = section(ui, "A section", |ui| {
         ui.label("Its contents.");

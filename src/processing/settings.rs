@@ -365,24 +365,53 @@ impl ProcessingSettings {
             "this service"
         };
         let missing = format!("No {service} key. Paste one.");
-        let remove = if slot == KeySlot::Llm && !fits && self.config.llm_key_for.contains("openai")
-        {
-            "Remove OpenAI key"
-        } else {
-            "Remove"
+        let saved_for = match slot {
+            KeySlot::Speech => &self.config.speech_key_for,
+            KeySlot::Llm => &self.config.llm_key_for,
         };
-        let remove_name = if remove == "Remove" {
-            format!("Remove key: {label}")
+        let owner = if saved_for.contains("api.openai.com") {
+            "OpenAI"
+        } else if saved_for.contains("anthropic.com") {
+            "Anthropic"
+        } else if saved_for.contains("groq.com") {
+            "Groq"
+        } else if saved_for.contains("googleapis.com") {
+            "Gemini"
+        } else if saved_for.contains("openrouter.ai") {
+            "OpenRouter"
         } else {
-            remove.to_owned()
+            saved_for
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .split('/')
+                .next()
+                .filter(|s| !s.is_empty())
+                .unwrap_or("service")
         };
+        let remove = format!("Remove {owner} key");
+        let remove_name = format!("{remove}: {label}");
         let held = self.held(slot).is_some();
         let mut save = false;
         let mut forget = false;
-        design::field(ui, label, None, None, |ui| {
+        design::field(ui, "API key", None, None, |ui| {
             ui.horizontal(|ui| {
                 let field = self.field(slot);
-                let width = (ui.available_width() - 150.0).clamp(120.0, 280.0);
+                let empty = field.typing.trim().is_empty();
+                let reason = empty.then_some("Enter a key first.");
+                let reason_width = reason.map_or(0.0, |text| {
+                    design::number_width(ui, text, &Type::Small.font(ui)) + design::S
+                });
+                let remove_width = if saved || held {
+                    Action::quiet(&remove).natural_width(ui) + design::L
+                } else {
+                    0.0
+                };
+                let room = Action::secondary("Save key").natural_width(ui)
+                    + reason_width
+                    + remove_width
+                    + design::S * 3.0;
+                let width = (ui.available_width() - room - design::S * 2.0)
+                    .clamp(design::L * 4.0, design::FORM_WIDTH / 2.0);
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut field.typing)
                         .password(true)
@@ -391,20 +420,21 @@ impl ProcessingSettings {
                         .hint_text(if saved && !fits {
                             &missing
                         } else if saved {
-                            "Saved. Enter a new key to replace it."
+                            "Saved"
                         } else {
                             "Paste the key"
                         }),
                 );
                 design::named(ui, &response, label);
-                let empty = field.typing.trim().is_empty();
+                design::blocked_reason(ui, reason);
                 save = Action::secondary("Save key")
                     .name(&format!("Save key: {label}"))
                     .blocked_if(empty, "Enter a key first.")
                     .show(ui)
                     .clicked();
                 if saved || held {
-                    forget = Action::quiet(remove).name(&remove_name).show(ui).clicked();
+                    ui.add_space(design::L);
+                    forget = Action::quiet(&remove).name(&remove_name).show(ui).clicked();
                 }
             });
         });
@@ -557,7 +587,7 @@ impl ProcessingSettings {
             .find(|(_, url, _)| self.config.speech_url == *url)
             .map_or(OTHER_SERVICE, |(name, ..)| name);
         let mut chosen = None;
-        design::field(ui, "Speech service", None, None, |ui| {
+        design::field(ui, "Service", None, None, |ui| {
             let inner = egui::ComboBox::from_id_salt("speech_service")
                 .selected_text(current)
                 .width(ui.available_width().min(design::FORM_WIDTH))
@@ -583,22 +613,18 @@ impl ProcessingSettings {
             self.persist();
         }
         let mut changed = false;
-        changed |= design::text_field(
+        let response = design::text_field(ui, "Address", &mut self.config.speech_url, None, None);
+        design::named(ui, &response, "Speech address");
+        changed |= response.changed();
+        let response = design::text_field(
             ui,
-            "Speech address",
-            &mut self.config.speech_url,
-            None,
-            None,
-        )
-        .changed();
-        changed |= design::text_field(
-            ui,
-            "Speech model",
+            "Model",
             &mut self.config.speech_model,
             Some("The name your service gives it. For OpenAI, gpt-transcribe."),
             None,
-        )
-        .changed();
+        );
+        design::named(ui, &response, "Speech model");
+        changed |= response.changed();
         if changed {
             self.persist();
         }
@@ -623,7 +649,7 @@ impl ProcessingSettings {
             })
             .map_or(OTHER_SERVICE, |(name, ..)| name);
         let mut chosen = None;
-        design::field(ui, "LLM service", None, None, |ui| {
+        design::field(ui, "Service", None, None, |ui| {
             let inner = egui::ComboBox::from_id_salt("llm_service")
                 .selected_text(current)
                 .width(ui.available_width().min(design::FORM_WIDTH))
@@ -652,17 +678,19 @@ impl ProcessingSettings {
         let mut changed = false;
         let codex = self.config.provider == Provider::CodexCli;
         if !codex {
-            changed |= design::text_field(ui, "LLM address", &mut self.config.llm_url, None, None)
-                .changed();
+            let response = design::text_field(ui, "Address", &mut self.config.llm_url, None, None);
+            design::named(ui, &response, "LLM address");
+            changed |= response.changed();
         }
-        changed |= design::text_field(
+        let response = design::text_field(
             ui,
-            "LLM model",
+            "Model",
             &mut self.config.llm_model,
             Some("The name your service gives it."),
             None,
-        )
-        .changed();
+        );
+        design::named(ui, &response, "LLM model");
+        changed |= response.changed();
         if changed {
             self.persist();
         }
@@ -721,6 +749,23 @@ impl ProcessingSettings {
         }
     }
 
+    pub fn context(&self) -> &'static str {
+        if self.config.problem().is_some() {
+            "Check processing settings"
+        } else if !self.has_key(KeySlot::Speech) && !super::is_local(&self.config.speech_url) {
+            "Speech key missing"
+        } else if self.config.provider == Provider::CodexCli && !self.codex_found {
+            "Codex not found"
+        } else if self.config.provider != Provider::CodexCli
+            && !self.has_key(KeySlot::Llm)
+            && !super::is_local(&self.config.llm_url)
+        {
+            "LLM key missing"
+        } else {
+            "Ready to process"
+        }
+    }
+
     pub fn show(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         ui.label(
@@ -743,10 +788,11 @@ impl ProcessingSettings {
                 &format!("Before you can process: {problem}"),
             );
         }
+        ui.add_space(design::L);
         self.input_section(ui);
-        ui.add_space(design::M);
-        self.speech_section(ui);
-        ui.add_space(design::M);
-        self.llm_section(ui);
+        ui.add_space(design::L);
+        ui.push_id("speech_settings", |ui| self.speech_section(ui));
+        ui.add_space(design::L);
+        ui.push_id("llm_settings", |ui| self.llm_section(ui));
     }
 }

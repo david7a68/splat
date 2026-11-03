@@ -167,6 +167,10 @@ impl Settings {
         }
     }
 
+    pub fn signed_out(&self) -> bool {
+        self.error.as_deref() == Some(SESSION_ENDED)
+    }
+
     pub fn connection_failed(&self) -> bool {
         self.account() == Account::Failed && self.error.as_deref() != Some(SESSION_ENDED)
     }
@@ -313,30 +317,33 @@ impl Settings {
         let mut open = ui
             .ctx()
             .data(|data| data.get_temp::<bool>(id).unwrap_or(false));
-        ui.horizontal(|ui| {
-            design::status(ui, Status { icon, word, color });
-            if design::Action::quiet(
-                if matches!(self.account(), Account::NotConnected | Account::Failed) {
-                    "Connect…"
-                } else {
-                    "Account…"
-                },
-            )
-            .show(ui)
-            .clicked()
-            {
-                open = !open;
-            }
-        });
         open |= self.focus_cookie
+            || self.sign_in_again
             || ui.ctx().data(|data| {
                 data.get_temp::<bool>(egui::Id::new("focus_cookie"))
                     .unwrap_or(false)
             });
-        ui.ctx().data_mut(|data| data.insert_temp(id, open));
+        design::group_heading(ui, "D&D Beyond account", 0);
         if open {
             self.show_account(ui, false);
+        } else {
+            ui.horizontal(|ui| {
+                design::status(ui, Status { icon, word, color });
+                if design::Action::quiet(
+                    if matches!(self.account(), Account::NotConnected | Account::Failed) {
+                        "Connect…"
+                    } else {
+                        "Account…"
+                    },
+                )
+                .show(ui)
+                .clicked()
+                {
+                    open = true;
+                }
+            });
         }
+        ui.ctx().data_mut(|data| data.insert_temp(id, open));
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
@@ -346,7 +353,7 @@ impl Settings {
     fn show_account(&mut self, ui: &mut egui::Ui, heading: bool) {
         let c = colors();
         if heading {
-            ui.label(Type::Heading.rich(ui, "D&D Beyond account").color(c.text));
+            design::group_heading(ui, "D&D Beyond account", 0);
         }
         let small = |ui: &mut egui::Ui, text: &str| {
             ui.add(egui::Label::new(Type::Small.rich(ui, text).color(c.muted)).wrap());
@@ -374,7 +381,11 @@ impl Settings {
             },
             Account::Failed => Status {
                 icon: icons::ERROR,
-                word: "Not connected",
+                word: if self.signed_out() {
+                    "Signed out of D&D Beyond"
+                } else {
+                    "Not connected"
+                },
                 color: c.result.error,
             },
             Account::KeyringWarning => Status {
@@ -388,7 +399,7 @@ impl Settings {
                 color: c.result.warning,
             },
         };
-        if heading {
+        {
             ui.horizontal(|ui| {
                 if account == Account::Busy {
                     crate::design::spinner(ui);
@@ -406,7 +417,7 @@ impl Settings {
             Account::RefreshFailing => {
                 small(
                     ui,
-                    "Splat keeps trying. Sync works until the session expires, within a minute.",
+                    "Splat keeps trying. Sync works for about one more minute.",
                 );
             }
             _ => {}
@@ -415,24 +426,23 @@ impl Settings {
             design::message(ui, Tone::Error, error);
         }
         if let Some(warning) = &self.warning {
-            design::message(
-                ui,
-                Tone::Warning,
-                if account == Account::KeyringWarning {
-                    "Your desktop keyring did not save the session. Unlock the keyring, then select Connect again, or connect again next time."
-                } else {
-                    warning
-                },
-            );
-        }
-        if matches!(account, Account::RefreshFailing | Account::KeyringWarning)
-            && design::Action::secondary(if account == Account::RefreshFailing {
-                "Sign in again"
+            if account == Account::KeyringWarning {
+                if design::message_with_action(
+                    ui,
+                    Tone::Warning,
+                    "Your desktop keyring did not save the session. Unlock the keyring, then connect again.",
+                    "Connect again",
+                ) {
+                    self.focus_sign_in();
+                }
             } else {
-                "Connect again"
-            })
-            .show(ui)
-            .clicked()
+                design::message(ui, Tone::Warning, warning);
+            }
+        }
+        if account == Account::RefreshFailing
+            && design::Action::secondary("Connect again")
+                .show(ui)
+                .clicked()
         {
             self.focus_sign_in();
         }
@@ -445,11 +455,15 @@ impl Settings {
                 ui.ctx()
                     .open_url(egui::OpenUrl::new_tab("https://www.dndbeyond.com/sign-in"));
             }
-            design::section(ui, "How to get your session cookie", |ui| {
-                ui.label("1. Sign in to D&D Beyond in your browser.");
-                ui.label("2. Open developer tools (F12), then Application or Storage → Cookies.");
-                ui.label("3. Select dndbeyond.com and copy the value of CobaltSession.");
-                ui.label("4. Paste only the value below and select Connect.");
+            ui.scope_builder(egui::UiBuilder::new().id("account_cookie_help"), |ui| {
+                design::section(ui, "How to get your session cookie", |ui| {
+                    ui.label("1. Sign in to D&D Beyond in your browser.");
+                    ui.label(
+                        "2. Open developer tools (F12), then Application or Storage → Cookies.",
+                    );
+                    ui.label("3. Select dndbeyond.com and copy the value of CobaltSession.");
+                    ui.label("4. Paste only the value below and select Connect.");
+                });
             });
             design::field(ui, "Session cookie", None, None, |ui| {
                 let response = ui.add(
@@ -471,37 +485,48 @@ impl Settings {
                 }
             });
             ui.checkbox(&mut self.remember, "Remember session in desktop keyring");
-            if self.cookie_input.trim().is_empty() {
-                small(ui, "Paste your session cookie to connect.");
-            }
-            if design::Action::secondary("Connect")
-                .blocked_if(
-                    self.cookie_input.trim().is_empty(),
-                    "Paste your session cookie first.",
-                )
-                .show(ui)
-                .clicked()
-            {
-                self.sign_in_again = false;
-                let cookie = Zeroizing::new(self.cookie_input.trim().to_owned());
-                self.send(
-                    crate::credentials::Action::Connect {
-                        cookie,
-                        remember: self.remember,
-                    },
-                    ui.ctx(),
-                );
-            }
+            ui.horizontal(|ui| {
+                let reason = self
+                    .cookie_input
+                    .trim()
+                    .is_empty()
+                    .then_some("Paste your session cookie first.");
+                design::blocked_reason(ui, reason);
+                if design::Action::secondary("Connect")
+                    .blocked(reason)
+                    .show(ui)
+                    .clicked()
+                {
+                    self.sign_in_again = false;
+                    let cookie = Zeroizing::new(self.cookie_input.trim().to_owned());
+                    self.send(
+                        crate::credentials::Action::Connect {
+                            cookie,
+                            remember: self.remember,
+                        },
+                        ui.ctx(),
+                    );
+                }
+            });
             small(
                 ui,
                 "Splat sends your session cookie only to D&D Beyond. In the keyring, it can reconnect at startup. The access token stays in memory.",
             );
         }
-        // Only when there is something to forget.
+        if matches!(
+            account,
+            Account::Connected | Account::KeyringWarning | Account::RefreshFailing
+        ) {
+            small(
+                ui,
+                "Disconnect removes Splat's saved session and clears local credentials. It does not sign your browser out of D&D Beyond.",
+            );
+        }
+        // Only when there is something to forget. It follows the trust text.
         if (!matches!(account, Account::NotConnected | Account::Failed)
             || self.warning.is_some()
             || self.saved_session)
-            && design::Action::secondary(if account == Account::Busy {
+            && design::Action::quiet(if account == Account::Busy {
                 "Cancel"
             } else {
                 "Disconnect"
@@ -511,12 +536,6 @@ impl Settings {
             .clicked()
         {
             self.disconnect(ui.ctx());
-        }
-        if matches!(account, Account::Connected | Account::KeyringWarning) {
-            small(
-                ui,
-                "Disconnect removes Splat's saved session and clears local credentials. It does not sign your browser out of D&D Beyond.",
-            );
         }
     }
 }
