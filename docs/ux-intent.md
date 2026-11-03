@@ -540,7 +540,7 @@ reading the code, not from a test run.
 | T4.2 | Cold start to the interrupted turn in ≤ 2, current participant selected | run-resume **new** | cost, state | 4; first row |
 | T4.3 | A player's initiative in ≤ 2. Rows do not move during entry | prep-to-table **new** | cost, state | 3; rows move |
 | T4.4 | Unfinished runs show their encounter, date and status, and come first | encounter-build | state | Fail |
-| T4.6 | An encounter leaves Ready when a run of it ends. Ended runs wait under their session in a collapsed History. Opening one adds nothing to the timeline | encounter-history | state | Fail |
+| T4.6 | An unfinished run appears only in In progress unless Keep in Ready is on, which blocks Start fight there. Its encounter returns to Ready when it ends. Ended runs wait under their session in a collapsed History. Opening one adds nothing to the timeline | encounter-history | state | Fail |
 | T4.5 | Setup and live views differ clearly. Live has no setup controls | encounter-run | look | Partly |
 | T5.1 | Creature results show existing CR, HP, and AC | encounter-build | state | Fail |
 | T5.2 | Read a full stat block with the draft open in ≤ 2, without leaving the editor | encounter-build | cost | 5+ |

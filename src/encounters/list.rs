@@ -107,11 +107,13 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
 fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
     ui.horizontal(|ui| {
         ui.label(Type::Label.rich(ui, word).color(colors().text));
-        ui.label(
-            Type::Label
-                .rich(ui, count.to_string())
-                .color(colors().muted),
-        );
+        if count > 0 {
+            ui.label(
+                Type::Label
+                    .rich(ui, count.to_string())
+                    .color(colors().muted),
+            );
+        }
     });
 }
 
@@ -128,6 +130,9 @@ fn section(
         (word.to_owned(), colors().text),
         (format!(" {count}"), colors().muted),
     ] {
+        if count == 0 && text != word {
+            continue;
+        }
         job.append(
             &text,
             0.0,
@@ -225,6 +230,12 @@ pub(super) fn in_progress_list(
     action: &mut Option<ListAction>,
 ) {
     heading(ui, "IN PROGRESS", page.in_progress.len());
+    if page.in_progress.is_empty() {
+        blocked_reason(
+            ui,
+            Some("No unfinished runs. Start a fight from Ready to run."),
+        );
+    }
     for (index, run) in page.in_progress.iter().enumerate() {
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
@@ -286,58 +297,36 @@ pub(super) fn in_progress_list(
 pub(super) fn ready_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
-    templates: &[Template],
     live: Option<&SavedRunInfo>,
     blocked: Option<&'static str>,
     action: &mut Option<ListAction>,
 ) {
     heading(ui, "READY TO RUN", page.ready.len());
     if page.ready.is_empty() {
-        design::empty_state(
+        blocked_reason(
             ui,
-            icons::ENCOUNTERS,
-            "No ready encounters",
-            if templates.is_empty() {
-                "Create an encounter with New encounter."
-            } else {
-                "Start a fight from History, or create an encounter with New encounter."
-            },
-            |_| {},
+            Some("No ready encounters. New encounter builds a roster for a fight."),
         );
     }
     for (index, row) in page.ready.iter().enumerate() {
         let template = row.template;
-        let unfinished = row
-            .unfinished_run
-            .then(|| {
-                page.in_progress.iter().find(|run| {
-                    history::template_of(run, templates)
-                        .is_some_and(|source| source.id == template.id)
-                })
-            })
-            .flatten()
-            .copied();
-        let detail = unfinished.map_or_else(
-            || template.summary.clone().unwrap_or_default(),
-            |run| format!("In progress · {}", round(run)),
-        );
+        let start_blocked = if row.unfinished_run {
+            Some("This encounter has an unfinished run. Resume it in In progress.")
+        } else {
+            blocked
+        };
         list_row(
             ui,
             &template.path,
             &template.name,
-            &detail,
-            unfinished.is_some(),
+            template.summary.as_deref().unwrap_or_default(),
+            false,
             |ui| {
-                if let Some(run) = unfinished {
-                    let open = live.is_some_and(|live| live.id == run.id);
-                    row_menu_for_run(ui, run, Some(template), open, blocked, false, action);
-                } else {
-                    row_menu(ui, &template.name, |ui| {
-                        if menu_action(ui, "Edit encounter", None) {
-                            *action = Some(ListAction::Edit(template.path.clone()));
-                        }
-                    });
-                }
+                row_menu(ui, &template.name, |ui| {
+                    if menu_action(ui, "Edit encounter", None) {
+                        *action = Some(ListAction::Edit(template.path.clone()));
+                    }
+                });
                 if Action::quiet("Edit")
                     .density(Density::Read)
                     .show(ui)
@@ -345,49 +334,24 @@ pub(super) fn ready_list(
                 {
                     *action = Some(ListAction::Edit(template.path.clone()));
                 }
-                if let Some(run) = unfinished {
-                    if live.is_some_and(|live| live.id == run.id) {
-                        let word = format!("Running · {}", round(run));
-                        if design::status_link(
-                            ui,
-                            Status {
-                                icon: icons::RUN,
-                                word: &word,
-                                color: colors().muted,
-                            },
-                        )
-                        .clicked()
-                        {
-                            *action = Some(ListAction::BackToRun);
-                        }
-                    } else if Action::secondary("Resume")
-                        .density(Density::Read)
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked()
-                    {
-                        *action = Some(ListAction::Resume(run.path.clone()));
-                    }
+                let button = if index == 0 && page.in_progress.is_empty() && live.is_none() {
+                    Action::primary(START_FIGHT)
                 } else {
-                    let button = if index == 0 && page.in_progress.is_empty() && live.is_none() {
-                        Action::primary(START_FIGHT)
-                    } else {
-                        Action::secondary(START_FIGHT)
-                    };
-                    if button
-                        .icon(icons::RUN)
-                        .density(Density::Read)
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked()
-                    {
-                        *action = Some(ListAction::Run(template.path.clone()));
-                    }
+                    Action::secondary(START_FIGHT)
+                };
+                if button
+                    .icon(icons::RUN)
+                    .density(Density::Read)
+                    .blocked(start_blocked)
+                    .show(ui)
+                    .clicked()
+                {
+                    *action = Some(ListAction::Run(template.path.clone()));
                 }
             },
         );
+        blocked_reason(ui, start_blocked);
     }
-    blocked_reason(ui, blocked);
 }
 
 pub(super) fn group_list(
@@ -398,12 +362,9 @@ pub(super) fn group_list(
 ) {
     if snapshot.groups.is_empty() {
         heading(ui, "GROUPS", 0);
-        design::empty_state(
+        blocked_reason(
             ui,
-            icons::ENCOUNTERS,
-            "No groups yet",
-            "Prepare creatures with New group. Add them to a fight when they arrive.",
-            |_| {},
+            Some("No groups yet. New group prepares creatures that can join a fight."),
         );
     } else {
         section(
@@ -430,6 +391,14 @@ pub(super) fn history_list(
     action: &mut Option<ListAction>,
 ) {
     ui.add_space(design::L);
+    if page.ended_count() == 0 && page.unreadable.is_empty() {
+        heading(ui, "HISTORY", 0);
+        blocked_reason(
+            ui,
+            Some("No ended fights. End a run to keep its final state here."),
+        );
+        return;
+    }
     section(
         ui,
         "encounter_history",
@@ -437,15 +406,6 @@ pub(super) fn history_list(
         page.ended_count(),
         read.map(|_| true),
         |ui| {
-            if page.ended_count() == 0 && page.unreadable.is_empty() {
-                design::empty_state(
-                    ui,
-                    icons::ENCOUNTERS,
-                    "No ended fights",
-                    "End a run to keep its final state here.",
-                    |_| {},
-                );
-            }
             for session in &page.history {
                 design::group_label(ui, session.label);
                 for past in &session.runs {

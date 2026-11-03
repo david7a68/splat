@@ -4992,8 +4992,13 @@ pub mod encounter_history {
         d.expect(HISTORY);
         d.observe(
             "T4.6",
-            !d.has_label(RUN_PAST),
-            "Ended encounters stay in closed History",
+            d.has_label(RUN_PAST)
+                && d.nodes()
+                    .iter()
+                    .filter(|node| node.name == RUN && node.role == egui::accesskit::Role::Label)
+                    .count()
+                    == 1,
+            "Ended encounters return to Ready; an unfinished encounter appears only in In progress",
         );
         d.state("encounters-with-history", Sizes::All);
         d.click_starting(HISTORY);
@@ -5051,7 +5056,38 @@ pub mod encounter_history {
             .id
             == live;
         d.observe("T4.6", still_open, "History leaves the current fight open");
+        d.observe(
+            "T4.4",
+            d.nodes().iter().filter(|node| node.name == RUN && node.role == egui::accesskit::Role::Label).count() == 1,
+            "An open unfinished run has one row; the strip keeps Next turn primary and Back to run secondary",
+        );
         d.state("history-beside-open-run", Sizes::All);
+
+        open_saved_encounter(d, RUN);
+        d.click("Keep in Ready during a run");
+        d.click(SAVE_ENCOUNTER);
+        d.click("Back to encounters");
+        let nodes = d.nodes();
+        d.observe(
+            "T4.4",
+            nodes
+                .iter()
+                .filter(|node| node.name == RUN && node.role == egui::accesskit::Role::Label)
+                .count()
+                == 2
+                && nodes
+                    .iter()
+                    .filter(|node| node.name == "Running · Round 2" && node.is_link())
+                    .count()
+                    == 1
+                && !d.has(RESUME)
+                && d.is_disabled(RUN_ENCOUNTER)
+                && d.visible_text(
+                    "This encounter has an unfinished run. Resume it in In progress.",
+                ),
+            "Keep in Ready adds only a blocked Start fight with a reason, never a second run link",
+        );
+        d.state("keep-in-ready-blocked", Sizes::All);
         d.click(NEW_ENCOUNTER);
         d.expect("Encounter name");
         d.observe(

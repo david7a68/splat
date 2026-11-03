@@ -880,7 +880,7 @@ const START_FIGHT: &str = "Start fight";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
-const REPEATABLE_OPTION: &str = "Keep in Ready after a run ends";
+const REPEATABLE_OPTION: &str = "Keep in Ready during a run";
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
@@ -2070,14 +2070,7 @@ impl Encounters {
                     loading,
                     &mut action,
                 );
-                ready_list(
-                    ui,
-                    &page,
-                    &snapshot.templates,
-                    live.as_ref(),
-                    start_blocked,
-                    &mut action,
-                );
+                ready_list(ui, &page, live.as_ref(), start_blocked, &mut action);
                 ui.add_space(design::L);
                 group_list(ui, snapshot, group_blocked, &mut action);
                 history_list(

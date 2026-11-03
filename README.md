@@ -4,7 +4,7 @@ A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
 The sidebar has one flat level: **Run** (while a run is open or paused), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
-opens beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
+opens beside any page. While a run is open, other pages show a strip with the turn, primary **Next turn**, and secondary **Back to run**. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
 change its width. The app keeps that width after a restart. Simulation is later work.
 
@@ -475,7 +475,10 @@ prior actions, including turn changes, dice rolls, and manual endings in the cur
 after changes; **Close run** asks once, then returns to the page the run began on. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
 with **Start another fight** and **Delete the saved run** in the row’s **⋯** menu. Deletion has one step of undo.
-The rail keeps a paused run in view and resumes it in one click. **History** holds dated, ended runs under their session.
+An encounter with an unfinished run appears only in **In progress** and returns to **Ready to run** when it ends.
+**Keep in Ready during a run** also keeps its Ready row, with **Start fight** blocked and a reason.
+Empty list sections show one muted line and hide the zero count.
+The rail keeps a paused run in view and resumes it in one click. Its detail wraps below the Run label. **History** holds dated, ended runs under their session.
 An ended run opens read-only in place, with its final state and log. It leaves the live run open. Run changes never
 write to templates or character copies.
 

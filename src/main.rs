@@ -53,15 +53,23 @@ fn main() -> eframe::Result {
     )
 }
 
-/// The paused detail uses the full rail width, below the icon and name.
+/// The paused detail wraps below the Run label, at the same inset as an open run.
 fn paused_run_item(ui: &mut egui::Ui, detail: &str) -> egui::Response {
     let c = colors();
-    let height = Density::Glance.control() + design::XS;
+    let name = format!("Run · {detail}");
+    let label_inset = design::S * 3.0 + design::XS;
+    let detail = ui.painter().layout(
+        detail.to_owned(),
+        Type::Small.font(ui),
+        c.muted,
+        (ui.available_width() - label_inset - design::XS).max(design::S),
+    );
+    let height = (Type::Body.line() + detail.size().y + design::S)
+        .max(Density::Glance.control() + design::XS);
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), height),
         egui::Sense::click(),
     );
-    let name = format!("Run · {detail}");
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), &name)
     });
@@ -71,17 +79,22 @@ fn paused_run_item(ui: &mut egui::Ui, detail: &str) -> egui::Response {
                 .rect_filled(rect, design::RADIUS_CONTROL, c.hover);
         }
         ui.painter().text(
-            rect.min + egui::vec2(design::S, design::XS),
+            rect.min + egui::vec2(design::S + design::XS / 2.0, design::XS),
             egui::Align2::LEFT_TOP,
-            format!("{} Run", icons::RUN),
+            icons::RUN,
             Type::Body.font(ui),
             c.muted,
         );
         ui.painter().text(
-            rect.min + egui::vec2(design::S, Type::Body.line() + design::XS),
+            rect.min + egui::vec2(label_inset, design::XS),
             egui::Align2::LEFT_TOP,
+            "Run",
+            Type::Body.font(ui),
+            c.muted,
+        );
+        ui.painter().galley(
+            rect.min + egui::vec2(label_inset, Type::Body.line() + design::XS),
             detail,
-            Type::Small.font(ui),
             c.muted,
         );
         if response.has_focus() {
@@ -978,7 +991,7 @@ impl Splat {
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if strip.running
-                            && Action::secondary("Next turn")
+                            && Action::primary("Next turn")
                                 .icon(icons::NEXT)
                                 .show(ui)
                                 .clicked()
@@ -987,7 +1000,7 @@ impl Splat {
                             run.next_turn();
                             self.sessions.after_a_step_back_to_note(self.notes_gave_way);
                         }
-                        if Action::primary("Back to run").show(ui).clicked() {
+                        if Action::secondary("Back to run").show(ui).clicked() {
                             self.page = Page::Run;
                         }
                         if strip.not_saved {
