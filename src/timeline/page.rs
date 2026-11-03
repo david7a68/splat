@@ -400,96 +400,96 @@ impl TimelinePage {
         } else {
             format!("{title} · {detail}")
         };
-        let response = design::row(
-            ui,
-            if open { design::XL } else { ROW },
-            selected,
-            &name,
-            |ui, rect| {
-                let painter = ui.painter();
-                let spine = rect.left() + SPINE;
-                let width = rect.width() - TEXT_AT - design::S;
-                let icon_y = rect.center().y;
-                if event.kind != Kind::Day {
-                    for (from, to) in [(rect.top(), icon_y - 11.0), (icon_y + 11.0, rect.bottom())]
-                    {
-                        painter.vline(
-                            spine,
-                            egui::Rangef::new(from, to),
-                            egui::Stroke::new(design::HAIRLINE_WIDTH, c.rule),
-                        );
-                    }
-                }
-                painter.text(
-                    egui::pos2(spine, icon_y),
-                    egui::Align2::CENTER_CENTER,
-                    event.kind.icon(),
-                    Type::Name.font(ui),
-                    if event.kind == Kind::Day {
-                        c.text
-                    } else {
-                        c.muted
-                    },
-                );
-                let galley = if event.kind == Kind::Day {
-                    let mut job = design::group_heading_text(ui, &title, 0);
-                    job.wrap.max_width = width;
-                    job.wrap.max_rows = 1;
-                    painter.layout_job(job)
-                } else {
-                    let font = if selected { Type::Strong } else { Type::Body };
-                    design::one_line(ui, &title, font.font(ui), c.text, width)
-                };
-                let lines = if detail.is_empty() || open {
-                    galley.size().y
-                } else {
-                    galley.size().y + Type::Small.line()
-                };
-                let top = rect.center().y - lines / 2.0;
-                let x = rect.left() + TEXT_AT;
-                painter.galley(egui::pos2(x, top), galley, c.text);
-                if !detail.is_empty() && !open {
-                    let second =
-                        design::one_line(ui, &detail, Type::Small.font(ui), c.muted, width);
-                    painter.galley(
-                        egui::pos2(x, top + lines - Type::Small.line()),
-                        second,
-                        c.muted,
+        let response = design::row(ui, ROW, selected, &name, |ui, rect| {
+            let painter = ui.painter();
+            let spine = rect.left() + SPINE;
+            let width = rect.width() - TEXT_AT - design::S;
+            let icon_y = rect.center().y;
+            if event.kind != Kind::Day {
+                for (from, to) in [(rect.top(), icon_y - 11.0), (icon_y + 11.0, rect.bottom())] {
+                    painter.vline(
+                        spine,
+                        egui::Rangef::new(from, to),
+                        egui::Stroke::new(design::HAIRLINE_WIDTH, c.rule),
                     );
                 }
-            },
-        );
+            }
+            painter.text(
+                egui::pos2(spine, icon_y),
+                egui::Align2::CENTER_CENTER,
+                event.kind.icon(),
+                Type::Name.font(ui),
+                if event.kind == Kind::Day {
+                    c.text
+                } else {
+                    c.muted
+                },
+            );
+            let galley = if event.kind == Kind::Day {
+                let mut job = design::group_heading_text(ui, &title, 0);
+                job.wrap.max_width = width;
+                job.wrap.max_rows = 1;
+                painter.layout_job(job)
+            } else {
+                let font = if selected { Type::Strong } else { Type::Body };
+                design::one_line(ui, &title, font.font(ui), c.text, width)
+            };
+            let lines = if detail.is_empty() {
+                galley.size().y
+            } else {
+                galley.size().y + Type::Small.line()
+            };
+            let top = rect.center().y - lines / 2.0;
+            let x = rect.left() + TEXT_AT;
+            painter.galley(egui::pos2(x, top), galley, c.text);
+            if !detail.is_empty() && !open {
+                let second = design::one_line(ui, &detail, Type::Small.font(ui), c.muted, width);
+                painter.galley(
+                    egui::pos2(x, top + lines - Type::Small.line()),
+                    second,
+                    c.muted,
+                );
+            }
+        });
         if open && !summary.is_empty() {
-            // Keep the title and round link in separate hit targets.
+            // The link uses the same second-line position as every other row.
+            let title_height = ui.fonts_mut(|fonts| fonts.row_height(&Type::Body.font(ui)));
+            let top = response.rect.center().y - (title_height + Type::Small.line()) / 2.0;
             let rect = egui::Rect::from_min_max(
-                response.rect.left_bottom(),
-                response.rect.right_bottom() + egui::vec2(0.0, design::XL),
+                egui::pos2(response.rect.left() + TEXT_AT, top + title_height),
+                egui::pos2(
+                    response.rect.right() - design::S,
+                    top + title_height + Type::Small.line(),
+                ),
             );
-            ui.allocate_rect(rect, egui::Sense::hover());
-            let rect = egui::Rect::from_min_max(
-                rect.min + egui::vec2(TEXT_AT, 0.0),
-                rect.max - egui::vec2(design::S, 0.0),
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(rect)
+                    .accessibility_parent(response.id),
+                |ui| {
+                    ui.spacing_mut().interact_size.y = 0.0;
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        let (before, after) = detail.split_once(&summary).unwrap_or(("", ""));
+                        ui.label(Type::Small.rich(ui, before).color(c.muted));
+                        if design::inline_status_link(
+                            ui,
+                            Status {
+                                icon: icons::RUN,
+                                word: &summary,
+                                color: c.text,
+                            },
+                        )
+                        .clicked()
+                        {
+                            self.wants_back_to_run = true;
+                        }
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, after).color(c.muted)).truncate(),
+                        );
+                    });
+                },
             );
-            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    let (before, after) = detail.split_once(&summary).unwrap_or(("", ""));
-                    ui.label(Type::Small.rich(ui, before).color(c.muted));
-                    if design::status_link(
-                        ui,
-                        Status {
-                            icon: icons::RUN,
-                            word: &summary,
-                            color: c.text,
-                        },
-                    )
-                    .clicked()
-                    {
-                        self.wants_back_to_run = true;
-                    }
-                    ui.add(egui::Label::new(Type::Small.rich(ui, after).color(c.muted)).truncate());
-                });
-            });
         }
         if response.clicked() {
             self.reset_detail = self.selected.as_ref() != Some(&event.id);
@@ -715,11 +715,8 @@ impl TimelinePage {
         }
         let event = &book.events[index];
         let title = event.label(days[index]);
-        let kind = if event.kind == Kind::Day {
-            event.kind.icon().to_owned()
-        } else {
-            format!("{} {}", event.kind.icon(), event.kind.word())
-        };
+        let icon_only = event.kind == Kind::Day || event.title.trim().is_empty();
+        let kind = header_kind(event);
         let needed = design::number_width(ui, &title, &Type::Heading.font(ui))
             + design::number_width(ui, &kind, &Type::Small.font(ui))
             + design::number_width(ui, "Saving blocked", &Type::Small.font(ui))
@@ -732,9 +729,9 @@ impl TimelinePage {
             + design::S * 5.0;
         let title_line = |ui: &mut egui::Ui| {
             let kind_label = ui.label(Type::Small.rich(ui, &kind).color(c.muted));
-            if event.kind == Kind::Day {
-                design::named(ui, &kind_label, "Day");
-                kind_label.on_hover_text("Day");
+            if icon_only {
+                design::named(ui, &kind_label, event.kind.word());
+                kind_label.on_hover_text(event.kind.word());
             }
             let shown =
                 design::words_that_fit(ui, &title, &Type::Heading.font(ui), ui.available_width());
@@ -1265,9 +1262,33 @@ pub fn check_long_rest_add(kinds: &'static [Kind]) {
     assert!(!super::party_state(&harness.state().events, session).rested);
 }
 
+fn header_kind(event: &Event) -> String {
+    if event.kind == Kind::Day || event.title.trim().is_empty() {
+        event.kind.icon().to_owned()
+    } else {
+        format!("{} {}", event.kind.icon(), event.kind.word())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_untitled_rest_names_its_kind_once_in_the_header() {
+        let mut book = Book::default();
+        book.add(Kind::LongRest, None);
+        let mut event = book.events.remove(0);
+        assert_eq!(
+            format!("{} {}", header_kind(&event), event.label(1))
+                .matches("Long rest")
+                .count(),
+            1
+        );
+        event.title = "Rest at the mill".into();
+        assert!(header_kind(&event).contains("Long rest"));
+        assert_eq!(event.label(1), "Rest at the mill");
+    }
 
     #[test]
     fn long_rest_added_on_timeline_restores_and_undo_removes_its_ruling() {

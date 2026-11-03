@@ -838,6 +838,34 @@ impl<'a> Driver<'a> {
         out.join(" ")
     }
 
+    /// The first source line must fit inside the editor's visible clip.
+    pub fn first_source_line_visible(&self, prefix: &str) -> bool {
+        let mut visible = false;
+        self.each_painted_text(|text, clip| {
+            if text.galley.job.text.starts_with(prefix)
+                && let Some(row) = text.galley.rows.first()
+            {
+                let rect = row.rect().translate(text.pos.to_vec2());
+                visible |= clip.expand(1.0).contains_rect(rect);
+            }
+        });
+        visible
+    }
+
+    pub fn painted_rect_in(&self, words: &str, area: egui::Rect) -> Option<egui::Rect> {
+        let mut found = None;
+        self.each_painted_text(|text, clip| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if text.galley.job.text.contains(words)
+                && area.contains(rect.center())
+                && clip.intersects(rect)
+            {
+                found = Some(rect);
+            }
+        });
+        found
+    }
+
     /// Where the reader's title is, which moves when the reader scrolls.
     pub fn scroll_position_of_reader(&self) -> Option<f32> {
         self.nodes()

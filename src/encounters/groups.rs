@@ -1577,6 +1577,7 @@ impl Encounters {
             });
         });
         ui.horizontal_wrapped(|ui| {
+            ui.set_min_height(design::Density::Read.control());
             let (icon, word, color) = if dirty {
                 (icons::DRAFT, "Unsaved", colors().document.unsaved)
             } else if let Some(note) = saved_note.as_deref() {
@@ -1584,7 +1585,7 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            discard = design::save_row_state(ui, Status { icon, word, color }, dirty, None);
+            discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
             if dirty && in_plan {
                 super::blocked_reason(ui, Some(super::draft_switch_reason()));
             }
@@ -1651,7 +1652,7 @@ impl Encounters {
         if compact {
             match pane {
                 EditorPane::Roster => members_pane(ui, draft, snapshot, expanded, true),
-                EditorPane::Add => add_pane(ui, draft, snapshot, search, focus_search, peek),
+                EditorPane::Add => add_pane(ui, draft, snapshot, search, focus_search, peek, true),
             }
             return;
         }
@@ -1668,7 +1669,7 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                add_pane(ui, draft, snapshot, search, focus_search, peek);
+                add_pane(ui, draft, snapshot, search, focus_search, peek, false);
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -1684,6 +1685,29 @@ impl Encounters {
     }
 }
 
+fn draft_member_summary(draft: &GroupDraft, snapshot: &Snapshot) -> String {
+    draft
+        .setup
+        .members
+        .iter()
+        .map(|member| {
+            let name = snapshot
+                .catalogue
+                .resolve_ref(&member.creature)
+                .ok()
+                .and_then(|id| snapshot.catalogue.entries.get(&id))
+                .map(|entry| entry.entry.name.as_str())
+                .unwrap_or("Unknown creature");
+            format!(
+                "{} × {}",
+                member.count,
+                shown_name(&member.overrides, name.to_owned())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn add_pane(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -1691,8 +1715,11 @@ fn add_pane(
     search: &mut String,
     focus_search: &mut bool,
     peek: &mut Option<Uuid>,
+    compact: bool,
 ) {
-    design::group_heading(ui, "Add creatures", 0);
+    if !compact {
+        design::group_heading(ui, "Add creatures", 0);
+    }
     ui.add(
         egui::Label::new(
             Type::Small
@@ -1704,7 +1731,12 @@ fn add_pane(
         )
         .wrap(),
     );
-    let chosen = Encounters::creature_search(
+    let summary = if compact {
+        draft_member_summary(draft, snapshot)
+    } else {
+        String::new()
+    };
+    let chosen = Encounters::creature_search_with_summary(
         ui,
         snapshot.creatures.iter().filter(|c| !c.linked),
         search,
@@ -1713,6 +1745,7 @@ fn add_pane(
         super::SearchRoster {
             already: &|_| false,
         },
+        &summary,
     );
     if let Some((id, _)) = chosen {
         if let Some((stat, name)) = snapshot.npc_stat_block(id) {
@@ -1750,7 +1783,7 @@ fn group_fields(
     snapshot: &Snapshot,
     expanded: &mut Option<String>,
     open: Option<(Uuid, &str)>,
-    tabbed: bool,
+    _tabbed: bool,
 ) {
     ui.horizontal(|ui| {
         ui.label(Type::Small.rich(ui, SIDE_FIELD).color(colors().muted));
@@ -1777,20 +1810,11 @@ fn group_fields(
         .sum::<u64>();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        if !tabbed {
-            design::group_heading(ui, "Members", count as usize);
-        }
+        design::group_heading(ui, "Members", count as usize);
         if !draft.setup.members.is_empty() {
             ui.label(
                 Type::Small
-                    .rich(
-                        ui,
-                        format!(
-                            "{}{}",
-                            if tabbed { "" } else { " · " },
-                            members_heading(draft, snapshot)
-                        ),
-                    )
+                    .rich(ui, format!("{}{}", " · ", members_heading(draft, snapshot)))
                     .color(colors().muted),
             );
         }

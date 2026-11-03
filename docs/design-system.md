@@ -305,7 +305,7 @@ Member names and stats have their own lines above Count, Edit, and the row menu.
 Member changes stay on one line, such as `Changed · 2 to add by hand`, until opened.
 An empty group frame has one muted line and no zero count or duplicate search summary.
 The Groups list has one level of headings: For any encounter, each encounter, then Encounter deleted.
-Its rows keep Edit and a menu with Remove, which has Undo. A planned group also has Remove with Undo; it removes the link and keeps the note’s words.
+Its rows keep Edit and a menu with Remove, which has Undo. A planned group has Remove from tonight and Undo remove. An isolated plan link is deleted; links inside sentences keep their words.
 A summary of members stays below the search when it has members. Removing an encounter’s group makes
 it available for any encounter on Save, with Undo until that save.
 
@@ -634,7 +634,7 @@ A Day's start time is the Kind field's help line.
 
 Sheet rows without a second line use one Read row. Correct HP owns the HP help;
 Correct initiative says This row moves. The current turn stays. Correction field labels
-share one column. Signed-out sheet conflicts keep Show file as their only action.
+share one column. Signed-out sheet conflicts offer Connect to refresh before Show file.
 An open Ready run says Go back to the run. Paused rows include their saved date and time.
 NPC roster rows put as Guard last. Group frames choose where Add goes; the search shows
 Adding to as read-only text. Members and XP share one heading line.
@@ -683,8 +683,9 @@ New entry reveals its selected list row after the catalogue reloads. Hidden sour
 headings and comments add no reader space. Manage packages offers Clear only for
 filled fields. Folder suggestions use the combo arrow and normal text colour.
 
-Plan group summaries put XP first, then Changed, members and side. They measure
-against their own action. Tabbed member and roster views omit the repeated count.
+Plan group summaries use side, member count, XP, Changed and members, in that order.
+They shorten members first and keep the full words on hover. Compact group editors
+keep the member summary under search and the full Members and XP heading.
 Sheet group headings use an L gap. Death-save counts use words; Correct HP has an
 L gap after death saves. Missing encounter entries have a warning icon.
 

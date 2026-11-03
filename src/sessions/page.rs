@@ -214,7 +214,7 @@ pub struct Sessions {
     removed_fight: Option<(Option<Uuid>, usize, String, String, String)>,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
-    removed_group: Option<(Option<Uuid>, usize, String, String, f32)>,
+    removed_group: Option<(Option<Uuid>, usize, String, String, f32, String)>,
     /// The fight behind the open event, read once.
     fight: Option<(Uuid, Result<FightSummary, String>)>,
     /// What the session before the selected one left, read once for each selection.
@@ -380,6 +380,35 @@ fn plan_summary(summary: &str) -> String {
         .replace("Ended ·\u{a0}Round", "Ended\u{a0}·\u{a0}Round")
 }
 
+/// Keep each summary item and its separator together, including the rest ruling.
+fn plan_event_summary(ui: &mut egui::Ui, summary: &str, restores: bool) {
+    let mut job = egui::text::LayoutJob::default();
+    let format = egui::TextFormat {
+        font_id: Type::Small.font(ui),
+        color: colors().muted,
+        ..Default::default()
+    };
+    job.append(&plan_summary(summary), 0.0, format.clone());
+    if restores {
+        let words = format!(
+            "{}{}\u{a0}Everyone\u{a0}at\u{a0}full",
+            if summary.is_empty() { "" } else { " ·\u{a0}" },
+            icons::OK
+        );
+        job.append(
+            &words,
+            0.0,
+            egui::TextFormat {
+                color: colors().document.saved,
+                ..format
+            },
+        );
+    }
+    if !job.text.is_empty() {
+        ui.add(egui::Label::new(job).wrap());
+    }
+}
+
 /// The recording count belongs to the tab's label and click target.
 fn recordings_tab(ui: &mut egui::Ui, shown: &mut Tab, count: usize) -> bool {
     design::counted_tab(
@@ -396,31 +425,9 @@ fn wrapped_words(ui: &mut egui::Ui, kind: Type, words: impl Into<String>, color:
     ui.add(egui::Label::new(kind.rich(ui, words).color(color)).wrap());
 }
 
-/// Keep the note's words while removing the group link that adds it to the plan.
+/// Remove an isolated plan line, but keep words embedded in a sentence.
 fn unlink_group(body: &mut String, name: &str) {
-    let mut out = String::new();
-    let mut rest = body.as_str();
-    while let Some(start) = rest.find("[[") {
-        out.push_str(&rest[..start]);
-        rest = &rest[start..];
-        let Some(end) = rest.find("]]") else {
-            break;
-        };
-        let link = &rest[..end + 2];
-        let inner = &rest[2..end];
-        if inner
-            .split('|')
-            .next()
-            .is_some_and(|target| target.trim().eq_ignore_ascii_case(name))
-        {
-            out.push_str(inner.rsplit('|').next().unwrap_or(inner));
-        } else {
-            out.push_str(link);
-        }
-        rest = &rest[end + 2..];
-    }
-    out.push_str(rest);
-    *body = out;
+    *body = unlink_planned_fight(body, name, 0);
 }
 
 fn unlink_planned_fight(body: &str, name: &str, occurrence: usize) -> String {
@@ -2834,7 +2841,15 @@ impl Sessions {
                 draft.show_disk();
             }
             if let Some(disk) = &draft.on_disk {
-                design::draft_comparison(ui, &draft.body, disk, (&draft.path, disk));
+                let face = design::reader::prose_type(ui);
+                design::draft_comparison_styled(
+                    ui,
+                    &draft.body,
+                    disk,
+                    (&draft.path, disk),
+                    face.font(ui),
+                    face.line(),
+                );
                 return;
             }
         }
@@ -2966,14 +2981,26 @@ impl Sessions {
                                 caret
                             }))
                             .translate(output.galley_pos.to_vec2());
-                        ui.scroll_to_rect(
-                            rect,
-                            Some(if in_panel {
-                                egui::Align::TOP
-                            } else {
-                                egui::Align::Center
-                            }),
-                        );
+                        if in_panel {
+                            ui.scroll_to_rect(rect, Some(egui::Align::TOP));
+                        } else {
+                            let clip = ui.clip_rect();
+                            if rect.top() < clip.top() || rect.bottom() > clip.bottom() {
+                                let wanted = (rect.bottom() - clip.height()).max(0.0);
+                                let top = output
+                                    .galley
+                                    .rows
+                                    .iter()
+                                    .map(|row| row.pos.y + output.galley_pos.y)
+                                    .find(|top| *top >= wanted)
+                                    .unwrap_or(rect.top());
+                                let visible = egui::Rect::from_min_size(
+                                    egui::pos2(rect.left(), top),
+                                    egui::vec2(rect.width(), clip.height()),
+                                );
+                                ui.scroll_to_rect(visible, Some(egui::Align::TOP));
+                            }
+                        }
                     }
                     if focus {
                         response.request_focus();
@@ -3393,7 +3420,7 @@ impl Sessions {
         session: Option<Uuid>,
         position: usize,
     ) -> bool {
-        let Some((id, at, _, _, height)) = &self.removed_group else {
+        let Some((id, at, _, _, height, name)) = &self.removed_group else {
             return false;
         };
         if *id != session || *at != position {
@@ -3404,8 +3431,8 @@ impl Sessions {
             design::undo_message(
                 ui,
                 Tone::Info,
-                "Group removed from this plan.",
-                "Undo remove from plan",
+                &format!("Removed “{name}” from tonight."),
+                "Undo remove",
             )
         })
         .inner
@@ -3435,7 +3462,7 @@ impl Sessions {
         if self
             .removed_group
             .as_ref()
-            .is_some_and(|(id, _, _, after, _)| {
+            .is_some_and(|(id, _, _, after, _, _)| {
                 *id == session && self.draft.as_ref().is_none_or(|draft| draft.body != *after)
             })
         {
@@ -3598,19 +3625,15 @@ impl Sessions {
                             if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
                         }, |ui| {
                             if running {
-                                if design::status_link(ui, Status { icon: icons::RUN,
+                                if design::inline_status_link(ui, Status { icon: icons::RUN,
                                     word: &plan.open_state, color: c.text }).clicked() {
                                     self.wants_back_to_run = true;
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN,
                                     word: &plan_saved_status(saved), color: c.muted });
-                            } else if !summary.is_empty() {
-                                wrapped_words(ui, Type::Small, plan_summary(&summary), c.muted);
-                            }
-                            if event.kind == Kind::LongRest && event.restores {
-                                design::status(ui, Status { icon: icons::OK,
-                                    word: "Everyone at full", color: c.document.saved });
+                            } else {
+                                plan_event_summary(ui, &summary, event.kind == Kind::LongRest && event.restores);
                             }
                         }, |ui| {
                             if let Some(saved) = saved {
@@ -3694,7 +3717,7 @@ impl Sessions {
                             }
                         }, |ui| {
                             if running {
-                                if design::status_link(ui, Status { icon: icons::RUN,
+                                if design::inline_status_link(ui, Status { icon: icons::RUN,
                                     word: &plan.open_state, color: c.text }).clicked() {
                                     self.wants_back_to_run = true;
                                 }
@@ -3756,13 +3779,13 @@ impl Sessions {
                         plan_row(ui, &group_widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                         }, |ui| {
-                            let summary = format!("{}{} · {} · {}", group.xp_label(), if group.members.iter().any(|m| !m.overrides.is_empty()) { " · Changed" } else { "" }, group.member_summary(), design::reader::human_label(&group.side));
+                            let summary = group.summary();
                             let shown = design::words_that_fit(ui, &summary, &Type::Small.font(ui), ui.available_width());
                             ui.label(Type::Small.rich(ui, shown).color(c.muted)).on_hover_text(&summary);
                             if let Some(problem) = &group.problem { wrapped_words(ui, Type::Small, problem, c.result.warning); }
                         }, |ui| {
                             design::row_menu(ui, &group.name, |ui| {
-                                if Action::quiet("Remove").name(&format!("Remove group {} from the plan", group.name))
+                                if Action::quiet("Remove from tonight").name(&format!("Remove group {} from the plan", group.name))
                                     .blocked(plan.group_blocked).show(ui).clicked() {
                                     remove_group = Some((position, group.name.clone(), 0.0)); ui.close();
                                 }
@@ -3815,7 +3838,7 @@ impl Sessions {
             }
         }
         if undo_group_remove
-            && let Some((_, _, before, _, _)) = self.removed_group.take()
+            && let Some((_, _, before, _, _, _)) = self.removed_group.take()
             && let Some(draft) = &mut self.draft
         {
             draft.body = before;
@@ -3827,7 +3850,8 @@ impl Sessions {
             let before = draft.body.clone();
             unlink_group(&mut draft.body, &name);
             draft.edited();
-            self.removed_group = Some((session, position, before, draft.body.clone(), height));
+            self.removed_group =
+                Some((session, position, before, draft.body.clone(), height, name));
             self.plan_notice_state = Some((draft.body.clone(), book.events.clone()));
         }
         if changed {
@@ -5754,9 +5778,10 @@ impl Sessions {
             return;
         };
         ui.add_space(design::XS);
+        design::group_heading(ui, "Session folder", 0);
         let edited = design::small_text_field(
             ui,
-            "Session folder",
+            "Folder",
             &mut self.folder_text,
             Some(
                 "Inside the campaign folder, unless the path is absolute. A name such as 30 Sessions is fine.",
@@ -6085,6 +6110,39 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn group_removal_deletes_only_an_isolated_plan_link() {
+        let mut body =
+            "## Plan for tonight\n- [[Rival Team]]\n## Notes\n- [[Rival Team]]\n".to_owned();
+        unlink_group(&mut body, "Rival Team");
+        assert_eq!(body, "## Plan for tonight\n## Notes\n- [[Rival Team]]\n");
+        let mut body = "## Plan for tonight\nMeet [[Rival Team|the rivals]] at dusk.\n".to_owned();
+        unlink_group(&mut body, "Rival Team");
+        assert_eq!(body, "## Plan for tonight\nMeet the rivals at dusk.\n");
+    }
+
+    #[test]
+    fn a_rest_ruling_uses_one_line_when_the_summary_fits() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.set_width(design::FORM_WIDTH);
+                let plain = ui
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", false))
+                    .response
+                    .rect
+                    .height();
+                let restored = ui
+                    .scope(|ui| plan_event_summary(ui, "Long rest · Old mill", true))
+                    .response
+                    .rect
+                    .height();
+                assert_eq!(plain, restored);
+            });
+        });
+    }
 
     #[test]
     fn long_rest_added_on_plan_restores_and_undo_removes_its_ruling() {

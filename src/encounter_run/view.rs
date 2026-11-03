@@ -2771,23 +2771,31 @@ impl Run {
                             Self::roll_block_name(&self.state, &self.state.participants[first]);
                         let full = format!("Move {arrival} before {name}");
                         let font = Type::Strong.font(ui);
-                        let shown = undo_words(
-                            ui,
-                            &full,
-                            &self.state.participants,
-                            &font,
-                            ui.available_width() - design::S * 2.0,
-                        );
                         design::message(ui, Tone::Info, &line);
-                        if Action::quiet(&shown)
-                            .name(&full)
-                            .hint(&full)
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.run_command(Command::MoveArrivalBefore(first, before));
-                        }
+                        ui.horizontal(|ui| {
+                            let icon = design::number_width(ui, icons::INFO, &Type::Body.font(ui));
+                            let gap = ui.spacing().item_spacing.x;
+                            let inset =
+                                design::S + design::HAIRLINE_WIDTH + icon + gap * 2.0 - design::XS;
+                            ui.add_space((inset - gap).max(0.0));
+                            let shown = undo_words(
+                                ui,
+                                &full,
+                                &self.state.participants,
+                                &font,
+                                ui.available_width() - design::S * 2.0,
+                            );
+                            if Action::quiet(&shown)
+                                .line_start()
+                                .name(&full)
+                                .hint(&full)
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                            {
+                                self.run_command(Command::MoveArrivalBefore(first, before));
+                            }
+                        });
                     } else {
                         design::message(ui, Tone::Success, &line);
                     }
@@ -2810,15 +2818,8 @@ impl Run {
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
     fn group_list(&mut self, ui: &mut egui::Ui) -> Option<Uuid> {
         let c = colors();
-        design::group_heading(
-            ui,
-            "Encounter groups",
-            self.groups.as_ref().map_or(0, |groups| {
-                let offered = super::OfferedGroups::of(groups, self.source);
-                offered.own.len() + offered.any.len() + offered.other.len()
-            }),
-        );
         let Some(groups) = self.groups.clone() else {
+            design::group_heading(ui, "Encounter groups", 0);
             ui.add(
                 egui::Label::new(
                     Type::Body
@@ -2833,6 +2834,7 @@ impl Run {
             return None;
         };
         if groups.is_empty() {
+            design::group_heading(ui, "Encounter groups", 0);
             ui.horizontal_wrapped(|ui| {
                 ui.label(
                     Type::Small
@@ -2856,6 +2858,9 @@ impl Run {
         // A campaign with only groups for any encounter, none of them planned, has nothing to
         // tell apart.
         let labelled = !offered.own.is_empty() || !planned.is_empty() || !offered.other.is_empty();
+        if !labelled {
+            design::group_heading(ui, "Encounter groups", offered.any.len());
+        }
         let mut add = None;
         for (heading, list) in [
             ("For this encounter", offered.own.as_slice()),
@@ -4818,7 +4823,9 @@ fn ordinal(place: usize) -> String {
 
 fn close_saved_words(undo: bool, sync: bool) -> String {
     match (undo, sync) {
-        (false, false) => "The run stays saved. Resume it from Encounters.",
+        (false, false) => {
+            "The run stays saved. Resume it from Paused run on the left, or from Encounters."
+        }
         (true, false) => "The run stays saved. Closing ends Undo for this run.",
         (false, true) => "The run stays saved. Sync stops.",
         (true, true) => "The run stays saved. Closing ends Undo for this run. Sync stops.",
@@ -5774,6 +5781,18 @@ fn correction_label(ui: &mut egui::Ui, label: &str) {
     });
 }
 
+fn signed_bonus(value: i64) -> String {
+    if value < 0 {
+        format!("−{}", value.unsigned_abs())
+    } else {
+        format!("+{value}")
+    }
+}
+
+fn parse_bonus(text: &str) -> Option<f64> {
+    text.trim().replace('−', "-").parse().ok()
+}
+
 fn optional_number(
     ui: &mut egui::Ui,
     label: &str,
@@ -5784,7 +5803,13 @@ fn optional_number(
     ui.horizontal(|ui| {
         correction_label(ui, label);
         if let Some(n) = value {
-            let response = ui.add(egui::DragValue::new(n).range(range));
+            let mut field = egui::DragValue::new(n).range(range);
+            if label == "Initiative bonus" {
+                field = field
+                    .custom_formatter(|value, _| signed_bonus(value as i64))
+                    .custom_parser(parse_bonus);
+            }
+            let response = ui.add(field);
             design::named(ui, &response, label);
             if Action::quiet("Mark unknown")
                 .name(&format!("Mark {label} unknown"))
@@ -5813,6 +5838,15 @@ mod tests {
     use super::*;
     use serde_yaml_ng::Mapping;
     use splat::content::{Entry, overrides::Overrides};
+
+    #[test]
+    fn initiative_bonus_formats_and_parses_signed_values() {
+        for (value, shown) in [(1, "+1"), (0, "+0"), (-1, "−1")] {
+            assert_eq!(signed_bonus(value), shown);
+            assert_eq!(parse_bonus(shown), Some(value as f64));
+            assert_eq!(parse_bonus(&value.to_string()), Some(value as f64));
+        }
+    }
 
     #[test]
     fn arrival_status_wraps_without_a_trailing_separator() {
@@ -5978,7 +6012,7 @@ mod tests {
     fn close_names_only_the_live_losses() {
         assert_eq!(
             close_saved_words(false, false),
-            "The run stays saved. Resume it from Encounters."
+            "The run stays saved. Resume it from Paused run on the left, or from Encounters."
         );
         assert!(!close_saved_words(false, true).contains("Undo"));
         assert!(!close_saved_words(true, false).contains("Sync stops"));
