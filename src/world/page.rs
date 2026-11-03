@@ -20,6 +20,7 @@ pub struct WorldPage {
     /// What only the app can do, for it to take after the page draws.
     pub ask_lookup: Option<String>,
     pub reload: bool,
+    pub run_open: bool,
     new_kind: Option<&'static str>,
     new_name: String,
     generated: Option<crate::npc_generator::Generated>,
@@ -214,7 +215,7 @@ impl WorldPage {
         }
         if let Some(npc) = &self.generated {
             let (saved, again, discard) =
-                crate::lookup::generated_card(ui, npc, &self.generator_problems);
+                crate::lookup::generated_card(ui, npc, &self.generator_problems, self.run_open);
             if saved {
                 made = Some(super::create_generated(campaign, npc));
             }

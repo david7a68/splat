@@ -12,6 +12,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 pub struct Settings {
     cookie_input: String,
+    focus_cookie: bool,
     sign_in_again: bool,
     session: Option<Session>,
     worker: Option<Worker>,
@@ -62,6 +63,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             cookie_input: String::new(),
+            focus_cookie: false,
             sign_in_again: false,
             session: None,
             worker: None,
@@ -92,6 +94,10 @@ impl Drop for Settings {
 }
 
 impl Settings {
+    pub(crate) fn focus_sign_in(&mut self) {
+        self.focus_cookie = true;
+        self.sign_in_again = true;
+    }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
         self.busy
@@ -217,6 +223,7 @@ impl Settings {
                                 if outcome.session.is_some() {
                                     // Kept only for a retry after a failed attempt.
                                     self.cookie_input.zeroize();
+                                    self.sign_in_again = false;
                                 }
                                 self.session = outcome.session;
                                 self.saved_session = false;
@@ -321,10 +328,11 @@ impl Settings {
                 open = !open;
             }
         });
-        open |= ui.ctx().data(|data| {
-            data.get_temp::<bool>(egui::Id::new("focus_cookie"))
-                .unwrap_or(false)
-        });
+        open |= self.focus_cookie
+            || ui.ctx().data(|data| {
+                data.get_temp::<bool>(egui::Id::new("focus_cookie"))
+                    .unwrap_or(false)
+            });
         ui.ctx().data_mut(|data| data.insert_temp(id, open));
         if open {
             self.show_account(ui, false);
@@ -426,9 +434,7 @@ impl Settings {
             .show(ui)
             .clicked()
         {
-            self.sign_in_again = true;
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(egui::Id::new("focus_cookie"), true));
+            self.focus_sign_in();
         }
         if self.sign_in_again || matches!(account, Account::NotConnected | Account::Failed) {
             small(
@@ -455,11 +461,11 @@ impl Settings {
                         .desired_width(420.0_f32.min(ui.available_width() - 2.0 * design::S)),
                 );
                 design::named(ui, &response, "Paste session cookie");
-                if ui
+                self.focus_cookie |= ui
                     .ctx()
                     .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("focus_cookie")))
-                    .unwrap_or(false)
-                {
+                    .unwrap_or(false);
+                if std::mem::take(&mut self.focus_cookie) {
                     response.request_focus();
                     response.scroll_to_me(Some(egui::Align::Center));
                 }

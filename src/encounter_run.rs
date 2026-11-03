@@ -1,6 +1,6 @@
 //! Manual DM controls. These record rulings; they do not execute creature rules.
 mod ad_hoc;
-mod view;
+pub(crate) mod view;
 use crate::encounter_settings::{Grouping, Initiative};
 pub(crate) use ad_hoc::RunCreature;
 use eframe::egui;
@@ -74,6 +74,10 @@ pub(crate) struct AddedFrom {
     pub group: String,
     /// One addition. The same group added twice is two of these, each with its own roll.
     pub instance: String,
+    #[serde(default)]
+    pub round: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<Uuid>,
 }
 /// One line of an encounter group, as a run adds it.
 #[derive(Clone, Debug)]
@@ -101,6 +105,8 @@ pub(crate) struct RunGroup {
     pub xp_unknown: Vec<String>,
     /// How many creatures the note names that this campaign cannot find.
     pub unavailable: u64,
+    /// Missing members retain their position, count and display name for the summary.
+    pub unavailable_members: Vec<(usize, u64, String)>,
     /// Every reason this group cannot be added now.
     pub problem: Option<String>,
 }
@@ -114,14 +120,11 @@ impl RunGroup {
     /// How many, on which side, and what they are worth, in one line.
     pub(crate) fn summary(&self) -> String {
         let mut summary = format!(
-            "{} · {} · XP {}",
+            "{} · {} · {}",
             crate::design::count(self.creature_count() as usize, "creature", "creatures"),
             crate::design::reader::human_label(&self.side),
-            self.xp
+            self.xp_label()
         );
-        if !self.xp_unknown.is_empty() || self.unavailable > 0 {
-            summary.push_str(" or more");
-        }
         if self
             .members
             .iter()
@@ -131,6 +134,33 @@ impl RunGroup {
         }
         summary
     }
+    pub(crate) fn xp_label(&self) -> String {
+        if self.xp_unknown.is_empty() && self.unavailable == 0 {
+            format!("XP {}", grouped_number(self.xp))
+        } else if self.xp == 0 && self.members.len() == self.xp_unknown.len() {
+            "XP not known".to_owned()
+        } else {
+            format!("XP {} + unknown", grouped_number(self.xp))
+        }
+    }
+    pub(crate) fn member_summary(&self) -> String {
+        let mut members: Vec<_> = self
+            .members
+            .iter()
+            .map(|member| {
+                let base = Base::of(&member.entry, &self.side);
+                let name = member
+                    .overrides
+                    .resolve(&base)
+                    .map_or(base.name, |resolved| resolved.name);
+                format!("{} × {name}", member.count)
+            })
+            .collect();
+        for (position, count, name) in &self.unavailable_members {
+            members.insert((*position).min(members.len()), format!("{count} × {name}"));
+        }
+        members.join(", ")
+    }
     /// Every creature the note names, whether or not it can be found now.
     pub(crate) fn creature_count(&self) -> u64 {
         self.members
@@ -138,6 +168,22 @@ impl RunGroup {
             .map(|member| member.count)
             .fold(self.unavailable, u64::saturating_add)
     }
+}
+pub(crate) fn grouped_number(number: impl ToString) -> String {
+    let text = number.to_string();
+    let digits = text.trim_start_matches('-');
+    let mut out = if text.starts_with('-') {
+        "−".to_owned()
+    } else {
+        String::new()
+    };
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 /// A campaign's groups, as one run sorts them.
 #[derive(Debug, Default)]
@@ -311,6 +357,8 @@ impl Participant {
         participant.added_from = Some(AddedFrom {
             group: group.name.clone(),
             instance: instance.to_owned(),
+            round: 0,
+            group_id: Some(group.id),
         });
         Ok(participant)
     }
@@ -432,8 +480,10 @@ pub(crate) struct Run {
     /// Test builds have no session. This lets the party-sync control be exercised.
     simulate_connection: bool,
     scroll_to_selected: bool,
-    /// What sync changed. It stays until the DM dismisses it, whatever they do next.
+    /// What sync changed. The next run action or sync event clears it.
     notice: Option<String>,
+    notice_changes: usize,
+    live_initiative: Option<usize>,
     /// A value reached the run with no step of its own, so Undo stops there.
     undo_stopped: bool,
     setup_inputs: BTreeMap<usize, String>,
@@ -459,6 +509,8 @@ pub(crate) struct Run {
     focus_first_missing: bool,
     /// The panel needs its space back, so Lookup should close.
     pub close_lookup: bool,
+    pub wants_sign_in: bool,
+    pub wants_group_editor: Option<String>,
     /// A button took the keyboard from the panel beside the run, so it goes back.
     pub return_focus: bool,
     /// Whether the panel beside the run is Notes, where words typed in Amount belong.
@@ -711,6 +763,8 @@ impl Run {
             simulate_connection: false,
             scroll_to_selected: false,
             notice: None,
+            notice_changes: 0,
+            live_initiative: None,
             recording_notice: None,
             undo_stopped: false,
             setup_inputs: BTreeMap::new(),
@@ -721,6 +775,8 @@ impl Run {
             content: None,
             lookup_request: None,
             close_lookup: false,
+            wants_sign_in: false,
+            wants_group_editor: None,
             return_focus: false,
             notes_open: false,
             for_note: None,
@@ -948,6 +1004,23 @@ impl Run {
         }
         sides
     }
+    pub(crate) fn arrivals_in_run(&self) -> BTreeMap<Uuid, (usize, Option<i64>)> {
+        self.state
+            .participants
+            .iter()
+            .enumerate()
+            .filter_map(|(index, p)| {
+                Some((p.added_from.as_ref()?.group_id?, (index, p.initiative)))
+            })
+            .collect()
+    }
+    pub(crate) fn select_arrival(&mut self, index: usize) {
+        if index < self.state.participants.len() {
+            self.select(index);
+            self.panel = Panel::Reference;
+            self.scroll_to_selected = true;
+        }
+    }
     fn apply(&mut self, command: Command) -> Result<(), String> {
         if matches!(self.state.phase, Phase::Ended { .. }) {
             return Err("This encounter has ended. Undo the ending to continue.".into());
@@ -1120,8 +1193,14 @@ impl Run {
                 format!("DM roll {expression}: {:?} = {}.", roll.dice, roll.total)
             }
             Command::AddGroup(group, total) => {
+                let first = next.participants.len();
                 let (added, initiative) =
                     Self::join_group(&mut next, &group, total, self.initiative.grouping)?;
+                for p in &mut next.participants[first..] {
+                    if let Some(from) = &mut p.added_from {
+                        from.round = next.round;
+                    }
+                }
                 format!("{GROUP_ADDED}{} added: {added}. {initiative}.", group.name)
             }
             Command::AddCreature(group, total) => {
@@ -1154,6 +1233,7 @@ impl Run {
             self.history_labels.remove(0);
         }
         self.dm_steps += 1;
+        self.notice = None;
         self.history.push(std::mem::replace(&mut self.state, next));
         self.history_labels.push(undo_label);
         self.last_initiative = initiative_edit;
@@ -1348,6 +1428,7 @@ impl Run {
     }
     fn undo(&mut self) {
         if let Some(previous) = self.history.pop() {
+            self.notice = None;
             self.dm_steps += 1;
             self.history_labels.pop();
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
@@ -1491,9 +1572,16 @@ impl Run {
         }
     }
     fn undo_label(&self) -> String {
-        self.history_labels
-            .last()
-            .map_or_else(|| "Undo".to_owned(), |label| format!("Undo: {label}"))
+        self.history_labels.last().map_or_else(
+            || {
+                if self.undo_stopped {
+                    "Undo stopped at sheet update".to_owned()
+                } else {
+                    "Undo".to_owned()
+                }
+            },
+            |label| format!("Undo: {label}"),
+        )
     }
     fn next_up(&self) -> Option<usize> {
         if self.state.phase != Phase::Running {
@@ -1987,6 +2075,9 @@ impl Run {
         let mut from_sheet = Vec::new();
         let mut from_panel = Vec::new();
         for (index, sync) in &mut self.syncs {
+            if sync.updated {
+                self.notice = None;
+            }
             let p = &mut self.state.participants[*index];
             let Some((campaign, id)) = remote_identity(p) else {
                 continue;
@@ -2106,6 +2197,7 @@ impl Run {
         }
         let what = what.join(" ");
         self.state.log.push(what.clone());
+        self.notice_changes = from_sheet.len() + from_panel.len();
         self.notice = Some(format!("{what} Undo history was cleared."));
         self.undo_stopped = true;
     }
@@ -2289,6 +2381,7 @@ impl Run {
                 storage.baseline = old_baseline;
                 self.id = old_id;
                 self.name = old_name;
+                self.error = Some(error.clone());
                 Err(error)
             }
         }
@@ -2418,6 +2511,8 @@ impl Run {
             simulate_connection: false,
             scroll_to_selected: true,
             notice: None,
+            notice_changes: 0,
+            live_initiative: None,
             recording_notice: None,
             undo_stopped: false,
             setup_inputs: BTreeMap::new(),
@@ -2428,6 +2523,8 @@ impl Run {
             content: None,
             lookup_request: None,
             close_lookup: false,
+            wants_sign_in: false,
+            wants_group_editor: None,
             return_focus: false,
             notes_open: false,
             for_note: None,
@@ -3806,7 +3903,7 @@ mod tests {
         assert_eq!(run.state.participants[0].hp, Some(max - 2));
         // Nothing to take back under another name, and the notice says what happened.
         assert!(run.history.is_empty());
-        assert_eq!(run.undo_label(), "Undo");
+        assert_eq!(run.undo_label(), "Undo stopped at sheet update");
         let notice = run.notice.clone().unwrap();
         let change = format!("HP {} → {}", max - 9, max - 2);
         assert!(notice.contains(&change), "{notice}");
@@ -4177,7 +4274,7 @@ mod tests {
         }
     }
     #[test]
-    fn the_undo_notice_stays_until_the_dm_dismisses_it() {
+    fn the_undo_notice_clears_on_the_next_run_action() {
         let (mut run, _, max) = matched_with_sheet(5);
         read_sheet(&mut run, max, 8);
         assert!(
@@ -4189,7 +4286,10 @@ mod tests {
         assert!(run.undo_stopped, "plain Undo gives this reason on hover");
         run.next_turn();
         run.apply(Command::Damage(0, 1)).unwrap();
-        assert!(run.notice.is_some(), "still there after the next steps");
+        assert!(
+            run.notice.is_none(),
+            "the Log keeps the sheet update after a new action"
+        );
     }
     #[test]
     fn the_existing_controls_settle_a_reconnect_conflict() {
@@ -4561,7 +4661,7 @@ mod tests {
         run.apply(Command::Next).unwrap();
         run.note_sheet_update(&["Guard 1".to_owned()]);
         assert!(run.history.is_empty());
-        assert_eq!(run.undo_label(), "Undo");
+        assert_eq!(run.undo_label(), "Undo stopped at sheet update");
         assert!(
             run.notice
                 .as_ref()
@@ -4627,6 +4727,45 @@ mod tests {
     }
 
     #[test]
+    fn arrival_identity_and_round_survive_a_restart_and_undo_clears_them() {
+        let mut run = run();
+        begin(&mut run);
+        let group = guard_group("Reserve", 2);
+        let id = group.id;
+        run.apply(Command::AddGroup(group, Some(9))).unwrap();
+        assert_eq!(
+            run.state
+                .participants
+                .last()
+                .unwrap()
+                .added_from
+                .as_ref()
+                .unwrap()
+                .round,
+            1
+        );
+        assert!(run.arrivals_in_run().contains_key(&id));
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = stored(&mut run, dir.path());
+        let reopened = Run::open(run.path().unwrap(), campaign).unwrap();
+        assert_eq!(run.arrivals_in_run(), reopened.arrivals_in_run());
+        assert_eq!(
+            reopened
+                .state
+                .participants
+                .last()
+                .unwrap()
+                .added_from
+                .as_ref()
+                .unwrap()
+                .round,
+            1
+        );
+        run.undo();
+        assert!(!run.arrivals_in_run().contains_key(&id));
+    }
+
+    #[test]
     fn an_npc_joins_the_fight_under_their_own_name_and_undo_removes_them() {
         let mut run = run();
         let before = run.state.participants.len();
@@ -4654,6 +4793,69 @@ mod tests {
             vec![(creature(), count, Overrides::default())],
         )
     }
+    #[test]
+    fn run_icons_have_glyphs_at_each_capture_size() {
+        use crate::design::{self, Type, icons};
+        for (width, height) in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
+            let ctx = egui::Context::default();
+            design::theme::install(&ctx);
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, height),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        for role in [
+                            Type::Small,
+                            Type::Body,
+                            Type::Strong,
+                            Type::Name,
+                            Type::Label,
+                        ] {
+                            let font = role.font(ui);
+                            for icon in [
+                                icons::DOWN,
+                                icons::TEMP_HP,
+                                icons::ABSENT,
+                                icons::CONCENTRATING,
+                                icons::MOVE_UP,
+                                icons::MOVE_DOWN,
+                                icons::WARN,
+                                icons::EDIT,
+                                icons::DRAG,
+                                icons::CHANGED,
+                                icons::OK,
+                                icons::ADD,
+                                icons::NEXT,
+                                icons::SESSIONS,
+                                icons::GROUP,
+                                icons::OFFLINE,
+                                icons::ERROR,
+                                icons::INFO,
+                                icons::KEYS,
+                                icons::DICE,
+                                icons::UNDO,
+                                icons::CLOSE,
+                                icons::SYNC_ON,
+                                "■",
+                                "◆",
+                                "•",
+                            ] {
+                                assert!(
+                                    ui.fonts_mut(|fonts| fonts.has_glyphs(&font, icon)),
+                                    "Missing icon {icon:?} at {width}×{height}"
+                                );
+                            }
+                        }
+                    });
+                },
+            );
+        }
+    }
     fn group_of(name: &str, side: &str, members: Vec<(Entry, u64, Overrides)>) -> Arc<RunGroup> {
         Arc::new(RunGroup {
             id: Uuid::new_v4(),
@@ -4674,6 +4876,7 @@ mod tests {
             xp: 0,
             xp_unknown: Vec::new(),
             unavailable: 0,
+            unavailable_members: Vec::new(),
             problem: None,
         })
     }

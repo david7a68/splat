@@ -185,6 +185,7 @@ impl AdHoc {
             xp: 0,
             xp_unknown: Vec::new(),
             unavailable: 0,
+            unavailable_members: Vec::new(),
             problem: None,
             encounter: None,
             encounter_name: None,
@@ -244,7 +245,6 @@ impl Run {
 
     pub(super) fn add_creature_form(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        design::group_label(ui, "One creature");
         let known = self.creatures.clone().unwrap_or_default();
         if let Some(picked) = self.ad_hoc.picked.clone() {
             ui.horizontal(|ui| {
@@ -272,25 +272,18 @@ impl Run {
             );
             let typed = self.ad_hoc.query.trim().to_lowercase();
             if typed.is_empty() {
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(
-                                ui,
-                                "From this campaign and its packages, or a new name to make one up for this fight.",
-                            )
-                            .color(c.muted),
-                    )
-                    .wrap(),
-                );
                 return;
             }
             let matches = matches_for(&known, &typed);
             for creature in matches.iter().take(MATCHES_SHOWN) {
                 // The whole name typed is already the one the button adds.
-                let row = ui
-                    .selectable_label(creature.lower == typed, &creature.entry.name)
-                    .on_hover_text(&creature.detail);
+                let row = design::two_line_row(
+                    ui,
+                    Density::Scan.row() + design::S,
+                    creature.lower == typed,
+                    &creature.entry.name,
+                    &creature.detail,
+                );
                 design::named(ui, &row, &format!("Choose {}", creature.entry.name));
                 if row.clicked() {
                     self.ad_hoc.picked = Some((*creature).clone());

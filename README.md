@@ -77,7 +77,12 @@ Build artifacts stay in the code repository's ignored `target/` directory.
 
 Keep D&D Beyond session cookies and tokens outside Git. Authentication is available
 in Settings; character sheets with combat sync are available in **Party**. Characters now have persistent local copies in the shared creature schema.
-The encounter builder uses these local character copies. Manual DM runs are available. Automatic combat resolution and simulation integration remain later work.
+The encounter builder uses these local character copies. Manual DM runs are available.
+The run panel groups participant tabs and fight tabs. `Correct` changes a participant's
+values. `Arrivals` adds a creature or a prepared group; a blank initiative total rolls it.
+`Ctrl+G` opens Arrivals in one step when it is in the `Fight` menu.
+Unsaved runs offer **Save as a new run and close** in the close dialog.
+Automatic combat resolution and simulation integration remain later work.
 
 ## D&D Beyond connection
 
