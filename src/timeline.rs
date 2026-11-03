@@ -574,6 +574,8 @@ pub struct Book {
     removed: Option<(usize, Event, String)>,
     /// What a reload replaced, until the next edit.
     dropped: Option<Vec<Event>>,
+    /// One ruling change, until the next edit.
+    rest_undo: Option<(Event, Event)>,
     /// Each session's note name, for links in the file's body.
     pub session_links: BTreeMap<Uuid, String>,
 }
@@ -596,6 +598,7 @@ impl Book {
 
     /// Read the file, and drop any edit not yet saved.
     pub fn reload(&mut self) {
+        self.rest_undo = None;
         self.dirty = false;
         self.reordered.clear();
         self.conflict = false;
@@ -655,6 +658,7 @@ impl Book {
 
     /// Note an edit. It saves after a short pause, or at the next `save`.
     pub fn touch(&mut self) {
+        self.rest_undo = None;
         let days = day_numbers(&self.events);
         for (at, event) in self.events.iter().enumerate() {
             let label = reference_label(event, days[at]);
@@ -824,6 +828,51 @@ impl Book {
         );
         self.touch();
         id
+    }
+
+    /// A rest added by the DM on either page includes the full-HP ruling.
+    pub fn add_long_rest(&mut self, session: Option<Uuid>) -> String {
+        let order = self.next_order();
+        let id = self.add(Kind::LongRest, session);
+        let event = self.event_mut(&id).expect("the rest just added");
+        event.restores = true;
+        event.played_order = order;
+        id
+    }
+
+    pub fn set_restores(&mut self, id: &str, restores: bool) {
+        let Some(event) = self
+            .event_mut(id)
+            .filter(|event| event.kind == Kind::LongRest)
+        else {
+            return;
+        };
+        if event.restores == restores {
+            return;
+        }
+        let before = event.clone();
+        event.restores = restores;
+        let after = event.clone();
+        self.touch();
+        self.rest_undo = Some((before, after));
+    }
+
+    pub fn rest_undo_id(&self) -> Option<&str> {
+        self.rest_undo
+            .as_ref()
+            .filter(|(_, after)| self.events.contains(after))
+            .map(|(_, after)| after.id.as_str())
+    }
+
+    pub fn undo_restores(&mut self) {
+        if self.rest_undo_id().is_none() {
+            return;
+        }
+        if let Some((before, _)) = self.rest_undo.take() {
+            let event = self.event_mut(&before.id).expect("the unchanged rest");
+            *event = before;
+            self.touch();
+        }
     }
 
     /// Put an event straight after another, or first. The list is the story's order.
@@ -1616,6 +1665,54 @@ mod tests {
         let other = book.add(Kind::Travel, session);
         book.event_mut(&other).unwrap().title = "To Emberfall".into();
         assert!(book.event_of_marker(&marker.key("another night")).is_none());
+    }
+
+    #[test]
+    fn long_rest_ruling_can_be_turned_off_on_and_undone() {
+        let session = Some(Uuid::new_v4());
+        let mut book = Book::default();
+        book.record_run(&fact(RunState::Running), session, true);
+        let before = party_state(&book.events, session);
+        let id = book.add_long_rest(session);
+        let order = book.event_mut(&id).unwrap().played_order;
+        assert!(order > 0);
+        assert!(party_state(&book.events, session).rested);
+        book.set_restores(&id, false);
+        assert_eq!(party_state(&book.events, session), before);
+        book.undo_restores();
+        assert!(party_state(&book.events, session).rested);
+        assert!(book.rest_undo_id().is_none());
+        book.set_restores(&id, false);
+        book.set_restores(&id, true);
+        assert!(party_state(&book.events, session).rested);
+        assert_eq!(book.event_mut(&id).unwrap().played_order, order);
+        book.undo_restores();
+        assert_eq!(party_state(&book.events, session), before);
+        book.remove(&id);
+        assert_eq!(party_state(&book.events, session), before);
+    }
+
+    #[test]
+    fn rest_ruling_undo_expires_at_the_next_edit_and_keeps_play_order() {
+        let session = Some(Uuid::new_v4());
+        let mut book = Book::default();
+        let id = book.add_long_rest(session);
+        book.record_run(&fact(RunState::Running), session, true);
+        book.set_restores(&id, false);
+        book.set_restores(&id, true);
+        assert_eq!(party_state(&book.events, session).fights.len(), 1);
+        book.event_mut(&id).unwrap().notes = "Later edit".into();
+        assert!(book.rest_undo_id().is_none());
+        book.undo_restores();
+        assert!(book.event_mut(&id).unwrap().restores);
+        book.set_restores(&id, false);
+        book.add(Kind::Travel, session);
+        assert!(book.rest_undo_id().is_none());
+        book.undo_restores();
+        assert!(!book.event_mut(&id).unwrap().restores);
+        // Recording markers remain proposals, without an automatic HP ruling.
+        let marker = book.add(Kind::LongRest, session);
+        assert!(!book.event_mut(&marker).unwrap().restores);
     }
 
     #[test]

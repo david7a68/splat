@@ -2997,6 +2997,7 @@ pub mod gallery {
         d.press(Key::Tab);
         d.state("focus-ring", Sizes::Default);
         d.click(MESSAGES);
+        d.expect("Spell · Level 3 · D&D 2024");
         d.state("messages", Sizes::AllAndHiDpi);
         let edges = (
             d.painted_left("Use the saved HP"),
@@ -4654,6 +4655,7 @@ pub mod session_notes {
         // The timeline is a place of its own, with every kind of event.
         d.click(NAV_TIMELINE);
         d.expect("Long rest");
+        d.expect("Everyone at full");
         d.state("timeline-session-events", Sizes::All);
         d.check_tab_order("timeline");
         d.click(ADD_DAY);
@@ -5598,7 +5600,9 @@ pub mod session_recording {
         d.click("Anthropic");
         d.observe(
             "T11.6",
-            d.has_containing("for another service"),
+            d.has_containing(
+                "The saved key is for OpenAI, so Splat will not send it to Anthropic.",
+            ),
             "A saved key does not follow the DM to a different service",
         );
         d.expect("Remove speech key (OpenAI)");
@@ -7141,6 +7145,19 @@ pub mod session_plan {
         );
         d.click("Add Long rest");
         d.state("long-rest-restores", Sizes::Default);
+        d.click("Long rest");
+        d.click("Not at full");
+        d.expect("Undo ruling");
+        let session = d.app_mut().sessions.current();
+        assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.state("plan-rest-ruling-off", Sizes::All);
+        d.click("Everyone at full");
+        assert!(crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.state("plan-rest-ruling-on", Sizes::All);
+        d.click("Undo ruling");
+        assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.click("Everyone at full");
+        d.click("Long rest");
         d.click(&format!("Resume: {SECOND}"));
         d.expect("Party HP is full after the long rest.");
         d.expect("Undo: full HP after long rest");
@@ -7160,12 +7177,35 @@ pub mod session_plan {
         d.state("saved-hp-restored", Sizes::Default);
         close_run(d);
         show_plan(d);
+        d.click("Long rest");
+        d.click("Not at full");
+        d.click(NAV_TIMELINE);
+        d.click("Add Long rest");
+        d.expect("Long rest added. Everyone starts the next fight at full.");
+        d.click("Undo add");
+        assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.click("Add Long rest");
+        d.expect("Everyone at full");
+        d.state("timeline-long-rest-restores", Sizes::All);
+        d.click("Not at full");
+        assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.state("timeline-rest-ruling-off", Sizes::Default);
+        d.click("Everyone at full");
+        d.state("timeline-rest-ruling-on", Sizes::Default);
+        d.click("Undo ruling");
+        assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
+        d.click("Everyone at full");
+        d.click(NAV_SESSIONS);
+        show_plan(d);
         d.click(&format!("More actions for {SECOND}"));
         d.click("Start a new run");
         d.observe(
             "T12.2",
             kestrel(d).contains("HP 41/41"),
-            format!("After Everyone to full: {}", kestrel(d)),
+            format!(
+                "A rest added on Timeline starts the next new fight at full: {}",
+                kestrel(d)
+            ),
         );
         close_run(d);
 

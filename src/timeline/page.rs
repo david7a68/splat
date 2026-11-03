@@ -104,11 +104,84 @@ pub fn quick_add(
                 .show(ui)
                 .clicked()
             {
-                added = Some(book.add(kind, session));
+                added = Some(if kind == Kind::LongRest {
+                    book.add_long_rest(session)
+                } else {
+                    book.add(kind, session)
+                });
             }
         }
     });
     added
+}
+
+pub enum RestRulingAction {
+    Set(bool),
+    Undo,
+}
+
+impl RestRulingAction {
+    pub fn apply(self, book: &mut Book, id: &str) {
+        match self {
+            Self::Set(restores) => book.set_restores(id, restores),
+            Self::Undo => book.undo_restores(),
+        }
+    }
+}
+
+/// Both pages show and edit the same ruling, with one step of undo.
+pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestRulingAction> {
+    if event.kind != Kind::LongRest {
+        return None;
+    }
+    let c = colors();
+    let mut action = None;
+    ui.horizontal_wrapped(|ui| {
+        design::status(
+            ui,
+            Status {
+                icon: if event.restores {
+                    icons::OK
+                } else {
+                    icons::LONG_REST
+                },
+                word: if event.restores {
+                    "Everyone at full"
+                } else {
+                    "Not at full"
+                },
+                color: if event.restores {
+                    c.document.saved
+                } else {
+                    c.muted
+                },
+            },
+        );
+        if design::link(
+            ui,
+            if event.restores {
+                "Not at full"
+            } else {
+                "Everyone at full"
+            },
+        )
+        .clicked()
+        {
+            action = Some(RestRulingAction::Set(!event.restores));
+        }
+    });
+    if undo && design::undo_message(ui, Tone::Info, "Long rest ruling changed.", "Undo ruling") {
+        action = Some(RestRulingAction::Undo);
+    }
+    action
+}
+
+pub fn long_rest_added_message(saved_fights: impl Iterator<Item = String>) -> String {
+    let mut words = "Long rest added. Everyone starts the next fight at full.".to_owned();
+    for name in saved_fights {
+        words.push_str(&format!(" {name} keeps its saved HP."));
+    }
+    words
 }
 
 /// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
@@ -314,6 +387,12 @@ impl TimelinePage {
                 format!("Day {day} · {detail}")
             };
         }
+        if event.kind == Kind::LongRest && event.restores {
+            if !detail.is_empty() {
+                detail.push_str(" · ");
+            }
+            detail.push_str(&format!("{} Everyone at full", icons::OK));
+        }
         let name = if detail.is_empty() {
             title.clone()
         } else {
@@ -493,7 +572,24 @@ impl TimelinePage {
                 .iter()
                 .position(|event| event.id == id)
                 .map_or_else(String::new, |at| book.events[at].label(days[at]));
-            if design::undo_message(ui, Tone::Success, &format!("{label} added."), "Undo add") {
+            let event = book.events.iter().find(|event| event.id == id);
+            let words = if let Some(event) =
+                event.filter(|event| event.kind == Kind::LongRest && event.restores)
+            {
+                long_rest_added_message(
+                    book.events
+                        .iter()
+                        .filter(|fight| {
+                            fight.is_in(event.session)
+                                && fight.run.is_some()
+                                && !fight.result.is_empty()
+                        })
+                        .map(|fight| fight.title.clone()),
+                )
+            } else {
+                format!("{label} added.")
+            };
+            if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                 book.remove(&id);
                 self.just_added = None;
                 self.selected = None;
@@ -736,6 +832,8 @@ impl TimelinePage {
             ui.label(Type::Small.rich(ui, reason).color(c.muted));
         }
         design::rule(ui);
+        let can_undo_ruling = book.rest_undo_id() == Some(id.as_str());
+        let mut ruling = None;
         let mut area = egui::ScrollArea::vertical()
             .id_salt(("timeline_detail", &id))
             .auto_shrink([false, false]);
@@ -805,6 +903,7 @@ impl TimelinePage {
                     },
                 );
             }
+            ruling = rest_ruling(ui, event, can_undo_ruling);
             if let Some(start) = starts.filter(|_| event.kind != Kind::Day) {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(
@@ -945,6 +1044,10 @@ impl TimelinePage {
         });
         if changed {
             book.touch();
+        }
+        if let Some(action) = ruling {
+            action.apply(book, &id);
+            self.just_added = None;
         }
         if let Some(after) = placed {
             book.place_after(&id, after.as_deref());
@@ -1140,4 +1243,37 @@ impl TimelinePage {
 /// The session's number alone. The row's own title is the event's.
 fn short_session(label: &str) -> &str {
     label.split(':').next().unwrap_or(label)
+}
+
+#[cfg(test)]
+pub fn check_long_rest_add(kinds: &'static [Kind]) {
+    use egui_kittest::kittest::Queryable;
+    let session = Some(Uuid::new_v4());
+    let mut harness = egui_kittest::Harness::builder().build_state(
+        move |ctx, book: &mut Book| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                quick_add(ui, book, session, kinds, |_| {});
+            });
+        },
+        Book::default(),
+    );
+    design::theme::install(&harness.ctx);
+    harness.run_steps(2);
+    harness.get_by_label("Add Long rest").click();
+    harness.run_steps(2);
+    assert_eq!(harness.state().events.len(), 1);
+    assert!(super::party_state(&harness.state().events, session).rested);
+    let id = harness.state().events[0].id.clone();
+    harness.state_mut().remove(&id);
+    assert!(!super::party_state(&harness.state().events, session).rested);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_rest_added_on_timeline_restores_and_undo_removes_its_ruling() {
+        check_long_rest_add(&Kind::ALL);
+    }
 }
