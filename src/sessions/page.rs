@@ -985,6 +985,8 @@ impl Sessions {
                 && self.selected == Some(session)
                 && self.tab == Tab::Recordings
                 && self.view == View::Notes
+                && self.form.is_none()
+                && (self.list_beside || !self.list_only)
                 && self.reading.is_none()
         };
         if stalled.is_none() && self.alerts.iter().all(|alert| row_here(alert.session)) {
