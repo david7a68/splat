@@ -39,13 +39,13 @@ fn escape_closes(d: &mut Driver<'_>, view: &str, still_open: &str, close_with: &
 /// W6: find content in the built-in library, read it, and return to the list.
 pub mod library_browse {
     use super::*;
-    const ENTRY_COUNT: &str = "2065 entries";
-    const SEARCH_RESULTS: &str = "Search results";
+    const ENTRY_COUNT: &str = "2,065 entries";
+    const SEARCH_RESULTS: &str = "SEARCH RESULTS";
     const CREATURE: &str = "Adult Black Dragon";
     const SPELL_ROW: &str = "Fireball · ";
     const CLASS_ROW: &str = "Wizard · Class";
     const CREATURES_SECTION: &str = "Creatures   ";
-    const CREATURES_COUNT: &str = "336 entries";
+    const CREATURES_COUNT: &str = "CREATURES 336";
     const NEXT_CREATURE: &str = "Aboleth";
     const BACK: &str = "Back";
     const LINKED_QUERY: &str = "bard subclass";
@@ -332,7 +332,13 @@ pub mod library_author {
         d.state("new-entry-created", Sizes::All);
         d.goal("create a new entry");
 
-        // Name clash: the same name again is refused, and the typed name stays.
+        // Creation closes the form. Open it again to check a name clash.
+        d.observe(
+            "New entry form",
+            !d.has(NEW_NAME_FIELD),
+            "The creation form closes after the entry is made",
+        );
+        d.click(NEW_ENTRY);
         d.type_into(NEW_NAME_FIELD, NEW_NAME);
         d.click(CREATE_ENTRY);
         d.observe(
@@ -415,7 +421,7 @@ pub mod reader_tables {
         d.click("New entry");
         d.type_into("Entry name", "Spell Progression");
         d.open_combo_at(2);
-        d.click("rule");
+        d.click("Rule");
         d.click("Create entry");
         d.type_into_editor(
             "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
@@ -608,7 +614,7 @@ pub mod party {
     const SOURCE: &str = "Source & parity";
     const COMPARE: [&str; 3] = ["AC 19", "HP 58/62", "Level 6 Fighter"];
     const NO_CHARACTERS: &str = "No local characters yet";
-    const NOT_LINKED: &str = "Link this campaign to D&D Beyond";
+    const NOT_LINKED: &str = "Connect D&D Beyond to see the party";
 
     pub fn run(d: &mut Driver<'_>) {
         go_party(d);
@@ -868,7 +874,7 @@ pub mod encounter_build {
         });
         let first = nodes
             .iter()
-            .position(|node| node.name == "IN PROGRESS")
+            .position(|node| node.name.starts_with("IN PROGRESS "))
             .zip(
                 nodes
                     .iter()
@@ -1106,12 +1112,12 @@ pub mod settings {
     use crate::settings::Account;
     const ACCOUNT_WORDS: [(Account, &str); 5] = [
         (Account::Busy, "Connecting"),
-        (Account::Connected, "Connected to D&D Beyond"),
+        (Account::Connected, "Connected"),
         (Account::NotConnected, "Not connected"),
-        (Account::Failed, "the last attempt failed"),
-        (Account::KeyringWarning, "was not saved"),
+        (Account::Failed, "Not connected"),
+        (Account::KeyringWarning, "Connected · not remembered"),
     ];
-    const REMOVE_CAMPAIGN: &str = "Remove Quiet Harbor from Splat";
+    const REMOVE_CAMPAIGN: &str = "More actions for Quiet Harbor";
     const REMOVE_TITLE: &str = "Remove Quiet Harbor?";
     const NOT_CONNECTED: &str = "Not connected";
     const COOKIE_HELP: &str = "How to get your session cookie";
@@ -1121,11 +1127,10 @@ pub mod settings {
     const CONNECT: &str = "Connect";
     const DISCONNECT: &str = "Disconnect";
     const OFFLINE_ERROR: &str = "Could not reach D&D Beyond";
-    const CAMPAIGNS_SECTION: &str = "Campaigns";
+    const CAMPAIGNS_SECTION: &str = "CAMPAIGNS";
     const EDIT_DETAILS: &str = "Edit details";
     const EDIT_FORM: &str = "Edit campaign details";
     const CANCEL: &str = "Cancel";
-    const ADD_FROM_REMOTE: &str = "Add from D&D Beyond";
 
     pub fn run(d: &mut Driver<'_>) {
         go_settings(d);
@@ -1134,10 +1139,7 @@ pub mod settings {
         d.check_tab_order("settings");
         d.goal("open settings");
 
-        d.click(COOKIE_HELP);
-        d.expect(COOKIE_HELP_TEXT);
-        d.state("cookie-help", Sizes::Default);
-        d.click(COOKIE_HELP);
+        d.click("Connect…");
         d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
         d.state("cookie-entered", Sizes::Default);
         d.click(CONNECT);
@@ -1182,13 +1184,20 @@ pub mod settings {
         d.expect(EDIT_FORM);
         d.state("edit-campaign", Sizes::Default);
         d.click(CANCEL);
-        d.click(ADD_FROM_REMOTE);
+        d.expect("connect your account");
         d.state("add-from-remote", Sizes::Default);
         d.click(REMOVE_CAMPAIGN);
+        d.click("Remove…");
         d.expect(REMOVE_TITLE);
         d.state("confirm-remove-campaign", Sizes::Default);
         d.press(Key::Escape);
         d.goal("edit a campaign's details");
+        d.click(REMOVE_CAMPAIGN);
+        d.state("campaign-row-menu", Sizes::Default);
+        d.press(Key::Escape);
+        d.click(COOKIE_HELP);
+        d.expect(COOKIE_HELP_TEXT);
+        d.state("cookie-help", Sizes::Default);
     }
 }
 
@@ -1264,20 +1273,20 @@ pub mod dialogs {
 /// W10: nothing set up yet, then a new campaign's placeholder tabs.
 pub mod empty {
     use super::*;
-    const NO_CAMPAIGN: &str = "No campaign selected";
+    const NO_CAMPAIGN: &str = "No campaign yet";
     const ADD_CAMPAIGN: &str = "Add campaign";
     const NAME_FIELD: &str = "Campaign name";
     const FOLDER_FIELD: &str = "Folder";
     const OPEN_CAMPAIGN: &str = "Open campaign";
     const NEW_CAMPAIGN: &str = "Ashes of Emberfall";
     const NEW_FOLDER: &str = "new-campaign";
-    const NO_ENTRIES: &str = "No campaign entries yet";
-    const OPEN_SETTINGS: &str = "Open Settings";
-    const NO_CAMPAIGN_ENCOUNTERS: &str = "No campaign to prepare yet";
-    const NO_CAMPAIGN_PARTY: &str = "No campaign, so no party yet";
-    const NOT_LINKED: &str = "Link this campaign to D&D Beyond";
+    const NO_ENTRIES: &str = "This campaign has no entries of its own yet";
+    const OPEN_SETTINGS: &str = "Add a campaign";
+    const NO_CAMPAIGN_ENCOUNTERS: &str = "No campaign yet";
+    const NO_CAMPAIGN_PARTY: &str = "No campaign yet";
+    const NOT_LINKED: &str = "Connect D&D Beyond to see the party";
     const CONTENT_TITLE: &str = "entries chosen";
-    const NEXT_STEP: &str = "Next step: add one in Settings";
+    const NEXT_STEP: &str = "Add a campaign";
 
     pub fn run(d: &mut Driver<'_>) {
         d.observe(
@@ -1293,7 +1302,8 @@ pub mod empty {
         d.check_tab_order("campaign, no campaign");
         d.goal("see the no-campaign state");
         d.begin_task();
-        let campaign_says = d.has_containing(NO_CAMPAIGN) && d.has(OPEN_SETTINGS);
+        let campaign_says =
+            d.has_containing(NO_CAMPAIGN) && d.has(NAME_FIELD) && d.has(ADD_CAMPAIGN);
         go_encounters(d);
         let encounters_says = d.has_containing(NO_CAMPAIGN_ENCOUNTERS) && d.has(OPEN_SETTINGS);
         d.state("encounters-no-campaign", Sizes::Default);
@@ -2150,7 +2160,7 @@ pub mod nav_state {
     use super::*;
     const QUERY: &str = "dragon";
     const CREATURE: &str = "Adult Black Dragon";
-    const SEARCH_RESULTS: &str = "Search results";
+    const SEARCH_RESULTS: &str = "SEARCH RESULTS";
     const MEMBER: &str = "Iselle Marrowind";
     const SHEET_PAGE: &str = "Spells";
     const SHEET_PAGE_TEXT: &str = "Spellcasting";
@@ -2470,6 +2480,10 @@ pub mod gallery {
         d.click("Markdown");
         d.state("markdown", Sizes::AllAndHiDpi);
         d.click(COMPONENTS);
+        d.scroll_until(pos2(600.0, 300.0), "More actions for Bridge Ambush", 30);
+        d.click("More actions for Bridge Ambush");
+        d.state("row-menu", Sizes::Default);
+        d.press(Key::Escape);
         let temp = crate::design::temp_hp_text(5);
         for _ in 0..30 {
             if d.visible_text(&temp) {
@@ -2482,6 +2496,8 @@ pub mod gallery {
             d.visible_text(&temp),
             "Temporary HP shows with its mark, as it does in the run and on Party",
         );
+        d.scroll_until(pos2(600.0, 300.0), "Nothing here yet", 30);
+        d.state("empty-state", Sizes::All);
     }
 }
 
@@ -3195,6 +3211,8 @@ pub mod library_scope {
 
     pub fn run(d: &mut Driver<'_>) {
         go_library(d);
+        search_library(d, "fireball");
+        d.click("Fireball · Spell · Level 3");
         d.begin_task();
         let before = d.app_mut().active_campaign_name();
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
@@ -3202,6 +3220,11 @@ pub mod library_scope {
         d.state("scope-menu", Sizes::Default);
         d.click(EVERYTHING);
         d.state("scope-everything", Sizes::Default);
+        d.observe(
+            "Reader selection",
+            d.visible_text("Casting Time"),
+            "The open spell stays in the reader when it belongs to the new scope",
+        );
         d.goal_within("A9", "show everything", 2);
         let after = d.app_mut().active_campaign_name();
         d.observe(
@@ -3217,7 +3240,6 @@ pub mod library_scope {
 pub mod signed_in {
     use super::*;
     use crate::settings::Account;
-    const CONNECTED_PAGE: &str = "Connected to D&D Beyond";
     const RAIL_CONNECTED: &str = "Connected";
     const REMOTE: &str = "Add from D&D Beyond";
     const REMOTE_NAME: &str = "Salt Road";
@@ -3237,9 +3259,8 @@ pub mod signed_in {
     const LINK_TAB: &str = "Link and folder";
     const BLOCKED_REASON: &str = "Close the run to change campaigns.";
     const EDIT_DETAILS: &str = "Edit details";
-    const RETRYING: &str = "renewing the session failed";
     const CONFLICT: &str = "Conflict";
-    const RAIL_FAILING: &str = "Session failing";
+    const RAIL_FAILING: &str = "Sign-in failing";
     const RAIL_OFFLINE: &str = "Not connected";
     const STOPPED_ROW: &str = "Sync stopped";
     const NOT_SENT: &str = "Not sent";
@@ -3253,7 +3274,7 @@ pub mod signed_in {
         go_settings(d);
         d.observe(
             "T10.3",
-            d.visible_text(CONNECTED_PAGE) && d.visible_text(RAIL_CONNECTED),
+            d.visible_text(RAIL_CONNECTED) && d.rail_words().contains(RAIL_CONNECTED),
             "With a session, the page and the rail both say Connected",
         );
         d.state("settings-connected", Sizes::All);
@@ -3263,12 +3284,13 @@ pub mod signed_in {
         d.goal("see the remote campaign list");
         d.observe(
             "Added campaigns",
-            d.is_disabled("The Emberfall Marches · Added")
-                && d.is_disabled("Quiet Harbor · Added")
-                && !d.is_disabled(REMOTE_NAME),
-            "A remote campaign already in the list, active or not, says so and is off",
+            d.has_containing("Added")
+                && !d.has("Add The Emberfall Marches from D&D Beyond")
+                && !d.has("Add Quiet Harbor from D&D Beyond")
+                && d.has("Add Salt Road from D&D Beyond"),
+            "An added remote campaign has a status; an available campaign has an Add action",
         );
-        d.click_containing(REMOTE_NAME);
+        d.click("Add Salt Road from D&D Beyond");
         d.state("import-remote-campaign", Sizes::Default);
         d.observe(
             "T10.3",
@@ -3331,7 +3353,7 @@ pub mod signed_in {
         let rail = d.rail_words();
         d.observe(
             "T10.3",
-            d.visible_text(RETRYING)
+            d.visible_text(RAIL_FAILING)
                 && rail.contains(RAIL_FAILING)
                 && !rail.contains(RAIL_CONNECTED),
             format!("A failed refresh has its own words, on the page and in the rail: {rail}"),
@@ -3722,7 +3744,22 @@ pub mod world {
         d.state("world-list", Sizes::All);
         d.check_tab_order("world-list");
 
-        d.click_containing("Setting.md");
+        d.click("New ▾");
+        d.state("world-new-menu", Sizes::Default);
+        d.click("NPC");
+        d.expect("Type a name first.");
+        d.state("world-new-npc-form", Sizes::All);
+        d.type_into("Name", "Watchkeeper");
+        d.click("Create note");
+        d.expect("Watchkeeper");
+        d.observe(
+            "World creation",
+            !d.has("Create note") && d.has_containing("Watchkeeper"),
+            "Creating a World note closes the form and opens the note",
+        );
+        d.state("world-new-note-created", Sizes::Default);
+
+        d.click("Setting · ");
         d.observe(
             "T14.1",
             d.visible_text("A cold war around an inner sea."),
@@ -3735,7 +3772,7 @@ pub mod world {
             "An Obsidian link in a note opens the note it names",
         );
 
-        d.click_containing("Gate Mechanics.md");
+        d.click_containing("Gate Mechanics");
         d.click("Roll forced_trip");
         d.observe(
             "T14.3",
@@ -5083,7 +5120,7 @@ pub mod encounter_history {
         d.observe(
             "T4.6",
             d.has_containing(&PAST_SESSION.to_uppercase())
-                && d.has("NO SESSION")
+                && d.has_containing("NO SESSION")
                 && d.has_label(RUN_PAST)
                 && d.has_label(RUN_OLD),
             "History groups ended runs by session",
@@ -5475,7 +5512,7 @@ pub mod run_add_creature {
         d.goal("add a creature made up at the table to a running fight");
         d.click_row("Ghost of the Mill");
         d.click("Stat block");
-        d.expect("Added by hand");
+        d.expect("Made up in this fight. It has no stat block.");
         d.state("made-up-creature-sheet", Sizes::Default);
         fight_tab(d, "Arrivals");
         d.expect(FIELD);

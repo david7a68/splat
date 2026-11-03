@@ -538,10 +538,7 @@ pub(super) fn list(
         ui.add(
             egui::Label::new(
                 Type::Body
-                    .rich(
-                        ui,
-                        "No groups yet. Prepare a set of creatures with New group, then add it to a running encounter when it arrives.",
-                    )
+                    .rich(ui, "No groups yet. Select New group.")
                     .color(colors().muted),
             )
             .wrap(),

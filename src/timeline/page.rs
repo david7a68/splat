@@ -421,13 +421,6 @@ impl TimelinePage {
 
     fn list(&mut self, ui: &mut egui::Ui, book: &Book, sessions: &[SessionLink]) {
         let days = day_numbers(&book.events);
-        if let Some(now) = clock_now(&book.events) {
-            ui.label(
-                Type::Small
-                    .rich(ui, format!("Now: {}", clock_words(now)))
-                    .color(colors().muted),
-            );
-        }
         let rows: Vec<usize> = (0..book.events.len())
             .filter(|&index| self.matches(&book.events[index], days[index]))
             .collect();
@@ -785,7 +778,7 @@ impl TimelinePage {
         ui: &mut egui::Ui,
         book: &mut Book,
         campaign_id: Uuid,
-        campaign: &str,
+        _campaign: &str,
         sessions: &[SessionLink],
         current: Option<Uuid>,
     ) {
@@ -805,8 +798,11 @@ impl TimelinePage {
             ui,
             "Timeline",
             Some(&format!(
-                "{campaign} · {}",
-                design::count(book.events.len(), "event", "events")
+                "{}{}",
+                design::count(book.events.len(), "event", "events"),
+                clock_now(&book.events)
+                    .map(|now| format!(" · Now: {}", clock_words(now)))
+                    .unwrap_or_default()
             )),
             |_| {},
         );

@@ -105,16 +105,7 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
 }
 
 fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
-    ui.horizontal(|ui| {
-        ui.label(Type::Label.rich(ui, word).color(colors().text));
-        if count > 0 {
-            ui.label(
-                Type::Label
-                    .rich(ui, count.to_string())
-                    .color(colors().muted),
-            );
-        }
-    });
+    design::group_heading(ui, word, count);
 }
 
 fn section(
@@ -125,25 +116,7 @@ fn section(
     open: Option<bool>,
     add: impl FnOnce(&mut egui::Ui),
 ) {
-    let mut job = egui::text::LayoutJob::default();
-    for (text, color) in [
-        (word.to_owned(), colors().text),
-        (format!(" {count}"), colors().muted),
-    ] {
-        if count == 0 && text != word {
-            continue;
-        }
-        job.append(
-            &text,
-            0.0,
-            egui::TextFormat {
-                font_id: Type::Label.font(ui),
-                color,
-                ..Default::default()
-            },
-        );
-    }
-    egui::CollapsingHeader::new(job)
+    egui::CollapsingHeader::new(design::group_heading_text(ui, word, count))
         .id_salt(id)
         .icon(design::section_icon)
         .open(open)
@@ -303,10 +276,7 @@ pub(super) fn ready_list(
 ) {
     heading(ui, "READY TO RUN", page.ready.len());
     if page.ready.is_empty() {
-        blocked_reason(
-            ui,
-            Some("No ready encounters. New encounter builds a roster for a fight."),
-        );
+        blocked_reason(ui, Some("None ready. Select New encounter."));
     }
     for (index, row) in page.ready.iter().enumerate() {
         let template = row.template;
@@ -362,10 +332,7 @@ pub(super) fn group_list(
 ) {
     if snapshot.groups.is_empty() {
         heading(ui, "GROUPS", 0);
-        blocked_reason(
-            ui,
-            Some("No groups yet. New group prepares creatures that can join a fight."),
-        );
+        blocked_reason(ui, Some("No groups yet. Select New group."));
     } else {
         section(
             ui,
@@ -393,10 +360,7 @@ pub(super) fn history_list(
     ui.add_space(design::L);
     if page.ended_count() == 0 && page.unreadable.is_empty() {
         heading(ui, "HISTORY", 0);
-        blocked_reason(
-            ui,
-            Some("No ended fights. End a run to keep its final state here."),
-        );
+        blocked_reason(ui, Some("No ended fights yet."));
         return;
     }
     section(
@@ -407,7 +371,7 @@ pub(super) fn history_list(
         read.map(|_| true),
         |ui| {
             for session in &page.history {
-                design::group_label(ui, session.label);
+                design::group_heading(ui, session.label, session.runs.len());
                 for past in &session.runs {
                     let run = past.run;
                     let date = run

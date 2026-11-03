@@ -1,7 +1,7 @@
 //! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
 use crate::{
     auth::Session,
-    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    design::{self, Action, Density, Tone, Type, colors, icons},
     party_sync::{Reader, Stored},
 };
 use eframe::egui;
@@ -163,39 +163,6 @@ impl Party {
         } else {
             None
         };
-        let mut refresh = false;
-        let mut open_link = false;
-        design::page_header(ui, "Party", None, |ui| {
-            if linked {
-                refresh = Action::secondary("Refresh party")
-                    .icon(icons::REFRESH)
-                    .blocked(can_refresh)
-                    .show(ui)
-                    .clicked();
-            }
-        });
-        if refresh && let Some(session) = session.clone() {
-            self.reader.refresh(session, ui.ctx(), true);
-        }
-        if !linked {
-            design::empty_state(
-                ui,
-                icons::PARTY,
-                "Link this campaign to D&D Beyond to see its party",
-                "Choose its D&D Beyond campaign under Campaign, Link and folder. The rest of Splat works without a link.",
-                |ui| {
-                    // Linking needs a session, so that comes first.
-                    if session.is_none() {
-                        self.wants_settings |=
-                            Action::primary("Connect D&D Beyond").show(ui).clicked();
-                    } else if Action::primary("Link this campaign").show(ui).clicked() {
-                        open_link = true;
-                    }
-                },
-            );
-            self.wants_link_page = open_link;
-            return;
-        }
         let cached = self
             .reader
             .selected
@@ -204,7 +171,7 @@ impl Party {
         let checked = self.reader.selected.as_ref().is_some_and(|id| {
             self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
         }) && self.reader.error.is_none();
-        let (status_icon, status_word, status_color) = if session.is_none() {
+        let (status_icon, status_word, _status_color) = if session.is_none() {
             (icons::OFFLINE, "Not connected", c.connection.offline)
         } else if self.reader.loading() {
             (icons::BUSY, "Refreshing", c.connection.busy)
@@ -225,28 +192,55 @@ impl Party {
                 c.connection.connected,
             )
         };
-        ui.horizontal_wrapped(|ui| {
-            if self.reader.loading() {
-                crate::design::spinner(ui);
+        let age = cached
+            .filter(|_| !self.combat.ready())
+            .map(|record| format!(" · Fetched {}", record_age(record)))
+            .unwrap_or_default();
+        let context = format!("{status_icon} {status_word}{age}");
+        let mut refresh = false;
+        let mut open_link = false;
+        design::page_header(ui, "Party", Some(&context), |ui| {
+            if linked {
+                refresh = Action::quiet("Refresh party")
+                    .icon(icons::REFRESH)
+                    .blocked(can_refresh)
+                    .show(ui)
+                    .clicked();
             }
-            let age = cached
-                .filter(|_| !self.combat.ready())
-                .map(|record| format!(" · Fetched {}", record_age(record)))
-                .unwrap_or_default();
-            design::status(
-                ui,
-                Status {
-                    icon: status_icon,
-                    word: &format!("{status_word}{age}"),
-                    color: status_color,
-                },
-            )
-            .on_hover_text(if session.is_none() {
-                "Showing saved sheets. Connect in Settings to get updates."
-            } else {
-                "Sheets refresh automatically. Use Refresh party to request the latest data."
-            });
         });
+        if linked {
+            design::blocked_reason(ui, can_refresh);
+        }
+        if refresh && let Some(session) = session.clone() {
+            self.reader.refresh(session, ui.ctx(), true);
+        }
+        if !linked {
+            design::empty_state(
+                ui,
+                icons::PARTY,
+                if session.is_none() {
+                    "Connect D&D Beyond to see the party"
+                } else {
+                    "Link this campaign to D&D Beyond to see its party"
+                },
+                if session.is_none() {
+                    "First connect your D&D Beyond account. Then choose its campaign under Campaign, Link and folder."
+                } else {
+                    "Choose its D&D Beyond campaign under Campaign, Link and folder."
+                },
+                |ui| {
+                    // Linking needs a session, so that comes first.
+                    if session.is_none() {
+                        self.wants_settings |=
+                            Action::primary("Connect D&D Beyond").show(ui).clicked();
+                    } else if Action::primary("Link this campaign").show(ui).clicked() {
+                        open_link = true;
+                    }
+                },
+            );
+            self.wants_link_page = open_link;
+            return;
+        }
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);
         }
@@ -1571,7 +1565,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     };
     match page {
         1 => {
-            section_heading(ui, "Attacks");
+            design::group_heading(ui, "Attacks", record.character.attacks.len());
             for attack in &record.character.attacks {
                 let value = &attack["damage"]["value"];
                 let damage = if let Some(n) = value.as_i64() {
@@ -1609,7 +1603,6 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
                 }
             }
             ui.add_space(design::S);
-            section_heading(ui, "Action descriptions");
             for (source, values) in d["actions"].as_object().into_iter().flat_map(|o| o.iter()) {
                 for v in array(values) {
                     add(v, source);
@@ -1673,7 +1666,6 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             }
         }
         3 => {
-            section_heading(ui, "Equipment & coins");
             for v in array(&d["inventory"]) {
                 add(v, "");
             }
@@ -1690,7 +1682,6 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             ));
         }
         _ => {
-            section_heading(ui, "Features & traits");
             for v in array(&d["race"]["racialTraits"]) {
                 add(v, "Species");
             }
@@ -1723,7 +1714,20 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         .iter()
         .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
-    ui.weak(design::count(filtered.len(), "entry", "entries"));
+    design::group_heading(
+        ui,
+        match page {
+            1 => "Action descriptions",
+            2 => "Spells",
+            3 => "Equipment & coins",
+            _ => "Features & traits",
+        },
+        filtered.len(),
+    );
+    let mut level_counts = std::collections::BTreeMap::new();
+    for row in &filtered {
+        *level_counts.entry(row.3).or_insert(0) += 1;
+    }
     if filtered.is_empty() {
         ui.label(if search.is_empty() {
             "No entries returned for this character."
@@ -1734,13 +1738,14 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
     let mut last_level = None;
     for (i, (name, meta, description, level)) in filtered.into_iter().enumerate() {
         if page == 2 && (i == 0 || last_level != *level) {
-            section_heading(
+            design::group_heading(
                 ui,
                 &match level {
                     Some(0) => "Cantrips".to_owned(),
                     Some(n) => format!("Level {n} spells"),
                     None => "Other spells".to_owned(),
                 },
+                level_counts.get(level).copied().unwrap_or(0),
             );
             last_level = *level;
         }
