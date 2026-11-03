@@ -4194,6 +4194,8 @@ pub mod world {
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");
+        d.expect("SIDE");
+        d.wait_for_text("Enemies");
         d.state("npc-add-to-run-form", Sizes::All);
         d.click("Add");
         d.settle();

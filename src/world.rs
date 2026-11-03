@@ -1408,12 +1408,17 @@ fn add_form(
         ui.checkbox(&mut adding.save, "Save this as their stat block");
     }
     if sides.len() > 1 {
+        ui.label(Type::Label.rich(ui, "SIDE").color(colors().muted));
         let combo = egui::ComboBox::from_id_salt("world_add_side")
-            .selected_text(adding.side.clone())
+            .selected_text(design::reader::human_label(&adding.side))
             .icon(design::combo_icon)
             .show_ui(ui, |ui| {
                 for side in sides {
-                    ui.selectable_value(&mut adding.side, side.clone(), side);
+                    ui.selectable_value(
+                        &mut adding.side,
+                        side.clone(),
+                        design::reader::human_label(side),
+                    );
                 }
             });
         design::named(ui, &combo.response, "Side");

@@ -491,7 +491,12 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.focus_window(true);
     go_encounters(d);
     open_saved_encounter(d, "Bridge Ambush");
-    d.wait_for_text("Unavailable creature");
+    d.wait_for_text("Not found. Its package entry was deleted.");
+    d.observe(
+        "Missing creature names",
+        d.has_containing("Cinder Wolf") && !d.has_containing("actor_wolf_"),
+        "Deleted entries keep their last known name and hide reference keys",
+    );
     d.state("deleted-package-entry-in-encounter", Sizes::All);
     go_library(d);
     search_library(d, "Ash Exposure");
@@ -510,6 +515,24 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "The deleted creature's words remain without a working link",
     );
     d.state("deleted-package-entry-reader-link", Sizes::All);
+    go_encounters(d);
+    d.click_beside(
+        "Cinder Wolf",
+        "Options: starting HP, temporary HP, initiative group and changes",
+    );
+    d.expect("Replacement creature");
+    d.type_into("Replacement creature", "Guard");
+    d.expect("Use Guard");
+    d.state("deleted-package-entry-choose-replacement", Sizes::All);
+    d.click("Use Guard");
+    d.expect("Guard");
+    let dirty = d.app_mut().encounters.draft_dirty();
+    d.observe(
+        "Replace deleted creature",
+        dirty,
+        "Choosing a replacement edits the draft; it does not save it",
+    );
+    d.state("deleted-package-entry-replaced", Sizes::All);
 }
 
 /// Copy a book creature into a shared package, then change its HP.

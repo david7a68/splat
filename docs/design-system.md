@@ -466,6 +466,7 @@ An unavailable package keeps its last known display name in the campaign selecti
 
 Package and campaign readers keep their owner status in both Read and Edit Markdown.
 Their file line offers Show file; entries in a vault also offer Edit in Obsidian.
+An encounter row whose creature was deleted keeps its last known name or says Missing creature. Its warning line says, for example, Enemies · Not found. Its package entry was deleted. Edit opens a creature replacement search; Remove stays in the row menu. The NPC Add to run form labels its side picker SIDE and uses the roster's side words.
 Folder is one editable field with a suggestion menu, followed by its help line.
 New packages default to the parent of the last registered package.
 A completed copy says where it went and keeps its path in hover text.
