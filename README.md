@@ -115,7 +115,8 @@ that the audio is not sent again. With a partial transcript, it names the remain
 audio parts. Recording silence has no elapsed time in its status word. The Session
 page shows the recorded time in the detail; the rail keeps it on hover. On Recordings,
 the live row owns the sound state, recorded time and input help. Timeline and the
-Session plan use the same fight state words. Processing says **Processing**, with
+Session plan use the same fight state words. An open fight's Timeline round links
+back to the run and does not say **Paused**. Processing says **Processing**, with
 the full step on hover.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.

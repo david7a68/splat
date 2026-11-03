@@ -1854,7 +1854,11 @@ fn members(
                 || missing_member_name(None, member.creature.link.as_deref()),
                 |entry| entry.name.clone(),
             );
-            let button = format!("Changes for {name}");
+            let button = if entry.is_none() {
+                format!("Replace {name}")
+            } else {
+                format!("Changes for {name}")
+            };
             let name = if entry.is_some() {
                 shown_name(&member.overrides, name)
             } else {
@@ -1885,7 +1889,7 @@ fn members(
                         if super::menu_action(ui, "Move down", (index + 1 == total).then_some("Already last.")) { lower = Some(index); }
                         if super::menu_action(ui, "Remove", None) { remove = Some(index); }
                     });
-                    if Action::quiet("Edit").density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
+                    if Action::quiet(if entry.is_none() { "Replace…" } else { "Edit" }).density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
                         *expanded = if is_open { None } else { show_form_when_it_opens(ui); Some(key.clone()) };
                     }
                 });

@@ -16,7 +16,7 @@ use std::{
 use uuid::Uuid;
 
 /// A played fight names its result and last round once, on the row's second line.
-pub fn played_fight_summary(event: &Event) -> String {
+pub fn played_fight_summary(event: &Event, open: bool) -> String {
     let state = |round: &str, paused, ended| {
         round
             .parse()
@@ -28,7 +28,7 @@ pub fn played_fight_summary(event: &Event) -> String {
     } else if let Some(round) = event.result.strip_prefix("Ended in round ") {
         state(round, false, true)
     } else if let Some(round) = event.result.strip_prefix("Round ") {
-        state(round, true, false)
+        state(round, !open, false)
     } else {
         None
     }
@@ -1012,20 +1012,29 @@ mod tests {
     #[test]
     fn fight_summary_uses_run_state_words_without_changing_stored_result() {
         let mut event = event(Kind::Encounter, "");
-        for (stored, shown) in [
-            ("Round 2", "Round 2 · Paused"),
-            ("Ended in round 3", "Ended · Round 3"),
+        for (stored, open, shown) in [
+            ("Round 2", true, "Round 2"),
+            ("Round 2", false, "Round 2 · Paused"),
+            ("Ended in round 3", false, "Ended · Round 3"),
+            ("Ended in round 3", true, "Ended · Round 3"),
             (
                 "Held the bridge, round 1",
+                false,
                 "Held the bridge · Ended · Round 1",
             ),
-            ("A custom result", "A custom result"),
+            (
+                "Held the bridge, round 1",
+                true,
+                "Held the bridge · Ended · Round 1",
+            ),
+            ("A custom result", false, "A custom result"),
+            ("A custom result", true, "A custom result"),
         ] {
             event.result = stored.into();
-            assert_eq!(played_fight_summary(&event), shown);
+            assert_eq!(played_fight_summary(&event, open), shown);
             assert!(
                 event
-                    .summary_with_result(None, &played_fight_summary(&event))
+                    .summary_with_result(None, &played_fight_summary(&event, open))
                     .contains(shown)
             );
             assert!(event.summary(None).contains(stored));

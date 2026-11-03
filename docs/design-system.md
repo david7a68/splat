@@ -782,6 +782,8 @@ one fitted line, with the full error on hover.
 
 On Recordings, the live row owns the sound state and recorded time. Plan and notes
 keeps its live header line. Timeline and the plan share the same fight summary.
+An open fight's Timeline row shows its round as a status link to the run, without
+Paused. Stored ended, named and custom results keep their words.
 New template hides while its form is open. Discard recovery uses Small text and
 a quiet Undo icon action on one line.
 
