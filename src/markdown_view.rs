@@ -214,173 +214,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                             widths[0] = widths[0].max(width);
                         }
                     }
-                    // The rules end with the table, not at the measure.
-                    let table_width = widths.iter().sum::<f32>()
-                        + TABLE_GAP * widths.len().saturating_sub(1) as f32;
                     let matched = rolls
                         .as_ref()
                         .and_then(|marker| crate::roll_table::matched_row(ui, marker, &rows));
-                    let left = ui.cursor().left();
-                    let clip = ui.clip_rect();
-                    let mut table_clip = clip;
-                    let mut frozen = Vec::new();
-                    let mut header = Vec::new();
-                    let mut bounds = egui::Rect::NOTHING;
-                    let mut show_table = |ui: &mut egui::Ui| {
-                        // The scroll area's visual margin must not leave fragments of
-                        // moving text beside the fixed first column.
-                        let mut content_clip = ui.clip_rect();
-                        content_clip.min.x = content_clip.left().max(left);
-                        ui.set_clip_rect(content_clip);
-                        ui.set_width(table_width);
-                        for (i, row) in rows.iter().enumerate() {
-                            let top = ui.cursor().top();
-                            let mut cells = Vec::new();
-                            design::table_row(ui, &widths, TABLE_GAP, |ui, position| {
-                                let mut cell = display(
-                                    row.get(columns[position]).map(String::as_str).unwrap_or(""),
-                                );
-                                if matched == Some(i) && position == 0 {
-                                    cell = format!("{} {cell}", design::icons::DICE);
-                                }
-                                let role = if i == 0 { Type::StatLabel } else { Type::Stat };
-                                let response = ui.add(
-                                    egui::Label::new(role.rich(ui, &cell).color(colors().text))
-                                        .wrap(),
-                                );
-                                cells.push((response.rect, cell, role));
-                            });
-                            let bottom = ui.cursor().top();
-                            let rect = egui::Rect::from_min_max(
-                                egui::pos2(left, top),
-                                egui::pos2(left + table_width, bottom),
-                            );
-                            bounds = bounds.union(rect);
-                            if matched == Some(i) {
-                                ui.painter().rect_filled(
-                                    rect,
-                                    egui::CornerRadius::ZERO,
-                                    colors().selected,
-                                );
-                                for (rect, text, role) in &cells {
-                                    let galley = ui.painter().layout(
-                                        text.clone(),
-                                        role.font(ui),
-                                        colors().text,
-                                        rect.width(),
-                                    );
-                                    ui.painter().galley(rect.min, galley, colors().text);
-                                }
-                            }
-                            if i == 0 {
-                                header = cells.clone();
-                            }
-                            if let Some(cell) = cells.first() {
-                                frozen.push((rect, cell.clone(), matched == Some(i)));
-                            }
-                        }
-                    };
-                    if table_width > ui.available_width() {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, "More columns: scroll sideways or use Shift+wheel.")
-                                .color(colors().muted),
-                        );
-                        ui.scope(|ui| {
-                            // Keep an ordinary wheel gesture scrolling the surrounding note.
-                            ui.style_mut().always_scroll_the_only_direction = false;
-                            // Egui floats a nested bar into its parent's visible area. Wait
-                            // until the table starts there, so it cannot cover earlier prose.
-                            let bars = if ui.cursor().top() < ui.clip_rect().bottom() {
-                                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
-                            } else {
-                                egui::scroll_area::ScrollBarVisibility::AlwaysHidden
-                            };
-                            let output = egui::ScrollArea::horizontal()
-                                .id_salt(ui.next_auto_id())
-                                .max_width(ui.available_width())
-                                .scroll_bar_visibility(bars)
-                                .show(ui, &mut show_table);
-                            table_clip = clip.intersect(output.inner_rect);
-                        });
-                    } else {
-                        ui.scope(&mut show_table);
-                    }
-                    // Paint the row label at the reader's left edge, over sideways-scrolled cells.
-                    let painter = ui.painter().with_clip_rect(table_clip);
-                    let first_width = widths.first().copied().unwrap_or_default() + TABLE_GAP;
-                    let paint_cell = |rect: egui::Rect, text: &str, role: Type| {
-                        let galley = painter.layout(
-                            text.to_owned(),
-                            role.font(ui),
-                            colors().text,
-                            rect.width(),
-                        );
-                        painter.galley(rect.min, galley, colors().text);
-                    };
-                    for (row, (cell, text, role), selected) in &frozen {
-                        let rect = egui::Rect::from_min_max(
-                            egui::pos2(left, row.top()),
-                            egui::pos2(left + first_width, row.bottom()),
-                        );
-                        painter.rect_filled(
-                            rect,
-                            egui::CornerRadius::ZERO,
-                            if *selected {
-                                colors().selected
-                            } else {
-                                colors().page
-                            },
-                        );
-                        let fixed =
-                            egui::Rect::from_min_size(egui::pos2(left, cell.top()), cell.size());
-                        paint_cell(fixed, text, *role);
-                        painter.vline(
-                            rect.right(),
-                            rect.y_range(),
-                            egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
-                        );
-                    }
-                    // The header follows the top of the reader until the table leaves view.
-                    if let Some((first, _, _)) = header.first() {
-                        let height = frozen
-                            .first()
-                            .map_or(first.height(), |(row, _, _)| row.height());
-                        let top = bounds.top().max(clip.top()).min(bounds.bottom() - height);
-                        let strip = egui::Rect::from_min_size(
-                            egui::pos2(left, top),
-                            egui::vec2(table_width, height),
-                        );
-                        painter.rect_filled(strip, egui::CornerRadius::ZERO, colors().page);
-                        for (at, (_, text, role)) in header.iter().enumerate() {
-                            if at == 0 {
-                                continue;
-                            }
-                            let cell_painter = &painter;
-                            let galley = cell_painter.layout(
-                                text.clone(),
-                                role.font(ui),
-                                colors().text,
-                                widths[at],
-                            );
-                            cell_painter.galley(
-                                egui::pos2(header[at].0.left(), top),
-                                galley,
-                                colors().text,
-                            );
-                        }
-                        let (_, text, role) = &header[0];
-                        painter.rect_filled(
-                            egui::Rect::from_min_size(strip.min, egui::vec2(first_width, height)),
-                            egui::CornerRadius::ZERO,
-                            colors().page,
-                        );
-                        paint_cell(
-                            egui::Rect::from_min_size(strip.min, egui::vec2(widths[0], height)),
-                            text,
-                            *role,
-                        );
-                    }
+                    reader_table(ui, &rows, &columns, &widths, &display, matched);
                     if let Some(marker) = rolls.take() {
                         crate::roll_table::roll_control(ui, &marker, &rows);
                     }
@@ -627,6 +464,183 @@ fn local_figure_links(markdown: &str, local: impl Fn(&str) -> bool) -> Cow<'_, s
 
 const TABLE_GAP: f32 = design::M;
 
+/// The row label has its own column. Only the remaining cells belong to the
+/// horizontal scroll area, so its real viewport also supplies the cell padding.
+fn reader_table(
+    ui: &mut egui::Ui,
+    rows: &[Vec<String>],
+    columns: &[usize],
+    widths: &[f32],
+    display: &dyn Fn(&str) -> String,
+    matched: Option<usize>,
+) {
+    if widths.is_empty() {
+        return;
+    }
+    let cells: Vec<Vec<_>> = rows
+        .iter()
+        .enumerate()
+        .map(|(row, cells)| {
+            columns
+                .iter()
+                .enumerate()
+                .map(|(position, column)| {
+                    let mut text = display(cells.get(*column).map(String::as_str).unwrap_or(""));
+                    if matched == Some(row) && position == 0 {
+                        text = format!("{} {text}", design::icons::DICE);
+                    }
+                    let role = if row == 0 {
+                        Type::StatLabel
+                    } else {
+                        Type::Stat
+                    };
+                    ui.painter()
+                        .layout(text, role.font(ui), colors().text, widths[position])
+                })
+                .collect()
+        })
+        .collect();
+    let heights: Vec<_> = cells
+        .iter()
+        .map(|row| {
+            row.iter().map(|cell| cell.size().y).fold(0.0, f32::max)
+                + design::XS * 2.0
+                + design::HAIRLINE_WIDTH
+        })
+        .collect();
+    let height: f32 = heights.iter().sum();
+    let width = widths.iter().sum::<f32>() + TABLE_GAP * widths.len().saturating_sub(1) as f32;
+    let scrolls = width > ui.available_width();
+    if scrolls {
+        ui.label(
+            Type::Small
+                .rich(ui, "More columns: scroll sideways or use Shift+wheel.")
+                .color(colors().muted),
+        );
+    }
+    let top = ui.cursor().top();
+    let left = ui.cursor().left();
+    let outer_clip = ui.clip_rect();
+    let mut moving_origin = egui::pos2(left + widths[0] + TABLE_GAP, top);
+    let mut moving_clip = outer_clip;
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = TABLE_GAP;
+        ui.allocate_ui_with_layout(
+            egui::vec2(widths[0], height),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                table_part(ui, &cells, widths, &heights, 0..1, matched);
+            },
+        );
+        if widths.len() > 1 {
+            let moving_width = width - widths[0] - TABLE_GAP;
+            let mut show = |ui: &mut egui::Ui| {
+                ui.set_width(moving_width);
+                moving_origin = ui.cursor().min;
+                ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                    table_part(ui, &cells, widths, &heights, 1..widths.len(), matched);
+                });
+            };
+            if scrolls {
+                ui.style_mut().always_scroll_the_only_direction = false;
+                let bars = if top < outer_clip.bottom() {
+                    egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+                } else {
+                    egui::scroll_area::ScrollBarVisibility::AlwaysHidden
+                };
+                let output = egui::ScrollArea::horizontal()
+                    .id_salt(ui.next_auto_id())
+                    .max_width(ui.available_width())
+                    .scroll_bar_visibility(bars)
+                    .show(ui, &mut show);
+                moving_clip = outer_clip.intersect(output.inner_rect);
+            } else {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(moving_width, height),
+                    egui::Layout::top_down(egui::Align::Min),
+                    &mut show,
+                );
+            }
+        }
+    });
+    let painter = ui.painter().with_clip_rect(outer_clip);
+    painter.vline(
+        left + widths[0],
+        top..=top + height,
+        egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
+    );
+    // The header follows the top edge until the final row leaves the reader.
+    if let Some(header) = cells.first() {
+        let header_top = top.max(outer_clip.top()).min(top + height - heights[0]);
+        let fixed = egui::Rect::from_min_size(
+            egui::pos2(left, header_top),
+            egui::vec2(widths[0], heights[0]),
+        );
+        painter.rect_filled(fixed, egui::CornerRadius::ZERO, colors().page);
+        painter.galley(
+            fixed.min + egui::vec2(0.0, design::XS),
+            header[0].clone(),
+            colors().text,
+        );
+        if widths.len() > 1 {
+            let painter = painter.with_clip_rect(moving_clip);
+            let strip = egui::Rect::from_min_size(
+                egui::pos2(moving_clip.left(), header_top),
+                egui::vec2(moving_clip.width(), heights[0]),
+            );
+            painter.rect_filled(strip, egui::CornerRadius::ZERO, colors().page);
+            let mut x = moving_origin.x;
+            for column in 1..widths.len() {
+                painter.galley(
+                    egui::pos2(x, header_top + design::XS),
+                    header[column].clone(),
+                    colors().text,
+                );
+                x += widths[column] + TABLE_GAP;
+            }
+        }
+    }
+}
+
+fn table_part(
+    ui: &mut egui::Ui,
+    cells: &[Vec<std::sync::Arc<egui::Galley>>],
+    widths: &[f32],
+    heights: &[f32],
+    columns: std::ops::Range<usize>,
+    matched: Option<usize>,
+) {
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let width = widths[columns.clone()].iter().sum::<f32>()
+        + TABLE_GAP * columns.len().saturating_sub(1) as f32;
+    for (row, cells) in cells.iter().enumerate() {
+        let (rect, _) =
+            ui.allocate_exact_size(egui::vec2(width, heights[row]), egui::Sense::hover());
+        if matched == Some(row) {
+            let mut fill = rect;
+            if columns.start == 0 && columns.end == 1 && widths.len() > 1 {
+                fill.max.x += TABLE_GAP;
+            }
+            ui.painter()
+                .rect_filled(fill, egui::CornerRadius::ZERO, colors().selected);
+        }
+        let mut x = rect.left();
+        for column in columns.clone() {
+            let cell = egui::Rect::from_min_size(
+                egui::pos2(x, rect.top() + design::XS),
+                cells[column].size(),
+            );
+            ui.place(cell, egui::Label::new(cells[column].clone()));
+            x += widths[column] + TABLE_GAP;
+        }
+        ui.painter().hline(
+            rect.x_range(),
+            rect.bottom(),
+            egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
+        );
+    }
+}
+
 /// Fit columns to their text without breaking words. A table that cannot fit
 /// those widths scrolls within its reader.
 fn column_widths(
@@ -648,10 +662,13 @@ fn column_widths(
     };
     let mut natural = vec![1.0_f32; columns.len()];
     let mut floor = vec![1.0_f32; columns.len()];
-    for row in rows {
+    for (row_index, row) in rows.iter().enumerate() {
         for (position, &column) in columns.iter().enumerate() {
             let cell = display(row.get(column).map(String::as_str).unwrap_or(""));
             natural[position] = natural[position].max(measure(&cell));
+            if row_index == 0 {
+                floor[position] = floor[position].max(measure(&cell));
+            }
             for word in cell.split_whitespace() {
                 floor[position] = floor[position].max(measure(word));
             }

@@ -105,6 +105,7 @@ pub struct ContentIndex {
     /// What the campaign's files looked like just before this was read.
     files_seen: Option<u64>,
     pub errors: Vec<String>,
+    main_source: String,
 }
 
 /// Among equal matches: the DM's own entry, then the book, then a sheet's copy.
@@ -140,6 +141,34 @@ impl Item {
 
     pub fn is_builtin(&self) -> bool {
         self.builtin
+    }
+
+    fn result_detail(&self, main_source: &str) -> String {
+        let mut detail = self.subtitle.clone();
+        if self.private {
+            detail.push_str(" · Campaign");
+        }
+        let source = self
+            .entry
+            .fields
+            .get("splat_sources")
+            .and_then(|sources| sources.as_sequence())
+            .and_then(|sources| sources.first())
+            .and_then(|source| source.get("title"))
+            .and_then(|title| title.as_str())
+            .or_else(|| {
+                self.entry
+                    .fields
+                    .get("splat_reference")
+                    .and_then(|reference| reference.get("source"))
+                    .and_then(|source| source.as_str())
+            })
+            .or_else(|| (!self.private && !self.builtin).then_some(self.owner.as_str()));
+        if let Some(source) = source.filter(|source| !source.is_empty() && *source != main_source) {
+            detail.push_str(" · ");
+            detail.push_str(source);
+        }
+        detail
     }
 
     fn file_keys(&self) -> [String; 2] {
@@ -275,6 +304,13 @@ impl ContentIndex {
         }
         items.sort_by(|a, b| a.lower.cmp(&b.lower).then(a.entry.id.cmp(&b.entry.id)));
         let mut index = Self {
+            main_source: crate::content_workspace::builtin_manifest()
+                .fields
+                .get("splat_reference")
+                .and_then(|reference| reference.get("source"))
+                .and_then(|source| source.as_str())
+                .unwrap_or_default()
+                .to_owned(),
             errors: catalogue.errors.clone(),
             files_seen,
             ..Default::default()
@@ -1038,7 +1074,7 @@ impl Lookup {
                         let item = &index.items[position];
                         (
                             item.entry.name.clone(),
-                            format!("{} · {}", item.subtitle, item.owner),
+                            item.result_detail(&index.main_source),
                             self.reading_written.is_none() && row == self.highlight,
                         )
                     }
@@ -1052,42 +1088,44 @@ impl Lookup {
                     }
                 })
                 .collect();
-            let width = results
-                .iter()
-                .map(|(title, detail, _)| {
-                    ui.painter()
-                        .layout_no_wrap(
-                            format!("{title} · {detail}"),
-                            Type::Small.font(ui),
-                            colors().text,
-                        )
-                        .size()
-                        .x
-                        + design::S
-                })
-                .fold(ui.available_width(), f32::max);
             ui.spacing_mut().item_spacing.y = 0.0;
-            egui::ScrollArea::both()
+            egui::ScrollArea::vertical()
                 .id_salt("lookup_results")
-                .max_height(RESULT_ROW * rows as f32 + design::M)
+                .max_height(RESULT_ROW * rows as f32)
                 .auto_shrink([false, true])
                 .show_rows(ui, RESULT_ROW, rows, |ui, range| {
-                    ui.set_width(width);
                     for row in range {
                         let (title, detail, selected) = &results[row];
-                        let response = design::row(ui, RESULT_ROW, *selected, title, |ui, rect| {
-                            let galley = ui.painter().layout_no_wrap(
-                                format!("{title} · {detail}"),
+                        let full = format!("{title} · {detail}");
+                        let response = design::row(ui, RESULT_ROW, *selected, &full, |ui, rect| {
+                            let name = ui.painter().layout_no_wrap(
+                                title.clone(),
                                 Type::Small.font(ui),
                                 colors().text,
                             );
+                            let tail = design::one_line(
+                                ui,
+                                &format!(" · {detail}"),
+                                Type::Small.font(ui),
+                                colors().muted,
+                                (rect.width() - name.size().x).max(0.0),
+                            );
+                            let top = rect.center().y - name.size().y / 2.0;
                             ui.painter().galley(
-                                rect.left_center() - egui::vec2(0.0, galley.size().y / 2.0),
-                                galley,
+                                egui::pos2(rect.left(), top),
+                                name.clone(),
                                 colors().text,
                             );
+                            ui.painter().galley(
+                                egui::pos2(rect.left() + name.size().x, top),
+                                tail,
+                                colors().muted,
+                            );
                         })
-                        .on_hover_text(format!("{title} · {detail}"));
+                        .on_hover_text(&full);
+                        ui.ctx().accesskit_node_builder(response.id, |node| {
+                            node.set_role_description("Lookup result");
+                        });
                         if response.clicked() {
                             chosen = Some(matches[row]);
                         }
@@ -1178,7 +1216,8 @@ impl Lookup {
             });
             let mut reroll = generate;
             if let Some(npc) = &self.generated {
-                let (saved, again, discard) = generated_card(ui, npc, &self.generator_problems);
+                let (saved, again, discard) =
+                    generated_card(ui, npc, &self.generator_problems, self.run_open);
                 reroll = again;
                 if saved {
                     made = Some(world::create_generated(&campaign, npc));

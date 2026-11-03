@@ -9,7 +9,7 @@
       "encounter-groups": 71,
       "encounter-history": 10,
       "encounter-owned-groups": 57,
-      "encounter-run": 54,
+      "encounter-run": 53,
       "gallery": 20,
       "library-author": 50,
       "library-browse": 79,
@@ -20,14 +20,14 @@
       "party": 42,
       "party-from-run": 30,
       "prep-to-table": 27,
-      "reader-tables": 50,
+      "reader-tables": 48,
       "run-absent-player": 36,
       "run-add-creature": 30,
       "run-edge-states": 27,
       "run-folder-defect": 1,
       "run-large-roster": 16,
       "run-long-names": 24,
-      "run-lookup": 38,
+      "run-lookup": 35,
       "run-no-groups": 2,
       "run-overrides": 33,
       "run-restart": 19,
@@ -38,19 +38,22 @@
       "session-notes": 136,
       "session-plan": 108,
       "session-plan-groups": 45,
-      "session-recording": 101,
+      "session-recording": 111,
       "settings": 17,
       "signed-in": 40,
-      "world": 35
+      "world": 32
+    },
+    "in-viewport/egui-chrome": {
+      "campaign-content": 6
     },
     "no-overlap/egui-chrome": {
       "dialogs": 4,
       "encounter-owned-groups": 4,
       "encounter-run": 4,
       "library-author": 2,
-      "library-browse": 9,
+      "library-browse": 2,
       "library-scope": 5,
-      "session-recording": 8
+      "session-recording": 10
     },
     "target-size/egui-chrome": {
       "campaign-content": 72,
@@ -61,7 +64,7 @@
       "encounter-groups": 71,
       "encounter-history": 10,
       "encounter-owned-groups": 56,
-      "encounter-run": 53,
+      "encounter-run": 52,
       "gallery": 20,
       "library-author": 49,
       "library-browse": 79,
@@ -72,14 +75,14 @@
       "party": 42,
       "party-from-run": 30,
       "prep-to-table": 27,
-      "reader-tables": 50,
+      "reader-tables": 48,
       "run-absent-player": 36,
       "run-add-creature": 30,
       "run-edge-states": 27,
       "run-folder-defect": 1,
       "run-large-roster": 16,
       "run-long-names": 24,
-      "run-lookup": 38,
+      "run-lookup": 35,
       "run-no-groups": 2,
       "run-overrides": 33,
       "run-restart": 19,
@@ -90,10 +93,10 @@
       "session-notes": 136,
       "session-plan": 108,
       "session-plan-groups": 45,
-      "session-recording": 99,
+      "session-recording": 107,
       "settings": 17,
       "signed-in": 40,
-      "world": 35
+      "world": 32
     }
   },
   "task_cost": {

@@ -2113,14 +2113,17 @@ pub mod run_sync_conflict {
         );
         d.observe(
             "T3.4",
-            clear_before && d.visible_text(UNDO_CLEARED),
+            clear_before
+                && d.visible_text("see Log.")
+                && d.has_containing(UNDO_CLEARED)
+                && d.has_containing(&changed),
             format!("Simulated sheet read: a message says, only after it, what changed from what to what: {changed}"),
         );
         // A new run action clears the notice. Its details remain in Log.
         d.click(NEXT_TURN);
         d.observe(
             "T3.4",
-            !d.visible_text(UNDO_CLEARED),
+            !d.visible_text("see Log.") && !d.has_containing(UNDO_CLEARED),
             "The next turn clears the old notice",
         );
         fight_tab(d, "Log");
@@ -3132,7 +3135,7 @@ pub mod run_roster_conflict {
         let cut = rows_cut(d);
         d.observe(
             "T1.3",
-            cut.is_empty() && d.visible_text("Sheet changes. See Log."),
+            cut.is_empty() && d.visible_text("see Log."),
             format!(
                 "At 960x640 with a long message, it takes one line and every row stays: {cut:?}"
             ),
@@ -4690,7 +4693,7 @@ pub mod session_recording {
         d.state("processing-failed-elsewhere", Sizes::Default);
         d.click(NAV_SESSIONS);
         d.expect("your limit is reached");
-        d.state("processing-failed", Sizes::Default);
+        d.state("processing-failed", Sizes::All);
 
         // Retry from the banner, so no old failure stays beside a new result.
         d.click("Process again");
@@ -4770,7 +4773,7 @@ pub mod session_recording {
         d.click("Not now");
 
         d.click_containing("More actions for 2026-01-01");
-        d.state("recording-row-menu", Sizes::Default);
+        d.state("recording-row-menu", Sizes::All);
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         d.state("recording-delete", Sizes::Default);

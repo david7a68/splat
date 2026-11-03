@@ -2069,12 +2069,6 @@ impl Library {
                         .rich(ui, "Choose what to do with the changed file first.")
                         .color(colors().muted),
                 );
-            } else if !dirty {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "No changes to save.")
-                        .color(colors().muted),
-                );
             }
         }
         // Live, because Discard in this same frame changed the draft.

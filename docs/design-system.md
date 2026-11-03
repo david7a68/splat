@@ -172,7 +172,7 @@ control still has an accessible name and a tooltip.
 
 `Discard` is one press and one step of undo, not a dialog: `Draft discarded` with `Undo
 discard` stays until the next edit. It stands apart from `Save`, and it shows only when
-there is something to discard. A session note changed on disk shows the draft and disk text side by side in the same monospace face. A selected surface and a line mark identify differing lines. The choices stay above the note panes; the plan keeps its place. A file that changed on disk stops saving and asks: the run
+there is something to discard. A session note changed on disk shows the draft and disk text side by side in the Write view’s styled source face. Text wraps at word boundaries. A selected surface and a line mark identify differing lines. The choices stay above the comparison, which uses the whole session body while the plan is hidden. A file that changed on disk stops saving and asks: the run
 offers `Replace the file with this run` and `Save as a new run`, and a Library note offers `Overwrite with my
 draft`, `Show disk version` and `Reload and lose my draft`. These messages cannot be dismissed.
 
@@ -319,7 +319,7 @@ The rail has one recording status link at its foot. It includes the saved audio 
 
 Each recording keeps its failure or stop reason beside its status, including the last processing step. Dismissing a banner does not remove that row state. Starting processing clears the old cancellation message. The result viewer uses one segmented control for Summary, Clean transcript, What the check changed, and Raw transcript. Every generated view uses the same Small draft notice. If the check did not run, the row says `No check ran`.
 
-Lookup shows up to five one-line results with the open result selected. Long result lines scroll sideways, so names and sources remain readable. A click on a result, or scrolling into its reader, closes the list. `Show all` offers the remaining results. Creation actions follow the results and include the proposed name. They appear only without an exact match; Generate NPC appears only for an empty search.
+Lookup shows up to five one-line results with the open result selected. A result shows its name, then muted type and level. Campaign-owned entries add Campaign; a source shows only when it differs from the campaign’s main source. Only the muted part is shortened with an ellipsis. The hover and accessible name keep the full row. Result lists never scroll sideways. A click on a result, or scrolling into its reader, closes the list. `Show all` offers the remaining results. Creation actions follow the results and include the proposed name. They appear only without an exact match; Generate NPC appears only for an empty search.
 
 A copy starts with the original name selected. Its destination and dependency preview update with the fields. Create copy saves it in one step. Edit the copy selects the result and opens its Markdown editor. An open encounter draft keeps Add to its encounter as the primary completion action. A Library disk conflict uses the full reader width for its single row of choices.
 

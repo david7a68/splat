@@ -566,6 +566,21 @@ fn session_row(ui: &mut egui::Ui, selected: bool, title: &str, detail: &str) -> 
     )
 }
 
+fn recording_detail(words: &str) -> String {
+    let detail = words
+        .strip_prefix("Failed: ")
+        .or_else(|| words.strip_prefix("Processing cancelled: "))
+        .or_else(|| words.strip_prefix("Stopped by itself: "))
+        .unwrap_or(words);
+    if let Some((step, rest)) = detail.split_once(", ")
+        && let Some((elapsed, error)) = rest.split_once(". ")
+        && elapsed.ends_with(" s")
+    {
+        return format!("{step}, after {elapsed}: {error}");
+    }
+    detail.to_owned()
+}
+
 fn clock(seconds: u64) -> String {
     if seconds < 3600 {
         format!("{}:{:02}", seconds / 60, seconds % 60)
@@ -1968,7 +1983,6 @@ impl Sessions {
                 draft.show_disk();
             }
             if let Some(disk) = &draft.on_disk {
-                let disk = disk.clone();
                 let left: Vec<_> = draft.body.lines().collect();
                 let right: Vec<_> = disk.lines().collect();
                 egui::ScrollArea::vertical()
@@ -1990,16 +2004,22 @@ impl Sessions {
                                         colors().page
                                     };
                                     egui::Frame::new().fill(fill).show(&mut columns[at], |ui| {
-                                        ui.add(
-                                            egui::Label::new(Type::Mono.rich(
+                                        ui.horizontal_top(|ui| {
+                                            if differs {
+                                                ui.label(
+                                                    Type::Small
+                                                        .rich(ui, "▎")
+                                                        .color(colors().accent),
+                                                );
+                                            }
+                                            let width = ui.available_width();
+                                            let galley = crate::markdown_source::layouter(
                                                 ui,
-                                                format!(
-                                                    "{} {text}",
-                                                    if differs { "▎" } else { " " }
-                                                ),
-                                            ))
-                                            .wrap(),
-                                        );
+                                                &text.to_string(),
+                                                width,
+                                            );
+                                            ui.add(egui::Label::new(galley).wrap());
+                                        });
                                     });
                                 }
                             }
@@ -3124,7 +3144,10 @@ impl Sessions {
         };
         design::status(ui, Status { icon, word, color }).on_hover_text(word);
         if let Some(words) = stored {
-            ui.add(egui::Label::new(Type::Small.rich(ui, words).color(c.muted)).wrap());
+            ui.add(
+                egui::Label::new(Type::Small.rich(ui, recording_detail(words)).color(c.muted))
+                    .wrap(),
+            );
         }
         if let Some(warning) = &recording.warning {
             design::message(ui, Tone::Warning, warning);
@@ -3218,7 +3241,7 @@ impl Sessions {
                 ui.add_space(design::L);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let menu = ui.menu_button("⋯", |ui| {
+                let menu = ui.menu_button(icons::EXPAND, |ui| {
                     delete = Action::quiet("Delete…")
                         .name(&format!("Delete recording: {}", recording.name))
                         .density(Density::Read)
@@ -3869,6 +3892,14 @@ impl Sessions {
         // A group being assembled needs the height, and last time can wait for it.
         if !(plan.group_open && self.group_session == self.selected) {
             self.last_time_block(ui, book);
+        }
+        if self
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.state == DraftState::Conflict)
+        {
+            self.note_editor(ui, false);
+            return;
         }
         let recordings = format!("Recordings ({})", self.recordings.len());
         let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM;

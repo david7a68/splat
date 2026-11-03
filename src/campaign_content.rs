@@ -417,10 +417,11 @@ impl CampaignContent {
                 ui,
                 Tone::Error,
                 &format!(
-                    "{path}: {} Fix it to save package choices.",
+                    "{path}: {}. Fix it to save package choices.",
                     problem
                         .as_deref()
-                        .unwrap_or("The repair has not been saved.")
+                        .unwrap_or("The repair has not been saved")
+                        .trim_end_matches('.')
                 ),
             );
             let id = egui::Id::new(("repair_open", path.as_str()));

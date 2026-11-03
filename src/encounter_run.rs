@@ -2276,8 +2276,7 @@ impl Run {
                 previous.participants[*index] = self.state.participants[*index].clone();
             }
             self.history.push(previous);
-            self.history_labels
-                .push(format!("{} (D&D Beyond)", choices.join("; ")));
+            self.history_labels.push("use D&D Beyond values".to_owned());
             self.dm_steps += 1;
         }
     }
