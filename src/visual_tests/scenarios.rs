@@ -4419,7 +4419,7 @@ pub mod session_notes {
         d.observe(
             "S4",
             !d.has("Next difference"),
-            "One differing line has no Next difference action",
+            "One changed line needs no Next difference action",
         );
         d.observe(
             "T11.4",
