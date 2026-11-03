@@ -679,6 +679,16 @@ fn visual_suite() {
             "Chrome measurements: {}. Apply with visual-baseline-chrome <label> after review.",
             chrome_observation.display()
         );
+        if (!regressions.is_empty() || !stale.is_empty())
+            && stale.iter().all(|line| {
+                line.split(" / ")
+                    .next()
+                    .is_some_and(|check| check.ends_with(ergonomics::CHROME_SUFFIX))
+            })
+            && let Ok(hint) = std::env::var("SPLAT_VISUAL_CHROME_HINT")
+        {
+            println!("{hint}");
+        }
     }
     if std::env::var_os("SPLAT_VISUAL_UPDATE_BASELINE").is_some() {
         assert!(
