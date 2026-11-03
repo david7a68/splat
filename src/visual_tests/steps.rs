@@ -29,8 +29,8 @@ pub const CLOSE_COPY: &str = "Close";
 pub const EDIT_MARKDOWN: &str = "Edit Markdown";
 pub const UNSAVED_NOTE: &str = "Unsaved";
 
-pub const READY_TO_RUN: &str = "Ready to run (";
-pub const HISTORY: &str = "History (";
+pub const READY_TO_RUN: &str = "READY TO RUN";
+pub const HISTORY: &str = "HISTORY";
 pub const RESUME: &str = "Resume";
 pub const RUN_HEADING: &str = "Run · ";
 pub const CURRENT_TURN: &str = "Current turn";
@@ -119,7 +119,7 @@ pub fn resume_run_from_cold_start(d: &mut Driver<'_>) {
 }
 
 pub fn resume_run(d: &mut Driver<'_>, name: &str) {
-    d.click_beside(&format!("{name} · Round"), RESUME);
+    d.click_beside(&format!("{name} · In progress · Round"), RESUME);
     d.expect(&format!("{RUN_HEADING}{name}"));
 }
 
@@ -134,7 +134,12 @@ pub fn open_saved_encounter(d: &mut Driver<'_>, name: &str) {
 }
 
 pub fn run_saved_encounter(d: &mut Driver<'_>, name: &str) {
-    d.click_beside_exact(name, RUN_ENCOUNTER);
+    if d.has_containing(&format!("{name} · In progress")) {
+        d.click_first(&format!("More actions for {name}"));
+        d.click("Start another fight");
+    } else {
+        d.click_beside_exact(name, RUN_ENCOUNTER);
+    }
 }
 
 pub fn open_local_package(d: &mut Driver<'_>, name: &str) {
@@ -192,6 +197,12 @@ pub fn copy_open_entry_to_campaign(d: &mut Driver<'_>) {
 /// The name of a group's button in the run's panel.
 pub fn add_group(name: &str) -> String {
     format!("Add {name} to the initiative list")
+}
+
+/// Saved-run deletion is kept behind the row menu.
+pub fn delete_saved_run(d: &mut Driver<'_>, name: &str) {
+    d.click_first(&format!("More actions for {name}"));
+    d.click("Delete the saved run");
 }
 
 /// Fight tabs share a menu when the panel has no room for all six words.

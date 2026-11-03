@@ -1057,6 +1057,9 @@ impl Sessions {
         };
         let here = number(self.selected)?;
         Some(match number(self.current()) {
+            Some(playing) if start == "New plan items go to" => {
+                format!("{start} {here}. {playing} is being played.")
+            }
             Some(playing) => format!("{start} {here}, not the session being played ({playing})."),
             None => format!("{start} {here}."),
         })
@@ -2408,7 +2411,7 @@ impl Sessions {
         if let Some(problem) = &self.rename_problem {
             design::message(ui, Tone::Warning, problem);
         }
-        if let Some(words) = self.not_being_played("These go to") {
+        if let Some(words) = self.not_being_played("New plan items go to") {
             design::message(ui, Tone::Warning, &words);
         } else if self.reading_note
             && let Some(words) = self.current_dated()
@@ -3650,7 +3653,8 @@ impl Sessions {
             self.last_time_block(ui, book);
         }
         let recordings = format!("Recordings ({})", self.recordings.len());
-        let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM;
+        let editing_group_here = plan.group_open && self.group_session == self.selected;
+        let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM && !editing_group_here;
         // In a wide page, the note is on the plan's tab, so there is no second one to choose.
         let mut shown = if beside && self.tab == Tab::Note {
             Tab::Plan
