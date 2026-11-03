@@ -4241,8 +4241,8 @@ mod tests {
         assert!(run.keeps_party_synced());
         assert_eq!(
             run.hp_of(0),
-            None,
-            "the sheet decides, so the override waits"
+            Some(1),
+            "the template HP stays while the setup override waits for the sheet"
         );
         assert_eq!(run.hp_of(1), Some(7));
 

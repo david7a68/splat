@@ -1621,7 +1621,7 @@ impl Library {
         let subtitles = loaded.subtitles();
         // A wide window's list gets room too, so that long names keep their second line.
         let min_list_width =
-            (design::number_width(ui, "Can use", &Type::Body.font(ui)) + design::XXL + design::L)
+            (design::number_width(ui, "Can use", &Type::Strong.font(ui)) + design::XXL + design::L)
                 * 2.0
                 + design::S * 2.0
                 + ui.spacing().item_spacing.x;
@@ -1829,20 +1829,22 @@ impl Library {
                 Scope::Campaign => "Own entries".to_owned(),
                 _ => label(scope),
             };
-            let mut fitted = design::words_that_fit(
-                ui,
-                &selected,
-                &Type::Body.font(ui),
-                width - design::XXL - design::L,
-            );
-            if fitted != selected {
+            let font = Type::Strong.font(ui);
+            let budget = width - design::XXL - design::L;
+            let mut fitted = selected.clone();
+            if design::number_width(ui, &selected, &font) > budget {
+                let room = budget - design::number_width(ui, "…", &font);
+                fitted = design::words_that_fit(ui, &selected, &font, room);
+                while !fitted.is_empty() && design::number_width(ui, &fitted, &font) > room {
+                    fitted.pop();
+                }
                 fitted.push('…');
             }
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
                 .width(width)
                 .truncate()
-                .selected_text(fitted)
+                .selected_text(Type::Strong.rich(ui, fitted))
                 .show_ui(ui, |ui| {
                     ui.set_min_width(260.0);
                     if active.is_some() {
@@ -3897,8 +3899,14 @@ mod tests {
             assert!(!rendered.contains("You gain a Bard subclass of your choice."));
             // The published wording is still readable, and the related link navigates.
             for label in ["Source text", "College of Lore"] {
-                let text = texts
+                let current = frame(vec![]);
+                let text = current
+                    .shapes
                     .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(text),
+                        _ => None,
+                    })
                     .find(|text| text.galley.job.text == label)
                     .unwrap();
                 let pos = text.pos + text.galley.size() * 0.5;
