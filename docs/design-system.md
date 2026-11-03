@@ -790,3 +790,12 @@ a quiet Undo icon action on one line.
 Settings fields under group headings use sentence-case labels. Connect stays at
 the cookie field's right edge. Input focus scrolls to the Recording heading.
 The campaign-added message follows the campaign rows, below their heading.
+
+## Library and preparation audit, iteration 14
+
+The run's Sheet shows live death saves once, with singular and plural words.
+Campaign Packages and the Library Package.md row offer Write Package.md again.
+The action keeps the registered identity and reloads; replacing a file has Undo.
+Copied typed World notes stay visible with a duplicate warning. Each identity
+action names its file and has Undo. Encounter repair opens World for World notes.
+A copied package folder names the duplicate identity when registration is refused.

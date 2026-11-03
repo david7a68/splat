@@ -30,6 +30,70 @@ pub(crate) fn note_id(text: &str) -> Option<Uuid> {
         })
 }
 
+pub(crate) const DELETED_MANIFEST: &str = "Package.md was deleted. Entries are still available. Write it again, or restore it from a backup.";
+
+/// A repair keeps the registered identity and never overwrites a later disk edit.
+pub(crate) struct ManifestWrite {
+    root: PathBuf,
+    before: Option<String>,
+    after: String,
+}
+impl ManifestWrite {
+    pub fn write(module: &Module) -> Result<Self, String> {
+        let catalogue = Catalogue::load(std::slice::from_ref(module), None)?;
+        if !catalogue.manifest_problems.contains_key(&module.id) {
+            return Err("Package.md is valid. No repair is needed.".into());
+        }
+        let manifest = &catalogue
+            .entries
+            .get(&module.id)
+            .ok_or("Package details are unavailable.")?
+            .entry;
+        let namespace = manifest
+            .fields
+            .get("splat_namespace")
+            .and_then(Value::as_str)
+            .ok_or("Package namespace is unavailable.")?;
+        let after = patch_fields(
+            &note_text(&module.name, "package", Some(namespace)),
+            &[("splat_id", Some(module.id.to_string().into()))],
+        )?;
+        let path = module.path.join("Package.md");
+        let before = match fs::read_to_string(path) {
+            Ok(text) => Some(text),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error.to_string()),
+        };
+        write_note(&module.path, "Package.md", before.as_deref(), &after)?;
+        Ok(Self {
+            root: module.path.clone(),
+            before,
+            after,
+        })
+    }
+    pub fn replaced(&self) -> bool {
+        self.before.is_some()
+    }
+    pub fn undo(&self) -> Result<PathBuf, String> {
+        let before = self
+            .before
+            .as_deref()
+            .ok_or("The write did not replace a file.")?;
+        // A broken manifest cannot pass write_note's parse check.
+        let path = note_path(&self.root, "Package.md")?;
+        if fs::read_to_string(&path).map_err(|e| e.to_string())? != self.after {
+            return Err("Package.md changed on disk. Reload before undoing.".into());
+        }
+        use std::io::Write;
+        let mut temp = tempfile::NamedTempFile::new_in(&self.root).map_err(|e| e.to_string())?;
+        temp.write_all(before.as_bytes())
+            .and_then(|_| temp.as_file().sync_all())
+            .map_err(|e| e.to_string())?;
+        temp.persist(path).map_err(|e| e.to_string())?;
+        Ok(self.root.clone())
+    }
+}
+
 /// Add new work to the active campaign without replacing its other choices.
 /// `None` selects the whole package, including future entries.
 pub fn use_in_campaign(
@@ -252,6 +316,7 @@ pub struct Catalogue {
     pub errors: Vec<String>,
     pub manifest_problems: BTreeMap<Uuid, String>,
     pub unreadable: BTreeMap<Uuid, UnreadableNote>,
+    pub duplicate_world: Vec<IndexedEntry>,
     duplicate_ids: BTreeSet<Uuid>,
     files: BTreeMap<Uuid, (PathBuf, String)>,
     namespaces: BTreeSet<String>,
@@ -336,13 +401,28 @@ impl Catalogue {
                 .collect();
             names.sort();
             let path = duplicate_repair_path(first.cloned().into_iter().chain([path])).unwrap();
+            if private && entry.kind == "world" {
+                if let Some(original) = self.entries.remove(&entry.id) {
+                    self.duplicate_world.push(original);
+                }
+                self.duplicate_world.push(IndexedEntry {
+                    entry: entry.clone(),
+                    owner,
+                    private,
+                });
+            }
             self.duplicate_ids.insert(entry.id);
             self.entries.remove(&entry.id);
             self.files.remove(&entry.id);
             self.keys.retain(|_, id| *id != entry.id);
             let word = format!(
-                "{} share an identity. Choose one in Library.",
-                names.join(" and ")
+                "{} share an identity. Choose one in {}.",
+                names.join(" and "),
+                if private && entry.kind == "world" {
+                    "World"
+                } else {
+                    "Library"
+                }
             );
             self.errors.push(word.clone());
             self.unreadable
@@ -485,15 +565,20 @@ impl Catalogue {
                         line.map_or(String::new(), |line| format!(" (line {line})"))
                     )
                 } else {
-                    "Package.md was deleted. Restore it from your backup.".into()
+                    DELETED_MANIFEST.into()
                 };
                 result.manifest_problems.insert(module.id, problem.clone());
                 result.errors.push(format!(
-                    "{}: {problem} Entries are still available.",
-                    module.name
+                    "{}: {problem}{}",
+                    module.name,
+                    if problem == DELETED_MANIFEST {
+                        ""
+                    } else {
+                        " Entries are still available."
+                    }
                 ));
                 // The registration keeps ownership while the on-disk manifest is repaired.
-                // This stand-in is never written to disk.
+                // The repair action can write these registered details again.
                 let namespace = entries
                     .iter()
                     .filter_map(|entry| entry.key.as_deref())
@@ -1555,6 +1640,70 @@ impl CopyPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manifest_write_preserves_identity_entries_and_supports_safe_undo() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("package");
+        fs::create_dir(&folder).unwrap();
+        fs::write(
+            folder.join("Module.md"),
+            note_text("Test", "package", Some("test")),
+        )
+        .unwrap();
+        let module = crate::library::local_module(&folder).unwrap();
+        let wolf = patch_fields(
+            &note_text("Wolf", "creature", None),
+            &[("splat_key", Some("test:wolf".into()))],
+        )
+        .unwrap();
+        fs::write(module.path.join("Wolf.md"), wolf).unwrap();
+        let valid = fs::read_to_string(module.path.join("Module.md")).unwrap();
+        fs::rename(
+            module.path.join("Module.md"),
+            module.path.join("Package.md"),
+        )
+        .unwrap();
+        let count = Catalogue::load(std::slice::from_ref(&module), None)
+            .unwrap()
+            .entries
+            .len();
+        assert!(ManifestWrite::write(&module).is_err());
+        assert_eq!(
+            fs::read_to_string(module.path.join("Package.md")).unwrap(),
+            valid
+        );
+        for broken in [true, false] {
+            let path = module.path.join("Package.md");
+            let bad = "---\nsplat_kind: [\n---\n";
+            if broken {
+                fs::write(&path, bad).unwrap();
+            } else {
+                fs::remove_file(&path).unwrap();
+            }
+            let repair = ManifestWrite::write(&module).unwrap();
+            assert_eq!(repair.replaced(), broken);
+            let catalogue = Catalogue::load(std::slice::from_ref(&module), None).unwrap();
+            assert!(catalogue.manifest_problems.is_empty());
+            assert_eq!(catalogue.entries.len(), count);
+            assert_eq!(catalogue.entries[&module.id].entry.name, "Test");
+            assert_eq!(
+                catalogue.entries[&module.id].entry.fields["splat_namespace"].as_str(),
+                Some("test")
+            );
+            assert_eq!(
+                crate::library::local_module(&module.path).unwrap().id,
+                module.id
+            );
+            if broken {
+                repair.undo().unwrap();
+                assert_eq!(fs::read_to_string(&path).unwrap(), bad);
+                let repair = ManifestWrite::write(&module).unwrap();
+                fs::write(&path, format!("{}\nExternal change.\n", repair.after)).unwrap();
+                assert!(repair.undo().is_err());
+            }
+        }
+    }
 
     #[test]
     fn broken_or_deleted_package_manifest_keeps_entries_and_reports_repair() {

@@ -490,7 +490,19 @@ impl WorldPage {
                 let entry = &index.items[position].entry;
                 let problems = super::broken_links(&index.items[position], index);
                 let faults = crate::roll_table::fault_count(&entry.body);
-                let detail = if faults > 0 {
+                let duplicate = index.duplicate_world.contains_key(&entry.path);
+                let name = if duplicate {
+                    std::path::Path::new(&entry.path)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned()
+                } else {
+                    entry.name.clone()
+                };
+                let detail = if duplicate {
+                    format!("{} Duplicate identity", icons::WARN)
+                } else if faults > 0 {
                     format!(
                         "{} {}",
                         icons::WARN,
@@ -542,7 +554,8 @@ impl WorldPage {
                             },
                         )
                     } else {
-                        design::two_line_row(ui, ROW, selected, &entry.name, &detail)
+                        design::two_line_row(ui, ROW, selected, &name, &detail)
+                            .on_hover_text(&entry.path)
                     };
                     if response.clicked() {
                         self.selected = Some(entry.id);

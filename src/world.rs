@@ -735,6 +735,38 @@ impl Change {
     }
 }
 
+fn new_identity(campaign: &Campaign, relative: &str) -> Result<(Change, Uuid), String> {
+    let path = note_path(&campaign.path, relative)?;
+    let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let entry = Entry::parse(relative, &before)?;
+    let id = crate::hermetic::new_uuid();
+    let redirected = crate::content_workspace::redirect_reference(&before, &entry, id)?;
+    let after = patch_fields(
+        &redirected,
+        &[
+            ("splat_id", Some(id.to_string().into())),
+            ("splat_key", None),
+        ],
+    )?;
+    write_note(&campaign.path, relative, Some(&before), &after)?;
+    Ok((
+        Change {
+            path: relative.into(),
+            before,
+            after,
+            word: "New identity saved.".into(),
+        },
+        id,
+    ))
+}
+
+pub(crate) fn repair_in_world(path: &Path) -> bool {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|text| Entry::parse("note.md", &text).ok())
+        .is_some_and(|entry| entry.kind == "world")
+}
+
 // --- Reading.
 
 /// What a run can tell a reader. `None` means that no run is open.
@@ -791,6 +823,7 @@ pub struct Reader {
     adding: Option<Adding>,
     picker: Option<Picker>,
     undo: Option<Change>,
+    identity_undo: Option<(Uuid, Change)>,
     error: Option<String>,
     /// A link that matches several files, waiting for the DM to choose.
     many: Vec<usize>,
@@ -929,6 +962,72 @@ impl Reader {
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
+        if let Some(campaign) = campaign {
+            if self
+                .identity_undo
+                .as_ref()
+                .is_some_and(|(id, _)| *id != campaign.id)
+            {
+                self.identity_undo = None;
+            }
+            if let Some((_, undo)) = &self.identity_undo
+                && Action::quiet("Undo new identity")
+                    .icon(design::icons::UNDO)
+                    .show(ui)
+                    .clicked()
+            {
+                match undo.undo(campaign) {
+                    Ok(()) => {
+                        let id = note_id(&undo.path);
+                        self.identity_undo = None;
+                        return Some(Go::Reload(id));
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
+            if let Some(paths) = index.duplicate_world.get(&item.entry.path) {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    "These files share an identity. Choose which file gets a new one.",
+                );
+                let mut paths = paths.clone();
+                let first = crate::content_workspace::duplicate_repair_path(
+                    paths.iter().map(|path| campaign.path.join(path)),
+                );
+                paths.sort_by_key(|path| Some(campaign.path.join(path)) != first);
+                for (at, path) in paths.iter().enumerate() {
+                    let filename = Path::new(path)
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    let label = format!("New identity for {filename}");
+                    let clicked = if Action::quiet(&label).natural_width(ui) > ui.available_width()
+                    {
+                        design::wrapped_link(ui, &label).clicked()
+                    } else {
+                        Action::quiet(&label).show(ui).clicked()
+                    };
+                    if clicked {
+                        match new_identity(campaign, path) {
+                            Ok((undo, id)) => {
+                                self.identity_undo = Some((campaign.id, undo));
+                                return Some(Go::Reload(id));
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                    ui.label(Type::Small.rich(ui, path).color(colors().muted));
+                    if at > 0 {
+                        ui.label(
+                            Type::Small
+                                .rich(ui, format!("Existing links will then use {}.", paths[0]))
+                                .color(colors().result.warning),
+                        );
+                    }
+                }
+            }
+        }
         if !self.compact
             && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private()
@@ -942,7 +1041,7 @@ impl Reader {
         }) {
             design::message(ui, Tone::Warning, warning);
         }
-        if item.entry.kind == "world" {
+        if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
             go = ui
                 .scope(|ui| {
                     ui.spacing_mut().item_spacing.y =
@@ -1733,6 +1832,46 @@ mod tests {
         let path = dir.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn world_identity_repair_writes_only_its_file_and_undo_keeps_later_edits() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Test".into(),
+            path: dir.path().into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        let before = patch_fields(
+            &crate::library::note_text("Rook", "world", None),
+            &[(
+                "splat_world",
+                Some(serde_yaml_ng::from_str("{type: npc}").unwrap()),
+            )],
+        )
+        .unwrap();
+        fs::write(dir.path().join("Rook.md"), &before).unwrap();
+        fs::write(dir.path().join("Rook copy.md"), &before).unwrap();
+        let (undo, id) = super::new_identity(&campaign, "Rook copy.md").unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rook.md")).unwrap(),
+            before
+        );
+        assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
+        undo.undo(&campaign).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
+            before
+        );
+        let (undo, _) = super::new_identity(&campaign, "Rook copy.md").unwrap();
+        fs::write(
+            dir.path().join("Rook copy.md"),
+            format!("{}\nExternal edit.", undo.after),
+        )
+        .unwrap();
+        assert!(undo.undo(&campaign).is_err());
     }
 
     #[test]
