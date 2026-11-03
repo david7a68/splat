@@ -278,6 +278,7 @@ fn reference(
     styled: bool,
     origin: &Origin<'_>,
 ) {
+    ui.add_space(design::M);
     if entry.is_some_and(|entry| entry.reading().ok().flatten().is_some())
         && let Some(source) = sections
             .iter()
@@ -291,7 +292,6 @@ fn reference(
         .collect();
     let item_details = entry.is_some_and(reader::has_item_details);
     if (!styled && !technical.is_empty()) || item_details {
-        ui.add_space(design::M);
         design::quiet_section(ui, "Technical details", |ui| {
             if let Some(entry) = entry.filter(|_| item_details) {
                 reader::item_details(ui, entry);

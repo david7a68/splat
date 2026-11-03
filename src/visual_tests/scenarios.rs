@@ -312,7 +312,26 @@ pub mod library_author {
             draft_here(d, "no front matter at all"),
             "Undo brings back the discarded draft",
         );
+        let editor_top = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Markdown editor")
+            .expect("editor before discard")
+            .rect
+            .top();
         d.click(DISCARD);
+        let discarded_top = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Markdown editor")
+            .expect("editor after discard")
+            .rect
+            .top();
+        d.observe(
+            "C5",
+            editor_top == discarded_top,
+            format!("Discard keeps the editor at the same height: {editor_top} to {discarded_top}"),
+        );
         d.goal("try each way out of a failed save");
 
         d.click(PACKAGE_ACTIONS);
@@ -7165,10 +7184,10 @@ pub mod share_to_package {
         d.click(COPY_TO);
         d.click("Destination");
         d.click(&format!("Package · {MODULE}"));
-        d.wait_for_text("Also copies Captain Varra, which Watch Orders needs.");
+        d.wait_for_text("Ashen Marches/Captain Varra.md");
         assert!(!d.visible_text("Required entries: 1"));
         d.state("private-dependency-shared-together", Sizes::All);
-        d.wait_for_text("Also copies");
+        d.wait_for_text("Ashen Marches/Watch Orders.md");
         d.type_into("Folder", "Watch/Captains");
         d.wait_for_text("Watch/Captains/Watch Orders.md");
         d.click("Review Markdown");
