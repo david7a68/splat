@@ -2690,6 +2690,23 @@ pub mod gallery {
         d.state("focus-ring", Sizes::Default);
         d.click(MESSAGES);
         d.state("messages", Sizes::AllAndHiDpi);
+        let edges = (
+            d.painted_left("Undo long rest"),
+            d.painted_left("The party has full HP after this long rest."),
+        );
+        d.observe(
+            "U6",
+            edges
+                .0
+                .zip(edges.1)
+                .is_some_and(|(action, message)| (action - message).abs() < 1.0),
+            format!("A quiet action aligns with its message text: {edges:?}"),
+        );
+        d.observe(
+            "U6",
+            !d.visible_passage("Second use of widget ID"),
+            "A line-start action registers its click target once",
+        );
         d.goal("see every part of the design system");
         d.click("Markdown");
         d.state("markdown", Sizes::AllAndHiDpi);
@@ -4370,7 +4387,11 @@ pub mod session_notes {
             !d.has("Show disk version") && d.in_view_containing("Written in Obsidian."),
             "The comparison opens at its first difference without another action",
         );
-        d.click("Next difference");
+        d.observe(
+            "S4",
+            !d.has("Next difference"),
+            "One changed line needs no Next difference action",
+        );
         d.observe(
             "T11.4",
             d.has_containing("Written in Obsidian."),
