@@ -1313,6 +1313,16 @@ impl<'a> Driver<'a> {
         ));
     }
 
+    /// Obsidian edits happen outside the app; exercise the real focus-return reload.
+    pub fn focus_window(&mut self, focused: bool) {
+        self.harness.input_mut().focused = focused;
+        self.harness
+            .input_mut()
+            .events
+            .push(egui::Event::WindowFocused(focused));
+        self.settle();
+    }
+
     /// Test-only access to app state that no UI route can create.
     pub fn app_mut(&mut self) -> &mut Splat {
         self.held = false;

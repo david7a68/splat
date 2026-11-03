@@ -132,6 +132,7 @@ pub struct Tables {
     attributes: [Option<Table>; 3],
     /// Tables that cannot be used, and why. The DM sees these with the result.
     pub problems: Vec<String>,
+    pub sources: Vec<String>,
 }
 
 impl Tables {
@@ -156,7 +157,10 @@ impl Tables {
                     continue;
                 }
                 match table_rows(&dice, &rows) {
-                    Ok(rows) => *slot = Some(Table { dice, rows }),
+                    Ok(rows) => {
+                        *slot = Some(Table { dice, rows });
+                        tables.sources.push(format!("{key}: {path}"));
+                    }
                     Err(error) => tables.problems.push(format!(
                         "{key} in {path} cannot be used, so the built-in list stands in. {error}"
                     )),

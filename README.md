@@ -87,7 +87,7 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
 
-Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
+Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 
 The `gallery` scenario captures every design token and component, including page headers, blocked reasons, full rows with menus, paused runs and message actions. The `missing-glyph` check rejects painted characters missing from the app fonts. `src/design/lint.rs` fails on raw
 colours, text sizes and raw icon text outside `src/design/`, and `src/design/tokens.rs` tests WCAG contrast.
@@ -265,6 +265,10 @@ notes, `Timeline.md`, session templates, recordings, and anything in a folder wh
 transcripts. Links such as `[[Verori]]`, `[[Gate Mechanics#Reliability]]` and `![[Map.png]]` work as in Obsidian. A link
 to two notes asks which one, and a link to nothing offers to create it. Each note lists what links to it.
 
+Every World note offers **Edit in Obsidian** and **Show file**. A file that cannot be read stays in the
+**Cannot be read** group. Open it to repair its text here, or follow **Edit in Obsidian**. Lookup's warning
+also opens the file in World. A repair draft stays in memory when you read another note.
+
 A one-line marker above a table makes it rollable. The first column is a number or a range, such as `2–5`, and the rows
 must cover what the dice can roll. A bad table says so, and the rest of the note still reads.
 
@@ -293,11 +297,19 @@ splat_world:
   creature: {key: dnd2024:creatures/goblin_boss}
 ```
 
+An NPC's **Stat block** and **In** rows each have a **Change** picker. A location has **In** too.
+Choose by name, or create a location from that picker. Each change edits only that key and offers **Undo**.
+The rest of the file, including comments and spacing, stays as it was. `in: "[[Ashfall Keep]]"` also works,
+including a location's aliases. A place loop stays in the list and shows a warning.
+A campaign creature in Library offers **Make NPC note**, which opens its new NPC note in World.
+**New ▾ → Note…** creates a file in `Notes/`; its type is optional. The note opens with **Edit in Obsidian**.
+
 **Add to run** on an NPC puts them in the open fight under their own name, on their stat block. It does not change the
 encounter, and Undo removes them. A location lists what is in it, and World shows locations as a tree.
 
 **Generate NPC** in Lookup rolls a name and three attributes: look, manner and want. **Reroll** rolls them all again,
 and nothing is written until **Save NPC**, which creates the note in `NPCs/` and opens it. **Discard** lets it go.
+The card names the campaign tables it uses, or says that it uses built-in lists.
 
 The built-in lists suit no world in particular, so a campaign can replace any of the four. Mark a table with the key
 `npc-name`, `npc-look`, `npc-manner` or `npc-want` in any world note. The first table in path order wins, session notes

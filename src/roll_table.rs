@@ -142,7 +142,13 @@ pub fn table_rows(dice: &str, rows: &[Vec<String>]) -> Result<Vec<RollRow>, Stri
     parsed.sort_by_key(|row| row.min);
     let mut next = low;
     for row in &parsed {
-        if row.min != next || row.max < row.min {
+        if row.min < next {
+            return Err(format!(
+                "{dice} has an overlap at {}. Use each result once.",
+                row.min
+            ));
+        }
+        if row.min > next || row.max < row.min {
             return Err(format!("{dice} needs a row for {next}. It has a gap here."));
         }
         next = row.max + 1;
@@ -192,6 +198,7 @@ pub fn roll_control(
     let mut state: RollState = ui.data(|data| data.get_temp(id)).unwrap_or_default();
     let mut request = None;
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = design::S;
         if Action::secondary(&format!("Roll {dice}"))
             .icon(design::icons::DICE)
             .density(Density::Read)
@@ -200,18 +207,14 @@ pub fn roll_control(
         {
             request = Some(None);
         }
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut state.typed)
-                .desired_width(design::XXL * 2.0 - design::S)
-                .min_size(egui::vec2(
-                    design::XXL * 2.0 - design::S,
-                    Density::Read.control(),
-                ))
-                .hint_text(Type::Small.rich(ui, "Typed roll"))
-                .background_color(colors().well)
-                .horizontal_align(egui::Align::Center),
+        let response = design::number_field(
+            ui,
+            &format!("Typed roll for {}", design::reader::human_label(key)),
+            &mut state.typed,
+            "Typed roll",
+            design::XXL * 3.0,
+            Density::Read.control(),
         );
-        design::named(ui, &response, &format!("Typed roll on {dice}"));
         if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             match state.typed.trim().parse::<i64>() {
                 Ok(value) => request = Some(Some(value)),

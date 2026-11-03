@@ -1,7 +1,9 @@
 //! The campaign's world: plain notes Splat reads and does not own, and the NPCs and locations
 //! made from them. Obsidian stays the editor. A plain note becomes a Lookup item, not an entry,
 //! so nothing depends on it. See `docs/design/world-and-house-rules.md`.
+mod fields;
 pub mod page;
+pub(crate) mod repair;
 
 use crate::{
     content_workspace::{EntryRef, patch_fields},
@@ -440,10 +442,10 @@ fn create_with_details(
     if stem.is_empty() {
         return Err("Type a name first.".to_owned());
     }
-    let folder = if kind == "location" {
-        "Locations"
-    } else {
-        "NPCs"
+    let folder = match kind {
+        "location" => "Locations",
+        "npc" => "NPCs",
+        _ => "Notes",
     };
     let relative = format!("{folder}/{stem}.md");
     let path = note_path(&campaign.path, &relative)?;
@@ -451,14 +453,33 @@ fn create_with_details(
         return Err(format!("{relative} already exists."));
     }
     let id = crate::hermetic::new_uuid();
-    let mut text = format!("{}\n# {name}\n", frontmatter(id, name, kind)?);
+    let mut text = if kind.is_empty() {
+        format!("# {name}\n")
+    } else {
+        format!("{}\n# {name}\n", frontmatter(id, name, kind)?)
+    };
     if !details.is_empty() {
         text.push('\n');
         text.push_str(details);
     }
     fs::create_dir_all(campaign.path.join(folder)).map_err(|e| e.to_string())?;
-    write_note(&campaign.path, &relative, None, &text)?;
-    Ok(id)
+    if kind.is_empty() {
+        use std::io::Write;
+        let mut temp =
+            tempfile::NamedTempFile::new_in(path.parent().ok_or("Missing parent folder")?)
+                .map_err(|e| e.to_string())?;
+        temp.write_all(text.as_bytes())
+            .and_then(|_| temp.as_file().sync_all())
+            .map_err(|e| e.to_string())?;
+        temp.persist_noclobber(&path).map_err(|e| e.to_string())?;
+    } else {
+        write_note(&campaign.path, &relative, None, &text)?;
+    }
+    Ok(if kind.is_empty() {
+        note_id(&relative)
+    } else {
+        id
+    })
 }
 
 /// Give a plain note an identity. Its body does not change.
@@ -487,15 +508,8 @@ fn set_world_field(
 ) -> Result<(), String> {
     let path = note_path(&campaign.path, &entry.path)?;
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let current = Entry::parse(&entry.path, &text)?;
-    let mut world = current
-        .fields
-        .get("splat_world")
-        .and_then(Value::as_mapping)
-        .cloned()
-        .unwrap_or_default();
-    world.insert(name.into(), value);
-    let updated = patch_fields(&text, &[("splat_world", Some(Value::Mapping(world)))])?;
+    Entry::parse(&entry.path, &text)?;
+    let updated = fields::patch(&text, name, value)?;
     write_note(&campaign.path, &entry.path, Some(&text), &updated).map(|_| ())
 }
 
@@ -536,6 +550,76 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
         unavailable_members: Vec::new(),
         problem,
     })
+}
+
+/// Always offer both routes: Obsidian for editing and the system file handler.
+pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &str) {
+    let path = campaign.path.join(relative);
+    ui.horizontal_wrapped(|ui| {
+        ui.label(Type::Small.rich(ui, relative).color(colors().muted));
+        if design::link(ui, "Edit in Obsidian").clicked() {
+            ui.ctx()
+                .open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
+        }
+        if design::link(ui, "Show file").clicked() {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+                "file://{}",
+                encode_path(&path)
+            )));
+        }
+    });
+}
+
+fn encode_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect()
+}
+
+fn obsidian_url(path: &Path) -> String {
+    format!("obsidian://open?path={}", encode_path(path))
+}
+
+pub(crate) fn make_npc_note(campaign: &Campaign, entry: &Entry) -> Result<Uuid, String> {
+    let id = create_entry(campaign, &entry.name, "npc")?;
+    let path = format!("NPCs/{}.md", sessions::file_safe(&entry.name));
+    let text = fs::read_to_string(campaign.path.join(&path)).map_err(|e| e.to_string())?;
+    let npc = Entry::parse(&path, &text)?;
+    set_world_field(
+        campaign,
+        &npc,
+        "creature",
+        serde_yaml_ng::to_value(EntryRef::id(entry.id)).map_err(|e| e.to_string())?,
+    )?;
+    Ok(id)
+}
+
+#[derive(Default)]
+struct Picker {
+    key: &'static str,
+    search: String,
+    new_location: String,
+    focus: bool,
+}
+
+struct Change {
+    path: String,
+    before: String,
+    after: String,
+    word: String,
+}
+
+impl Change {
+    fn undo(&self, campaign: &Campaign) -> Result<(), String> {
+        write_note(&campaign.path, &self.path, Some(&self.after), &self.before).map(|_| ())
+    }
 }
 
 // --- Reading.
@@ -589,6 +673,8 @@ pub struct Reader {
     status: String,
     other_type: String,
     adding: Option<Adding>,
+    picker: Option<Picker>,
+    undo: Option<Change>,
     error: Option<String>,
     /// A link that matches several files, waiting for the DM to choose.
     many: Vec<usize>,
@@ -655,6 +741,7 @@ impl Reader {
             self.status = status(&item.entry).to_owned();
             self.other_type.clear();
             self.adding = None;
+            self.picker = None;
             self.error = None;
         }
         crate::markdown_view::want_heading(ui.ctx(), self.heading.take());
@@ -685,25 +772,39 @@ impl Reader {
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
-        if item.entry.kind == "world" && item.is_private() {
+        if (item.is_world_note() || item.entry.kind == "world")
+            && item.is_private()
+            && let Some(campaign) = campaign
+        {
+            file_actions(ui, campaign, &item.entry.path);
+        }
+        if let Some(change) = &self.undo
+            && change.path == item.entry.path
+        {
+            let mut undo = false;
             ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    Type::Small
-                        .rich(
-                            ui,
-                            format!("Write this note in Obsidian. File: {}", item.entry.path),
-                        )
-                        .color(colors().muted),
-                );
-                if design::link(ui, "Show file").clicked()
-                    && let Some(campaign) = campaign
-                {
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
-                        "file://{}",
-                        campaign.path.join(&item.entry.path).display()
-                    )));
-                }
+                ui.label(Type::Small.rich(ui, &change.word).color(colors().muted));
+                undo = Action::quiet("Undo")
+                    .name("Undo World change")
+                    .show(ui)
+                    .clicked();
             });
+            if undo && let Some(campaign) = campaign {
+                match change.undo(campaign) {
+                    Ok(_) => {
+                        self.undo = None;
+                        return Some(Go::Reload(item.entry.id));
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
+        }
+        for warning in index
+            .errors
+            .iter()
+            .filter(|error| error.starts_with(&format!("{}:", item.entry.path)))
+        {
+            design::message(ui, Tone::Warning, warning);
         }
         if item.entry.kind == "world" {
             go = self.entry_controls(ui, item, index, campaign);
@@ -787,6 +888,162 @@ impl Reader {
         }
     }
 
+    fn change(&mut self, campaign: &Campaign, item: &Item, key: &str, value: Value) -> Option<Go> {
+        let result = (|| {
+            let before = fs::read_to_string(note_path(&campaign.path, &item.entry.path)?)
+                .map_err(|e| e.to_string())?;
+            let after = fields::patch(&before, key, value)?;
+            write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
+            Ok::<_, String>(Change {
+                path: item.entry.path.clone(),
+                before,
+                after,
+                word: if key == "in" {
+                    "Place changed."
+                } else {
+                    "Stat block changed."
+                }
+                .into(),
+            })
+        })();
+        match result {
+            Ok(change) => {
+                self.undo = Some(change);
+                self.picker = None;
+                Some(Go::Reload(item.entry.id))
+            }
+            Err(error) => {
+                self.error = Some(error);
+                None
+            }
+        }
+    }
+
+    fn relationships(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: &Campaign,
+    ) -> Option<Go> {
+        let mut go = None;
+        for (key, label) in [("creature", "Stat block"), ("in", "In")] {
+            if key == "creature" && world_type(&item.entry) != "npc" {
+                continue;
+            }
+            let target = if key == "in" {
+                index.place_of(item.entry.id)
+            } else {
+                creature(&item.entry).and_then(|r| index.position_of(&r))
+            };
+            ui.push_id(key, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, format!("{label}: "))
+                            .color(colors().muted),
+                    );
+                    if let Some(at) = target {
+                        if design::link(ui, &index.items[at].entry.name).clicked() {
+                            go = Some(Go::Item(at, None));
+                        }
+                    } else {
+                        ui.label(Type::Small.rich(ui, "none").color(colors().muted));
+                    }
+                    if Action::quiet("Change")
+                        .name(&format!("Change {label}"))
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.picker = Some(Picker {
+                            key,
+                            focus: true,
+                            ..Default::default()
+                        });
+                    }
+                })
+            });
+        }
+        let Some(picker) = &mut self.picker else {
+            return go;
+        };
+        let key = picker.key;
+        let label = if key == "in" {
+            "Find a location"
+        } else {
+            "Find a stat block"
+        };
+        let width = ui.available_width();
+        let response = design::search_field(ui, label, &mut picker.search, label, width);
+        if std::mem::take(&mut picker.focus) {
+            response.request_focus();
+        }
+        let matches = if key == "creature" {
+            index.creatures_matching(&picker.search, 5)
+        } else {
+            index
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(_, i)| {
+                    i.is_private()
+                        && i.entry.kind == "world"
+                        && world_type(&i.entry) == "location"
+                        && i.entry
+                            .name
+                            .to_lowercase()
+                            .contains(&picker.search.to_lowercase())
+                })
+                .map(|(at, _)| at)
+                .take(5)
+                .collect()
+        };
+        let mut chosen = None;
+        let mut cancel = false;
+        for at in matches {
+            let entry = &index.items[at].entry;
+            if design::link(ui, &entry.name).clicked() {
+                chosen = serde_yaml_ng::to_value(EntryRef::id(entry.id)).ok();
+            }
+        }
+        if key == "in" {
+            design::quiet_section(ui, "New location…", |ui| {
+                design::text_field(ui, "Location name", &mut picker.new_location, None, None);
+                let reason = picker
+                    .new_location
+                    .trim()
+                    .is_empty()
+                    .then_some("Type a name first.");
+                ui.horizontal_wrapped(|ui| {
+                    if Action::secondary("Create location here")
+                        .blocked(reason)
+                        .show(ui)
+                        .clicked()
+                    {
+                        match create_entry(campaign, &picker.new_location, "location") {
+                            Ok(id) => chosen = serde_yaml_ng::to_value(EntryRef::id(id)).ok(),
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                    design::blocked_reason(ui, reason);
+                });
+            });
+        }
+        ui.horizontal_wrapped(|ui| {
+            if Action::quiet("Clear value").show(ui).clicked() {
+                chosen = Some(Value::Null);
+            }
+            cancel = Action::quiet("Cancel").show(ui).clicked();
+        });
+        if let Some(value) = chosen {
+            return self.change(campaign, item, key, value);
+        }
+        if cancel || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            self.picker = None;
+        }
+        go
+    }
+
     fn entry_controls(
         &mut self,
         ui: &mut egui::Ui,
@@ -795,6 +1052,9 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Go> {
         let campaign = campaign.filter(|_| item.is_private())?;
+        if let Some(go) = self.relationships(ui, item, index, campaign) {
+            return Some(go);
+        }
         ui.add_space(design::XS);
         design::text_field(ui, "Status", &mut self.status, None, None);
         let wanted = self.status.trim().to_owned();
@@ -1153,5 +1413,83 @@ mod tests {
         let again = create_generated(&campaign, &npc).unwrap_err();
         assert!(again.contains("already exists"), "{again}");
         assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), text);
+    }
+    fn sample_campaign(root: &Path) -> Campaign {
+        Campaign {
+            id: Uuid::new_v4(),
+            name: "Sample".into(),
+            path: root.into(),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        }
+    }
+
+    #[test]
+    fn plain_note_creation_uses_a_stable_path_identity_and_never_replaces_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let id = create_entry(&campaign, "Watch notes", "").unwrap();
+        assert_eq!(id, note_id("Notes/Watch notes.md"));
+        let path = dir.path().join("Notes/Watch notes.md");
+        assert_eq!(fs::read_to_string(&path).unwrap(), "# Watch notes\n");
+        assert!(create_entry(&campaign, "Watch notes", "").is_err());
+        assert_eq!(
+            scan(dir.path(), &dir.path().join("Sessions")).notes.len(),
+            1
+        );
+    }
+
+    #[test]
+    fn undo_restores_exact_bytes_and_refuses_a_later_disk_edit() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        create_entry(&campaign, "Rook", "npc").unwrap();
+        let path = "NPCs/Rook.md";
+        let before = fs::read_to_string(dir.path().join(path)).unwrap();
+        let after = fields::patch(&before, "in", "[[Ashfall Keep]]".into()).unwrap();
+        write_note(dir.path(), path, Some(&before), &after).unwrap();
+        let change = Change {
+            path: path.into(),
+            before: before.clone(),
+            after: after.clone(),
+            word: "Place changed.".into(),
+        };
+        change.undo(&campaign).unwrap();
+        assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), before);
+        let external = format!("{after}\nWords from Obsidian.\n");
+        fs::write(dir.path().join(path), &external).unwrap();
+        assert!(
+            change
+                .undo(&campaign)
+                .unwrap_err()
+                .contains("changed on disk")
+        );
+        assert_eq!(fs::read_to_string(dir.path().join(path)).unwrap(), external);
+    }
+
+    #[test]
+    fn obsidian_paths_encode_query_characters_spaces_and_unicode() {
+        assert_eq!(
+            obsidian_url(Path::new("/vault/A & B/#é?.md")),
+            "obsidian://open?path=/vault/A%20%26%20B/%23%C3%A9%3F.md"
+        );
+    }
+
+    #[test]
+    fn making_an_npc_links_its_creature_and_keeps_that_creatures_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let mut entry = note_entry("Creatures/Varra.md", "Varra", "A captain.".into());
+        entry.kind = "creature".into();
+        let id = make_npc_note(&campaign, &entry).unwrap();
+        let text = fs::read_to_string(dir.path().join("NPCs/Varra.md")).unwrap();
+        let npc = Entry::parse("NPCs/Varra.md", &text).unwrap();
+        assert_eq!(npc.id, id);
+        assert_eq!(creature(&npc), Some(Reference::Id(entry.id)));
+        assert!(make_npc_note(&campaign, &entry).is_err());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("NPCs/Varra.md")).unwrap(),
+            text
+        );
     }
 }
