@@ -30,6 +30,8 @@ pub struct UserData {
     pub campaigns: Vec<Campaign>,
     #[serde(default)]
     pub modules: Vec<Module>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unregistered_modules: Vec<Module>,
 }
 
 impl Default for UserData {
@@ -39,6 +41,7 @@ impl Default for UserData {
             active_campaign_id: None,
             campaigns: Vec::new(),
             modules: Vec::new(),
+            unregistered_modules: Vec::new(),
         }
     }
 }
@@ -173,6 +176,7 @@ fn decode(bytes: &[u8]) -> Result<UserData, String> {
             },
             campaigns,
             modules: Vec::new(),
+            unregistered_modules: Vec::new(),
         })
     } else {
         serde_json::from_value(value)

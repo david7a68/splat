@@ -53,8 +53,13 @@ fn damaged_frontmatter_with_splat_like_keys_is_reported() {
     let temp = tempfile::tempdir().unwrap();
     for (path, text) in [
         ("No fence.md", "splat_id: lost\nsplat_name: Wolf\n---\nBody"),
-        ("No prefix.md", "---\nschema: 1\nid: lost\nkind: creature\nname: Wolf\n---\nBody"),
-    ] { std::fs::write(temp.path().join(path), text).unwrap(); }
+        (
+            "No prefix.md",
+            "---\nschema: 1\nid: lost\nkind: creature\nname: Wolf\n---\nBody",
+        ),
+    ] {
+        std::fs::write(temp.path().join(path), text).unwrap();
+    }
     let (entries, errors) = read_directory(temp.path()).unwrap();
     assert!(entries.is_empty());
     assert_eq!(errors.len(), 2);

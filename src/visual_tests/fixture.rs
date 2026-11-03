@@ -149,6 +149,7 @@ fn seed_campaigns(
         active_campaign_id: Some(active.id),
         campaigns: vec![active, quiet, unlinked],
         modules: vec![module],
+        unregistered_modules: Vec::new(),
     };
     let mut store = Store::at(settings.to_path_buf());
     store.load()?;

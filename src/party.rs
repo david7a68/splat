@@ -1414,7 +1414,7 @@ fn tiles(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
 fn metric(ui: &mut egui::Ui, label: &str, value: impl ToString) {
     ui.allocate_ui(egui::vec2(TILE_WIDTH, 44.0), |ui| {
         ui.set_min_height(design::XXL + design::M);
-        ui.set_width(TILE_WIDTH - 4.0);
+        ui.set_width(TILE_WIDTH);
         design::stat_tile(ui, label, &value.to_string());
     });
 }
@@ -1654,9 +1654,12 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         proficiencies(ui);
         defenses(ui);
     } else {
-        ui.columns(2, |cols| {
-            proficiencies(&mut cols[0]);
-            defenses(&mut cols[1]);
+        sheet_columns(ui, 2, |ui, column| {
+            if column == 0 {
+                proficiencies(ui);
+            } else {
+                defenses(ui);
+            }
         });
     }
 }

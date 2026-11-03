@@ -644,6 +644,8 @@ impl Splat {
             if items.len() != background {
                 self.page = items[0].1;
             }
+            ctx.data_mut(|data| data.insert_temp(egui::Id::new("resume_draft_focus"), self.page));
+            ctx.request_repaint();
         }
         if save_close && self.library.save_for_close() {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1639,6 +1641,13 @@ impl Splat {
             }
             self.campaign_content.package_restored(result);
         }
+        if let Some(id) = self.campaign_content.forget_package.take() {
+            let result = self.campaigns.unregister_module(id);
+            if result.is_ok() {
+                self.lookup.refresh();
+            }
+            self.campaign_content.package_restored(result);
+        }
         if let Some(words) = markdown_view::take_lookup_link(ctx) {
             self.notes_give_way();
             self.lookup.open_words(&words);
@@ -1911,6 +1920,16 @@ impl eframe::App for Splat {
             {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 self.confirm_close = true;
+            }
+        }
+        if let Some(page) =
+            ctx.data_mut(|data| data.remove_temp::<Page>(egui::Id::new("resume_draft_focus")))
+        {
+            match page {
+                Page::Library => self.library.refocus_draft(),
+                Page::Sessions => self.sessions.return_focus_to_note(),
+                Page::Encounters => self.encounters.refocus_draft(),
+                _ => {}
             }
         }
         if self.confirm_close {

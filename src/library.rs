@@ -39,6 +39,13 @@ enum Owner {
 }
 
 impl Owner {
+    fn folder(&self) -> String {
+        self.root()
+            .and_then(Path::file_name)
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    }
     fn id(&self) -> Option<Uuid> {
         match self {
             Self::Builtin => None,
@@ -170,7 +177,35 @@ struct Note {
     owner: Owner,
 }
 impl Note {
+    fn is_manifest(&self) -> bool {
+        matches!(self.owner, Owner::Package(_))
+            && (self
+                .entry
+                .as_ref()
+                .is_some_and(|entry| entry.kind == "package")
+                || matches!(self.path.as_str(), "Package.md" | "Module.md")
+                || self.text.lines().any(|line| line == "splat_kind: package"))
+    }
+
+    fn about_label(&self) -> String {
+        let name = match &self.owner {
+            Owner::Package(module) => &module.name,
+            _ => self.name(),
+        };
+        format!(
+            "{}About {name}",
+            if self.error.is_some() {
+                format!("{} ", icons::WARN)
+            } else {
+                String::new()
+            }
+        )
+    }
+
     fn unreadable_kind(&self) -> Section {
+        if self.is_manifest() {
+            return Section::PackageDetails;
+        }
         let declared = self
             .text
             .lines()
@@ -221,6 +256,57 @@ struct Loaded {
     duplicate_ids: std::sync::OnceLock<std::collections::HashSet<Uuid>>,
 }
 impl Loaded {
+    fn can_rename_links(&self, selected: usize, old: &str, new: &str) -> bool {
+        !self.notes.iter().enumerate().any(|(at, note)| {
+            at != selected
+                && note.entry.is_some()
+                && [old, new].iter().any(|name| {
+                    note.name().eq_ignore_ascii_case(name)
+                        || Path::new(&note.path)
+                            .file_stem()
+                            .and_then(|stem| stem.to_str())
+                            .is_some_and(|stem| stem.eq_ignore_ascii_case(name))
+                })
+        })
+    }
+    fn duplicate_folder_paths(&self, owner: &Owner) -> Option<Vec<String>> {
+        let root = owner.root()?;
+        let mut other_root = None;
+        let mut paths = Vec::new();
+        for (at, note) in self.notes.iter().enumerate() {
+            if note
+                .entry
+                .as_ref()
+                .is_none_or(|entry| entry.kind == "package")
+            {
+                continue;
+            }
+            let duplicates = self.duplicates(at);
+            if duplicates.is_empty() {
+                continue;
+            }
+            if duplicates.len() != 1 {
+                return None;
+            }
+            let pair = &self.notes[duplicates[0]];
+            let (here, there) = (note.owner.root()?, pair.owner.root()?);
+            let counterpart = if here == root {
+                there
+            } else if there == root {
+                here
+            } else {
+                return None;
+            };
+            if counterpart == root || other_root.is_some_and(|known| known != counterpart) {
+                return None;
+            }
+            other_root = Some(counterpart);
+            if here == root {
+                paths.push(note.path.clone());
+            }
+        }
+        (paths.len() > 1).then_some(paths)
+    }
     fn duplicate_ids(&self) -> &std::collections::HashSet<Uuid> {
         self.duplicate_ids.get_or_init(|| {
             self.notes
@@ -262,7 +348,11 @@ impl Loaded {
             .iter()
             .enumerate()
             .filter_map(|(i, note)| {
-                (i != index && note.entry.as_ref().is_some_and(|entry| entry.id == target.id || (target.key.is_some() && target.key == entry.key))).then_some(i)
+                (i != index
+                    && note.entry.as_ref().is_some_and(|entry| {
+                        entry.id == target.id || (target.key.is_some() && target.key == entry.key)
+                    }))
+                .then_some(i)
             })
             .collect()
     }
@@ -426,7 +516,11 @@ impl Loaded {
                 } else {
                     line
                 };
-                presentation::list_subtitle(&line, source)
+                let mut subtitle = presentation::list_subtitle(&line, source);
+                if let Owner::Package(module) = &note.owner
+                    && self.owners.iter().any(|owner| matches!(owner, Owner::Package(other) if other.id != module.id && other.name == module.name))
+                { subtitle.push_str(&format!(" · {}/", note.owner.folder())); }
+                subtitle
             })
             .collect();
         // Imported sections share a broad parent. Use the closest named subsection
@@ -540,7 +634,16 @@ fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> e
         &if selected { Type::Strong } else { Type::Body }.font(ui),
         width,
     );
-    let detail = design::words_that_fit(ui, subtitle, &Type::Small.font(ui), width);
+    let visible_subtitle = subtitle
+        .rsplit_once(" · ")
+        .filter(|(_, folder)| folder.ends_with('/'))
+        .map(|(detail, folder)| format!("{folder} · {detail}"));
+    let detail = design::words_that_fit(
+        ui,
+        visible_subtitle.as_deref().unwrap_or(subtitle),
+        &Type::Small.font(ui),
+        width,
+    );
     let response = design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, &title, &detail);
     design::named(ui, &response, &format!("{name} · {subtitle}"));
     response
@@ -607,7 +710,7 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
         fields.insert(
             "splat_stats".into(),
             serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
-                "max_hp: {value: 1}\narmor_class: {value: 10}\ninitiative: {value: 0}\nspeed: {value: 30, unit: ft}\nstrength: {value: 10}\ndexterity: {value: 10}\nconstitution: {value: 10}\nintelligence: {value: 10}\nwisdom: {value: 10}\ncharisma: {value: 10}\n",
+                "initiative: {value: 0}\nspeed: {value: 30, unit: ft}\nstrength: {value: 10}\ndexterity: {value: 10}\nconstitution: {value: 10}\nintelligence: {value: 10}\nwisdom: {value: 10}\ncharisma: {value: 10}\n",
             )
             .expect("creature fields"),
         );
@@ -904,25 +1007,18 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     if let Some(module) = module {
         let path = module.path.canonicalize().map_err(|e| e.to_string())?;
         let (entries, errors) = content::read_directory(&path)?;
-        let actual = entries.iter().find(|entry| entry.kind == "package");
-        if actual.is_some() {
-            module_from_entries(path.clone(), &entries)?;
-        }
-        if actual.is_some_and(|entry| entry.id != module.id) {
-            return Err(
-                "The package at this folder has a different identity. Register it separately."
-                    .into(),
-            );
-        }
-        let missing_manifest = actual.is_none() && !path.join("Package.md").exists();
+        let manifest_path = crate::content_workspace::package_manifest_path(module);
+        let missing_manifest = !entries.iter().any(|entry| entry.kind == "package")
+            && !path.join(&manifest_path).exists();
         for entry in entries {
             let text = fs::read_to_string(note_path(&module.path, &entry.path)?)
                 .map_err(|e| e.to_string())?;
+            let mismatched = entry.kind == "package" && entry.id != module.id;
             notes.push(Note {
                 path: entry.path.clone(),
                 text,
-                entry: Some(entry),
-                error: None,
+                entry: (!mismatched).then_some(entry),
+                error: mismatched.then(|| "Package details have another identity. Replace with the registered details, or restore the original id.".into()),
                 owner: Owner::Package(module.clone()),
             });
         }
@@ -936,8 +1032,8 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
             });
         }
         for error in errors {
-            let text = fs::read_to_string(note_path(&module.path, &error.path)?)
-                .map_err(|e| e.to_string())?;
+            let text =
+                fs::read_to_string(note_path(&module.path, &error.path)?).unwrap_or_default();
             notes.push(Note {
                 path: error.path,
                 text,
@@ -970,7 +1066,12 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
 /// The whole catalogue: built-in, every package, and the active campaign's own entries.
 fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, String> {
     let mut all = load(None)?;
-    all.owners = modules.iter().cloned().map(Owner::Package).chain(campaign.cloned().map(Owner::Campaign)).collect();
+    all.owners = modules
+        .iter()
+        .cloned()
+        .map(Owner::Package)
+        .chain(campaign.cloned().map(Owner::Campaign))
+        .collect();
     for module in modules {
         if let Err(error) = splat::content::art::ArtIndex::default().add_package(&module.path) {
             all.load_errors.push(format!("{}: {error}", module.name));
@@ -1001,7 +1102,7 @@ fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Result<Loaded, S
                 }
                 for error in errors {
                     let text = fs::read_to_string(note_path(&campaign.path, &error.path)?)
-                        .map_err(|e| e.to_string())?;
+                        .unwrap_or_default();
                     all.notes.push(Note {
                         path: error.path,
                         text,
@@ -1109,8 +1210,15 @@ pub struct Library {
     discarded: Option<(Option<Uuid>, String, String)>,
     discarded_note: Option<Note>,
     identity_undo: Option<IdentityUndo>,
+    identities_undo: Option<crate::content_workspace::ContentEdits>,
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
     package_copy: Option<crate::content_workspace::PackageCopy>,
+    copy_not_used: bool,
+    copy_campaign_before: Option<(Campaign, String, String, String)>,
+    unregistered: Option<Module>,
+    copied_rosters: Option<crate::content_workspace::ContentEdits>,
+    renamed_links: Option<(String, String)>,
+    link_edits: Option<crate::content_workspace::ContentEdits>,
     copied_package: Option<Module>,
     copy_name: String,
     copy_name_open: bool,
@@ -1153,6 +1261,7 @@ pub struct Library {
     focus_new_name: bool,
     focus_hp: bool,
     focus_repair: bool,
+    focus_markdown: bool,
     new_name: String,
     new_kind: String,
     new_folder: String,
@@ -1256,6 +1365,9 @@ struct BackStep {
     search: String,
 }
 impl Library {
+    pub fn refocus_draft(&mut self) {
+        self.focus_markdown = true;
+    }
     fn register_copy(&mut self, campaigns: &mut Campaigns) -> Result<(), String> {
         let source = self
             .copied_package
@@ -1268,10 +1380,39 @@ impl Library {
         {
             return Err("Choose a separate copied folder first.".into());
         }
+        let campaign_document = if !self.copy_not_used {
+            campaigns
+                .active_campaign()
+                .map(|campaign| CampaignDocument::load(&campaign))
+                .transpose()?
+        } else {
+            None
+        };
         let copy = crate::content_workspace::PackageCopy::write(&source.path, &self.copy_name)?;
         if let Err(error) = campaigns.register_module(copy.module.clone()) {
             copy.undo()?;
             return Err(error);
+        }
+        if let Some(mut document) = campaign_document {
+            let before = document.text.clone();
+            document
+                .selections
+                .push(crate::content_workspace::PackageSelection {
+                    name: Some(copy.module.name.clone()),
+                    package: crate::content_workspace::EntryRef::id(copy.module.id),
+                    selection: crate::content_workspace::Selection::All,
+                });
+            if let Err(error) = document.save() {
+                let unregister = campaigns.unregister_module(copy.module.id);
+                let restore = copy.undo();
+                return Err(format!(
+                    "Could not use the copy: {error}. {} {}",
+                    unregister.err().unwrap_or_default(),
+                    restore.err().unwrap_or_default()
+                ));
+            }
+            self.copy_campaign_before =
+                Some((document.campaign, document.path, before, document.text));
         }
         self.package_copy = Some(copy);
         self.copied_package = None;
@@ -1280,6 +1421,42 @@ impl Library {
         self.stale = true;
         self.scope = Scope::All;
         self.content_changed = Some(source.path.clone());
+        Ok(())
+    }
+
+    fn undo_package_registration(&mut self, campaigns: &mut Campaigns) -> Result<(), String> {
+        let copy = self
+            .package_copy
+            .as_ref()
+            .ok_or("No package registration to undo.")?;
+        let mut extra: Vec<_> = self
+            .copy_campaign_before
+            .as_ref()
+            .map(|(campaign, path, before, after)| {
+                (
+                    campaign.path.clone(),
+                    path.clone(),
+                    after.clone(),
+                    before.clone(),
+                )
+            })
+            .into_iter()
+            .collect();
+        if let Some(edits) = &self.copied_rosters {
+            extra.extend(edits.inverse_files());
+        }
+        let edits = copy.undo_with(extra)?;
+        if let Err(error) = campaigns.unregister_module(copy.module.id) {
+            return Err(match edits.undo() {
+                Ok(()) => error,
+                Err(restore) => format!("{error}. Could not restore the copy: {restore}"),
+            });
+        }
+        self.content_changed = Some(copy.module.path.clone());
+        self.package_copy = None;
+        self.copy_campaign_before = None;
+        self.copied_rosters = None;
+        self.stale = true;
         Ok(())
     }
 
@@ -1612,11 +1789,15 @@ impl Library {
                                 if let Some(name) = l
                                     .notes
                                     .iter()
-                                    .find(|n| {
-                                        n.owner.id() == Some(module.id)
-                                            && n.entry.as_ref().is_some_and(|e| e.kind == "package")
+                                    .filter(|n| {
+                                        n.owner.id() == Some(module.id) && n.error.is_none()
                                     })
-                                    .map(|n| n.name().to_owned())
+                                    .find_map(|n| {
+                                        n.entry
+                                            .as_ref()
+                                            .filter(|entry| entry.kind == "package")
+                                            .map(|entry| entry.name.clone())
+                                    })
                                     && name != module.name
                                 {
                                     let _ = campaigns.rename_module(module.id, name);
@@ -1743,8 +1924,8 @@ impl Library {
                             .map(|message| message.split(": ").next().unwrap_or(message))
                             .collect::<std::collections::HashSet<_>>()
                             .len(),
-                        "entry needs fixing",
-                        "entries need fixing",
+                        "file needs fixing",
+                        "files need fixing",
                     );
                     let response = design::status_link(
                         ui,
@@ -1824,22 +2005,131 @@ impl Library {
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
         }
+        if let Some((old, new)) = self.renamed_links.clone()
+            && let Some(loaded) = &self.loaded
+        {
+            let mut files = Vec::new();
+            let mut count = 0;
+            for note in &loaded.notes {
+                if let Some(root) = note.owner.root() {
+                    let (after, changed) = crate::world::rename_note_links(&note.text, &old, &new);
+                    if changed > 0 {
+                        count += changed;
+                        files.push((
+                            root.to_path_buf(),
+                            note.path.clone(),
+                            note.text.clone(),
+                            after,
+                        ));
+                    }
+                }
+            }
+            if count > 0
+                && design::message_with_action(
+                    ui,
+                    Tone::Info,
+                    &format!("Links still say {old}."),
+                    &format!("Update {}", design::count(count, "link", "links")),
+                )
+            {
+                match crate::content_workspace::ContentEdits::write(files) {
+                    Ok(edits) => {
+                        self.link_edits = Some(edits);
+                        self.renamed_links = None;
+                        self.stale = true;
+                        self.content_changed =
+                            campaigns.active_campaign().map(|campaign| campaign.path);
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
+        }
+        if let Some(edits) = &self.link_edits
+            && Action::quiet("Undo link update")
+                .icon(icons::UNDO)
+                .show(ui)
+                .clicked()
+        {
+            match edits.undo() {
+                Ok(()) => {
+                    self.link_edits = None;
+                    self.stale = true;
+                    self.content_changed =
+                        campaigns.active_campaign().map(|campaign| campaign.path);
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
+        if let Some(module) = self.unregistered.clone() {
+            let message = format!(
+                "{} is unregistered. Its files stay in {}.",
+                module.name,
+                module.path.display()
+            );
+            if design::message_with_action(ui, Tone::Info, &message, "Undo unregister") {
+                let result = local_module(&module.path).and_then(|found| {
+                    if found.id != module.id {
+                        return Err("That folder now holds a different package.".into());
+                    }
+                    campaigns.restore_module(module)
+                });
+                match result {
+                    Ok(()) => {
+                        self.unregistered = None;
+                        self.stale = true;
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
+        }
         if self.package_copy.is_some()
             && design::message_with_action(
                 ui,
                 Tone::Success,
-                "The copy is registered as a new package.",
+                &format!(
+                    "{} is registered · {}",
+                    self.package_copy.as_ref().unwrap().module.name,
+                    if self.copy_campaign_before.is_some() {
+                        "Used here"
+                    } else {
+                        "Not used here"
+                    }
+                ),
                 "Undo package registration",
             )
+            && let Err(error) = self.undo_package_registration(campaigns)
         {
-            let copy = self.package_copy.as_ref().unwrap();
-            match copy
-                .undo()
-                .and_then(|()| campaigns.unregister_module(copy.module.id))
-            {
+            self.error = Some(error);
+        }
+
+        if let Some(copy) = &self.package_copy
+            && let Some(campaign) = campaigns.active_campaign()
+            && self.copied_rosters.is_none()
+            && Action::quiet("Use the copy's entries")
+                .blocked(self.draft_reason())
+                .show(ui)
+                .clicked()
+        {
+            match copy.use_in_rosters(&campaign) {
+                Ok(edits) => {
+                    self.copied_rosters = Some(edits);
+                    self.content_changed = Some(campaign.path);
+                    self.stale = true;
+                }
+                Err(error) => self.error = Some(error),
+            }
+        }
+        if let Some(edits) = &self.copied_rosters
+            && Action::quiet("Undo source change")
+                .icon(icons::UNDO)
+                .show(ui)
+                .clicked()
+        {
+            match edits.undo() {
                 Ok(()) => {
-                    self.content_changed = Some(copy.module.path.clone());
-                    self.package_copy = None;
+                    self.copied_rosters = None;
+                    self.content_changed =
+                        campaigns.active_campaign().map(|campaign| campaign.path);
                     self.stale = true;
                 }
                 Err(error) => self.error = Some(error),
@@ -1985,12 +2275,12 @@ impl Library {
                         &mut self.search,
                     );
                     if let Scope::Package(package) = scope
-                        && let Some((index, note)) =
-                            loaded.notes.iter().enumerate().find(|(_, n)| {
-                                n.owner.id() == Some(package)
-                                    && n.entry.as_ref().is_some_and(|e| e.kind == "package")
-                            })
-                        && design::link(ui, &format!("About {}", note.name())).clicked()
+                        && let Some((index, note)) = loaded
+                            .notes
+                            .iter()
+                            .enumerate()
+                            .find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                        && design::link(ui, &note.about_label()).clicked()
                         && !dirty
                     {
                         self.selected = Some(index);
@@ -2202,8 +2492,8 @@ impl Library {
                         design::named(ui, &combo.response, "Section");
                     });
                     if let Scope::Package(package) = scope
-                        && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.entry.as_ref().is_some_and(|e| e.kind == "package"))
-                        && design::link(ui, &format!("About {}", note.name())).clicked() && !dirty
+                        && let Some((index, note)) = loaded.notes.iter().enumerate().find(|(_, n)| n.owner.id() == Some(package) && n.is_manifest())
+                        && design::link(ui, &note.about_label()).clicked() && !dirty
                     { self.selected = Some(index); self.draft = note.text.clone(); self.source = false; }
                 }
                 ui.horizontal(|ui| {
@@ -2530,6 +2820,7 @@ impl Library {
             self.confirm_unregister = None;
             match campaigns.unregister_module(module.id) {
                 Ok(()) => {
+                    self.unregistered = Some(module);
                     self.scope = Scope::default();
                     self.stale = true;
                 }
@@ -2659,176 +2950,205 @@ impl Library {
                                 None,
                                 None,
                             );
-                        }
-                        if Action::quiet("Register as a new package")
-                            .blocked(locked)
-                            .show(ui)
-                            .clicked()
-                        {
-                            if self.copy_name_open {
-                                if let Err(error) = self.register_copy(campaigns) {
-                                    self.error = Some(error);
-                                }
-                            } else {
-                                self.copy_name_open = true;
+                            if campaigns.active_campaign().is_some() {
+                                use_checkbox(
+                                    ui,
+                                    &mut self.copy_not_used,
+                                    "Uses every entry in this package, including future entries.",
+                                );
                             }
                         }
+                        let label = if self.copy_name_open && self.copy_name.trim().is_empty() {
+                            "Register package".into()
+                        } else if self.copy_name_open {
+                            format!("Register {}", self.copy_name.trim())
+                        } else {
+                            "Register as a new package".into()
+                        };
+                        let reason = locked
+                            .or((self.copy_name_open && self.copy_name.trim().is_empty())
+                                .then_some("Type a name first."));
+                        ui.horizontal_wrapped(|ui| {
+                            if Action::quiet(&label).blocked(reason).show(ui).clicked() {
+                                if self.copy_name_open {
+                                    if let Err(error) = self.register_copy(campaigns) {
+                                        self.error = Some(error);
+                                    }
+                                } else {
+                                    self.copy_not_used = campaigns
+                                        .active_campaign()
+                                        .and_then(|campaign| CampaignDocument::load(&campaign).ok())
+                                        .is_some_and(|document| {
+                                            document.selections.iter().any(|selection| {
+                                                selection.package.id == Some(copy.id)
+                                            })
+                                        });
+                                    self.copy_name_open = true;
+                                }
+                            }
+                            design::blocked_reason(ui, reason);
+                        });
                     }
                 }
 
-                form_heading(ui, "New package");
-                let response = design::text_field(ui, "Name", &mut self.name, None, None);
-                if std::mem::take(&mut self.focus_package_name) {
-                    response.request_focus();
-                }
-                let parent = self.package_path.get_or_insert_with(|| {
-                    campaigns
-                        .modules()
-                        .last()
-                        .and_then(|module| module.path.parent())
-                        .map(Path::to_path_buf)
-                        .or_else(|| {
-                            campaigns
-                                .package_folder("new_package")
-                                .ok()
-                                .and_then(|p| p.parent().map(Path::to_path_buf))
-                        })
-                        .unwrap_or_default()
-                });
-                ui.horizontal_top(|ui| {
-                    let width = ui.available_width()
-                        - Action::secondary("Browse…").natural_width(ui)
-                        - ui.spacing().item_spacing.x;
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            let mut path = parent.display().to_string();
-                            if design::text_field(ui, "Folder", &mut path, None, None).changed() {
-                                *parent = PathBuf::from(path);
-                                self.package_folder_changed = true;
-                            }
-                        },
-                    );
-                    ui.vertical(|ui| {
-                        ui.add_space(design::L + design::XS);
-                        if Action::secondary("Browse…")
-                            .name("Choose new package folder")
-                            .show(ui)
-                            .clicked()
-                            && let Some(chosen) = crate::hermetic::pick_folder()
-                        {
-                            *parent = chosen;
-                            self.package_folder_changed = true;
-                        }
-                    });
-                });
-                let namespace: String = self
-                    .name
-                    .trim()
-                    .to_lowercase()
-                    .chars()
-                    .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                    .collect();
-                let root = self
-                    .package_path
-                    .as_ref()
-                    .map(|parent| Ok(parent.join(&namespace)))
-                    .unwrap_or_else(|| {
+                if !self.copy_name_open {
+                    form_heading(ui, "New package");
+                    let response = design::text_field(ui, "Name", &mut self.name, None, None);
+                    if std::mem::take(&mut self.focus_package_name) {
+                        response.request_focus();
+                    }
+                    let parent = self.package_path.get_or_insert_with(|| {
                         campaigns
                             .modules()
                             .last()
                             .and_then(|module| module.path.parent())
-                            .map(|parent| Ok(parent.join(&namespace)))
-                            .unwrap_or_else(|| campaigns.package_folder(&namespace))
-                    });
-                if let Ok(root) = &root
-                    && !self.name.trim().is_empty()
-                {
-                    ui.add(
-                        egui::Label::new(
-                            Type::Small
-                                .rich(ui, format!("Will create {}", root.display()))
-                                .color(c.muted),
-                        )
-                        .wrap(),
-                    );
-                }
-                if campaigns.active_campaign().is_some() {
-                    use_checkbox(
-                        ui,
-                        &mut self.package_not_used,
-                        "Uses every entry in this package, including future entries.",
-                    );
-                }
-                let reason = locked.or(self.name.trim().is_empty().then_some("Type a name first."));
-                ui.horizontal(|ui| {
-                    if (if self.run_open {
-                        Action::secondary("Create package")
-                    } else {
-                        Action::primary("Create package")
-                    })
-                    .blocked(reason)
-                    .show(ui)
-                    .clicked()
-                    {
-                        let namespace: String = self
-                            .name
-                            .trim()
-                            .to_lowercase()
-                            .chars()
-                            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                            .collect();
-                        match root
-                            .and_then(|root| {
-                                fs::create_dir_all(
-                                    root.parent().ok_or("No package folder is available.")?,
-                                )
-                                .map_err(|e| e.to_string())?;
-                                create_module(&root, &self.name, &namespace)
+                            .map(Path::to_path_buf)
+                            .or_else(|| {
+                                campaigns
+                                    .package_folder("new_package")
+                                    .ok()
+                                    .and_then(|p| p.parent().map(Path::to_path_buf))
                             })
-                            .and_then(|module| {
-                                campaigns.register_module(module.clone())?;
-                                if !self.package_not_used
-                                    && let Some(campaign) = campaigns.active_campaign()
+                            .unwrap_or_default()
+                    });
+                    ui.horizontal_top(|ui| {
+                        let width = ui.available_width()
+                            - Action::secondary("Browse…").natural_width(ui)
+                            - ui.spacing().item_spacing.x;
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(width, 0.0),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                let mut path = parent.display().to_string();
+                                if design::text_field(ui, "Folder", &mut path, None, None).changed()
                                 {
-                                    crate::content_workspace::use_in_campaign(
-                                        &campaign,
-                                        module.id,
-                                        &module.name,
-                                        None,
-                                    )?;
+                                    *parent = PathBuf::from(path);
+                                    self.package_folder_changed = true;
                                 }
-                                Ok(module)
-                            }) {
-                            Ok(module) => {
-                                self.content_changed = campaigns.active_campaign().map(|c| c.path);
-                                self.scope = Scope::Package(module.id);
-                                self.form = false;
-                                self.new_form = true;
-                                self.new_place = None;
-                                self.new_name.clear();
-                                self.new_folder = kind_folder(&self.new_kind).into();
-                                self.new_not_used = false;
-                                self.focus_new_name = true;
-                                self.stale = true;
+                            },
+                        );
+                        ui.vertical(|ui| {
+                            ui.add_space(design::L + design::XS);
+                            if Action::secondary("Browse…")
+                                .name("Choose new package folder")
+                                .show(ui)
+                                .clicked()
+                                && let Some(chosen) = crate::hermetic::pick_folder()
+                            {
+                                *parent = chosen;
+                                self.package_folder_changed = true;
                             }
-                            Err(error) => self.error = Some(error),
-                        }
-                    }
-                    design::blocked_reason(ui, reason);
-                    ui.add_space(design::L);
-                    if (!self.name.is_empty() || self.package_folder_changed)
-                        && Action::quiet("Clear")
-                            .name("Clear the new package fields")
-                            .show(ui)
-                            .clicked()
+                        });
+                    });
+                    let namespace: String = self
+                        .name
+                        .trim()
+                        .to_lowercase()
+                        .chars()
+                        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                        .collect();
+                    let root = self
+                        .package_path
+                        .as_ref()
+                        .map(|parent| Ok(parent.join(&namespace)))
+                        .unwrap_or_else(|| {
+                            campaigns
+                                .modules()
+                                .last()
+                                .and_then(|module| module.path.parent())
+                                .map(|parent| Ok(parent.join(&namespace)))
+                                .unwrap_or_else(|| campaigns.package_folder(&namespace))
+                        });
+                    if let Ok(root) = &root
+                        && !self.name.trim().is_empty()
                     {
-                        self.name.clear();
-                        self.package_path = None;
-                        self.package_folder_changed = false;
+                        ui.add(
+                            egui::Label::new(
+                                Type::Small
+                                    .rich(ui, format!("Will create {}", root.display()))
+                                    .color(c.muted),
+                            )
+                            .wrap(),
+                        );
                     }
-                });
+                    if campaigns.active_campaign().is_some() {
+                        use_checkbox(
+                            ui,
+                            &mut self.package_not_used,
+                            "Uses every entry in this package, including future entries.",
+                        );
+                    }
+                    let reason =
+                        locked.or(self.name.trim().is_empty().then_some("Type a name first."));
+                    ui.horizontal(|ui| {
+                        if (if self.run_open {
+                            Action::secondary("Create package")
+                        } else {
+                            Action::primary("Create package")
+                        })
+                        .blocked(reason)
+                        .show(ui)
+                        .clicked()
+                        {
+                            let namespace: String = self
+                                .name
+                                .trim()
+                                .to_lowercase()
+                                .chars()
+                                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                                .collect();
+                            match root
+                                .and_then(|root| {
+                                    fs::create_dir_all(
+                                        root.parent().ok_or("No package folder is available.")?,
+                                    )
+                                    .map_err(|e| e.to_string())?;
+                                    create_module(&root, &self.name, &namespace)
+                                })
+                                .and_then(|module| {
+                                    campaigns.register_module(module.clone())?;
+                                    if !self.package_not_used
+                                        && let Some(campaign) = campaigns.active_campaign()
+                                    {
+                                        crate::content_workspace::use_in_campaign(
+                                            &campaign,
+                                            module.id,
+                                            &module.name,
+                                            None,
+                                        )?;
+                                    }
+                                    Ok(module)
+                                }) {
+                                Ok(module) => {
+                                    self.content_changed =
+                                        campaigns.active_campaign().map(|c| c.path);
+                                    self.scope = Scope::Package(module.id);
+                                    self.form = false;
+                                    self.new_form = true;
+                                    self.new_place = None;
+                                    self.new_name.clear();
+                                    self.new_folder = kind_folder(&self.new_kind).into();
+                                    self.new_not_used = false;
+                                    self.focus_new_name = true;
+                                    self.stale = true;
+                                }
+                                Err(error) => self.error = Some(error),
+                            }
+                        }
+                        design::blocked_reason(ui, reason);
+                        ui.add_space(design::L);
+                        if (!self.name.is_empty() || self.package_folder_changed)
+                            && Action::quiet("Clear")
+                                .name("Clear the new package fields")
+                                .show(ui)
+                                .clicked()
+                        {
+                            self.name.clear();
+                            self.package_path = None;
+                            self.package_folder_changed = false;
+                        }
+                    });
+                }
                 form_heading(ui, "Registered packages");
                 design::rule(ui);
                 if campaigns.modules().is_empty() {
@@ -3169,16 +3489,29 @@ impl Library {
                 .map(|id| {
                     let mut owners = vec![note.owner.clone()];
                     for owner in &self.loaded.as_ref().unwrap().owners {
-                        if !owners.contains(owner) { owners.push(owner.clone()); }
+                        if !owners.contains(owner) {
+                            owners.push(owner.clone());
+                        }
                     }
                     for other in &self.loaded.as_ref().unwrap().notes {
-                        if other.owner.root().is_some() && !owners.contains(&other.owner) { owners.push(other.owner.clone()); }
+                        if other.owner.root().is_some() && !owners.contains(&other.owner) {
+                            owners.push(other.owner.clone());
+                        }
                     }
                     let mut found = None;
                     for owner in owners {
-                        let old = if owner == note.owner { note.path.as_str() } else { "" };
+                        let old = if owner == note.owner {
+                            note.path.as_str()
+                        } else {
+                            ""
+                        };
                         if let Some((path, text)) = moved_note(owner.root().unwrap(), id, old)? {
-                            if found.is_some() { return Err("Several files have this entry's ID. Choose one in Library.".to_owned()); }
+                            if found.is_some() {
+                                return Err(
+                                    "Several files have this entry's ID. Choose one in Library."
+                                        .to_owned(),
+                                );
+                            }
                             found = Some((owner, path, text));
                         }
                     }
@@ -3191,7 +3524,10 @@ impl Library {
                     note.path = path;
                     note.owner = owner;
                     if note.text != text {
-                        self.disk_change = Some(DiskChange { text: Some(text), moved_to: Some(note.path.clone()) });
+                        self.disk_change = Some(DiskChange {
+                            text: Some(text),
+                            moved_to: Some(note.path.clone()),
+                        });
                         self.error = Some(NOTE_CHANGED.into());
                         return;
                     }
@@ -3248,6 +3584,13 @@ impl Library {
         match result {
             Ok(entry) => {
                 let l = self.loaded.as_mut().unwrap();
+                if let Some(old) = &l.notes[i].entry
+                    && old.name != entry.name
+                    && entry.kind != "package"
+                    && l.can_rename_links(i, &old.name, &entry.name)
+                {
+                    self.renamed_links = Some((old.name.clone(), entry.name.clone()));
+                }
                 if entry.kind == "package"
                     && let Owner::Package(module) = &l.notes[i].owner
                 {
@@ -3309,35 +3652,11 @@ impl Library {
         let recovery = self
             .selected
             .and_then(|at| self.loaded.as_ref()?.notes.get(at))
-            .filter(|note| note.path == "Package.md" && note.error.is_some())
+            .filter(|note| note.is_manifest() && note.error.is_some())
             .and_then(|note| match &note.owner {
                 Owner::Package(module) => Some(module.clone()),
                 _ => None,
             });
-        if let Some(module) = recovery {
-            if !module.path.join("Package.md").exists() {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    crate::content_workspace::DELETED_MANIFEST,
-                );
-            }
-            if Action::quiet("Write Package.md again")
-                .blocked(self.draft_reason())
-                .show(ui)
-                .clicked()
-            {
-                match crate::content_workspace::ManifestWrite::write(&module) {
-                    Ok(write) => {
-                        self.manifest_write = Some(write);
-                        self.stale = true;
-                        self.content_changed = Some(module.path);
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-                return;
-            }
-        }
         let gone_notice = self.discarded_note.as_ref().map(|note| {
             let names = self
                 .loaded
@@ -3458,6 +3777,8 @@ impl Library {
             });
         }
         let mut new_identity = None;
+        let mut new_identities = None;
+        let mut undo_identities = false;
         let mut undo_identity = false;
         let editor_width = if conflict {
             ui.available_width()
@@ -3834,6 +4155,16 @@ impl Library {
                     .file_name()
                     .unwrap_or_default()
                     .to_string_lossy();
+                let same_filename = duplicate_indices.iter().any(|&other| {
+                    other != at
+                        && Path::new(&loaded.notes[other].path).file_name()
+                            == Path::new(&target.path).file_name()
+                });
+                let filename = if same_filename {
+                    format!("{filename} in {}/", target.owner.folder())
+                } else {
+                    filename.into_owned()
+                };
                 if Action::quiet(&format!("New identity for {filename}"))
                     .blocked(draft_reason)
                     .show(ui)
@@ -3847,6 +4178,14 @@ impl Library {
                         .file_name()
                         .unwrap_or_default()
                         .to_string_lossy();
+                    let remaining = if same_filename {
+                        format!(
+                            "{remaining} in {}/",
+                            loaded.notes[duplicate_indices[0]].owner.folder()
+                        )
+                    } else {
+                        remaining.into_owned()
+                    };
                     ui.label(
                         Type::Small
                             .rich(
@@ -3857,6 +4196,30 @@ impl Library {
                     );
                 }
             }
+            let mut shown = std::collections::HashSet::new();
+            for &at in &duplicate_indices {
+                let owner = &loaded.notes[at].owner;
+                if shown.insert(owner.id())
+                    && let Some(paths) = loaded.duplicate_folder_paths(owner)
+                    && Action::quiet(&format!(
+                        "New identity for all {} files in {}/",
+                        paths.len(),
+                        owner.folder()
+                    ))
+                    .blocked(draft_reason)
+                    .show(ui)
+                    .clicked()
+                {
+                    new_identities = Some((owner.root().unwrap().to_path_buf(), paths));
+                }
+            }
+        }
+        if self.identities_undo.is_some() {
+            undo_identities = Action::quiet("Undo folder identities")
+                .icon(icons::UNDO)
+                .blocked(draft_reason)
+                .show(ui)
+                .clicked();
         }
         if self.identity_undo.is_some() {
             undo_identity = Action::quiet("Undo new identity")
@@ -4011,6 +4374,44 @@ impl Library {
         {
             design::message(ui, Tone::Error, problem);
         }
+        if let Some(module) = recovery {
+            let path = crate::content_workspace::package_manifest_path(&module);
+            let exists = module.path.join(&path).exists();
+            if !exists {
+                design::message(
+                    ui,
+                    Tone::Warning,
+                    crate::content_workspace::DELETED_MANIFEST,
+                );
+            }
+            let label = if exists {
+                format!("Replace with a basic {path}")
+            } else {
+                format!("Write {path} again")
+            };
+            if exists {
+                ui.label(
+                    Type::Small
+                        .rich(ui, "Keeps the id, name and namespace. Drops the rest.")
+                        .color(colors().muted),
+                );
+            }
+            if Action::quiet(&label)
+                .blocked(draft_reason)
+                .show(ui)
+                .clicked()
+            {
+                match crate::content_workspace::ManifestWrite::write(&module) {
+                    Ok(write) => {
+                        self.manifest_write = Some(write);
+                        self.stale = true;
+                        self.content_changed = Some(module.path);
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+                return;
+            }
+        }
         if editable
             && !conflict
             && let Ok(entry) = &parsed
@@ -4084,9 +4485,7 @@ impl Library {
             .show(ui, |ui| {
                 if let Some(change) = &mut self.disk_change {
                     if let Some(text) = &change.text {
-                        let face = egui::TextStyle::Monospace.resolve(ui.style());
-                        let height = ui.fonts_mut(|fonts| fonts.row_height(&face));
-                        design::draft_comparison_styled(ui, &self.draft, text, (&note.path, text), face, height);
+                        design::grouped_draft_comparison(ui, &self.draft, text, (&note.path, text), true);
                     } else {
                         design::group_heading(ui, "Your draft", 0);
                         let mut draft = self.draft.as_str();
@@ -4106,6 +4505,7 @@ impl Library {
                             .interactive(editable),
                     );
                     design::named(ui, &response, "Markdown editor");
+                    if std::mem::take(&mut self.focus_markdown) { response.request_focus(); }
                     if std::mem::take(&mut self.focus_repair) && let Some(line) = repair_line {
                         let at = self.draft.lines().take(line.saturating_sub(1)).map(|line| line.chars().count() + 1).sum();
                         response.request_focus();
@@ -4114,7 +4514,7 @@ impl Library {
                         state.store(ui.ctx(), response.id);
                     }
                     if std::mem::take(&mut self.focus_hp)
-                        && let Some(at) = self.draft.find("max_hp: {value: ").map(|at| at + "max_hp: {value: ".len())
+                        && let Some(at) = self.draft.find("initiative: ").map(|at| at + "initiative: ".len())
                     {
                         response.request_focus();
                         let at = self.draft[..at].chars().count();
@@ -4338,7 +4738,19 @@ impl Library {
         if save {
             self.save_selected(file_gone);
         }
-        let identity_result = if let Some(at) = new_identity {
+        let identity_result = if let Some((root, paths)) = new_identities {
+            crate::content_workspace::ContentEdits::new_identities(&root, &paths).map(|edits| {
+                self.identities_undo = Some(edits);
+                self.stale = true;
+                self.content_changed = Some(root);
+            })
+        } else if undo_identities {
+            self.identities_undo.as_ref().unwrap().undo().map(|()| {
+                self.identities_undo = None;
+                self.stale = true;
+                self.content_changed = campaigns.active_campaign().map(|campaign| campaign.path);
+            })
+        } else if let Some(at) = new_identity {
             self.open_entry(at);
             self.give_new_identity()
         } else if undo_identity {
@@ -4387,6 +4799,74 @@ impl Library {
 mod tests {
     use super::*;
 
+    #[test]
+    fn copy_registration_and_undo_keep_campaign_choices_and_later_edits() {
+        let temp = tempfile::tempdir().unwrap();
+        let world = crate::visual_tests::fixture::World::build(
+            temp.path(),
+            &temp.path().join("cache"),
+            "copy-use",
+            crate::visual_tests::fixture::Seed::Campaign,
+        )
+        .unwrap();
+        let mut app = world.app();
+        let original = app.campaigns.modules()[0].clone();
+        let campaign = app.campaigns.active_campaign().unwrap();
+        let campaign_before = CampaignDocument::load(&campaign).unwrap().text;
+        let copied = temp.path().join("copied");
+        fs::create_dir(&copied).unwrap();
+        for entry in content::read_directory(&original.path).unwrap().0 {
+            let path = copied.join(&entry.path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::copy(original.path.join(&entry.path), path).unwrap();
+        }
+        for used in [false, true] {
+            let mut library = Library {
+                copied_package: Some(local_module(&copied).unwrap()),
+                copy_name: "Reaches".into(),
+                copy_not_used: !used,
+                ..Default::default()
+            };
+            library.register_copy(&mut app.campaigns).unwrap();
+            let id = library.package_copy.as_ref().unwrap().module.id;
+            let document = CampaignDocument::load(&campaign).unwrap();
+            assert_eq!(
+                document
+                    .selections
+                    .iter()
+                    .any(|selection| selection.package.id == Some(id)),
+                used
+            );
+            assert!(
+                document
+                    .selections
+                    .iter()
+                    .any(|selection| selection.package.id == Some(original.id))
+            );
+            let path = copied.join("Module.md");
+            let manifest = fs::read_to_string(&path).unwrap();
+            fs::write(&path, format!("{manifest}\nLater edit.\n")).unwrap();
+            assert!(
+                library
+                    .undo_package_registration(&mut app.campaigns)
+                    .is_err()
+            );
+            assert_eq!(
+                CampaignDocument::load(&campaign).unwrap().text,
+                document.text
+            );
+            fs::write(path, manifest).unwrap();
+            library
+                .undo_package_registration(&mut app.campaigns)
+                .unwrap();
+            assert_eq!(
+                CampaignDocument::load(&campaign).unwrap().text,
+                campaign_before
+            );
+            assert_eq!(app.campaigns.modules(), std::slice::from_ref(&original));
+        }
+    }
+
     fn navigation_library() -> Library {
         let notes = ["First", "Second", "Destination"]
             .into_iter()
@@ -4419,6 +4899,19 @@ mod tests {
     }
 
     #[test]
+    fn link_updates_stop_when_a_name_or_filename_is_ambiguous() {
+        let mut library = navigation_library();
+        let loaded = library.loaded.as_mut().unwrap();
+        assert!(loaded.can_rename_links(0, "First", "New name"));
+        assert!(!loaded.can_rename_links(0, "First", "Second"));
+        loaded.notes[1].path = "Elsewhere/FIRST.md".into();
+        assert!(!loaded.can_rename_links(0, "First", "New name"));
+        loaded.notes[1].path = "Second.md".into();
+        loaded.notes[1].entry.as_mut().unwrap().name = "First".into();
+        assert!(!loaded.can_rename_links(0, "First", "New name"));
+    }
+
+    #[test]
     fn saving_a_note_moved_to_another_owner_does_not_create_a_second_file() {
         let temp = tempfile::tempdir().unwrap();
         let first = create_module(&temp.path().join("first"), "First", "first").unwrap();
@@ -4426,13 +4919,25 @@ mod tests {
         let text = note_text("Wolf", "creature", None);
         fs::write(first.path.join("Wolf.md"), &text).unwrap();
         let loaded = load_all(&[first.clone(), second.clone()], None).unwrap();
-        let selected = loaded.notes.iter().position(|note| note.path == "Wolf.md").unwrap();
-        let mut library = Library { loaded: Some(loaded), selected: Some(selected), draft: format!("{text}\nMy draft.\n"), ..Default::default() };
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|note| note.path == "Wolf.md")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: format!("{text}\nMy draft.\n"),
+            ..Default::default()
+        };
         fs::rename(first.path.join("Wolf.md"), second.path.join("Moved.md")).unwrap();
         library.save_selected(false);
         assert!(library.error.is_none(), "{:?}", library.error);
         assert!(!first.path.join("Wolf.md").exists());
-        assert_eq!(fs::read_to_string(second.path.join("Moved.md")).unwrap(), library.draft);
+        assert_eq!(
+            fs::read_to_string(second.path.join("Moved.md")).unwrap(),
+            library.draft
+        );
     }
 
     #[test]
@@ -4442,14 +4947,26 @@ mod tests {
         let text = note_text("Wolf", "creature", None);
         fs::write(module.path.join("Wolf.md"), &text).unwrap();
         let loaded = load(Some(&module)).unwrap();
-        let selected = loaded.notes.iter().position(|note| note.path == "Wolf.md").unwrap();
-        let mut library = Library { loaded: Some(loaded), selected: Some(selected), draft: format!("{text}\nMy draft.\n"), ..Default::default() };
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|note| note.path == "Wolf.md")
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: format!("{text}\nMy draft.\n"),
+            ..Default::default()
+        };
         fs::rename(module.path.join("Wolf.md"), module.path.join("Moved.md")).unwrap();
         let outside = format!("{text}\nOutside edit.\n");
         fs::write(module.path.join("Moved.md"), &outside).unwrap();
         library.save_selected(false);
         assert!(library.disk_change.is_some());
-        assert_eq!(fs::read_to_string(module.path.join("Moved.md")).unwrap(), outside);
+        assert_eq!(
+            fs::read_to_string(module.path.join("Moved.md")).unwrap(),
+            outside
+        );
         assert!(library.draft.contains("My draft."));
     }
 
@@ -4460,7 +4977,11 @@ mod tests {
         let (entries, _) = content::read_directory(&module.path).unwrap();
         let path = module.path.join(&entries[0].path);
         let valid = fs::read_to_string(&path).unwrap();
-        fs::write(&path, valid.replace("splat_namespace: test", "splat_namespace: [")).unwrap();
+        fs::write(
+            &path,
+            valid.replace("splat_namespace: test", "splat_namespace: ["),
+        )
+        .unwrap();
         let repair = crate::content_workspace::ManifestWrite::write(&module).unwrap();
         assert!(repair.replaced());
         assert_eq!(content::read_directory(&module.path).unwrap().0.len(), 1);
@@ -4803,6 +5324,12 @@ mod tests {
         );
         assert!(text.contains("speed: {value: 30, unit: ft}"));
         let entry = Entry::parse("Copper Drake.md", &text).unwrap();
+        assert!(entry.fields["splat_stats"]["max_hp"].get("value").is_none());
+        assert!(
+            entry.fields["splat_stats"]["armor_class"]
+                .get("value")
+                .is_none()
+        );
         assert_eq!(
             entry.fields["splat_creature"]["type"].as_str(),
             Some("humanoid")
@@ -4941,6 +5468,27 @@ mod tests {
             eprintln!("User package run {run}: ready={elapsed:?}");
             assert!(elapsed.as_secs_f64() < 1.0, "User library must load in <1s");
         }
+    }
+
+    #[test]
+    fn duplicate_package_rows_show_the_folder_before_clipped_details() {
+        let ctx = egui::Context::default();
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.set_width(280.0);
+                let response = entry_row(
+                    ui,
+                    "Cinder Wolf",
+                    "Duplicate identity · Creature · CR 1 · Ashen Marches · ashen-marches-copy/",
+                    false,
+                );
+                assert_eq!(response.rect.height(), ENTRY_ROW_HEIGHT);
+            });
+        });
+        assert!(output.shapes.iter().any(|shape| matches!(
+            &shape.shape,
+            egui::Shape::Text(text) if text.galley.job.text.starts_with("ashen-marches-copy/")
+        )));
     }
 
     #[test]

@@ -1285,6 +1285,9 @@ const BLOCKED_BY_RUN: &str = "Close the open run first.";
 const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
 const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
 impl Encounters {
+    pub fn refocus_draft(&mut self) {
+        self.focus_name = true;
+    }
     fn refresh_validation_error(&mut self, group: bool) {
         let path = if group {
             self.group_draft.as_ref().map(GroupDraft::path)
@@ -4279,12 +4282,18 @@ mod tests {
             dndbeyond_campaign_name: None,
         };
         if campaign.path.is_dir() && !campaign.path.join("Campaign.md").exists() {
-            crate::content_workspace::CampaignDocument::new(&campaign).unwrap().save().unwrap();
+            crate::content_workspace::CampaignDocument::new(&campaign)
+                .unwrap()
+                .save()
+                .unwrap();
         }
         campaign
     }
     fn creature(root: &std::path::Path, name: &str, party: bool) -> Uuid {
-        let text = crate::library::note_text(name, "creature", None);
+        let text = crate::library::note_text(name, "creature", None).replace(
+            "splat_stats:\n",
+            "splat_stats:\n  max_hp: {value: 1}\n  armor_class: {value: 10}\n",
+        );
         let text = if party {
             patch_fields(
                 &text,

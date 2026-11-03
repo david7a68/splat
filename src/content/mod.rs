@@ -1023,14 +1023,29 @@ pub fn patch_fields(
 }
 
 pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), String> {
-    fn walk(root: &Path, current: &Path, files: &mut Vec<(String, String)>, errors: &mut Vec<Diagnostic>) -> Result<(), String> {
-        let mut report = |path: &Path, message: String| errors.push(Diagnostic {
-            path: path.strip_prefix(root).unwrap_or(path).to_string_lossy().into_owned(), message,
-        });
+    fn walk(
+        root: &Path,
+        current: &Path,
+        files: &mut Vec<(String, String)>,
+        errors: &mut Vec<Diagnostic>,
+    ) -> Result<(), String> {
+        let mut report = |path: &Path, message: String| {
+            errors.push(Diagnostic {
+                path: path
+                    .strip_prefix(root)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .into_owned(),
+                message,
+            })
+        };
         let listing = match std::fs::read_dir(current) {
             Ok(listing) => listing,
             Err(error) if current == root => return Err(format!("{}: {error}", root.display())),
-            Err(error) => { report(current, error.to_string()); return Ok(()); }
+            Err(error) => {
+                report(current, error.to_string());
+                return Ok(());
+            }
         };
         let mut paths = Vec::new();
         for entry in listing {
@@ -1041,12 +1056,24 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
         }
         paths.sort();
         for path in paths {
-            if path.file_name().is_some_and(|name| name.to_string_lossy().starts_with('.')) { continue; }
+            if path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+            {
+                continue;
+            }
             let meta = match unless_vanished(std::fs::symlink_metadata(&path)) {
                 Ok(Some(meta)) => meta,
                 Ok(None) => continue,
                 Err(message) => {
-                    errors.push(Diagnostic { path: path.strip_prefix(root).unwrap_or(&path).to_string_lossy().into_owned(), message });
+                    errors.push(Diagnostic {
+                        path: path
+                            .strip_prefix(root)
+                            .unwrap_or(&path)
+                            .to_string_lossy()
+                            .into_owned(),
+                        message,
+                    });
                     continue;
                 }
             };
@@ -1060,21 +1087,38 @@ pub fn read_directory(root: &Path) -> Result<(Vec<Entry>, Vec<Diagnostic>), Stri
                     Ok(Some(text)) => text,
                     Ok(None) => continue,
                     Err(message) => {
-                        errors.push(Diagnostic { path: path.strip_prefix(root).unwrap_or(&path).to_string_lossy().into_owned(), message });
+                        errors.push(Diagnostic {
+                            path: path
+                                .strip_prefix(root)
+                                .unwrap_or(&path)
+                                .to_string_lossy()
+                                .into_owned(),
+                            message,
+                        });
                         continue;
                     }
                 };
                 let normalized = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
-                let name = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().into_owned();
+                let name = path
+                    .strip_prefix(root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .into_owned();
                 let Some(frontmatter) = normalized.strip_prefix("---\n") else {
                     if normalized.trim_start().starts_with("splat_") {
-                        errors.push(Diagnostic { path: name, message: "Line 1: Splat fields need an opening --- line.".into() });
+                        errors.push(Diagnostic {
+                            path: name,
+                            message: "Line 1: Splat fields need an opening --- line.".into(),
+                        });
                     }
                     continue;
                 };
                 let frontmatter = frontmatter.split("\n---").next().unwrap_or(frontmatter);
                 if !frontmatter.lines().any(|line| line.starts_with("splat_")) {
-                    if ["schema:", "id:", "kind:"].iter().all(|key| frontmatter.lines().any(|line| line.starts_with(key))) {
+                    if ["schema:", "id:", "kind:"]
+                        .iter()
+                        .all(|key| frontmatter.lines().any(|line| line.starts_with(key)))
+                    {
                         errors.push(Diagnostic { path: name, message: "Line 2: These fields look like Splat content. Restore their splat_ prefixes.".into() });
                     }
                     continue;

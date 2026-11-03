@@ -460,9 +460,7 @@ In **Campaign → Packages**, enable a whole package or select individual
 entries. Required dependencies are included separately with their reasons, and rule
 groups include all members. Whole-package selections include future additions;
 individual selections do not. When all current entries are selected, **Include future additions** switches to the whole package. **Save selections** writes `splat_packages` into the
-campaign manifest while preserving unrelated fields, comments, and note text. A
-campaign without a manifest gets `Campaign.md` on first save, with its existing UUID
-and the default SRD selection. Missing packages and unresolved references remain visible.
+campaign manifest while preserving unrelated fields, comments, and note text. A new campaign gets `Campaign.md` with its UUID and the default SRD selection. If that file is deleted, **Write Campaign.md again** restores the held text only when you select it. **Undo write Campaign.md** removes that restored file if it has no later edits. Missing packages and unresolved references remain visible.
 A package that other entries need but that is not registered shows once, as **Package not
 found**. The issue uses the package's name when its folder, with a `Package.md`, is beside a
 registered package, and its namespace otherwise. An entry missing from a loaded package also
@@ -737,7 +735,7 @@ On window focus, Splat checks campaign notes and every registered package for di
 
 If a package creature is deleted on disk, its encounter row keeps the last known name or says **Missing creature**. **Replace…** chooses a replacement with CR, HP and AC in view. **Replace all** is on by default for rows that use the same missing entry. The change keeps their names and starting values, with one Undo. The row menu keeps **Edit** and can remove a row. The NPC **Add to run** form labels its side choice **SIDE** and uses the roster's side names.
 
-New creature entries start with AC 10, HP 1, speed and six ability scores in `splat_stats`, with the HP value selected in the editor. Size, type, alignment and CR are fields too. Library, Lookup, encounter search and XP use one CR rule. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. If the first heading differs from the entry name, Library offers to fix that heading, with Undo. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
+New creature entries start with speed and six ability scores in `splat_stats`. HP and AC stay unset until you enter them. Size, type, alignment and CR are fields too. Library, Lookup, encounter search and XP use one CR rule. The reader shows each vital once. If a visible AC or HP line disagrees, the editor offers to use its value for the fight, with Undo. A renamed copy also renames its first H1 when it matches the source name. If the first heading differs from the entry name, Library offers to fix that heading, with Undo. Package creation shows a **Folder** field and the destination path after you type a name. `package-file-changed`, `package-delete-entry`, `book-to-package` and `world-note-deleted` cover these disk and copy paths.
 
 Library keeps its reader toolbar on one line. At narrow widths, **More** holds Copy and Make NPC note. Lookup supports **Alt+Left** for Back. World lists broken place and stat block links beside each note and counts affected notes in its header. Generated NPCs show their save path before **Save NPC**.
 
@@ -754,10 +752,14 @@ menu above **Delete…**, with confirmation before it replaces results. The Reco
 keeps Stop recording on the row. Its list has a width limit; result readers keep the full pane.
 
 Package repair keeps entries available when `Package.md` breaks or is deleted.
-**Write Package.md again** restores the registered identity and package details.
+**Write Package.md again** restores a missing manifest. **Replace with a basic Package.md** replaces an existing manifest and says which fields it drops.
 Replacing a broken file offers **Undo write Package.md**. Copied World notes stay
 visible in World and Lookup with a duplicate warning and file-specific identity
 repair. Each repair has Undo. It also uses the file name for the copy's name and matching
 first heading. A copied package folder offers **Register as a new package** under
 its warning. This writes new package and entry identities, keeps links within the
 copy, and has one Undo that restores the files. A run's Sheet uses its live death-save counts once.
+
+Copy registration has **Use in this campaign**. It starts off when the campaign uses the original. **Use the copy's entries** changes encounter and group sources while keeping their names, counts and changes, with Undo. Duplicate repair actions name the folder when filenames match and can repair a whole copied folder at once.
+
+After **Unregister**, Library offers **Undo unregister**. Campaign keeps the last folder and offers **Register it again**. A missing folder shows its last path and, when there is one matching folder nearby, **Use this folder**. Folder recovery has Undo.

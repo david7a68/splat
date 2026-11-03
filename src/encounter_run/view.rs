@@ -18,6 +18,7 @@ use eframe::egui::{
     self, Align, Align2, Galley, Key, Layout, Modifiers, Rect, Stroke, StrokeKind, pos2, vec2,
 };
 use splat::content::overrides::{BY_HAND, Row};
+use splat::content::{Entry, Reference};
 use std::{path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
@@ -3364,6 +3365,22 @@ impl Run {
             return;
         }
         let mut link = None;
+        if let Some(content) = &self.content {
+            let at = content.position_of(&Reference::Id(definition.id));
+            let current = at.map(|at| &content.items[at].entry);
+            let unreadable = content
+                .errors
+                .iter()
+                .any(|error| error.contains(&definition.path));
+            if let Some(message) = snapshot_notice(definition, current, unreadable) {
+                ui.label(Type::Small.rich(ui, message).color(colors().muted));
+                if let Some(at) = at
+                    && Action::quiet("Read the new version").show(ui).clicked()
+                {
+                    self.lookup_request = Some(at);
+                }
+            }
+        }
         if definition.fields.contains_key("splat_external") {
             ui.add(
                 egui::Label::new(
@@ -4056,8 +4073,8 @@ impl Run {
                 }
                 detail = next;
             }
-            if p.npc_identity() {
-                detail.push_str(&format!(" · as {}", p.definition.name));
+            if p.named_stat_block() {
+                detail = format!("as {} · {detail}", p.definition.name);
             }
             let row_name = format!("{name} · {detail}");
             let detail = detail
@@ -4632,6 +4649,36 @@ fn set_exhaustion(index: usize, at: usize, level: u8) -> Command {
 /// The action names what it does, so its label cannot be read as a state.
 /// What an encounter or group changed on this creature: the value it replaced and the new
 /// one, each marked. It stays out in the open, above the stat block that keeps its own values.
+fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) -> Option<String> {
+    let name = std::path::Path::new(&snapshot.path)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
+    let Some(current) = current else {
+        return Some(format!(
+            "As at the start of this fight. {name} {}.",
+            if unreadable {
+                "cannot be read now"
+            } else {
+                "was deleted"
+            }
+        ));
+    };
+    let fields = |entry: &Entry| {
+        entry
+            .fields
+            .iter()
+            .filter(|(key, _)| {
+                !key.as_str()
+                    .is_some_and(|key| key.starts_with("splat_run_"))
+            })
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<serde_yaml_ng::Mapping>()
+    };
+    (snapshot.body != current.body || fields(snapshot) != fields(current))
+        .then(|| format!("As at the start of this fight. {name} has changed since."))
+}
+
 fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
     let c = colors();
     if let Some(added) = &p.added_from {
@@ -4651,7 +4698,7 @@ fn changes_block(ui: &mut egui::Ui, p: &Participant, above_stat_block: bool) {
             .wrap(),
         );
     }
-    if p.npc_identity() {
+    if p.named_stat_block() {
         ui.label(
             Type::Small
                 .rich(ui, format!("as {}", p.definition.name))
@@ -5019,7 +5066,7 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
         parts.push("Concentrating".into());
     }
     parts.extend(p.conditions.iter().cloned());
-    if p.npc_identity() {
+    if p.named_stat_block() {
         parts.push(format!("as {}", p.definition.name));
     }
     if let Some(changes) = p.changes.as_ref().filter(|_| p.stat_changes()) {
@@ -5265,7 +5312,7 @@ impl RowLayout {
         }
         // A change is never hidden. What the run cannot apply is on the row, for the roll.
         // A number stays with its word when the line wraps.
-        if p.npc_identity() {
+        if p.named_stat_block() {
             add(&format!("as {}", p.definition.name), c.muted);
         }
         let mut bonus_start = None;
@@ -5840,6 +5887,52 @@ mod tests {
     use super::*;
     use serde_yaml_ng::Mapping;
     use splat::content::{Entry, overrides::Overrides};
+
+    #[test]
+    fn run_snapshot_notice_distinguishes_unchanged_changed_unreadable_and_deleted() {
+        let text = crate::library::note_text("Wolf", "creature", None);
+        let snapshot = Entry::parse("Wolf.md", &text).unwrap();
+        assert!(snapshot_notice(&snapshot, Some(&snapshot), false).is_none());
+        let mut current = snapshot.clone();
+        current.body.push_str("A new attack.");
+        assert!(
+            snapshot_notice(&snapshot, Some(&current), false)
+                .unwrap()
+                .contains("has changed since")
+        );
+        assert!(
+            snapshot_notice(&snapshot, None, true)
+                .unwrap()
+                .contains("cannot be read now")
+        );
+        assert!(
+            snapshot_notice(&snapshot, None, false)
+                .unwrap()
+                .contains("was deleted")
+        );
+    }
+
+    #[test]
+    fn a_replaced_creature_keeps_its_stat_block_name_in_run_rows() {
+        let text = crate::library::note_text("Guard", "creature", None)
+            .replace("max_hp: {}", "max_hp: {value: 11}");
+        let entry = Entry::parse("Guard.md", &text).unwrap();
+        let mut p = Participant::with_overrides(
+            "wolf".into(),
+            "Enemies".into(),
+            entry,
+            &Mapping::new(),
+            &Overrides {
+                name: Some("Cinder Wolf".into()),
+                ..Default::default()
+            },
+            true,
+        )
+        .unwrap();
+        p.name = "Cinder Wolf 1".into();
+        assert!(p.named_stat_block());
+        assert!(row_name(&p, TurnMark::None, None).contains("as Guard"));
+    }
 
     #[test]
     fn initiative_bonus_formats_and_parses_signed_values() {

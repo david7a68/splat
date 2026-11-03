@@ -2842,15 +2842,7 @@ impl Sessions {
                 draft.show_disk();
             }
             if let Some(disk) = &draft.on_disk {
-                let face = design::reader::prose_type(ui);
-                design::draft_comparison_styled(
-                    ui,
-                    &draft.body,
-                    disk,
-                    (&draft.path, disk),
-                    face.font(ui),
-                    face.line(),
-                );
+                design::grouped_draft_comparison(ui, &draft.body, disk, (&draft.path, disk), false);
                 return;
             }
         }

@@ -115,7 +115,13 @@ fn publishing_a_moved_character_updates_its_identity_and_keeps_notes() {
     assert!(text.ends_with("My campaign notes.\n"));
     let (entries, errors) = crate::content::read_directory(dir.path()).unwrap();
     assert!(errors.is_empty());
-    assert_eq!(entries.iter().filter(|entry| entry.id == record.definition.splat_id).count(), 1);
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|entry| entry.id == record.definition.splat_id)
+            .count(),
+        1
+    );
 }
 
 #[test]

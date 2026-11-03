@@ -561,7 +561,7 @@ Keep Can use whole at the minimum list width. A shortened package name keeps its
 
 On window focus, check campaign notes and registered package folders. Reload changed catalogues and show the disk comparison if a draft's file changed. Package About reports used and total entries, offers Use every entry with Undo, and omits the entry breadcrumb and Engine support. Removing an unavailable package offers Undo and keeps links to affected encounters.
 
-Creation and copy fields share one right edge. New package has a Folder field with Browse beside it and a full destination path below it. Creature templates use inline stat values, AC 10 and HP 1, and select max_hp on opening. A renamed copy changes its first H1 only when it matches the source name.
+Creation and copy fields share one right edge. New package has a Folder field with Browse beside it and a full destination path below it. Creature templates use inline stat values and omit HP and AC until the author sets them. A renamed copy changes its first H1 only when it matches the source name.
 
 ## Run and encounter audit, iteration 4
 
@@ -798,8 +798,7 @@ The campaign-added message follows the campaign rows, below their heading.
 ## Library and preparation audit, iteration 14
 
 The run's Sheet shows live death saves once, with singular and plural words.
-Campaign Packages and the Library Package.md row offer Write Package.md again.
-The action keeps the registered identity and reloads; replacing a file has Undo.
+Campaign Packages and the Library details row offer Write Package.md again for a missing file. An existing file offers Replace with a basic Package.md, with a note that it drops the other fields. The action keeps the registered identity and reloads; replacing a file has Undo.
 Copied typed World notes stay visible with a duplicate warning. Each identity
 action names its file and has Undo. Encounter repair opens World for World notes.
 A copied package folder names the original under Add folder, with the id in
@@ -807,3 +806,14 @@ Technical details. Register as a new package asks for a name, writes independent
 package and entry identities, and has one Undo for all files. New identity also
 sets a note's name and matching first heading to its file stem. World rows with
 the same typed name show each file name on the second line.
+
+## Content audit, iteration 18
+
+Adjacent comparison lines form one change. Next difference appears only for separate changes.
+Keeping a draft in the close dialog restores its editor focus and cursor.
+Package copy registration names the copy and whether the campaign uses it. Its use checkbox starts off when the original is already used. Use the copy's entries keeps roster names, counts and changes, with one Undo.
+Duplicate repairs name the folder when filenames match. A folder batch repair has one guarded Undo.
+Unregister keeps the last folder in Settings. Library offers Undo unregister; Campaign offers Register it again.
+Missing package recovery looks beside known package folders. A unique match offers Use this folder. The picker starts beside the old folder. Both paths have Undo.
+World place choices stay beside In. Always use this one saves a path with Undo. Changes name both values. File and stored names that differ offer a guarded name update with Undo.
+Unreadable content names its path and keeps other files available. Missing Campaign.md needs an explicit write from held text. Paused stat blocks state when their snapshot differs from the current file.

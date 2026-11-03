@@ -107,6 +107,9 @@ impl WorldPage {
                 .flatten()
                 .filter(|(at, _)| {
                     !super::broken_links(&index.items[*at], index).is_empty()
+                        || index
+                            .duplicate_world
+                            .contains_key(&index.items[*at].entry.path)
                         || crate::roll_table::fault_count(&index.items[*at].entry.body) > 0
                 })
                 .count()
@@ -144,6 +147,7 @@ impl WorldPage {
                             for &(at, _) in index.world_groups("").values().flatten() {
                                 let item = &index.items[at];
                                 if (!super::broken_links(item, index).is_empty()
+                                    || index.duplicate_world.contains_key(&item.entry.path)
                                     || crate::roll_table::fault_count(&item.entry.body) > 0)
                                     && design::link(ui, &item.entry.name).clicked()
                                 {
@@ -477,11 +481,7 @@ impl WorldPage {
         for ((kind, title), rows) in groups {
             ui.add_space(design::XS);
             if *kind == 3 {
-                ui.label(
-                    Type::Small
-                        .rich(ui, format!("{} {title}/  {}", icons::DOCUMENT, rows.len()))
-                        .color(colors().muted),
-                );
+                design::folder_group_heading(ui, title, rows.len());
             } else {
                 design::group_heading(ui, title, rows.len());
             }

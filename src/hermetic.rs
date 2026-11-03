@@ -21,6 +21,21 @@ pub fn pick_folder() -> Option<PathBuf> {
     rfd::FileDialog::new().pick_folder()
 }
 
+pub fn pick_folder_from(parent: Option<&std::path::Path>) -> Option<PathBuf> {
+    #[cfg(not(test))]
+    {
+        let dialog = rfd::FileDialog::new();
+        parent
+            .map_or(dialog.clone(), |parent| dialog.set_directory(parent))
+            .pick_folder()
+    }
+    #[cfg(test)]
+    {
+        let _ = parent;
+        pick_folder()
+    }
+}
+
 #[cfg(not(test))]
 pub fn new_uuid() -> Uuid {
     Uuid::new_v4()
@@ -87,6 +102,7 @@ pub mod closed {
 
     thread_local! {
         static NEXT_UUID: Cell<Option<u128>> = const { Cell::new(None) };
+        static NEXT_FOLDER: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
     }
 
     /// Open the character cache at a temporary folder for this test process.
@@ -110,7 +126,11 @@ pub mod closed {
     }
 
     pub fn pick_folder() -> Option<PathBuf> {
-        None
+        NEXT_FOLDER.with(|folder| folder.borrow_mut().take())
+    }
+
+    pub fn next_folder(path: PathBuf) {
+        NEXT_FOLDER.with(|folder| *folder.borrow_mut() = Some(path));
     }
 
     pub fn new_uuid() -> Uuid {

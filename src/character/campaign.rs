@@ -97,19 +97,31 @@ impl EntitySnapshot {
 
     fn current_campaign_path(&self, campaign: &Path) -> Result<PathBuf, CampaignCopyError> {
         let (entries, errors) = crate::content::read_directory(campaign)?;
-        let mut paths: Vec<_> = entries.iter()
+        let mut paths: Vec<_> = entries
+            .iter()
             .filter(|entry| entry.id == self.definition.splat_id)
-            .map(|entry| campaign.join(&entry.path)).collect();
+            .map(|entry| campaign.join(&entry.path))
+            .collect();
         for error in errors {
             let path = campaign.join(&error.path);
-            if fs::read_to_string(&path).is_ok_and(|text| text.contains(&self.definition.splat_id.to_string())) {
+            if fs::read_to_string(&path)
+                .is_ok_and(|text| text.contains(&self.definition.splat_id.to_string()))
+            {
                 return Err(format!("{}: {}", path.display(), error.message).into());
             }
         }
         match paths.len() {
             0 => Ok(self.campaign_path(campaign)),
             1 => Ok(paths.pop().unwrap()),
-            _ => Err(format!("Several character files share this identity: {}. Keep one before refreshing.", paths.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ")).into()),
+            _ => Err(format!(
+                "Several character files share this identity: {}. Keep one before refreshing.",
+                paths
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+            .into()),
         }
     }
     /// Saves this copy over local edits, with the same checks and order as any save. The bytes

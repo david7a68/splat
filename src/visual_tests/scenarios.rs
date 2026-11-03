@@ -259,14 +259,18 @@ pub mod library_author {
             d.has_containing(CHANGED_ON_DISK)
                 && d.has(OVERWRITE)
                 && d.has(RELOAD_DISK)
-                && d.has(SHOW_DISK)
+                && !d.has(SHOW_DISK)
                 && d.visible_text("YOUR DRAFT"),
             "An external change keeps the draft's words, and offers overwrite, reload and the disk version",
         );
         d.state("save-conflict", Sizes::Default);
         d.goal("handle a failed save");
         d.expect("IN THE FILE NOW");
-        d.click(SHOW_DISK);
+        d.observe(
+            "C2 grouped changes",
+            !d.has(SHOW_DISK),
+            "Adjacent differences need no Next difference action",
+        );
         d.observe(
             "T8.3",
             d.has_containing("Edited elsewhere."),
@@ -744,6 +748,26 @@ pub mod campaign_content {
             |d| d.visible_text(crate::encounters::draft_switch_reason()),
         );
         d.state("repair-dirty", Sizes::Default);
+        d.click("Discard");
+        std::fs::remove_file(d.root.join(BROKEN_NOTE)).unwrap();
+        let manifest = d.root.join("campaigns/emberfall/Campaign.md");
+        let before = std::fs::read_to_string(&manifest).unwrap();
+        std::fs::remove_file(&manifest).unwrap();
+        d.click(RELOAD);
+        d.wait_for_text("Write Campaign.md again");
+        assert!(!manifest.exists());
+        d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
+        d.click("Write Campaign.md again");
+        d.wait_for_text("Undo write Campaign.md");
+        assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
+        d.state("campaign-manifest-written-with-undo", Sizes::All);
+        d.click("Undo write Campaign.md");
+        d.wait_for_text("Write Campaign.md again");
+        assert!(!manifest.exists());
+        d.expect_same(
+            "Undo removes only the restored manifest and returns to the same missing-file view.",
+        );
+        d.state("campaign-manifest-write-undone", Sizes::All);
     }
 }
 
@@ -1642,7 +1666,12 @@ pub mod dialogs {
 
         escape_closes(d, "unsaved changes prompt", CLOSE_PROMPT, KEEP_EDITING);
         d.expect(UNSAVED_NOTE);
-        d.state("kept-editing", Sizes::Default);
+        d.observe(
+            "C1 focus",
+            d.focused_name().as_deref() == Some("Markdown editor"),
+            "Keep editing restores focus to the draft",
+        );
+        d.state("kept-editing", Sizes::All);
         d.goal("return to the draft");
     }
 }
@@ -7677,8 +7706,10 @@ pub mod package_to_table {
         go_library(d);
         let text = d.editor_text().expect("new creature editor");
         let edited = text
-            .replace("max_hp: {value: 1}", "max_hp: {value: 22}")
-            .replace("armor_class: {value: 10}", "armor_class: {value: 15}")
+            .replace(
+                "splat_stats:\n",
+                "splat_stats:\n  max_hp: {value: 22}\n  armor_class: {value: 15}\n",
+            )
             .replace("strength: {value: 10}", "strength: {value: 18}")
             .replace("dexterity: {value: 10}", "dexterity: {value: 14}");
         assert_ne!(text, edited);
@@ -7794,9 +7825,12 @@ pub mod remove_package_in_use {
             d.root.join("modules/ashen-marches/Module.md").is_file(),
             "Unregistering keeps the package files",
         );
+        d.expect("Undo unregister");
+        d.state("package-unregistered-with-undo", Sizes::All);
         go_campaign(d);
         d.click("Reload from disk");
-        d.expect("Splat cannot find Ashen Marches.");
+        d.expect("Ashen Marches is not registered.");
+        d.expect("Register it again");
         d.expect("Remove from this campaign");
         d.expect("Find the folder…");
         d.observe(

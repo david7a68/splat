@@ -1990,7 +1990,10 @@ mod tests {
             dndbeyond_campaign_name: None,
         };
         if campaign.path.is_dir() && !campaign.path.join("Campaign.md").exists() {
-            crate::content_workspace::CampaignDocument::new(&campaign).unwrap().save().unwrap();
+            crate::content_workspace::CampaignDocument::new(&campaign)
+                .unwrap()
+                .save()
+                .unwrap();
         }
         campaign
     }
