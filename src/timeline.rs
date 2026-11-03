@@ -315,13 +315,17 @@ pub fn day_numbers(events: &[Event]) -> Vec<u32> {
 }
 
 /// A link to one event. Obsidian follows it to the event's block in `Timeline.md`.
-pub fn reference(event: &Event, day: u32) -> String {
+pub fn reference_label(event: &Event, day: u32) -> String {
     let label: String = event
         .label(day)
         .chars()
         .filter(|c| !matches!(c, '[' | ']' | '|' | '#' | '^'))
         .collect();
-    format!("[[Timeline#^{}|{}]]", event.id, label.trim())
+    label.trim().to_owned()
+}
+
+pub fn reference(event: &Event, day: u32) -> String {
+    format!("[[Timeline#^{}|{}]]", event.id, reference_label(event, day))
 }
 
 /// Call `found` with each timeline link in a text: the ID and the label, if it has one.
@@ -353,27 +357,6 @@ pub fn referenced_ids(text: &str) -> Vec<String> {
         }
     });
     ids
-}
-
-/// A note for the Reader: each link becomes the words it stands for.
-pub fn for_reading(text: &str, events: &[Event]) -> String {
-    let days = day_numbers(events);
-    let mut out = String::with_capacity(text.len());
-    let mut copied = 0;
-    each_reference(text, |start, end, id, label| {
-        out.push_str(&text[copied..start]);
-        // The event's name now, not the name it had when the link was made.
-        match events.iter().position(|event| event.id == id) {
-            Some(index) => out.push_str(&events[index].label(days[index])),
-            None => match label {
-                Some(label) => out.push_str(&format!("{label} (removed from the timeline)")),
-                None => out.push_str("(event not on the timeline)"),
-            },
-        }
-        copied = end;
-    });
-    out.push_str(&text[copied..]);
-    out
 }
 
 /// An event an LLM found in a transcript. It is only a suggestion until the DM adds it.
@@ -548,6 +531,8 @@ pub struct Book {
     pub events: Vec<Event>,
     baseline: Option<Vec<u8>>,
     saved_events: Vec<Event>,
+    pub renamed_links: BTreeMap<String, Vec<String>>,
+    link_titles: BTreeMap<String, (String, String)>,
     reordered: Vec<String>,
     dirty: bool,
     last_edit: Option<Instant>,
@@ -602,6 +587,17 @@ impl Book {
                     .and_then(parse)
                 {
                     Ok(events) => {
+                        let days = day_numbers(&events);
+                        self.link_titles = events
+                            .iter()
+                            .enumerate()
+                            .map(|(at, event)| {
+                                (
+                                    event.id.clone(),
+                                    (event.title.clone(), reference_label(event, days[at])),
+                                )
+                            })
+                            .collect();
                         self.saved_events.clone_from(&events);
                         self.events = events;
                     }
@@ -633,6 +629,20 @@ impl Book {
 
     /// Note an edit. It saves after a short pause, or at the next `save`.
     pub fn touch(&mut self) {
+        let days = day_numbers(&self.events);
+        for (at, event) in self.events.iter().enumerate() {
+            let label = reference_label(event, days[at]);
+            if let Some((title, old_label)) = self
+                .link_titles
+                .insert(event.id.clone(), (event.title.clone(), label))
+                && title != event.title
+            {
+                let labels = self.renamed_links.entry(event.id.clone()).or_default();
+                if !labels.contains(&old_label) {
+                    labels.push(old_label);
+                }
+            }
+        }
         self.dirty = true;
         self.last_edit = Some(Instant::now());
         self.removed = None;
@@ -816,6 +826,12 @@ impl Book {
         }
     }
 
+    pub fn removed_row(&self) -> Option<(usize, String)> {
+        self.removed
+            .as_ref()
+            .map(|(at, _, label)| (*at, label.clone()))
+    }
+
     pub fn removed(&self) -> Option<&str> {
         self.removed.as_ref().map(|(.., label)| label.as_str())
     }
@@ -981,6 +997,21 @@ mod tests {
             state,
             steps: 1,
         }
+    }
+
+    #[test]
+    fn a_rename_offers_old_link_words_even_before_the_first_save() {
+        let mut book = Book::default();
+        let id = book.add(Kind::LongRest, None);
+        book.events[0].title = "Rest at [the mill]".into();
+        book.touch();
+        assert_eq!(book.renamed_links[&id], ["Long rest"]);
+        assert_eq!(
+            reference(&book.events[0], 0),
+            format!("[[Timeline#^{id}|Rest at the mill]]")
+        );
+        book.touch();
+        assert_eq!(book.renamed_links[&id], ["Long rest"]);
     }
 
     #[test]
@@ -1178,7 +1209,7 @@ mod tests {
     }
 
     #[test]
-    fn a_reference_resolves_and_reads_as_its_words() {
+    fn a_reference_keeps_its_identity_and_written_alias() {
         let mut book = Book::default();
         let day = book.add(Kind::Day, None);
         let id = book.add(Kind::Encounter, None);
@@ -1191,22 +1222,9 @@ mod tests {
             referenced_ids(&note),
             [id.clone(), day.clone(), "gone".into()]
         );
-        assert_eq!(
-            for_reading(&note, &book.events),
-            "We fought at Bridge [Ambush], on Day 1. Then (event not on the timeline)."
-        );
-        // The name now, and a removed event says so.
         book.event_mut(&id).unwrap().title = "The bridge".into();
-        assert_eq!(for_reading(&link, &book.events), "The bridge");
-        let gone = "[[Timeline#^gone|Old words]]";
-        assert_eq!(
-            for_reading(gone, &book.events),
-            "Old words (removed from the timeline)"
-        );
-        assert_eq!(
-            for_reading("no links [[Other]]", &book.events),
-            "no links [[Other]]"
-        );
+        assert!(link.ends_with("|Bridge Ambush]]"));
+        assert_eq!(referenced_ids(&link), [id]);
     }
 
     #[test]

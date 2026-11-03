@@ -230,10 +230,11 @@ pub(super) fn in_progress_list(
     page: &history::Arranged<'_>,
     templates: &[Template],
     live: Option<&SavedRunInfo>,
-    blocked: Option<&'static str>,
-    loading: bool,
+    availability: (Option<&'static str>, bool),
+    story: &Story<'_>,
     action: &mut Option<ListAction>,
 ) {
+    let (blocked, loading) = availability;
     heading(ui, "IN PROGRESS", page.in_progress.len());
     if page.in_progress.is_empty() {
         blocked_reason(
@@ -244,7 +245,7 @@ pub(super) fn in_progress_list(
     for (index, run) in page.in_progress.iter().enumerate() {
         let open = live.is_some_and(|live| live.id == run.id);
         let template = history::template_of(run, templates);
-        let detail = if open {
+        let mut detail = if open {
             run.label
                 .strip_prefix(&run_state_word(run, false))
                 .unwrap_or(&run.label)
@@ -253,6 +254,34 @@ pub(super) fn in_progress_list(
         } else {
             run.label.clone()
         };
+        if page
+            .in_progress
+            .iter()
+            .filter(|other| other.encounter == run.encounter)
+            .count()
+            > 1
+        {
+            let session = story
+                .events
+                .iter()
+                .find(|event| event.run == run.id && run.id.is_some())
+                .and_then(|event| event.session)
+                .and_then(|id| story.sessions.iter().find(|session| session.id == id));
+            let context = session
+                .map(|session| session.label.clone())
+                .unwrap_or_else(|| {
+                    let created = std::fs::metadata(&run.path)
+                        .ok()
+                        .and_then(|metadata| metadata.created().ok())
+                        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|time| time.as_secs())
+                        .or(run.saved_at);
+                    created
+                        .map(crate::encounter_run::calendar_date)
+                        .unwrap_or_else(|| "Date unknown".into())
+                });
+            detail.push_str(&format!(" · {context}"));
+        }
         list_row(ui, &run.path, &run.encounter, &detail, !open, |ui| {
             row_menu_for_run(ui, run, template, open, blocked, loading, action);
             let edit_width = design::number_width(ui, "Edit", &Type::Strong.font(ui)) + design::L;
@@ -292,6 +321,7 @@ pub(super) fn in_progress_list(
                     Action::secondary("Resume")
                 };
                 if button
+                    .icon(icons::RUN)
                     .density(Density::Read)
                     .blocked(blocked)
                     .show(ui)
