@@ -41,8 +41,6 @@ const TWO_COLUMNS_FROM: f32 = 640.0;
 /// The plan and the note stand side by side from here.
 const PLAN_BESIDE_NOTE_FROM: f32 = 720.0;
 const PLAN_WIDTH: f32 = 330.0;
-/// Room in the plan for the widest action on a row.
-const PLAN_ACTION: f32 = design::XL * 6.0;
 /// A list longer than this gets a search, and it scrolls instead of leaving the window.
 const FIGHT_SEARCH_FROM: usize = 8;
 const FIGHT_MENU_WIDTH: f32 = 240.0;
@@ -179,6 +177,11 @@ struct Live {
     recorder: Recorder,
 }
 
+struct LinkUndoState {
+    notes: Vec<(PathBuf, String)>,
+    events: Vec<timeline::Event>,
+}
+
 #[derive(Default)]
 pub struct Sessions {
     pub run_open: bool,
@@ -201,6 +204,9 @@ pub struct Sessions {
     deleted_run: Option<crate::encounter_run::DeletedRun>,
     row_notice: Option<(Option<Uuid>, usize)>,
     updated_links: Option<Vec<(Draft, String)>>,
+    link_undo_state: Option<LinkUndoState>,
+    link_problem: Option<String>,
+    removed_fight: Option<(Option<Uuid>, usize, String, String, String)>,
     plan_notice_state: Option<(String, Vec<timeline::Event>)>,
     removed_event_in_plan: bool,
     removed_group: Option<(Option<Uuid>, String, String)>,
@@ -259,7 +265,6 @@ pub struct Sessions {
     /// A step of the run came between. The next word typed starts a line of its own.
     break_before_words: bool,
     note_editor_id: Option<egui::Id>,
-    conflict_at: Option<(PathBuf, usize)>,
     move_run_here: Option<(Uuid, String)>,
     /// When a recording last stopped, so the rail can say it was kept.
     saved_at: Option<Instant>,
@@ -303,6 +308,14 @@ pub struct Sessions {
     pub wants_lookup: Option<String>,
 }
 
+pub fn processed_warning() -> Status<'static> {
+    Status {
+        icon: icons::WARN,
+        word: "Processed, with a warning",
+        color: colors().result.warning,
+    }
+}
+
 /// Words that wrap at the width they are given.
 fn wrapped_words(ui: &mut egui::Ui, kind: Type, words: impl Into<String>, color: Color32) {
     ui.add(egui::Label::new(kind.rich(ui, words).color(color)).wrap());
@@ -333,6 +346,53 @@ fn unlink_group(body: &mut String, name: &str) {
     }
     out.push_str(rest);
     *body = out;
+}
+
+fn unlink_planned_fight(body: &str, name: &str, occurrence: usize) -> String {
+    let mut in_plan = false;
+    let mut found = 0;
+    let mut removed = false;
+    body.split_inclusive('\n')
+        .filter_map(|line| {
+            let heading = line.trim();
+            if heading.starts_with("## ") {
+                in_plan = heading.eq_ignore_ascii_case("## Plan for tonight");
+            }
+            if !in_plan || removed {
+                return Some(line.to_owned());
+            }
+            let mut start = 0;
+            while let Some(at) = line[start..].find("[[") {
+                let at = start + at;
+                let Some(end) = line[at..].find("]]").map(|end| at + end + 2) else {
+                    break;
+                };
+                let target = &line[at + 2..end - 2];
+                if target
+                    .split('|')
+                    .next()
+                    .is_some_and(|target| target.trim().eq_ignore_ascii_case(name))
+                {
+                    if found == occurrence {
+                        removed = true;
+                        let prefix = line[..at].trim();
+                        if matches!(prefix, "" | "-" | "*") && line[end..].trim().is_empty() {
+                            return None;
+                        }
+                        return Some(format!(
+                            "{}{}{}",
+                            &line[..at],
+                            target.rsplit('|').next().unwrap_or(target),
+                            &line[end..]
+                        ));
+                    }
+                    found += 1;
+                }
+                start = end;
+            }
+            Some(line.to_owned())
+        })
+        .collect()
 }
 
 /// One row of a session's plan: an icon and words, then the action at the end. The action has
@@ -832,7 +892,7 @@ impl Sessions {
                     retry: None,
                     word: "Recording stopped",
                     words: format!(
-                        "The recording of {label} stopped by itself. {kept} Check the microphone, then record again. The recorder said: {words}"
+                        "The recording of {label} stopped by itself. {kept} Check the microphone, then record again. The recorder said: {}.", words.trim_end_matches(['.', '!', '?'])
                     ),
                 });
             } else {
@@ -993,10 +1053,7 @@ impl Sessions {
                         let here = self.on_page
                             && self.selected == Some(alert.session)
                             && self.tab == Tab::Recordings;
-                        if !alert.can_record
-                            && !here
-                            && Action::quiet("Open the session").show(ui).clicked()
-                        {
+                        if !here && Action::quiet("Open the session").show(ui).clicked() {
                             open = Some(alert.session);
                         }
                         ui.add_space(design::L);
@@ -1150,6 +1207,8 @@ impl Sessions {
         self.plan_notice_state = None;
         self.removed_event_in_plan = false;
         self.updated_links = None;
+        self.link_undo_state = None;
+        self.removed_fight = None;
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {
@@ -1379,10 +1438,26 @@ impl Sessions {
     }
 
     /// Only this explicit action changes a note after an event rename.
-    pub fn event_link_message(&mut self, ui: &mut egui::Ui, book: &Book) {
+    pub fn event_link_offer(&mut self, ui: &mut egui::Ui, book: &Book, event: &str) {
         if book.renamed_links.is_empty() && self.updated_links.is_none() {
             return;
         }
+        let Some(renamed) = book.renamed_links.get(event) else {
+            return;
+        };
+        let Some(current) = book.events.iter().find(|item| item.id == event) else {
+            return;
+        };
+        let words = format!(
+            "Notes still say “{}” for {}.",
+            renamed.join("” or “"),
+            current.title
+        );
+        let mut scoped = Book::default();
+        scoped.events = book.events.clone();
+        scoped
+            .renamed_links
+            .insert(event.to_owned(), renamed.clone());
         let mut changes = Vec::new();
         let mut count = 0;
         for note in &self.notes {
@@ -1394,7 +1469,7 @@ impl Sessions {
                 } else {
                     continue;
                 };
-            let (body, found) = updated_event_links(&draft.body, book);
+            let (body, found) = updated_event_links(&draft.body, &scoped);
             if found > 0 {
                 count += found;
                 changes.push((draft, body));
@@ -1404,12 +1479,22 @@ impl Sessions {
             && design::message_with_action(
                 ui,
                 Tone::Info,
-                "Notes still use an event's old name.",
+                &words,
                 &format!("Update {} in notes", design::count(count, "link", "links")),
             )
         {
             self.update_event_link_notes(changes);
+            self.link_undo_state = Some(LinkUndoState {
+                notes: self.note_bodies(),
+                events: book.events.clone(),
+            });
         }
+        if let Some(problem) = &self.link_problem {
+            design::message(ui, Tone::Warning, problem);
+        }
+    }
+
+    pub fn event_link_undo(&mut self, ui: &mut egui::Ui) {
         if self.updated_links.is_some()
             && design::message_with_action(
                 ui,
@@ -1420,8 +1505,40 @@ impl Sessions {
         {
             self.undo_event_link_notes();
         }
-        if let Some(problem) = &self.rename_problem {
+        if let Some(problem) = &self.link_problem {
             design::message(ui, Tone::Warning, problem);
+        }
+    }
+
+    fn note_bodies(&self) -> Vec<(PathBuf, String)> {
+        self.notes
+            .iter()
+            .filter_map(|note| {
+                let body = self
+                    .draft
+                    .as_ref()
+                    .filter(|draft| draft.path == note.path)
+                    .map(|draft| draft.body.clone())
+                    .or_else(|| {
+                        fs::read_to_string(&note.path)
+                            .ok()
+                            .map(|text| body_of(&text).to_owned())
+                    })?;
+                let disk = fs::read_to_string(&note.path).unwrap_or_default();
+                Some((note.path.clone(), format!("{body}\0{disk}")))
+            })
+            .collect()
+    }
+
+    pub fn expire_event_link_undo(&mut self, on_timeline: bool, book: &Book) {
+        let changed = self
+            .link_undo_state
+            .as_ref()
+            .is_some_and(|state| state.notes != self.note_bodies() || state.events != book.events);
+        if !on_timeline || changed || self.draft.as_ref().is_some_and(Draft::needs_attention) {
+            self.updated_links = None;
+            self.link_undo_state = None;
+            self.link_problem = None;
         }
     }
 
@@ -1430,7 +1547,7 @@ impl Sessions {
         for (before, body) in changes {
             let mut next = before.clone();
             if next.needs_attention() {
-                self.rename_problem =
+                self.link_problem =
                     Some("Save or resolve the changed note before updating its links.".into());
                 continue;
             }
@@ -1438,7 +1555,7 @@ impl Sessions {
             next.edited();
             next.save();
             if next.unsaved() {
-                self.rename_problem = Some(format!(
+                self.link_problem = Some(format!(
                     "Links in {} were not saved. Resolve the note's save problem and try again.",
                     next.path.display()
                 ));
@@ -1483,7 +1600,7 @@ impl Sessions {
                     self.draft = Some(current);
                 }
             } else {
-                self.rename_problem = Some("A note changed after its links were updated. Keep or resolve that edit before Undo.".into());
+                self.link_problem = Some("A note changed after its links were updated. Keep or resolve that edit before Undo.".into());
                 remaining.push((before, after));
             }
         }
@@ -1620,7 +1737,10 @@ impl Sessions {
         };
         let (session, label) = (live.session, live.label.clone());
         let stopped = match live.recorder.health() {
-            Health::Stopped(words) => Some(format!("Stopped by itself: {words}")),
+            Health::Stopped(words) => Some(format!(
+                "Stopped by itself: {}.",
+                words.trim_end_matches(['.', '!', '?'])
+            )),
             _ => None,
         };
         let path = live.recorder.stop();
@@ -2105,7 +2225,7 @@ impl Sessions {
             "New session"
         };
         let c = colors();
-        ui.label(Type::Title.rich(ui, heading).color(c.text));
+        design::group_heading(ui, heading, 0);
         ui.add_space(design::XS);
         design::text_field(ui, "Number", &mut form.number, None, None);
         let title = design::text_field(
@@ -2138,6 +2258,18 @@ impl Sessions {
                     });
                 design::named(ui, &inner.response, "Session template");
             });
+        }
+        if form.editing.is_none()
+            && let Some(folder) = &self.folder
+        {
+            let path = super::note_path(folder, form.number.parse().unwrap_or(1), &form.title);
+            let shown = path.strip_prefix(folder).unwrap_or(&path);
+            wrapped_words(
+                ui,
+                Type::Small,
+                format!("File: {}", shown.display()),
+                c.muted,
+            );
         }
         if let Some(error) = &form.error {
             design::message(ui, Tone::Error, error);
@@ -2273,7 +2405,7 @@ impl Sessions {
                             "Processing".to_owned()
                         } else if result == Some(note.id) {
                             let word = if self.job_warned {
-                                "Processed: check it"
+                                "Processed, with a warning"
                             } else {
                                 "Processed"
                             };
@@ -2323,39 +2455,13 @@ impl Sessions {
             if let Some(disk) = &draft.on_disk {
                 let left: Vec<_> = draft.body.lines().collect();
                 let right: Vec<_> = disk.lines().collect();
-                let differences: Vec<_> = (0..left.len().max(right.len()))
-                    .filter(|&line| left.get(line) != right.get(line))
-                    .collect();
-                let first = differences.first().copied().unwrap_or(0);
-                let initial = self
-                    .conflict_at
-                    .as_ref()
-                    .is_none_or(|(path, _)| *path != draft.path);
-                let mut target = initial.then_some(first);
-                if initial {
-                    self.conflict_at = Some((draft.path.clone(), first));
-                }
-                ui.horizontal(|ui| {
-                    let words = if differences.is_empty() {
-                        "No lines differ".to_owned()
-                    } else {
-                        design::count(differences.len(), "line differs", "lines differ")
-                    };
-                    ui.label(Type::Small.rich(ui, words).color(colors().muted));
-                    if !differences.is_empty()
-                        && Action::quiet("Next difference").show(ui).clicked()
-                    {
-                        let current = self.conflict_at.as_ref().map_or(first, |(_, line)| *line);
-                        let next = differences
-                            .iter()
-                            .copied()
-                            .find(|&line| line > current)
-                            .unwrap_or(first);
-                        self.conflict_at = Some((draft.path.clone(), next));
-                        target = Some(next);
-                    }
-                });
-                let current = self.conflict_at.as_ref().map_or(first, |(_, line)| *line);
+                let first = (0..left.len().max(right.len()))
+                    .find(|&at| left.get(at) != right.get(at))
+                    .unwrap_or(0);
+                let state = ui.make_persistent_id(("draft_difference", (&draft.path, disk)));
+                let current = ui
+                    .data(|data| data.get_temp::<usize>(state))
+                    .unwrap_or(first);
                 if let Some(heading) = left
                     .iter()
                     .take(current + 1)
@@ -2368,67 +2474,10 @@ impl Sessions {
                             .color(colors().muted),
                     );
                 }
-                ui.columns(2, |columns| {
-                    design::group_label(&mut columns[0], "Your draft");
-                    design::group_label(&mut columns[1], "In the file now");
-                });
-                let comparison_height = ui.available_height();
-                egui::ScrollArea::vertical()
-                    .id_salt(("conflict_versions", &draft.path))
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        for line in 0..left.len().max(right.len()) {
-                            let differs = left.get(line) != right.get(line);
-                            let top = ui.cursor().top();
-                            ui.columns(2, |columns| {
-                                for (at, lines) in [&left, &right].into_iter().enumerate() {
-                                    let fill = if differs {
-                                        colors().selected
-                                    } else {
-                                        colors().page
-                                    };
-                                    egui::Frame::new().fill(fill).show(&mut columns[at], |ui| {
-                                        ui.set_min_width(ui.available_width());
-                                        ui.horizontal_top(|ui| {
-                                            let (mark, _) = ui.allocate_exact_size(
-                                                egui::vec2(design::XS, Type::Body.line()),
-                                                egui::Sense::hover(),
-                                            );
-                                            if differs {
-                                                ui.painter().vline(
-                                                    mark.center().x,
-                                                    mark.y_range(),
-                                                    egui::Stroke::new(
-                                                        design::HAIRLINE_WIDTH,
-                                                        colors().accent,
-                                                    ),
-                                                );
-                                            }
-                                            ui.add(
-                                                egui::Label::new(Type::Body.rich(
-                                                    ui,
-                                                    lines.get(line).copied().unwrap_or(" "),
-                                                ))
-                                                .wrap(),
-                                            );
-                                        });
-                                    });
-                                }
-                            });
-                            if target.map(|line| line.saturating_sub(2)) == Some(line) {
-                                let rect = egui::Rect::from_min_size(
-                                    egui::pos2(ui.min_rect().left(), top),
-                                    egui::vec2(ui.available_width(), Type::Body.line()),
-                                );
-                                ui.scroll_to_rect(rect, Some(egui::Align::TOP));
-                            }
-                        }
-                        ui.add_space((comparison_height - Type::Body.line()).max(0.0));
-                    });
+                design::draft_comparison(ui, &draft.body, disk, (&draft.path, disk));
                 return;
             }
         }
-        self.conflict_at = None;
         let focus = std::mem::take(&mut self.focus_notes);
         // A stray click leaves the keyboard on nothing, and the DM's eyes can be on the table.
         // With no field to go to, what they type still belongs in the note.
@@ -2484,6 +2533,13 @@ impl Sessions {
                 insert_at_caret(ui.ctx(), id, draft, "", true);
             }
         }
+        let heading_id = ui.id().with(("note_heading_offset", self.selected));
+        let editor_height = ui.available_height()
+            + if in_panel {
+                ui.data(|data| data.get_temp::<f32>(heading_id).unwrap_or(0.0))
+            } else {
+                0.0
+            };
         egui::ScrollArea::vertical()
             .id_salt(("session_editor", self.selected, in_panel))
             .auto_shrink([false, false])
@@ -2497,7 +2553,7 @@ impl Sessions {
                     .layouter(&mut layouter)
                     .margin(egui::vec2(design::S, design::S))
                     .desired_width(ui.available_width())
-                    .min_size(egui::vec2(0.0, ui.available_height()))
+                    .min_size(egui::vec2(0.0, editor_height))
                     .show(ui);
                 crate::markdown_source::paint_section_rules(ui, &output);
                 if in_panel && let Some(at) = draft.body.find("## What happened") {
@@ -2507,7 +2563,7 @@ impl Sessions {
                         .galley
                         .pos_from_cursor(egui::text::CCursor::new(heading))
                         .top();
-                    ui.add_space(offset.max(0.0));
+                    ui.data_mut(|data| data.insert_temp(heading_id, offset.max(0.0)));
                 }
                 let response = output.response;
                 design::named(ui, &response, "Note text");
@@ -2964,6 +3020,7 @@ impl Sessions {
             self.deleted_run = None;
             self.row_notice = None;
             self.removed_group = None;
+            self.removed_fight = None;
             self.removed_event_in_plan = false;
             self.plan_notice_state = None;
         }
@@ -3098,6 +3155,7 @@ impl Sessions {
         let mut insert = None;
         let mut remove = None;
         let mut remove_group = None;
+        let mut remove_fight = None;
         let mut delete_run = None;
         let mut toggle = None;
         let mut changed = false;
@@ -3109,7 +3167,10 @@ impl Sessions {
             egui::ScrollArea::vertical().id_salt(("session_plan", session))
                 .auto_shrink([false, false]).show(ui, |ui| {
                 let width = ui.available_width() - design::M;
-                let widths = [width - PLAN_ACTION - design::S, PLAN_ACTION];
+                let action_width = [Action::primary("Start fight").icon(icons::RUN), Action::primary("Resume").icon(icons::RUN), Action::quiet("Add to notes"), Action::secondary("Arrivals").icon(icons::GROUP)]
+                    .into_iter().map(|action| action.density(Density::Read).natural_width(ui)).fold(0.0, f32::max)
+                    + Density::Read.control() + design::S;
+                let widths = [width - action_width - design::S, action_width];
                 let mut any = false;
                 let mut primary_available = plan.open_run.is_none() && !self.confirm_record;
                 for (at, event) in book.events.iter_mut().enumerate() {
@@ -3126,16 +3187,13 @@ impl Sessions {
                     let saved_fight = plan.fights.iter().find(|fight| fight.saved.as_ref()
                         .is_some_and(|saved| saved.id == event.run && event.run.is_some()));
                     let saved = saved_fight.and_then(|fight| fight.saved.as_ref()).filter(|_| !running);
-                    let row_widths = if event.run.is_some() && saved.is_none() {
-                        [width - Density::Read.control() - design::S, Density::Read.control()]
-                    } else { widths };
                     let summary = if event.run.is_some() {
                         played_fight_summary(event)
                     } else {
                         event.summary(None)
                     };
                     let row = ui.push_id(event.id.clone(), |ui| {
-                        plan_row(ui, &row_widths, if is_open { icons::DOWN } else { icons::NEXT }, |ui| {
+                        plan_row(ui, &widths, if is_open { icons::DOWN } else { icons::NEXT }, |ui| {
                             if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
                             if running {
                                 if design::status_link(ui, Status { icon: icons::RUN,
@@ -3220,6 +3278,7 @@ impl Sessions {
                     undo_row_remove |= design::message_with_action(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
                 }
                 for (position, fight) in planned.iter().enumerate() {
+                    self.removed_fight_message(ui, session, position);
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
                     ui.push_id((&fight.path, position), |ui| {
@@ -3236,17 +3295,22 @@ impl Sessions {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
                             } else { wrapped_words(ui, Type::Small, &fight.summary, c.muted); }
                         }, |ui| {
-                            if running {
-                                // The run strip owns Back to run.
-                            } else if let Some(saved) = &fight.saved {
-                                design::row_menu(ui, &fight.name, |ui| {
+                            design::row_menu(ui, &fight.name, |ui| {
+                                if Action::quiet("Remove from tonight").show(ui).clicked() {
+                                    remove_fight = Some((position, fight.name.clone())); ui.close();
+                                }
+                                if fight.saved.is_some() {
                                     if Action::quiet("Start a new run").blocked(plan.blocked).show(ui).clicked() {
                                         self.wants_fight = Some(fight.path.clone()); ui.close();
                                     }
                                     if Action::quiet("Delete the saved run").blocked(plan.blocked).show(ui).clicked() {
-                                        delete_run = Some(saved.clone()); ui.close();
+                                        delete_run = fight.saved.clone(); ui.close();
                                     }
-                                });
+                                }
+                            });
+                            if running {
+                                // The run strip owns Back to run.
+                            } else if let Some(saved) = &fight.saved {
                                 let action = if std::mem::take(&mut primary_available) { Action::primary("Resume") } else { Action::secondary("Resume") };
                                 if action.icon(icons::RUN).name(&format!("Resume: {}", fight.name)).density(Density::Read).blocked(plan.blocked).show(ui).clicked() {
                                     self.wants_saved_run = Some(saved.path.clone());
@@ -3273,15 +3337,12 @@ impl Sessions {
                         plan_rule(ui);
                     });
                 }
+                self.removed_fight_message(ui, session, planned.len());
                 for group in &planned_groups {
                     any = true;
                     ui.push_id(group.id, |ui| {
                         let mut read_group = false;
-                        let group_action = design::number_width(ui, if plan.arrivals_open { "Arrivals" } else { "Edit" }, &Type::Strong.font(ui))
-                            + Density::Read.control() + design::L * 2.0
-                            + if plan.arrivals_open { design::number_width(ui, icons::GROUP, &Type::Body.font(ui)) + design::S } else { 0.0 };
-                        let group_widths = [widths.iter().sum::<f32>() - group_action, group_action];
-                        plan_row(ui, &group_widths, icons::GROUP, |ui| {
+                        plan_row(ui, &widths, icons::GROUP, |ui| {
                             if design::wrapped_link(ui, &group.name).clicked() { read_group = true; }
                             let summary = group.summary().split(" · ").map(|part| part.replace(' ', "\u{a0}")).collect::<Vec<_>>().join(" · ");
                             wrapped_words(ui, Type::Small, summary, c.muted);
@@ -3313,6 +3374,31 @@ impl Sessions {
                 }
             });
         });
+        if let Some((position, name)) = remove_fight
+            && let Some(draft) = &mut self.draft
+        {
+            let occurrence = book
+                .events
+                .iter()
+                .filter(|event| {
+                    event.is_in(session)
+                        && event.run.is_some()
+                        && event.title.eq_ignore_ascii_case(&name)
+                })
+                .count()
+                + planned[..position]
+                    .iter()
+                    .filter(|fight| fight.name.eq_ignore_ascii_case(&name))
+                    .count();
+            let before = draft.body.clone();
+            let after = unlink_planned_fight(&before, &name, occurrence);
+            if before != after {
+                draft.body = after.clone();
+                draft.edited();
+                self.removed_fight = Some((session, position, name, before, after.clone()));
+                self.plan_notice_state = Some((after, book.events.clone()));
+            }
+        }
         if let Some(name) = remove_group
             && let Some(draft) = &mut self.draft
         {
@@ -3381,6 +3467,32 @@ impl Sessions {
             self.added = None;
             self.mentions
                 .insert(session, timeline::referenced_ids(&draft.body));
+        }
+    }
+
+    fn removed_fight_message(&mut self, ui: &mut egui::Ui, session: Option<Uuid>, position: usize) {
+        let Some((id, at, name, before, after)) = &self.removed_fight else {
+            return;
+        };
+        if *id != session
+            || *at != position
+            || self.draft.as_ref().is_none_or(|draft| draft.body != *after)
+        {
+            return;
+        }
+        ui.add_space(design::S);
+        if design::message_with_action(
+            ui,
+            Tone::Info,
+            &format!("Removed “{name}” from tonight."),
+            "Undo remove",
+        ) {
+            if let Some(draft) = &mut self.draft {
+                draft.body = before.clone();
+                draft.edited();
+            }
+            self.removed_fight = None;
+            self.plan_notice_state = None;
         }
     }
 
@@ -3710,7 +3822,10 @@ impl Sessions {
                 (icons::ERROR, state, c.result.error)
             }
         } else if recording.warning.is_some() {
-            (icons::WARN, "Processed, with a warning", c.result.warning)
+            {
+                let status = processed_warning();
+                (status.icon, status.word, status.color)
+            }
         } else if recording.summary {
             (icons::OK, "Processed", c.result.success)
         } else if recording.transcript {
@@ -4008,7 +4123,16 @@ impl Sessions {
                 } else {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                         if let Some(id) = &added {
-                            if design::link(ui, "On the timeline").clicked() {
+                            if design::status_link(
+                                ui,
+                                Status {
+                                    icon: icons::OK,
+                                    word: "On the timeline",
+                                    color: c.result.success,
+                                },
+                            )
+                            .clicked()
+                            {
                                 self.wants_event = Some(id.clone());
                             }
                         } else if Action::secondary("Add")
@@ -4290,6 +4414,8 @@ impl Sessions {
             } else {
                 processing::host(&config.llm_url)
             };
+            ui.scope(|ui| {
+            ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
             ui.add(
                 egui::Label::new(
                     Type::Small
@@ -4304,6 +4430,7 @@ impl Sessions {
                 )
                 .wrap(),
             );
+            });
         }
         let recordings = self.recordings.clone();
         if recordings.is_empty() {
@@ -4390,6 +4517,26 @@ impl Sessions {
         }
     }
 
+    fn session_details_action(&mut self, ui: &mut egui::Ui, note: &Note) {
+        if Action::quiet("Details")
+            .name("Edit session details")
+            .show(ui)
+            .clicked()
+        {
+            self.form = Some(Form {
+                editing: Some(note.id),
+                number: note.number.to_string(),
+                title: note.title.clone(),
+                date: note.date.clone(),
+                template: String::new(),
+                error: None,
+            });
+        }
+        if let Some(draft) = &self.draft {
+            Self::note_status(ui, draft);
+        }
+    }
+
     fn session_pane(
         &mut self,
         ui: &mut egui::Ui,
@@ -4426,46 +4573,25 @@ impl Sessions {
             }
             return;
         };
-        // At a narrow width the title gets its own line, so controls cannot squeeze it out.
         let title_on_own_line = ui.available_width() < TWO_COLUMNS_FROM;
-        if title_on_own_line {
-            note_title(ui, &note.label(), &note.date);
-        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
             self.record_control(ui, settings);
-            if Action::quiet("Details")
-                .name("Edit session details")
-                .show(ui)
-                .clicked()
+            if !title_on_own_line
+                || self
+                    .draft
+                    .as_ref()
+                    .is_some_and(|draft| draft.state == DraftState::Conflict)
             {
-                self.form = Some(Form {
-                    editing: Some(note.id),
-                    number: note.number.to_string(),
-                    title: note.title.clone(),
-                    date: note.date.clone(),
-                    template: String::new(),
-                    error: None,
-                });
-            }
-            if let Some(draft) = &self.draft {
-                // Centred on the buttons beside it, though the row aligns to the top.
-                ui.allocate_ui_with_layout(
-                    egui::vec2(STATUS_WIDTH, Density::Scan.control()),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| Self::note_status(ui, draft),
-                );
+                self.session_details_action(ui, &note);
             }
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                if !title_on_own_line {
-                    note_title(ui, &note.label(), &note.date);
-                }
+                note_title(ui, &note.label(), &note.date);
             });
         });
         self.record_line(ui, settings);
         if let Some(draft) = &mut self.draft {
             Self::draft_problem(ui, draft);
         }
-        self.event_link_message(ui, book);
         let shown = self.notice_session.is_none() || self.notice_session == self.selected;
         if shown && self.job_done {
             self.job_done = false;
@@ -4593,8 +4719,11 @@ impl Sessions {
                         .color(c.muted),
                 );
             }
-            if shown == Tab::Note || (shown == Tab::Plan && beside) {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if title_on_own_line {
+                    self.session_details_action(ui, &note);
+                }
+                if shown == Tab::Note || (shown == Tab::Plan && beside) {
                     let (word, icon) = if self.reading_note {
                         ("Write", icons::EDIT)
                     } else {
@@ -4608,8 +4737,8 @@ impl Sessions {
                     {
                         self.reading_note = !self.reading_note;
                     }
-                });
-            }
+                }
+            });
         });
         ui.add_space(design::XS);
         match shown {
@@ -5060,10 +5189,63 @@ impl Sessions {
             ui.add(
                 egui::Label::new(
                     Type::Small
-                        .rich(ui, "Notes, Timeline.md, Templates and Recordings are all here. Changing this does not move files.")
+                        .rich(
+                            ui,
+                            "Notes, Timeline.md, Templates and Recordings are all here.",
+                        )
                         .color(c.muted),
                 )
                 .wrap(),
+            );
+        }
+        let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
+        let files = self
+            .folder
+            .as_ref()
+            .map(|folder| super::storage_files(folder))
+            .transpose();
+        let has_files = changed
+            && files
+                .as_ref()
+                .ok()
+                .and_then(|files| files.as_ref())
+                .is_some_and(|files| !files.is_empty());
+        if has_files {
+            let files = files.as_ref().unwrap().as_ref().unwrap();
+            let notes = self.notes.len();
+            let templates = files
+                .iter()
+                .filter(|path| {
+                    self.folder
+                        .as_ref()
+                        .is_some_and(|folder| path.starts_with(folder.join(super::TEMPLATES)))
+                })
+                .count();
+            let recordings = files
+                .iter()
+                .filter(|path| path.extension().is_some_and(|ext| ext == "wav"))
+                .count();
+            let counts = [
+                design::count(notes, "note", "notes"),
+                design::count(book.events.len(), "event", "events"),
+                design::count(templates, "template", "templates"),
+                design::count(recordings, "recording", "recordings"),
+            ]
+            .into_iter()
+            .filter(|count| !count.is_empty())
+            .collect::<Vec<_>>()
+            .join(", ");
+            let counts = if counts.is_empty() {
+                "Timeline.md".to_owned()
+            } else {
+                counts
+            };
+            design::message(
+                ui,
+                Tone::Warning,
+                &format!(
+                    "The current folder keeps {counts}. Splat will not show these files from the new folder."
+                ),
             );
         }
         ui.add_space(design::XS);
@@ -5073,17 +5255,36 @@ impl Sessions {
             Some("Wait for processing to finish.")
         } else if self.busy_with_edit() || book.not_saved() {
             Some("Choose what to do with the unsaved file first.")
+        } else if files.is_err() {
+            Some("Could not read the session files. Check the current folder first.")
+        } else if !changed {
+            Some("No changes to save.")
         } else {
             None
         };
-        if let Some(reason) = blocked {
-            wrapped_words(ui, Type::Small, reason, c.muted);
-        }
-        if Action::secondary("Save folder")
-            .blocked(blocked)
-            .show(ui)
-            .clicked()
-        {
+        let mut move_files = false;
+        let save = ui
+            .horizontal_wrapped(|ui| {
+                design::blocked_reason(ui, blocked);
+                if has_files {
+                    move_files = Action::secondary("Move files and save")
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked();
+                    Action::quiet("Save without moving")
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked()
+                        || move_files
+                } else {
+                    Action::secondary("Save folder")
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked()
+                }
+            })
+            .inner;
+        if save {
             self.flush();
             // The save just now can fail. Those words stay on screen, as `select` keeps them.
             if self.draft.as_ref().is_some_and(Draft::needs_attention) {
@@ -5093,7 +5294,12 @@ impl Sessions {
                 );
                 return;
             }
-            match save_folder(&campaign, &self.folder_text) {
+            let saved = if move_files {
+                super::move_storage(&campaign, &self.folder_text)
+            } else {
+                save_folder(&campaign, &self.folder_text)
+            };
+            match saved {
                 Ok(folder) => {
                     self.folder = Some(folder);
                     self.folder_error = None;
@@ -5246,6 +5452,66 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removing_one_planned_fight_keeps_other_links_prose_and_sections() {
+        let body = "## Recap of last time\n- [[Bridge]]\n## Plan for tonight\n- [[Bridge]]\n- [[Bridge]]\nMeet [[Bridge|the guard]] at dusk.\n- [[Shrine]]\n## What happened\n- [[Bridge]]\n";
+        let changed = unlink_planned_fight(body, "Bridge", 1);
+        assert_eq!(
+            changed,
+            body.replacen("- [[Bridge]]\n- [[Bridge]]", "- [[Bridge]]", 1)
+        );
+        assert_eq!(
+            unlink_planned_fight(body, "Bridge", 2),
+            body.replace(
+                "Meet [[Bridge|the guard]] at dusk.",
+                "Meet the guard at dusk."
+            )
+        );
+        assert_eq!(unlink_planned_fight(body, "Missing", 0), body);
+    }
+
+    #[test]
+    fn link_update_undo_expires_on_navigation_note_edits_and_event_edits() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = create_note(
+            dir.path(),
+            &NewNote {
+                number: 1,
+                title: "",
+                date: "2026-11-03",
+                campaign: "Test",
+                template: "Original words.",
+            },
+        )
+        .unwrap();
+        let mut sessions = Sessions {
+            notes: vec![note.clone()],
+            ..Default::default()
+        };
+        let mut book = Book::default();
+        for edit in 0..3 {
+            sessions.updated_links = Some(Vec::new());
+            sessions.link_undo_state = Some(LinkUndoState {
+                notes: sessions.note_bodies(),
+                events: book.events.clone(),
+            });
+            sessions.expire_event_link_undo(true, &book);
+            assert!(sessions.updated_links.is_some());
+            match edit {
+                0 => sessions.expire_event_link_undo(false, &book),
+                1 => {
+                    fs::write(&note.path, "Changed outside Splat.").unwrap();
+                    sessions.expire_event_link_undo(true, &book);
+                }
+                _ => {
+                    book.add(Kind::Day, None);
+                    sessions.expire_event_link_undo(true, &book);
+                }
+            }
+            assert!(sessions.updated_links.is_none());
+        }
+    }
 
     #[test]
     fn event_link_updates_save_and_undo_as_one_batch_without_overwriting_external_edits() {

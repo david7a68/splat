@@ -324,6 +324,10 @@ impl Settings {
                 data.get_temp::<bool>(egui::Id::new("focus_cookie"))
                     .unwrap_or(false)
             });
+        let heading_top = ui.cursor().top();
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("account_heading_content_y"), heading_top)
+        });
         design::group_heading(ui, "D&D Beyond account", 0);
         if open {
             self.show_account(ui, false);
@@ -373,9 +377,6 @@ impl Settings {
         let state = self.connection_status();
         {
             ui.horizontal(|ui| {
-                if account == Account::Busy {
-                    crate::design::spinner(ui);
-                }
                 design::status(ui, state);
             });
         }
@@ -456,7 +457,10 @@ impl Settings {
                     response.scroll_to_me(Some(egui::Align::Center));
                 }
             });
-            ui.checkbox(&mut self.remember, "Remember session in desktop keyring");
+            ui.checkbox(
+                &mut self.remember,
+                "Remember my D&D Beyond sign-in on this computer",
+            );
             ui.horizontal(|ui| {
                 let reason = self
                     .cookie_input
@@ -464,11 +468,12 @@ impl Settings {
                     .is_empty()
                     .then_some("Paste your session cookie first.");
                 design::blocked_reason(ui, reason);
-                if design::Action::secondary("Connect")
-                    .blocked(reason)
-                    .show(ui)
-                    .clicked()
-                {
+                let action = if reason.is_none() && account != Account::Connected {
+                    design::Action::primary("Connect")
+                } else {
+                    design::Action::secondary("Connect")
+                };
+                if action.blocked(reason).show(ui).clicked() {
                     self.sign_in_again = false;
                     let cookie = Zeroizing::new(self.cookie_input.trim().to_owned());
                     self.send(
@@ -498,14 +503,28 @@ impl Settings {
         if (!matches!(account, Account::NotConnected | Account::Failed)
             || self.warning.is_some()
             || self.saved_session)
-            && design::Action::quiet(if account == Account::Busy {
-                "Cancel"
-            } else {
-                "Disconnect"
-            })
-            .density(Density::Read)
-            .show(ui)
-            .clicked()
+            && ui
+                .scope_builder(
+                    egui::UiBuilder::new().max_rect({
+                        let mut rect = ui.available_rect_before_wrap();
+                        // The quiet button's text starts at the column edge.
+                        if account == Account::Busy {
+                            rect.min.x -= design::S;
+                        }
+                        rect
+                    }),
+                    |ui| {
+                        design::Action::quiet(if account == Account::Busy {
+                            "Cancel"
+                        } else {
+                            "Disconnect"
+                        })
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    },
+                )
+                .inner
         {
             self.disconnect(ui.ctx());
         }

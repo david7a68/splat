@@ -217,7 +217,14 @@ impl DndBeyond {
         local: &mut Campaigns,
     ) {
         if session.is_none() {
-            if ui.ctx().content_rect().width() >= 1000.0 {
+            let heading_visible = ui
+                .ctx()
+                .data(|data| data.get_temp::<f32>(egui::Id::new("account_heading_content_y")))
+                .is_some_and(|y| {
+                    ui.clip_rect()
+                        .contains(egui::pos2(ui.clip_rect().center().x, y))
+                });
+            if ui.ctx().content_rect().width() >= 1000.0 || heading_visible {
                 return;
             }
             ui.horizontal_wrapped(|ui| {
@@ -274,10 +281,11 @@ impl DndBeyond {
                                         color: crate::design::colors().muted,
                                     },
                                 );
-                            } else if crate::design::Action::secondary("Add…")
-                                .name(&format!("Add {} from D&D Beyond", remote.name))
-                                .show(ui)
-                                .clicked()
+                            } else if !local.importing(&remote.id)
+                                && crate::design::Action::secondary("Add…")
+                                    .name(&format!("Add {} from D&D Beyond", remote.name))
+                                    .show(ui)
+                                    .clicked()
                             {
                                 local.start_import(&remote.id, &remote.name);
                             }

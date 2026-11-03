@@ -404,12 +404,12 @@ impl ProcessingSettings {
             ui.horizontal(|ui| {
                 let field = self.field(slot);
                 let empty = field.typing.trim().is_empty();
-                let show_save = !empty || (!saved && !held);
-                let reason = (empty && show_save).then_some("Enter a key first.");
+                let show_save = !empty || (!saved && !held) || !fits;
+                let reason = (empty && show_save).then_some("Paste a key first.");
                 let reason_width = reason.map_or(0.0, |text| {
                     design::number_width(ui, text, &Type::Small.font(ui)) + design::S
                 });
-                let remove_width = if saved || held {
+                let remove_width = if (saved || held) && fits {
                     Action::quiet(&remove).natural_width(ui) + design::L
                 } else {
                     0.0
@@ -438,19 +438,27 @@ impl ProcessingSettings {
                 );
                 design::named(ui, &response, label);
                 design::blocked_reason(ui, reason);
-                if !field.typing.trim().is_empty() || (!saved && !held) {
+                if show_save {
                     save = Action::secondary("Save key")
                         .name(&format!("Save key: {label}"))
-                        .blocked_if(empty, "Enter a key first.")
+                        .blocked_if(empty, "Paste a key first.")
                         .show(ui)
                         .clicked();
                 }
-                if saved || held {
+                if (saved || held) && fits {
                     ui.add_space(design::L);
                     forget = Action::quiet(&remove).name(&remove_name).show(ui).clicked();
                 }
             });
         });
+        if (saved || held) && !fits {
+            design::message(
+                ui,
+                Tone::Warning,
+                "The saved key is for another service, so Splat will not send it here. Save a key for this service.",
+            );
+            forget = Action::quiet(&remove).name(&remove_name).show(ui).clicked();
+        }
         if save {
             match slot {
                 KeySlot::Speech => self.config.speech_key_for = self.config.speech_url.clone(),
@@ -491,12 +499,6 @@ impl ProcessingSettings {
                 Type::Small
                     .rich(ui, format!("{} Saved in the desktop keyring.", icons::OK))
                     .color(colors().document.saved),
-            );
-        } else if saved {
-            design::message(
-                ui,
-                Tone::Warning,
-                "The saved key is for another service, so Splat will not send it here. Save a key for this service.",
             );
         }
     }

@@ -770,6 +770,10 @@ impl Campaigns {
         });
     }
 
+    pub fn importing(&self, remote: &str) -> bool {
+        self.remote.as_ref().is_some_and(|(id, _)| id == remote)
+    }
+
     pub fn show_import_form(&mut self, ui: &mut egui::Ui, remote_id: &str) {
         if self.remote.as_ref().is_some_and(|(id, _)| id == remote_id) {
             self.form(ui, false, true);
@@ -792,14 +796,13 @@ impl Campaigns {
         }
     }
 
-    fn form(&mut self, ui: &mut egui::Ui, inline: bool, primary: bool) {
+    fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
         let editing = self.editing.is_some();
         // Keep the add form's open state when Settings changes between one and two columns.
         let form_scope = egui::Id::new(("campaign_form", self.editing));
         ui.scope_builder(egui::UiBuilder::new().id(form_scope), |ui| {
             let mut added = false;
-            let direct =
-                editing || self.remote.is_some() || (inline && self.data.campaigns.is_empty());
+            let direct = editing || self.remote.is_some() || self.data.campaigns.is_empty();
             let title = if editing {
                 "Details".to_owned()
             } else if let Some((_, name)) = &self.remote {
@@ -812,9 +815,6 @@ impl Campaigns {
             let empty = self.data.campaigns.is_empty();
             let mut fields = |ui: &mut egui::Ui| {
                 ui.add_space(design::XS);
-                if let Some((id, name)) = &self.remote {
-                    ui.label(format!("{name} · D&D Beyond ID {id}"));
-                }
                 let name = design::text_field(ui, "Campaign name", &mut self.name, None, None);
                 if std::mem::take(&mut self.focus_name) {
                     name.request_focus();
@@ -877,7 +877,9 @@ impl Campaigns {
                 }
             };
             let form = if direct {
-                design::group_heading(ui, &title, 0);
+                if editing {
+                    design::group_heading(ui, &title, 0);
+                }
                 fields(ui);
                 None
             } else {

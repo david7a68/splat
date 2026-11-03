@@ -471,19 +471,15 @@ impl Splat {
         if self.timeline.not_saved() {
             items.push(("The timeline is not saved.".to_owned(), Page::Timeline));
         }
-        if let Some(label) = self.sessions.recording_label() {
+        if self.sessions.recording_label().is_some() {
             items.push((
-                format!(
-                    "{label} is recording. Closing stops it, and what is recorded so far is kept."
-                ),
+                "Closing stops the recording. What is recorded so far is kept.".to_owned(),
                 Page::Sessions,
             ));
         }
-        if let Some(label) = self.sessions.processing_label() {
+        if self.sessions.processing_label().is_some() {
             items.push((
-                format!(
-                    "{label} is processing. Closing stops it. What is done is kept, and processing it again goes on from there."
-                ),
+                "Closing stops processing. What is done is kept. Continue processing goes on from there.".to_owned(),
                 Page::Sessions,
             ));
         }
@@ -575,6 +571,16 @@ impl Splat {
             ui.add_space(design::S);
             let loses = items.len() != background && (!only_sync || sync_loss);
             ui.horizontal(|ui| {
+                if only_sync
+                    && self.settings.signed_out()
+                    && Action::quiet("Connect to sync").show(ui).clicked()
+                {
+                    self.page = Page::Settings;
+                    self.settings_tab = SettingsTab::default();
+                    self.settings.focus_sign_in();
+                    self.confirm_close = false;
+                }
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if only_run_unsaved {
                         save_new = Action::primary("Save as a new run and close")
@@ -594,15 +600,6 @@ impl Splat {
                     keep |= response.clicked();
                 });
             });
-            if only_sync
-                && self.settings.signed_out()
-                && Action::quiet("Connect to sync").show(ui).clicked()
-            {
-                self.page = Page::Settings;
-                self.settings_tab = SettingsTab::default();
-                self.settings.focus_sign_in();
-                self.confirm_close = false;
-            }
             if loses {
                 ui.add_space(design::L);
                 discard = Action::destructive(discard_label).show(ui).clicked();
@@ -769,11 +766,16 @@ impl Splat {
                 }
             }
             for state in statuses {
-                design::wrapped_status(ui, state).on_hover_text(if state.word == "Signed out" {
-                    "Signed out of D&D Beyond"
-                } else {
-                    state.word
-                });
+                let full = match state.word {
+                    "Signed out" => "Signed out of D&D Beyond",
+                    "Not remembered" => "Connected · not remembered",
+                    "Check result" => sessions::page::processed_warning().word,
+                    _ => state.word,
+                };
+                let response = design::wrapped_status(ui, state).on_hover_text(full);
+                if full != state.word {
+                    design::named(ui, &response, full);
+                }
             }
             // Words that could not be saved lead to where the DM can choose.
             for (lost, word, target) in [
@@ -939,6 +941,9 @@ impl Splat {
         if self.settings.signed_out() {
             account.word = "Signed out";
         }
+        if account.word == "Connected · not remembered" {
+            account.word = "Not remembered";
+        }
         let mut statuses = vec![account];
         for (dirty, word) in [
             (self.library.dirty(), "Library draft"),
@@ -987,11 +992,9 @@ impl Splat {
                 color: c.connection.busy,
             });
         } else if self.sessions.job_warned() {
-            statuses.push(Status {
-                icon: icons::WARN,
-                word: "Processed: check it",
-                color: c.result.warning,
-            });
+            let mut status = sessions::page::processed_warning();
+            status.word = "Check result";
+            statuses.push(status);
         } else if self.sessions.job_done() {
             statuses.push(Status {
                 icon: icons::SUCCESS,
@@ -1125,9 +1128,9 @@ impl Splat {
                             design::status(
                                 ui,
                                 Status {
-                                    icon: icons::OFFLINE,
+                                    icon: icons::SYNC_OFF,
                                     word: "Sync stopped",
-                                    color: c.result.error,
+                                    color: c.sync.pending,
                                 },
                             );
                         }
@@ -1337,19 +1340,13 @@ impl Splat {
                         .index()
                         .map(|index| index.places())
                         .unwrap_or_default();
-                    egui::TopBottomPanel::bottom("event_link_updates")
-                        .show_separator_line(false)
-                        .frame(egui::Frame::new())
-                        .show_inside(ui, |ui| {
-                            self.sessions.event_link_message(ui, &self.timeline)
-                        });
                     self.timeline_page.show(
                         ui,
                         &mut self.timeline,
                         campaign.id,
-                        &campaign.name,
                         &links,
                         current,
+                        &mut self.sessions,
                     );
                 } else {
                     self.no_campaign(ui);
@@ -1852,6 +1849,8 @@ impl eframe::App for Splat {
         self.processing.recording_now = self.sessions.recording();
         let open = self.campaigns.active_campaign();
         self.sessions.poll(ctx, open.as_ref(), &mut self.timeline);
+        self.sessions
+            .expire_event_link_undo(self.page == Page::Timeline, &self.timeline);
         self.old_session = self.sessions.current_dated().is_some();
         let fact = self.encounters.run().map(encounter_run::Run::timeline_fact);
         if fact != self.run_fact {
