@@ -178,6 +178,7 @@ pub fn components(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         let _ = icon_button(ui, icons::CLOSE, "Close");
         let _ = link(ui, "A link");
+        let _ = small_link(ui, "A small link");
         let mut choice = 1;
         segmented(ui, &mut choice, &[(0, "Read"), (1, "Edit"), (2, "Log")]);
         let _ = split_action(ui, Action::secondary("Split"), "Other ways", |ui| {
