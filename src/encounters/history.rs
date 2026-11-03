@@ -1,6 +1,6 @@
 //! What the Encounters page shows where: what is in play, what is ready, and what has happened.
-//! An encounter leaves Ready when a run of it ends, so nothing is written to its note, and an
-//! undo of the ending brings it back. The story's sessions come from the timeline.
+//! An encounter with an unfinished run leaves Ready until it ends, unless Keep in Ready is on.
+//! Nothing is written to the encounter note. The story's sessions come from the timeline.
 use crate::{
     encounter_run::{SavedRunInfo, Standing},
     timeline::{Event, page::SessionLink},
@@ -14,13 +14,13 @@ pub(super) struct Template {
     pub id: Uuid,
     pub name: String,
     pub summary: Option<String>,
-    /// It stays ready after a run ends.
+    /// It stays in Ready while a run is unfinished, with Start fight blocked.
     pub repeatable: bool,
 }
 
 pub(super) struct ReadyRow<'a> {
     pub template: &'a Template,
-    /// A run of it has not ended, so starting it again is probably not what the DM means.
+    /// A run of it has not ended, so Start fight is blocked in Ready.
     pub unfinished_run: bool,
 }
 
@@ -38,7 +38,7 @@ pub(super) struct PastSession<'a> {
 
 #[derive(Default)]
 pub(super) struct Arranged<'a> {
-    /// The open run first, whatever its phase, so the way back to it is always here.
+    /// Unfinished runs, with the open one first. Ended runs always stay in History.
     pub in_progress: Vec<&'a SavedRunInfo>,
     pub ready: Vec<ReadyRow<'a>>,
     pub history: Vec<PastSession<'a>>,
@@ -55,7 +55,10 @@ const NO_SESSION: &str = "No session";
 
 /// The template a run came from. A save with no record of it matches by name, but only when
 /// one template has that name: entries can share a name, and a wrong match would hide one.
-fn template_of<'a>(run: &SavedRunInfo, templates: &'a [Template]) -> Option<&'a Template> {
+pub(super) fn template_of<'a>(
+    run: &SavedRunInfo,
+    templates: &'a [Template],
+) -> Option<&'a Template> {
     if let Some(source) = run.source {
         return templates.iter().find(|template| template.id == source);
     }
@@ -79,17 +82,23 @@ pub(super) fn arrange<'a>(
         .iter()
         .filter(|run| open.is_none_or(|open| run.id != open.id));
     let mut page = Arranged::default();
-    page.in_progress.extend(open);
-    let (mut ended, mut unfinished) = (BTreeSet::new(), BTreeSet::new());
+    page.in_progress
+        .extend(open.filter(|run| run.standing == Standing::Unfinished));
+    let mut unfinished = BTreeSet::new();
     if let Some(open) = open
+        && open.standing == Standing::Unfinished
         && let Some(template) = template_of(open, templates)
     {
-        match open.standing {
-            Standing::Ended => ended.insert(template.id),
-            _ => unfinished.insert(template.id),
-        };
+        unfinished.insert(template.id);
     }
     let mut past = Vec::new();
+    past.extend(
+        open.filter(|run| run.standing == Standing::Ended)
+            .map(|run| PastRun {
+                run,
+                template: template_of(run, templates),
+            }),
+    );
     for run in on_disk {
         let template = template_of(run, templates);
         match run.standing {
@@ -99,14 +108,13 @@ pub(super) fn arrange<'a>(
                 unfinished.extend(template.map(|template| template.id));
             }
             Standing::Ended => {
-                ended.extend(template.map(|template| template.id));
                 past.push(PastRun { run, template });
             }
         }
     }
     page.ready = templates
         .iter()
-        .filter(|template| template.repeatable || !ended.contains(&template.id))
+        .filter(|template| template.repeatable || !unfinished.contains(&template.id))
         .map(|template| ReadyRow {
             template,
             unfinished_run: unfinished.contains(&template.id),
@@ -222,22 +230,21 @@ mod tests {
     }
 
     #[test]
-    fn an_ended_run_moves_its_encounter_out_of_ready() {
+    fn an_ended_run_returns_its_encounter_to_ready() {
         let templates = [template("Bridge"), template("Mill")];
         let runs = [run(&templates[0], Standing::Ended)];
         let page = arrange(&templates, &runs, None, &[], &[]);
-        assert_eq!(ready_names(&page), ["Mill"]);
+        assert_eq!(ready_names(&page), ["Bridge", "Mill"]);
         assert_eq!(page.ended_count(), 1);
     }
 
     #[test]
-    fn an_unfinished_run_comes_first_and_leaves_its_encounter_ready() {
+    fn an_unfinished_run_appears_only_in_progress() {
         let templates = [template("Bridge")];
         let runs = [run(&templates[0], Standing::Unfinished)];
         let page = arrange(&templates, &runs, None, &[], &[]);
         assert_eq!(page.in_progress.len(), 1);
-        assert_eq!(ready_names(&page), ["Bridge"]);
-        assert!(page.ready[0].unfinished_run);
+        assert!(page.ready.is_empty());
     }
 
     #[test]
@@ -245,10 +252,14 @@ mod tests {
         let mut road = template("Road");
         road.repeatable = true;
         let templates = [road];
-        let runs = [run(&templates[0], Standing::Ended)];
+        let runs = [run(&templates[0], Standing::Unfinished)];
         let page = arrange(&templates, &runs, None, &[], &[]);
         assert_eq!(ready_names(&page), ["Road"]);
-        assert_eq!(page.ended_count(), 1, "its past runs are still history");
+        assert!(
+            page.ready[0].unfinished_run,
+            "starting again must be blocked"
+        );
+        assert_eq!(page.in_progress.len(), 1);
     }
 
     /// A new run is in no list yet. An ending, and its undo, show before the run closes.
@@ -261,41 +272,37 @@ mod tests {
         live.id = saved.id;
         let runs = [saved];
         let page = arrange(&templates, &runs, Some(&live), &[], &[]);
-        assert_eq!(ready_names(&page), ["Bridge"], "undo brings it back");
+        assert!(page.ready.is_empty(), "undo restores the unfinished run");
         assert_eq!(page.ended_count(), 0);
         assert_eq!(page.in_progress.len(), 1, "one row, not two");
 
         let brand_new = run(&templates[0], Standing::Ended);
+        let page = arrange(&templates, &[], Some(&brand_new), &[], &[]);
+        assert_eq!(ready_names(&page), ["Bridge"], "it ended while open");
+        assert!(page.in_progress.is_empty());
+        assert_eq!(page.ended_count(), 1);
+        assert_eq!(page.history[0].runs[0].run.id, brand_new.id);
+
         let other = [run(&templates[0], Standing::Unfinished)];
         let page = arrange(&templates, &other, Some(&brand_new), &[], &[]);
-        assert!(ready_names(&page).is_empty(), "it ended while open");
-        assert_eq!(page.in_progress.len(), 2);
-        assert_eq!(
-            page.in_progress[0].id, brand_new.id,
-            "the way back stays first"
-        );
-        assert!(
-            page.in_progress[1..]
-                .iter()
-                .all(|run| run.id == other[0].id),
-            "then the rest"
-        );
-        assert_eq!(page.ended_count(), 0);
+        assert!(page.ready.is_empty(), "another run is still unfinished");
+        assert_eq!(page.in_progress[0].id, other[0].id);
+        assert_eq!(page.ended_count(), 1);
     }
 
     #[test]
     fn an_old_save_matches_by_name_only_when_one_encounter_has_it() {
         let single = [template("Bridge")];
-        let runs = [old_run("Bridge", Standing::Ended)];
+        let runs = [old_run("Bridge", Standing::Unfinished)];
         let page = arrange(&single, &runs, None, &[], &[]);
         assert!(ready_names(&page).is_empty());
-        assert!(page.history[0].runs[0].template.is_some());
+        assert!(template_of(page.in_progress[0], &single).is_some());
 
         let twins = [template("New encounter"), template("New encounter")];
-        let runs = [old_run("New encounter", Standing::Ended)];
+        let runs = [old_run("New encounter", Standing::Unfinished)];
         let page = arrange(&twins, &runs, None, &[], &[]);
         assert_eq!(page.ready.len(), 2, "a shared name proves nothing");
-        assert!(page.history[0].runs[0].template.is_none());
+        assert!(template_of(page.in_progress[0], &twins).is_none());
     }
 
     #[test]

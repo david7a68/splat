@@ -3709,7 +3709,8 @@ impl Sessions {
             self.last_time_block(ui, book);
         }
         let recordings = format!("Recordings ({})", self.recordings.len());
-        let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM;
+        let editing_group_here = plan.group_open && self.group_session == self.selected;
+        let beside = ui.available_width() >= PLAN_BESIDE_NOTE_FROM && !editing_group_here;
         // In a wide page, the note is on the plan's tab, so there is no second one to choose.
         let mut shown = if beside && self.tab == Tab::Note {
             Tab::Plan

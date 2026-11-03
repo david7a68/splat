@@ -738,16 +738,14 @@ pub mod encounter_build {
     const NEW_NAME: &str = "Ashfall Crossing";
     const MONSTER: &str = "wolf";
     const BOSS: &str = "cultist";
-    const DUPLICATE: &str = "Duplicate";
     const SAVED_NOTE: &str = "Encounter saved.";
     const SAVED_ENCOUNTER: &str = "Bridge Ambush";
     const SAVED_FIRST_SLOT: &str = "1. Brannoch Vale";
     const SYNC_OPTION: &str = "Sync party with D&D Beyond";
     const PARTY_NOW: &str = "Party now: HP";
-    const LIVE_ROW: &str = "HP 11/41 · Bloodied · AC 15 · Poisoned";
+    const LIVE_ROW: &str = "HP\u{a0}11/41 · Bloodied · AC\u{a0}15 · Poisoned";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
-    const READ: &str = "Read";
     const RESULT_NAME: &str = "Wolf";
     const OWN_CREATURE: &str = "Cinder Wolf";
     const EDITOR_NAME: &str = "Encounter name";
@@ -818,7 +816,7 @@ pub mod encounter_build {
         );
         d.click_first(ADD);
         d.expect("6. ");
-        d.click_below("6. ", DUPLICATE);
+        d.click_first(ADD);
         d.expect("7. ");
         d.type_text(BOSS);
         d.click_first(ADD);
@@ -844,7 +842,7 @@ pub mod encounter_build {
         );
         // Read a full stat block in Lookup, with the editor still open.
         let before = d.interaction_count();
-        d.click_first(READ);
+        d.click("Cultist");
         let cost = d.interaction_count() - before;
         let read = d.has_containing("ARMOR CLASS");
         d.state("stat-block-beside-editor", Sizes::All);
@@ -889,7 +887,7 @@ pub mod encounter_build {
         });
         let first = nodes
             .iter()
-            .position(|node| node.name == "In progress")
+            .position(|node| node.name == "IN PROGRESS")
             .zip(
                 nodes
                     .iter()
@@ -2424,7 +2422,7 @@ pub mod run_folder_defect {
     use super::*;
     const RUN_FOLDER: &str = "Run folder";
     const SAVE_SETTINGS: &str = "Save run settings";
-    const DISCARD: &str = "Discard changes";
+    const DISCARD: &str = "Discard";
     const BACK_TO_LIST: &str = "Back to encounters";
 
     pub fn run(d: &mut Driver<'_>) {
@@ -2562,7 +2560,7 @@ pub mod column_resize {
 
     fn the_roster_follows_the_add_panel(d: &mut Driver<'_>) {
         d.set_base(LARGE);
-        // An open run blocks editing an encounter.
+        // Close the run before checking the editor at the full page height.
         close_run(d);
         go_encounters(d);
         open_saved_encounter(d, ENCOUNTER);
@@ -2572,7 +2570,7 @@ pub mod column_resize {
         let roster = d
             .nodes()
             .into_iter()
-            .filter(|node| node.name.ends_with("Remove") && node.in_view())
+            .filter(|node| node.name.starts_with("More actions for") && node.in_view())
             .map(|node| node.rect.right())
             .fold(0.0, f32::max);
         d.observe(
@@ -2762,13 +2760,29 @@ pub mod run_restart {
         close_run(d);
         go_library(d);
         d.restart();
+        let no_open_run = !d.app_mut().encounters.has_run();
         d.observe(
             "Restart",
-            d.has_containing(SEARCH_LIBRARY) && !d.has_containing(RUN_HEADING),
+            d.has_containing(SEARCH_LIBRARY) && no_open_run,
             "With no open run, the app reopens on the last page",
         );
         d.state("restart-on-last-page", Sizes::Default);
         d.goal("restart on a page");
+        d.begin_task();
+        d.observe(
+            "P3",
+            d.has_containing("Paused"),
+            "The rail keeps the paused run in view",
+        );
+        let before_resume = d.interaction_count();
+        d.click_starting("Run · Round");
+        d.expect(NEXT_TURN);
+        d.state("paused-run-resumed-from-rail", Sizes::All);
+        d.observe(
+            "P3",
+            d.interaction_count() - before_resume == 1,
+            "The paused run resumes with one click",
+        );
     }
 }
 
@@ -3631,7 +3645,7 @@ pub mod nav_table {
                 && d.has_label(FIRST_SLOT),
             "Encounter draft: its name and rows are as they were",
         );
-        d.click(DISCARD);
+        d.click("Discard");
         d.goal("walk section 3's table");
 
         // G3: every control in the rail goes somewhere of its own.
@@ -3640,6 +3654,9 @@ pub mod nav_table {
         for name in d.rail_page_buttons() {
             d.click(&name);
             let title = d.page_title();
+            if name.starts_with("Run · ") {
+                close_run(d);
+            }
             titles.push((name, title));
         }
         let mut distinct: Vec<&Option<String>> = titles.iter().map(|(_, title)| title).collect();
@@ -3657,7 +3674,7 @@ pub mod nav_table {
         go_encounters(d);
         d.click(NEW_ENCOUNTER);
         let mut silent = d.disabled_without_reason();
-        d.click(DISCARD);
+        d.click("Discard");
         go_settings(d);
         silent.extend(d.disabled_without_reason());
         go_campaign(d);
@@ -4873,7 +4890,7 @@ pub mod session_recording {
 /// W13: prepare encounter groups, and add one to a run when it arrives.
 pub mod encounter_groups {
     use super::*;
-    const LIST_HEADING: &str = "Encounter groups (4)";
+    const LIST_HEADING: &str = "GROUPS";
     const GROUPS_TAB: &str = "Arrivals";
     const NEW_GROUP: &str = "New group";
     const SAVE_GROUP: &str = "Save group";
@@ -4886,6 +4903,7 @@ pub mod encounter_groups {
 
     pub fn run(d: &mut Driver<'_>) {
         d.expect(LIST_HEADING);
+        d.click_starting(LIST_HEADING);
         d.state("groups-in-the-list", Sizes::All);
         d.check_tab_order("encounters, with groups");
 
@@ -4902,7 +4920,6 @@ pub mod encounter_groups {
         d.expect("Maximum HP: how it changes");
         d.state("group-member-changes", Sizes::All);
         d.check_tab_order("group editor, changes open");
-        d.click(CHANGES);
         d.click("Back to encounters");
 
         // A group that cannot be added says why, in the editor, and its change says why.
@@ -4938,13 +4955,13 @@ pub mod encounter_groups {
         d.state("group-rejected-empty", Sizes::Default);
         d.type_into(FIND, "wolf");
         d.state("group-find-creature", Sizes::Default);
-        d.click_beside("Wolf", ADD);
+        d.click_beside_exact("Wolf", ADD);
         d.click(SAVE_GROUP);
         d.expect(SAVED_NOTE);
         d.state("group-saved", Sizes::Default);
         d.goal("make an encounter group");
         d.click("Back to encounters");
-        d.expect("Encounter groups (5)");
+        d.expect("GROUPS");
 
         // At the table: the panel, with members and XP.
         resume_run(d, RUN);
@@ -5084,68 +5101,116 @@ pub mod encounter_groups {
 
 pub mod encounter_history {
     use super::*;
-    const DELETE_RUN: &str = "Delete the saved run of Bridge Ambush";
-    const UNDO_DELETE: &str = "Undo delete";
     const OPEN_OLD: &str = "Open the run of Old Mill Raid";
-    const BACK: &str = "Back to this run";
-    const NO_SESSION: &str = "NO SESSION";
-
     pub fn run(d: &mut Driver<'_>) {
         d.expect(READY_TO_RUN);
         d.expect(HISTORY);
         d.observe(
             "T4.6",
-            !d.has_label(RUN_PAST),
-            "An encounter whose run ended is not in Ready to run, and History starts closed",
+            d.has_label(RUN_PAST)
+                && d.nodes()
+                    .iter()
+                    .filter(|node| node.name == RUN && node.role == egui::accesskit::Role::Label)
+                    .count()
+                    == 1,
+            "Ended encounters return to Ready; an unfinished encounter appears only in In progress",
         );
         d.state("encounters-with-history", Sizes::All);
-
         d.click_starting(HISTORY);
-        let session = d.has_containing(&PAST_SESSION.to_uppercase());
         d.observe(
             "T4.6",
-            session && d.has(NO_SESSION) && d.has_label(RUN_PAST) && d.has_label(RUN_OLD),
-            format!("Ended runs sit under their session, or under No session: {session}"),
+            d.has_containing(&PAST_SESSION.to_uppercase())
+                && d.has("NO SESSION")
+                && d.has_label(RUN_PAST)
+                && d.has_label(RUN_OLD),
+            "History groups ended runs by session",
         );
         d.state("history-open", Sizes::All);
         d.check_tab_order("encounters, history open");
-
-        // Undo is the guard on a delete, and the row comes back as it was.
-        d.click_starting(DELETE_RUN);
-        d.expect(UNDO_DELETE);
+        delete_saved_run(d, RUN);
+        d.expect("Undo delete");
         d.observe(
             "T4.6",
-            !d.has_containing(DELETE_RUN),
-            "A deleted run leaves the list, and Undo delete is offered",
+            !d.has_containing(&format!("{RUN} · In progress")),
+            "Deleted run leaves the list with Undo",
         );
         d.state("run-deleted", Sizes::Default);
-        d.click(UNDO_DELETE);
-        d.expect(DELETE_RUN);
-
-        // Reading an old run writes nothing to the story.
+        d.click("Undo delete");
+        d.expect(&format!("{RUN} · In progress"));
         let before = d.app_mut().timeline.events.len();
         d.click_starting(OPEN_OLD);
-        d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));
-        let after = d.app_mut().timeline.events.len();
+        d.expect("Read-only");
+        let unchanged =
+            d.app_mut().timeline.events.len() == before && !d.app_mut().encounters.has_run();
         d.observe(
             "T4.6",
-            after == before,
-            "Opening an ended run with no event adds none",
+            unchanged,
+            "Reading History changes no story and leaves the live-run slot free",
         );
-        d.state("ended-run-open", Sizes::Default);
-
+        d.state("ended-run-open", Sizes::All);
+        resume_run(d, RUN);
+        let live = d
+            .app_mut()
+            .encounters
+            .run()
+            .unwrap()
+            .live_info()
+            .unwrap()
+            .id;
         go_encounters(d);
-        d.expect(BACK);
+        d.click_starting(OPEN_OLD.replace("Open", "Close").as_str());
+        d.click_starting(OPEN_OLD);
+        d.expect("Read-only");
+        let still_open = d
+            .app_mut()
+            .encounters
+            .run()
+            .unwrap()
+            .live_info()
+            .unwrap()
+            .id
+            == live;
+        d.observe("T4.6", still_open, "History leaves the current fight open");
+        d.observe(
+            "T4.4",
+            d.nodes().iter().filter(|node| node.name == RUN && node.role == egui::accesskit::Role::Label).count() == 1,
+            "An open unfinished run has one row; the strip keeps Next turn primary and Back to run secondary",
+        );
+        d.state("history-beside-open-run", Sizes::All);
+
+        open_saved_encounter(d, RUN);
+        d.click("Keep in Ready during a run");
+        d.click(SAVE_ENCOUNTER);
+        d.click("Back to encounters");
         let nodes = d.nodes();
-        let open_first = nodes
-            .iter()
-            .position(|node| node.name == BACK)
-            .zip(nodes.iter().position(|node| node.name == RESUME))
-            .is_some_and(|(back, resume)| back < resume);
-        d.observe("T4.6", open_first, "The open run comes before the others");
-        d.state("open-ended-run-first", Sizes::Default);
-        d.click(BACK);
-        d.expect(&format!("{RUN_HEADING}{RUN_OLD}"));
+        d.observe(
+            "T4.4",
+            nodes
+                .iter()
+                .filter(|node| node.name == RUN && node.role == egui::accesskit::Role::Label)
+                .count()
+                == 2
+                && nodes
+                    .iter()
+                    .filter(|node| node.name == "Running · Round 2" && node.is_link())
+                    .count()
+                    == 1
+                && !d.has(RESUME)
+                && d.is_disabled(RUN_ENCOUNTER)
+                && d.visible_text(
+                    "This encounter has an unfinished run. Resume it in In progress.",
+                ),
+            "Keep in Ready adds only a blocked Start fight with a reason, never a second run link",
+        );
+        d.state("keep-in-ready-blocked", Sizes::All);
+        d.click(NEW_ENCOUNTER);
+        d.expect("Encounter name");
+        d.observe(
+            "P12",
+            d.is_disabled(RUN_ENCOUNTER) && !d.is_disabled(SAVE_ENCOUNTER),
+            "New encounter stays editable while starting a fight is blocked",
+        );
+        d.state("draft-during-run", Sizes::All);
     }
 }
 
@@ -5154,7 +5219,7 @@ pub mod encounter_owned_groups {
     use super::*;
     const SHRINE: &str = "Shrine of Cinders";
     const GROUPS_TAB: &str = "Arrivals";
-    const BELONGS_DROPDOWN: usize = 1;
+    const BELONGS_DROPDOWN: usize = 2;
     const NEW_FOR_ENCOUNTER: &str = "New group for this encounter";
     const NEW_NAME: &str = "Ash Hounds";
     const FOR_ENCOUNTERS: &str = "Groups for encounters";
@@ -5166,8 +5231,9 @@ pub mod encounter_owned_groups {
 
     pub fn run(d: &mut Driver<'_>) {
         // The page lists what can arrive anywhere. An encounter's own stay out of the way.
-        d.expect("Encounter groups (5)");
+        d.expect("GROUPS");
         d.state("groups-for-encounters-closed", Sizes::All);
+        d.click_starting("GROUPS");
         d.check_tab_order("encounters, with groups for encounters closed");
         d.observe(
             "T13.5",
@@ -5221,7 +5287,7 @@ pub mod encounter_owned_groups {
         d.state("new-group-in-the-encounter", Sizes::All);
         let roster_before = d.has_containing("Roster (7)");
         d.type_into(FIND_CREATURE, "wolf");
-        d.click_beside("Wolf", ADD);
+        d.click_beside_exact("Wolf", ADD);
         d.expect("1. Wolf");
         d.observe(
             "T13.6",
@@ -5243,8 +5309,16 @@ pub mod encounter_owned_groups {
         );
         d.state("encounter-and-group-saved", Sizes::Default);
         d.goal("build a group in an encounter's editor");
+        d.begin_task();
+        d.click_first(&format!("More actions for {NEW_NAME}"));
+        d.click("Remove");
+        d.expect("Undo remove group");
+        d.state("saved-group-removed", Sizes::All);
+        d.click("Undo remove group");
+        d.expect(&format!("Group name: {NEW_NAME}"));
+        d.begin_task();
         d.click("Back to encounters");
-        d.expect("Encounter groups (5)");
+        d.expect("GROUPS");
         d.expect(&format!("{FOR_ENCOUNTERS} (3)"));
 
         // A group can change hands, in its editor.
@@ -5374,7 +5448,7 @@ pub mod run_overrides {
         d.state("slot-with-changes", Sizes::All);
         d.click_beside(
             FIRST_SLOT,
-            "Options: starting HP, temporary HP, initiative group and overrides",
+            "Options: starting HP, temporary HP, initiative group and changes",
         );
         d.observe(
             "T13.3",
@@ -5382,10 +5456,8 @@ pub mod run_overrides {
             "Opening a slot's overrides brings the form into view, however low the slot is",
         );
         d.state("slot-changes-open", Sizes::All);
-        d.click("Back to encounters");
-
-        // A new run takes them when it starts.
-        run_saved_encounter(d, RUN_ARENA);
+        // Start from the editor: the changed creature stays in view until setup opens.
+        d.click(RUN_ENCOUNTER);
         d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
         d.state("setup-with-a-changed-row", Sizes::Default);
         d.observe(
@@ -5494,8 +5566,8 @@ pub mod session_plan_groups {
             "Assembling a group stays on the session's page",
         );
         d.type_into(FIND_CREATURE, "wolf");
-        d.click_beside("Wolf", ADD);
-        d.click_beside("Wolf", ADD);
+        d.click_beside_exact("Wolf", ADD);
+        d.click_beside_exact("Wolf", ADD);
         d.state("plan-group-assembled", Sizes::All);
         d.click("Save group");
         d.expect("Edit group Ash Pack");
@@ -5950,9 +6022,9 @@ pub mod session_plan {
             d.has(RESUME) && d.has_containing(HISTORY),
             "An interrupted run can be resumed, and ended runs are in the history",
         );
-        let delete = format!("Delete the saved run of {SECOND}");
+        let delete = format!("{SECOND} · In progress");
         let before = d.has_containing(&delete);
-        d.click_starting(&delete);
+        delete_saved_run(d, SECOND);
         d.expect("Undo delete");
         d.state("run-removed", Sizes::Default);
         d.click("Undo delete");
@@ -5971,6 +6043,8 @@ pub mod session_plan {
         d.click_first(ADD);
         d.expect("6. Werewolf");
         d.begin_task();
+        d.click_first("More actions for Werewolf");
+        d.state("roster-row-menu", Sizes::All);
         d.click("Make it yours");
         d.expect("6. Werewolf copy");
         d.state("make-it-yours", Sizes::All);
@@ -5979,7 +6053,7 @@ pub mod session_plan {
             d.has("Save creature") && d.has_containing("Hit points"),
             "A creature that names itself copies, swaps in and opens beside the roster",
         );
-        d.replace_text_in("Hit points", "90");
+        d.type_text("90");
         d.press_ctrl(Key::S);
         d.expect("Add participants");
         d.goal_within("T12.0", "make a creature your own", 7);

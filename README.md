@@ -2,9 +2,9 @@
 
 A desktop foundation for D&D 2024 encounter planning and simulation.
 Built with Rust and egui (eframe). The design system is in [docs/design-system.md](docs/design-system.md).
-The sidebar has one flat level: **Run** (while a run is open), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
+The sidebar has one flat level: **Run** (while a run is open or paused), **Encounters**, **Session**, **Timeline**, **World**, **Party**,
 **Library**, **Campaign**, and **Settings**. The campaign switcher is always above them. **Lookup** (Ctrl+K) searches every entry, every session note and the timeline, and
-opens beside any page. While a run is open, other pages show a strip with the turn and **Next turn**. Each page keeps its
+opens beside any page. While a run is open, other pages show a strip with the turn, primary **Next turn**, and secondary **Back to run**. Each page keeps its
 state, and the app reopens on the last page or the open run. Drag the edge of the sidebar, a page's list, or a panel to
 change its width. The app keeps that width after a restart. Simulation is later work.
 
@@ -367,11 +367,14 @@ get updates again, use **Show file** to inspect it or choose **Replace with D&D 
 
 Open **Encounters**, select **New encounter**, and type a name.
 Use **Add party**, or search the campaign's available creatures. Each result shows
-the CR, HP and AC it has, and **Read** opens its stat block in Lookup, beside the draft.
-Add or duplicate a creature for each participant, assign its side, and use the arrows
-to change roster order. Optional starting HP and temporary HP apply to that
+the CR, HP and AC it has. Select its name to open its stat block in Lookup, beside the draft.
+Add a creature for each participant and assign its side. The row’s **⋯** menu has
+**Move up**, **Move down**, **Duplicate**, **Make it yours**, and **Remove**. Optional starting HP and temporary HP apply to that
 participant only. With a value off, the creature's starting state applies.
-The default sides, party and enemies, are hostile to each other.
+The side menu offers **Party**, **Enemies**, and **Other…** for a side of your own.
+The default sides, Party and Enemies, are hostile to each other. The sync and
+repeat options sit below the roster. **Party in roster** means all party members are present.
+You can edit or create an encounter while a run is open. Close the run before you start another fight.
 
 A roster slot can also build in changes to its creature: a display name, maximum HP,
 AC, initiative bonus, attack bonus, damage bonus, speed, starting conditions, and
@@ -396,8 +399,8 @@ Saving a template does not execute rules or start a combat run.
 
 ### Encounter groups
 
-A session's plan can assemble a group in place: choose **Group**, then **New group**. The note stays
-beside the editor, and the saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **Arrivals**, which goes to that
+A session's plan can assemble a group in place: choose **Group**, then **New group**. The editor uses
+the full column. The note stays behind its **Note** tab. The saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **Arrivals**, which goes to that
 panel in the run.
 
 An encounter group is a reusable, named set of creatures that you prepare once and add to a
@@ -413,6 +416,7 @@ it. With one encounter, only runs of that encounter offer it, and the Encounters
 closed **Groups for encounters** section.
 
 The encounter editor has a frame for each of its own groups, with its name, side, members and notes.
+The frame’s **⋯ → Remove** makes a saved group available for any encounter on the next save. **Undo remove group** restores its owner before that save.
 **New group for this encounter** starts one there, before or after the encounter is saved. **Add to**,
 above the search, chooses whether the search adds to the roster or to a group. **Save encounter**
 saves the encounter and its groups together, and writes nothing if any of them cannot be saved. See [the schema](docs/design/campaign-schema.md#encounter-groups).
@@ -477,7 +481,12 @@ prior actions, including turn changes, dice rolls, and manual endings in the cur
 **End encounter** records a manual ending and your outcome. Runs save automatically
 after changes; **Close run** asks once, then returns to the page the run began on. A setup closed with nothing done leaves no saved run. The app reopens an open
 run after a restart, on the current turn, and turns its sync back on. **In progress** on Encounters has **Resume** for an interrupted run,
-and **Delete**, with one step of undo. **History** holds the ended ones, under their session. Run changes never
+with **Start another fight** and **Delete the saved run** in the row’s **⋯** menu. Deletion has one step of undo.
+An encounter with an unfinished run appears only in **In progress** and returns to **Ready to run** when it ends.
+**Keep in Ready during a run** also keeps its Ready row, with **Start fight** blocked and a reason.
+Empty list sections show one muted line and hide the zero count.
+The rail keeps a paused run in view and resumes it in one click. Its detail wraps below the Run label. **History** holds dated, ended runs under their session.
+An ended run opens read-only in place, with its final state and log. It leaves the live run open. Run changes never
 write to templates or character copies.
 
 ### Run storage and campaign initiative
