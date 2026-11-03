@@ -5186,6 +5186,17 @@ pub mod session_notes {
             "Opening Timeline resets its selected detail to the top",
         );
         d.state("timeline-with-run", Sizes::All);
+        d.observe_both(
+            "iter-14-S1",
+            "The open fight's Timeline row says Round 2 without Paused",
+            |d| {
+                d.nodes().iter().any(|node| {
+                    node.name.starts_with(&format!("{RUN} ·"))
+                        && node.name.contains("Round 2")
+                        && !node.name.contains("Paused")
+                })
+            },
+        );
         // Beside a panel at the minimum window, the list keeps its room.
         d.press_ctrl(Key::K);
         d.state("timeline-beside-lookup", Sizes::All);
@@ -5215,10 +5226,20 @@ pub mod session_notes {
         d.click(NAV_TIMELINE);
         d.observe(
             "T11.3",
-            d.has_containing("Fight · Round 2 · Paused · Session 2"),
+            d.has_containing("Fight · Round 2 · Session 2"),
             "A run went to the newest session, with no step, though an older note was read",
         );
         d.goal("use the timeline during a run");
+        d.click("Round 2");
+        let opened_run = d.app_mut().page == crate::Page::Run;
+        d.observe(
+            "iter-14-S1",
+            opened_run,
+            "The Timeline round link opens the run",
+        );
+        d.audit_goal_within("iter-14-S1", "open the run from its Timeline round", 1);
+        d.click(NAV_TIMELINE);
+        d.begin_task();
 
         // A new session changes where the next events go, and the open run stays.
         d.click(NAV_SESSIONS);
@@ -5921,10 +5942,11 @@ pub mod encounter_groups {
         });
         d.observe(
             "T13.3",
-            found && invalid && d.has("Changes for Unknown creature"),
+            found && invalid && d.has("Replace Unknown creature"),
             "The editor says why a creature is unavailable, and that a change cannot stand",
         );
-        d.state("group-unavailable-creature", Sizes::Default);
+        d.expect("Replace Unknown creature");
+        d.state("group-unavailable-creature", Sizes::All);
         d.click("Changes for Cinder Wolf");
         let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become −28"));
         d.observe(
@@ -5953,7 +5975,7 @@ pub mod encounter_groups {
 
         // Repair is a separate workflow; it does not change the build goal's cost.
         d.click(&format!("Edit group {GROUP_LOST}"));
-        d.click("Changes for Unknown creature");
+        d.click("Replace Unknown creature");
         d.type_into("Replacement creature", "Ember");
         d.expect("Use Ember Cultist");
         d.state("group-member-replacement-search", Sizes::Default);
@@ -6140,7 +6162,8 @@ pub mod encounter_groups {
             run_open,
             "Edit group opens the broken group and keeps the run open",
         );
-        d.state("broken-group-open-for-repair", Sizes::Default);
+        d.expect("Replace Unknown creature");
+        d.state("broken-group-open-for-repair", Sizes::All);
     }
 }
 

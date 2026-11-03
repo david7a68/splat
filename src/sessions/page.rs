@@ -3588,7 +3588,7 @@ impl Sessions {
                         .is_some_and(|saved| saved.id == event.run && event.run.is_some()));
                     let saved = saved_fight.and_then(|fight| fight.saved.as_ref()).filter(|_| !running);
                     let summary = if event.run.is_some() {
-                        timeline::played_fight_summary(event)
+                        timeline::played_fight_summary(event, running)
                     } else {
                         event.summary(None)
                     };
