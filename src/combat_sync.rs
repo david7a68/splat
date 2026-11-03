@@ -459,6 +459,7 @@ fn simulated_sheet(character: u64, max_hp: i64, damage: i64) -> Remote {
 #[derive(Default)]
 pub struct CombatSync {
     pub enabled: bool,
+    stopped_at_end: bool,
     scope: Option<(u64, String, String)>,
     remote: Option<Remote>,
     desired: Groups,
@@ -609,6 +610,18 @@ impl CombatSync {
         self.gate = None;
         self.enabled = false;
     }
+    /// The fight ended with this sync in error. It stops, and an Undo of the end restarts it.
+    pub fn stop_at_end(&mut self) {
+        self.stop();
+        self.stopped_at_end = true;
+    }
+    pub fn stopped_at_end(&self) -> bool {
+        self.stopped_at_end
+    }
+    /// Spell slots or limited uses that only this sync holds, until a read can ask about them.
+    pub fn holds_unsent(&self) -> bool {
+        !self.unsent.is_empty()
+    }
     /// The session ended. This sync stops, and says so until the DM starts it again.
     pub fn session_ended(&mut self) {
         #[cfg(test)]
@@ -724,6 +737,7 @@ impl CombatSync {
     /// Turn sync on. It reads the sheet before it writes anything.
     pub fn start(&mut self) {
         self.enabled = true;
+        self.stopped_at_end = false;
         self.keep_unsent();
         if let Some(remote) = self.remote.take() {
             self.matched = Some(remote.groups);

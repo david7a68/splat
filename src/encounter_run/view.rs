@@ -2820,6 +2820,9 @@ impl Run {
                     if let Some(sync) = self.syncs.get_mut(&index) {
                         sync.note_outside_field(&a);
                         sync.note_outside_field(&b);
+                        if sync.enabled && (a.has_focus() || b.has_focus()) {
+                            ui.label(Type::Small.rich(ui, SYNC_WAITS).color(colors().muted));
+                        }
                     }
                     if successes != p.successes || failures != p.failures {
                         command = Some(Command::DeathSaves(index, successes, failures));

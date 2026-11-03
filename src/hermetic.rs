@@ -31,7 +31,7 @@ pub fn now() -> u64 {
     splat::character::now()
 }
 
-/// A point on the clock that times a word on screen.
+/// A point on the clock that times a word on screen, or sync's next step.
 #[cfg(not(test))]
 pub type Moment = std::time::Instant;
 

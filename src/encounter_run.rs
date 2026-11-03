@@ -1432,15 +1432,13 @@ impl Run {
                 p.combat_values = values;
             }
             self.forget_removed_participants();
-            // Back in the fight, a sync stopped at its end for its error starts again, as the
-            // others do. What it holds unsent stays with it.
+            // Back in the fight, a sync that the end stopped for its error starts again. A stop
+            // by the DM stays, and what a sync holds unsent stays with it.
             if was_ended && !self.ended() {
-                self.syncs.retain(|_, sync| {
-                    sync.enabled
-                        || sync.error.is_none()
-                        || sync.session_lost()
-                        || sync.unconfirmed()
-                });
+                self.syncs
+                    .values_mut()
+                    .filter(|sync| sync.stopped_at_end())
+                    .for_each(crate::combat_sync::CombatSync::start);
             }
             self.dirty = true;
             self.error = None;
@@ -2094,9 +2092,14 @@ impl Run {
                     || sync.state() == crate::combat_sync::SyncState::Error
             });
             // One kept for its words alone reads no more. The words stay, and the worker goes.
+            // Slots or uses still unsent need a read to ask about them, so that one reads on.
             for sync in self.syncs.values_mut() {
-                if sync.state() == crate::combat_sync::SyncState::Error && !sync.unconfirmed() {
-                    sync.stop();
+                if sync.enabled
+                    && sync.state() == crate::combat_sync::SyncState::Error
+                    && !sync.unconfirmed()
+                    && !sync.holds_unsent()
+                {
+                    sync.stop_at_end();
                 }
             }
         } else if self.connected && self.keep_party_synced {
@@ -3985,6 +3988,15 @@ mod tests {
             "out of the field"
         );
         assert_eq!(below(&harness), place);
+        // F6-03: the manual death saves make sync wait too, and say so.
+        harness.get_by_label("Death save successes").click();
+        harness.run_steps(3);
+        assert!(
+            harness.query_by_label(SYNC_WAITS).is_some(),
+            "in a death save"
+        );
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
         // The panel has its own words, and with sync off nothing waits.
         click_panel_hp(&mut harness);
         assert!(harness.query_by_label(SYNC_WAITS).is_none());
@@ -4073,6 +4085,44 @@ mod tests {
         connected_tick(&mut run);
         let sync = &run.syncs[&0];
         assert!(sync.enabled && sync.error.is_none());
+    }
+    /// F6-01: a stop that the DM chose stays through an Undo of the end, with its words.
+    #[test]
+    fn undo_of_the_end_keeps_a_stop_the_dm_chose() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        run.keep_party_synced();
+        connected_tick(&mut run);
+        read_sheet(&mut run, 60, 10);
+        run.syncs.get_mut(&0).unwrap().error = Some("Could not read.".into());
+        run.syncs.get_mut(&0).unwrap().stop();
+        run.apply(Command::End("Won".into())).unwrap();
+        connected_tick(&mut run);
+        run.undo();
+        connected_tick(&mut run);
+        let sync = &run.syncs[&0];
+        assert!(!sync.enabled, "the stop stays");
+        assert_eq!(sync.error.as_deref(), Some("Could not read."));
+    }
+    /// F6-02: slots or uses still unsent need a read to ask about them, even after the end.
+    #[test]
+    fn an_error_row_holding_unsent_slots_reads_on_after_the_end() {
+        let mut run = run();
+        begin(&mut run);
+        linked(&mut run, 0, "11");
+        run.keep_party_synced();
+        connected_tick(&mut run);
+        read_sheet(&mut run, 60, 10);
+        let sync = run.syncs.get_mut(&0).unwrap();
+        sync.simulate_slot_edit();
+        sync.start();
+        sync.error = Some("Could not read.".into());
+        assert!(sync.holds_unsent() && !sync.unconfirmed());
+        run.apply(Command::End("Won".into())).unwrap();
+        connected_tick(&mut run);
+        let sync = &run.syncs[&0];
+        assert!(sync.enabled && sync.holds_unsent());
     }
     /// F5-02: with something to send, the error row keeps its worker, as a close waits for it.
     #[test]

@@ -62,9 +62,6 @@ fn marked_line_job(
     job
 }
 
-/// What the campaign's choices pull in, in columns: first what this package holds, then
-/// the campaign's own, which need no choice. A row is never listed under a package that
-/// does not hold it.
 /// What this package holds, and the campaign's own. Another package's are its own.
 fn needed_here(
     catalogue: &Catalogue,
@@ -96,6 +93,9 @@ fn opening_listing(
     }
 }
 
+/// What the campaign's choices pull in, in columns: first what this package holds, then
+/// the campaign's own, which need no choice. A row is never listed under a package that
+/// does not hold it.
 fn required_table(
     ui: &mut egui::Ui,
     catalogue: &Catalogue,
