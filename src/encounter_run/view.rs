@@ -2103,14 +2103,17 @@ impl Run {
             sync.conflicts(ui);
         }
         let reference = if is_sheet { "Sheet" } else { "Stat block" };
-        self.panel_tabs(ui, reference, true);
+        self.panel_tabs(ui, Some(reference), true);
         design::rule(ui);
         self.panel_body(ui, index, self.panel);
     }
 
     /// One row, with participant controls on the left and fight controls on the right.
-    fn panel_tabs(&mut self, ui: &mut egui::Ui, reference: &str, conditions: bool) {
-        let mut participant = vec![(Panel::Reference, reference)];
+    fn panel_tabs(&mut self, ui: &mut egui::Ui, reference: Option<&str>, conditions: bool) {
+        let mut participant = Vec::new();
+        if let Some(reference) = reference {
+            participant.push((Panel::Reference, reference));
+        }
         if conditions {
             participant.push((Panel::Conditions, "Conditions"));
         }
@@ -3040,17 +3043,10 @@ impl Run {
                     .rich(ui, "Everyone is ready.")
                     .color(colors().result.success),
             });
-            // Notes hide the panel with Record and the order of ties, so one word leads there.
-            if self.hide_panel {
-                let (word, panel) = if missing_hp > 0 {
-                    ("Open Correct", Panel::Record)
-                } else {
-                    ("Turn order", Panel::Reference)
-                };
-                if design::link(ui, word).clicked() {
-                    self.panel = panel;
-                    self.close_lookup = true;
-                }
+            // Notes hide corrections and tie order, so one link leads there.
+            if self.hide_panel && design::link(ui, "Open Correct").clicked() {
+                self.panel = Panel::Record;
+                self.close_lookup = true;
             }
         });
         design::rule(ui);
@@ -3373,31 +3369,14 @@ impl Run {
             &self.state.participants[self.selected].name
         };
         ui.label(Type::Title.rich(ui, title).color(colors().text));
-        self.panel_tabs(ui, "Turn order", false);
+        self.panel_tabs(ui, None, false);
         design::rule(ui);
         self.sync_block(ui);
         match self.panel {
             Panel::Reference | Panel::Conditions | Panel::Keys => {
-                // What the DM reads to the table comes before anyone rolls.
-                let (prep, _) = self.prep();
-                if !prep.is_empty() {
-                    design::group_label(ui, READ_ALOUD);
-                    let room = ui.available_height() * 0.4;
-                    egui::ScrollArea::vertical()
-                        .id_salt("run_setup_prep")
-                        .max_height(room)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| style::markdown(ui, prep));
-                    design::rule(ui);
-                }
-                self.turn_order_preview(ui);
+                self.notes_tab(ui);
             }
             Panel::Record => {
-                ui.label(
-                    Type::Heading
-                        .rich(ui, &self.state.participants[self.selected].name)
-                        .color(colors().text),
-                );
                 let p = &self.state.participants[self.selected];
                 ui.label(
                     Type::Small
@@ -3405,6 +3384,7 @@ impl Run {
                         .color(colors().muted),
                 );
                 changes_block(ui, p, false);
+                design::quiet_section(ui, "Resolve ties", |ui| self.turn_order_preview(ui));
                 self.record_tab(ui, self.selected);
             }
             Panel::Log => self.log_tab(ui),
@@ -3481,7 +3461,8 @@ impl Run {
         }
         egui::ScrollArea::vertical()
             .id_salt("run_order_preview")
-            .auto_shrink([false, false])
+            .max_height(design::READER_MEASURE / 3.0)
+            .auto_shrink([false, true])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 let order = &self.state.order;
@@ -3495,6 +3476,9 @@ impl Run {
                     };
                     let up = position > 0 && tied(order.get(position - 1));
                     let down = tied(order.get(position + 1));
+                    if !up && !down {
+                        continue;
+                    }
                     ui.push_id(index, |ui| {
                         ui.horizontal(|ui| {
                             ui.set_min_height(Density::Read.control());

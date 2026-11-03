@@ -1379,6 +1379,15 @@ pub fn focus_and_select(ui: &Ui, id: Id, text: &str) {
     }
 }
 
+/// The shared Add strip. Callers supply quiet, worded actions in their screen's order.
+pub fn add_strip(ui: &mut Ui, actions: impl FnOnce(&mut Ui)) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = XS;
+        ui.label(Type::Label.rich(ui, "Add").color(colors().muted));
+        actions(ui);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
