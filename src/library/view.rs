@@ -156,6 +156,10 @@ fn show_inner(
     links: &dyn Links,
     values: Option<&RunValues>,
 ) -> Option<usize> {
+    if let Some(entry) = entry {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), entry.id));
+    }
     let reading = entry.and_then(|entry| entry.reading().ok().flatten());
     let sections = presentation::reading_sections(body, name);
     let styled = entry.filter(|entry| reading.is_none() && creature::supports(entry, &sections));

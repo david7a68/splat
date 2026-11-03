@@ -1694,13 +1694,12 @@ impl Run {
                                 ui.add(egui::Label::new(Type::Body.rich(ui, condition).color(colors().text)).wrap());
                             });
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                let menu = ui.menu_button("⋯", |ui| {
+                                design::row_menu(ui, condition, |ui| {
                                     if ui.button("Remove").clicked() {
                                         command = Some(Command::RemoveCondition(index, i));
                                         ui.close();
                                     }
                                 });
-                                design::named(ui, &menu.response, &format!("More actions for {condition}"));
                             });
                         });
                     }

@@ -672,6 +672,8 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Go> {
         let mut go = None;
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(egui::Id::new("reader_document"), item.entry.id));
         let title = item
             .entry
             .reading()
@@ -682,6 +684,26 @@ impl Reader {
         style::subtitle(ui, &format!("{} · {}", item.subtitle, item.owner));
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
+        }
+        if item.entry.kind == "world" && item.is_private() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(
+                    Type::Small
+                        .rich(
+                            ui,
+                            format!("Write this note in Obsidian. File: {}", item.entry.path),
+                        )
+                        .color(colors().muted),
+                );
+                if design::link(ui, "Show file").clicked()
+                    && let Some(campaign) = campaign
+                {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+                        "file://{}",
+                        campaign.path.join(&item.entry.path).display()
+                    )));
+                }
+            });
         }
         if item.entry.kind == "world" {
             go = self.entry_controls(ui, item, index, campaign);

@@ -1128,6 +1128,15 @@ impl Encounters {
             .iter()
             .find(|run| run.standing == crate::encounter_run::Standing::Unfinished)
     }
+    pub fn paused_run_count(&self) -> usize {
+        self.snapshot.as_ref().map_or(0, |snapshot| {
+            snapshot
+                .runs
+                .iter()
+                .filter(|run| run.standing == crate::encounter_run::Standing::Unfinished)
+                .count()
+        })
+    }
     /// A new encounter from a session's plan. It joins the plan, and back leads there.
     /// Whether a fight is open that has not ended.
     pub fn run_takes_arrivals(&self) -> bool {
@@ -3142,13 +3151,14 @@ impl Encounters {
             return;
         };
         let draft_open = self.draft_dirty();
+        let run_open = self.has_run();
         let mut settings_saved = false;
         let mut error = None;
         let Some(snapshot) = &mut self.snapshot else {
             crate::design::spinner(ui);
             return;
         };
-        ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+        ui.set_width(ui.available_width().min(design::FORM_WIDTH));
         ui.add_space(design::S);
         let closed_while = draft_open.then_some("Save or discard the open encounter first.");
         design::locked(ui, closed_while, |ui| {
@@ -3216,11 +3226,17 @@ impl Encounters {
                 }
                 let pressed = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        Action::primary("Save run settings")
-                            .key("Ctrl+S")
-                            .blocked_if(!changed, "No changes to save.")
-                            .show(ui)
-                            .clicked()
+                        let pressed = (if run_open {
+                            Action::secondary("Save run settings")
+                        } else {
+                            Action::primary("Save run settings")
+                        })
+                        .key("Ctrl+S")
+                        .blocked_if(!changed, "No changes to save.")
+                        .show(ui)
+                        .clicked();
+                        design::blocked_reason(ui, (!changed).then_some("No changes to save."));
+                        pressed
                     })
                     .inner;
                 if pressed || save_key {

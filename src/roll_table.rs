@@ -207,7 +207,9 @@ pub fn roll_control(
                     design::XXL * 2.0 - design::S,
                     Density::Read.control(),
                 ))
-                .hint_text(Type::Small.rich(ui, "Typed roll")),
+                .hint_text(Type::Small.rich(ui, "Typed roll"))
+                .background_color(colors().well)
+                .horizontal_align(egui::Align::Center),
         );
         design::named(ui, &response, &format!("Typed roll on {dice}"));
         if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {

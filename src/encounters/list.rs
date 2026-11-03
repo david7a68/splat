@@ -172,19 +172,30 @@ pub(super) fn list_row(
     });
 }
 
-/// Project saved rows through the same state words as the run.
+/// Read the state from old and current run labels without exposing round zero.
 pub(crate) fn run_state_word(run: &SavedRunInfo, paused: bool) -> String {
     let round = run
         .label
         .split(" · ")
         .find_map(|part| part.strip_prefix("Round "))
-        .and_then(|part| part.parse::<u64>().ok())
+        .and_then(|part| part.parse::<u32>().ok())
         .unwrap_or(0);
-    crate::encounter_run::state_words(
-        round,
-        paused,
-        run.standing == crate::encounter_run::Standing::Ended,
-    )
+    let state = if run.standing == crate::encounter_run::Standing::Ended {
+        if round == 0 {
+            "Ended · Setup".to_owned()
+        } else {
+            format!("Ended · Round {round}")
+        }
+    } else if round == 0 {
+        "Setup".to_owned()
+    } else {
+        format!("Round {round}")
+    };
+    if paused && run.standing == crate::encounter_run::Standing::Unfinished {
+        format!("{state} · Paused")
+    } else {
+        state
+    }
 }
 
 fn row_menu_for_run(
