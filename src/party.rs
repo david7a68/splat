@@ -435,9 +435,12 @@ impl Party {
             let actions = if connected {
                 vec!["Show file", action]
             } else {
-                vec!["Show file"]
+                vec!["Connect to refresh", "Show file"]
             };
             storage_notice(ui, Tone::Warning, &words, &actions, |ui| {
+                if !connected && design::link(ui, "Connect to refresh").clicked() {
+                    self.wants_settings = true;
+                }
                 show_file(ui, path);
                 if waiting && connected {
                     ui.label(Type::Small.rich(ui, action).color(colors().muted));
@@ -1363,10 +1366,13 @@ fn sheet_column_widths(room: f32, gap: f32) -> Vec<f32> {
         3 => &[2, 1],
         _ => &[1, 1],
     };
-    spans
+    let mut widths: Vec<_> = spans
         .iter()
         .map(|span| *span as f32 * (TILE_WIDTH + gap) - gap)
-        .collect()
+        .collect();
+    let last = widths.len() - 1;
+    widths[last] = (room - widths[..last].iter().sum::<f32>() - gap * last as f32).max(0.0);
+    widths
 }
 
 fn sheet_columns(ui: &mut egui::Ui, count: usize, mut row: impl FnMut(&mut egui::Ui, usize)) {
@@ -2104,6 +2110,16 @@ mod sheet_now_tests {
         assert_eq!(&names[..3], ["Acrobatics", "Animal Handling", "Arcana"]);
         assert_eq!(names.last(), Some(&"Survival"));
         assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn last_sheet_column_uses_all_remaining_room() {
+        let room = 420.0;
+        let gap = crate::design::S;
+        let widths = super::sheet_column_widths(room, gap);
+        assert_eq!(widths.len(), 2);
+        assert_eq!(widths[1], room - widths[0] - gap);
+        assert!(widths[1] > super::TILE_WIDTH);
     }
 
     #[test]

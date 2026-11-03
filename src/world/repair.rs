@@ -193,6 +193,9 @@ impl Repair {
                 });
             });
         });
+        if self.dirty() {
+            design::blocked_reason(ui, Some(crate::encounters::draft_switch_reason()));
+        }
         saved
     }
 }

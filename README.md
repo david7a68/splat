@@ -114,8 +114,11 @@ keeps its state in the session list; a missing input offers **Choose an input**.
 that the audio is not sent again. With a partial transcript, it names the remaining
 audio parts. Recording silence has no elapsed time in its status word. The Session
 page shows the recorded time in the detail; the rail keeps it on hover. On Recordings,
-the live row owns the sound state, recorded time and input help. Timeline and the
-Session plan use the same fight state words. An open fight's Timeline round links
+the live row owns the sound state, recorded time and input help.
+Session folder is read-only while a run is open. Campaign forms keep their fields,
+Browse and save actions on one right edge. A dirty details form offers Discard and
+Undo discard. Missing speech-key links focus that key in Settings.
+Timeline and the Session plan use the same fight state words. An open fight's Timeline round links
 back to the run and does not say **Paused**. Processing says **Processing**, with
 the full step on hover. Long rest starts the next new fight at full from both Session
 and Timeline. Both pages show the ruling and let you turn it off or on, with Undo.
@@ -491,7 +494,7 @@ creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 
 If you edit a generated campaign note, Splat keeps your edit and stops updating that character's notes. To
-get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, **Open Settings** takes you to the connection. Personal notes carry over when Splat can still find them.
+get updates again, use **Show file** to inspect it or choose **Replace with D&D Beyond sheet** on the warning. Splat reads that character again and replaces its edited notes. Your version stays beside the note in a `.splat-archive` file. The row says **Local edits** until replacement. The result names the character and has **Show file** for the kept version and **Dismiss**. When signed out, **Connect to refresh** takes you to the connection. Personal notes carry over when Splat can still find them.
 
 ## Encounter builder
 
@@ -532,7 +535,7 @@ Saving a template does not execute rules or start a combat run.
 
 A session's plan can assemble a group in place: choose **Group**, then **New group**. The editor uses
 the full column. The note stays behind its **Note** tab. The saved group is linked in the plan. **Edit** on its row opens it again. While a fight is open, the row has **Arrivals**, which goes to that
-panel in the run. Its **⋯ → Remove** removes it from this plan and keeps the note’s words. **Undo remove from plan** restores the link.
+panel in the run. Its **⋯ → Remove from tonight** deletes an isolated plan link and keeps words inside a sentence. **Undo remove** restores the link.
 
 An encounter group is a reusable, named set of creatures that you prepare once and add to a
 running encounter when it arrives. It is a note with `splat_kind: encounter_group`, saved under

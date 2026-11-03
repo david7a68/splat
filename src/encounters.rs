@@ -617,7 +617,7 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
         });
         return;
     }
-    const COLUMNS: [(&str, f32); 3] = [("CR ", 66.0), ("HP ", 46.0), ("AC ", 38.0)];
+    const COLUMNS: [(&str, &str); 3] = [("CR ", "CR 1/8"), ("HP ", "HP 999"), ("AC ", "AC 25")];
     let parts: Vec<&str> = detail.split(" · ").collect();
     let other = parts
         .iter()
@@ -626,7 +626,8 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
     ui.spacing_mut().interact_size.y = 0.0;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        for (prefix, width) in COLUMNS {
+        for (prefix, widest) in COLUMNS {
+            let width = design::number_width(ui, widest, &Type::Small.font(ui)) + design::S;
             let part = parts
                 .iter()
                 .find(|part| part.starts_with(prefix))
@@ -643,7 +644,7 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
             );
         }
         if detail.starts_with("NPC · as ") {
-            ui.add_space(design::S);
+            ui.add_space(design::M - design::S);
             ui.label(
                 Type::Small
                     .rich(ui, parts[..2].join(" · "))
@@ -652,11 +653,29 @@ pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&st
         }
         // Only whole: a cut name says nothing, and Read always shows it.
         if let Some(source) = source
-            && design::number_width(ui, source, &Type::Small.font(ui)) <= ui.available_width()
+            && design::number_width(ui, source, &Type::Small.font(ui)) + design::M - design::S
+                <= ui.available_width()
         {
+            ui.add_space(design::M - design::S);
             ui.label(Type::Small.rich(ui, source).color(colors().muted));
         }
     });
+}
+
+fn editor_save_state(
+    ui: &mut egui::Ui,
+    state: Status<'_>,
+    dirty: bool,
+    blocked: Option<&str>,
+) -> bool {
+    ui.set_min_height(Density::Read.control());
+    design::status(ui, state);
+    dirty
+        && Action::quiet("Discard")
+            .density(Density::Read)
+            .blocked(blocked)
+            .show(ui)
+            .clicked()
 }
 
 fn grouped(value: u64) -> String {
@@ -780,6 +799,14 @@ fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
     parts.join(" · ")
 }
 /// Keep a stat label with its value. A second line can break between facts.
+fn changed_detail(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> String {
+    let font = Type::Small.font(ui);
+    let reserved = design::number_width(ui, word, &font)
+        + design::number_width(ui, " · ", &font)
+        + design::XS * 2.0;
+    design::words_that_fit(ui, detail, &font, (width - reserved).max(0.0))
+}
+
 fn stat_line(text: &str) -> String {
     text.split(" · ")
         .map(|part| part.replace(' ', "\u{a0}"))
@@ -2894,7 +2921,7 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            discard = design::save_row_state(
+            discard = editor_save_state(
                 ui,
                 Status { icon, word, color },
                 dirty,
@@ -3228,6 +3255,18 @@ impl Encounters {
         peek: &mut Option<Uuid>,
         roster: SearchRoster<'_>,
     ) -> Option<(Uuid, bool)> {
+        Self::creature_search_with_summary(ui, creatures, search, focus_search, peek, roster, "")
+    }
+
+    fn creature_search_with_summary<'a>(
+        ui: &mut egui::Ui,
+        creatures: impl Iterator<Item = &'a Creature>,
+        search: &mut String,
+        focus_search: &mut bool,
+        peek: &mut Option<Uuid>,
+        roster: SearchRoster<'_>,
+        summary: &str,
+    ) -> Option<(Uuid, bool)> {
         let mut chosen = None;
         let response = design::search_field(
             ui,
@@ -3238,6 +3277,12 @@ impl Encounters {
         );
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
+        }
+        if !summary.is_empty() {
+            let shown =
+                design::words_that_fit(ui, summary, &Type::Small.font(ui), ui.available_width());
+            ui.label(Type::Small.rich(ui, shown).color(colors().muted))
+                .on_hover_text(summary);
         }
         let query = search.to_lowercase();
         let mut matches: Vec<&Creature> = creatures
@@ -3557,14 +3602,15 @@ impl Encounters {
                                     ui.spacing_mut().interact_size.y = 0.0;
                                     ui.horizontal(|ui| {
                                         ui.spacing_mut().item_spacing.x = design::XS;
-                                        let change_width = design::number_width(ui, "Changed", &Type::Small.font(ui));
-                                        let budget = (ui.available_width() - change_width - design::S).max(0.0);
-                                        let fitted = design::words_that_fit(ui, &detail, &Type::Small.font(ui), budget);
+                                        let word = definition.and_then(|entry| Overrides::parse(&slot.overrides).ok().map(|overrides| groups::change_words(&overrides, entry, &slot.side))).unwrap_or_else(|| "Changed".into());
+                                        let change_width = design::number_width(ui, &word, &Type::Small.font(ui));
+                                        let fitted = changed_detail(ui, &detail, &word, ui.available_width());
                                         let detail_rect = ui.label(Type::Small.rich(ui, stat_line(&fitted)).color(colors().muted)).on_hover_text(&detail).rect;
+                                        let separator = ui.label(Type::Small.rich(ui, " · ").color(colors().muted)).rect;
                                         // Keep the text baseline and row pitch. The 24 px target extends into the row's padding.
-                                        let at = egui::pos2(detail_rect.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
+                                        let at = egui::pos2(separator.right() + design::XS, detail_rect.center().y - design::XL / 2.0);
                                         let mut inline = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(at, egui::vec2(change_width, design::XL))).layout(egui::Layout::top_down(egui::Align::Min)));
-                                        if design::small_link(&mut inline, "Changed").clicked() {
+                                        if design::small_link(&mut inline, &word).clicked() {
                                             groups::show_form_when_it_opens(ui);
                                             *expanded = Some(slot.key.clone());
                                         }
@@ -3842,6 +3888,9 @@ impl Encounters {
                     }
                 }
             });
+            if snapshot.options != snapshot.saved_options {
+                design::blocked_reason(ui, Some(draft_switch_reason()));
+            }
         });
         });
         if draft_open {
@@ -3910,6 +3959,88 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn editor_save_row_has_one_height_in_every_state() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut heights = Vec::new();
+                for (dirty, word) in [(true, "Unsaved"), (false, "Saved"), (false, "No changes")] {
+                    heights.push(
+                        ui.horizontal(|ui| {
+                            editor_save_state(
+                                ui,
+                                Status {
+                                    icon: icons::OK,
+                                    word,
+                                    color: colors().muted,
+                                },
+                                dirty,
+                                None,
+                            );
+                        })
+                        .response
+                        .rect
+                        .height(),
+                    );
+                }
+                assert_eq!(heights, vec![Density::Read.control(); 3]);
+            });
+        });
+    }
+
+    #[test]
+    fn creature_detail_columns_reserve_room_for_their_widest_values() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                detail_columns(ui, "CR 1/8 · HP 999 · AC 25", Some("Ashen Marches"));
+            });
+        });
+        let bounds = |word| {
+            output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == word => {
+                        Some(egui::Rect::from_min_size(text.pos, text.galley.size()))
+                    }
+                    _ => None,
+                })
+                .expect("the stat and source text must be painted")
+        };
+        for (before, after, gap) in [
+            ("CR 1/8", "HP 999", design::S),
+            ("HP 999", "AC 25", design::S),
+            ("AC 25", "Ashen Marches", design::M),
+        ] {
+            assert!(bounds(after).left() - bounds(before).right() >= gap - 0.5);
+        }
+    }
+
+    #[test]
+    fn changed_row_cuts_long_source_before_the_full_hand_change_link() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let detail = "Enemies · CR 2 · HP 43 · AC 15 · A very long source name from the Ashen Marches · as Ember Cultist";
+                let word = "Changed · 3 to add by hand";
+                for width in [280.0, 400.0] {
+                    let fitted = changed_detail(ui, detail, word, width);
+                    assert!(fitted.ends_with('…'), "{fitted}");
+                    assert!(!fitted.contains(word));
+                    let font = Type::Small.font(ui);
+                    let used = design::number_width(ui, &fitted, &font)
+                        + design::number_width(ui, word, &font)
+                        + design::number_width(ui, " · ", &font) + design::XS * 2.0;
+                    assert!(used <= width, "{used} exceeds {width}");
+                }
+            });
+        });
+    }
     #[test]
     fn roster_stats_use_the_search_order_and_keep_other_details_last() {
         assert_eq!(

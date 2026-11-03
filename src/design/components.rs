@@ -1212,6 +1212,24 @@ pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
     status_label(ui, state, true)
 }
 
+/// Two rail lines share the word's left edge, leaving the icon in its own column.
+pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> Response {
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = S;
+        ui.add_sized(
+            vec2(Type::Body.line(), Type::Small.line()),
+            egui::Label::new(Type::Small.rich(ui, state.icon).color(state.color)),
+        );
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
+            response.union(ui.label(Type::Small.rich(ui, detail).color(state.color)))
+        })
+        .inner
+    })
+    .inner
+}
+
 fn status_label(ui: &mut Ui, state: Status<'_>, wrap: bool) -> Response {
     let mut job = LayoutJob::default();
     let format = egui::TextFormat {
@@ -1252,6 +1270,44 @@ pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
         vec2(galley.size().x, galley.size().y.max(24.0)),
         Sense::click(),
     );
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), state.word));
+    if ui.is_rect_visible(rect) {
+        let top = rect.center().y - galley.size().y / 2.0;
+        ui.painter()
+            .galley(pos2(rect.left(), top), galley, state.color);
+        if response.has_focus() {
+            focus_ring(ui, rect);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// A status link whose 24 px hit target does not add height to its text line.
+pub fn inline_status_link(ui: &mut Ui, state: Status<'_>) -> Response {
+    let format = egui::TextFormat {
+        font_id: Type::Small.font(ui),
+        color: state.color,
+        ..Default::default()
+    };
+    let mut job = LayoutJob::default();
+    job.append(state.icon, 0.0, format.clone());
+    job.append(" ", 0.0, format.clone());
+    job.append(
+        state.word,
+        0.0,
+        egui::TextFormat {
+            underline: egui::Stroke::new(1.0, state.color),
+            ..format
+        },
+    );
+    job.wrap.max_width = ui.available_width().max(1.0);
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+    let (rect, allocated) = ui.allocate_exact_size(galley.size(), Sense::hover());
+    let target = Rect::from_min_max(
+        rect.min - vec2(0.0, (24.0 - rect.height()).max(0.0)),
+        rect.max,
+    );
+    let response = ui.interact(target, allocated.id, Sense::click());
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), state.word));
     if ui.is_rect_visible(rect) {
         let top = rect.center().y - galley.size().y / 2.0;
@@ -1922,6 +1978,7 @@ pub fn overflow_tabs_small(ui: &mut Ui, selected: &mut usize, choices: &[(usize,
 }
 
 /// Compare a draft with its file. The first draw and Next difference scroll to a marked line.
+#[cfg(test)]
 pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash::Hash) {
     let left: Vec<_> = draft.lines().collect();
     let right: Vec<_> = disk.lines().collect();

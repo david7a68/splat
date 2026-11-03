@@ -22,6 +22,7 @@ pub struct Campaigns {
     add_path: String,
     name: String,
     path: String,
+    discarded_details: Option<(String, String)>,
     remote: Option<(String, String)>,
     confirm_remove: Option<Uuid>,
     /// The campaign just added, and where to go next.
@@ -50,6 +51,7 @@ impl Default for Campaigns {
             add_path: String::new(),
             name: String::new(),
             path: String::new(),
+            discarded_details: None,
             remote: None,
             confirm_remove: None,
             added: None,
@@ -283,6 +285,7 @@ impl Campaigns {
             add_path: String::new(),
             name: String::new(),
             path: String::new(),
+            discarded_details: None,
             remote: None,
             confirm_remove: None,
             added: None,
@@ -446,6 +449,7 @@ impl Campaigns {
     }
 
     fn clear_form(&mut self) {
+        self.discarded_details = None;
         let editing = self.editing.take().is_some();
         self.name = if editing {
             std::mem::take(&mut self.add_name)
@@ -817,6 +821,7 @@ impl Campaigns {
                                 }
                                 self.remote = None;
                                 self.editing = Some(campaign.id);
+                                self.discarded_details = None;
                                 self.name = campaign.name.clone();
                                 self.path = campaign.path.to_string_lossy().into_owned();
                             }
@@ -903,6 +908,7 @@ impl Campaigns {
         // Keep the add form's open state when Settings changes between one and two columns.
         let form_scope = egui::Id::new(("campaign_form", self.editing));
         ui.scope_builder(egui::UiBuilder::new().id(form_scope), |ui| {
+            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
             let mut added = false;
             let direct = editing || self.remote.is_some() || self.data.campaigns.is_empty();
             let editing_id = self.editing;
@@ -918,7 +924,7 @@ impl Campaigns {
                 let room = ui.available_width();
                 let field = ui
                     .vertical(|ui| {
-                        ui.set_max_width((room - BROWSE_WIDTH).max(120.0));
+                        ui.set_max_width((room - BROWSE_WIDTH - design::S).max(120.0));
                         design::small_text_field(ui, "Folder", &mut self.path, None, None)
                     })
                     .inner;
@@ -926,7 +932,7 @@ impl Campaigns {
                     egui::pos2(field.rect.right() + design::S, field.rect.top()),
                     egui::vec2(BROWSE_WIDTH, field.rect.height()),
                 );
-                ui.scope_builder(egui::UiBuilder::new().max_rect(browse), |ui| {
+                ui.scope_builder(egui::UiBuilder::new().max_rect(browse).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
                     if Action::secondary("Browse…")
                         .density(Density::Read)
                         .show(ui)
@@ -989,10 +995,17 @@ impl Campaigns {
                             false,
                             None,
                         );
-                    } else {
-                        design::blocked_reason(ui, reason);
                     }
-                    if (editing || !missing || self.remote.is_some())
+                    if editing && !unchanged {
+                        self.discarded_details = None;
+                        if Action::quiet("Discard").show(ui).clicked()
+                            && let Some(saved) = self.data.campaigns.iter().find(|c| Some(c.id) == self.editing)
+                        {
+                            self.discarded_details = Some((self.name.clone(), self.path.clone()));
+                            self.name = saved.name.clone();
+                            self.path = saved.path.to_string_lossy().into_owned();
+                        }
+                    } else if (!missing || editing || self.remote.is_some())
                         && Action::quiet("Cancel").show(ui).clicked()
                     {
                         self.clear_form();
@@ -1004,8 +1017,17 @@ impl Campaigns {
                                 Err(error) => self.error = Some(error),
                             }
                         }
+                        ui.spacing_mut().item_spacing.x = design::S;
+                        design::blocked_reason(ui, reason.filter(|_| !editing || !unchanged));
                     });
                 });
+                if self.discarded_details.is_some()
+                    && design::draft_discarded(ui, "Campaign details")
+                    && let Some((name, path)) = self.discarded_details.take()
+                {
+                    self.name = name;
+                    self.path = path;
+                }
                 if let Some(error) = &self.error {
                     design::message(ui, Tone::Error, error);
                     if error.contains("registered at another folder") {
@@ -1234,6 +1256,7 @@ mod tests {
             add_path: String::new(),
             name: String::new(),
             path: String::new(),
+            discarded_details: None,
             remote: None,
             confirm_remove: None,
             added: None,

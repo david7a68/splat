@@ -142,6 +142,7 @@ pub struct ProcessingSettings {
     /// A recording is live, so a new input cannot apply to it.
     pub recording_now: bool,
     pub focus_input: bool,
+    pub focus_speech_key: bool,
     started: bool,
     load_error: Option<String>,
     save_error: Option<String>,
@@ -164,6 +165,7 @@ impl Default for ProcessingSettings {
             config: Config::default(),
             recording_now: false,
             focus_input: false,
+            focus_speech_key: false,
             started: false,
             load_error: None,
             save_error: None,
@@ -402,6 +404,7 @@ impl ProcessingSettings {
         let remove = format!("Remove {slot_word} key ({owner})");
         let remove_name = format!("{remove}: {label}");
         let held = self.held(slot).is_some();
+        let focus = slot == KeySlot::Speech && std::mem::take(&mut self.focus_speech_key);
         let mut save = false;
         design::small_field(ui, "API key", None, None, |ui| {
             ui.horizontal(|ui| {
@@ -432,6 +435,10 @@ impl ProcessingSettings {
                         }),
                 );
                 design::named(ui, &response, label);
+                if focus {
+                    response.request_focus();
+                    response.scroll_to_me(Some(egui::Align::Center));
+                }
                 if show_save {
                     save = Action::secondary("Save key")
                         .name(&format!("Save key: {label}"))
@@ -783,7 +790,19 @@ impl ProcessingSettings {
             design::message(ui, Tone::Error, error);
         }
         if let Some(problem) = self.problem() {
-            let problem = problem.replace(" in Settings", "");
+            let problem = if problem.starts_with("Save an API key for this speech service") {
+                let host = super::host(&self.config.speech_url);
+                format!(
+                    "save an {} key under Speech service.",
+                    if host == "api.openai.com" {
+                        "OpenAI"
+                    } else {
+                        &host
+                    }
+                )
+            } else {
+                problem.replace(" in Settings", "")
+            };
             design::message(
                 ui,
                 Tone::Info,
