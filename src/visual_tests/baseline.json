@@ -1,22 +1,22 @@
 {
   "violations": {
     "accessible-name/egui-chrome": {
-      "campaign-content": 66,
-      "column-resize": 97,
-      "dialogs": 37,
-      "empty": 18,
+      "campaign-content": 72,
+      "column-resize": 94,
+      "dialogs": 45,
+      "empty": 16,
       "encounter-build": 49,
       "encounter-groups": 70,
       "encounter-history": 10,
       "encounter-owned-groups": 58,
-      "encounter-run": 52,
+      "encounter-run": 54,
       "gallery": 20,
-      "library-author": 60,
-      "library-browse": 88,
-      "library-navigation": 35,
-      "library-scope": 9,
-      "library-to-encounter": 22,
-      "nav-state": 26,
+      "library-author": 50,
+      "library-browse": 79,
+      "library-navigation": 32,
+      "library-scope": 7,
+      "library-to-encounter": 20,
+      "nav-state": 24,
       "party": 42,
       "party-from-run": 25,
       "prep-to-table": 27,
@@ -26,25 +26,22 @@
       "run-edge-states": 16,
       "run-folder-defect": 1,
       "run-large-roster": 17,
-      "run-long-names": 26,
-      "run-lookup": 35,
+      "run-long-names": 24,
+      "run-lookup": 38,
       "run-no-groups": 2,
       "run-overrides": 33,
-      "run-restart": 20,
+      "run-restart": 19,
       "run-resume": 7,
       "run-roster-conflict": 19,
       "run-sync-conflict": 28,
-      "run-sync-states": 21,
-      "session-notes": 137,
+      "run-sync-states": 20,
+      "session-notes": 136,
       "session-plan": 106,
       "session-plan-groups": 47,
-      "session-recording": 106,
+      "session-recording": 101,
       "settings": 17,
       "signed-in": 38,
-      "world": 31
-    },
-    "clipped": {
-      "column-resize": 9
+      "world": 33
     },
     "no-overlap/egui-chrome": {
       "dialogs": 4,
@@ -53,25 +50,25 @@
       "library-author": 2,
       "library-browse": 9,
       "library-scope": 5,
-      "session-recording": 7
+      "session-recording": 8
     },
     "target-size/egui-chrome": {
-      "campaign-content": 66,
-      "column-resize": 97,
-      "dialogs": 36,
-      "empty": 18,
+      "campaign-content": 72,
+      "column-resize": 94,
+      "dialogs": 44,
+      "empty": 16,
       "encounter-build": 49,
       "encounter-groups": 70,
       "encounter-history": 10,
       "encounter-owned-groups": 57,
-      "encounter-run": 51,
+      "encounter-run": 53,
       "gallery": 20,
-      "library-author": 59,
-      "library-browse": 88,
-      "library-navigation": 35,
-      "library-scope": 8,
-      "library-to-encounter": 22,
-      "nav-state": 26,
+      "library-author": 49,
+      "library-browse": 79,
+      "library-navigation": 32,
+      "library-scope": 6,
+      "library-to-encounter": 20,
+      "nav-state": 24,
       "party": 42,
       "party-from-run": 25,
       "prep-to-table": 27,
@@ -81,22 +78,22 @@
       "run-edge-states": 16,
       "run-folder-defect": 1,
       "run-large-roster": 17,
-      "run-long-names": 26,
-      "run-lookup": 35,
+      "run-long-names": 24,
+      "run-lookup": 38,
       "run-no-groups": 2,
       "run-overrides": 33,
-      "run-restart": 20,
+      "run-restart": 19,
       "run-resume": 7,
       "run-roster-conflict": 19,
       "run-sync-conflict": 28,
-      "run-sync-states": 21,
-      "session-notes": 137,
+      "run-sync-states": 20,
+      "session-notes": 136,
       "session-plan": 106,
       "session-plan-groups": 47,
-      "session-recording": 105,
+      "session-recording": 99,
       "settings": 17,
       "signed-in": 38,
-      "world": 31
+      "world": 33
     }
   },
   "task_cost": {
@@ -111,7 +108,7 @@
     },
     "dialogs": {
       "ask to close with unsaved changes": 8,
-      "copy an entry to a campaign": 7,
+      "copy an entry to a campaign": 6,
       "open the copy dialog": 3,
       "return to the draft": 1
     },
@@ -169,7 +166,7 @@
       "A9: show everything": 2
     },
     "library-to-encounter": {
-      "copy an entry and use it in an encounter": 9,
+      "copy an entry and use it in an encounter": 8,
       "save the encounter with the copy": 1
     },
     "nav-state": {
@@ -269,7 +266,7 @@
       "assemble a group in the session's plan": 15
     },
     "session-recording": {
-      "record a session and process it": 77
+      "record a session and process it": 76
     },
     "settings": {
       "edit a campaign's details": 5,

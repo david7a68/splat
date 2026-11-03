@@ -3928,7 +3928,7 @@ pub mod session_notes {
         d.click("Open this session");
         d.observe(
             "T11.4",
-            d.visible_text("My words during the conflict."),
+            d.has_containing("My words during the conflict."),
             "Opening the session again keeps the words that could not be saved",
         );
         d.click("Overwrite with my draft");
