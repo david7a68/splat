@@ -310,7 +310,6 @@ pub fn components(ui: &mut egui::Ui) {
                 let _ = Action::secondary("Save")
                     .blocked(Some("No changes to save."))
                     .show(ui);
-                blocked_reason(ui, Some("No changes to save."));
             });
         });
     });

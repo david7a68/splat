@@ -642,18 +642,11 @@ impl Campaigns {
         let c = colors();
         ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
         self.remove_dialog(ui.ctx());
-        if let Some(added) = self.added.clone() {
-            ui.horizontal(|ui| {
-                design::message(ui, Tone::Success, &added);
-                if Action::primary("Build an encounter")
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked()
-                {
-                    self.wants_encounters = true;
-                    self.added = None;
-                }
-            });
+        if let Some(added) = self.added.clone()
+            && design::message_with_action(ui, Tone::Success, &added, "Build an encounter")
+        {
+            self.wants_encounters = true;
+            self.added = None;
         }
         ui.horizontal(|ui| {
             design::group_heading(ui, "Campaigns", self.data.campaigns.len());
@@ -899,7 +892,20 @@ impl Campaigns {
                     } else {
                         Action::secondary(submit)
                     };
-                    design::blocked_reason(ui, reason);
+                    if unchanged {
+                        design::save_row_state(
+                            ui,
+                            design::Status {
+                                icon: design::icons::OK,
+                                word: "No changes",
+                                color: colors().muted,
+                            },
+                            false,
+                            None,
+                        );
+                    } else {
+                        design::blocked_reason(ui, reason);
+                    }
                     if action.blocked(reason).show(ui).clicked() {
                         match self.save_form() {
                             Ok(()) => added = !editing,

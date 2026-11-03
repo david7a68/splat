@@ -577,6 +577,21 @@ impl CampaignContent {
                     crate::world::repair::editor(ui, path, draft, error_line);
 
                     ui.horizontal(|ui| {
+                        let dirty = draft != baseline;
+                        design::save_row_state(
+                            ui,
+                            design::Status {
+                                icon: if dirty { icons::DRAFT } else { icons::OK },
+                                word: if dirty { "Unsaved" } else { "No changes" },
+                                color: if dirty {
+                                    colors().document.unsaved
+                                } else {
+                                    colors().muted
+                                },
+                            },
+                            false,
+                            None,
+                        );
                         if draft != baseline
                             && Action::quiet("Discard")
                                 .density(Density::Read)
@@ -607,10 +622,7 @@ impl CampaignContent {
                                 .blocked_if(draft == baseline, "No changes to save.")
                                 .show(ui)
                                 .clicked();
-                            design::blocked_reason(
-                                ui,
-                                (draft == baseline).then_some("No changes to save."),
-                            );
+
                             if pressed
                                 || (draft != baseline
                                     && ui.input_mut(|i| {
@@ -690,7 +702,20 @@ impl CampaignContent {
                         self.saved_selections.clone(),
                     ));
                 }
-            } else if self.discarded_selections.is_some()
+            } else {
+                design::save_row_state(
+                    ui,
+                    design::Status {
+                        icon: icons::OK,
+                        word: "No changes",
+                        color: c.muted,
+                    },
+                    false,
+                    None,
+                );
+            }
+            if !changed
+                && self.discarded_selections.is_some()
                 && design::draft_discarded(ui)
                 && let Some(selections) = self.discarded_selections.take()
             {
@@ -716,7 +741,7 @@ impl CampaignContent {
                     .blocked(blocked)
                     .show(ui)
                     .clicked();
-                    design::blocked_reason(ui, blocked);
+                    design::blocked_reason(ui, repair);
                     pressed
                 })
                 .inner;
@@ -1211,12 +1236,20 @@ impl CampaignContent {
                         );
                     }
                     if !all
-                        && Action::secondary("Use all")
-                            .density(Density::Read)
-                            .blocked_if(all, "This whole package is already in use.")
-                            .hint("Every entry, including future additions")
-                            .show(ui)
-                            .clicked()
+                        && Action::secondary(
+                            if entry_ids.iter().all(|id| {
+                                closure.direct.contains(id) || closure.required.contains_key(id)
+                            }) {
+                                "Include future additions"
+                            } else {
+                                "Use all"
+                            },
+                        )
+                        .density(Density::Read)
+                        .blocked_if(all, "This whole package is already in use.")
+                        .hint("Every entry, including future additions")
+                        .show(ui)
+                        .clicked()
                     {
                         if let Some(i) = selection_index {
                             document.selections[i].selection = Selection::All;

@@ -463,6 +463,13 @@ pub mod reader_tables {
         d.click("Kind of entry");
         d.click("Rule");
         d.click("Create entry");
+        assert!(
+            d.nodes()
+                .iter()
+                .any(|n| n.name.starts_with("Spell Progression · ") && n.fully_in_view()),
+            "the new entry row is in view"
+        );
+        assert!(d.app_mut().library.selected_name() == Some("Spell Progression"));
         d.type_into_editor(
             "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
              | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
@@ -558,6 +565,7 @@ pub mod campaign_content {
 
         d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.expect(CHANGED);
+        d.expect("Include future additions");
         d.state("selection-changed", Sizes::Default);
         d.click(DISCARD_SELECTION);
         d.goal("change and discard a selection");
@@ -2664,8 +2672,9 @@ pub mod party_from_run {
         d.click_row(MEMBER);
         d.state("zero-hp-selected", Sizes::Default);
         d.click("Correct");
-        d.expect("Death saves");
+        d.expect("DEATH SAVES");
         d.click("Add a death save success");
+        d.expect("1 success · 0 failures");
         d.observe(
             "Death saves",
             !d.has("DEATH SAVES (MANUAL)"),
@@ -4946,7 +4955,7 @@ pub mod session_notes {
         d.click("Death saves");
         d.observe(
             "T11.8",
-            !d.has("Close notes") && d.has("Death saves"),
+            !d.has("Close notes") && d.has("DEATH SAVES"),
             "Death saves show, in place of the notes, when both have no room",
         );
         d.click_containing("Undo: 99 damage");
@@ -6384,7 +6393,7 @@ pub mod session_plan_groups {
         d.goal("assemble a group in the session's plan");
         d.observe(
             "T14.6",
-            d.has_containing("2 creatures") && !d.has("Back to the plan"),
+            d.has_containing("2 × Wolf") && !d.has("Back to the plan"),
             "A group saved from the plan is linked in it, with what it holds",
         );
         go_library(d);
@@ -7055,8 +7064,8 @@ pub mod package_to_table {
         let edited = text
             .replace("max_hp: {value: 1}", "max_hp: {value: 22}")
             .replace("armor_class: {value: 10}", "armor_class: {value: 15}")
-            .replace("strength:\n    value: 10", "strength:\n    value: 18")
-            .replace("dexterity:\n    value: 10", "dexterity:\n    value: 14");
+            .replace("strength: {value: 10}", "strength: {value: 18}")
+            .replace("dexterity: {value: 10}", "dexterity: {value: 14}");
         assert_ne!(text, edited);
         d.replace_editor_text(&edited);
         d.click("Save");
@@ -7172,7 +7181,7 @@ pub mod remove_package_in_use {
         );
         go_campaign(d);
         d.click("Reload from disk");
-        d.expect("Ashen Marches is no longer on this computer.");
+        d.expect("Splat cannot find Ashen Marches.");
         d.expect("Remove from this campaign");
         d.expect("Find the folder…");
         d.observe(

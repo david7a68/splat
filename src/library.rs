@@ -395,7 +395,17 @@ const SEARCH_NAME: &str = "Search the Library";
 
 // Fixed height keeps the virtual scroll position independent of label length.
 fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> egui::Response {
-    design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, name, subtitle)
+    let width = ui.available_width() - design::S * 2.0;
+    let title = design::words_that_fit(
+        ui,
+        name,
+        &if selected { Type::Strong } else { Type::Body }.font(ui),
+        width,
+    );
+    let detail = design::words_that_fit(ui, subtitle, &Type::Small.font(ui), width);
+    let response = design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, &title, &detail);
+    design::named(ui, &response, &format!("{name} · {subtitle}"));
+    response
 }
 
 pub(crate) fn local_module(path: &Path) -> Result<Module, String> {
@@ -594,14 +604,34 @@ pub(crate) fn folder_field(
                                     .font(Type::Strong.font(ui))
                                     .margin(egui::Vec2::ZERO)
                                     .desired_width(width)
-                                    .min_size(egui::vec2(width, design::XL))
-                                    .hint_text(Type::Strong.rich(ui, "Main folder")),
+                                    .min_size(egui::vec2(width, design::XL)),
                             );
                             design::named(ui, &response, label);
-                            let response = ui.add(
-                                egui::Button::new(Type::Body.rich(ui, icons::DOWN))
-                                    .frame(false)
-                                    .min_size(egui::vec2(design::XL, design::XL)),
+                            if value.is_empty() {
+                                ui.painter().text(
+                                    response.rect.left_center(),
+                                    egui::Align2::LEFT_CENTER,
+                                    "Main folder",
+                                    Type::Strong.font(ui),
+                                    colors().text,
+                                );
+                            }
+                            let (rect, response) = ui.allocate_exact_size(
+                                egui::vec2(design::XL, design::XL),
+                                egui::Sense::click(),
+                            );
+                            let icon = egui::Align2::RIGHT_CENTER.align_size_within_rect(
+                                egui::Vec2::splat(ui.spacing().icon_width),
+                                rect,
+                            );
+                            design::combo_icon(
+                                ui,
+                                icon,
+                                ui.style().interact(&response),
+                                egui::Popup::is_id_open(
+                                    ui.ctx(),
+                                    egui::Popup::default_response_id(&response),
+                                ),
                             );
                             design::named(ui, &response, &format!("Suggestions for {label}"));
                             egui::Popup::menu(&response).show(|ui| {
@@ -944,6 +974,7 @@ pub struct Library {
     new_form: bool,
     focus_new_name: bool,
     focus_hp: bool,
+    focus_repair: bool,
     new_name: String,
     new_kind: String,
     new_folder: String,
@@ -951,6 +982,7 @@ pub struct Library {
     package_not_used: bool,
     focus_package_name: bool,
     package_path: Option<PathBuf>,
+    package_folder_changed: bool,
     pub use_entry: Option<(Uuid, Uuid)>,
     source: bool,
     message: Option<String>,
@@ -1004,6 +1036,13 @@ struct BackStep {
     search: String,
 }
 impl Library {
+    #[cfg(test)]
+    pub(crate) fn selected_name(&self) -> Option<&str> {
+        self.selected
+            .and_then(|i| self.loaded.as_ref()?.notes.get(i))
+            .map(Note::name)
+    }
+
     pub fn report_error(&mut self, error: String) {
         self.error = Some(error);
     }
@@ -1024,6 +1063,7 @@ impl Library {
         self.discarded = Some((note.owner.id(), note.path.clone(), draft));
         match change.text {
             Some(text) => {
+                self.stale = true;
                 match Entry::parse(&note.path, &text) {
                     Ok(entry) => {
                         note.entry = Some(entry);
@@ -1174,6 +1214,7 @@ impl Library {
                 self.disk_change = Some(DiskChange { text });
             }
         }
+        self.discarded = None;
         self.stale = true;
     }
     fn invalidate(&mut self) {
@@ -1258,6 +1299,9 @@ impl Library {
                             if let Some(i) = self.selected {
                                 self.draft = l.notes[i].text.clone();
                             }
+                            self.reveal_row |= self.selected.is_some();
+                            self.focus_repair =
+                                self.selected.is_some_and(|i| l.notes[i].error.is_some());
                             self.loaded = Some(l);
                             self.invalidate();
                         }
@@ -1305,6 +1349,31 @@ impl Library {
                 .then(|| design::count(total, "entry", "entries"))
                 .as_deref(),
             |ui| {
+                if let Some(loaded) = &self.loaded
+                    && !loaded.diagnostics.is_empty()
+                {
+                    let word = design::count(
+                        loaded.diagnostics.len(),
+                        "validation message",
+                        "validation messages",
+                    );
+                    let response = Action::quiet(&word).icon(icons::WARN).show(ui);
+                    egui::Popup::menu(&response).show(|ui| {
+                        ui.set_max_width(design::READER_MEASURE);
+                        egui::ScrollArea::vertical()
+                            .max_height(design::XXL * 6.0)
+                            .show(ui, |ui| {
+                                for message in &loaded.diagnostics {
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small.rich(ui, message).color(colors().muted),
+                                        )
+                                        .wrap(),
+                                    );
+                                }
+                            });
+                    });
+                }
                 let no_place =
                     campaigns.active_campaign().is_none() && campaigns.modules().is_empty();
                 if !(self.scope == Scope::Campaign && total == 0) {
@@ -1393,7 +1462,7 @@ impl Library {
         ui.add_space(design::XS);
         self.unregister_dialog(ui.ctx(), campaigns);
         if let Some(e) = &self.error {
-            design::message(ui, Tone::Error, &format!("Error: {e}"));
+            design::message_with_code(ui, Tone::Error, &format!("Error: {e}"));
         }
         if let Some(message) = &self.message {
             design::message(ui, Tone::Success, message);
@@ -1433,35 +1502,6 @@ impl Library {
         let Some(loaded) = &self.loaded else {
             return;
         };
-        if !loaded.diagnostics.is_empty() {
-            design::section(
-                ui,
-                design::count(
-                    loaded.diagnostics.len(),
-                    "validation message",
-                    "validation messages",
-                ),
-                |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(140.0)
-                        .show(ui, |ui| {
-                            for message in &loaded.diagnostics {
-                                ui.add(
-                                    egui::Label::new(
-                                        Type::Small.rich(ui, message).color(colors().muted),
-                                    )
-                                    .wrap(),
-                                );
-                            }
-                        });
-                    ui.label(
-                        Type::Small
-                            .rich(ui, "An unresolved reference can mean that the package it needs is not registered.")
-                            .color(colors().muted),
-                    );
-                },
-            );
-        }
         // Each scope has its own counts. Search and sections stay within the scope.
         let scope = self.scope;
         if self
@@ -1982,7 +2022,12 @@ impl Library {
         let count = self.loaded.as_ref().map_or(0, |l| {
             l.notes
                 .iter()
-                .filter(|n| n.owner.id() == Some(module.id))
+                .filter(|n| {
+                    n.owner.id() == Some(module.id)
+                        && n.entry
+                            .as_ref()
+                            .is_none_or(|e| !matches!(e.kind.as_str(), "package" | "reference"))
+                })
                 .count()
         });
         let mut keep = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
@@ -2183,6 +2228,7 @@ impl Library {
                             let mut path = parent.display().to_string();
                             if design::text_field(ui, "Folder", &mut path, None, None).changed() {
                                 *parent = PathBuf::from(path);
+                                self.package_folder_changed = true;
                             }
                         },
                     );
@@ -2195,6 +2241,7 @@ impl Library {
                             && let Some(chosen) = crate::hermetic::pick_folder()
                         {
                             *parent = chosen;
+                            self.package_folder_changed = true;
                         }
                     });
                 });
@@ -2293,13 +2340,15 @@ impl Library {
                     }
                     design::blocked_reason(ui, reason);
                     ui.add_space(design::L);
-                    if Action::quiet("Cancel")
-                        .name("Close the package form")
-                        .show(ui)
-                        .clicked()
+                    if (!self.name.is_empty() || self.package_folder_changed)
+                        && Action::quiet("Clear")
+                            .name("Clear the new package fields")
+                            .show(ui)
+                            .clicked()
                     {
                         self.name.clear();
                         self.package_path = None;
+                        self.package_folder_changed = false;
                     }
                 });
                 ui.add_space(design::M);
@@ -2542,6 +2591,7 @@ impl Library {
                                 self.selected = l.notes.iter().position(|n| {
                                     n.path == created_path && n.owner.id() == created_owner
                                 });
+                                self.reveal_row = true;
                                 self.search.clear();
                                 self.section = Section::All;
                                 self.source = true;
@@ -2675,6 +2725,10 @@ impl Library {
                         }
                     }
                 }
+                self.stale |= l.notes[i]
+                    .entry
+                    .as_ref()
+                    .is_none_or(|old| old.id != entry.id);
                 l.notes[i].entry = Some(entry);
                 l.notes[i].text = self.draft.clone();
                 l.notes[i].error = None;
@@ -3096,9 +3150,16 @@ impl Library {
             let (slot, _) =
                 ui.allocate_exact_size(egui::vec2(editor_width, height), egui::Sense::hover());
             if let Some(reason) = draft_reason {
-                ui.put(
-                    slot,
-                    egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
+                ui.scope_builder(
+                    egui::UiBuilder::new()
+                        .max_rect(slot)
+                        .layout(egui::Layout::left_to_right(egui::Align::Min)),
+                    |ui| {
+                        ui.add(
+                            egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
+                                .wrap(),
+                        );
+                    },
                 );
             }
         }
@@ -3138,8 +3199,12 @@ impl Library {
                     .clicked();
             });
         }
-        if let Some(error) = &note.error {
-            design::message_with_code(ui, Tone::Error, error);
+        let (repair_problem, repair_line) =
+            crate::campaign_content::repair_problem(&note.path, &self.draft);
+        if note.error.is_some()
+            && let Some(problem) = &repair_problem
+        {
+            design::message(ui, Tone::Error, problem);
         }
         if editable
             && !conflict
@@ -3229,6 +3294,13 @@ impl Library {
                             .interactive(editable),
                     );
                     design::named(ui, &response, "Markdown editor");
+                    if std::mem::take(&mut self.focus_repair) && let Some(line) = repair_line {
+                        let at = self.draft.lines().take(line.saturating_sub(1)).map(|line| line.chars().count() + 1).sum();
+                        response.request_focus();
+                        let mut state = egui::TextEdit::load_state(ui.ctx(), response.id).unwrap_or_default();
+                        state.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(at))));
+                        state.store(ui.ctx(), response.id);
+                    }
                     if std::mem::take(&mut self.focus_hp)
                         && let Some(at) = self.draft.find("max_hp: {value: ").map(|at| at + "max_hp: {value: ".len())
                     {
@@ -3521,6 +3593,58 @@ mod tests {
             }),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn repaired_package_note_reloads_campaign_uses() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test package", "test").unwrap();
+        let campaign = Campaign {
+            id: Uuid::new_v4(),
+            name: "Test campaign".into(),
+            path: temp.path().join("campaign"),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        fs::create_dir_all(&campaign.path).unwrap();
+        let text = note_text("Test rule", "rule", None);
+        let id = Entry::parse("Rule.md", &text).unwrap().id;
+        fs::write(module.path.join("Rule.md"), &text).unwrap();
+        crate::content_workspace::use_in_campaign(&campaign, module.id, &module.name, Some(id))
+            .unwrap();
+        assert!(
+            load_all(std::slice::from_ref(&module), Some(&campaign))
+                .unwrap()
+                .uses
+                .unwrap()
+                .contains(&id)
+        );
+        fs::write(
+            module.path.join("Rule.md"),
+            text.replace("splat_kind: rule", "splat_kind: ["),
+        )
+        .unwrap();
+        let loaded = load_all(std::slice::from_ref(&module), Some(&campaign)).unwrap();
+        assert!(!loaded.uses.as_ref().unwrap().contains(&id));
+        let selected = loaded
+            .notes
+            .iter()
+            .position(|n| n.path == "Rule.md" && n.owner.id() == Some(module.id))
+            .unwrap();
+        let mut library = Library {
+            loaded: Some(loaded),
+            selected: Some(selected),
+            draft: text.clone(),
+            ..Default::default()
+        };
+        library.save_selected(false);
+        assert!(library.error.is_none(), "{:?}", library.error);
+        assert!(library.stale, "the next frame must rebuild campaign uses");
+        let loaded = load_all(&[module], Some(&campaign)).unwrap();
+        assert!(
+            loaded.uses.unwrap().contains(&id),
+            "the repaired note is Used here"
+        );
     }
 
     #[test]

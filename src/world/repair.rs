@@ -148,10 +148,15 @@ impl Repair {
                             },
                         );
                     } else {
-                        ui.label(
-                            design::Type::Small
-                                .rich(ui, "No changes to save.")
-                                .color(colors().muted),
+                        design::save_row_state(
+                            ui,
+                            design::Status {
+                                icon: design::icons::OK,
+                                word: "No changes",
+                                color: colors().muted,
+                            },
+                            false,
+                            None,
                         );
                     }
                 });

@@ -330,13 +330,16 @@ pub(super) fn show(
                         style::identity(ui, &identity);
                     }
                 }
-                ui.scope(|ui| {
-                    ui.spacing_mut().item_spacing.y = crate::design::XS / 2.0;
-                    for (label, value) in facts {
-                        style::detail(ui, &label, &value);
-                    }
-                });
-                ui.add_space(crate::design::M);
+                let has_facts = !facts.is_empty();
+                if has_facts {
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = crate::design::XS / 2.0;
+                        for (label, value) in facts {
+                            style::detail(ui, &label, &value);
+                        }
+                    });
+                    ui.add_space(crate::design::M);
+                }
                 style::source_prose(ui, &presentation::overview_markdown(&prose));
             } else {
                 // An intro has no printed heading, so the reader adds none.

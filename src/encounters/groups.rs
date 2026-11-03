@@ -787,7 +787,14 @@ pub(super) fn of_encounter(
                             }
                         });
                     });
-                    group_fields(ui, group, snapshot, expanded, Some((this.0, &this.1)));
+                    group_fields(
+                        ui,
+                        group,
+                        snapshot,
+                        expanded,
+                        Some((this.0, &this.1)),
+                        false,
+                    );
                 });
             if adding && reveal {
                 frame.response.scroll_to_me(Some(egui::Align::Max));
@@ -1498,9 +1505,6 @@ impl Encounters {
                 - if draft.setup.members.is_empty() {
                     design::number_width(ui, "Add a creature first", &Type::Small.font(ui))
                         + design::L
-                } else if !dirty {
-                    design::number_width(ui, "No changes to save.", &Type::Small.font(ui))
-                        + design::L
                 } else {
                     0.0
                 })
@@ -1536,8 +1540,6 @@ impl Encounters {
                     ui,
                     if draft.setup.members.is_empty() {
                         Some("Add a creature first")
-                    } else if !dirty {
-                        Some("No changes to save.")
                     } else {
                         None
                     },
@@ -1552,9 +1554,7 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            if dirty || saved_note.is_some() {
-                discard = design::save_row_state(ui, Status { icon, word, color }, dirty, None);
-            }
+            discard = design::save_row_state(ui, Status { icon, word, color }, dirty, None);
             if dirty && in_plan {
                 super::blocked_reason(ui, Some(super::draft_switch_reason()));
             }
@@ -1615,7 +1615,7 @@ impl Encounters {
         let expanded = &mut self.expanded;
         if compact {
             match pane {
-                EditorPane::Roster => members_pane(ui, draft, snapshot, expanded),
+                EditorPane::Roster => members_pane(ui, draft, snapshot, expanded, true),
                 EditorPane::Add => add_pane(ui, draft, snapshot, search, focus_search, peek),
             }
             return;
@@ -1644,7 +1644,7 @@ impl Encounters {
             }))
             .show_inside(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
-                members_pane(ui, draft, snapshot, expanded);
+                members_pane(ui, draft, snapshot, expanded, false);
             });
     }
 }
@@ -1693,6 +1693,7 @@ fn members_pane(
     draft: &mut GroupDraft,
     snapshot: &Snapshot,
     expanded: &mut Option<String>,
+    tabbed: bool,
 ) {
     let top = ui.cursor().top();
     egui::ScrollArea::vertical()
@@ -1702,7 +1703,7 @@ fn members_pane(
             let mut clip = ui.clip_rect();
             clip.min.y = clip.min.y.max(top);
             ui.set_clip_rect(clip);
-            group_fields(ui, draft, snapshot, expanded, None);
+            group_fields(ui, draft, snapshot, expanded, None, tabbed);
         });
 }
 
@@ -1714,6 +1715,7 @@ fn group_fields(
     snapshot: &Snapshot,
     expanded: &mut Option<String>,
     open: Option<(Uuid, &str)>,
+    tabbed: bool,
 ) {
     ui.horizontal(|ui| {
         ui.label(Type::Small.rich(ui, SIDE_FIELD).color(colors().muted));
@@ -1738,11 +1740,20 @@ fn group_fields(
         .sum::<u64>();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        design::group_heading(ui, "Members", count as usize);
+        if !tabbed {
+            design::group_heading(ui, "Members", count as usize);
+        }
         if !draft.setup.members.is_empty() {
             ui.label(
                 Type::Small
-                    .rich(ui, format!(" · {}", members_heading(draft, snapshot)))
+                    .rich(
+                        ui,
+                        format!(
+                            "{}{}",
+                            if tabbed { "" } else { " · " },
+                            members_heading(draft, snapshot)
+                        ),
+                    )
                     .color(colors().muted),
             );
         }

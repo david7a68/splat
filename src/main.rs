@@ -817,12 +817,19 @@ impl Splat {
                     self.page = Page::Sessions;
                 }
             }
-            for state in statuses {
+            for mut state in statuses {
                 let full = match state.word {
                     "Signed out" => "Signed out of D&D Beyond",
-                    "Not remembered" => "Connected · not remembered",
                     _ => state.word,
                 };
+                if state.word == "Connected · not remembered"
+                    && design::number_width(ui, state.word, &Type::Small.font(ui))
+                        + Type::Small.line()
+                        + design::S
+                        > ui.available_width()
+                {
+                    state.word = "Connected";
+                }
                 let response = design::wrapped_status(ui, state).on_hover_text(full);
                 if full != state.word {
                     design::named(ui, &response, full);
@@ -999,9 +1006,6 @@ impl Splat {
         let mut account = self.settings.connection_status();
         if self.settings.signed_out() {
             account.word = "Signed out";
-        }
-        if account.word == "Connected · not remembered" {
-            account.word = "Not remembered";
         }
         let mut statuses = vec![account];
         for (dirty, word) in [

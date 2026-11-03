@@ -210,7 +210,7 @@ impl PackageSelection {
             .as_deref()
             .is_some_and(|name| !name.trim().is_empty())
         {
-            format!("{} is no longer on this computer.", self.display_name())
+            format!("Splat cannot find {}.", self.display_name())
         } else {
             format!("{}.", self.display_name())
         }
@@ -1989,7 +1989,7 @@ mod tests {
         }
         assert_eq!(
             selection.unavailable_message(),
-            "Ashen Marches is no longer on this computer."
+            "Splat cannot find Ashen Marches."
         );
         assert_eq!(selection.campaign_users(&catalogue).len(), 3);
         assert!(
