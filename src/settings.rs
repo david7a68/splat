@@ -489,7 +489,6 @@ impl Settings {
                     .trim()
                     .is_empty()
                     .then_some("Paste your session cookie first.");
-                design::blocked_reason(ui, reason);
                 let action = if reason.is_none()
                     && account != Account::Connected
                     && !self.campaign_form_open
@@ -500,7 +499,10 @@ impl Settings {
                 };
                 let clicked = ui
                     .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        action.blocked(reason).show(ui).clicked()
+                        let clicked = action.blocked(reason).show(ui).clicked();
+                        ui.spacing_mut().item_spacing.x = design::S;
+                        design::blocked_reason(ui, reason);
+                        clicked
                     })
                     .inner;
                 if clicked {
