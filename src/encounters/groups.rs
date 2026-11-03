@@ -1744,21 +1744,18 @@ fn group_fields(
         .map(|member| member.count)
         .sum::<u64>();
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
         design::group_heading(ui, "Members", count as usize);
         if !draft.setup.members.is_empty() {
             ui.label(
                 Type::Small
-                    .rich(ui, format!("· {}", members_heading(draft, snapshot)))
+                    .rich(ui, format!(" · {}", members_heading(draft, snapshot)))
                     .color(colors().muted),
             );
         }
     });
     if draft.setup.members.is_empty() {
-        let empty = if open.is_some() {
-            "No members yet. Add creatures from the search."
-        } else {
-            "No members yet. Add creatures from the list on the right."
-        };
+        let empty = "No members yet. Add creatures from the search.";
         ui.add(egui::Label::new(Type::Small.rich(ui, empty).color(colors().muted)).wrap());
     }
     members(ui, draft, snapshot, expanded);
@@ -1842,15 +1839,15 @@ fn members(
                     .custom_formatter(|value, _| super::grouped(value as u64))
                     .custom_parser(|text| text.replace(',', "").parse().ok()));
                 design::named(ui, &count, &format!("How many of {name}"));
-                if Action::quiet("Edit").density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
-                    *expanded = if is_open { None } else { show_form_when_it_opens(ui); Some(key.clone()) };
-                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     super::row_menu(ui, &name, |ui| {
                         if super::menu_action(ui, "Move up", (index == 0).then_some("Already first.")) { raise = Some(index); }
                         if super::menu_action(ui, "Move down", (index + 1 == total).then_some("Already last.")) { lower = Some(index); }
                         if super::menu_action(ui, "Remove", None) { remove = Some(index); }
                     });
+                    if Action::quiet("Edit").density(Density::Read).name(&button).selected(is_open).show(ui).clicked() {
+                        *expanded = if is_open { None } else { show_form_when_it_opens(ui); Some(key.clone()) };
+                    }
                 });
             });
             if entry.is_none() {

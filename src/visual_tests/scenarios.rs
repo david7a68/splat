@@ -2783,8 +2783,10 @@ pub mod gallery {
         d.state("row-menu", Sizes::Default);
         d.press(Key::Escape);
         d.scroll_until(pos2(600.0, 300.0), "ONE CAUSE, ONE SENTENCE", 30);
+        d.scroll_at(pos2(600.0, 300.0), 1);
         d.state("blocked-cause", Sizes::Default);
         d.scroll_until(pos2(600.0, 300.0), "Paused runs", 30);
+        d.scroll_at(pos2(600.0, 300.0), 1);
         d.state("paused-runs", Sizes::Default);
         let temp = crate::design::temp_hp_text(5);
         for _ in 0..30 {
@@ -2997,11 +2999,12 @@ pub mod column_resize {
             near(rail_edge(d), RAIL_WIDTH),
             "The run limits the rail to keep room for its roster",
         );
+        d.click(NEXT_TURN);
         d.state("run-rail-keeps-roster-room", Sizes::All);
         d.click(NAV_LOOKUP);
         d.settle();
         d.expect("Close Lookup");
-        d.state("lookup-beside-wide-rail", Sizes::All);
+        d.state("lookup-beside-run-rail", Sizes::All);
         // Lookup gives the page what it needs, here beside a rail of the widest kind.
         let lookup_edge = d.column_edge("lookup");
         let before = d.place_of(crate::lookup::SEARCH_NAME).unwrap().width();
@@ -3021,7 +3024,6 @@ pub mod column_resize {
         );
         d.click(NAV_LOOKUP);
         d.expect(NEXT_TURN);
-        d.click(NEXT_TURN);
         d.goal("resize the columns and go on working");
         the_roster_follows_the_add_panel(d);
         d.set_base(DEFAULT);
@@ -4356,8 +4358,8 @@ pub mod session_notes {
             "Undo goes at the next thing the DM does, so it cannot undo the wrong event",
         );
         d.state_prepared("session-event-in-notes", Sizes::Default, |d| {
-            show_plan(d);
-            d.wait_for_text("In notes");
+            write_note(d);
+            d.expect("Note text");
         });
         write_note(d);
         let linked = d.editor_text().is_some_and(|text| {
@@ -4584,6 +4586,14 @@ pub mod session_notes {
         d.app_mut().timeline.save();
         d.replace_text_in("Session folder", "30 Sessions");
         d.expect("Move files and save");
+        d.expect("Unsaved");
+        d.click("Discard");
+        d.observe(
+            "iter-7-S3",
+            d.field_text("Session folder").as_deref() == Some("Sessions"),
+            "Discard restores the saved session folder",
+        );
+        d.replace_text_in("Session folder", "30 Sessions");
         d.expect("Save without moving");
         d.state("session-folder-move-offered", Sizes::All);
         d.click("Move files and save");
@@ -6720,6 +6730,24 @@ pub mod session_plan {
         );
         d.click("Add Long rest");
         d.state("long-rest-restores", Sizes::Default);
+        d.click(&format!("Resume: {SECOND}"));
+        d.expect("Party HP is full after the long rest.");
+        d.expect("Use the saved HP");
+        d.observe(
+            "iter-7-S1",
+            kestrel(d).contains("HP 41/41"),
+            "Resume restores a saved Setup after the long rest",
+        );
+        d.state("resumed-setup-after-long-rest", Sizes::All);
+        d.click("Use the saved HP");
+        d.observe(
+            "iter-7-S1",
+            kestrel(d).contains("HP 11/41"),
+            "One Undo restores the saved HP",
+        );
+        d.state("saved-hp-restored", Sizes::Default);
+        close_run(d);
+        show_plan(d);
         d.click(&format!("More actions for {SECOND}"));
         d.click("Start a new run");
         d.observe(
@@ -7038,6 +7066,7 @@ pub mod remove_package_in_use {
         d.state("missing-package-removed-with-undo", Sizes::All);
         d.click("Undo package removal");
         d.wait_for_text("Find the folder…");
+        d.expect_same("Undo restores the missing-package choice shown before removal.");
         d.state("package-removal-undone", Sizes::All);
         d.click("Remove from this campaign");
         let campaign = d.app_mut().campaigns.active_campaign().unwrap();
@@ -7050,7 +7079,6 @@ pub mod remove_package_in_use {
                 .any(|selection| selection.package.id == Some(package)),
             "Removing the unavailable package saves the other campaign choices",
         );
-        d.state("missing-package-removed", Sizes::Default);
         go_encounters(d);
         resume_run_from_cold_start(d);
         d.wait_for_text(NEXT_TURN);

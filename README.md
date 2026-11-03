@@ -91,8 +91,9 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
 - `SPLAT_VISUAL_SCENARIOS=party,settings` runs only those scenarios. `visual-test <label> --only
   party,settings` is the same, and keeps the captures of the label's other scenarios.
 - `SPLAT_VISUAL_VIDEO=0` turns video off for `visual-test`.
-- Consecutive capture steps at the same size must have different pixels. Use
-  `d.expect_same("reason")` before the second step only for an intended repeat.
+- Each capture must differ from every earlier step of its scenario at the same size
+  in at least 0.1% of pixels. Use `d.expect_same("reason")` before an intended return.
+  Captures finish pending note and Timeline saves before they render.
 - `audit-gate [label]` runs formatting, Clippy, all tests and all captures. It
   clears scenario filters and baseline-update mode, and enforces the baseline.
   Video and optional contact-sheet settings work as for `visual-test`.

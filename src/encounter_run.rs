@@ -452,6 +452,7 @@ struct State {
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
 /// HP that came from the last fight, not from the sheets.
 struct CarriedHp {
+    saved: bool,
     from: String,
     sheets: SheetValues,
     /// Fights whose runs could not be read, so their HP is not here.
@@ -489,6 +490,7 @@ pub(crate) struct Run {
     dm_steps: usize,
     /// Never saved.
     carried: Option<CarriedHp>,
+    rest_order: u64,
     last_roll: Option<LastRoll>,
     /// Digits typed so far. Empty after each use, so a wrong number cannot repeat.
     amount: String,
@@ -780,6 +782,7 @@ impl Run {
             halved: BTreeSet::new(),
             dm_steps: 0,
             carried: None,
+            rest_order: 0,
             last_roll: None,
             amount: String::new(),
             condition: String::new(),
@@ -848,6 +851,7 @@ impl Run {
     }
     /// HP came from the last fight, not from the sheets, and the log says so.
     pub fn note_carry(&mut self, carry: &Carry, sheets: SheetValues) {
+        self.rest_order = carry.rest_order;
         // A fight that cannot be read carries nothing, and the log must not say it did.
         if !sheets.is_empty() {
             self.state
@@ -855,15 +859,59 @@ impl Run {
                 .push(format!("Party HP carried over from {}.", carry.from));
         }
         self.carried = Some(CarriedHp {
+            saved: false,
             from: carry.from.clone(),
             sheets,
             missing: carry.missing.clone(),
         });
         self.dirty = true;
     }
+    /// A Setup saved now has already seen this rest; reopening must keep its saved HP.
+    pub fn remember_rest(&mut self, order: u64) {
+        if self.state.phase == Phase::Setup && order > self.rest_order {
+            self.rest_order = order;
+            self.dirty = true;
+        }
+    }
+
+    /// Restore a Setup saved before this rest. Combat keeps its saved values.
+    pub fn rest_saved_setup(&mut self, order: u64) {
+        if self.state.phase != Phase::Setup || order <= self.rest_order {
+            return;
+        }
+        let before = self.state.clone();
+        let mut saved = Vec::new();
+        for (index, participant) in self.state.participants.iter_mut().enumerate() {
+            if participant.definition.fields.contains_key("splat_external")
+                && participant.max_hp.is_some()
+            {
+                saved.push((index, participant.hp, participant.temporary_hp));
+                participant.hp = participant.max_hp;
+                participant.temporary_hp = 0;
+            }
+        }
+        self.history.push(before);
+        self.history_labels.push("Use the saved HP".into());
+        self.state
+            .log
+            .push("Party HP is full after the long rest.".into());
+        self.carried = Some(CarriedHp {
+            saved: true,
+            from: "the long rest".into(),
+            sheets: saved,
+            missing: Vec::new(),
+        });
+        self.rest_order = order;
+        self.dirty = true;
+    }
     /// The carried values that still differ from the sheets, as one step back to the sheets.
     fn back_to_sheets(&self) -> Option<(String, Command)> {
         let carried = self.carried.as_ref()?;
+        if carried.saved
+            && self.history_labels.last().map(String::as_str) != Some("Use the saved HP")
+        {
+            return None;
+        }
         let mut commands = Vec::new();
         for (index, hp, temp) in &carried.sheets {
             let p = self.state.participants.get(*index)?;
@@ -2553,6 +2601,8 @@ struct Recovery {
 
 #[derive(Serialize, Deserialize)]
 struct SavedRun {
+    #[serde(default)]
+    rest_order: u64,
     version: u32,
     #[serde(default)]
     recovery: Recovery,
@@ -2667,6 +2717,7 @@ impl Run {
             return Ok(());
         }
         let saved = SavedRun {
+            rest_order: self.rest_order,
             version: 1,
             recovery: self.recovery.clone(),
             campaign: storage.campaign,
@@ -2893,6 +2944,7 @@ impl Run {
             halved: BTreeSet::new(),
             dm_steps: 0,
             carried: None,
+            rest_order: saved.rest_order,
             last_roll: None,
             amount: String::new(),
             condition: String::new(),
@@ -3174,6 +3226,7 @@ impl DeletedRun {
 /// Where the party stands between fights in one session.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Carry {
+    pub rest_order: u64,
     /// The fight or the rest it comes from, in words.
     pub from: String,
     /// A long rest the DM said restored everyone. A later fight's values still come first.
@@ -5142,6 +5195,53 @@ mod tests {
         assert_eq!(run.prep(), ("Only words.", None));
     }
     #[test]
+    fn a_later_rest_restores_saved_setup_once_with_undo_but_keeps_combat_hp() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut setup = run();
+        linked(&mut setup, 0, "42");
+        setup.state.participants[0].hp = Some(3);
+        setup.state.participants[0].temporary_hp = 2;
+        let campaign = stored(&mut setup, folder.path());
+        let mut resumed = close_and_reopen(&mut setup, campaign);
+        resumed.rest_saved_setup(1);
+        assert_eq!(
+            resumed.state.participants[0].hp,
+            resumed.state.participants[0].max_hp
+        );
+        assert_eq!(resumed.state.participants[0].temporary_hp, 0);
+        assert_eq!(resumed.history.len(), 1);
+        assert_eq!(
+            resumed.state.log.last().unwrap(),
+            "Party HP is full after the long rest."
+        );
+        resumed.undo();
+        assert_eq!(
+            (
+                resumed.state.participants[0].hp,
+                resumed.state.participants[0].temporary_hp
+            ),
+            (Some(3), 2)
+        );
+        let mut reopened = close_and_reopen(&mut resumed, campaign);
+        reopened.rest_saved_setup(1);
+        assert_eq!(reopened.state.participants[0].hp, Some(3));
+        reopened.rest_saved_setup(2);
+        assert_eq!(reopened.history.len(), 1);
+        begin(&mut reopened);
+        reopened.state.participants[0].hp = Some(4);
+        let mut combat = close_and_reopen(&mut reopened, campaign);
+        combat.rest_saved_setup(3);
+        assert_eq!(combat.state.participants[0].hp, Some(4));
+        assert!(combat.history.is_empty());
+        let mut setup = run();
+        linked(&mut setup, 0, "42");
+        setup.state.participants[0].hp = Some(3);
+        setup.remember_rest(3);
+        setup.rest_saved_setup(3);
+        assert_eq!(setup.state.participants[0].hp, Some(3));
+    }
+
+    #[test]
     fn a_player_starts_from_the_last_fight_and_the_sheet_is_one_step_back() {
         let id = Uuid::new_v4();
         let entry = Entry::parse(
@@ -5154,6 +5254,7 @@ mod tests {
         let mut hero =
             Participant::new("hero".into(), "party".into(), entry, &Mapping::new(), true).unwrap();
         let carry = Carry {
+            rest_order: 0,
             from: "the bridge".into(),
             full: false,
             values: BTreeMap::from([(id, (7, 2))]),
@@ -5164,6 +5265,7 @@ mod tests {
         // A value the same as the sheet has nothing to say.
         assert_eq!(hero.carry_over(&carry), None);
         let rested = Carry {
+            rest_order: 1,
             from: "the long rest".into(),
             full: true,
             values: BTreeMap::new(),
@@ -5206,6 +5308,7 @@ mod tests {
         )
         .unwrap();
         let carry = Carry {
+            rest_order: 0,
             from: "the bridge".into(),
             full: true,
             values: BTreeMap::from([(id, (1, 0))]),

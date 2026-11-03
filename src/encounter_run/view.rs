@@ -3611,7 +3611,18 @@ impl Run {
         if let Some(words) = self.carry_missing() {
             design::message(ui, Tone::Warning, &words);
         }
-        if let Some((from, back)) = self.back_to_sheets()
+        let saved_hp = self.carried.as_ref().is_some_and(|carried| carried.saved)
+            && self.history_labels.last().map(String::as_str) == Some("Use the saved HP");
+        if saved_hp {
+            if design::message_with_action(
+                ui,
+                Tone::Info,
+                "Party HP is full after the long rest.",
+                "Use the saved HP",
+            ) {
+                self.undo();
+            }
+        } else if let Some((from, back)) = self.back_to_sheets()
             && design::message_with_action(
                 ui,
                 Tone::Info,

@@ -404,8 +404,7 @@ fn unlink_planned_fight(body: &str, name: &str, occurrence: usize) -> String {
         .collect()
 }
 
-/// One row of a session's plan: an icon and words, then the action at the end. The action has
-/// one height either way, so that the rows below never move.
+/// One plan row: an icon, a compact text column, and actions centred beside both lines.
 fn plan_row(
     ui: &mut egui::Ui,
     widths: &[f32],
@@ -419,9 +418,24 @@ fn plan_row(
         ui.label(Type::Body.rich(ui, icon).color(colors().muted));
         ui.vertical(|ui| {
             let left = ui.cursor().min;
+            let title_width = (ui.available_width() - widths[1] - design::S).max(design::XL);
+            let text = ui.allocate_ui_with_layout(
+                egui::vec2(title_width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(title_width);
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    words(ui);
+                    summary(ui);
+                },
+            );
+            ui.set_min_height(text.response.rect.height().max(Density::Read.control()));
             let action_rect = egui::Rect::from_min_size(
                 egui::pos2(ui.max_rect().right() - widths[1], left.y),
-                egui::vec2(widths[1], Density::Read.control()),
+                egui::vec2(
+                    widths[1],
+                    text.response.rect.height().max(Density::Read.control()),
+                ),
             );
             let mut action_ui = ui.new_child(
                 egui::UiBuilder::new()
@@ -429,16 +443,6 @@ fn plan_row(
                     .layout(egui::Layout::right_to_left(egui::Align::Center)),
             );
             action(&mut action_ui);
-            let title_width = (action_rect.left() - left.x - design::S).max(design::XL);
-            ui.allocate_ui_with_layout(
-                egui::vec2(title_width, Density::Read.control()),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.set_width(title_width);
-                    words(ui);
-                },
-            );
-            summary(ui);
         });
     });
 }
@@ -1868,7 +1872,7 @@ impl Sessions {
                 self.saved_at = Some(Instant::now());
                 (
                     Tone::Success,
-                    format!("Recording of {label} saved: {}.", recording_title(&path)),
+                    format!("Recording saved: {}.", recording_title(&path)),
                 )
             } else {
                 (Tone::Warning, format!("Nothing was recorded for {label}."))
@@ -3291,7 +3295,7 @@ impl Sessions {
                 ..Default::default()
             }))
             .show_inside(ui, |ui| {
-                self.plan_messages(ui, book, session);
+                self.plan_messages(ui, book, session, plan);
                 added = quick_add(ui, book, session, &PLAN_KINDS, |ui| {
                     self.fight_menu(ui, plan);
                     self.group_menu(ui, plan);
@@ -3753,7 +3757,13 @@ impl Sessions {
     }
 
     /// What can be undone in the plan: the event just added or just removed.
-    fn plan_messages(&mut self, ui: &mut egui::Ui, book: &mut Book, session: Option<Uuid>) {
+    fn plan_messages(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &mut Book,
+        session: Option<Uuid>,
+        plan: &Plan<'_>,
+    ) {
         if self.row_notice.is_none() {
             self.deleted_run_message(ui);
         }
@@ -3787,7 +3797,24 @@ impl Sessions {
             let (id, words) = (
                 just.id.clone(),
                 if restores {
-                    "Long rest added. Everyone starts the next fight at full.".to_owned()
+                    let names =
+                        plan.fights
+                            .iter()
+                            .filter(|fight| {
+                                fight.saved.as_ref().is_some_and(|saved| {
+                                    !plan_saved_status(saved).starts_with("Setup")
+                                })
+                            })
+                            .map(|fight| format!("{} keeps its saved HP.", fight.name))
+                            .collect::<Vec<_>>();
+                    if names.is_empty() {
+                        "Long rest added. Everyone starts the next fight at full.".to_owned()
+                    } else {
+                        format!(
+                            "Long rest added. New fights start at full. {}",
+                            names.join(" ")
+                        )
+                    }
                 } else {
                     format!("{} added{to}.", just.label)
                 },
@@ -5314,7 +5341,14 @@ impl Sessions {
         let Some(mut name) = self.new_template.take() else {
             return;
         };
-        design::text_field(ui, "Template name", &mut name, None, None);
+        design::group_label(ui, "New template");
+        design::text_field(
+            ui,
+            "Template name",
+            &mut name,
+            Some("Starts with the title line only."),
+            None,
+        );
         let mut keep = true;
         ui.horizontal(|ui| {
             if if self.open_run.is_some() {
@@ -5591,23 +5625,42 @@ impl Sessions {
         let mut move_files = false;
         let save = ui
             .horizontal_wrapped(|ui| {
-                design::blocked_reason(ui, blocked);
-                if has_files {
-                    move_files = Action::secondary("Move files and save")
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked();
-                    Action::quiet("Save without moving")
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked()
-                        || move_files
-                } else {
-                    Action::secondary("Save folder")
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked()
+                if changed {
+                    design::status(
+                        ui,
+                        Status {
+                            icon: icons::DRAFT,
+                            word: "Unsaved",
+                            color: colors().document.unsaved,
+                        },
+                    );
+                    if Action::quiet("Discard").show(ui).clicked() {
+                        if let Ok(saved) = folder_setting(&campaign) {
+                            self.folder_text = saved;
+                        }
+                        self.folder_error = None;
+                    }
                 }
+                design::blocked_reason(ui, blocked);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if has_files {
+                        move_files = Action::secondary("Move files and save")
+                            .blocked(blocked)
+                            .show(ui)
+                            .clicked();
+                        Action::quiet("Save without moving")
+                            .blocked(blocked)
+                            .show(ui)
+                            .clicked()
+                            || move_files
+                    } else {
+                        Action::secondary("Save folder")
+                            .blocked(blocked)
+                            .show(ui)
+                            .clicked()
+                    }
+                })
+                .inner
             })
             .inner;
         if save {
