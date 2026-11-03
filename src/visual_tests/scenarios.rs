@@ -4620,6 +4620,13 @@ pub mod session_recording {
     const RECORDING: &str = "19:00";
     const WARNING: &str = "The second pass returned no transcript, so the first pass's transcript stands without a check.";
 
+    fn choose_view(d: &mut Driver<'_>, name: &str) {
+        if d.has("Recording view") {
+            d.click("Recording view");
+        }
+        d.click(name);
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, TITLE);
@@ -4889,11 +4896,35 @@ pub mod session_recording {
         d.state("marked-transcript", Sizes::All);
         d.click("Earlier part");
         d.expect("Part 1 of 2");
-        d.click("What the check changed");
+        choose_view(d, "What the check changed");
         d.expect("Restored");
         d.state("second-pass-review", Sizes::Default);
-        d.click("Summary");
-        d.state("recording-summary", Sizes::Default);
+        choose_view(d, "Summary");
+        let viewer_layout = d.at_size(SMALL, |d| {
+            let back = d.place_of("Back to recordings").unwrap();
+            let add = d.place_of("Add to notes").unwrap();
+            let views: Vec<_> = [
+                "Summary",
+                "Clean transcript",
+                "What the check changed",
+                "Raw transcript",
+            ]
+            .iter()
+            .filter_map(|name| d.place_of(name))
+            .collect();
+            (back.center().y - add.center().y).abs() < 1.0
+                && views.len() == 4
+                && views.iter().all(|view| {
+                    view.top() >= back.bottom() && (view.top() - views[0].top()).abs() < 1.0
+                })
+                && (views[0].left() - back.left()).abs() < 1.0
+        });
+        d.observe(
+            "iter-2-R11",
+            viewer_layout,
+            "Navigation and Add to notes share a line; all four view choices stay on the next line",
+        );
+        d.state("recording-summary", Sizes::All);
         d.click("Back to recordings");
         d.click(NAV_TIMELINE);
         d.observe(
@@ -4993,6 +5024,26 @@ pub mod session_recording {
             "A note whose file went keeps its words, saved under a new identity",
         );
         d.goal("record a session and process it");
+
+        // A separate responsive check follows the measured workflow.
+        d.click("Record this session");
+        d.click("Start recording");
+        d.click("Stop recording");
+        d.click("Recordings");
+        d.click_containing("Process:");
+        d.expect("Summary");
+        d.click("Summary");
+        d.press_ctrl(Key::K);
+        d.expect("Recording view");
+        choose_view(d, "Raw transcript");
+        d.observe(
+            "iter-2-R11",
+            d.visible_text("Raw transcript") && !d.has("Add to notes"),
+            "The narrow viewer's dropdown switches to the raw transcript",
+        );
+        choose_view(d, "Summary");
+        d.state("recording-summary-narrow", Sizes::Default);
+        d.press_ctrl(Key::K);
     }
 }
 

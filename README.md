@@ -606,7 +606,7 @@ Transport and conflict handling are tested with simulated responses. Live writes
 have not been verified with an authenticated D&D Beyond character. Endpoint
 sources and limits are recorded in [the research notes](docs/research/dndbeyond-combat-writes.md).
 
-Recording failures and stops remain on each recording’s row after you dismiss a banner. A stopped recording links to the microphone input in Settings. **Continue processing** resumes kept work. An active job hides the old cancellation or failure reason. The result viewer keeps its back link, date and text choices together. The rail’s recording status opens the recording in one click.
+Recording failures and stops remain on each recording’s row after you dismiss a banner. A stopped recording links to the microphone input in Settings. **Continue processing** resumes kept work. An active job hides the old cancellation or failure reason. The result viewer keeps its back link, date and Add to notes on one line. View choices sit below them, as a segmented control or a dropdown when space is short. The rail’s recording status opens the recording in one click.
 
 Lookup keeps up to five results above the reader and marks the open one. New NPC and New location include the proposed name, and appear only when no exact match exists. A copy keeps the original name by default and offers Edit the copy after saving. Wide reader tables keep their first column and header in view. World rolls mark their matched row.
 

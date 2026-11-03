@@ -3797,50 +3797,62 @@ impl Sessions {
             .collect();
         let mut back = false;
         let mut add_to_notes = None;
-        let mut switched = false;
         let in_notes = self.draft.as_ref().map_or("", |draft| draft.body.as_str());
-        ui.horizontal_wrapped(|ui| {
-            back = Action::quiet("Recordings")
-                .icon(icons::BACK)
-                .name("Back to recordings")
-                .density(Density::Read)
-                .show(ui)
-                .clicked();
-            ui.label(Type::Small.rich(ui, &reading.name).color(c.muted));
-            switched = design::segmented(ui, &mut made, &options);
-            if reading.made == Made::Summary {
-                let action_width = design::number_width(ui, "Add to notes", &Type::Strong.font(ui))
-                    + 2.0 * design::M;
-                let width = if ui.available_width() >= action_width {
-                    ui.available_width()
-                } else {
-                    ui.max_rect().width()
-                };
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, Density::Read.control()),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        let summary = nested_in_note(reading.parts[0].1.trim());
-                        if in_notes.contains(summary.trim()) {
-                            design::status(
-                                ui,
-                                Status {
-                                    icon: icons::OK,
-                                    word: "In notes",
-                                    color: c.document.saved,
-                                },
-                            );
-                        } else if Action::secondary("Add to notes")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                        {
-                            add_to_notes = Some(summary);
-                        }
-                    },
-                );
-            }
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if reading.made == Made::Summary {
+                    let summary = nested_in_note(reading.parts[0].1.trim());
+                    if in_notes.contains(summary.trim()) {
+                        design::status(
+                            ui,
+                            Status {
+                                icon: icons::OK,
+                                word: "In notes",
+                                color: c.document.saved,
+                            },
+                        );
+                    } else if Action::secondary("Add to notes")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                    {
+                        add_to_notes = Some(summary);
+                    }
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    back = Action::quiet("Recordings")
+                        .icon(icons::BACK)
+                        .name("Back to recordings")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked();
+                    ui.label(Type::Small.rich(ui, &reading.name).color(c.muted));
+                });
+            });
         });
+        // Reserve each segment's full width before choosing the control. Its row never wraps.
+        let segments_width: f32 =
+            options
+                .iter()
+                .map(|(_, label)| {
+                    design::number_width(ui, label, &Type::Strong.font(ui))
+                        .max(design::number_width(ui, label, &Type::Body.font(ui)))
+                        + 2.0 * design::S
+                })
+                .sum();
+        let switched = if segments_width + design::XS <= ui.available_width() {
+            design::segmented(ui, &mut made, &options)
+        } else {
+            let inner = egui::ComboBox::from_id_salt("recording_view")
+                .selected_text(made.word())
+                .show_ui(ui, |ui| {
+                    for (option, label) in &options {
+                        ui.selectable_value(&mut made, *option, *label);
+                    }
+                });
+            design::named(ui, &inner.response, "Recording view");
+            made != reading.made
+        };
         if switched
             && let Some(recording) = self
                 .recordings
