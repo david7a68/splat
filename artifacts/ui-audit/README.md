@@ -45,6 +45,12 @@ Party, the session plan and world notes. Captures are under the ignored
 The fixed Back control remains in its normal place while disabled. The draft,
 Save and Discard controls remain visible at the minimum window size.
 
+Validation: the complete locked test suite, formatting and Clippy with warnings
+denied passed. All 41 UI scenarios passed. The new scenario adds only egui's
+existing scroll-bar and resize-handle allowances to the ergonomics baseline;
+it has no workflow, target-size, clipping or overlap failures in app controls.
+Independent Standards and Spec reviews found no actionable issues.
+
 ## Next iteration
 
 Visual review found a moderate issue in the Wizard class table at the minimum
