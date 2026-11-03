@@ -4,7 +4,7 @@
       "campaign-content": 72,
       "column-resize": 94,
       "dialogs": 45,
-      "empty": 14,
+      "empty": 15,
       "encounter-build": 49,
       "encounter-groups": 72,
       "encounter-history": 30,
@@ -13,7 +13,7 @@
       "gallery": 30,
       "library-author": 50,
       "library-browse": 79,
-      "library-navigation": 32,
+      "library-navigation": 31,
       "library-scope": 8,
       "library-to-encounter": 20,
       "nav-state": 24,
@@ -52,7 +52,7 @@
       "encounter-run": 4,
       "gallery": 1,
       "library-author": 2,
-      "library-browse": 2,
+      "library-browse": 6,
       "library-scope": 5,
       "session-plan": 21,
       "session-recording": 10,
@@ -63,7 +63,7 @@
       "campaign-content": 72,
       "column-resize": 94,
       "dialogs": 44,
-      "empty": 14,
+      "empty": 15,
       "encounter-build": 49,
       "encounter-groups": 72,
       "encounter-history": 30,
@@ -72,7 +72,7 @@
       "gallery": 29,
       "library-author": 49,
       "library-browse": 79,
-      "library-navigation": 32,
+      "library-navigation": 31,
       "library-scope": 7,
       "library-to-encounter": 20,
       "nav-state": 24,
@@ -232,7 +232,7 @@
     },
     "run-overrides": {
       "read a changed creature's card in a run": 2,
-      "start a run with a changed creature": 6
+      "start a run with a changed creature": 5
     },
     "run-restart": {
       "be in a run": 3,
@@ -260,7 +260,7 @@
       "use the timeline during a run": 79
     },
     "session-plan": {
-      "T12.0: make a creature your own": 5,
+      "T12.0: make a creature your own": 4,
       "T12.1: go back from a finished fight": 1,
       "T12.1: start a planned fight from the session": 1,
       "T12.2: go back to the sheets' HP": 1,
@@ -279,7 +279,7 @@
       "edit a campaign's details": 5,
       "find campaign management": 0,
       "open settings": 1,
-      "try to connect without a network": 5
+      "try to connect without a network": 4
     },
     "signed-in": {
       "see the remote campaign list": 2

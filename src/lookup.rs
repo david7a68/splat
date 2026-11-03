@@ -150,7 +150,7 @@ impl Item {
         } else {
             Some(self.owner.as_str())
         };
-        presentation::list_subtitle(&self.entry, source)
+        presentation::list_subtitle(&self.subtitle, source)
     }
 
     fn file_keys(&self) -> [String; 2] {

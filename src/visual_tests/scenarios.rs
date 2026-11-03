@@ -44,7 +44,7 @@ pub mod library_browse {
     const CREATURE: &str = "Adult Black Dragon";
     const SPELL_ROW: &str = "Fireball · ";
     const CLASS_ROW: &str = "Wizard · Class";
-    const CREATURES_SECTION: &str = "Creatures   ";
+    const CREATURES_SECTION: &str = "Creatures";
     const CREATURES_COUNT: &str = "CREATURES 336";
     const NEXT_CREATURE: &str = "Aboleth";
     const BACK: &str = "Back";
@@ -420,7 +420,7 @@ pub mod reader_tables {
         go_library(d);
         d.click("New entry");
         d.type_into("Entry name", "Spell Progression");
-        d.open_combo_at(2);
+        d.click("Kind of entry");
         d.click("Rule");
         d.click("Create entry");
         d.type_into_editor(

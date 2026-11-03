@@ -1717,8 +1717,7 @@ impl Run {
     fn footer_height(&self) -> f32 {
         FOOTER_HEIGHT
             + if self.sync_needs_sign_in() {
-                // The footer's existing lower padding supplies the rest of this line.
-                Type::Small.line() - design::S
+                Type::Small.line()
             } else {
                 0.0
             }
@@ -4190,7 +4189,8 @@ impl RowLayout {
             .map_or(second_height, |line| line.size().y);
         let name_line = self.name_line(scale);
         if self.fit == RowFit::Compressed {
-            return (1.0 + name_line + self.name_extra() + second + 1.0).max(self.even);
+            return (name_line + self.name_extra() + second + design::HAIRLINE_WIDTH)
+                .max(self.even);
         }
         let top = ((scale.row - name_line - second_height) / 2.0).max(1.0);
         scale

@@ -231,10 +231,11 @@ impl Loaded {
                     Owner::Package(module) => Some(module.name.as_str()),
                     Owner::Campaign(_) => Some("Campaign"),
                 };
-                note.entry.as_ref().map_or_else(
-                    || "Invalid note".to_owned(),
-                    |entry| presentation::list_subtitle(entry, source),
-                )
+                let line = note
+                    .entry
+                    .as_ref()
+                    .map_or_else(|| "Invalid note".to_owned(), presentation::subtitle);
+                presentation::list_subtitle(&line, source)
             })
             .collect();
         // Identical names and parents retain a stable count as a last resort.
@@ -1398,34 +1399,38 @@ impl Library {
             *current
         };
         let before = scope;
-        let combo = egui::ComboBox::from_id_salt("library_scope")
-            .icon(design::combo_icon)
-            .width(
-                ui.available_width()
-                    .min(if compact { 150.0 } else { 166.0 }),
-            )
-            .wrap()
-            .selected_text(label(scope))
-            .show_ui(ui, |ui| {
-                ui.set_min_width(260.0);
-                if active.is_some() {
-                    ui.selectable_value(&mut scope, Scope::Uses, label(Scope::Uses));
-                }
-                ui.selectable_value(&mut scope, Scope::All, label(Scope::All));
-                ui.separator();
-                ui.selectable_value(&mut scope, Scope::Builtin, label(Scope::Builtin));
-                for m in campaigns.modules() {
-                    ui.selectable_value(
-                        &mut scope,
-                        Scope::Package(m.id),
-                        label(Scope::Package(m.id)),
-                    );
-                }
-                if active.is_some() {
-                    ui.selectable_value(&mut scope, Scope::Campaign, label(Scope::Campaign));
-                }
-            });
-        design::named(ui, &combo.response, "What the Library shows");
+        // This control moves between columns as the reader narrows. Keep an open
+        // menu attached to it when the window changes size.
+        ui.scope_builder(egui::UiBuilder::new().id("library_scope_host"), |ui| {
+            let combo = egui::ComboBox::from_id_salt("library_scope")
+                .icon(design::combo_icon)
+                .width(
+                    ui.available_width()
+                        .min(if compact { 150.0 } else { 166.0 }),
+                )
+                .wrap()
+                .selected_text(label(scope))
+                .show_ui(ui, |ui| {
+                    ui.set_min_width(260.0);
+                    if active.is_some() {
+                        ui.selectable_value(&mut scope, Scope::Uses, label(Scope::Uses));
+                    }
+                    ui.selectable_value(&mut scope, Scope::All, label(Scope::All));
+                    ui.separator();
+                    ui.selectable_value(&mut scope, Scope::Builtin, label(Scope::Builtin));
+                    for m in campaigns.modules() {
+                        ui.selectable_value(
+                            &mut scope,
+                            Scope::Package(m.id),
+                            label(Scope::Package(m.id)),
+                        );
+                    }
+                    if active.is_some() {
+                        ui.selectable_value(&mut scope, Scope::Campaign, label(Scope::Campaign));
+                    }
+                });
+            design::named(ui, &combo.response, "What the Library shows");
+        });
         *current = scope;
         if scope != before {
             // The selected entry can stay if it is in this scope. A draft always stays.
