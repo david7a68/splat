@@ -778,6 +778,27 @@ impl CampaignContent {
                 });
             });
         }
+        for module in campaigns.modules() {
+            if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
+                ui.horizontal_wrapped(|ui| {
+                    design::message(
+                        ui,
+                        Tone::Warning,
+                        &format!("{}: {problem} Entries are still available.", module.name),
+                    );
+                    if module.path.join("Package.md").exists()
+                        && Action::quiet("Open in Library").show(ui).clicked()
+                    {
+                        ui.ctx().data_mut(|data| {
+                            data.insert_temp(
+                                egui::Id::new("open_library_repair"),
+                                module.path.join("Package.md"),
+                            )
+                        });
+                    }
+                });
+            }
+        }
         let affected: Vec<_> = catalogue
             .entries
             .values()
@@ -792,43 +813,36 @@ impl CampaignContent {
         if let Some(removed) = &self.removed_package
             && removed.campaign == active.id
         {
-            let undo = design::message_with_action(
-                ui,
-                if removed.users.is_empty() {
-                    Tone::Success
-                } else {
-                    Tone::Warning
-                },
-                &if removed.users.is_empty() {
-                    format!("{} removed from this campaign.", removed.name)
-                } else {
-                    format!(
-                        "{} now {} creatures Splat cannot find.",
-                        removed
-                            .users
-                            .iter()
-                            .map(|(_, name)| name.as_str())
-                            .collect::<Vec<_>>()
-                            .join(" and "),
-                        if removed.users.len() == 1 {
-                            "has"
-                        } else {
-                            "have"
+            let undo = if removed.users.is_empty() {
+                design::undo_message(
+                    ui,
+                    Tone::Success,
+                    &format!("{} removed from this campaign.", removed.name),
+                    "Undo package removal",
+                )
+            } else {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(Type::Body.rich(ui, icons::WARN).color(c.result.warning));
+                    for (at, (id, name)) in removed.users.iter().enumerate() {
+                        if at > 0 {
+                            ui.label("and");
                         }
-                    )
-                },
-                "Undo package removal",
-            );
-            ui.horizontal_wrapped(|ui| {
-                for (at, (id, name)) in removed.users.iter().enumerate() {
-                    if at > 0 {
-                        ui.label("and");
+                        if design::link(ui, name).clicked() {
+                            self.open_lookup = Some(*id);
+                        }
                     }
-                    if design::link(ui, name).clicked() {
-                        self.open_lookup = Some(*id);
-                    }
-                }
-            });
+                    ui.label(if removed.users.len() == 1 {
+                        "now has creatures Splat cannot find."
+                    } else {
+                        "now have creatures Splat cannot find."
+                    });
+                    Action::quiet("Undo package removal")
+                        .icon(icons::UNDO)
+                        .show(ui)
+                        .clicked()
+                })
+                .inner
+            };
             if undo {
                 if document.selections != removed.after {
                     self.error = Some(

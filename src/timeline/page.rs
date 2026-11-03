@@ -112,7 +112,7 @@ pub fn quick_add(
 /// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
 pub fn problems(ui: &mut egui::Ui, book: &mut Book) {
     if let Some(count) = book.dropped()
-        && design::message_with_action(
+        && design::undo_message(
             ui,
             Tone::Info,
             &format!(
@@ -169,7 +169,7 @@ pub fn undo_removed(ui: &mut egui::Ui, book: &mut Book) -> bool {
     let Some(removed) = book.removed().map(str::to_owned) else {
         return false;
     };
-    if design::message_with_action(
+    if design::undo_message(
         ui,
         Tone::Info,
         &format!("Removed “{removed}”."),
@@ -432,7 +432,7 @@ impl TimelinePage {
             } else {
                 Tone::Info
             };
-            if design::message_with_action(ui, tone, &words, "Undo remove") {
+            if design::undo_message(ui, tone, &words, "Undo remove") {
                 book.undo_remove();
             }
         }
@@ -449,12 +449,7 @@ impl TimelinePage {
                 .iter()
                 .position(|event| event.id == id)
                 .map_or_else(String::new, |at| book.events[at].label(days[at]));
-            if design::message_with_action(
-                ui,
-                Tone::Success,
-                &format!("{label} added."),
-                "Undo add",
-            ) {
+            if design::undo_message(ui, Tone::Success, &format!("{label} added."), "Undo add") {
                 book.remove(&id);
                 self.just_added = None;
                 self.selected = None;

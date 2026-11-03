@@ -1366,20 +1366,23 @@ fn sheet_column_widths(room: f32, gap: f32) -> Vec<f32> {
 fn sheet_columns(ui: &mut egui::Ui, count: usize, mut row: impl FnMut(&mut egui::Ui, usize)) {
     let widths = sheet_column_widths(ui.available_width(), ui.spacing().item_spacing.x);
     let rows = count.div_ceil(widths.len());
-    ui.horizontal_top(|ui| {
-        for (column, width) in widths.into_iter().enumerate() {
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, 0.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.set_width(width);
-                    for at in column * rows..((column + 1) * rows).min(count) {
-                        row(ui, at);
-                    }
-                },
-            );
-        }
-    });
+    for line in 0..rows {
+        ui.horizontal_top(|ui| {
+            for (column, width) in widths.iter().copied().enumerate() {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_width(width);
+                        let at = column * rows + line;
+                        if at < count {
+                            row(ui, at);
+                        }
+                    },
+                );
+            }
+        });
+    }
 }
 
 /// A row of stat tiles that breaks evenly: six across, or three, or two. A lone tile on a
@@ -2051,6 +2054,30 @@ mod sheet_now_tests {
                 tiles += span;
             }
         }
+    }
+
+    #[test]
+    fn wrapped_sheet_cells_keep_the_next_pair_on_one_row() {
+        let ctx = eframe::egui::Context::default();
+        let mut cells = [eframe::egui::Rect::NOTHING; 4];
+        for _ in 0..3 {
+            let _ = ctx.run(Default::default(), |ctx| {
+                eframe::egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.set_width(280.0);
+                    super::sheet_columns(ui, 4, |ui, at| {
+                        cells[at] = ui
+                            .allocate_space(eframe::egui::vec2(
+                                super::TILE_WIDTH,
+                                crate::design::L * if at == 0 { 3.0 } else { 1.0 },
+                            ))
+                            .1;
+                    });
+                });
+            });
+        }
+        assert_eq!(cells[1].top(), cells[3].top());
+        assert!(cells[1].top() >= cells[0].bottom());
+        assert!(cells[1].top() >= cells[2].bottom());
     }
     fn wizard(fetched: u64) -> EntitySnapshot {
         let abilities: Vec<_> = ["str", "dex", "con", "int", "wis", "cha"]

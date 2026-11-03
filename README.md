@@ -115,7 +115,13 @@ that the audio is not sent again. With a partial transcript, it names the remain
 audio parts. Recording silence has no elapsed time in its status word. The Session
 page shows the recorded time in the detail; the rail keeps it on hover. On Recordings, the silent row owns this detail and its input help. Processing says **Processing**, with the full step on hover.
 
-Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
+Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. Type headings use capitals and a count. World folder headings keep normal-case paths. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
+
+A broken or deleted `Package.md` keeps the package's entries available. Campaign
+names the manifest fault and opens an unreadable manifest in Library for repair.
+SRD copies no longer warn about hidden citation links. World lists table faults
+and offers its repair count in the header. New entries start in their kind folder.
+Named NPC search results say **In roster** after Add.
 
 An unreadable package creature offers **Open in Library** from the encounter roster.
 Library keeps a deleted file's draft until you choose **Save my draft again** or

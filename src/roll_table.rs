@@ -113,6 +113,27 @@ pub fn marked_tables(body: &str) -> Vec<MarkedTable> {
     found
 }
 
+/// Use the reader's checks when counting tables that cannot roll.
+pub(crate) fn fault_count(body: &str) -> usize {
+    marked_tables(body)
+        .into_iter()
+        .filter(|(marker, rows)| {
+            marker
+                .as_ref()
+                .map_or(true, |(_, dice)| table_rows(dice, rows).is_err())
+        })
+        .count()
+}
+
+#[test]
+fn fault_count_keeps_valid_tables_and_counts_each_invalid_table_once() {
+    let valid =
+        "<!-- splat:rolls key=a dice=1d4 -->\n\n| d4 | Result |\n|---|---|\n| 1-4 | Fine |\n";
+    let broken = valid.replace("1-4", "2-4");
+    assert_eq!(fault_count(valid), 0);
+    assert_eq!(fault_count(&format!("{valid}\n{broken}\n{broken}")), 2);
+}
+
 fn parse_range(cell: &str) -> Option<(i64, i64)> {
     let cell = cell.trim();
     if let Ok(value) = cell.parse() {

@@ -293,6 +293,16 @@ impl Loaded {
             .iter()
             .filter(|note| note.owner != Owner::Builtin)
         {
+            if let Some(entry) = &note.entry {
+                let faults = crate::roll_table::fault_count(&entry.body);
+                if faults > 0 {
+                    self.diagnostics.push(format!(
+                        "{}: {}",
+                        note.path,
+                        design::count(faults, "table fault", "table faults")
+                    ));
+                }
+            }
             if let Some(entry) = &note.entry
                 && let Some((old, _)) = presentation::heading_fix(&note.text, entry)
             {
@@ -666,6 +676,16 @@ pub(crate) fn creation_path(ui: &mut egui::Ui, root: &Path, relative: &str, dest
 }
 
 /// Existing folders, with an optional kind folder as the first suggestion.
+fn kind_folder(kind: &str) -> &'static str {
+    match kind {
+        "creature" => "Creatures",
+        "spell" => "Spells",
+        "item" => "Items",
+        "effect" => "Effects",
+        _ => "Rules",
+    }
+}
+
 pub(crate) fn folder_field(
     ui: &mut egui::Ui,
     label: &str,
@@ -883,13 +903,17 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
     if let Some(module) = module {
         let path = module.path.canonicalize().map_err(|e| e.to_string())?;
         let (entries, errors) = content::read_directory(&path)?;
-        let actual = module_from_entries(path, &entries)?;
-        if actual.id != module.id {
+        let actual = entries.iter().find(|entry| entry.kind == "package");
+        if actual.is_some() {
+            module_from_entries(path.clone(), &entries)?;
+        }
+        if actual.is_some_and(|entry| entry.id != module.id) {
             return Err(
                 "The package at this folder has a different identity. Register it separately."
                     .into(),
             );
         }
+        let missing_manifest = actual.is_none() && !path.join("Package.md").exists();
         for entry in entries {
             let text = fs::read_to_string(note_path(&module.path, &entry.path)?)
                 .map_err(|e| e.to_string())?;
@@ -898,6 +922,13 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 text,
                 entry: Some(entry),
                 error: None,
+                owner: Owner::Package(module.clone()),
+            });
+        }
+        if missing_manifest {
+            notes.push(Note {
+                path: "Package.md".into(), text: String::new(), entry: None,
+                error: Some("Package.md was deleted. Restore it from your backup. Entries are still available.".into()),
                 owner: Owner::Package(module.clone()),
             });
         }
@@ -1167,14 +1198,6 @@ fn form_heading(ui: &mut egui::Ui, title: &str) {
             .rich(ui, title.to_uppercase())
             .color(colors().text),
     );
-}
-
-fn undo_message(ui: &mut egui::Ui, text: &str, action: &str) -> bool {
-    ui.horizontal_wrapped(|ui| {
-        design::message(ui, Tone::Info, text);
-        Action::quiet(action).icon(icons::UNDO).show(ui).clicked()
-    })
-    .inner
 }
 
 fn obsidian_for(root: &Path, owner: &Owner) -> bool {
@@ -1722,6 +1745,7 @@ impl Library {
         );
         if new_entry {
             self.new_form = true;
+            self.new_folder = kind_folder(&self.new_kind).into();
             self.focus_new_name = true;
             self.form = false;
         }
@@ -1884,6 +1908,7 @@ impl Library {
                             .clicked()
                         {
                             self.new_form = true;
+                            self.new_folder = kind_folder(&self.new_kind).into();
                         }
                     },
                 );
@@ -2168,7 +2193,7 @@ impl Library {
                                 create = Action::secondary("New entry").icon(icons::ADD).show(ui).clicked();
                             });
                         }
-                        if create { self.new_form = true; self.focus_new_name = true; self.new_kind = "creature".into(); }
+                        if create { self.new_form = true; self.focus_new_name = true; self.new_kind = "creature".into(); self.new_folder = "Creatures".into(); }
                     } else {
                     let text = if scope == Scope::Campaign && !searching {
                         "No campaign entries yet. Copy an entry here with Copy to…, or create one with New entry."
@@ -2205,7 +2230,10 @@ impl Library {
                                 _ => line,
                             };
                             let broken = note.entry.as_ref().zip(link_index.as_ref()).filter(|_| note.owner != Owner::Builtin).map_or(0, |(entry, index)| index.broken_link_count(&entry.body, entry.id));
-                            let subtitle = if broken > 0 {
+                            let faults = note.entry.as_ref().map_or(0, |entry| crate::roll_table::fault_count(&entry.body));
+                            let subtitle = if faults > 0 {
+                                format!("{} {} · {subtitle}", icons::WARN, design::count(faults, "table fault", "table faults"))
+                            } else if broken > 0 {
                                 format!("{} {} · {subtitle}", icons::WARN, design::count(broken, "broken link", "broken links"))
                             } else { subtitle.to_owned() };
                             let response = ui
@@ -2675,7 +2703,7 @@ impl Library {
                                 self.new_form = true;
                                 self.new_place = None;
                                 self.new_name.clear();
-                                self.new_folder.clear();
+                                self.new_folder = kind_folder(&self.new_kind).into();
                                 self.new_not_used = false;
                                 self.focus_new_name = true;
                                 self.stale = true;
@@ -2749,6 +2777,10 @@ impl Library {
     }
 
     fn new_entry(&mut self, ui: &mut egui::Ui, dirty: bool, campaigns: &Campaigns) {
+        if self.new_kind.is_empty() {
+            self.new_kind = "creature".into();
+            self.new_folder = kind_folder(&self.new_kind).into();
+        }
         if self.loaded.is_none() {
             return;
         }
@@ -2780,7 +2812,7 @@ impl Library {
             .filter(|place| *place < places.len())
             .unwrap_or(default_place);
         ui.vertical(|ui| {
-            ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
+            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
             form_heading(ui, "New entry");
             ui.label(
                 Type::Small
@@ -2796,6 +2828,7 @@ impl Library {
                     self.new_kind = "creature".into();
                 }
                 design::group_label(ui, "Kind");
+                let old_kind = self.new_kind.clone();
                 let combo = form_control(ui, |ui| {
                     egui::ComboBox::from_id_salt("new_kind")
                         .width(ui.available_width())
@@ -2818,6 +2851,9 @@ impl Library {
                             }
                         })
                 });
+                if self.new_kind != old_kind {
+                    self.new_folder = kind_folder(&self.new_kind).into();
+                }
                 design::named(ui, &combo.response, "Kind of entry");
                 design::group_label(ui, "Destination");
                 let combo = form_control(ui, |ui| {
@@ -3144,7 +3180,12 @@ impl Library {
         });
         if self.discarded_note.is_some()
             && !self.dirty()
-            && undo_message(ui, gone_notice.as_deref().unwrap(), "Undo let go")
+            && design::undo_message(
+                ui,
+                Tone::Info,
+                gone_notice.as_deref().unwrap(),
+                "Undo let go",
+            )
             && let Some((_, _, draft)) = self.discarded.take()
             && let Some(note) = self.discarded_note.take()
             && let Some(loaded) = self.loaded.as_mut()
@@ -3724,7 +3765,7 @@ impl Library {
         }
         if !save_row
             && discard_is_for(self.discarded.as_ref(), note)
-            && undo_message(ui, "Draft discarded.", "Undo discard")
+            && design::undo_message(ui, Tone::Info, "Draft discarded.", "Undo discard")
             && let Some((_, _, text)) = self.discarded.take()
         {
             self.draft = text;
@@ -4246,16 +4287,13 @@ mod tests {
             Uuid::new_v4(),
         );
         assert!(!closure.direct.contains(&id));
-        assert!(
-            closure
-                .errors
-                .iter()
-                .any(|error| error.contains("duplicate identity"))
-        );
+        assert!(closure.errors.iter().any(|error| {
+            error.contains("Wolf copy.md and Wolf.md share an identity. Choose one in Library.")
+        }));
         assert!(
             catalogue.unreadable[&id]
                 .word
-                .contains("duplicate identity")
+                .contains("Wolf copy.md and Wolf.md share an identity. Choose one in Library.")
         );
         let copy_index = library
             .loaded
@@ -5534,6 +5572,36 @@ mod tests {
                 .iter()
                 .any(|d| d.starts_with("Broken.md"))
         );
+    }
+
+    #[test]
+    fn package_manifest_failure_keeps_library_entries_and_a_named_warning() {
+        let temp = tempfile::tempdir().unwrap();
+        let module = create_module(&temp.path().join("package"), "Test", "test").unwrap();
+        fs::rename(
+            module.path.join("Module.md"),
+            module.path.join("Package.md"),
+        )
+        .unwrap();
+        fs::write(
+            module.path.join("Wolf.md"),
+            note_text("Wolf", "creature", None),
+        )
+        .unwrap();
+        fs::write(module.path.join("Package.md"), "---\nsplat_id: [\n---\n").unwrap();
+        for deleted in [false, true] {
+            if deleted {
+                fs::remove_file(module.path.join("Package.md")).unwrap();
+            }
+            let loaded = load_all(std::slice::from_ref(&module), None).unwrap();
+            assert!(loaded.notes.iter().any(|note| note.name() == "Wolf"));
+            assert!(
+                loaded
+                    .diagnostics
+                    .iter()
+                    .any(|message| message.contains("Package.md"))
+            );
+        }
     }
 
     /// Writes a package whose one item needs `needs`.

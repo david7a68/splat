@@ -207,15 +207,18 @@ pub(crate) struct ReadingSection<'a> {
 
 /// The embedded SRD preserves printed column wraps for provenance. Reflow only
 /// its reading view; authored Markdown and the stored source are never rewritten.
+pub(crate) fn hidden_provenance_line(line: &str) -> bool {
+    let line = line.trim().trim_end_matches('\\');
+    line.starts_with("<!-- SRD page ") || line.starts_with("Original layout: [[")
+}
+
 pub(crate) fn overview_markdown(source: &str) -> String {
     let mut output = String::new();
     let mut row = false;
     let lines: Vec<&str> = source
         .lines()
         .map(|raw| raw.trim().trim_end_matches('\\'))
-        .filter(|line| {
-            !line.starts_with("<!-- SRD page ") && !line.starts_with("Original layout: [[")
-        })
+        .filter(|line| !hidden_provenance_line(line))
         .collect();
     let mut index = 0;
     while index < lines.len() {

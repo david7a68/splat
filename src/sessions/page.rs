@@ -1686,7 +1686,7 @@ impl Sessions {
 
     pub fn event_link_undo(&mut self, ui: &mut egui::Ui) {
         if self.updated_links.is_some()
-            && design::message_with_action(
+            && design::undo_message(
                 ui,
                 Tone::Success,
                 "Links updated in notes.",
@@ -2428,7 +2428,7 @@ impl Sessions {
 
     fn draft_problem(ui: &mut egui::Ui, draft: &mut Draft) {
         if draft.dropped.is_some()
-            && design::message_with_action(ui, Tone::Info, "Draft dropped.", "Undo reload")
+            && design::undo_message(ui, Tone::Info, "Draft dropped.", "Undo reload")
         {
             draft.undo_reload();
         }
@@ -3416,7 +3416,7 @@ impl Sessions {
         }
         ui.allocate_ui(egui::vec2(ui.available_width(), *height), |ui| {
             ui.set_min_height(*height);
-            design::message_with_action(
+            design::undo_message(
                 ui,
                 Tone::Info,
                 "Group removed from this plan.",
@@ -3595,7 +3595,7 @@ impl Sessions {
                 for (at, event) in book.events.iter_mut().enumerate() {
                     if let Some((removed_at, label)) = &removed_row && *removed_at == at {
                         ui.add_space(design::S);
-                        undo_row_remove |= design::message_with_action(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
+                        undo_row_remove |= design::undo_message(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
                     }
                     if !event.is_in(session) { continue; }
                     any = true;
@@ -3701,7 +3701,7 @@ impl Sessions {
                 }
                 if let Some((at, label)) = &removed_row && *at >= event_count {
                     ui.add_space(design::S);
-                    undo_row_remove |= design::message_with_action(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
+                    undo_row_remove |= design::undo_message(ui, Tone::Info, &format!("Removed “{label}”."), "Undo remove");
                 }
                 for (position, fight) in planned.iter().enumerate() {
                     self.removed_fight_message(ui, session, position);
@@ -3926,7 +3926,7 @@ impl Sessions {
             return;
         }
         ui.add_space(design::S);
-        if design::message_with_action(
+        if design::undo_message(
             ui,
             Tone::Info,
             &format!("Removed “{name}” from tonight."),
@@ -4028,7 +4028,7 @@ impl Sessions {
                     format!("{} added{to}.", just.label)
                 },
             );
-            if design::message_with_action(ui, Tone::Success, &words, "Undo add") {
+            if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                 book.remove(&id);
                 self.added = None;
             }
@@ -5196,7 +5196,7 @@ impl Sessions {
                     self.move_run_to_session(book, run, session);
                 }
             } else if self.moved_run.is_some() {
-                if design::message_with_action(ui, tone, &words, "Undo move") {
+                if design::undo_message(ui, tone, &words, "Undo move") {
                     self.undo_move(book);
                 }
             } else {
@@ -5564,7 +5564,7 @@ impl Sessions {
                     }
                 }
                 if let Some((name, _)) = self.deleted_template.clone()
-                    && design::message_with_action(
+                    && design::undo_message(
                         ui,
                         Tone::Info,
                         &format!("Deleted “{name}”."),

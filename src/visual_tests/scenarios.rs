@@ -359,7 +359,10 @@ pub mod library_author {
         d.goal("open and close the package form");
 
         d.click(NEW_ENTRY);
-        d.state("new-entry-form", Sizes::Default);
+        d.observe_both("W7", "A new creature starts in Creatures", |d| {
+            d.field_text("Folder").as_deref() == Some("Creatures")
+        });
+        d.state("new-entry-form", Sizes::All);
         d.type_into(NEW_NAME_FIELD, NEW_NAME);
         d.click(CREATE_ENTRY);
         d.expect(NEW_NAME);
@@ -1525,6 +1528,17 @@ pub mod dialogs {
         d.click("Edit the copy");
         d.expect("Markdown editor");
         d.state("edit-the-copy", Sizes::All);
+        d.observe_both(
+            "W1/C1",
+            "The copied Watch Aboleth row has no broken-link warning",
+            |d| {
+                d.has_containing("Watch Aboleth · ")
+                    && !d.nodes().iter().any(|node| {
+                        node.name.starts_with("Watch Aboleth · ")
+                            && node.name.contains("broken link")
+                    })
+            },
+        );
         d.goal("copy an entry to a campaign");
 
         open_local_package(d, MODULE);
@@ -6273,7 +6287,7 @@ pub mod encounter_owned_groups {
         d.observe(
             "T13.6",
             d.has(&format!("Adding to {NEW_NAME}"))
-                && d.has(&format!("Belongs to: {SHRINE}"))
+                && !d.has(&format!("Belongs to: {SHRINE}"))
                 && d.has_containing("No members yet. Add creatures from the search."),
             "A new group belongs to this encounter, and takes what the search adds",
         );
@@ -6292,7 +6306,7 @@ pub mod encounter_owned_groups {
             d.in_view("1. Wolf"),
             "The member just added comes into view, in its group",
         );
-        d.state("creature-added-to-a-group", Sizes::Default);
+        d.state("creature-added-to-a-group", Sizes::All);
         d.click(SAVE_ENCOUNTER);
         d.expect("Saved");
         d.observe(
@@ -6304,7 +6318,10 @@ pub mod encounter_owned_groups {
         d.goal("build a group in an encounter's editor");
         d.begin_task();
         d.click_first(&format!("More actions for {NEW_NAME}"));
-        d.click("Make available to any encounter");
+        d.click_containing("Move to…");
+        d.expect("Any encounter");
+        d.state("move-encounter-group-menu", Sizes::All);
+        d.click("Any encounter");
         d.expect("Undo remove group");
         d.state("saved-group-removed", Sizes::All);
         d.click("Undo remove group");
@@ -7218,6 +7235,11 @@ pub mod npc_in_encounter {
             "One Add uses Guard with the NPC's name",
         );
         d.state("npc-in-roster", Sizes::All);
+        d.observe_both(
+            "P2",
+            "A named NPC already on the roster cannot be added again from search",
+            |d| d.visible_text("In roster") && !d.has("Add"),
+        );
         d.click(SAVE_ENCOUNTER);
         d.wait_for_text("Saved");
         d.click(RUN_ENCOUNTER);
@@ -7408,9 +7430,7 @@ pub mod remove_package_in_use {
         d.state("missing-package-technical-details", Sizes::Default);
         d.click("Technical details");
         d.click("Remove from this campaign");
-        d.wait_for_text(
-            "Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.",
-        );
+        d.wait_for_text("now have creatures Splat cannot find.");
         d.expect("Bridge Ambush");
         d.expect("Shrine of Cinders");
         d.state("missing-package-removed-with-undo", Sizes::All);

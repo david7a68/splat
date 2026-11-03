@@ -546,7 +546,7 @@ An unavailable package keeps its last known display name in the campaign selecti
 
 Package and campaign readers keep their owner status in both Read and Edit Markdown.
 Their file line offers Show file; entries in a vault also offer Edit in Obsidian.
-An encounter row whose creature was deleted keeps its last known name or says Missing creature. Its warning line says, for example, Enemies · Not found. Its package entry was deleted. Edit opens a creature replacement search; Remove stays in the row menu. The NPC Add to run form labels its side picker SIDE and uses the roster's side words.
+An encounter row whose creature was deleted keeps its last known name or says Missing creature. Its warning line says, for example, Enemies · Not found. Its package entry was deleted. Replace… opens a creature replacement search; Edit and Remove stay in the row menu. The NPC Add to run form labels its side picker SIDE and uses the roster's side words.
 Folder is one editable field with a suggestion menu, followed by its help line.
 New packages default to the parent of the last registered package.
 A completed copy says where it went and keeps its path in hover text.
@@ -759,3 +759,14 @@ overflow band. The band says `2 tied`. Ordering arrows still work inside a share
 roll. Run notices keep a result icon beside their text. Arrivals separates status
 from members when the summary wraps and never ends a line with a separator.
 Plan additions offer `Undo add`. Templates uses the shared quiet back action.
+
+Library copies do not count hidden SRD provenance lines
+as broken links. SRD page targets count as found. Table faults use list warnings
+and the World header's repair link. World folder groups use normal-case paths
+after type groups. New entries start in their kind folder and use FORM_WIDTH.
+A broken or deleted Package.md keeps its package entries available and names the
+manifest fault. Campaign offers Open in Library for an unreadable manifest.
+Groups list side, count, XP, changes and members. Encounter group frames keep
+ownership in Move to…; full editors keep Belongs to. Named NPC results say
+In roster after Add. Paired sheet cells share the taller cell's row height.
+Undo messages use the quiet action and undo icon, with the action below when needed.
