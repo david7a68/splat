@@ -6620,6 +6620,7 @@ pub mod share_to_package {
 pub mod remove_package_in_use {
     use super::*;
     pub fn run(d: &mut Driver<'_>) {
+        let package = d.app_mut().campaigns.modules()[0].id;
         go_library(d);
         d.click("Packages");
         d.click("Manage packages…");
@@ -6635,7 +6636,31 @@ pub mod remove_package_in_use {
         );
         go_campaign(d);
         d.click("Reload from disk");
-        d.expect("Unavailable package:");
+        d.expect("Ashen Marches is no longer on this computer. 2 entries in this campaign use it.");
+        d.expect("Remove from this campaign");
+        d.expect("Find the folder…");
+        d.observe(
+            "Missing package name",
+            !d.visible_text(&package.to_string()),
+            "The missing package keeps its name; identifiers stay in Technical details",
+        );
         d.state("campaign-keeps-missing-package-choice", Sizes::All);
+        d.click("Technical details");
+        d.expect(&package.to_string());
+        d.state("missing-package-technical-details", Sizes::Default);
+        d.click("Technical details");
+        d.click("Remove from this campaign");
+        d.click("Save selections");
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let document = crate::content_workspace::CampaignDocument::load(&campaign).unwrap();
+        d.observe(
+            "Remove unavailable package",
+            !document
+                .selections
+                .iter()
+                .any(|selection| selection.package.id == Some(package)),
+            "Removing the unavailable package saves the other campaign choices",
+        );
+        d.state("missing-package-removed", Sizes::Default);
     }
 }

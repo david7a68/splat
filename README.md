@@ -363,7 +363,7 @@ apply a change. The sidebar shows how many changes wait. See
 Under **Packages → Manage packages…**, register an existing folder containing exactly one package
 manifest, or enter a name to create a package. The form shows the new folder path. **Browse…** changes its parent folder. After creation, the first entry form opens. Package
 registrations are stored in user settings; package notes remain in their own folders.
-Unregistering a package leaves its files in place. Package and campaign folders must
+Unregistering a package leaves its files in place. Campaign keeps its last known name and offers **Remove from this campaign** or **Find the folder…** if it becomes unavailable. Package IDs stay under **Technical details**. Package and campaign folders must
 be separate. Register My Homebrew in your preferred location for shared homebrew.
 
 Local packages support new entries and Markdown editing. **About <package name>** opens the manifest. **New entry** shows the folder, kind and path before it writes a note, then opens its editor. Kind templates include a reader skeleton. A new subfolder is created when the note is saved.

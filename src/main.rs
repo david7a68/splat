@@ -1552,8 +1552,14 @@ impl Splat {
                 data.remove_temp::<(uuid::Uuid, uuid::Uuid)>(egui::Id::new("use_package_entry"))
             })
         }) && let Some(campaign) = self.campaigns.active_campaign()
+            && let Some(module) = self
+                .campaigns
+                .modules()
+                .iter()
+                .find(|module| module.id == package)
         {
-            match content_workspace::use_in_campaign(&campaign, package, Some(entry)) {
+            match content_workspace::use_in_campaign(&campaign, package, &module.name, Some(entry))
+            {
                 Ok(()) => {
                     self.library.refresh_destination(&campaign.path, ctx);
                     self.campaign_content.refresh_destination(&campaign.path);
@@ -1565,6 +1571,16 @@ impl Splat {
                     self.library.report_error(error);
                 }
             }
+        }
+        if let Some(module) = self.campaign_content.found_package.take() {
+            let root = module.path.clone();
+            let result = self.campaigns.restore_module(module);
+            if result.is_ok() {
+                self.library.refresh_destination(&root, ctx);
+                self.encounters.refresh_content(ctx, &self.campaigns, &root);
+                self.lookup.refresh();
+            }
+            self.campaign_content.package_restored(result);
         }
         if let Some(words) = markdown_view::take_lookup_link(ctx) {
             self.notes_give_way();

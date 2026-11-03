@@ -352,7 +352,7 @@ fn entry_row(ui: &mut egui::Ui, name: &str, subtitle: &str, selected: bool) -> e
     design::two_line_row(ui, ENTRY_ROW_HEIGHT, selected, name, subtitle)
 }
 
-fn local_module(path: &Path) -> Result<Module, String> {
+pub(crate) fn local_module(path: &Path) -> Result<Module, String> {
     let path = path.canonicalize().map_err(|e| e.to_string())?;
     let (entries, _) = content::read_directory(&path)?;
     module_from_entries(path, &entries)
@@ -1919,7 +1919,10 @@ impl Library {
                                     && let Some(campaign) = campaigns.active_campaign()
                                 {
                                     crate::content_workspace::use_in_campaign(
-                                        &campaign, module.id, None,
+                                        &campaign,
+                                        module.id,
+                                        &module.name,
+                                        None,
                                     )?;
                                 }
                                 Ok(module)
@@ -2155,6 +2158,7 @@ impl Library {
                                                 crate::content_workspace::use_in_campaign(
                                                     &campaign,
                                                     owner.id().unwrap(),
+                                                    owner.source(),
                                                     Some(entry.id),
                                                 )
                                             })

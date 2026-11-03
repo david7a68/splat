@@ -314,6 +314,7 @@ impl CopyDialog {
                                 crate::content_workspace::use_in_campaign(
                                     &campaign,
                                     d.1,
+                                    d.2.strip_prefix("Package · ").unwrap_or(&d.2),
                                     Some(entry.id),
                                 )
                                 .map_err(|e| {

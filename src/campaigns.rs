@@ -203,6 +203,14 @@ impl Campaigns {
         self.persist(data)
     }
 
+    /// Restore a missing package, including one whose registered folder moved.
+    pub fn restore_module(&mut self, module: crate::persistence::Module) -> Result<(), String> {
+        let mut data = self.data.clone();
+        data.modules.retain(|known| known.id != module.id);
+        data.modules.push(module);
+        self.persist(data)
+    }
+
     pub fn rename_module(&mut self, id: Uuid, name: String) -> Result<(), String> {
         let mut data = self.data.clone();
         let module = data
@@ -245,6 +253,26 @@ impl Campaigns {
     }
 
     pub fn unregister_module(&mut self, id: Uuid) -> Result<(), String> {
+        if let Some(module) = self.data.modules.iter().find(|module| module.id == id) {
+            // Keep the last registration name in older campaign manifests too.
+            for campaign in &self.data.campaigns {
+                let Ok(mut document) = CampaignDocument::load(campaign) else {
+                    continue;
+                };
+                let mut changed = false;
+                for selection in &mut document.selections {
+                    if selection.package.id == Some(id)
+                        && selection.name.as_ref() != Some(&module.name)
+                    {
+                        selection.name = Some(module.name.clone());
+                        changed = true;
+                    }
+                }
+                if changed {
+                    document.save()?;
+                }
+            }
+        }
         let mut data = self.data.clone();
         data.modules.retain(|m| m.id != id);
         self.persist(data)
@@ -1022,5 +1050,53 @@ mod tests {
                 .as_deref(),
             Some("12")
         );
+    }
+    #[test]
+    fn unregistering_remembers_legacy_names_and_finding_a_folder_restores_one_registration() {
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("campaign");
+        std::fs::create_dir(&folder).unwrap();
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns.start_import("12", "Campaign");
+        campaigns.path = folder.to_string_lossy().into_owned();
+        campaigns.save_form().unwrap();
+        let campaign = campaigns.active_campaign().unwrap();
+        let package = crate::persistence::Module {
+            id: Uuid::new_v4(),
+            name: "Ashen Marches".into(),
+            path: temp.path().join("old-folder"),
+        };
+        campaigns.register_module(package.clone()).unwrap();
+        let mut document = CampaignDocument::load(&campaign).unwrap();
+        document
+            .selections
+            .push(crate::content_workspace::PackageSelection {
+                name: None,
+                package: crate::content_workspace::EntryRef::id(package.id),
+                selection: crate::content_workspace::Selection::All,
+            });
+        document.save().unwrap();
+        campaigns.unregister_module(package.id).unwrap();
+        let document = CampaignDocument::load(&campaign).unwrap();
+        assert_eq!(
+            document
+                .selections
+                .iter()
+                .find(|selection| selection.package.id == Some(package.id))
+                .unwrap()
+                .name
+                .as_deref(),
+            Some("Ashen Marches")
+        );
+        assert!(campaigns.modules().is_empty());
+        campaigns.restore_module(package.clone()).unwrap();
+        let mut moved = package.clone();
+        moved.path = temp.path().join("new-folder");
+        campaigns.restore_module(moved.clone()).unwrap();
+        assert_eq!(campaigns.modules(), &[moved]);
+        let mut overlapping = package;
+        overlapping.path = folder;
+        assert!(campaigns.restore_module(overlapping).is_err());
+        assert_eq!(campaigns.modules()[0].path, temp.path().join("new-folder"));
     }
 }

@@ -20,6 +20,7 @@ use uuid::Uuid;
 pub fn use_in_campaign(
     campaign: &Campaign,
     package: Uuid,
+    package_name: &str,
     entry: Option<Uuid>,
 ) -> Result<(), String> {
     let mut document = CampaignDocument::load(campaign)?;
@@ -28,18 +29,19 @@ pub fn use_in_campaign(
         .iter_mut()
         .find(|s| s.package.id == Some(package))
     {
+        selection.name = Some(package_name.into());
         match (&mut selection.selection, entry) {
-            (Selection::All, _) => return Ok(()),
+            (Selection::All, _) => {}
             (Selection::Selected { entries }, Some(id)) => {
-                if entries.iter().any(|e| e.id == Some(id)) {
-                    return Ok(());
+                if !entries.iter().any(|e| e.id == Some(id)) {
+                    entries.push(EntryRef::id(id));
                 }
-                entries.push(EntryRef::id(id));
             }
             (selection, None) => *selection = Selection::All,
         }
     } else {
         document.selections.push(PackageSelection {
+            name: Some(package_name.into()),
             package: EntryRef::id(package),
             selection: entry.map_or(Selection::All, |id| Selection::Selected {
                 entries: vec![EntryRef::id(id)],
@@ -155,8 +157,64 @@ pub enum Selection {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PackageSelection {
+    /// Last known display name, retained if the package is removed or moved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub package: EntryRef,
     pub selection: Selection,
+}
+
+impl PackageSelection {
+    pub fn display_name(&self) -> &str {
+        self.name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .unwrap_or("A package that is no longer on this computer")
+    }
+
+    pub fn unavailable_message(&self, catalogue: &Catalogue) -> String {
+        let mut message = if self
+            .name
+            .as_deref()
+            .is_some_and(|name| !name.trim().is_empty())
+        {
+            format!("{} is no longer on this computer.", self.display_name())
+        } else {
+            format!("{}.", self.display_name())
+        };
+        match &self.selection {
+            Selection::Selected { entries } => {
+                let references: Vec<_> = entries
+                    .iter()
+                    .filter_map(|entry| entry.reference().ok())
+                    .collect();
+                let uses = catalogue
+                    .entries
+                    .values()
+                    .filter(|entry| entry.private)
+                    .filter(|entry| {
+                        content::required_references(&entry.entry).is_ok_and(|required| {
+                            required
+                                .iter()
+                                .any(|reference| references.contains(reference))
+                        })
+                    })
+                    .count();
+                message.push_str(&format!(
+                    " {} in this campaign {} it.",
+                    if uses == 0 {
+                        "No entries".into()
+                    } else {
+                        crate::design::count(uses, "entry", "entries")
+                    },
+                    if uses == 1 { "uses" } else { "use" }
+                ));
+            }
+            Selection::All => message.push_str(" This campaign uses the whole package."),
+        }
+        message
+    }
 }
 
 pub struct ModuleIndex {
@@ -415,7 +473,7 @@ impl Catalogue {
                 None => {
                     result.errors.push(format!(
                         "Selected package unavailable: {}",
-                        selection.package.label()
+                        selection.display_name()
                     ));
                     continue;
                 }
@@ -707,6 +765,7 @@ impl CampaignDocument {
                         "splat_packages",
                         Some(
                             serde_yaml_ng::to_value(vec![PackageSelection {
+                                name: Some(builtin_manifest().name),
                                 package: EntryRef::id(builtin_manifest().id),
                                 selection: Selection::All,
                             }])
@@ -1010,6 +1069,7 @@ mod tests {
             private: false,
         });
         let selection = vec![PackageSelection {
+            name: None,
             package: EntryRef::id(owner),
             selection: Selection::Selected {
                 entries: vec![EntryRef::id(creature_id)],
@@ -1034,6 +1094,7 @@ mod tests {
         );
         let all = cat.closure(
             &[PackageSelection {
+                name: None,
                 package: EntryRef::id(owner),
                 selection: Selection::All,
             }],
@@ -1043,6 +1104,7 @@ mod tests {
         assert!(all.direct.contains(&later_id));
         let unavailable = cat.closure(
             &[PackageSelection {
+                name: None,
                 package: EntryRef::id(Uuid::new_v4()),
                 selection: Selection::All,
             }],
@@ -1298,6 +1360,7 @@ mod tests {
         assert!(plan.text.contains(content::builtin::ATTRIBUTION));
         let all = cat.closure(
             &[PackageSelection {
+                name: None,
                 package: EntryRef::id(builtin_manifest().id),
                 selection: Selection::All,
             }],
@@ -1379,6 +1442,7 @@ mod tests {
                 .unwrap()
                 .closure(
                     &[PackageSelection {
+                        name: None,
                         package: EntryRef::id(id),
                         selection: Selection::All,
                     }],
@@ -1481,15 +1545,16 @@ mod tests {
         let package = Uuid::new_v4();
         let first = Uuid::new_v4();
         let second = Uuid::new_v4();
-        use_in_campaign(&campaign, package, Some(first)).unwrap();
-        use_in_campaign(&campaign, package, Some(second)).unwrap();
-        use_in_campaign(&campaign, package, Some(first)).unwrap();
+        use_in_campaign(&campaign, package, "Test package", Some(first)).unwrap();
+        use_in_campaign(&campaign, package, "Test package", Some(second)).unwrap();
+        use_in_campaign(&campaign, package, "Test package", Some(first)).unwrap();
         let document = CampaignDocument::load(&campaign).unwrap();
         let selection = document
             .selections
             .iter()
             .find(|s| s.package.id == Some(package))
             .unwrap();
+        assert_eq!(selection.name.as_deref(), Some("Test package"));
         assert_eq!(
             selection.selection,
             Selection::Selected {
@@ -1502,8 +1567,8 @@ mod tests {
                 .iter()
                 .any(|s| s.package.id == Some(builtin_manifest().id))
         );
-        use_in_campaign(&campaign, package, None).unwrap();
-        use_in_campaign(&campaign, package, Some(Uuid::new_v4())).unwrap();
+        use_in_campaign(&campaign, package, "Test package", None).unwrap();
+        use_in_campaign(&campaign, package, "Test package", Some(Uuid::new_v4())).unwrap();
         let document = CampaignDocument::load(&campaign).unwrap();
         assert_eq!(
             document
@@ -1513,6 +1578,68 @@ mod tests {
                 .unwrap()
                 .selection,
             Selection::All
+        );
+    }
+    #[test]
+    fn old_package_selections_load_and_missing_names_stay_out_of_identifiers() {
+        let id = Uuid::new_v4();
+        let old = format!("package: {{id: {id}}}\nselection: {{mode: all}}\n");
+        let mut selection: PackageSelection = serde_yaml_ng::from_str(&old).unwrap();
+        assert_eq!(selection.name, None);
+        let message = selection.unavailable_message(&Catalogue::default());
+        assert!(message.starts_with("A package that is no longer on this computer."));
+        assert!(!message.contains(&id.to_string()));
+        selection.name = Some("Ashen Marches".into());
+        let text = serde_yaml_ng::to_string(&selection).unwrap();
+        assert_eq!(
+            serde_yaml_ng::from_str::<PackageSelection>(&text).unwrap(),
+            selection
+        );
+    }
+
+    #[test]
+    fn missing_package_counts_campaign_entries_once_not_individual_references() {
+        let package = Uuid::new_v4();
+        let needed = Uuid::new_v4();
+        let selection = PackageSelection {
+            name: Some("Ashen Marches".into()),
+            package: EntryRef::id(package),
+            selection: Selection::Selected {
+                entries: vec![EntryRef::id(needed)],
+            },
+        };
+        let mut catalogue = Catalogue::default();
+        for number in 0..3 {
+            let text = note_text(&format!("Entry {number}"), "rule", None);
+            let text = patch_fields(
+                &text,
+                &[(
+                    "splat_requires",
+                    Some(
+                        serde_yaml_ng::to_value(vec![EntryRef::id(needed), EntryRef::id(needed)])
+                            .unwrap(),
+                    ),
+                )],
+            )
+            .unwrap();
+            catalogue
+                .insert(
+                    Entry::parse(&format!("Entry {number}.md"), &text).unwrap(),
+                    Uuid::nil(),
+                    true,
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            selection.unavailable_message(&catalogue),
+            "Ashen Marches is no longer on this computer. 3 entries in this campaign use it."
+        );
+        assert!(
+            catalogue
+                .closure(&[selection], Uuid::nil())
+                .errors
+                .iter()
+                .all(|error| !error.contains(&package.to_string()))
         );
     }
 }
