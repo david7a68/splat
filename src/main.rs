@@ -803,12 +803,14 @@ impl Splat {
                     },
                 );
                 let full = if state == "Processed" {
-                    sessions::page::processed_warning().word
+                    sessions::page::processed_warning().word.to_owned()
                 } else {
-                    state
+                    self.sessions
+                        .recording_hover()
+                        .unwrap_or_else(|| state.to_owned())
                 };
                 if state == "Recording silence" || full != state {
-                    design::named(ui, &response, full);
+                    design::named(ui, &response, &full);
                 }
                 if response.on_hover_text(full).clicked() {
                     self.sessions.open_live_recording();

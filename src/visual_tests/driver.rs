@@ -879,6 +879,7 @@ impl<'a> Driver<'a> {
     pub fn row_words(&self, name: &str) -> String {
         self.row_node(name)
             .map_or_else(String::new, |row| self.painted_in(row.shown))
+            .replace('\u{a0}', " ")
     }
 
     /// The name in the dock, which is the selected participant's.

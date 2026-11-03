@@ -158,7 +158,7 @@ pub fn group_heading_text(ui: &Ui, title: &str, count: usize) -> LayoutJob {
     job
 }
 
-/// Run state uses the full second line, so ended and round words fit in the rail.
+/// Run state aligns with the label and keeps its full words on hover.
 pub fn run_nav_item(ui: &mut Ui, detail: &str, selected: bool) -> Response {
     let c = colors();
     let height = Density::Glance.control() + XS;
@@ -204,10 +204,11 @@ pub fn run_nav_item(ui: &mut Ui, detail: &str, selected: bool) -> Response {
             if selected { Type::Strong } else { Type::Body }.font(ui),
             color,
         );
+        let shown = words_that_fit(ui, detail, &Type::Small.font(ui), rect.width() - 28.0 - S);
         ui.painter().text(
-            pos2(rect.left() + S, rect.top() + height * 0.56),
+            pos2(rect.left() + 28.0, rect.top() + height * 0.56),
             Align2::LEFT_TOP,
-            detail,
+            shown,
             Type::Small.font(ui),
             c.muted,
         );
@@ -215,7 +216,7 @@ pub fn run_nav_item(ui: &mut Ui, detail: &str, selected: bool) -> Response {
             focus_ring(ui, rect);
         }
     }
-    response
+    response.on_hover_text(format!("Run · {detail}"))
 }
 
 /// The quiet menu at the right edge of a list row.

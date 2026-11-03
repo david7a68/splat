@@ -1373,7 +1373,7 @@ impl Run {
                         .unwrap_or(next.cursor);
                 }
                 format!(
-                    "Move {} before {target} at {}{}.",
+                    "{} moved before {target} at {}{}.",
                     next.participants[first].name,
                     display(next.participants[before].initiative),
                     if waits { " · acts next round" } else { "" }
@@ -1752,10 +1752,6 @@ impl Run {
                 name(i),
                 if *present { "present" } else { "absent" }
             ),
-            // A long effect stays readable on the panel, and the label stays whole.
-            Command::Condition(i, condition) if condition.trim().chars().count() > 24 => {
-                format!("effect on {}", name(i))
-            }
             Command::Condition(i, condition) => format!("{} on {}", condition.trim(), name(i)),
             Command::RemoveCondition(i, at) => format!(
                 "{} off {}",
@@ -1763,7 +1759,6 @@ impl Run {
                     .participants
                     .get(*i)
                     .and_then(|p| p.conditions.get(*at))
-                    .filter(|condition| condition.trim().chars().count() <= 24)
                     .map_or("an effect", String::as_str),
                 name(i)
             ),
@@ -2586,8 +2581,8 @@ impl Run {
                 first
             } else {
                 format!(
-                    "{first} and {} more",
-                    crate::design::count(more, "", "").trim()
+                    "{first} and {}",
+                    crate::design::count(more, "more sheet", "more sheets")
                 )
             }
         });
@@ -5777,7 +5772,7 @@ mod tests {
                 .log
                 .last()
                 .unwrap()
-                .starts_with(&format!("Move {} before ", run.state.participants[3].name))
+                .starts_with(&format!("{} moved before ", run.state.participants[3].name))
         );
         assert_eq!(run.state.order, vec![0, 3, 4, 1, 2]);
         assert_eq!(run.current(), current);
@@ -5800,7 +5795,10 @@ mod tests {
         assert_eq!(run.notice_changes, 2);
         assert_eq!(
             run.notice_summary.as_deref(),
-            Some(format!("{first}'s sheet changed: HP 20 → 18, temp HP 2 → 0 and 1 more").as_str())
+            Some(
+                format!("{first}'s sheet changed: HP 20 → 18, temp HP 2 → 0 and 1 more sheet")
+                    .as_str()
+            )
         );
         assert!(
             run.state
@@ -5840,7 +5838,7 @@ mod tests {
                 .log
                 .last()
                 .unwrap()
-                .contains("before First wave at 15 · acts next round")
+                .contains("moved before First wave at 15 · acts next round")
         );
         run.undo();
         assert_eq!(run.state.order, order);

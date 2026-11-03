@@ -3213,6 +3213,7 @@ pub mod run_edge_states {
         d.click(CONDITIONS);
         d.type_into(OTHER_EFFECT, LONG_EFFECT);
         d.click(ADD_EFFECT);
+        d.expect(&format!("Undo: {LONG_EFFECT} on {TARGET}"));
         d.state("long-effect-text", Sizes::All);
         d.observe(
             "Long effects",
@@ -3398,7 +3399,7 @@ pub mod run_sync_states {
                 in_view && text.contains(word),
                 format!("{name}'s row, in view, says {word}: {text}"),
             );
-            let painted = d.row_words(name);
+            let painted = d.row_words(name).replace('\u{a0}', " ");
             d.observe(
                 "T3.1",
                 painted.contains(word),
@@ -5237,7 +5238,7 @@ pub mod session_recording {
         );
         d.click_containing("Undo: 7 damage");
         close_run(d);
-        d.click("Recording silence");
+        d.click_containing("Recording silence ·");
         d.expect("Silent for over a minute");
         d.expect("Check the input in Settings");
         d.state("recording-silent", Sizes::Default);
@@ -5414,6 +5415,8 @@ pub mod session_recording {
         d.state("processing-failed-elsewhere", Sizes::Default);
         d.click(NAV_SESSIONS);
         d.expect("your limit is reached");
+        d.expect("Continue processing sends the raw transcript");
+        d.expect("The audio is not sent again.");
         d.state("processing-failed", Sizes::All);
 
         // The open recording row owns the retry and clears the old failure.
@@ -5550,6 +5553,7 @@ pub mod session_recording {
         d.expect("Choose an input");
         d.click(NAV_SESSIONS);
         d.expect("no such device");
+        d.expect("Choose an input");
         d.state("recording-stopped", Sizes::Default);
         d.observe(
             "R3",
@@ -5847,6 +5851,9 @@ pub mod encounter_groups {
         d.expect("placed after");
         let before = current_participant(d);
         d.click_containing("Move before Rival Team");
+        d.at_size(DEFAULT, |d| {
+            d.expect("Rival Captain 2 moved before Rival Team at 14")
+        });
         d.observe(
             "F4",
             current_participant(d) == before
@@ -6200,8 +6207,8 @@ pub mod run_overrides {
             "T13.3",
             row.contains("Blessed")
                 && row.contains("Changed")
-                && row.contains("Attack +1")
-                && (row.contains("Damage +1") || row.contains("more")),
+                && ((row.contains("Attack +1") && row.contains("Damage +1"))
+                    || row.contains("more")),
             format!("The row marks a change and carries its bonuses: {row}"),
         );
         d.observe(
