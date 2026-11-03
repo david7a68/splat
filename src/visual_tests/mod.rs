@@ -43,7 +43,7 @@ const BASELINE_PATH: &str = "src/visual_tests/baseline.json";
 
 type Script = fn(&mut Driver<'_>);
 
-const SCENARIOS: [(&str, Seed, Script); 54] = [
+const SCENARIOS: [(&str, Seed, Script); 57] = [
     (
         "package-to-table",
         Seed::Campaign,

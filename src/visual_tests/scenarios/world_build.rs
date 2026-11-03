@@ -210,6 +210,13 @@ pub fn round_trip(d: &mut Driver<'_>) {
 
 pub fn tables(d: &mut Driver<'_>) {
     let body = "# Table Workshop\n\n<!-- splat:rolls key=valid dice=1d6 -->\n\n| d6 | Result |\n|---|---|\n| 1 | Rain |\n| 2-5 | Fog |\n| 6 | Sun |\n\n<!-- splat:rolls key=gap dice=1d4 -->\n\n| d4 | Gap |\n|---|---|\n| 1 | One |\n| 3-4 | Later |\n\n<!-- splat:rolls key=overlap dice=1d4 -->\n\n| d4 | Overlap |\n|---|---|\n| 1-3 | First |\n| 3-4 | Second |\n\n<!-- splat:rolls key=words dice=1d6 -->\n\n| d6 | Words |\n|---|---|\n| 1 | One |\n| 2 to 5 | Fog |\n| 6 | Six |\n";
+    let body = body.replace(
+        "<!-- splat:rolls key=words",
+        &format!(
+            "{}<!-- splat:rolls key=words",
+            "\nThe next table checks a range written as words.\n".repeat(8)
+        ),
+    );
     fs::write(root(d).join("Table Workshop.md"), body).unwrap();
     reload(d);
     d.click(NAV_WORLD);
@@ -240,12 +247,12 @@ pub fn tables(d: &mut Driver<'_>) {
     );
     d.state("authored-table-typed-roll", Sizes::All);
     d.set_base(SMALL);
-    d.scroll_until(READER, "Typed roll for Words", 24);
-    d.wait_for_text("Typed roll for Words");
+    d.scroll_until(READER, "The first column must be a number", 24);
+    d.wait_for_text("The first column must be a number");
     d.state("authored-table-gap-and-overlap", Sizes::All);
     d.observe(
         "World table author",
-        d.visible_text("overlap") || d.visible_text("gap"),
+        d.visible_text("The first column must be a number"),
         "An invalid table says what needs an edit",
     );
 }
@@ -481,8 +488,8 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.focus_window(false);
     d.focus_window(true);
     go_encounters(d);
-    open_saved_encounter(d, "Shrine of Cinders");
-    d.wait_for_text("unavailable");
+    open_saved_encounter(d, "Bridge Ambush");
+    d.wait_for_text("Unavailable creature");
     d.state("deleted-package-entry-in-encounter", Sizes::All);
     go_library(d);
     search_library(d, "Ash Exposure");
@@ -513,19 +520,21 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     d.wait_for_text("Creatures/Watch Aboleth.md");
     d.state("book-copy-to-package", Sizes::All);
     d.click(CREATE_COPY);
-    d.wait_for_text("Copied to Ashen Marches as Watch Aboleth.");
+    d.expect("Copied to Ashen Marches as Watch Aboleth.");
     d.click("Edit the copy");
-    d.wait_for_text("Markdown editor");
+    d.expect("Markdown editor");
     let original = d.editor_text().unwrap();
     let parsed = splat::content::Entry::parse("Creatures/Watch Aboleth.md", &original).unwrap();
     let mut stats = parsed.fields["splat_stats"].clone();
     stats["max_hp"]["value"] = 180.into();
     let changed =
         crate::content_workspace::patch_fields(&original, &[("splat_stats", Some(stats))]).unwrap();
+    let changed = changed.replace("150 (20d10 + 40)", "180 (20d10 + 70)");
     d.replace_text_in("Markdown editor", &changed);
     d.click("Save");
     d.click("Read");
     d.wait_for_text("Watch Aboleth");
+    d.expect("180 (20d10 + 70)");
     assert!(
         fs::read_to_string(
             d.root

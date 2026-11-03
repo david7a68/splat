@@ -506,6 +506,7 @@ pub(crate) fn folder_field(
                         let response = ui.add(
                             egui::TextEdit::singleline(value)
                                 .frame(false)
+                                .margin(egui::Vec2::ZERO)
                                 .desired_width(width)
                                 .min_size(egui::vec2(width, design::Density::Read.control()))
                                 .hint_text("Main folder"),
@@ -2523,10 +2524,17 @@ impl Library {
             Ok(entry) => {
                 let l = self.loaded.as_mut().unwrap();
                 if entry.kind == "package"
-                    && let Owner::Package(module) = &mut l.notes[i].owner
+                    && let Owner::Package(module) = &l.notes[i].owner
                 {
                     self.renamed = Some((module.id, entry.name.clone()));
-                    module.name = entry.name.clone();
+                    let id = module.id;
+                    for note in &mut l.notes {
+                        if let Owner::Package(owner) = &mut note.owner
+                            && owner.id == id
+                        {
+                            owner.name = entry.name.clone();
+                        }
+                    }
                 }
                 l.notes[i].entry = Some(entry);
                 l.notes[i].text = self.draft.clone();
@@ -2608,6 +2616,9 @@ impl Library {
         let about = note.entry.as_ref().is_some_and(|e| e.kind == "package");
         let mut use_every = None;
         let package_word = match &note.owner {
+            Owner::Package(_) if about && campaigns.active_campaign().is_none() => {
+                "No campaign open".into()
+            }
             Owner::Package(module) if about => {
                 let loaded = self.loaded.as_ref().unwrap();
                 let entries: Vec<_> = loaded

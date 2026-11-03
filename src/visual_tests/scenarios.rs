@@ -388,7 +388,7 @@ pub mod library_navigation {
         d.click("Undo dependency copy");
         d.wait_for_text("Captain Varra is in this campaign only.");
         d.click("Wiki watch spell");
-        d.wait_for_text("A veil of hot ash");
+        d.wait_for_text("Hot ash falls");
         d.observe(
             "C4",
             !d.has("Close Lookup"),
@@ -4096,7 +4096,6 @@ pub mod world {
         );
         d.state("world-heading-beside-run", Sizes::All);
 
-        d.clear_text_in(SEARCH_LOOKUP);
         d.click("Clear");
         d.click("Generate NPC");
         d.expect("Save NPC");
@@ -4127,6 +4126,7 @@ pub mod world {
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");
+        d.state("npc-add-to-run-form", Sizes::All);
         d.click("Add");
         d.settle();
         d.observe(
@@ -6825,6 +6825,7 @@ pub mod remove_package_in_use {
             "Removing the unavailable package saves the other campaign choices",
         );
         d.state("missing-package-removed", Sizes::Default);
+        go_encounters(d);
         resume_run_from_cold_start(d);
         d.wait_for_text(NEXT_TURN);
         d.state("paused-run-after-package-removal", Sizes::All);

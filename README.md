@@ -667,3 +667,7 @@ Settings imports a D&D Beyond campaign directly below its row and suggests a new
 Library shows **Back** with **Alt+Left** whenever an earlier entry is available. Both ordinary and wiki links open in place. The draft and disk comparison opens at the first changed line, with two context lines above it; a missing line says **No line**. Lookup has **Clear** beside search. An NPC read beside a run shows linked **Fights as** and **In** values. New packages start beside the last registered package. **Folder** accepts a new folder or suggests an existing one.
 
 The visual suite includes `npc-in-lookup`, `package-rename` and `package-about`. `share-to-package` checks the new references after **Share both**, and Library navigation checks the dependency copy action and its Undo.
+
+On window focus, Splat checks campaign notes and every registered package for disk changes. Library, Lookup and encounter search reload changed content. A changed draft opens the disk comparison. A package's About page counts its used entries and offers **Use every entry** with Undo. Removing an unavailable package also offers Undo and keeps links to the encounters that need its creatures.
+
+New creature entries start with AC 10 and HP 1, with the HP value selected in the editor. A renamed copy also renames its first H1 when it matches the source name. Package creation shows a **Folder** field and the full destination path. `package-file-changed`, `package-delete-entry` and `book-to-package` cover these disk and copy paths.

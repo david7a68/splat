@@ -169,7 +169,7 @@ tooltips, and separators. Text cursors do not blink, because motion draws the ey
 | Count | `count` | `1 entry`, `2,108 entries`; zero returns no text. Empty unit words return only the formatted number |
 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and come before it.
-The Library scope control uses Can use in both layouts and sits at the top of its category column. At a narrow width, it sits above the list.
+The Library scope control uses Can use in both layouts and sits at the top of its category column. At a narrow width, scope and category share one line at equal widths above search. Hide the All entries heading when there is no search.
 
 **R-6: Empty states.** The full `empty_state` (icon, serif title and text) belongs to an empty pane or page only. An empty section inside a list page shows one muted line under its heading, with no `0` count.
 
@@ -469,7 +469,13 @@ A completed copy says where it went and keeps its path in hover text.
 Share both copies a campaign dependency with its entry and reconnects the new references.
 The warning action copies and reconnects one dependency. Undo restores the reference and removes the unchanged copy.
 A compact NPC reader shows Fights as and In on one read-only line; both names open in Lookup.
-Lookup keeps Back and its close icon on the title line, with Clear beside search.
+Lookup keeps Back and its close icon on the title line. Clear appears beside search only when search has text. Result rows use Scan height, Body text for names, and Small muted text for metadata.
+
+Library puts owner status on the file line so Back does not move the title. During a draft, Back opens the earlier entry in Lookup. Related entries follow the reader body. A standalone bold caption above a table is plain text; other reader links have an underline.
+
+On window focus, check campaign notes and registered package folders. Reload changed catalogues and show the disk comparison if a draft's file changed. Package About reports used and total entries, offers Use every entry with Undo, and omits the entry breadcrumb and Engine support. Removing an unavailable package offers Undo and keeps links to affected encounters.
+
+Creation and copy fields share one right edge. New package has a Folder field with Browse beside it and a full destination path below it. Creature templates use inline stat values, AC 10 and HP 1, and select max_hp on opening. A renamed copy changes its first H1 only when it matches the source name.
 
 ## Run and encounter audit, iteration 4
 

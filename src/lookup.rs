@@ -1723,6 +1723,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn package_files_are_checked_without_an_active_campaign() {
+        use std::fs;
+        let folder = tempfile::tempdir().unwrap();
+        let modules = vec![Module {
+            id: Uuid::new_v4(),
+            name: "Watch".into(),
+            path: folder.path().to_owned(),
+        }];
+        let path = folder.path().join("Wolf.md");
+        fs::write(&path, "# Wolf\n").unwrap();
+        let before = content_fingerprint(&modules, None);
+        fs::write(&path, "# Wolf\n\nA changed creature.\n").unwrap();
+        let edited = content_fingerprint(&modules, None);
+        assert_ne!(before, edited);
+        fs::remove_file(path).unwrap();
+        assert_ne!(edited, content_fingerprint(&modules, None));
+    }
+
+    #[test]
     fn a_package_named_campaign_is_not_the_dms_own_entry() {
         let mut item = ContentIndex::load(&[], None).unwrap().items.remove(0);
         item.owner = "Campaign Companion".into();
