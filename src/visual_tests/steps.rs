@@ -116,7 +116,7 @@ pub fn resume_run_from_cold_start(d: &mut Driver<'_>) {
 }
 
 pub fn resume_run(d: &mut Driver<'_>, name: &str) {
-    d.click_beside(&format!("{name} · In progress · Round"), RESUME);
+    d.click_beside(&format!("{name} · Round"), RESUME);
     d.expect(&format!("{RUN_HEADING}{name}"));
 }
 
@@ -131,7 +131,8 @@ pub fn open_saved_encounter(d: &mut Driver<'_>, name: &str) {
 }
 
 pub fn run_saved_encounter(d: &mut Driver<'_>, name: &str) {
-    if d.has_containing(&format!("{name} · In progress")) {
+    if d.has_containing(&format!("{name} · Round")) || d.has_containing(&format!("{name} · Setup"))
+    {
         d.click_first(&format!("More actions for {name}"));
         d.click("Start another fight");
     } else {

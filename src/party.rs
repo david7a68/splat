@@ -207,7 +207,10 @@ impl Party {
                     .blocked(can_refresh)
                     .show(ui)
                     .clicked();
-                if session.is_none() && design::link(ui, "Connect to refresh").clicked() {
+                if session.is_none()
+                    && !self.reader.members.is_empty()
+                    && design::link(ui, "Connect to refresh").clicked()
+                {
                     self.wants_settings = true;
                 }
             }
@@ -236,9 +239,9 @@ impl Party {
                     // Linking needs a session, so that comes first.
                     if session.is_none() {
                         self.wants_settings |= if self.run_open {
-                            Action::secondary("Connect D&D Beyond")
+                            Action::secondary("Open Settings")
                         } else {
-                            Action::primary("Connect D&D Beyond")
+                            Action::primary("Open Settings")
                         }
                         .show(ui)
                         .clicked();
@@ -354,6 +357,7 @@ impl Party {
                                 portrait.as_deref(),
                                 from_fights,
                                 is_selected,
+                                self.reader.conflicts.contains_key(&m.id),
                             )
                             .clicked()
                             {
@@ -384,66 +388,62 @@ impl Party {
         for warning in warnings {
             design::message(ui, Tone::Warning, &format!("Local storage: {warning}"));
         }
-        if !self.reader.archived.is_empty() {
-            let names = self
+        let archives = self.reader.archived.clone();
+        let mut dismiss = false;
+        for path in &archives {
+            let name = self
                 .reader
-                .archived
-                .iter()
-                .filter_map(|path| path.file_name())
-                .map(|name| name.to_string_lossy())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let words = format!(
-                "D&D Beyond sheets replaced local edits. Your versions are kept as copies: {names}"
-            );
-            if design::message_with_action(ui, Tone::Success, &words, "Dismiss") {
-                self.reader.archived.clear();
-            }
+                .archived_owners
+                .get(path)
+                .map(|id| self.reader.member_name(id))
+                .unwrap_or("This character");
+            let words =
+                format!("{name}'s sheet now matches D&D Beyond. Your edited version is kept.");
+            storage_notice(ui, Tone::Success, &words, &["Show file", "Dismiss"], |ui| {
+                show_file(ui, path);
+                dismiss |= Action::quiet("Dismiss")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked();
+            });
+        }
+        if dismiss {
+            self.reader.archived.clear();
+            self.reader.archived_owners.clear();
         }
         let conflicts = self.reader.conflicts.clone();
         for (id, path) in &conflicts {
             let name = self.reader.member_name(id).to_owned();
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!("{name}'s sheet file has your own edits, so Splat stopped updating it."),
+            let words = format!(
+                "{name}'s sheet file has your own edits, so Splat stopped updating it.\nReplacing keeps your version as a copy."
             );
-            ui.label(
-                Type::Small
-                    .rich(ui, "Your version is kept as a copy.")
-                    .color(colors().muted),
-            );
-            ui.horizontal(|ui| {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.reader.force_waiting() {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, "Waiting for D&D Beyond.")
-                                .color(colors().muted),
-                        );
-                    } else if connected {
-                        if Action::quiet("Replace with D&D Beyond sheet")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                        {
-                            if conflicts.len() == 1 {
-                                self.reader.force_read();
-                            } else {
-                                self.reader.force_read_character(id);
-                            }
-                        }
-                    } else if design::link(ui, "Open Settings").clicked() {
-                        self.wants_settings = true;
-                    }
-                    if design::link(ui, "Show file")
-                        .on_hover_text(path.display().to_string())
+            let waiting = self.reader.force_waiting();
+            let action = if waiting {
+                "Waiting for D&D Beyond."
+            } else if connected {
+                "Replace with D&D Beyond sheet"
+            } else {
+                "Open Settings"
+            };
+            storage_notice(ui, Tone::Warning, &words, &["Show file", action], |ui| {
+                show_file(ui, path);
+                if waiting {
+                    ui.label(Type::Small.rich(ui, action).color(colors().muted));
+                } else if connected {
+                    if Action::quiet(action)
+                        .density(Density::Read)
+                        .show(ui)
                         .clicked()
-                        && let Ok(url) = reqwest::Url::from_file_path(path)
                     {
-                        ui.ctx().open_url(egui::OpenUrl::new_tab(url.to_string()));
+                        if conflicts.len() == 1 {
+                            self.reader.force_read();
+                        } else {
+                            self.reader.force_read_character(id);
+                        }
                     }
-                });
+                } else if design::link(ui, action).clicked() {
+                    self.wants_settings = true;
+                }
             });
         }
         for id in self.reader.conflicts.keys() {
@@ -619,6 +619,43 @@ impl Party {
 }
 
 /// The later of two reads of a sheet. Off this page combat sync is idle, so the reader can be ahead.
+/// Actions stay on the first line; the message owns both lines and its full-height bar.
+fn storage_notice(
+    ui: &mut egui::Ui,
+    tone: Tone,
+    words: &str,
+    actions: &[&str],
+    add: impl FnOnce(&mut egui::Ui),
+) {
+    let room: f32 = actions
+        .iter()
+        .map(|word| design::number_width(ui, word, &Type::Strong.font(ui)) + design::S * 3.0)
+        .sum();
+    ui.horizontal_top(|ui| {
+        let width = (ui.available_width() - room - design::S).max(design::S);
+        ui.allocate_ui_with_layout(
+            egui::vec2(width, 0.0),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_width(width);
+                ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                design::message(ui, tone, words);
+            },
+        );
+        add(ui);
+    });
+}
+
+fn show_file(ui: &mut egui::Ui, path: &std::path::Path) {
+    if design::link(ui, "Show file")
+        .on_hover_text(path.display().to_string())
+        .clicked()
+        && let Ok(url) = reqwest::Url::from_file_path(path)
+    {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(url.to_string()));
+    }
+}
+
 fn newer<'a>(
     a: Option<&'a EntitySnapshot>,
     b: Option<&'a EntitySnapshot>,
@@ -860,6 +897,7 @@ fn member_row(
     portrait: Option<&std::path::Path>,
     from_fights: Option<(i64, i64)>,
     selected: bool,
+    local_edits: bool,
 ) -> egui::Response {
     let c = colors();
     let compare = compare_values(record);
@@ -889,6 +927,9 @@ fn member_row(
     .join(" ");
     if record.is_none() {
         summary = "No local copy yet".into();
+    }
+    if local_edits {
+        summary.push_str(" · Local edits");
     }
     let hp = from_fights
         .map(|(hp, _)| hp)
@@ -1052,11 +1093,10 @@ fn source_and_parity(
     let small = |ui: &mut egui::Ui, text: String| {
         ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)).wrap());
     };
-    small(
-        ui,
-        "D&D Beyond supplies these totals. Splat does not add to them.".into(),
-    );
-    for message in &record.coverage {
+    small(ui, "D&D Beyond supplies these totals.".into());
+    // The first two source notes repeat the totals sentence and internal schema details.
+    // Keep later notices, such as two services returning different names.
+    for message in record.coverage.iter().skip(2) {
         small(ui, message.clone());
     }
     if let Some(Ok(entry)) = content_entry {
@@ -1087,8 +1127,8 @@ fn source_and_parity(
             small(
                 ui,
                 format!(
-                    "{} rules still need to be read; {} rules still need support in Splat.",
-                    list("gaps").len(),
+                    "{} not read yet · {} not supported in Splat",
+                    design::count(list("gaps").len(), "rule", "rules"),
                     list("engine_gaps")
                         .iter()
                         .filter_map(serde_yaml_ng::Value::as_str)
@@ -1576,7 +1616,9 @@ fn sheet_entries(record: &EntitySnapshot, page: usize) -> Vec<SheetEntry> {
                         format!("Level {n}")
                     })
                     .unwrap_or_default(),
-                if v["prepared"] == true || v["alwaysPrepared"] == true {
+                if def["level"].as_u64().is_some_and(|level| level > 0)
+                    && (v["prepared"] == true || v["alwaysPrepared"] == true)
+                {
                     " · Prepared"
                 } else {
                     ""
@@ -1802,16 +1844,18 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
         .iter()
         .filter(|(name, source, _, _)| format!("{name} {source}").to_lowercase().contains(&search))
         .collect();
-    design::group_heading(
-        ui,
-        match page {
-            1 => "Action descriptions",
-            2 => "Spells",
-            3 => "Equipment & coins",
-            _ => "Features & traits",
-        },
-        filtered.len(),
-    );
+    if page != 2 {
+        design::group_heading(
+            ui,
+            match page {
+                1 => "Action descriptions",
+                2 => "Spells",
+                3 => "Equipment & coins",
+                _ => "Features & traits",
+            },
+            filtered.len(),
+        );
+    }
     let mut level_counts = std::collections::BTreeMap::new();
     for row in &filtered {
         *level_counts.entry(row.3).or_insert(0) += 1;

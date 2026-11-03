@@ -222,25 +222,37 @@ and a muted count, without a rule. Empty sections hide the count and show one mu
 line with the next step. Groups and History start closed when they have rows. Each row keeps
 its main action, quiet `Edit`, and `⋯` menu at the column’s right edge. The menu is
 named `More actions for <name>`. It holds deletion and starting another run.
-An unfinished run shows `In progress · Round 2` and `Resume`. An open run shows the
-status link `Running · Round 2`. The strip owns the primary `Next turn` and secondary
+An unfinished run shows `Setup · Paused` or `Round 2 · Paused` and `Resume`. An open run shows the
+status link `Setup` or `Round 2`; its second line keeps only the saved time. The strip owns the primary `Next turn` and secondary
 `Back to run`. An encounter with an unfinished run appears only in In progress. When
 the run ends, its encounter returns to Ready to run. With `Keep in Ready during a run`
 on, its Ready row keeps `Start fight` blocked and says to resume from In progress.
 History opens a read-only final state and log in place. It never takes the live-run slot.
-A paused run stays in the rail and resumes in one click.
+History rows keep only `Open` or `Close` and their row menu. Start and Edit stay in that menu.
+Ready rows name their creatures; an empty roster blocks Start with `Add participants first`.
+The open-run block appears once under `READY TO RUN`.
 
 Roster rows have the name and second line, side menu, quiet `Edit`, then `⋯`.
 The menu holds ordering, duplication, `Make it yours`, and removal. A creature
 result’s name opens its stat block; its one button is `Add`. A party member already
-present shows `In roster`. The sync and repeat options follow the roster. The
+present shows `In roster`, and leaves an empty search once the whole party is present.
+Results use text-coloured names, underlined on hover. The main source has no suffix; other sources
+and campaign-owned entries show their source or `Campaign`, including roster rows.
+The sync and repeat options follow the roster. The
 header keeps Save and Start on its first line, and the name field gives up width.
+An encounter with an unfinished run offers Resume and moves Start another fight into its menu.
+Its save row includes the run state.
 `Discard` is quiet beside the save-state word. A blocked Start shows its reason.
-The side picker offers `Party`, `Enemies`, and `Other…` in every editor.
+The side picker offers `Party`, `Enemies`, and `Other…` in every editor. Only choosing Other opens a name field; it replaces the value.
+All editor section headings use `group_heading`. In the tabbed layout, Add participants has no repeated heading.
 
 A plan group editor takes the full notes column; the note stays behind its tab.
 Member names and stats have their own lines above Count, Edit, and the row menu.
-A summary of members stays below the search. Removing an encounter’s group makes
+Member changes stay on one line, such as `Changed · 2 to add by hand`, until opened.
+An empty group frame has one muted line and no zero count or duplicate search summary.
+The Groups list has one level of headings: For any encounter, each encounter, then Encounter deleted.
+Its rows keep Edit and a menu with Remove, which has Undo. A planned group also has Remove with Undo; it removes the link and keeps the note’s words.
+A summary of members stays below the search when it has members. Removing an encounter’s group makes
 it available for any encounter on Save, with Undo until that save.
 
 ## The live run
@@ -311,7 +323,10 @@ a word for each kind. A day uses the shared group-heading style, without a rule,
 colour for kinds, because a kind is not a state. An event's detail sits beside the list, with the same width
 rule as Lookup. The detail column exists only when an event is selected. Its header stays above the scrolling form: kind, title, save state, Copy link and a row menu with Remove. Selecting a different event resets the fields to the top. A copy uses a check and Copied on the button for two seconds. Link text stays in a quiet section; Place after is the one ordering control. Adds to shares the filter line. Notices have their own line and never cover the header.
 
-Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or separate count line; the shared group heading holds the count. Local-edit warnings name the character, keep actions at the right edge and say that replacement keeps a copy. Technical details stays closed.
+Party uses one group-heading style throughout Overview. Saving throws and skills use two or three columns. Lists with eight or fewer entries have no filter or separate count line; the shared group heading holds the count. Local-edit warnings name the character, keep actions on the first line at the right edge and say that replacement keeps a copy.
+The affected list row says `Local edits`. A replacement names the character, with Show file for the kept version and Dismiss.
+An empty Party has one Open Settings action. Spell levels have their own counts, with no extra Spells heading; cantrips omit Prepared.
+Technical details stays closed and uses plain words for rules not read yet or not supported.
 
 A live microphone has the only colour here. `Record` takes a second, inline step that says to tell the table.
 While it records, the rail keeps the word and the time in view on every page. The time counts audio in the file, so it
