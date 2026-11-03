@@ -48,7 +48,6 @@ pub mod library_browse {
     const CREATURES_SECTION: &str = "Creatures";
     const CREATURES_COUNT: &str = "CREATURES 336";
     const NEXT_CREATURE: &str = "Aboleth";
-    const BACK: &str = "Back";
     const LINKED_QUERY: &str = "bard subclass";
     const LINKED_ROW: &str = "Level 3: Bard Subclass";
     const LINKED_TITLE: &str = "Bard Subclass";
@@ -114,19 +113,19 @@ pub mod library_browse {
         d.click_containing(LINKED_ROW);
         d.click(LINK);
         d.state("followed-link", Sizes::Default);
-        let offered = d.has(BACK) && !d.is_disabled(BACK);
+        let wide_toolbar = !d.has("Back");
         let away = !d.in_view(LINKED_TITLE);
         let before = d.interaction_count();
-        d.click(BACK);
+        d.press_alt(Key::ArrowLeft);
         let cost = d.interaction_count() - before;
         d.observe(
             "T6.2",
-            offered
+            wide_toolbar
                 && away
                 && cost == 1
                 && d.in_view(LINKED_TITLE)
                 && d.has_containing(SEARCH_RESULTS),
-            "Back after a link returns to the prior entry and its search in 1",
+            "Alt+Left returns to the prior entry and its search in 1; the wide toolbar omits Back",
         );
         d.state("back-after-link", Sizes::Default);
         d.begin_task();
@@ -148,7 +147,7 @@ pub mod library_browse {
 /// W8: edit a note in a local package, then manage packages and add an entry.
 pub mod library_author {
     use super::*;
-    const LOCAL_PACKAGE: &str = "Local package";
+    const LOCAL_PACKAGE: &str = "Ashen Marches · Used here";
     const NOTE: &str = "Ash Exposure";
     const NOTE_ROW: &str = "Ash Exposure · ";
     const OTHER_NOTE: &str = "Ashfall";
@@ -161,8 +160,7 @@ pub mod library_author {
     const OTHER_NOTE_TEXT: &str = "Hot ash falls";
     const OVERWRITE: &str = "Overwrite with my draft";
     const RELOAD_DISK: &str = "Reload and lose my draft";
-    const SHOW_DISK: &str = "Show disk version";
-    const EXTERNAL_STATUS: &str = "Changed on disk";
+    const SHOW_DISK: &str = "Next difference";
     const UNDO_DISCARD: &str = "Undo discard";
     const CHANGED_ON_DISK: &str = "This note changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
@@ -196,7 +194,7 @@ pub mod library_author {
         d.state("edit-markdown", Sizes::All);
         d.observe(
             "Clean word",
-            d.visible_text("No changes"),
+            d.visible_text("No changes to save."),
             "A clean document says so, in one word, as Encounters and Campaign do",
         );
         d.goal("open a note for editing");
@@ -246,12 +244,12 @@ pub mod library_author {
                 && d.has(OVERWRITE)
                 && d.has(RELOAD_DISK)
                 && d.has(SHOW_DISK)
-                && d.visible_text(EXTERNAL_STATUS)
-                && draft_here(d, SECOND_WORDS),
+                && d.visible_text("YOUR DRAFT"),
             "An external change keeps the draft's words, and offers overwrite, reload and the disk version",
         );
         d.state("save-conflict", Sizes::Default);
         d.goal("handle a failed save");
+        d.expect("IN THE FILE NOW");
         d.click(SHOW_DISK);
         d.observe(
             "T8.3",
@@ -371,6 +369,7 @@ pub mod library_navigation {
         let text =
             crate::content_workspace::patch_fields(&text, &[("splat_reading", Some(reading))])
                 .unwrap();
+        let text = format!("{text}\n\n[[Captain Varra|Wiki Captain Varra]]\n\n[[Missing place]]\n");
         std::fs::write(path, text).unwrap();
 
         go_library(d);
@@ -378,37 +377,34 @@ pub mod library_navigation {
         d.click(MODULE);
         d.click_starting("Ash Exposure · ");
         d.state("homebrew-reference", Sizes::All);
+        d.click("Wiki Captain Varra");
+        d.expect("The last commander of the Emberfall watch.");
+        d.state("wiki-link-beside-library", Sizes::All);
+        d.press(Key::Escape);
         d.click("Read Captain Varra");
         d.expect("The last commander of the Emberfall watch.");
         d.state("reference-outside-package", Sizes::All);
-        d.click("Back");
-        d.expect("Read Captain Varra");
         d.observe(
-            "Homebrew navigation",
-            d.has_containing(MODULE),
-            "Back restores the package scope after a reference to a campaign entry",
+            "Library toolbar",
+            !d.has("Back"),
+            "The visible list supplies navigation; the reader has no redundant Back action",
         );
-        d.click("Read Captain Varra");
         d.click(EDIT_MARKDOWN);
         d.type_into_editor("Varra now carries a silver sword. ");
         d.state("draft-with-history", Sizes::All);
         d.observe(
             "Draft safety",
-            d.is_disabled("Back")
+            !d.has("Back")
                 && d.editor_text()
                     .is_some_and(|text| text.contains("silver sword")),
-            "Back cannot replace an unsaved homebrew draft",
+            "The editor keeps its draft beside the list",
         );
         d.click("Save");
-        d.click("Back");
-        d.expect("Read Captain Varra");
-        d.click("Read Captain Varra");
-        d.click(EDIT_MARKDOWN);
+        d.click("Read");
         d.observe(
             "Saved homebrew",
-            d.editor_text()
-                .is_some_and(|text| text.contains("silver sword")),
-            "The homebrew edit remains after saving and returning through Back",
+            d.has_containing("silver sword"),
+            "The saved homebrew words appear in Read view",
         );
     }
 }
@@ -487,7 +483,7 @@ pub mod campaign_content {
     const REQUIRED: &str = "Needed by your entries";
     const REQUIRED_BY: &str = "needed by";
     const OWN_ENTRY_SEARCH: &str = "varra";
-    const RELOAD: &str = "Reload content";
+    const RELOAD: &str = "Reload from disk";
     const REPAIR: &str = "Repair";
     const SAVE_SELECTIONS: &str = "Save selections";
     const BROKEN_NOTE: &str = "campaigns/emberfall/Notes/Broken.md";
@@ -495,9 +491,13 @@ pub mod campaign_content {
     pub fn run(d: &mut Driver<'_>) {
         go_campaign(d);
         d.expect(PAGE_TITLE);
+        d.click_starting("D&D 2024 · SRD");
+        d.expect("Whole package, with future additions");
         d.state("packages-tab", Sizes::Default);
         d.check_tab_order("campaign, packages");
         // No click: the brief asks for these on screen, with the built-in package open.
+        d.click_starting(REQUIRED);
+        d.wait_for_text("NEEDED BY YOUR ENTRIES");
         let reasons = d.visible_text(REQUIRED_BY);
         let counted = d.has_containing(REQUIRED);
         // The list fills its pane, rather than stopping short of the end.
@@ -513,7 +513,7 @@ pub mod campaign_content {
         d.state("packages-partial-selection", Sizes::All);
         d.goal("see a partial package selection");
 
-        d.click(UNSELECTED_ENTRY);
+        d.click(&format!("Use {UNSELECTED_ENTRY}"));
         d.expect(CHANGED);
         d.state("selection-changed", Sizes::Default);
         d.click(DISCARD_SELECTION);
@@ -587,6 +587,8 @@ pub mod campaign_content {
             "Save disabled by a repair states its reason",
         );
         // The repair opens here, with the note's text in it.
+        d.click(REPAIR);
+        d.expect("Note text");
         d.state("repair-open", Sizes::Default);
         d.observe(
             "Repair says why",
@@ -674,7 +676,7 @@ pub mod party {
         d.expect(NO_CHARACTERS);
         d.observe(
             "P20",
-            !d.has("Connect to refresh") && d.has("Open Settings"),
+            !d.has("Connect to refresh") && d.has("Connect D&D Beyond"),
             "An empty Party has one Open Settings action",
         );
         d.state("no-characters-signed-out", Sizes::All);
@@ -747,7 +749,7 @@ pub mod party {
         d.state("connect-to-refresh", Sizes::Default);
     }
     const FORCE_READ: &str = "Replace with D&D Beyond sheet";
-    const CONNECT_FIRST: &str = "Open Settings";
+    const CONNECT_FIRST: &str = "Connect D&D Beyond";
     const REPLACED: &str = "sheet now matches D&D Beyond. Your edited version is kept.";
     const DISMISS: &str = "Dismiss";
     const EDITED_NOTE: &str = "My own words";
@@ -1280,7 +1282,7 @@ pub mod dialogs {
     const CLOSE_WINDOW: &str = "Cancel";
     const NOTE: &str = "Ash Exposure";
     const CLOSE_PROMPT: &str = "has unsaved changes.";
-    const KEEP_EDITING: &str = "Keep running";
+    const KEEP_EDITING: &str = "Keep editing";
 
     pub fn run(d: &mut Driver<'_>) {
         go_library(d);
@@ -1353,12 +1355,12 @@ pub mod empty {
     const NEW_CAMPAIGN: &str = "Ashes of Emberfall";
     const NEW_FOLDER: &str = "new-campaign";
     const NO_ENTRIES: &str = "Use Copy to… from any entry, or make a new one here.";
-    const OPEN_SETTINGS: &str = "Add a campaign";
+    const OPEN_SETTINGS: &str = "Add campaign";
     const NO_CAMPAIGN_ENCOUNTERS: &str = "No campaign yet";
     const NO_CAMPAIGN_PARTY: &str = "No campaign yet";
     const NOT_LINKED: &str = "Connect D&D Beyond to see the party";
     const CONTENT_TITLE: &str = "entries chosen";
-    const NEXT_STEP: &str = "Add a campaign";
+    const NEXT_STEP: &str = "Add campaign";
 
     pub fn run(d: &mut Driver<'_>) {
         d.observe(
@@ -1423,7 +1425,7 @@ pub mod empty {
         d.state("party-without-link", Sizes::Default);
         d.observe(
             "Party next step",
-            d.has("Open Settings") && !d.has("Link this campaign"),
+            d.has("Connect D&D Beyond") && !d.has("Link this campaign"),
             "With no session, the next step is to connect, because linking needs one",
         );
         d.goal("see the other empty tabs");
@@ -2644,7 +2646,7 @@ pub mod gallery {
         d.click("More actions for Bridge Ambush");
         d.state("row-menu", Sizes::Default);
         d.press(Key::Escape);
-        d.scroll_until(pos2(600.0, 300.0), "One cause, one sentence", 30);
+        d.scroll_until(pos2(600.0, 300.0), "ONE CAUSE, ONE SENTENCE", 30);
         d.state("blocked-cause", Sizes::Default);
         d.scroll_until(pos2(600.0, 300.0), "Paused runs", 30);
         d.state("paused-runs", Sizes::Default);
@@ -3401,7 +3403,7 @@ pub mod run_roster_conflict {
 /// browsing never changes the active campaign.
 pub mod library_scope {
     use super::*;
-    const USES: &str = "What this campaign can use";
+    const USES: &str = "Can use";
     const EVERYTHING: &str = "Everything";
     const ACTIVE: &str = "The Emberfall Marches";
 
@@ -3690,7 +3692,6 @@ pub mod nav_table {
     const LINKED_ROW: &str = "Level 3: Bard Subclass";
     const LINK: &str = "College of Lore";
     const LINKED_TITLE: &str = "Bard Subclass";
-    const BACK: &str = "Back";
     const SYNC_PARTY: &str = "Sync party";
     const STOP_SYNC: &str = "Stop party sync";
     const FIRST_READ: &str = "First read";
@@ -3810,11 +3811,11 @@ pub mod nav_table {
         d.click(LINK);
         go_settings(d);
         go_library(d);
-        d.click(BACK);
+        d.press_alt(Key::ArrowLeft);
         d.observe(
             "G2",
             d.in_view(LINKED_TITLE),
-            "Reading history: Back still returns to the entry before the link",
+            "Reading history: Alt+Left still returns to the entry before the link",
         );
         d.click(CLEAR_SEARCH);
         d.begin_task();
@@ -4015,6 +4016,7 @@ pub mod world {
         d.state("world-heading-beside-run", Sizes::All);
 
         d.clear_text_in(SEARCH_LOOKUP);
+        d.click("Close entry");
         d.click("Generate NPC");
         d.expect("Save NPC");
         d.observe(
@@ -6517,5 +6519,123 @@ pub mod npc_in_encounter {
         d.state("npc-in-setup", Sizes::All);
         let cost = d.interaction_count() - started;
         d.observe("W6", cost <= 8, format!("Prepare an encounter with a named NPC and start setup: {cost} interactions, target 8"));
+    }
+}
+
+/// New package content reaches the same campaign's encounter without selecting it again.
+pub mod package_to_table {
+    use super::*;
+    pub fn run(d: &mut Driver<'_>) {
+        go_encounters(d);
+        d.click(NEW_ENCOUNTER);
+        go_library(d);
+        d.click("Packages");
+        d.click("Manage packages…");
+        d.begin_task();
+        d.type_text("Copper Coast");
+        d.expect("Use in this campaign");
+        d.state("create-package-location", Sizes::Default);
+        d.click("Create package");
+        d.expect("Copper Coast");
+        d.type_text("Copper Drake");
+        d.expect("Use in this campaign");
+        d.state("new-entry-used-by-default", Sizes::All);
+        d.click("Create entry");
+        d.expect("Copper Drake");
+        d.state("created-entry", Sizes::Default);
+        go_encounters(d);
+        d.type_into(FIND_CREATURE, "Copper Drake");
+        d.expect("Copper Drake");
+        d.click("Add");
+        d.audit_goal_within(
+            "W18a",
+            "create a package and entry and add it to the open encounter",
+            8,
+        );
+        d.state("new-package-at-the-table", Sizes::All);
+    }
+}
+
+/// A private required dependency blocks sharing; an independent copy can use a new folder.
+pub mod share_to_package {
+    use super::*;
+    pub fn run(d: &mut Driver<'_>) {
+        let root = d.root.join("campaigns/emberfall");
+        let (entries, _) = splat::content::read_directory(&root).unwrap();
+        let varra = entries
+            .iter()
+            .find(|entry| entry.name == "Captain Varra")
+            .unwrap();
+        let text = crate::library::note_text("Watch Orders", "rule", None);
+        let text = crate::content_workspace::patch_fields(
+            &text,
+            &[(
+                "splat_requires",
+                Some(
+                    serde_yaml_ng::to_value(vec![crate::content_workspace::EntryRef::id(varra.id)])
+                        .unwrap(),
+                ),
+            )],
+        )
+        .unwrap();
+        std::fs::write(root.join("Watch Orders.md"), text).unwrap();
+        go_library(d);
+        d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
+        d.click("Campaign entries");
+        d.type_into(SEARCH_LIBRARY, "Watch Orders");
+        d.click_starting("Watch Orders · ");
+        d.click(COPY_TO);
+        d.click("Destination");
+        d.click(&format!("Package · {MODULE}"));
+        d.expect("requires private campaign entry");
+        d.state("private-dependency-blocks-sharing", Sizes::All);
+        d.observe(
+            "W18b",
+            !d.has(CREATE_COPY),
+            "Sharing cannot leave a package dependent on a private campaign entry",
+        );
+        d.click("Cancel");
+        d.clear_text_in(SEARCH_LIBRARY);
+        d.type_into(SEARCH_LIBRARY, "Captain Varra");
+        d.click_starting("Captain Varra · ");
+        d.click(COPY_TO);
+        d.click("Destination");
+        d.click(&format!("Package · {MODULE}"));
+        d.type_into("Subfolder", "Watch/Captains");
+        d.expect("Use in this campaign");
+        d.state("share-to-new-folder", Sizes::All);
+        d.click(CREATE_COPY);
+        d.expect("Saved:");
+        d.observe(
+            "W11",
+            d.root
+                .join("modules/ashen-marches/Watch/Captains/Captain Varra.md")
+                .is_file(),
+            "Creating the copy also creates its subfolder",
+        );
+        d.state("shared-copy-created", Sizes::Default);
+    }
+}
+
+pub mod remove_package_in_use {
+    use super::*;
+    pub fn run(d: &mut Driver<'_>) {
+        go_library(d);
+        d.click("Packages");
+        d.click("Manage packages…");
+        d.click(&format!("More actions for {MODULE}"));
+        d.click(&format!("Unregister {MODULE}"));
+        d.expect("Unregister Ashen Marches?");
+        d.state("package-in-use-warning", Sizes::All);
+        d.click("Unregister");
+        d.observe(
+            "W18c",
+            d.root.join("modules/ashen-marches/Module.md").is_file(),
+            "Unregistering keeps the package files",
+        );
+        go_campaign(d);
+        d.click("Reload from disk");
+        d.expect("Unavailable package:");
+        d.state("campaign-keeps-missing-package-choice", Sizes::All);
     }
 }

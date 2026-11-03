@@ -15,6 +15,40 @@ use std::{
 };
 use uuid::Uuid;
 
+/// Add new work to the active campaign without replacing its other choices.
+/// `None` selects the whole package, including future entries.
+pub fn use_in_campaign(
+    campaign: &Campaign,
+    package: Uuid,
+    entry: Option<Uuid>,
+) -> Result<(), String> {
+    let mut document = CampaignDocument::load(campaign)?;
+    if let Some(selection) = document
+        .selections
+        .iter_mut()
+        .find(|s| s.package.id == Some(package))
+    {
+        match (&mut selection.selection, entry) {
+            (Selection::All, _) => return Ok(()),
+            (Selection::Selected { entries }, Some(id)) => {
+                if entries.iter().any(|e| e.id == Some(id)) {
+                    return Ok(());
+                }
+                entries.push(EntryRef::id(id));
+            }
+            (selection, None) => *selection = Selection::All,
+        }
+    } else {
+        document.selections.push(PackageSelection {
+            package: EntryRef::id(package),
+            selection: entry.map_or(Selection::All, |id| Selection::Selected {
+                entries: vec![EntryRef::id(id)],
+            }),
+        });
+    }
+    document.save()
+}
+
 pub fn builtin_manifest() -> Entry {
     let bytes = content::builtin::source_file("Package.md").expect("bundled manifest");
     Entry::parse(
@@ -890,9 +924,6 @@ impl CopyPlan {
                 "A note already exists at this destination. Choose another name or folder.".into(),
             );
         }
-        if !path.parent().is_some_and(Path::is_dir) {
-            return Err("The destination subfolder must already exist.".into());
-        }
         Entry::parse(&relative, &text)?;
         Ok(Self {
             root: destination.into(),
@@ -922,6 +953,9 @@ impl CopyPlan {
         {
             return Err("The source changed on disk. Reload it and review a new copy.".into());
         }
+        let path = note_path(&self.root, &self.relative)?;
+        fs::create_dir_all(path.parent().ok_or("Missing destination folder")?)
+            .map_err(|e| e.to_string())?;
         write_note(&self.root, &self.relative, None, &self.text)
     }
 }
@@ -1439,5 +1473,46 @@ mod tests {
         let destinations = destinations(&campaign_root, &modules);
         assert!(destinations.lists("item:needed"));
         assert!(!destinations.lists("item:other"));
+    }
+    #[test]
+    fn new_work_extends_partial_selections_and_keeps_whole_packages() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path().into());
+        let package = Uuid::new_v4();
+        let first = Uuid::new_v4();
+        let second = Uuid::new_v4();
+        use_in_campaign(&campaign, package, Some(first)).unwrap();
+        use_in_campaign(&campaign, package, Some(second)).unwrap();
+        use_in_campaign(&campaign, package, Some(first)).unwrap();
+        let document = CampaignDocument::load(&campaign).unwrap();
+        let selection = document
+            .selections
+            .iter()
+            .find(|s| s.package.id == Some(package))
+            .unwrap();
+        assert_eq!(
+            selection.selection,
+            Selection::Selected {
+                entries: vec![EntryRef::id(first), EntryRef::id(second)]
+            }
+        );
+        assert!(
+            document
+                .selections
+                .iter()
+                .any(|s| s.package.id == Some(builtin_manifest().id))
+        );
+        use_in_campaign(&campaign, package, None).unwrap();
+        use_in_campaign(&campaign, package, Some(Uuid::new_v4())).unwrap();
+        let document = CampaignDocument::load(&campaign).unwrap();
+        assert_eq!(
+            document
+                .selections
+                .iter()
+                .find(|s| s.package.id == Some(package))
+                .unwrap()
+                .selection,
+            Selection::All
+        );
     }
 }

@@ -25,10 +25,14 @@ pub struct CopyDialog {
     copied_entry: Option<splat::content::Entry>,
     pub edit_copy: Option<splat::content::Entry>,
     focus_name: bool,
+    not_used: bool,
     /// The DM chose to add the copy to the open draft.
     pub add_to_draft: Option<Uuid>,
 }
 impl CopyDialog {
+    pub fn prefer_package(&mut self, package: Uuid) {
+        self.destination = Some((false, package));
+    }
     #[cfg(test)]
     pub fn busy(&self) -> bool {
         self.pending.is_some()
@@ -63,6 +67,7 @@ impl CopyDialog {
             copied_entry: None,
             edit_copy: None,
             focus_name: true,
+            not_used: false,
             add_to_draft: None,
         }
     }
@@ -184,14 +189,27 @@ impl CopyDialog {
                 design::focus_and_select(ui, response.id, &self.name);
             }
             let name_changed = response.changed();
-            let folder_changed = design::text_field(
-                ui,
-                "Subfolder",
-                &mut self.folder,
-                Some("An existing subfolder. Leave blank to use the main folder."),
-                None,
-            )
-            .changed();
+            let old_folder = self.folder.clone();
+            if let Some(destination) = destinations
+                .iter()
+                .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
+            {
+                crate::library::folder_field(
+                    ui,
+                    "Subfolder",
+                    &mut self.folder,
+                    &destination.3,
+                    None,
+                );
+                if !destination.0 && campaigns.active_campaign().is_some() {
+                    crate::library::use_checkbox(
+                        ui,
+                        &mut self.not_used,
+                        "Adds the copy to this campaign's package choices.",
+                    );
+                }
+            }
+            let folder_changed = self.folder != old_folder;
             if old != self.destination || name_changed || folder_changed {
                 self.plan = None;
                 self.error = None;
@@ -288,15 +306,32 @@ impl CopyDialog {
                                     "Destination folder changed. Review the copy again.".into()
                                 );
                             }
-                            plan.save()
+                            let entry = plan.save()?;
+                            if !d.0
+                                && !self.not_used
+                                && let Some(campaign) = campaigns.active_campaign()
+                            {
+                                crate::content_workspace::use_in_campaign(
+                                    &campaign,
+                                    d.1,
+                                    Some(entry.id),
+                                )
+                                .map_err(|e| {
+                                    format!("Copy saved. Could not use it in this campaign: {e}")
+                                })?;
+                            }
+                            Ok(entry)
                         });
                     match result {
                         Ok(_) => {
                             // A creature copied to the active campaign can join the open
                             // draft now. A copy elsewhere is not one this draft can use.
                             let to_active = self.destination.is_some_and(|(is_campaign, id)| {
-                                is_campaign
-                                    && campaigns.active_campaign().is_some_and(|a| a.id == id)
+                                (is_campaign
+                                    && campaigns.active_campaign().is_some_and(|a| a.id == id))
+                                    || (!is_campaign
+                                        && !self.not_used
+                                        && campaigns.active_campaign().is_some())
                             });
                             self.copied_creature =
                                 splat::content::Entry::parse(&plan.relative, &plan.text)

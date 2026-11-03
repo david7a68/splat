@@ -6,6 +6,28 @@ use eframe::egui::{self, Align, Layout, vec2};
 use splat::content::{Entry, Reading, Reference};
 use uuid::Uuid;
 
+/// Keep the picture beside the title, so the stats can follow the meta line.
+pub(crate) fn title_with_art(
+    ui: &mut egui::Ui,
+    title: &str,
+    subtitle: &str,
+    entry: Option<&Entry>,
+) {
+    let art = entry.and_then(|entry| crate::art::entry_art(ui.ctx(), entry));
+    ui.horizontal_top(|ui| {
+        let width = (ui.available_width()
+            - art.as_ref().map_or(0.0, |_| design::XXL * 2.0 + design::M))
+        .max(design::XXL);
+        ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+            style::title(ui, title);
+            style::subtitle(ui, subtitle);
+        });
+        if let Some(path) = art {
+            crate::art::thumbnail(ui, &path, title);
+        }
+    });
+}
+
 /// What the reader's links can open. An index belongs to the implementer.
 pub(crate) trait Links {
     /// The one entry a reference names, or nothing if it is missing or ambiguous.
@@ -167,7 +189,6 @@ fn show_inner(
     let reading = reading.as_ref();
     let builtin = origin.builtin;
     let room = ui.available_width();
-    let art = entry.and_then(|entry| crate::art::entry_art(ui.ctx(), entry));
     // A wide window's margin holds what is rarely wanted, so the prose keeps its measure and
     // the page has no dead space.
     if room >= design::READER_MEASURE + design::XXL + REFERENCE_MIN {
@@ -185,9 +206,6 @@ fn show_inner(
             let width = ui.available_width().min(REFERENCE_MAX);
             ui.allocate_ui_with_layout(vec2(width, 0.0), layout, |ui| {
                 ui.set_max_width(width);
-                if let Some(path) = &art {
-                    crate::art::hero(ui, path, name);
-                }
                 reference(ui, entry, &sections, styled.is_some(), origin);
             });
         });
@@ -195,9 +213,6 @@ fn show_inner(
     }
     // Rules text keeps its measure in a wide side panel too.
     style::measure(ui, |ui| {
-        if let Some(path) = &art {
-            crate::art::small_hero(ui, path, name);
-        }
         let open_link = content(
             ui, entry, reading, &sections, styled, builtin, links, values,
         );

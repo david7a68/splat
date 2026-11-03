@@ -764,13 +764,14 @@ impl Campaigns {
         }
     }
 
-    fn form(&mut self, ui: &mut egui::Ui, _inline: bool, primary: bool) {
+    fn form(&mut self, ui: &mut egui::Ui, inline: bool, primary: bool) {
         let editing = self.editing.is_some();
         // Keep the add form's open state when Settings changes between one and two columns.
         let form_scope = egui::Id::new(("campaign_form", self.editing));
         ui.scope_builder(egui::UiBuilder::new().id(form_scope), |ui| {
             let mut added = false;
-            let direct = editing || self.remote.is_some();
+            let direct =
+                editing || self.remote.is_some() || (inline && self.data.campaigns.is_empty());
             let title = if editing {
                 "Details".to_owned()
             } else if let Some((_, name)) = &self.remote {

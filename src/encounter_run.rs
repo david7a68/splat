@@ -1451,7 +1451,20 @@ impl Run {
                 }
                 p.successes = successes;
                 p.failures = failures;
-                format!("Death saves: {successes} successes, {failures} failures.")
+                {
+                    let count = |n, single, plural| {
+                        if n == 0 {
+                            format!("0 {plural}")
+                        } else {
+                            crate::design::count(n, single, plural)
+                        }
+                    };
+                    format!(
+                        "Death saves: {}, {}.",
+                        count(usize::from(successes), "success", "successes"),
+                        count(usize::from(failures), "failure", "failures")
+                    )
+                }
             }
             Command::Note(_, note) => {
                 if note.trim().is_empty() {

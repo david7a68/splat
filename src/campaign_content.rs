@@ -113,7 +113,7 @@ pub(crate) fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<
             let thing = if *ch == '[' { "list" } else { "mapping" };
             return (
                 Some(format!(
-                    "line {line} opens a {thing} with `{ch}` that never closes"
+                    "line {line} opens a {thing} with {ch} that never closes"
                 )),
                 Some(*line),
             );
@@ -262,8 +262,9 @@ impl CampaignContent {
             ctx.request_repaint();
         });
     }
-    pub fn refresh_destination(&mut self, root: &std::path::Path) {
-        if !self.dirty() && self.active.as_ref().is_some_and(|c| c.path == root) {
+    pub fn refresh_destination(&mut self, _root: &std::path::Path) {
+        // A package write can also save this campaign's selection (Use in this campaign).
+        if !self.dirty() && self.active.is_some() {
             self.refresh_pending = true;
         }
     }
@@ -501,32 +502,32 @@ impl CampaignContent {
         let mut repaired = false;
         for (path, baseline, draft) in &mut self.repairs {
             let (problem, error_line) = repair_problem(path, draft);
-            design::message(
+            let problem = problem
+                .as_deref()
+                .unwrap_or("The repair has not been saved");
+            let problem = problem.replace('[', "`[`").replace('{', "`{`");
+            design::message_with_code(
                 ui,
                 Tone::Error,
                 &format!(
                     "{path} cannot be read. Fix it here or in World. {}.",
-                    problem
-                        .as_deref()
-                        .unwrap_or("The repair has not been saved")
-                        .trim_end_matches('.')
+                    problem.trim_end_matches('.')
                 ),
             );
             let id = egui::Id::new(("repair_open", path.as_str()));
-            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(true);
+            let mut open = ui.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
             if Action::quiet("Repair").show(ui).clicked() {
                 open = !open;
             }
             ui.data_mut(|data| data.insert_temp(id, open));
             if open {
+                design::group_heading(ui, &format!("Repair {path}"), 0);
                 ui.scope(|ui| {
                     ui.set_max_width(design::READER_MEASURE);
                     // What is wrong comes first, and stays true as the DM edits.
 
                     crate::world::repair::editor(ui, path, draft, error_line);
-                    if draft == baseline {
-                        ui.label(Type::Small.rich(ui, "No changes yet").color(colors().muted));
-                    }
+
                     ui.horizontal(|ui| {
                         if draft != baseline
                             && Action::quiet("Discard repair draft")
@@ -563,11 +564,16 @@ impl CampaignContent {
                             }
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if Action::secondary("Save repaired note")
+                            let pressed = Action::secondary("Save repaired note")
                                 .density(Density::Read)
-                                .blocked_if(draft == baseline, "No changes yet")
+                                .blocked_if(draft == baseline, "No changes yet.")
                                 .show(ui)
-                                .clicked()
+                                .clicked();
+                            design::blocked_reason(
+                                ui,
+                                (draft == baseline).then_some("No changes yet."),
+                            );
+                            if pressed
                                 || (draft != baseline
                                     && ui.input_mut(|i| {
                                         i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
@@ -658,11 +664,8 @@ impl CampaignContent {
                     document.selections = selections;
                 }
             }
-            if !dirty && repair.is_none() {
-                ui.label(Type::Small.rich(ui, "No changes").color(c.document.clean));
-            }
             if !dirty && !self.repairs.iter().any(|(_, b, d)| b != d) {
-                reload = Action::quiet("Reload content")
+                reload = Action::quiet("Reload from disk")
                     .icon(icons::REFRESH)
                     .density(Density::Read)
                     .show(ui)
@@ -1019,10 +1022,10 @@ impl CampaignContent {
                                     let why = closure.required.get(&id).map(|reasons| {
                                         reasons.iter().cloned().collect::<Vec<_>>().join(", ")
                                     });
-                                    if ui
+                                    let response = ui
                                         .add_enabled(
                                             !required,
-                                            egui::Checkbox::new(&mut selected, &entry.name),
+                                            egui::Checkbox::new(&mut selected, ""),
                                         )
                                         .on_hover_text(&entry.name)
                                         .on_disabled_hover_text(why.as_ref().map_or_else(
@@ -1034,8 +1037,10 @@ impl CampaignContent {
                                                 )
                                             },
                                         ))
-                                        .changed()
-                                    {
+                                        ;
+                                    design::named(ui, &response, &format!("Use {}", entry.name));
+                                    if design::link(ui, &entry.name).clicked() { self.open_lookup = Some(id); }
+                                    if response.changed() {
                                         toggled = Some((id, selected));
                                     }
                                     ui.label(
@@ -1122,7 +1127,7 @@ mod tests {
         assert_eq!(line, Some(3));
         assert_eq!(
             problem.as_deref(),
-            Some("line 3 opens a list with `[` that never closes")
+            Some("line 3 opens a list with [ that never closes")
         );
     }
 

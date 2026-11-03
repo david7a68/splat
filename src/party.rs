@@ -239,9 +239,9 @@ impl Party {
                     // Linking needs a session, so that comes first.
                     if session.is_none() {
                         self.wants_settings |= if self.run_open {
-                            Action::secondary("Open Settings")
+                            Action::secondary("Connect D&D Beyond")
                         } else {
-                            Action::primary("Open Settings")
+                            Action::primary("Connect D&D Beyond")
                         }
                         .show(ui)
                         .clicked();
@@ -282,7 +282,7 @@ impl Party {
                     "This campaign has no party members.",
                     "Add characters in D&D Beyond, then refresh the party.",
                     |ui| {
-                        if design::link(ui, "Open Settings").clicked() {
+                        if design::link(ui, "Connect D&D Beyond").clicked() {
                             self.wants_settings = true;
                         }
                     },
@@ -295,9 +295,9 @@ impl Party {
                     "Connect to D&D Beyond in Settings to load this party.",
                     |ui| {
                         if if self.run_open {
-                            Action::secondary("Open Settings")
+                            Action::secondary("Connect D&D Beyond")
                         } else {
-                            Action::primary("Open Settings")
+                            Action::primary("Connect D&D Beyond")
                         }
                         .show(ui)
                         .clicked()
@@ -423,7 +423,7 @@ impl Party {
             } else if connected {
                 "Replace with D&D Beyond sheet"
             } else {
-                "Open Settings"
+                "Connect D&D Beyond"
             };
             storage_notice(ui, Tone::Warning, &words, &["Show file", action], |ui| {
                 show_file(ui, path);

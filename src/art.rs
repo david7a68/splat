@@ -16,9 +16,6 @@ use std::{
 
 /// Decoded images kept ready. Older ones are dropped, so browsing does not fill video memory.
 const KEEP_DECODED: usize = 32;
-const HERO: Vec2 = vec2(360.0, 320.0);
-/// Beside a run or in a narrow page, the rules come first and the picture stays small.
-const SMALL_HERO_HEIGHT: f32 = 110.0;
 const FIGURE_HEIGHT: f32 = 520.0;
 
 pub fn install(ctx: &egui::Context) {
@@ -161,19 +158,9 @@ fn picture(ui: &mut egui::Ui, path: &Path, name: &str, max: Vec2) {
     }
 }
 
-/// An entry's picture, in the Reader's margin.
-pub fn hero(ui: &mut egui::Ui, path: &Path, name: &str) {
-    let width = ui.available_width().min(HERO.x);
-    picture(ui, path, name, vec2(width, HERO.y));
-    ui.add_space(design::S);
-}
-
-/// An entry's picture, above its text where there is no margin.
-pub fn small_hero(ui: &mut egui::Ui, path: &Path, name: &str) {
-    ui.add_space(design::S);
-    let width = ui.available_width();
-    picture(ui, path, name, vec2(width, SMALL_HERO_HEIGHT));
-    ui.add_space(design::XS);
+/// A reader thumbnail retains the full-size picture action.
+pub fn thumbnail(ui: &mut egui::Ui, path: &Path, name: &str) {
+    picture(ui, path, name, Vec2::splat(design::XXL * 2.0));
 }
 
 /// An image in the flow of a note, as wide as the text.

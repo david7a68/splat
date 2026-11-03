@@ -88,7 +88,19 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
     let mut figures: Vec<std::path::PathBuf> = Vec::new();
     let mut in_figure = false;
     let ctx = ui.ctx().clone();
-    let source = local_figure_links(markdown, |url| crate::art::link_art(&ctx, url).is_some());
+    let index = ui.ctx().data(|data| {
+        data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+            "reader_link_index",
+        ))
+    });
+    let from = ui
+        .ctx()
+        .data(|data| data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document")));
+    let linked = index.map_or_else(
+        || markdown.to_owned(),
+        |index| index.reader_markdown(markdown, from),
+    );
+    let source = local_figure_links(&linked, |url| crate::art::link_art(&ctx, url).is_some());
     for event in Parser::new_ext(
         &source,
         Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
@@ -127,6 +139,10 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 if let Some(path) = local {
                     figures.push(path);
                     in_figure = true;
+                    continue;
+                }
+                if dest_url.starts_with("splat-missing:") {
+                    link = Some((job.text.len(), LinkTarget::Missing));
                     continue;
                 }
                 if let Some(note) = dest_url.strip_prefix(NOTE_LINK) {
@@ -292,7 +308,7 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                     && let Some(start) = strong_link.take()
                 {
                     let words = job.text[start..].trim();
-                    if !words.is_empty() {
+                    if !words.is_empty() && !words.ends_with(['.', ':']) {
                         for section in &mut job.sections {
                             if section.byte_range.start >= start {
                                 section.format.color = colors().accent;
@@ -401,7 +417,9 @@ fn show_with_density(ui: &mut egui::Ui, markdown: &str, dense: bool) {
                 if matches!(role, Type::ProseStrong | Type::ProseItalic) && heading.is_none() {
                     font_id.size = prose.size();
                 }
-                let color = if link.is_some() {
+                let color = if matches!(link, Some((_, LinkTarget::Missing))) {
+                    colors().muted
+                } else if link.is_some() {
                     colors().accent
                 } else {
                     colors().text
@@ -602,7 +620,11 @@ fn reader_table(
         let header_rect = egui::Rect::from_min_max(
             egui::pos2(left, header_top),
             egui::pos2(
-                (left + width).min(outer_clip.right()),
+                (left + width).min(if widths.len() > 1 {
+                    moving_clip.right()
+                } else {
+                    outer_clip.right()
+                }),
                 header_top + heights[0],
             ),
         );
@@ -797,6 +819,7 @@ struct Targets {
 }
 
 enum LinkTarget {
+    Missing,
     Note(String),
     Lookup(String),
     Url(String),
@@ -818,6 +841,39 @@ fn draw_with_links(
         .sense(egui::Sense::click())
         .layout_in_ui(ui);
     ui.painter().galley(position, galley.clone(), colors().text);
+    for (range, destination) in &links {
+        if matches!(destination, LinkTarget::Missing) {
+            let mut byte_at = 0;
+            for row in &galley.rows {
+                let mut x = position.x + row.pos.x;
+                for glyph in &row.glyphs {
+                    let length = glyph.chr.len_utf8();
+                    if range.contains(&byte_at) {
+                        let y = position.y + row.pos.y + row.size.y;
+                        let mut dot = x;
+                        while dot < x + glyph.advance_width {
+                            ui.painter().line_segment(
+                                [
+                                    egui::pos2(dot, y),
+                                    egui::pos2(
+                                        (dot + design::HAIRLINE_WIDTH).min(x + glyph.advance_width),
+                                        y,
+                                    ),
+                                ],
+                                egui::Stroke::new(design::HAIRLINE_WIDTH, colors().muted),
+                            );
+                            dot += design::XS;
+                        }
+                    }
+                    byte_at += length;
+                    x += glyph.advance_width;
+                }
+                if row.ends_with_newline {
+                    byte_at += 1;
+                }
+            }
+        }
+    }
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Link, true, text.as_str()));
     let Some(pointer) = response.hover_pos() else {
         return;
@@ -828,15 +884,22 @@ fn draw_with_links(
         .nth(at)
         .map_or(text.len(), |(byte, _)| byte);
     if let Some((_, destination)) = links.iter().find(|(range, _)| range.contains(&byte)) {
+        if matches!(destination, LinkTarget::Missing) {
+            response.on_hover_text("Not found in this campaign");
+            return;
+        }
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         if let LinkTarget::Url(url) = destination {
             response.clone().on_hover_text(url);
         }
         if response.clicked() {
             match destination {
-                LinkTarget::Note(note) => ui
-                    .ctx()
-                    .data_mut(|data| data.insert_temp(clicked_id(), note.clone())),
+                LinkTarget::Missing => {}
+                LinkTarget::Note(note) => ui.ctx().data_mut(|data| {
+                    let from = data.get_temp::<uuid::Uuid>(egui::Id::new("reader_document"));
+                    data.insert_temp(egui::Id::new("clicked_reader_document"), from);
+                    data.insert_temp(clicked_id(), note.clone());
+                }),
                 LinkTarget::Lookup(words) => ui.ctx().data_mut(|data| {
                     data.insert_temp(egui::Id::new("markdown_clicked_lookup"), words.clone());
                 }),

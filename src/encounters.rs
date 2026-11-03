@@ -2539,10 +2539,7 @@ impl Encounters {
         });
         ui.allocate_ui(egui::vec2(ui.available_width(), Type::Small.line()), |ui| {
             if dirty {
-                blocked_reason(
-                    ui,
-                    Some("Save or discard the draft to start a fight or switch campaign."),
-                );
+                blocked_reason(ui, Some("Save or discard to switch campaign."));
             }
         });
         if has_run {
@@ -2877,6 +2874,35 @@ impl Encounters {
             *focus_search = true;
         }
         if matches.is_empty() {
+            let index = ui.ctx().data(|data| {
+                data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new(
+                    "reader_link_index",
+                ))
+            });
+            if let Some(index) = index {
+                for (package, entry, name, owner) in index.unused_creatures(&query) {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            Type::Small
+                                .rich(
+                                    ui,
+                                    format!(
+                                        "{name} is in {owner}, which this campaign does not use."
+                                    ),
+                                )
+                                .color(colors().muted),
+                        );
+                        if design::link(ui, "Use it").clicked() {
+                            ui.ctx().data_mut(|data| {
+                                data.insert_temp(
+                                    egui::Id::new("use_package_entry"),
+                                    (package, entry),
+                                )
+                            });
+                        }
+                    });
+                }
+            }
             design::empty_state(
                 ui,
                 icons::SEARCH,

@@ -1293,6 +1293,34 @@ pub fn message(ui: &mut Ui, tone: Tone, text: &str) -> Response {
     inner.inner
 }
 
+/// A message whose marked fragments use the code font.
+pub fn message_with_code(ui: &mut Ui, tone: Tone, text: &str) -> Response {
+    let (icon, color) = tone.parts();
+    let mut job = LayoutJob::default();
+    for (i, part) in text.split('`').enumerate() {
+        job.append(
+            part,
+            0.0,
+            egui::TextFormat {
+                font_id: if i % 2 == 0 { Type::Body } else { Type::Mono }.font(ui),
+                color: colors().text,
+                ..Default::default()
+            },
+        );
+    }
+    ui.horizontal_top(|ui| {
+        let start = ui.cursor().min;
+        ui.add_space(S + 1.0);
+        ui.label(Type::Body.rich(ui, icon).color(color));
+        ui.add_space(-XS);
+        let response = ui.add(egui::Label::new(job).wrap());
+        let bar = Rect::from_min_max(start, pos2(start.x + 3.0, response.rect.bottom()));
+        ui.painter().rect_filled(bar, 0.0, color);
+        response
+    })
+    .inner
+}
+
 /// Work in progress. Test builds draw a still mark: the moving one is drawn from the clock,
 /// so two captures of the same state would differ.
 pub fn spinner(ui: &mut Ui) {
@@ -1574,6 +1602,111 @@ pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)
             );
         }
     });
+}
+
+/// Second-level sheet pages keep one Small tab line, with overflow in More.
+pub fn overflow_tabs_small(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)]) {
+    ui.scope(|ui| {
+        let small = Type::Small.font(ui);
+        for role in [
+            Type::Body.style(),
+            Type::Strong.style(),
+            egui::TextStyle::Button,
+        ] {
+            ui.style_mut().text_styles.insert(role, small.clone());
+        }
+        overflow_tabs(ui, selected, choices);
+    });
+}
+
+/// Compare a draft with its file. The first draw and Next difference scroll to a marked line.
+pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash::Hash) {
+    let left: Vec<_> = draft.lines().collect();
+    let right: Vec<_> = disk.lines().collect();
+    let differences: Vec<_> = (0..left.len().max(right.len()))
+        .filter(|&line| left.get(line) != right.get(line))
+        .collect();
+    let state = ui.make_persistent_id(("draft_difference", id));
+    let first = differences.first().copied().unwrap_or(0);
+    let current = ui.data(|data| data.get_temp::<usize>(state));
+    let mut target = current.is_none().then_some(first);
+    ui.horizontal(|ui| {
+        let words = if differences.is_empty() {
+            "No lines differ".into()
+        } else {
+            super::count(differences.len(), "line differs", "lines differ")
+        };
+        ui.label(Type::Small.rich(ui, words).color(colors().muted));
+        if !differences.is_empty() && Action::quiet("Next difference").show(ui).clicked() {
+            target = Some(
+                differences
+                    .iter()
+                    .copied()
+                    .find(|&line| line > current.unwrap_or(first))
+                    .unwrap_or(first),
+            );
+        }
+    });
+    if let Some(line) = target {
+        ui.data_mut(|data| data.insert_temp(state, line));
+    }
+    ui.columns(2, |columns| {
+        group_label(&mut columns[0], "Your draft");
+        group_label(&mut columns[1], "In the file now");
+    });
+    let height = ui.available_height();
+    egui::ScrollArea::vertical()
+        .id_salt(state)
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for line in 0..left.len().max(right.len()) {
+                let differs = left.get(line) != right.get(line);
+                let top = ui.cursor().top();
+                ui.columns(2, |columns| {
+                    for (at, lines) in [&left, &right].into_iter().enumerate() {
+                        egui::Frame::new()
+                            .fill(if differs {
+                                colors().selected
+                            } else {
+                                colors().page
+                            })
+                            .show(&mut columns[at], |ui| {
+                                ui.set_min_width(ui.available_width());
+                                ui.horizontal_top(|ui| {
+                                    let (mark, _) = ui.allocate_exact_size(
+                                        egui::vec2(XS, Type::Body.line()),
+                                        egui::Sense::hover(),
+                                    );
+                                    if differs {
+                                        ui.painter().vline(
+                                            mark.center().x,
+                                            mark.y_range(),
+                                            egui::Stroke::new(HAIRLINE_WIDTH, colors().accent),
+                                        );
+                                    }
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Body
+                                                .rich(ui, lines.get(line).copied().unwrap_or(" ")),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
+                            });
+                    }
+                });
+                if target == Some(line) {
+                    ui.scroll_to_rect(
+                        egui::Rect::from_min_size(
+                            egui::pos2(ui.min_rect().left(), top),
+                            egui::vec2(ui.available_width(), Type::Body.line()),
+                        ),
+                        Some(egui::Align::TOP),
+                    );
+                }
+            }
+            ui.add_space((height - Type::Body.line()).max(0.0));
+        });
 }
 
 #[cfg(test)]

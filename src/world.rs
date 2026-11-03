@@ -671,6 +671,9 @@ enum FormEnd {
 pub struct Reader {
     showing: Option<Uuid>,
     status: String,
+    status_editing: bool,
+    status_drafts: HashMap<Uuid, String>,
+    pub compact: bool,
     other_type: String,
     adding: Option<Adding>,
     picker: Option<Picker>,
@@ -678,6 +681,8 @@ pub struct Reader {
     error: Option<String>,
     /// A link that matches several files, waiting for the DM to choose.
     many: Vec<usize>,
+    many_heading: Option<String>,
+    heading_document: Option<Uuid>,
     heading: Option<String>,
     /// What only the app can do, for it to take after this reader draws.
     pub join: Option<Join>,
@@ -688,8 +693,26 @@ pub struct Reader {
 }
 
 impl Reader {
+    /// Offer the same short chooser to links opened outside the World page.
+    pub fn choose_link(&mut self, positions: Vec<usize>, target: &str) {
+        self.many = positions;
+        self.many_heading = target
+            .split('|')
+            .next()
+            .and_then(|target| target.split_once('#'))
+            .map(|(_, heading)| {
+                heading
+                    .rsplit('#')
+                    .next()
+                    .unwrap_or(heading)
+                    .trim()
+                    .to_owned()
+            });
+    }
+
     /// Show this heading the next time the item is drawn.
     pub fn show_heading(&mut self, heading: Option<String>) {
+        self.heading_document = None;
         self.heading = heading;
     }
 
@@ -725,7 +748,11 @@ impl Reader {
                 chosen = Some(position);
             }
         }
-        chosen.and_then(|position| self.settle(Go::Item(position, None)))
+        chosen.and_then(|position| {
+            let heading = self.many_heading.take();
+            self.heading_document = Some(index.items[position].entry.id);
+            self.settle(Go::Item(position, heading))
+        })
     }
 
     /// Draw any item: a plain note, a world entry, or an entry of another kind.
@@ -737,14 +764,27 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Nav> {
         if self.showing != Some(item.entry.id) {
+            if let Some(previous) = self.showing {
+                self.status_drafts.insert(previous, self.status.clone());
+            }
             self.showing = Some(item.entry.id);
-            self.status = status(&item.entry).to_owned();
+            self.status = self
+                .status_drafts
+                .remove(&item.entry.id)
+                .unwrap_or_else(|| status(&item.entry).to_owned());
+            self.status_editing = self.status != status(&item.entry);
             self.other_type.clear();
             self.adding = None;
             self.picker = None;
             self.error = None;
         }
-        crate::markdown_view::want_heading(ui.ctx(), self.heading.take());
+        let heading = if self.heading_document.is_none_or(|id| id == item.entry.id) {
+            self.heading_document = None;
+            self.heading.take()
+        } else {
+            None
+        };
+        crate::markdown_view::want_heading(ui.ctx(), heading);
         let go = self.draw(ui, item, index, campaign);
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
@@ -767,21 +807,28 @@ impl Reader {
             .ok()
             .flatten()
             .map_or_else(|| item.entry.name.clone(), |reading| reading.title);
-        style::title(ui, &title);
-        style::subtitle(ui, &format!("{} · {}", item.subtitle, item.owner));
+        view::title_with_art(
+            ui,
+            &title,
+            &format!("{} · {}", item.subtitle, item.owner),
+            Some(&item.entry),
+        );
         if let Some(error) = &self.error {
             design::message(ui, Tone::Error, error);
         }
-        if (item.is_world_note() || item.entry.kind == "world")
+        if !self.compact
+            && (item.is_world_note() || item.entry.kind == "world")
             && item.is_private()
             && let Some(campaign) = campaign
         {
             file_actions(ui, campaign, &item.entry.path);
         }
-        if let Some(change) = &self.undo
+        if !self.compact
+            && let Some(change) = &self.undo
             && change.path == item.entry.path
         {
             let mut undo = false;
+
             ui.horizontal_wrapped(|ui| {
                 ui.label(Type::Small.rich(ui, &change.word).color(colors().muted));
                 undo = Action::quiet("Undo")
@@ -811,7 +858,7 @@ impl Reader {
         }
         if item.is_note() {
             style::measure(ui, |ui| style::markdown(ui, &item.entry.body));
-            if item.is_world_note() {
+            if !self.compact && item.is_world_note() {
                 go = go.or(self.make_entry_control(ui, item, campaign));
             }
         } else {
@@ -831,7 +878,11 @@ impl Reader {
         }
         go = go.or(related(ui, item, index));
         if let Some(target) = crate::markdown_view::take_note_link(ui.ctx()) {
-            go = go.or(Some(index.follow(&target, item)));
+            let followed = index.follow(&target, item);
+            if let Go::Many(positions) = &followed {
+                self.choose_link(positions.clone(), &target);
+            }
+            go = go.or(Some(followed));
         }
         go
     }
@@ -1052,21 +1103,47 @@ impl Reader {
         campaign: Option<&Campaign>,
     ) -> Option<Go> {
         let campaign = campaign.filter(|_| item.is_private())?;
-        if let Some(go) = self.relationships(ui, item, index, campaign) {
+        if !self.compact
+            && let Some(go) = self.relationships(ui, item, index, campaign)
+        {
             return Some(go);
         }
         ui.add_space(design::XS);
-        design::text_field(ui, "Status", &mut self.status, None, None);
-        let wanted = self.status.trim().to_owned();
-        if wanted != status(&item.entry)
-            && Action::secondary("Save status")
-                .density(Density::Read)
-                .show(ui)
-                .clicked()
-        {
-            match set_world_field(campaign, &item.entry, "status", wanted.into()) {
-                Ok(()) => return Some(Go::Reload(item.entry.id)),
-                Err(error) => self.error = Some(error),
+        if !self.compact {
+            if !self.status_editing && Action::quiet("Edit status").show(ui).clicked() {
+                self.status_editing = true;
+            }
+            if self.status_editing {
+                let response = design::text_field(ui, "Status", &mut self.status, None, None);
+                let wanted = self.status.trim().to_owned();
+                if wanted != status(&item.entry) {
+                    let mut save = response.has_focus()
+                        && ui.input(|input| input.key_pressed(egui::Key::Enter));
+                    ui.horizontal(|ui| {
+                        design::status(
+                            ui,
+                            design::Status {
+                                icon: design::icons::DRAFT,
+                                word: "Unsaved",
+                                color: colors().document.unsaved,
+                            },
+                        );
+                        save |= Action::secondary("Save status")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked();
+                    });
+                    if save {
+                        match set_world_field(campaign, &item.entry, "status", wanted.into()) {
+                            Ok(()) => {
+                                self.status_editing = false;
+                                self.status_drafts.remove(&item.entry.id);
+                                return Some(Go::Reload(item.entry.id));
+                            }
+                            Err(error) => self.error = Some(error),
+                        }
+                    }
+                }
             }
         }
         if world_type(&item.entry) != "npc" {
