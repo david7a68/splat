@@ -579,31 +579,27 @@ impl TimelinePage {
         }
         let event = &book.events[index];
         let title = event.label(days[index]);
-        let kind = format!("{} {}", event.kind.icon(), event.kind.word());
-        let status_word = if blocked.is_some() {
-            if unsaved { "Unsaved" } else { "Saving blocked" }
-        } else if unsaved {
-            "Saving…"
+        let kind = if event.kind == Kind::Day {
+            event.kind.icon().to_owned()
         } else {
-            "Saved"
+            format!("{} {}", event.kind.icon(), event.kind.word())
         };
-        let copied = self
-            .copied
-            .as_ref()
-            .is_some_and(|(copied, _)| *copied == id);
-        let copy_word = if copied { "Copied" } else { "Copy link" };
         let needed = design::number_width(ui, &title, &Type::Heading.font(ui))
             + design::number_width(ui, &kind, &Type::Small.font(ui))
-            + design::number_width(ui, status_word, &Type::Small.font(ui))
+            + design::number_width(ui, "Saving blocked", &Type::Small.font(ui))
             + design::number_width(ui, icons::OK, &Type::Small.font(ui))
-            + Action::secondary(copy_word)
+            + Action::secondary("Copy link")
                 .icon(icons::COPY)
                 .density(Density::Read)
                 .natural_width(ui)
             + Density::Read.control()
             + design::S * 5.0;
         let title_line = |ui: &mut egui::Ui| {
-            ui.label(Type::Small.rich(ui, &kind).color(c.muted));
+            let kind_label = ui.label(Type::Small.rich(ui, &kind).color(c.muted));
+            if event.kind == Kind::Day {
+                design::named(ui, &kind_label, "Day");
+                kind_label.on_hover_text("Day");
+            }
             let shown =
                 design::words_that_fit(ui, &title, &Type::Heading.font(ui), ui.available_width());
             ui.label(Type::Heading.rich(ui, shown).color(c.text))
@@ -1038,23 +1034,30 @@ impl TimelinePage {
             return;
         }
         let width = design::side_panel_width(ui.available_width());
-        design::Column::panel("timeline_detail_panel", width)
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::S as i8,
-                ..Default::default()
-            }))
-            .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
-        egui::CentralPanel::default()
-            // The panel's drag handle lies on this edge, so the rows stop short of it.
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                right: design::S as i8,
-                ..Default::default()
-            }))
-            .show_inside(ui, |ui| {
-                notes.expire_event_link_undo(true, book);
-                notes.event_link_undo(ui);
-                self.list(ui, book, sessions)
-            });
+        let content_width = ui.available_width().min(design::LIST_MEASURE + width);
+        ui.allocate_ui_with_layout(
+            egui::vec2(content_width, ui.available_height()),
+            egui::Layout::top_down(egui::Align::LEFT),
+            |ui| {
+                design::Column::panel("timeline_detail_panel", width)
+                    .frame(egui::Frame::new().inner_margin(egui::Margin {
+                        left: design::S as i8,
+                        ..Default::default()
+                    }))
+                    .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
+                egui::CentralPanel::default()
+                    // The panel's drag handle lies on this edge, so the rows stop short of it.
+                    .frame(egui::Frame::new().inner_margin(egui::Margin {
+                        right: design::S as i8,
+                        ..Default::default()
+                    }))
+                    .show_inside(ui, |ui| {
+                        notes.expire_event_link_undo(true, book);
+                        notes.event_link_undo(ui);
+                        self.list(ui, book, sessions)
+                    });
+            },
+        );
     }
 }
 

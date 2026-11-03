@@ -104,6 +104,9 @@ Live run rows keep their first condition and shorten change bonuses first. Setup
 shows places once every present participant has initiative. Recording recovery
 keeps its state in the session list; a missing input offers **Choose an input**.
 **Process again** reuses the raw transcript and names what it sends in its confirmation.
+**Continue processing** also names what it sends. With a complete transcript, it says
+that the audio is not sent again. Recording silence has no elapsed time in the rail;
+hover shows how much audio was recorded.
 
 Library has **New entry** in its header. Its form opens in the reader column and closes after creation. World has **New ▾** for a plain note, a note with a type, an NPC, a location, or a generated NPC. List headings use capitals and a count. Page headers show state or nonzero counts beside the title, with a rule and an `L` gap below. Counts use thousands separators.
 

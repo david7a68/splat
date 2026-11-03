@@ -336,6 +336,17 @@ fn processing_destination(settings: &ProcessingSettings) -> String {
     )
 }
 
+fn recording_destination(settings: &ProcessingSettings, recording: &Recording) -> String {
+    if recording.transcript && processing::transcript_short_of(&recording.path).is_none() {
+        format!(
+            "Continue processing sends the raw transcript, this session's name, notes and events to {}. The audio is not sent again.",
+            processing_llm(settings)
+        )
+    } else {
+        processing_destination(settings)
+    }
+}
+
 pub fn processed_warning() -> Status<'static> {
     Status {
         icon: icons::WARN,
@@ -351,6 +362,7 @@ fn plan_summary(summary: &str) -> String {
         .map(|part| part.replace(' ', "\u{a0}"))
         .collect::<Vec<_>>()
         .join(" ·\u{a0}")
+        .replace("Ended ·\u{a0}Round", "Ended\u{a0}·\u{a0}Round")
 }
 
 /// The recording count belongs to the tab's label and click target.
@@ -951,7 +963,7 @@ fn session_row(
     )
 }
 
-fn recording_detail(words: &str) -> String {
+fn recording_detail(words: &str, missing_input: bool) -> String {
     if let Some(cancelled) = words.strip_prefix("Processing cancelled: ") {
         if let Some(tail) = cancelled.strip_prefix("Transcribing part ") {
             let part = tail.split('.').next().unwrap_or(tail);
@@ -961,7 +973,15 @@ fn recording_detail(words: &str) -> String {
         return format!("Cancelled during {step}. Continue processing goes on from there.");
     }
     if words.starts_with("Stopped by itself:") {
-        return format!("{}. Check the microphone in", words.trim_end_matches('.'));
+        return format!(
+            "{}. {}",
+            words.trim_end_matches('.'),
+            if missing_input {
+                "Choose an input, then record again."
+            } else {
+                "Check the microphone, then record again."
+            }
+        );
     }
     let detail = words.strip_prefix("Failed: ").unwrap_or(words);
     if let Some((step, rest)) = detail.split_once(", ")
@@ -1111,7 +1131,7 @@ impl Sessions {
             .filter(|live| matches!(live.recorder.health(), Health::Stalled | Health::Stopped(_)))
             .map(|live| {
                 format!(
-                    "{}: not saving audio after {}. What was saved is kept. Record again starts a new file.",
+                    "The recording of {} is not saving audio after {}. What was saved is kept. Record again starts a new file.",
                     live.label,
                     spoken_length(live.recorder.seconds())
                 )
@@ -1855,19 +1875,25 @@ impl Sessions {
                 .map(|status| status.word.to_owned());
         };
         let (_, word, _) = self.recording_status()?;
-        Some(if word == "Not saving audio" {
-            word.to_owned()
-        } else {
-            format!(
-                "{} {}",
-                if word == "Recording silence" {
-                    "Silence"
-                } else {
-                    word
-                },
+        Some(
+            if matches!(word, "Not saving audio" | "Recording silence") {
+                word.to_owned()
+            } else {
+                format!("{} {}", word, clock(live.recorder.seconds()))
+            },
+        )
+    }
+
+    pub fn recording_hover(&self) -> Option<String> {
+        if let Some(live) = &self.live
+            && *live.recorder.health() == Health::Silent
+        {
+            return Some(format!(
+                "Recording silence · {} recorded",
                 clock(live.recorder.seconds())
-            )
-        })
+            ));
+        }
+        self.recording_detail()
     }
 
     /// The word the rail keeps in view. A failed recording cannot look like a live one.
@@ -3576,7 +3602,10 @@ impl Sessions {
                         event.summary(None)
                     };
                     let row = ui.push_id(event.id.clone(), |ui| {
-                        plan_row(ui, &widths, if is_open { icons::DOWN } else { icons::NEXT }, |ui| {
+                        let row_widths = if event.run.is_some() && (running || saved.is_none()) {
+                            [width - Density::Read.control() - design::S, Density::Read.control()]
+                        } else { widths };
+                        plan_row(ui, &row_widths, if is_open { icons::DOWN } else { icons::NEXT }, |ui| {
                             if plan_link(ui, &label, is_open).clicked() { toggle = Some(event.id.clone()); }
                         }, |ui| {
                             if running {
@@ -3666,7 +3695,10 @@ impl Sessions {
                     any = true;
                     let running = plan.open_run.is_some() && plan.open_encounter == Some(fight.name.as_str());
                     ui.push_id((&fight.path, position), |ui| {
-                        plan_row(ui, &widths, if self.open_planned.as_ref() == Some(&fight.path) { icons::DOWN } else { icons::NEXT }, |ui| {
+                        let row_widths = if running {
+                            [width - Density::Read.control() - design::S, Density::Read.control()]
+                        } else { widths };
+                        plan_row(ui, &row_widths, if self.open_planned.as_ref() == Some(&fight.path) { icons::DOWN } else { icons::NEXT }, |ui| {
                             if plan_link(ui, &fight.name, self.open_planned.as_ref() == Some(&fight.path)).clicked() {
                                 self.open_planned = (self.open_planned.as_ref() != Some(&fight.path)).then(|| fight.path.clone());
                             }
@@ -4243,6 +4275,10 @@ impl Sessions {
                 .color(c.muted),
         );
         let stored = &recording.status;
+        let missing_input = settings.input_missing()
+            || stored
+                .as_ref()
+                .is_some_and(|words| words.to_lowercase().contains("no such device"));
         let (icon, word, color) = if live {
             self.recording_status()
                 .unwrap_or((icons::RECORD, "Recording", c.recording))
@@ -4284,20 +4320,14 @@ impl Sessions {
             ui.add(egui::Label::new(Type::Small.rich(ui, format!("Not saving audio after {}. What was saved is kept. Record again starts a new file.", spoken_length(live.recorder.seconds()))).color(c.muted)).wrap());
         }
         if let Some(words) = stored.as_ref().filter(|_| !live && !processing) {
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.add(
-                    egui::Label::new(Type::Small.rich(ui, recording_detail(words)).color(c.muted))
-                        .wrap(),
-                );
-                if words.starts_with("Stopped by itself:")
-                    && ui
-                        .add(egui::Link::new(Type::Small.rich(ui, " Settings")))
-                        .clicked()
-                {
-                    self.wants_recording_input = true;
-                }
-            });
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, recording_detail(words, missing_input))
+                        .color(c.muted),
+                )
+                .wrap(),
+            );
         }
         if let Some(warning) = recording.warning.as_ref().filter(|_| !live && !processing) {
             design::message(ui, Tone::Warning, warning);
@@ -4344,6 +4374,14 @@ impl Sessions {
                     .as_ref()
                     .is_some_and(|words| words.starts_with("Stopped by itself:"))
             {
+                if missing_input
+                    && Action::secondary("Choose an input")
+                        .density(Density::Read)
+                        .show(ui)
+                        .clicked()
+                {
+                    self.wants_recording_input = true;
+                }
                 record_again = Action::secondary("Record again")
                     .density(Density::Read)
                     .blocked_if(
@@ -4901,34 +4939,6 @@ impl Sessions {
             self.reading_view(ui, book);
             return;
         }
-        let offers_process = self.recordings.iter().any(|recording| {
-            !recording.summary
-                && self
-                    .live
-                    .as_ref()
-                    .is_none_or(|live| live.recorder.path() != recording.path)
-                && self
-                    .job
-                    .as_ref()
-                    .is_none_or(|(job, _)| job.recording != recording.path)
-        });
-        if offers_process
-            && self.live.is_none()
-            && self.job.is_none()
-            && settings.problem().is_none()
-        {
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-                ui.add(
-                    egui::Label::new(
-                        Type::Small
-                            .rich(ui, processing_destination(settings))
-                            .color(colors().muted),
-                    )
-                    .wrap(),
-                );
-            });
-        }
         let recordings = self.recordings.clone();
         if recordings.is_empty() {
             ui.add_space(design::M);
@@ -4967,6 +4977,28 @@ impl Sessions {
                     ui.scope_builder(
                         egui::UiBuilder::new().id(("recording_row", &recording.path)),
                         |ui| {
+                            if !recording.summary
+                                && self.live.is_none()
+                                && self.job.is_none()
+                                && settings.problem().is_none()
+                            {
+                                ui.scope(|ui| {
+                                    ui.set_max_width(
+                                        ui.available_width().min(design::READER_MEASURE),
+                                    );
+                                    ui.add(
+                                        egui::Label::new(
+                                            Type::Small
+                                                .rich(
+                                                    ui,
+                                                    recording_destination(settings, recording),
+                                                )
+                                                .color(colors().muted),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
+                            }
                             self.recording_row(ui, recording, settings, book);
                         },
                     );
@@ -5181,12 +5213,11 @@ impl Sessions {
                 .find(|note| Some(note.id) == current)
                 .map(|note| format!("Open Session {}", note.number));
             let mut open = false;
-            ui.horizontal_wrapped(|ui| {
+            if let Some(next) = next {
+                open = design::message_with_action(ui, Tone::Warning, &words, &next);
+            } else {
                 design::message(ui, Tone::Warning, &words);
-                if let Some(next) = next {
-                    open = design::link(ui, &next).clicked();
-                }
-            });
+            }
             if open {
                 self.select(current);
             }
@@ -5974,6 +6005,13 @@ impl Sessions {
         self.notice_session = None;
         let session = self.selected.expect("an open session");
         let path = self.recordings[0].path.clone();
+        if matches!(progress, processing::Progress::Asking { .. }) {
+            let transcript = processing::transcript_path(&path);
+            fs::write(transcript,
+                "---\ntranscript_parts_done: 1\ntranscript_parts: 1\n---\n\nThe party held the bridge.\n")
+                .expect("a complete raw transcript before the LLM pass");
+            self.refresh_recordings();
+        }
         self.job = Some((Job::held(path, progress), session));
     }
 
