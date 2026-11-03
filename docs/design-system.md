@@ -384,7 +384,7 @@ icons are glyphs or painter shapes. `design::icons` names only the glyphs in use
   It is a reference, not a full inventory: some tokens and whole-screen parts, such as the
   run row and the dialogs, are seen in their own scenarios.
 - `visual_tests::ergonomics`: target size, accessible name, in view, overlap (including
-  over labels), clipped text (any ellipsis, or text past its pane's edge, read from the
+  over labels, except a label fully inside its own interactive ancestor), clipped text (any ellipsis, or text past its pane's edge, read from the
   painted shapes), keyboard reach, and the workflow goals. Each check except the workflow
   goals has a seeded failure in its unit tests. Workflow goals were shown to fail by breaking
   the app for one run.
@@ -412,7 +412,7 @@ Library keeps search and the selected result when its scope changes. Empty categ
 
 Inline creation forms use a Label title, fields, then a named Create action, its Small blocked reason, an L gap, and quiet Cancel. A Library draft states its cause once in the existing save row; controls that share the cause use its hover text. Typing never inserts a line above the editor. Campaign save state also belongs only in its save row. Lookup Back and Open in Library share the title line. Plain World notes use one-line rows. A typed table roll has the well fill, a centred placeholder, and the dice as its column heading. Fixed table headers cover passing rows with page fill and a hairline.
 
-Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. The add-campaign form closes after a successful add.
+Settings uses `CAMPAIGNS` and `D&D BEYOND ACCOUNT` group headings in both layouts. In the compact layout, the open account form replaces the status line and its `Connect…` link. The account verb is `Connect`; states include `Not connected` and `Signed out of D&D Beyond`. A keyring warning owns its `Connect again` action. `Disconnect` is quiet and follows the trust text. A quiet action on its own line aligns its word with the text above it; its target can extend into the gutter. The add-campaign form closes after a successful add.
 
 Settings shows one Connecting status, and Cancel aligns with the column. Connect is primary when a cookie is entered, no campaign form is open and no run owns the primary action. An unchanged campaign form blocks Save details with No changes to save. Settings leaves its header context empty; campaign counts stay on their list heading. The rail shortens Connected · not remembered to Not remembered; its hover text and accessible name keep the full state. The import form keeps the campaign name in its field and omits the remote identifier, repeated heading and open row's Add action. An API key saved for another service keeps Save key visible with Paste a key first; removing that other key is a separate quiet action.
 
@@ -501,5 +501,5 @@ Encounter drafts keep Save or discard to switch campaign on their save row.
 A blocked Start fight shows Close the open run first beside it. Clean group saves use
 No changes to save beside Save group, with no second clean status.
 NPC search results keep CR, HP and AC in fixed columns and put NPC · as Guard after AC.
-An offline Party now line offers Connect to sync. Initiative tie arrows have one fixed slot
+An offline Party now line offers Connect to sync. The first-sheet-read help keeps its Settings link inside the Small sentence. Initiative tie arrows have one fixed slot
 before the ordinal and use the standard setup row height.

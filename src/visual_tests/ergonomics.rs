@@ -1222,7 +1222,7 @@ mod tests {
         let mut label = control("Bloodied", at(20.0, 40.0, 70.0, 16.0));
         label.role = Role::Label;
         label.label_owner = Some(row.id);
-        assert!(!checks_for(&[row.clone(), label.clone()]).contains(&"no-overlap".to_owned()));
+        assert!(!checks_for(&[row, label]).contains(&"no-overlap".to_owned()));
     }
 
     #[test]

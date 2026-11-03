@@ -508,28 +508,15 @@ impl Settings {
         if (!matches!(account, Account::NotConnected | Account::Failed)
             || self.warning.is_some()
             || self.saved_session)
-            && ui
-                .scope_builder(
-                    egui::UiBuilder::new().max_rect({
-                        let mut rect = ui.available_rect_before_wrap();
-                        // The quiet button's text starts at the column edge.
-                        if account == Account::Busy {
-                            rect.min.x -= design::S;
-                        }
-                        rect
-                    }),
-                    |ui| {
-                        design::Action::quiet(if account == Account::Busy {
-                            "Cancel"
-                        } else {
-                            "Disconnect"
-                        })
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                    },
-                )
-                .inner
+            && design::Action::quiet(if account == Account::Busy {
+                "Cancel"
+            } else {
+                "Disconnect"
+            })
+            .line_start()
+            .density(Density::Read)
+            .show(ui)
+            .clicked()
         {
             self.disconnect(ui.ctx());
         }

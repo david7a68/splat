@@ -480,7 +480,13 @@ impl ProcessingSettings {
                     .color(colors().document.saved),
             );
         }
-        if (saved || held) && Action::quiet(&remove).name(&remove_name).show(ui).clicked() {
+        if (saved || held)
+            && Action::quiet(&remove)
+                .line_start()
+                .name(&remove_name)
+                .show(ui)
+                .clicked()
+        {
             *self.held(slot) = None;
             if let Some(tx) = self.replies.as_ref().map(|(tx, _)| tx.clone()) {
                 let ctx = ui.ctx().clone();

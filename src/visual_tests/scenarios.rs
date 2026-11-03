@@ -2613,10 +2613,21 @@ pub mod library_to_encounter {
         d.begin_task();
 
         d.click(SAVE_ENCOUNTER);
+        let detail = d
+            .place_of(&format!("6. {COPY_NAME}"))
+            .map_or_else(String::new, |title| {
+                d.painted_in(egui::Rect::from_min_max(
+                    title.left_bottom(),
+                    pos2(title.left() + 400.0, title.bottom() + 18.0),
+                ))
+                .replace('\u{a0}', " ")
+            });
         d.observe(
             "C17",
-            d.has_containing("HP 150 · AC 17 · CR 10 · Campaign"),
-            "The roster identifies the campaign-owned copy",
+            ["HP 150", "AC 17", "CR 10", "Campaign"]
+                .iter()
+                .all(|word| detail.contains(word)),
+            format!("The copied Aboleth's roster detail identifies its campaign source: {detail}"),
         );
         d.state("copy-in-encounter", Sizes::All);
         d.goal("save the encounter with the copy");

@@ -1235,16 +1235,26 @@ impl Splat {
                 }
                 design::rule(ui);
                 if self.settings_tab == SettingsTab::Recording {
-                    let clip = ui.available_rect_before_wrap().intersect(ui.clip_rect());
-                    egui::ScrollArea::vertical()
-                        .id_salt("recording_settings")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            ui.set_clip_rect(ui.clip_rect().intersect(clip));
-                            ui.add_space(design::L);
-                            ui.set_max_width(design::FORM_WIDTH + design::XXL);
-                            self.processing.show(ui);
-                        });
+                    // Line-start quiet actions use the gutter for their hit area.
+                    // Keep fields at the usual column edge inside the wider viewport.
+                    let mut viewport = ui.available_rect_before_wrap();
+                    viewport.min.x -= design::S;
+                    let clip = viewport.intersect(ui.clip_rect());
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(viewport), |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("recording_settings")
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.set_clip_rect(ui.clip_rect().intersect(clip));
+                                ui.add_space(design::L);
+                                let mut fields = ui.available_rect_before_wrap();
+                                fields.min.x += design::S;
+                                ui.scope_builder(egui::UiBuilder::new().max_rect(fields), |ui| {
+                                    ui.set_max_width(design::FORM_WIDTH + design::XXL);
+                                    self.processing.show(ui);
+                                });
+                            });
+                    });
                     return;
                 }
                 let blocked = self.blocked_switch();
