@@ -673,7 +673,7 @@ impl TimelinePage {
             // A session whose note has gone has nothing to open.
             if let Some(session) = event.session
                 && sessions.iter().any(|known| known.id == session)
-                && Action::quiet("Open this session").show(ui).clicked()
+                && design::link(ui, "Open this session").clicked()
             {
                 self.open_session = Some(session);
             }

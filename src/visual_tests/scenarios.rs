@@ -712,6 +712,18 @@ pub mod party {
             !d.has_containing(REPLACED),
             "Dismiss removes the report of where the edits went",
         );
+        d.app_mut()
+            .settings
+            .simulate(crate::settings::Account::NotConnected);
+        d.settle();
+        d.click("Connect to refresh");
+        d.observe(
+            "P26",
+            d.page_title().as_deref() == Some("Settings")
+                && d.focused_name().as_deref() == Some("Paste session cookie"),
+            "Connect to refresh opens Settings with the cookie field focused",
+        );
+        d.state("connect-to-refresh", Sizes::Default);
     }
     const FORCE_READ: &str = "Replace with D&D Beyond sheet";
     const CONNECT_FIRST: &str = "Open Settings";
@@ -5719,15 +5731,15 @@ pub mod session_plan {
         d.click(FIRST);
         d.observe(
             "S3",
-            d.has_containing("Ended in round"),
-            "A played fight states its last round",
+            d.has("Held the bridge · ended in round 1"),
+            "A played fight gives its result and last round on one line",
         );
         d.goal_within("T12.5", "read how a fight ended", 1);
         d.state("fight-in-place", Sizes::All);
         d.observe(
             "T12.5",
-            d.visible_text("7/41") && d.page_title().as_deref() == Some("Session"),
-            "Final HP reads in the plan, with no run to reopen",
+            d.visible_text("Kestrel 7/41") && d.page_title().as_deref() == Some("Session"),
+            "Final HP names each character in the plan, with no run to reopen",
         );
         d.click(FIRST);
 

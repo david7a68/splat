@@ -339,6 +339,19 @@ fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
     }
 }
 
+/// A played fight names its result and last round once, on the row's second line.
+fn played_fight_summary(event: &timeline::Event) -> String {
+    if let Some((outcome, round)) = event.result.rsplit_once(", round ") {
+        format!("{outcome} · ended in round {round}")
+    } else if let Some(round) = event.result.strip_prefix("Ended in round ") {
+        format!("Ended in round {round}")
+    } else if let Some(round) = event.result.strip_prefix("Round ") {
+        format!("Paused in round {round}")
+    } else {
+        event.result.clone()
+    }
+}
+
 /// The words of one of the plan's add menus.
 struct PlanMenu<'a> {
     word: &'a str,
@@ -2507,9 +2520,16 @@ impl Sessions {
                     let saved_fight = plan.fights.iter().find(|fight| fight.saved.as_ref()
                         .is_some_and(|saved| saved.id == event.run && event.run.is_some()));
                     let saved = saved_fight.and_then(|fight| fight.saved.as_ref()).filter(|_| !running);
-                    let summary = event.summary(None);
+                    let row_widths = if event.run.is_some() && saved.is_none() {
+                        [width - Density::Read.control() - design::S, Density::Read.control()]
+                    } else { widths };
+                    let summary = if event.run.is_some() {
+                        played_fight_summary(event)
+                    } else {
+                        event.summary(None)
+                    };
                     let row = ui.push_id(event.id.clone(), |ui| {
-                        plan_row(ui, &widths, event.kind.icon(), |ui| {
+                        plan_row(ui, &row_widths, event.kind.icon(), |ui| {
                             if design::wrapped_link(ui, &label).clicked() { toggle = Some(event.id.clone()); }
                             if running {
                                 if design::status_link(ui, Status { icon: icons::RUN,
@@ -2843,61 +2863,65 @@ impl Sessions {
                 );
             }
             Ok(summary) => {
-                wrapped_words(
-                    ui,
-                    Type::Small,
-                    format!(
-                        "{} in round {}",
-                        if summary.ended { "Ended" } else { "Paused" },
-                        summary.round
-                    ),
-                    colors().muted,
-                );
                 let known = |n: Option<i64>| n.map_or_else(|| "?".to_owned(), |n| n.to_string());
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = design::XS;
-                    for row in summary.rows.iter().filter(|row| row.player) {
-                        let initials: String = row
-                            .name
-                            .split_whitespace()
-                            .filter_map(|part| part.chars().next())
-                            .collect();
-                        let hp = format!("{}/{}", known(row.hp), known(row.max_hp));
-                        let mut detail = format!("{}: {hp} HP", row.name);
-                        if row.temporary_hp > 0 {
-                            detail.push_str(&format!(
-                                " · {}",
-                                design::temp_hp_text(row.temporary_hp)
-                            ));
-                        }
-                        if !row.present {
-                            detail.push_str(" · Absent");
-                        }
-                        for condition in &row.conditions {
-                            detail.push_str(&format!(" · {condition}"));
-                        }
-                        let mut words = egui::text::LayoutJob::default();
-                        let format = |color| egui::TextFormat {
-                            font_id: Type::Small.font(ui),
-                            color,
-                            ..Default::default()
-                        };
-                        words.append(&initials, 0.0, format(colors().muted));
-                        words.append(
-                            &format!(" {hp}"),
-                            0.0,
-                            format(design::hp_color(design::hp_state(row.hp, row.max_hp))),
-                        );
-                        if row.temporary_hp > 0 {
-                            words.append(
-                                &format!(" {}", design::temp_hp_text(row.temporary_hp)),
-                                0.0,
-                                format(colors().hp.temp),
-                            );
-                        }
-                        ui.label(words).on_hover_text(detail);
+                let mut cells = Vec::new();
+                let mut widest = 0.0_f32;
+                for row in summary.rows.iter().filter(|row| row.player) {
+                    let first = row.name.split_whitespace().next().unwrap_or(&row.name);
+                    let hp = format!("{}/{}", known(row.hp), known(row.max_hp));
+                    let mut detail = format!("{}: {hp} HP", row.name);
+                    if row.temporary_hp > 0 {
+                        detail.push_str(&format!(" · {}", design::temp_hp_text(row.temporary_hp)));
                     }
-                });
+                    if !row.present {
+                        detail.push_str(" · Absent");
+                    }
+                    for condition in &row.conditions {
+                        detail.push_str(&format!(" · {condition}"));
+                    }
+                    let mut words = egui::text::LayoutJob::default();
+                    let format = |color| egui::TextFormat {
+                        font_id: Type::Small.font(ui),
+                        color,
+                        ..Default::default()
+                    };
+                    words.append(first, 0.0, format(colors().muted));
+                    words.append(
+                        &format!(" {hp}"),
+                        0.0,
+                        format(design::hp_color(design::hp_state(row.hp, row.max_hp))),
+                    );
+                    if row.temporary_hp > 0 {
+                        words.append(
+                            &format!(" {}", design::temp_hp_text(row.temporary_hp)),
+                            0.0,
+                            format(colors().hp.temp),
+                        );
+                    }
+                    widest = widest.max(ui.painter().layout_job(words.clone()).size().x);
+                    cells.push((words, detail));
+                }
+                let across = if 3.0 * widest + 2.0 * design::S <= ui.available_width() {
+                    3
+                } else {
+                    2
+                };
+                let cell_width =
+                    (ui.available_width() - (across - 1) as f32 * design::S) / across as f32;
+                egui::Grid::new(("played_party_hp", run))
+                    .num_columns(across)
+                    .min_col_width(cell_width)
+                    .max_col_width(cell_width)
+                    .min_row_height(Type::Small.line())
+                    .spacing(egui::vec2(design::S, design::XS))
+                    .show(ui, |ui| {
+                        for (at, (words, detail)) in cells.into_iter().enumerate() {
+                            ui.add(egui::Label::new(words).wrap()).on_hover_text(detail);
+                            if (at + 1) % across == 0 {
+                                ui.end_row();
+                            }
+                        }
+                    });
                 ui.horizontal(|ui| {
                     // Padding gives this short word a target of at least 24 px.
                     let log = design::link(ui, " Log ");
@@ -3599,9 +3623,23 @@ impl Sessions {
                     - design::number_width(ui, &note.date, &Type::Small.font(ui))
                     - design::S;
                 let title = design::words_that_fit(ui, &note.label(), &Type::Title.font(ui), room);
+                let baseline = |words: &str, kind: Type| {
+                    let galley =
+                        ui.painter()
+                            .layout_no_wrap(words.to_owned(), kind.font(ui), c.text);
+                    galley
+                        .rows
+                        .first()
+                        .and_then(|row| row.glyphs.first())
+                        .map_or(0.0, |glyph| glyph.pos.y)
+                };
+                let date_offset = baseline(&title, Type::Title) - baseline(&note.date, Type::Small);
                 ui.label(Type::Title.rich(ui, title).color(c.text))
                     .on_hover_text(note.label());
-                ui.label(Type::Small.rich(ui, &note.date).color(c.muted));
+                ui.vertical(|ui| {
+                    ui.add_space(date_offset.max(0.0));
+                    ui.label(Type::Small.rich(ui, &note.date).color(c.muted));
+                });
             });
         });
         self.record_line(ui, settings);

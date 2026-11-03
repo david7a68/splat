@@ -1448,6 +1448,8 @@ impl Splat {
         }
         if std::mem::take(&mut self.party.wants_settings) {
             self.page = Page::Settings;
+            self.settings_tab = SettingsTab::Account;
+            self.settings.focus_cookie = true;
         }
         if std::mem::take(&mut self.party.wants_link_page) {
             self.page = Page::Campaign;

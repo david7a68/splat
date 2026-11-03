@@ -155,8 +155,17 @@ impl Party {
 
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let c = colors();
+        let fetched = self
+            .reader
+            .selected
+            .as_ref()
+            .and_then(|id| self.reader.sheets.get(id))
+            .filter(|_| !self.combat.ready())
+            .map(|record| format!(" · Fetched {}", record_age(record)))
+            .unwrap_or_default();
+        let connect_reason = format!("Not connected{fetched} · Connect to refresh");
         let can_refresh = if session.is_none() {
-            Some("Connect to D&D Beyond first")
+            Some(connect_reason.as_str())
         } else if !linked {
             Some("Link this campaign to D&D Beyond first.")
         } else if self.reader.loading() {
@@ -175,7 +184,10 @@ impl Party {
                     .clicked();
             }
         });
-        if linked && let Some(reason) = can_refresh {
+        if linked
+            && session.is_some()
+            && let Some(reason) = can_refresh
+        {
             ui.label(Type::Small.rich(ui, reason).color(c.muted));
         }
         if refresh && let Some(session) = session.clone() {
@@ -212,11 +224,6 @@ impl Party {
             self.wants_link_page = open_link;
             return;
         }
-        let cached = self
-            .reader
-            .selected
-            .as_ref()
-            .and_then(|id| self.reader.sheets.get(id));
         let checked = self.reader.selected.as_ref().is_some_and(|id| {
             self.reader.online_ids.contains(id) && !self.reader.errors.contains_key(id)
         }) && self.reader.error.is_none();
@@ -245,15 +252,11 @@ impl Party {
             if self.reader.loading() {
                 crate::design::spinner(ui);
             }
-            let age = cached
-                .filter(|_| !self.combat.ready())
-                .map(|record| format!(" · Fetched {}", record_age(record)))
-                .unwrap_or_default();
             design::status(
                 ui,
                 Status {
                     icon: status_icon,
-                    word: &format!("{status_word}{age}"),
+                    word: &format!("{status_word}{fetched}"),
                     color: status_color,
                 },
             )
@@ -262,6 +265,12 @@ impl Party {
             } else {
                 "Sheets refresh automatically. Use Refresh party to request the latest data."
             });
+            if session.is_none() {
+                ui.label(Type::Small.rich(ui, "·").color(c.muted));
+                if design::link(ui, "Connect to refresh").clicked() {
+                    self.wants_settings = true;
+                }
+            }
         });
         if let Some(e) = &self.reader.error {
             design::message(ui, Tone::Error, e);

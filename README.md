@@ -171,7 +171,7 @@ moves nothing, and the row says so. A fight does not move the clock. The list in
 writes the body from it. An encounter run adds its own event when combat begins. New events and runs go to the newest
 session unless you choose another on the Timeline page. **Notes** (Ctrl+J) opens that session's note beside any page.
 
-A planned fight with a saved run offers **Resume**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight opens its final party HP with **Log**, **Whole run** and **Timeline** links.
+A planned fight with a saved run offers **Resume**. Its menu holds **Start a new run** and **Delete the saved run**, with undo for deletion. The open fight has a status link in the plan; the run strip keeps **Back to run**. A played fight shows its result and last round once. It opens a grid of final party HP with first names, then **Log**, **Whole run** and **Timeline** links.
 
 Session and Timeline use the same quiet **Add** strip: **Fight**, **Group** (plan only), **Day**, **Long rest**, **Short rest**, **Travel**, **Major event**. A new event opens with **Title** focused. On Timeline, **Adds to** chooses the session. The detail column opens only when an event is selected. Its title, save state, **Copy link** and row menu stay above the fields as they scroll. **Place after** sets the event order.
 
@@ -351,7 +351,7 @@ are in Settings and in **Campaign → Link and folder**.
 
 Open **Party** to read the linked D&D Beyond party. Select a character
 and browse Overview, Actions, Spells, Equipment, and Features. **Refresh party**
-gets the latest sheets and states why it cannot refresh when signed out. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
+gets the latest sheets. When signed out, **Connect to refresh** in the status line opens Settings with the cookie field focused. Saves and skills use two or three columns. A sheet list gets a filter only when it has more than eight entries. **Technical details** keeps source and rule checks out of the main sheet. Computed totals come directly from D&D Beyond. Local
 creature records remain available offline, and open sheets use the event stream
 with polling fallback. No character changes are sent to D&D Beyond. See [viewer details and streaming findings](docs/character-viewer.md).
 

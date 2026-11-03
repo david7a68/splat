@@ -2646,9 +2646,6 @@ pub struct Carry {
 
 /// One fight after the fact: how each participant ended, and what the log says.
 pub struct FightSummary {
-    pub round: u64,
-    /// Combat ended, so these are the final values. A run can also be closed mid-fight.
-    pub ended: bool,
     pub rows: Vec<FightRow>,
     pub log: Vec<String>,
 }
@@ -2692,8 +2689,6 @@ pub fn party_at_end(path: &Path, campaign: Uuid) -> Result<BTreeMap<Uuid, (i64, 
 pub fn fight_summary(path: &Path, campaign: Uuid) -> Result<FightSummary, String> {
     let state = read_saved(path, campaign)?.state;
     Ok(FightSummary {
-        round: state.round,
-        ended: matches!(state.phase, Phase::Ended { .. }),
         rows: state
             .order
             .iter()

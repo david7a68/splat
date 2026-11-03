@@ -199,7 +199,7 @@ The Session page is a list the DM works down, beside the note. A row is an icon,
 the right. A row opens in place, and its fields use the same form parts as the Timeline page. The first fight to come has
 the primary button when no run is open, and the others the secondary. A saved unfinished run offers Resume, with Start a new run and Delete the saved run in its menu. The open run has a status link; the strip owns the primary. The word for a fight is **Start
 fight**, on this page and on Encounters. Add buttons stay at the foot of the plan, and a message opens above them, so
-that they do not move under the pointer. An empty plan uses `empty_state` above the strip. A played fight opens its last round, one line of party HP, and quiet Log, Whole run and Timeline links. Remove stays in its row menu. A long rest and its full-HP ruling share one message and one Undo; Not at full waits inside the opened row. In a page narrower than 720 px, the plan and the note have a tab each.
+that they do not move under the pointer. An empty plan uses `empty_state` above the strip. A played fight shows its result and last round once, on its second line. Its final party HP uses first names in a grid of two or three cells per line, then quiet Log, Whole run and Timeline links. Hover gives full names and conditions. Remove stays in its row menu, aligned with the name. A long rest and its full-HP ruling share one message and one Undo; Not at full waits inside the opened row. In a page narrower than 720 px, the plan and the note have a tab each.
 
 ## The live run
 

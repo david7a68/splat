@@ -12,6 +12,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 pub struct Settings {
     cookie_input: String,
+    pub focus_cookie: bool,
     session: Option<Session>,
     worker: Option<Worker>,
     generation: u64,
@@ -61,6 +62,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             cookie_input: String::new(),
+            focus_cookie: false,
             session: None,
             worker: None,
             generation: 0,
@@ -373,6 +375,10 @@ impl Settings {
                         .desired_width(420.0_f32.min(ui.available_width() - 2.0 * design::S)),
                 );
                 design::named(ui, &response, "Paste session cookie");
+                if std::mem::take(&mut self.focus_cookie) {
+                    response.request_focus();
+                    response.scroll_to_me(Some(egui::Align::Center));
+                }
             });
             ui.checkbox(&mut self.remember, "Remember session in desktop keyring");
             if self.cookie_input.trim().is_empty() {
