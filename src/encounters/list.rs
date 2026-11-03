@@ -154,7 +154,7 @@ pub(super) fn list_row(
                 );
                 let warning = visible_detail
                     .split(" · ")
-                    .position(|part| part == "Changed elsewhere");
+                    .position(|part| matches!(part, "Changed elsewhere" | "Offered in no fight"));
                 let mut job = egui::text::LayoutJob::default();
                 for (index, part) in visible_detail.split(" · ").enumerate() {
                     if index > 0 {
@@ -383,10 +383,8 @@ pub(super) fn ready_list(
                 || (run.source.is_none() && run.encounter == template.name)
         });
         let open = unfinished.is_some_and(|run| live.is_some_and(|live| live.id == run.id));
-        let short_reason = if open {
-            unfinished.map(|run| format!("Running · {}", run_state_word(run, false)))
-        } else if row.unfinished_run {
-            Some("Paused · resume above".to_owned())
+        let short_reason = if open || row.unfinished_run {
+            Some("Resume it in In progress".to_owned())
         } else if template.summary.as_deref().is_none_or(str::is_empty) {
             Some("Add participants first".to_owned())
         } else {
@@ -407,7 +405,11 @@ pub(super) fn ready_list(
             ui,
             &template.path,
             &template.name,
-            template.summary.as_deref().unwrap_or_default(),
+            template
+                .summary
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .unwrap_or("No participants yet"),
             false,
             |ui| {
                 row_menu(ui, &template.name, |ui| {

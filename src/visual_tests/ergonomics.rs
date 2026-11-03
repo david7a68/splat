@@ -370,6 +370,38 @@ const ELISION_ALLOWED: &[(&str, &str)] = &[(
     "a folder path in a text field",
 )];
 
+fn opaque_panes(shape: &egui::Shape, clip: egui::Rect, panes: &mut Vec<egui::Rect>) {
+    match shape {
+        egui::Shape::Vec(items) => {
+            for item in items {
+                opaque_panes(item, clip, panes);
+            }
+        }
+        egui::Shape::Rect(pane) if pane.fill.a() == 255 => {
+            let rect = pane.rect.intersect(clip);
+            if rect.width() >= 100.0
+                && rect.height() >= 100.0
+                && (pane.rect.left() <= clip.left() + OVERLAP_TOLERANCE
+                    || pane.rect.right() >= clip.right() - OVERLAP_TOLERANCE)
+                && (pane.rect.top() <= clip.top() + OVERLAP_TOLERANCE
+                    || pane.rect.bottom() >= clip.bottom() - OVERLAP_TOLERANCE)
+            {
+                panes.push(rect);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn pane_covers_edge(rect: egui::Rect, text: egui::Rect) -> bool {
+    // Whole windows and popups intentionally hide their background. A sibling pane
+    // clips one edge of text whose other edge is still visible.
+    rect.top() <= text.top()
+        && rect.bottom() >= text.bottom()
+        && rect.intersect(text).width() > OVERLAP_TOLERANCE
+        && !rect.contains_rect(text)
+}
+
 /// Painted text that lost its end to an ellipsis, or runs past the edge of its pane. A
 /// tooltip does not help a DM reading across a table, so all of it is reported, whatever
 /// painted it, except the named field above and the specified Lookup detail suffix.
@@ -408,13 +440,54 @@ pub fn cut_text(
         }
     }
     let mut found = Vec::new();
-    for clipped in shapes {
+    let panes: Vec<_> = shapes
+        .iter()
+        .enumerate()
+        .flat_map(|(index, clipped)| {
+            let mut panes = Vec::new();
+            opaque_panes(&clipped.shape, clipped.clip_rect, &mut panes);
+            panes.into_iter().map(move |rect| (index, rect))
+        })
+        .collect();
+    for (index, clipped) in shapes.iter().enumerate() {
         search(
             &clipped.shape,
             clipped.clip_rect,
             horizontal_regions,
             &mut found,
         );
+        // A later opaque pane can hide an edge even when the text's own clip is wide.
+        fn covered(
+            shape: &egui::Shape,
+            clip: egui::Rect,
+            later: &[(usize, egui::Rect)],
+            index: usize,
+            found: &mut Vec<(String, egui::Rect, &'static str)>,
+        ) {
+            match shape {
+                egui::Shape::Vec(items) => {
+                    for item in items {
+                        covered(item, clip, later, index, found);
+                    }
+                }
+                egui::Shape::Text(text) => {
+                    let bounds = text.visual_bounding_rect().intersect(clip);
+                    if bounds.is_positive()
+                        && later
+                            .iter()
+                            .any(|(at, pane)| *at > index && pane_covers_edge(*pane, bounds))
+                    {
+                        found.push((
+                            text.galley.job.text.clone(),
+                            bounds,
+                            "Covered by a later pane",
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        covered(&clipped.shape, clipped.clip_rect, &panes, index, &mut found);
     }
     found
         .into_iter()
@@ -1122,6 +1195,43 @@ mod tests {
         let mut cut = control("Save", at(10.0, 10.0, 80.0, 30.0));
         cut.clip = Some(at(0.0, 0.0, 50.0, 300.0));
         assert!(checks_for(&[cut]).contains(&"clipped".to_owned()));
+    }
+
+    #[test]
+    fn clipped_fails_when_a_later_pane_covers_the_end_of_text() {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(400.0, 300.0))
+            .build(|ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.painter().text(
+                        egui::pos2(100.0, 50.0),
+                        egui::Align2::LEFT_TOP,
+                        "Saved beside the roster",
+                        egui::FontId::proportional(18.0),
+                        egui::Color32::BLACK,
+                    );
+                    ui.painter().rect_filled(
+                        at(180.0, 0.0, 220.0, 300.0),
+                        0.0,
+                        egui::Color32::WHITE,
+                    );
+                });
+            });
+        harness.run_steps(2);
+        let found = cut_text(
+            &harness.output().shapes,
+            &[],
+            &[],
+            "seeded",
+            "covered",
+            "400x300",
+        );
+        assert!(
+            found
+                .iter()
+                .any(|v| v.detail.starts_with("Covered by a later pane: Saved")),
+            "{found:?}"
+        );
     }
 
     #[test]

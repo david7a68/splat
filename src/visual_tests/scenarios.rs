@@ -766,7 +766,7 @@ pub mod encounter_build {
     const SAVED_FIRST_SLOT: &str = "1. Brannoch Vale";
     const SYNC_OPTION: &str = "Sync party with D&D Beyond";
     const PARTY_NOW: &str = "Party now: HP";
-    const LIVE_ROW: &str = "HP\u{a0}11/41 · Bloodied · AC\u{a0}15 · Poisoned";
+    const LIVE_ROW: &str = "HP\u{a0}11/41 · AC\u{a0}15 · Bloodied · Poisoned";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
     const RESULT_NAME: &str = "Wolf";
@@ -1786,7 +1786,7 @@ pub mod prep_to_table {
         );
         d.observe(
             "T4.3",
-            !before.is_empty() && before == after && d.visible_text("Absent ·"),
+            !before.is_empty() && before == after && d.visible_text("Absent\u{a0}·"),
             format!("Marking a player absent moves no field, and the row says so: {before:?} then {after:?}"),
         );
         d.click(&format!("Absent: {player}"));
@@ -1896,10 +1896,29 @@ pub mod prep_to_table {
             .iter()
             .find(|node| node.name.starts_with("Move ") && node.name.contains(" before "))
             .map(|node| node.name.clone());
+        let places = |d: &Driver<'_>| -> Vec<String> {
+            d.nodes()
+                .iter()
+                .filter(|node| node.name.starts_with("Place for "))
+                .map(|node| node.name.clone())
+                .collect()
+        };
+        let before = places(d);
         if let Some(tie) = tie {
             d.click(&tie);
         }
         d.expect("Undo: tie order");
+        let after = places(d);
+        let first = after
+            .iter()
+            .find_map(|place| place.strip_prefix("Place for ")?.strip_suffix(": 1st"))
+            .unwrap_or_default()
+            .to_owned();
+        d.observe(
+            "P1",
+            before != after && !first.is_empty() && d.visible_text(&format!("{first} goes first")),
+            "Tie arrows update the fixed places, and the ready line names the first participant",
+        );
         d.state("shared-roll-order", Sizes::Default);
         // Tied rows keep their arrows in two fixed places, so that a second click on one lands
         // on the same arrow.
@@ -1924,6 +1943,11 @@ pub mod prep_to_table {
         d.expect(ROUND);
         d.expect(CURRENT_TURN);
         d.state("first-turn", Sizes::All);
+        d.observe(
+            "P1",
+            current_participant(d).as_deref() == Some(first.as_str()),
+            "Combat starts with the participant named in setup",
+        );
         d.goal("begin combat");
     }
 }
@@ -2552,7 +2576,7 @@ pub mod library_to_encounter {
         d.click(SAVE_ENCOUNTER);
         d.observe(
             "C17",
-            d.has_containing("CR 10 · HP 150 · AC 17 · Campaign"),
+            d.has_containing("HP 150 · AC 17 · CR 10 · Campaign"),
             "The roster identifies the campaign-owned copy",
         );
         d.state("copy-in-encounter", Sizes::All);
@@ -2868,6 +2892,11 @@ pub mod column_resize {
             "Lookup is narrower before its capture",
         );
         d.state("lookup-narrow-beside-wide-rail", Sizes::All);
+        d.observe_both(
+            "iter-4-F1",
+            "The dock label names exactly one participant with Lookup open",
+            |d| d.dock_names_one_participant(),
+        );
         d.click(NAV_LOOKUP);
         d.expect(NEXT_TURN);
         d.click(NEXT_TURN);
@@ -3348,6 +3377,19 @@ pub mod run_roster_conflict {
         );
         d.app_mut().encounters.simulate_sheet_update(LONG_MESSAGE);
         d.settle();
+        for size in [SMALL, DEFAULT] {
+            let fits = d.at_size(size, |d| {
+                let right = d.place_of(NEXT_TURN).unwrap().right();
+                d.place_of("Absent")
+                    .is_some_and(|rect| rect.right() <= right + 1.0)
+                    && d.visible_text("Saved")
+            });
+            d.observe(
+                "R1",
+                fits,
+                format!("At {size:?}, the dock and save status fit the roster column"),
+            );
+        }
         d.state("message-on-one-line", Sizes::Default);
         let cut = rows_cut(d);
         d.observe(
@@ -5264,7 +5306,8 @@ pub mod encounter_groups {
 
         // An existing group: its changes are out in the open, with the values they replace.
         d.click(&format!("Edit group {GROUP_RIVALS}"));
-        d.expect("3 creatures · XP 600");
+        d.expect("MEMBERS 3");
+        d.expect("XP 600");
         d.state("group-editor", Sizes::All);
         d.observe(
             "T13.3",
@@ -5276,6 +5319,14 @@ pub mod encounter_groups {
         d.expect("Maximum HP: how it changes");
         d.state("group-member-changes", Sizes::All);
         d.check_tab_order("group editor, changes open");
+        d.click("Done with changes");
+        d.observe(
+            "F5",
+            !d.has("Maximum HP: how it changes")
+                && d.in_view_containing("Changes for Ember Cultist"),
+            "Done closes the form and returns to its member",
+        );
+        d.state("group-changes-done", Sizes::Default);
         d.click("Back to encounters");
 
         // A group that cannot be added says why, in the editor, and its change says why.
@@ -5306,8 +5357,8 @@ pub mod encounter_groups {
         // A new group cannot be saved empty, and it says so.
         d.click(NEW_GROUP);
         d.type_text("Ash Pack");
-        d.click(SAVE_GROUP);
-        d.expect("This group is empty");
+        assert!(d.is_disabled(SAVE_GROUP));
+        d.expect("Add a creature first");
         d.state("group-rejected-empty", Sizes::Default);
         d.type_into(FIND, "wolf");
         d.state("group-find-creature", Sizes::Default);
@@ -5342,14 +5393,15 @@ pub mod encounter_groups {
         d.check_tab_order("run, group panel");
         d.observe(
             "T13.1",
-            d.has_containing("3 × Goblin Warrior") && d.visible_text("3 members · XP 150"),
+            d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior")
+                && d.visible_text("3 members · XP 150"),
             "The panel lists each group's members and total XP",
         );
         d.observe(
             "T13.1",
             d.visible_text("XP not known")
                 && d.has_containing("Member 1, Unknown creature: not in this campaign's packages")
-                && d.visible_text("1 × Unknown creature"),
+                && d.visible_text("1\u{a0}×\u{a0}Unknown\u{a0}creature"),
             "A broken member has a readable name in both its summary and its fault",
         );
         d.observe(
@@ -5449,6 +5501,22 @@ pub mod encounter_groups {
         d.expect(RIVAL_NAME);
         d.state("a-named-side-on-its-turn", Sizes::Default);
         d.goal("add groups by a total and by dragging");
+
+        // A new arrival tie is checked outside the existing measured workflow.
+        d.type_into(TOTAL_FOR_RIVALS, "14");
+        d.click(&add_group(GROUP_RIVALS));
+        d.expect("placed after");
+        let before = current_participant(d);
+        d.click("Move before");
+        d.observe(
+            "F4",
+            current_participant(d) == before && d.has_containing("Undo: move arrival before"),
+            "Move before keeps the current turn and offers Undo",
+        );
+        d.state("tied-arrival-moved-before", Sizes::All);
+        d.click_containing("Undo: move arrival before");
+        d.click_containing("Undo: add Rival Team");
+        d.begin_task();
 
         // Setup has the same panel.
         close_run(d);
@@ -5569,7 +5637,7 @@ pub mod encounter_history {
                     == 1
                 && !d.has(RESUME)
                 && d.is_disabled(RUN_ENCOUNTER)
-                && d.visible_text("Running · Round 2"),
+                && d.visible_text("Resume it in In progress"),
             "Keep in Ready adds only a blocked Start fight with a reason, never a second run link",
         );
         d.state("keep-in-ready-blocked", Sizes::All);
@@ -5636,7 +5704,8 @@ pub mod encounter_owned_groups {
             "T13.6",
             d.has(&format!("Group name: {GROUP_SHRINE}"))
                 && d.has_containing("Goblin Warrior")
-                && d.has_containing("2 creatures · XP"),
+                && d.has("MEMBERS 2")
+                && d.has_containing("XP 100"),
             "A section shows the group's name and its members",
         );
 
@@ -5797,7 +5866,7 @@ pub mod run_overrides {
             !d.has_containing(BASE_AND_CHANGED)
                 && d.visible_text("printed 33")
                 && d.has_containing("Attack bonus: As printed → +1 on each attack")
-                && d.has_containing("add\u{a0}by\u{a0}hand")
+                && d.has_containing("add by hand")
                 && d.has_containing("Speed: 30 ft → 40 ft")
                 && d.visible_text("Speed 30 ft. → 40 ft · add by hand")
                 && d.has_containing("Changed"),

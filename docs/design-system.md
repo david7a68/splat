@@ -458,3 +458,21 @@ Every reader resolves `[[Name]]`, `[[Name#Heading]]` and `[[Name|text]]` against
 A package manifest opens from About followed by its name. It is not an entry row. Creation forms show their destination path. Creating a package opens its first entry form. Folder suggestions include existing folders, and saving can create a new subfolder. Reader pictures are 64 px thumbnails beside the title and meta line. Run-in titles use bold text. Sheet tabs use Small as a second level.
 
 An unavailable package keeps its last known display name in the campaign selection. Older selections without a name say A package that is no longer on this computer. The message counts affected campaign entries when the selected references are known, with Remove from this campaign and Find the folder… beside it. The folder picker checks the package identity before restoring its registration. Only Technical details shows its ID.
+
+## Run and encounter audit, iteration 4
+
+The run dock and footer use the roster column's fixed width. A panel never covers
+their words. The dock fits whole words at every width and keeps the last word or
+number that distinguishes a participant. Its hover text and accessible name keep
+the full name. An off Absent toggle uses muted text and no fill.
+
+Setup keeps roster rows in place. A muted ordinal follows each initiative field,
+updates after each total or tie ruling, and the ready line names who goes first.
+The compact fight menu reads Fight and uses the tab underline. Its panel title
+names the open fight tab.
+
+Every change field shows its printed value and result, including changes added by
+hand. Editors, run cards and fault details share the same preview. Done closes a
+change form and returns to its member row. An empty group blocks Save group with
+Add a creature first. A tied arrival states who it tied with and offers Move before
+as one step with Undo. Member summaries wrap between members, never inside a name.

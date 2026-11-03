@@ -24,7 +24,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use uuid::Uuid;
-pub(crate) use view::change_rows;
+pub(crate) use view::{change_preview, change_rows};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Participant {
@@ -172,6 +172,13 @@ impl RunGroup {
             );
         }
         members.join(", ")
+    }
+    pub(crate) fn member_summary_wrapped(&self) -> String {
+        self.member_summary()
+            .split(", ")
+            .map(|member| member.replace(' ', "\u{a0}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     }
     /// Every creature the note names, whether or not it can be found now.
     pub(crate) fn creature_count(&self) -> u64 {
@@ -617,6 +624,7 @@ enum Command {
     Begin,
     Next,
     Move(usize, usize),
+    MoveArrivalBefore(usize, usize),
     End(String),
     Health(usize, Option<i64>, Option<i64>),
     TempHp(usize, i64),
@@ -999,7 +1007,19 @@ impl Run {
             ));
         }
         number_added(&state.participants, &mut added);
-        let initiative = Self::group_initiative(state, &mut added, total, grouping)?;
+        let mut initiative = Self::group_initiative(state, &mut added, total, grouping)?;
+        if let Some((p, total)) = added.iter().find_map(|new| {
+            let total = new.initiative?;
+            state
+                .order
+                .iter()
+                .map(|i| &state.participants[*i])
+                .rev()
+                .find(|p| p.present && p.initiative == Some(total))
+                .map(|p| (p, total))
+        }) {
+            initiative.push_str(&format!(". Tied with {} at {total} · placed after", p.name));
+        }
         let names: Vec<_> = added.iter().map(|p| p.name.clone()).collect();
         let first = state.participants.len();
         state.participants.extend(added);
@@ -1198,6 +1218,54 @@ impl Run {
                     next.round, next.participants[next.order[next.cursor]].name
                 )
             }
+            Command::MoveArrivalBefore(first, before) => {
+                if first >= next.participants.len()
+                    || before >= first
+                    || !next.participants[before].present
+                    || next.participants[first].initiative != next.participants[before].initiative
+                {
+                    return Err("Choose a present participant with the same initiative.".into());
+                }
+                let current = (next.phase == Phase::Running).then(|| next.order[next.cursor]);
+                let instance = next
+                    .participants
+                    .get(first)
+                    .and_then(|p| p.added_from.as_ref())
+                    .map(|a| a.instance.clone())
+                    .ok_or("This arrival is no longer here.")?;
+                let members: Vec<_> = next
+                    .order
+                    .iter()
+                    .copied()
+                    .filter(|i| {
+                        next.participants[*i]
+                            .added_from
+                            .as_ref()
+                            .is_some_and(|a| a.instance == instance)
+                            && next.participants[*i].initiative
+                                == next.participants[before].initiative
+                    })
+                    .collect();
+                next.order.retain(|i| !members.contains(i));
+                let at = next
+                    .order
+                    .iter()
+                    .position(|i| *i == before)
+                    .ok_or("This participant is no longer here.")?;
+                next.order.splice(at..at, members);
+                if let Some(current) = current {
+                    next.cursor = next
+                        .order
+                        .iter()
+                        .position(|i| *i == current)
+                        .unwrap_or(next.cursor);
+                }
+                format!(
+                    "Arrival moved before {} at {}.",
+                    next.participants[before].name,
+                    display(next.participants[before].initiative)
+                )
+            }
             Command::Move(from, to) => {
                 if self.initiative.roster_ties {
                     return Err("This campaign resolves initiative ties in roster order.".into());
@@ -1278,6 +1346,9 @@ impl Run {
         if began {
             self.panel = Panel::Reference;
         }
+        let undo_label = next_tie_label(&self.state.log).map_or(undo_label.clone(), |tie| {
+            format!("{undo_label} · Tied with {tie}")
+        });
         self.history_labels.push(undo_label);
         self.last_initiative = initiative_edit;
         if follow_turn && let Some(current) = self.current() {
@@ -1552,6 +1623,7 @@ impl Run {
             Command::Begin => "begin combat".into(),
             Command::Next => "next turn".into(),
             Command::Move(..) => "tie order".into(),
+            Command::MoveArrivalBefore(..) => "move arrival before".into(),
             Command::End(_) => "end encounter".into(),
             Command::Health(i, ..) => format!("HP correction on {}", name(i)),
             Command::TempHp(i, amount) => format!("{amount} temporary HP on {}", name(i)),
@@ -3333,6 +3405,13 @@ pub(crate) fn write_ended_run(
 fn display(value: Option<i64>) -> String {
     value.map_or_else(|| "?".into(), |n| n.to_string())
 }
+fn next_tie_label(log: &[String]) -> Option<&str> {
+    log.last()
+        .filter(|line| line.starts_with(GROUP_ADDED) || line.starts_with(ONE_ADDED))?
+        .split_once("Tied with ")
+        .map(|(_, tie)| tie.trim_end_matches('.'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5454,6 +5533,25 @@ mod tests {
         assert_eq!(run.state.order, vec![0, 1, 3, 4, 2]);
         assert_eq!(run.next_up(), Some(3));
     }
+    #[test]
+    fn arrival_tie_can_move_before_and_undo_keeps_the_current_turn() {
+        let mut run = run();
+        begin(&mut run);
+        run.apply(Command::Next).unwrap();
+        run.apply(Command::AddGroup(guard_group("Tied", 2), Some(15)))
+            .unwrap();
+        assert!(run.state.log.last().unwrap().contains("Tied with"));
+        assert!(run.undo_label().contains("placed after"));
+        let after = run.state.order.clone();
+        let current = run.current();
+        run.apply(Command::MoveArrivalBefore(3, 1)).unwrap();
+        assert_eq!(run.state.order, vec![0, 3, 4, 1, 2]);
+        assert_eq!(run.current(), current);
+        run.undo();
+        assert_eq!(run.state.order, after);
+        assert_eq!(run.current(), current);
+    }
+
     #[test]
     fn the_same_group_can_be_added_twice_with_separate_creatures() {
         let mut run = run();

@@ -580,12 +580,6 @@ const RESULT_ROW: f32 = 40.0;
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
 fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
-    if detail.starts_with("NPC · as ") {
-        let words = design::words_that_fit(ui, detail, &Type::Small.font(ui), ui.available_width());
-        ui.label(Type::Small.rich(ui, words).color(colors().muted))
-            .on_hover_text(detail);
-        return;
-    }
     const COLUMNS: [(&str, f32); 3] = [("CR ", 66.0), ("HP ", 46.0), ("AC ", 38.0)];
     let parts: Vec<&str> = detail.split(" · ").collect();
     let other = parts
@@ -595,6 +589,13 @@ fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
     ui.spacing_mut().interact_size.y = 0.0;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
+        if detail.starts_with("NPC · as ") {
+            ui.label(
+                Type::Small
+                    .rich(ui, parts[..2].join(" · "))
+                    .color(colors().muted),
+            );
+        }
         for (prefix, width) in COLUMNS {
             let part = parts
                 .iter()
@@ -803,6 +804,13 @@ impl Snapshot {
             .any(|c| c.id == stat)
             .then(|| (stat, npc.name.clone()))
     }
+    fn npc_name_for(&self, entry: &Entry, overrides: &Mapping) -> Option<String> {
+        let name = overrides.get("name")?.as_str()?;
+        self.catalogue.entries.values().find_map(|candidate| {
+            let (stat, npc_name) = self.npc_stat_block(candidate.entry.id)?;
+            (stat == entry.id && name == npc_name).then_some(npc_name)
+        })
+    }
     fn load(campaign: &Campaign, modules: &[Module]) -> Result<Self, String> {
         let document = CampaignDocument::load(campaign)?;
         let catalogue = Catalogue::load(modules, Some(campaign))?;
@@ -877,7 +885,7 @@ impl Snapshot {
                     id: npc.id,
                     name: npc.name.clone(),
                     lower: npc.name.to_lowercase(),
-                    detail: format!("NPC · as {}", stat.name),
+                    detail: format!("NPC · as {} · {}", stat.name, stat.detail),
                     source: None,
                     party: false,
                     linked: false,
@@ -1802,7 +1810,12 @@ impl Encounters {
                 .as_ref()
                 .ok_or("Party-slot bindings are not supported by this runner yet.")?;
             let id = snapshot.catalogue.resolve_ref(reference)?;
-            let entry = snapshot.catalogue.entries[&id].entry.clone();
+            let mut entry = snapshot.catalogue.entries[&id].entry.clone();
+            if let Some(name) = snapshot.npc_name_for(&entry, &slot.overrides) {
+                entry
+                    .fields
+                    .insert("splat_run_npc_name".into(), name.into());
+            }
             // A synced player's sheet decides these, so the run starts from its copy of the sheet.
             let synced =
                 fresh.setup.combat_sync && snapshot.creatures.iter().any(|c| c.id == id && c.party);
@@ -2115,8 +2128,9 @@ impl Encounters {
                     story.sessions,
                 );
                 let mut counts = Vec::new();
-                if !page.ready.is_empty() {
-                    counts.push(design::count(page.ready.len(), "ready", "ready"));
+                let ready = page.ready.iter().filter(|row| !row.unfinished_run).count();
+                if ready > 0 {
+                    counts.push(design::count(ready, "ready", "ready"));
                 }
                 if !page.in_progress.is_empty() {
                     counts.push(design::count(
@@ -2410,7 +2424,8 @@ impl Encounters {
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
         let from_session = self.from_session;
-        ui.horizontal(|ui| {
+        let stack_actions = ui.available_rect_before_wrap().width() < design::READER_MEASURE;
+        ui.horizontal_wrapped(|ui| {
             let back_name = if from_session {
                 "Back to session"
             } else {
@@ -2426,9 +2441,20 @@ impl Encounters {
                 )
                 .show(ui)
                 .clicked();
-            let width = (ui.available_width()
-                - design::S * if unfinished.is_some() { 38.0 } else { 33.0 })
-            .max(Density::Scan.control());
+            let width = if stack_actions {
+                (ui.available_rect_before_wrap().width() - 2.0 * design::S)
+                    .max(Density::Scan.control())
+            } else {
+                (ui.available_rect_before_wrap().width()
+                    - design::S * if unfinished.is_some() { 38.0 } else { 33.0 }
+                    - if dirty {
+                        0.0
+                    } else {
+                        design::number_width(ui, "No changes to save.", &Type::Small.font(ui))
+                            + design::L
+                    })
+                .max(Density::Scan.control())
+            };
             let response = ui.add(
                 egui::TextEdit::singleline(&mut draft_ref.name)
                     .id(design::focus_id(NAME_FIELD))
@@ -2444,55 +2470,65 @@ impl Encounters {
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 *focus_search_after_name = true;
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let start_blocked = has_run
-                    .then_some(BLOCKED_BY_RUN)
-                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                    .or(loading.then_some("Still reading this campaign."))
-                    .or(draft_ref
-                        .setup
-                        .roster
-                        .is_empty()
-                        .then_some("Add participants first"));
-                if unfinished.is_some() {
-                    row_menu(ui, &draft_ref.name, |ui| {
-                        start_another = menu_action(ui, "Start another fight", start_blocked);
-                    });
-                }
-                let word = if unfinished.is_some() {
-                    "Resume"
-                } else {
-                    START_FIGHT
-                };
-                run_it = if has_run || (dirty && unfinished.is_none()) {
-                    Action::secondary(word)
-                } else {
-                    Action::primary(word)
-                }
-                .blocked(if unfinished.is_some() {
-                    has_run
+            let action_width = if stack_actions {
+                ui.max_rect().width()
+            } else {
+                ui.available_rect_before_wrap().width()
+            };
+            ui.allocate_ui_with_layout(
+                egui::vec2(action_width, Density::Scan.control()),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    let start_blocked = has_run
                         .then_some(BLOCKED_BY_RUN)
                         .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
                         .or(loading.then_some("Still reading this campaign."))
-                } else {
-                    start_blocked
-                })
-                .hint(if unfinished.is_some() {
-                    "Save this encounter and resume its unfinished run."
-                } else {
-                    "Save this encounter and start a run."
-                })
-                .show(ui)
-                .clicked();
-                save = if dirty && !has_run && unfinished.is_none() {
-                    Action::primary("Save encounter")
-                } else {
-                    Action::secondary("Save encounter")
-                }
-                .blocked_if(!dirty, "No changes to save.")
-                .show(ui)
-                .clicked();
-            });
+                        .or(draft_ref
+                            .setup
+                            .roster
+                            .is_empty()
+                            .then_some("Add participants first"));
+                    if unfinished.is_some() {
+                        row_menu(ui, &draft_ref.name, |ui| {
+                            start_another = menu_action(ui, "Start another fight", start_blocked);
+                        });
+                    }
+                    let word = if unfinished.is_some() {
+                        "Resume"
+                    } else {
+                        START_FIGHT
+                    };
+                    run_it = if has_run || (dirty && unfinished.is_none()) {
+                        Action::secondary(word)
+                    } else {
+                        Action::primary(word)
+                    }
+                    .blocked(if unfinished.is_some() {
+                        has_run
+                            .then_some(BLOCKED_BY_RUN)
+                            .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                            .or(loading.then_some("Still reading this campaign."))
+                    } else {
+                        start_blocked
+                    })
+                    .hint(if unfinished.is_some() {
+                        "Save this encounter and resume its unfinished run."
+                    } else {
+                        "Save this encounter and start a run."
+                    })
+                    .show(ui)
+                    .clicked();
+                    save = if dirty && !has_run && unfinished.is_none() {
+                        Action::primary("Save encounter")
+                    } else {
+                        Action::secondary("Save encounter")
+                    }
+                    .blocked_if(!dirty, "No changes to save.")
+                    .show(ui)
+                    .clicked();
+                    blocked_reason(ui, (!dirty).then_some("No changes to save."));
+                },
+            );
         });
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
@@ -2509,7 +2545,9 @@ impl Encounters {
             } else {
                 (icons::OK, "No changes", colors().muted)
             };
-            design::status(ui, Status { icon, word, color });
+            if dirty || saved_note.is_some() {
+                design::status(ui, Status { icon, word, color });
+            }
             if let Some(run) = &unfinished {
                 design::status(
                     ui,
@@ -2539,7 +2577,7 @@ impl Encounters {
         });
         ui.allocate_ui(egui::vec2(ui.available_width(), Type::Small.line()), |ui| {
             if dirty {
-                blocked_reason(ui, Some("Save or discard to switch campaign."));
+                blocked_reason(ui, Some(draft_switch_reason()));
             }
         });
         if has_run {
@@ -3091,14 +3129,16 @@ impl Encounters {
                 let detail = detail
                     .strip_prefix("Party copy · ")
                     .map_or_else(|| detail.clone(), str::to_owned);
+                let detail = roster_detail(&detail);
                 let detail = match creature.and_then(|creature| creature.source.as_deref()) {
                     Some(source) => format!("{detail} · {source}"),
                     None => detail,
                 };
                 let side_icon = if slot.side == "party" { icons::PARTY } else if slot.side == "enemies" { icons::ENCOUNTERS } else { icons::GROUP };
-                let detail = format!("{side_icon} {} · {detail}", design::reader::human_label(&slot.side));
+                let identity = definition.filter(|entry| snapshot.npc_name_for(entry, &slot.overrides).is_some()).map(|entry| format!("as {} · ", entry.name)).unwrap_or_default();
+                let detail = format!("{identity}{side_icon} {} · {detail}", design::reader::human_label(&slot.side));
                 let is_open = expanded.as_deref() == Some(slot.key.as_str());
-                ui.horizontal(|ui| {
+                let member_row = ui.horizontal(|ui| {
                     ui.set_min_height(Density::Glance.row());
                     // Every slot is reserved, so columns line up between rows.
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -3148,7 +3188,9 @@ impl Encounters {
                         });
                     });
                 });
+                let member_row = member_row.response.rect;
                 if let Some(entry) = definition
+                    && !(slot.overrides.len() == 1 && snapshot.npc_name_for(entry, &slot.overrides).is_some())
                     && groups::changes_link(ui, &slot.overrides, entry, &slot.side, is_open)
                 {
                     groups::show_form_when_it_opens(ui);
@@ -3222,13 +3264,14 @@ impl Encounters {
                             .color(colors().muted),
                     );
                     if let Some(entry) = definition {
-                        groups::overrides_form(
+                        let done = groups::overrides_form(
                             ui,
                             &mut slot.overrides,
                             entry,
                             &slot.side,
                             Some(&sides),
                         );
+                        if done { *expanded = None; ui.scroll_to_rect(member_row, Some(egui::Align::Min)); }
                     }
                 }
                 design::rule(ui);
@@ -3322,8 +3365,8 @@ impl Encounters {
                 else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
                 else if !changed { Some("No changes to save.") } else { None };
             if run_files > 0 {
-                design::message(ui, Tone::Warning, &format!("{} {} in {}. Splat will not show them from the new folder.",
-                    design::count(run_files, "saved run", "saved runs"), if run_files == 1 { "stays" } else { "stay" }, snapshot.saved_options.folder));
+                design::message(ui, Tone::Warning, &format!("{} {} in {}. Splat will not show {} from the new folder.",
+                    design::count(run_files, "saved run", "saved runs"), if run_files == 1 { "stays" } else { "stay" }, snapshot.saved_options.folder, if run_files == 1 { "it" } else { "them" }));
             }
             ui.horizontal(|ui| {
                 let save_key = changed && blocked.is_none() && run_files == 0
@@ -3410,6 +3453,32 @@ use list::{
     blocked_reason, group_list, history_list, in_progress_list, menu_action, ready_list, row_menu,
     side_control,
 };
+
+pub(crate) fn draft_switch_reason() -> &'static str {
+    "Save or discard to switch campaign."
+}
+
+fn roster_detail(detail: &str) -> String {
+    let parts: Vec<_> = detail.split(" · ").collect();
+    let mut result = Vec::new();
+    if let Some(hp) = parts.iter().find(|p| p.starts_with("HP ")) {
+        let mut hp = (*hp).to_owned();
+        if let Some(temp) = parts.iter().find_map(|p| p.strip_prefix("Temp ")) {
+            hp.push_str(&format!(" {} +{temp}", icons::TEMP_HP));
+        }
+        result.push(hp);
+    }
+    if let Some(ac) = parts.iter().find(|p| p.starts_with("AC ")) {
+        result.push((*ac).to_owned());
+    }
+    result.extend(
+        parts
+            .iter()
+            .filter(|p| !p.starts_with("HP ") && !p.starts_with("AC ") && !p.starts_with("Temp "))
+            .map(|p| (*p).to_owned()),
+    );
+    result.join(" · ")
+}
 
 #[cfg(test)]
 mod tests {
@@ -3539,7 +3608,7 @@ mod tests {
             snapshot
                 .creatures
                 .iter()
-                .any(|c| c.id == npc && c.detail == "NPC · as Guard")
+                .any(|c| c.id == npc && c.detail.starts_with("NPC · as Guard · CR "))
         );
         let mut draft = Draft::new();
         draft.add_selected(npc, false, &snapshot);

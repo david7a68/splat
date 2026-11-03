@@ -1125,9 +1125,9 @@ impl Splat {
                             design::status(
                                 ui,
                                 Status {
-                                    icon: icons::OFFLINE,
+                                    icon: icons::SYNC_OFF,
                                     word: "Sync stopped",
-                                    color: c.result.error,
+                                    color: c.sync.pending,
                                 },
                             );
                         }

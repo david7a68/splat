@@ -437,6 +437,7 @@ pub struct Action<'a> {
     selected: bool,
     key: Option<&'a str>,
     plain: bool,
+    wrap: bool,
 }
 
 impl<'a> Action<'a> {
@@ -452,6 +453,7 @@ impl<'a> Action<'a> {
             selected: false,
             key: None,
             plain: false,
+            wrap: false,
         }
     }
     pub fn primary(label: &'a str) -> Self {
@@ -463,6 +465,12 @@ impl<'a> Action<'a> {
     /// In body weight, for an action repeated on every row of a list.
     pub fn plain(mut self) -> Self {
         self.plain = true;
+        self
+    }
+
+    /// Keep a long action's words visible on the next line.
+    pub fn wrap(mut self) -> Self {
+        self.wrap = true;
         self
     }
 
@@ -572,7 +580,12 @@ impl<'a> Action<'a> {
             Kind::Secondary | Kind::Quiet => c.text,
             Kind::Destructive => c.destructive,
         };
-        let galley = one_line(ui, self.label, font, foreground, room);
+        let galley = if self.wrap {
+            ui.painter()
+                .layout(self.label.to_owned(), font, foreground, room.max(1.0))
+        } else {
+            one_line(ui, self.label, font, foreground, room)
+        };
         let key = self.key.map(|key| {
             one_line(
                 ui,
@@ -584,7 +597,17 @@ impl<'a> Action<'a> {
         });
         let key_width = key.as_ref().map_or(0.0, |key| key.size().x + S);
         let width = (galley.size().x + 2.0 * padding + icon_width + key_width).max(self.height);
-        let (rect, response) = ui.allocate_exact_size(vec2(width, self.height), Sense::click());
+        let (rect, response) = ui.allocate_exact_size(
+            vec2(
+                width,
+                if self.wrap {
+                    self.height.max(galley.size().y + S)
+                } else {
+                    self.height
+                },
+            ),
+            Sense::click(),
+        );
         let name = self.name.unwrap_or(self.label);
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
         if !ui.is_rect_visible(rect) {

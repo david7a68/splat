@@ -129,7 +129,7 @@ pub fn components(ui: &mut egui::Ui) {
     let c = colors();
     page_header(ui, "Encounters", Some("2 ready · 1 in progress"), |ui| {
         let _ = Action::secondary("New encounter").icon(icons::ADD).show(ui);
-        let _ = Action::quiet("Reload").show(ui);
+        let _ = Action::quiet("Reload from disk").show(ui);
     });
     design_group(ui, "Buttons: enabled, blocked");
     for (kind, label) in [
@@ -228,9 +228,30 @@ pub fn components(ui: &mut egui::Ui) {
             status(ui, Status { icon, word, color });
         }
     });
-    group_heading(ui, "Ready to run", 2);
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        group_heading(ui, "In progress", 1);
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.label(Type::Name.rich(ui, "Bridge Ambush"));
+                let _ = status_link(
+                    ui,
+                    Status {
+                        icon: icons::RUN,
+                        word: "Round 2 · Paused",
+                        color: c.muted,
+                    },
+                );
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                row_menu(ui, "Paused Bridge Ambush", |ui| {
+                    let _ = Action::quiet("Start another fight").show(ui);
+                });
+                let _ = Action::quiet("Edit").show(ui);
+                let _ = Action::secondary("Resume").show(ui);
+            });
+        });
+        group_heading(ui, "Ready to run", 2);
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.label(Type::Name.rich(ui, "Bridge Ambush"));
@@ -247,27 +268,6 @@ pub fn components(ui: &mut egui::Ui) {
                 let _ = Action::quiet("Edit").show(ui);
                 let _ = Action::secondary("Start fight").show(ui);
             });
-        });
-    });
-    group_heading(ui, "In progress", 1);
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            ui.label(Type::Name.rich(ui, "Bridge Ambush"));
-            let _ = status_link(
-                ui,
-                Status {
-                    icon: icons::RUN,
-                    word: "Round 2 · Paused",
-                    color: c.sync.matching,
-                },
-            );
-        });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            row_menu(ui, "Paused Bridge Ambush", |ui| {
-                let _ = Action::quiet("Start another fight").show(ui);
-            });
-            let _ = Action::quiet("Edit").show(ui);
-            let _ = Action::secondary("Resume").show(ui);
         });
     });
     design_group(ui, "One cause, one sentence");
