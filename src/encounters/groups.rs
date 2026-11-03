@@ -527,7 +527,7 @@ fn list_row(
         },
     );
     if let Some(problem) = &group.problem {
-        ui.add_space(-design::L);
+        ui.add_space(-design::S);
         ui.scope(|ui| {
             ui.spacing_mut().item_spacing.y = design::XS;
             let faults = problem
@@ -541,7 +541,7 @@ fn list_row(
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            ui.horizontal_wrapped(|ui| {
+            ui.vertical(|ui| {
                 ui.add(
                     egui::Label::new(
                         Type::Small
@@ -1694,10 +1694,16 @@ fn members_pane(
     snapshot: &Snapshot,
     expanded: &mut Option<String>,
 ) {
+    let top = ui.cursor().top();
     egui::ScrollArea::vertical()
         .id_salt("group_editor")
         .auto_shrink([false, false])
-        .show(ui, |ui| group_fields(ui, draft, snapshot, expanded, None));
+        .show(ui, |ui| {
+            let mut clip = ui.clip_rect();
+            clip.min.y = clip.min.y.max(top);
+            ui.set_clip_rect(clip);
+            group_fields(ui, draft, snapshot, expanded, None);
+        });
 }
 
 /// What a group is, in its own editor and in the frame an encounter's editor gives it. There,

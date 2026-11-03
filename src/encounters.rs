@@ -585,7 +585,7 @@ const RESULT_ROW: f32 = 40.0;
 /// A result's stats, each in its own place, so that they can be compared down the list. The
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
-fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
+pub(crate) fn detail_columns(ui: &mut egui::Ui, detail: &str, source: Option<&str>) {
     if detail.contains("HP not set") {
         ui.horizontal_wrapped(|ui| {
             for part in detail.split(" · ") {
