@@ -438,6 +438,7 @@ pub struct Action<'a> {
     key: Option<&'a str>,
     plain: bool,
     wrap: bool,
+    line_start: bool,
 }
 
 impl<'a> Action<'a> {
@@ -454,6 +455,7 @@ impl<'a> Action<'a> {
             key: None,
             plain: false,
             wrap: false,
+            line_start: false,
         }
     }
     pub fn primary(label: &'a str) -> Self {
@@ -477,6 +479,12 @@ impl<'a> Action<'a> {
     pub fn quiet(label: &'a str) -> Self {
         Self::new(Kind::Quiet, label)
     }
+    /// Align a quiet action's word with the text above it. Its target extends into the gutter.
+    pub fn line_start(mut self) -> Self {
+        self.line_start = true;
+        self
+    }
+
     pub fn destructive(label: &'a str) -> Self {
         Self::new(Kind::Destructive, label)
     }
@@ -597,17 +605,24 @@ impl<'a> Action<'a> {
         });
         let key_width = key.as_ref().map_or(0.0, |key| key.size().x + S);
         let width = (galley.size().x + 2.0 * padding + icon_width + key_width).max(self.height);
-        let (rect, response) = ui.allocate_exact_size(
-            vec2(
-                width,
-                if self.wrap {
-                    self.height.max(galley.size().y + S)
-                } else {
-                    self.height
-                },
-            ),
-            Sense::click(),
+        let size = vec2(
+            width,
+            if self.wrap {
+                self.height.max(galley.size().y + S)
+            } else {
+                self.height
+            },
         );
+        let (rect, response) = if self.kind == Kind::Quiet && self.line_start {
+            let (id, allocated) = ui.allocate_space(size);
+            let rect = ui
+                .layout()
+                .align_size_within_rect(size, allocated)
+                .translate(vec2(-padding, 0.0));
+            (rect, ui.interact(rect, id, Sense::click()))
+        } else {
+            ui.allocate_exact_size(size, Sense::click())
+        };
         let name = self.name.unwrap_or(self.label);
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
         if !ui.is_rect_visible(rect) {
@@ -739,9 +754,19 @@ pub fn icon_button(ui: &mut Ui, icon: &str, name: &str) -> Response {
 
 /// An inline link with a real `Link` role, and a target of at least 24 px.
 pub fn link(ui: &mut Ui, label: &str) -> Response {
+    text_link(ui, label, Type::Body)
+}
+
+/// A Small inline link with the same target and accessible role as the body link.
+#[allow(dead_code)] // Settings adopts this shared API in Package C.
+pub fn small_link(ui: &mut Ui, label: &str) -> Response {
+    text_link(ui, label, Type::Small)
+}
+
+fn text_link(ui: &mut Ui, label: &str, role: Type) -> Response {
     let c = colors();
     let room = ui.available_width().max(1.0);
-    let galley = one_line(ui, label, Type::Body.font(ui), c.accent, room);
+    let galley = one_line(ui, label, role.font(ui), c.accent, room);
     let (rect, response) = ui.allocate_exact_size(
         vec2(galley.size().x, galley.size().y.max(24.0)),
         Sense::click(),
@@ -1382,7 +1407,7 @@ pub fn message_with_action(ui: &mut Ui, tone: Tone, text: &str, action: &str) ->
         message(ui, tone, text);
         ui.horizontal(|ui| {
             ui.add_space((inset - gap).max(0.0));
-            pressed = button.show(ui).clicked();
+            pressed = button.line_start().show(ui).clicked();
         });
     } else {
         ui.horizontal_top(|ui| {
@@ -1664,7 +1689,7 @@ pub fn draft_comparison(ui: &mut Ui, draft: &str, disk: &str, id: impl std::hash
             super::count(differences.len(), "line differs", "lines differ")
         };
         ui.label(Type::Small.rich(ui, words).color(colors().muted));
-        if !differences.is_empty() && Action::quiet("Next difference").show(ui).clicked() {
+        if differences.len() > 1 && Action::quiet("Next difference").show(ui).clicked() {
             target = Some(
                 differences
                     .iter()
