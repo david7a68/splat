@@ -55,7 +55,7 @@ impl Owner {
         match self {
             Self::Builtin => "Built-in package · Read only".into(),
             Self::Package(module) => format!("Package · {}", module.name),
-            Self::Campaign(campaign) => format!("Campaign · {}", campaign.name),
+            Self::Campaign(_) => "Campaign".into(),
         }
     }
     /// Where an entry came from.
@@ -74,7 +74,10 @@ fn reader_subtitle(owner: &Owner, listed: &str, class_level: Option<String>) -> 
     match class_level {
         Some(level) => format!("{level} · {}", owner.source()),
         None if *owner == Owner::Builtin => format!("{listed} · {BUILTIN_NAME}"),
-        None => listed.to_owned(),
+        None => listed
+            .strip_suffix(" · Campaign")
+            .unwrap_or(listed)
+            .to_owned(),
     }
 }
 
@@ -238,15 +241,77 @@ impl Loaded {
                 presentation::list_subtitle(&line, source)
             })
             .collect();
-        // Identical names and parents retain a stable count as a last resort.
-        let mut seen = std::collections::HashMap::new();
+        // Imported sections share a broad parent. Use the closest named subsection
+        // before a repeated heading, from the source spans, rather than a page number.
+        let parent_of = |note: &Note| {
+            note.entry
+                .as_ref()
+                .and_then(|entry| entry.fields.get("splat_conversion"))
+                .and_then(|meta| meta.get("parent_name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_owned()
+        };
+        let mut name_counts = std::collections::HashMap::new();
+        for note in &self.notes {
+            *name_counts
+                .entry((parent_of(note), note.name()))
+                .or_insert(0_usize) += 1;
+        }
         for (i, note) in self.notes.iter().enumerate() {
-            let count = seen
-                .entry((note.name(), subtitles[i].clone()))
-                .or_insert(0_usize);
-            *count += 1;
-            if *count > 1 {
-                subtitles[i].push_str(&format!(" · {count}"));
+            let duplicates = name_counts[&(parent_of(note), note.name())];
+            if duplicates < 2 {
+                continue;
+            }
+            let Some(entry) = &note.entry else {
+                continue;
+            };
+            let Some(meta) = entry.fields.get("splat_conversion") else {
+                continue;
+            };
+            let parent = meta.get("parent_name").and_then(|v| v.as_str());
+            let first = meta
+                .get("line_span")
+                .and_then(|span| span.get("first"))
+                .and_then(|v| v.as_u64());
+            let Some(first) = first else {
+                continue;
+            };
+            let context = self
+                .notes
+                .iter()
+                .filter(|other| other.owner == note.owner)
+                .filter_map(|other| {
+                    let meta = other.entry.as_ref()?.fields.get("splat_conversion")?;
+                    if meta.get("parent_name").and_then(|v| v.as_str()) != parent
+                        || name_counts[&(parent_of(other), other.name())] > 1
+                    {
+                        return None;
+                    }
+                    let start = meta.get("line_span")?.get("first")?.as_u64()?;
+                    (if parent.is_some_and(|parent| parent.eq_ignore_ascii_case(note.name())) {
+                        start > first
+                    } else {
+                        start < first
+                    })
+                    .then_some((start, other.name()))
+                })
+                .min_by_key(|(start, _)| {
+                    if parent.is_some_and(|parent| parent.eq_ignore_ascii_case(note.name())) {
+                        *start
+                    } else {
+                        u64::MAX - *start
+                    }
+                });
+            if let Some((_, context)) = context
+                && let Some(parent) = parent
+            {
+                if parent.eq_ignore_ascii_case(note.name()) {
+                    subtitles[i].push_str(&format!(" · {context}"));
+                } else {
+                    subtitles[i] = subtitles[i]
+                        .replace(&format!(" · {parent}"), &format!(" · {parent} › {context}"));
+                }
             }
         }
         subtitles
@@ -333,10 +398,24 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
     if let Some(ns) = namespace {
         fields.insert("splat_namespace".into(), ns.into());
     }
+    if kind == "creature" && namespace.is_none() {
+        fields.insert(
+            "splat_stats".into(),
+            serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
+                "max_hp: {value: null}\narmor_class: {value: null}\ninitiative: {value: null}\n",
+            )
+            .expect("creature fields"),
+        );
+    }
     format!(
-        "---\n{}---\n\n# {}\n\n",
+        "---\n{}---\n\n# {}\n\n{}",
         serde_yaml_ng::to_string(&fields).expect("string fields"),
-        name
+        name,
+        if kind == "creature" {
+            "## Actions\n\n"
+        } else {
+            ""
+        }
     )
 }
 
@@ -831,7 +910,29 @@ impl Library {
             ctx.request_repaint();
         });
     }
+    fn draft_reason(&self) -> Option<&'static str> {
+        if self.disk_change.is_some() {
+            Some("Choose what to do with the changed file first.")
+        } else if self.dirty() {
+            Some(
+                if self
+                    .selected
+                    .and_then(|i| self.loaded.as_ref().map(|l| &l.notes[i].owner))
+                    .is_some_and(|owner| matches!(owner, Owner::Campaign(_)))
+                {
+                    "Save or discard to copy, add an entry, change packages or switch campaign."
+                } else {
+                    "Save or discard to copy, add an entry or change packages."
+                },
+            )
+        } else {
+            None
+        }
+    }
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("library"))
+        });
         let key = load_key(campaigns);
         if self.load_key.is_none() && self.loaded.is_some() {
             self.load_key = Some(key.clone());
@@ -881,8 +982,10 @@ impl Library {
             }
         }
         let dirty = self.dirty();
-        let locked =
-            (dirty || self.pending.is_some()).then_some("Save or discard this entry first.");
+        let locked = self.draft_reason().or(self
+            .pending
+            .is_some()
+            .then_some("Wait for the Library to load."));
         // Beside Lookup at the minimum window, everything here gets smaller.
         let compact = ui.available_width() < 900.0 || self.disk_change.is_some();
         let mut open_form = false;
@@ -898,15 +1001,21 @@ impl Library {
         design::page_header(
             ui,
             "Library",
-            Some(&design::count(total, "entry", "entries")),
+            (total > 0)
+                .then(|| design::count(total, "entry", "entries"))
+                .as_deref(),
             |ui| {
                 let no_place =
                     campaigns.active_campaign().is_none() && campaigns.modules().is_empty();
-                new_entry = Action::secondary("New entry")
-                    .icon(icons::ADD)
-                    .blocked(locked.or(no_place.then_some("Add a campaign or a package first.")))
-                    .show(ui)
-                    .clicked();
+                if !(self.scope == Scope::Campaign && total == 0) {
+                    new_entry = Action::secondary("New entry")
+                        .icon(icons::ADD)
+                        .blocked(
+                            locked.or(no_place.then_some("Add a campaign or a package first.")),
+                        )
+                        .show(ui)
+                        .clicked();
+                }
                 design::locked(ui, locked, |ui| {
                     let response = Action::quiet("Packages").show(ui);
                     egui::Popup::menu(&response).show(|ui| {
@@ -922,7 +1031,6 @@ impl Library {
                 });
             },
         );
-        design::blocked_reason(ui, locked);
         if new_entry {
             self.new_form = true;
             self.form = false;
@@ -986,7 +1094,11 @@ impl Library {
         if !loaded.diagnostics.is_empty() {
             design::section(
                 ui,
-                format!("{} validation messages", loaded.diagnostics.len()),
+                design::count(
+                    loaded.diagnostics.len(),
+                    "validation message",
+                    "validation messages",
+                ),
                 |ui| {
                     egui::ScrollArea::vertical()
                         .max_height(140.0)
@@ -1063,7 +1175,7 @@ impl Library {
                     ui,
                     icons::LIBRARY,
                     "No entries of your own yet",
-                    "This campaign has no entries of its own yet. Use Copy to… from any entry, or create one here.",
+                    "Use Copy to… from any entry, or make a new one here.",
                     |ui| {
                         if Action::primary("New entry")
                             .icon(icons::ADD)
@@ -1077,7 +1189,7 @@ impl Library {
             }
             return;
         }
-        if !compact {
+        if !compact && self.disk_change.is_none() {
             design::Column::left("library_sections", 166.0, 150.0..=280.0)
                 // The drag handle is on this edge, so the rows stop short of it.
                 .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -1099,8 +1211,9 @@ impl Library {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             for &(group, sections) in Section::GROUPS {
                                 // Keep the empty encounter section discoverable, but hide an unused fallback.
-                                if sections == [Section::Other]
-                                    && count_of(Section::Other, &counts) == 0
+                                if sections
+                                    .iter()
+                                    .all(|section| count_of(*section, &counts) == 0)
                                 {
                                     continue;
                                 }
@@ -1118,13 +1231,19 @@ impl Library {
                                 }
                                 for &section in sections {
                                     let count = count_of(section, &counts);
+                                    if count == 0 {
+                                        continue;
+                                    }
                                     let selected = self.section == section && !searching;
                                     let label = section.label();
                                     let response = design::row(
                                         ui,
                                         Density::Read.row(),
                                         selected,
-                                        &format!("{label}   {count}"),
+                                        &format!(
+                                            "{label}   {}",
+                                            design::count(count, "", "").trim()
+                                        ),
                                         |ui, rect| {
                                             let c = colors();
                                             let font =
@@ -1148,7 +1267,7 @@ impl Library {
                                                 ui.painter(),
                                                 rect.right() - design::S,
                                                 rect.center().y,
-                                                &count.to_string(),
+                                                design::count(count, "", "").trim(),
                                                 &Type::Small.font(ui),
                                                 c.muted,
                                             );
@@ -1174,6 +1293,7 @@ impl Library {
                     *section != self.section || *cached_query != query
                 })
         {
+            self.reveal_row |= self.matches_scope != Some(scope);
             self.matches_scope = Some(scope);
             let mut found: Vec<usize> = loaded
                 .notes
@@ -1229,7 +1349,29 @@ impl Library {
             }))
             .show_inside(ui, |ui| {
                 if compact {
-                    Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.search);
+                    ui.horizontal(|ui| {
+                        Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.search);
+
+                    let combo = egui::ComboBox::from_id_salt("library_section")
+                        .icon(design::combo_icon)
+                        .width(ui.available_width())
+                        .truncate()
+                        .selected_text(match self.section { Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
+                        .show_ui(ui, |ui| {
+                            for &(_, sections) in Section::GROUPS {
+                                for &section in sections {
+                                    if count_of(section, &counts) == 0 { continue; }
+                                    let response = ui.selectable_label(self.section == section, section.label());
+                                    design::named(ui, &response, &format!("Library section: {}", section.label()));
+                                    if response.clicked() {
+                                        self.section = section;
+                                        self.search.clear();
+                                    }
+                                }
+                            }
+                        });
+                    design::named(ui, &combo.response, "Section");
+                    });
                 }
                 ui.horizontal(|ui| {
                     let width =
@@ -1250,26 +1392,6 @@ impl Library {
                         self.search.clear();
                     }
                 });
-                if compact {
-                    ui.add_space(design::XS);
-                    let combo = egui::ComboBox::from_id_salt("library_section")
-                        .icon(design::combo_icon)
-                        .width(ui.available_width().min(200.0))
-                        .selected_text(self.section.label())
-                        .show_ui(ui, |ui| {
-                            for &(_, sections) in Section::GROUPS {
-                                for &section in sections {
-                                    let response = ui.selectable_label(self.section == section, section.label());
-                                    design::named(ui, &response, &format!("Library section: {}", section.label()));
-                                    if response.clicked() {
-                                        self.section = section;
-                                        self.search.clear();
-                                    }
-                                }
-                            }
-                        });
-                    design::named(ui, &combo.response, "Section");
-                }
                 ui.add_space(design::XS);
                 design::group_heading(ui, if searching { "Search results" } else { self.section.label() }, matches.len());
                 if matches.is_empty() {
@@ -1351,7 +1473,11 @@ impl Library {
             .unwrap_or_default();
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
-                left: design::L as i8,
+                left: if self.disk_change.is_some() {
+                    0
+                } else {
+                    design::L as i8
+                },
                 right: 0,
                 top: 0,
                 bottom: 0,
@@ -1374,7 +1500,7 @@ impl Library {
         campaigns: &Campaigns,
         current: &mut Scope,
         section: &mut Section,
-        search: &mut String,
+        _search: &mut String,
     ) {
         let active = campaigns.active_campaign();
         let label = |scope: Scope| -> String {
@@ -1387,10 +1513,7 @@ impl Library {
                     .iter()
                     .find(|m| m.id == id)
                     .map_or_else(|| "A package".to_owned(), |m| m.name.clone()),
-                Scope::Campaign => active.as_ref().map_or_else(
-                    || "This campaign".to_owned(),
-                    |c| format!("Own entries · {}", c.name),
-                ),
+                Scope::Campaign => "Campaign entries".to_owned(),
             }
         };
         let mut scope = if active.is_none() && matches!(*current, Scope::Uses | Scope::Campaign) {
@@ -1404,12 +1527,21 @@ impl Library {
         ui.scope_builder(egui::UiBuilder::new().id("library_scope_host"), |ui| {
             let combo = egui::ComboBox::from_id_salt("library_scope")
                 .icon(design::combo_icon)
-                .width(
-                    ui.available_width()
-                        .min(if compact { 150.0 } else { 166.0 }),
-                )
-                .wrap()
-                .selected_text(label(scope))
+                .width(ui.available_width().min(if compact {
+                    (ui.available_width() - design::S) * 0.6
+                } else {
+                    166.0
+                }))
+                .truncate()
+                .selected_text(match scope {
+                    Scope::Uses => if compact { "Can use" } else { "This campaign" }.to_owned(),
+                    Scope::Builtin => "D&D 2024".to_owned(),
+                    Scope::Package(_) if compact && ui.available_width() < 220.0 => {
+                        "Package".to_owned()
+                    }
+                    Scope::Campaign => "Own entries".to_owned(),
+                    _ => label(scope),
+                })
                 .show_ui(ui, |ui| {
                     ui.set_min_width(260.0);
                     if active.is_some() {
@@ -1434,7 +1566,6 @@ impl Library {
         *current = scope;
         if scope != before {
             // The selected entry can stay if it is in this scope. A draft always stays.
-            search.clear();
             *section = Section::All;
         }
     }
@@ -1462,7 +1593,7 @@ impl Library {
         design::dialog(ctx, "unregister_package", &title, |ui| {
             ui.add(
                 egui::Label::new(format!(
-                    "{count} entries leave Splat's lists, and any campaign that selects them can no longer use them."
+                    "{} leave Splat's lists, and any campaign that selects them can no longer use them.", design::count(count, "entry", "entries")
                 ))
                 .wrap(),
             );
@@ -1499,9 +1630,10 @@ impl Library {
     /// Registering a package is a form in the page, not a window over it.
     fn package_form(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         let c = colors();
-        let dirty = self.dirty();
-        let locked =
-            (dirty || self.pending.is_some()).then_some("Save or discard this entry first.");
+        let locked = self.draft_reason().or(self
+            .pending
+            .is_some()
+            .then_some("Wait for the Library to load."));
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.form = false;
         }
@@ -1510,19 +1642,7 @@ impl Library {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                ui.horizontal(|ui| {
-                    ui.label(Type::Section.rich(ui, "Manage packages").color(c.text));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if Action::quiet("Close")
-                            .density(Density::Read)
-                            .name("Close the package form")
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.form = false;
-                        }
-                    });
-                });
+                design::group_label(ui, "Manage packages");
                 design::group_label(ui, "Add a package folder…");
                 ui.horizontal_wrapped(|ui| {
                     design::text_input(
@@ -1568,46 +1688,54 @@ impl Library {
                 design::group_label(ui, "New package");
                 design::text_field(ui, "Name", &mut self.name, None, None);
                 let reason = locked.or(self.name.trim().is_empty().then_some("Type a name first."));
-                if (if self.run_open {
-                    Action::secondary("Create")
-                } else {
-                    Action::primary("Create")
-                })
-                .blocked(reason)
-                .show(ui)
-                .clicked()
-                {
-                    let namespace: String = self
-                        .name
-                        .trim()
-                        .to_lowercase()
-                        .chars()
-                        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                        .collect();
-                    let root = campaigns.package_folder(&namespace);
-                    match root
-                        .and_then(|root| {
-                            fs::create_dir_all(
-                                root.parent().ok_or("No package folder is available.")?,
-                            )
-                            .map_err(|e| e.to_string())?;
-                            create_module(&root, &self.name, &namespace)
-                        })
-                        .and_then(|module| {
-                            campaigns.register_module(module.clone())?;
-                            Ok(module)
-                        }) {
-                        Ok(module) => {
-                            self.scope = Scope::Package(module.id);
-                            self.form = false;
-                            self.stale = true;
+                ui.horizontal(|ui| {
+                    if (if self.run_open {
+                        Action::secondary("Create package")
+                    } else {
+                        Action::primary("Create package")
+                    })
+                    .blocked(reason)
+                    .show(ui)
+                    .clicked()
+                    {
+                        let namespace: String = self
+                            .name
+                            .trim()
+                            .to_lowercase()
+                            .chars()
+                            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                            .collect();
+                        let root = campaigns.package_folder(&namespace);
+                        match root
+                            .and_then(|root| {
+                                fs::create_dir_all(
+                                    root.parent().ok_or("No package folder is available.")?,
+                                )
+                                .map_err(|e| e.to_string())?;
+                                create_module(&root, &self.name, &namespace)
+                            })
+                            .and_then(|module| {
+                                campaigns.register_module(module.clone())?;
+                                Ok(module)
+                            }) {
+                            Ok(module) => {
+                                self.scope = Scope::Package(module.id);
+                                self.form = false;
+                                self.stale = true;
+                            }
+                            Err(error) => self.error = Some(error),
                         }
-                        Err(error) => self.error = Some(error),
                     }
-                }
-                if let Some(reason) = reason {
-                    ui.label(Type::Small.rich(ui, reason).color(c.muted));
-                }
+                    design::blocked_reason(ui, reason);
+                    ui.add_space(design::L);
+                    if Action::quiet("Cancel")
+                        .name("Close the package form")
+                        .show(ui)
+                        .clicked()
+                    {
+                        self.form = false;
+                    }
+                });
                 ui.add_space(design::M);
                 design::group_label(ui, "Registered packages");
                 design::rule(ui);
@@ -1687,12 +1815,7 @@ impl Library {
             .unwrap_or(default_place);
         ui.vertical(|ui| {
             ui.set_max_width(ui.available_width().min(design::READER_MEASURE));
-            ui.horizontal(|ui| {
-                design::group_label(ui, "New entry");
-                if Action::quiet("Cancel").show(ui).clicked() {
-                    self.new_form = false;
-                }
-            });
+            design::group_label(ui, "New entry");
             ui.label(
                 Type::Small
                     .rich(
@@ -1744,60 +1867,66 @@ impl Library {
                 } else {
                     None
                 };
-                design::blocked_reason(ui, blocked);
-                if Action::primary("Create entry")
-                    .blocked(blocked)
-                    .show(ui)
-                    .clicked()
-                {
-                    let name = self.new_name.trim();
-                    if name.contains(['/', '\\', '\n', '\r']) || name == "." || name == ".." {
-                        self.error =
-                            Some("Use a name without path separators or line breaks.".into());
-                        return;
+                ui.horizontal(|ui| {
+                    let create = Action::primary("Create entry")
+                        .blocked(blocked)
+                        .show(ui)
+                        .clicked();
+                    design::blocked_reason(ui, blocked);
+                    ui.add_space(design::L);
+                    if Action::quiet("Cancel").show(ui).clicked() {
+                        self.new_form = false;
                     }
-                    let path = format!("{name}.md");
-                    let text = note_text(name, &self.new_kind, None);
-                    let owner = places[place].clone();
-                    let root = owner.root().expect("a writable owner").to_path_buf();
-                    match write_note(&root, &path, None, &text) {
-                        Ok(entry) => {
-                            let l = self.loaded.as_mut().unwrap();
-                            let created_path = path.clone();
-                            let created_owner = owner.id();
-                            l.notes.push(Note {
-                                path,
-                                text: text.clone(),
-                                entry: Some(entry),
-                                error: None,
-                                owner,
-                            });
-                            l.notes.sort_by_cached_key(|n| natural_key(n.name()));
-                            l.invalidate();
-                            self.matches = None;
-                            self.scope_counts = None;
-                            self.selected = l.notes.iter().position(|n| {
-                                n.path == created_path && n.owner.id() == created_owner
-                            });
-                            self.search.clear();
-                            self.section = Section::All;
-                            self.source = true;
-                            self.draft = text;
-                            self.new_name.clear();
-                            self.new_form = false;
-                            self.error = None;
-                            // Show the new entry, wherever the DM chose to put it.
-                            if self
-                                .selected
-                                .is_some_and(|i| !l.in_scope(&l.notes[i], self.scope))
-                            {
-                                self.scope = Scope::All;
-                            }
-                            self.content_changed = Some(root);
+                    if create {
+                        let name = self.new_name.trim();
+                        if name.contains(['/', '\\', '\n', '\r']) || name == "." || name == ".." {
+                            self.error =
+                                Some("Use a name without path separators or line breaks.".into());
+                            return;
                         }
-                        Err(e) => self.error = Some(e),
+                        let path = format!("{name}.md");
+                        let text = note_text(name, &self.new_kind, None);
+                        let owner = places[place].clone();
+                        let root = owner.root().expect("a writable owner").to_path_buf();
+                        match write_note(&root, &path, None, &text) {
+                            Ok(entry) => {
+                                let l = self.loaded.as_mut().unwrap();
+                                let created_path = path.clone();
+                                let created_owner = owner.id();
+                                l.notes.push(Note {
+                                    path,
+                                    text: text.clone(),
+                                    entry: Some(entry),
+                                    error: None,
+                                    owner,
+                                });
+                                l.notes.sort_by_cached_key(|n| natural_key(n.name()));
+                                l.invalidate();
+                                self.matches = None;
+                                self.scope_counts = None;
+                                self.selected = l.notes.iter().position(|n| {
+                                    n.path == created_path && n.owner.id() == created_owner
+                                });
+                                self.search.clear();
+                                self.section = Section::All;
+                                self.source = true;
+                                self.draft = text;
+                                self.new_name.clear();
+                                self.new_form = false;
+                                self.error = None;
+                                // Show the new entry, wherever the DM chose to put it.
+                                if self
+                                    .selected
+                                    .is_some_and(|i| !l.in_scope(&l.notes[i], self.scope))
+                                {
+                                    self.scope = Scope::All;
+                                }
+                                self.content_changed = Some(root);
+                            }
+                            Err(e) => self.error = Some(e),
+                        }
                     }
-                }
+                });
             });
         });
         self.new_place = (place != default_place).then_some(place);
@@ -1835,7 +1964,7 @@ impl Library {
     /// bar beside them rather than across an empty band.
     fn editor(&mut self, ui: &mut egui::Ui, subtitle: &str) {
         let spare = ui.available_width() - view::WIDE_READER;
-        if spare <= 0.0 {
+        if spare <= 0.0 || self.disk_change.is_some() {
             self.editor_pane(ui, subtitle);
             return;
         }
@@ -1926,8 +2055,8 @@ impl Library {
             design::empty_state(
                 ui,
                 icons::LIBRARY,
-                "Read the Library",
-                "Choose an entry from the list to read it, or create an entry of your own.",
+                "No entry open",
+                "Choose one from the list, or make a new one.",
                 |_| {},
             );
             return;
@@ -1941,6 +2070,7 @@ impl Library {
                 None => file_gone = true,
             }
         }
+        let draft_reason = self.draft_reason();
         let note = &self.loaded.as_ref().unwrap().notes[i];
         let parsed = Entry::parse(&note.path, &self.draft);
         let reading = parsed
@@ -1963,6 +2093,11 @@ impl Library {
         }
         let editable = note.owner.editable();
         let conflict = self.disk_change.is_some();
+        let editor_width = if conflict {
+            ui.available_width()
+        } else {
+            ui.available_width().min(EDITOR_MAX_WIDTH)
+        };
         self.just_saved &= !dirty && self.source;
         let mut save = overwrite
             || (dirty
@@ -2015,7 +2150,7 @@ impl Library {
                 },
                 Owner::Campaign(_) => Status {
                     icon: icons::EDIT,
-                    word: "Campaign",
+                    word: "This campaign · Editable",
                     color: d.clean,
                 },
             }
@@ -2029,7 +2164,7 @@ impl Library {
                 .density(Density::Read)
                 .hint("Return to the entry before this link")
                 .blocked_if(self.history.is_empty(), "No earlier entry to return to.")
-                .blocked_if(dirty, "Save or discard this entry before going back.")
+                .blocked(draft_reason)
                 .show(ui)
                 .clicked()
             {
@@ -2048,7 +2183,7 @@ impl Library {
                 && Action::quiet("Copy to…")
                     .icon(icons::COPY)
                     .density(Density::Read)
-                    .blocked_if(dirty, "Save or discard this entry before you copy it.")
+                    .blocked(draft_reason)
                     .show(ui)
                     .clicked()
             {
@@ -2066,36 +2201,16 @@ impl Library {
                 design::status(ui, state);
             }
         });
-        if dirty {
-            ui.label(
-                Type::Small
-                    .rich(ui, "Save or discard this draft to copy it, manage packages or switch campaign.")
-                    .color(colors().muted),
-            );
-        }
         // Save and Discard are one row, as far apart as the pane allows.
         if save_row {
             ui.horizontal(|ui| {
-                // Keep the save row within the editor measure.
-                ui.set_max_width(ui.available_width().min(EDITOR_MAX_WIDTH));
-                let blocked = if conflict {
-                    Some("Choose what to do with the changed file first.")
-                } else {
-                    (!dirty).then_some("No changes to save.")
-                };
-                design::status(ui, state);
-                if dirty
-                    && !conflict
-                    && Action::quiet("Discard changes")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                {
-                    self.discarded = Some((note.owner.id(), note.path.clone(), self.draft.clone()));
-                    self.draft = note.text.clone();
-                    self.error = None;
-                }
+                ui.set_max_width(editor_width);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let blocked = if conflict {
+                        Some("Choose what to do with the changed file first.")
+                    } else {
+                        (!dirty).then_some("No changes to save.")
+                    };
                     save |= (if self.run_open {
                         Action::secondary("Save")
                     } else {
@@ -2106,15 +2221,35 @@ impl Library {
                     .key("Ctrl+S")
                     .show(ui)
                     .clicked();
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        design::status(ui, state);
+                        if dirty
+                            && !conflict
+                            && Action::quiet("Discard changes")
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked()
+                        {
+                            self.discarded =
+                                Some((note.owner.id(), note.path.clone(), self.draft.clone()));
+                            self.draft = note.text.clone();
+                            self.error = None;
+                        }
+                    });
                 });
             });
-            if conflict {
-                ui.label(
-                    Type::Small
-                        .rich(ui, "Choose what to do with the changed file first.")
-                        .color(colors().muted),
-                );
-            }
+            // This line always occupies the same two lines of the editor, so typing
+            // changes its words without moving the caret. Other controls use its hint.
+            let reason = draft_reason.unwrap_or("");
+            ui.allocate_ui_with_layout(
+                egui::vec2(editor_width, Type::Small.line() * 2.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
+                    );
+                },
+            );
         }
         // Live, because Discard in this same frame changed the draft.
         if self.draft != note.text {
@@ -2195,7 +2330,7 @@ impl Library {
                         egui::TextEdit::multiline(&mut self.draft)
                             .font(egui::TextStyle::Monospace)
                             .margin(egui::vec2(design::S, design::S))
-                            .desired_width(ui.available_width().min(EDITOR_MAX_WIDTH))
+                            .desired_width(editor_width)
                             .min_size(egui::vec2(0.0, ui.available_height()))
                             .interactive(editable),
                     );
@@ -2524,6 +2659,27 @@ mod tests {
             times[times.len() * 95 / 100],
             times.last().unwrap()
         );
+    }
+
+    #[test]
+    fn repeated_rule_headings_name_their_subsection() {
+        let loaded = load(None).unwrap();
+        let subtitles = loaded.subtitles();
+        for (suffix, context) in [
+            ("ability_modifier", "Ability Checks"),
+            ("ability_modifier_2", "Saving Throws"),
+            ("ability_modifier_3", "Attack Rolls"),
+        ] {
+            let row = loaded
+                .notes
+                .iter()
+                .position(|note| {
+                    note.entry.as_ref().and_then(|entry| entry.key.as_deref())
+                        == Some(format!("dnd2024:rules/d20_tests_{suffix}").as_str())
+                })
+                .unwrap();
+            assert_eq!(subtitles[row], format!("Rule · D20 Tests › {context}"));
+        }
     }
 
     #[test]

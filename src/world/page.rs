@@ -35,6 +35,9 @@ impl WorldPage {
         index: Option<&Arc<ContentIndex>>,
         campaign: &Campaign,
     ) {
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("world"))
+        });
         let count = index.map_or(0, |index| {
             index.world_groups("").values().map(Vec::len).sum()
         });
@@ -42,7 +45,9 @@ impl WorldPage {
         design::page_header(
             ui,
             "World",
-            Some(&design::count(count, "note", "notes")),
+            (count > 0)
+                .then(|| design::count(count, "note", "notes"))
+                .as_deref(),
             |ui| {
                 create = design::locked(
                     ui,
@@ -136,11 +141,9 @@ impl WorldPage {
                     design::empty_state(
                         ui,
                         icons::WORLD,
-                        "Read the world notes",
-                        "World notes are the Markdown files in this campaign's World folder.",
-                        |ui| {
-                            create = new_menu(ui);
-                        },
+                        "No note open",
+                        "Choose one from the list, or make a new one.",
+                        |_| {},
                     );
                     return;
                 };
@@ -200,14 +203,19 @@ impl WorldPage {
                     .trim()
                     .is_empty()
                     .then_some("Type a name first.");
-                if design::Action::primary("Create note")
-                    .blocked(reason)
-                    .show(ui)
-                    .clicked()
+                if design::Action::primary(if kind == "npc" {
+                    "Create NPC"
+                } else {
+                    "Create location"
+                })
+                .blocked(reason)
+                .show(ui)
+                .clicked()
                 {
                     made = Some(super::create_entry(campaign, &self.new_name, kind));
                 }
                 design::blocked_reason(ui, reason);
+                ui.add_space(design::L);
                 if design::Action::quiet("Cancel").show(ui).clicked() {
                     self.new_kind = None;
                 }
@@ -267,7 +275,34 @@ impl WorldPage {
                 let selected = self.selected == Some(entry.id);
                 ui.horizontal(|ui| {
                     ui.add_space(depth as f32 * design::S);
-                    if design::two_line_row(ui, ROW, selected, &entry.name, &detail).clicked() {
+                    let response = if detail.is_empty() {
+                        design::row(
+                            ui,
+                            design::Density::Read.row(),
+                            selected,
+                            &format!("{} · ", entry.name),
+                            |ui, rect| {
+                                let galley = design::one_line(
+                                    ui,
+                                    &entry.name,
+                                    Type::Body.font(ui),
+                                    colors().text,
+                                    rect.width() - design::S * 2.0,
+                                );
+                                ui.painter().galley(
+                                    egui::pos2(
+                                        rect.left() + design::S,
+                                        rect.center().y - galley.size().y / 2.0,
+                                    ),
+                                    galley,
+                                    colors().text,
+                                );
+                            },
+                        )
+                    } else {
+                        design::two_line_row(ui, ROW, selected, &entry.name, &detail)
+                    };
+                    if response.clicked() {
                         self.selected = Some(entry.id);
                     }
                 });

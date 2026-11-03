@@ -57,6 +57,7 @@ pub struct CampaignContent {
     snapshot: Option<Snapshot>,
     saved_selections: Vec<PackageSelection>,
     module: Option<Uuid>,
+    dependencies: bool,
     search: String,
     entry_matches: Option<(Uuid, String, Vec<Uuid>)>,
     /// The DM's choice of list. Until they choose, a package opens on the list it needs.
@@ -70,6 +71,64 @@ pub struct CampaignContent {
     /// What `Discard` last dropped, for one step of undo.
     discarded_selections: Option<Vec<PackageSelection>>,
     discarded_repair: Option<(String, String)>,
+}
+/// Return a useful YAML repair message and the physical line to mark.
+fn repair_problem(path: &str, text: &str) -> (Option<String>, Option<usize>) {
+    let Some(problem) = Entry::parse(path, text).err() else {
+        return (None, None);
+    };
+    let yaml = text
+        .strip_prefix("---\n")
+        .and_then(|text| text.split_once("\n---").map(|(yaml, _)| yaml));
+    if let Some(yaml) = yaml
+        && let Err(error) = serde_yaml_ng::from_str::<serde_yaml_ng::Value>(yaml)
+    {
+        let mut opens = Vec::new();
+        for (index, line) in yaml.lines().enumerate() {
+            let mut quote = None;
+            for ch in line.chars() {
+                if matches!(ch, '\'' | '"') {
+                    if quote == Some(ch) {
+                        quote = None;
+                    } else if quote.is_none() {
+                        quote = Some(ch);
+                    }
+                }
+                if quote.is_some() {
+                    continue;
+                }
+                if ch == '#' {
+                    break;
+                }
+                match ch {
+                    '[' | '{' => opens.push((ch, index + 2)),
+                    ']' | '}' => {
+                        opens.pop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Some((ch, line)) = opens.first() {
+            let thing = if *ch == '[' { "list" } else { "mapping" };
+            return (
+                Some(format!(
+                    "line {line} opens a {thing} with `{ch}` that never closes"
+                )),
+                Some(*line),
+            );
+        }
+        if let Some(location) = error.location() {
+            let line = location.line() + 1;
+            return (
+                Some(format!(
+                    "Check the YAML on line {line}. Use a name, a colon and its value"
+                )),
+                Some(line),
+            );
+        }
+    }
+    (Some(problem), None)
 }
 impl CampaignContent {
     #[cfg(test)]
@@ -85,6 +144,32 @@ impl CampaignContent {
                 .snapshot
                 .as_ref()
                 .is_some_and(|s| s.document.selections != self.saved_selections)
+    }
+    pub fn context(&self) -> String {
+        self.snapshot.as_ref().map_or_else(String::new, |snapshot| {
+            let chosen = snapshot
+                .closure
+                .1
+                .direct
+                .iter()
+                .filter(|id| snapshot.catalogue.selectable(**id))
+                .count();
+            let needed = snapshot
+                .closure
+                .1
+                .required
+                .keys()
+                .filter(|id| snapshot.catalogue.selectable(**id))
+                .count();
+            let mut parts = Vec::new();
+            if chosen > 0 {
+                parts.push(design::count(chosen, "entry chosen", "entries chosen"));
+            }
+            if needed > 0 {
+                parts.push(design::count(needed, "needed by them", "needed by them"));
+            }
+            parts.join(" · ")
+        })
     }
     /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.
     pub fn tick(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
@@ -107,7 +192,7 @@ impl CampaignContent {
     /// Words for the sidebar, when the campaign package has something to review.
     pub fn review_detail(&self) -> Option<String> {
         let count = self.reconcile.proposals.len();
-        (count > 0).then(|| format!("{count} to review"))
+        (count > 0).then(|| design::count(count, "to review", "to review"))
     }
     fn finish_check(&mut self) {
         let Some(rx) = &self.reconcile.pending else {
@@ -268,6 +353,9 @@ impl CampaignContent {
                     match result {
                         Ok(snapshot) => {
                             self.saved_selections = snapshot.document.selections.clone();
+                            if self.module.is_none() {
+                                self.dependencies = true;
+                            }
                             self.snapshot = Some(snapshot);
                         }
                         Err(e) => self.error = Some(e),
@@ -412,7 +500,7 @@ impl CampaignContent {
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let mut repaired = false;
         for (path, baseline, draft) in &mut self.repairs {
-            let problem = Entry::parse(path, draft).err();
+            let (problem, error_line) = repair_problem(path, draft);
             design::message(
                 ui,
                 Tone::Error,
@@ -439,12 +527,28 @@ impl CampaignContent {
                         .max_height(220.0)
                         .id_salt(("repair", path.as_str()))
                         .show(ui, |ui| {
-                            let response = ui.add(
-                                egui::TextEdit::multiline(draft)
-                                    .font(egui::TextStyle::Monospace)
-                                    .desired_width(f32::INFINITY),
-                            );
-                            design::named(ui, &response, "Note text");
+                            let output = egui::TextEdit::multiline(draft)
+                                .font(egui::TextStyle::Monospace)
+                                .desired_width(f32::INFINITY)
+                                .show(ui);
+                            design::named(ui, &output.response, "Note text");
+                            if let Some(line) = error_line {
+                                let position = draft
+                                    .lines()
+                                    .take(line.saturating_sub(1))
+                                    .map(|line| line.chars().count() + 1)
+                                    .sum();
+                                let row = output
+                                    .galley
+                                    .pos_from_cursor(egui::text::CCursor::new(position));
+                                let y = output.galley_pos.y + row.top();
+                                let painter = ui.painter().with_clip_rect(output.text_clip_rect);
+                                painter.vline(
+                                    output.response.rect.left() + design::XS,
+                                    y..=y + row.height(),
+                                    egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
+                                );
+                            }
                         });
                     if draft == baseline {
                         ui.label(Type::Small.rich(ui, "No changes yet").color(colors().muted));
@@ -539,13 +643,24 @@ impl CampaignContent {
         let c = colors();
         ui.horizontal(|ui| {
             let dirty = document.selections != self.saved_selections || document.baseline.is_none();
-            let repair = (!self.repairs.is_empty())
-                .then_some("Repair the invalid notes above before saving selections.");
+            let repair_text = self
+                .repairs
+                .first()
+                .map(|(path, _, _)| format!("Fix {path} first."));
+            let repair = repair_text.as_deref();
             let save_key = dirty
                 && repair.is_none()
                 && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
             let changed = document.selections != self.saved_selections;
             if changed {
+                design::status(
+                    ui,
+                    design::Status {
+                        icon: icons::DRAFT,
+                        word: "Unsaved",
+                        color: c.document.unsaved,
+                    },
+                );
                 self.discarded_selections = None;
                 if Action::quiet("Discard selection changes")
                     .density(Density::Read)
@@ -572,28 +687,28 @@ impl CampaignContent {
             if !dirty && repair.is_none() {
                 ui.label(Type::Small.rich(ui, "No changes").color(c.document.clean));
             }
-            reload = Action::quiet("Reload content")
-                .icon(icons::REFRESH)
-                .density(Density::Read)
-                .blocked_if(
-                    document.selections != self.saved_selections
-                        || self.repairs.iter().any(|(_, b, d)| b != d),
-                    "Save or discard your changes first.",
-                )
-                .show(ui)
-                .clicked();
+            if !dirty && !self.repairs.iter().any(|(_, b, d)| b != d) {
+                reload = Action::quiet("Reload content")
+                    .icon(icons::REFRESH)
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked();
+            }
             let pressed = ui
                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    (if self.run_open {
+                    let blocked = repair.or((!dirty).then_some("No changes to save."));
+                    let pressed = (if self.run_open {
                         Action::secondary("Save selections")
                     } else {
                         Action::primary("Save selections")
                     })
                     .density(Density::Read)
                     .key("Ctrl+S")
-                    .blocked(repair.or((!dirty).then_some("No changes to save.")))
+                    .blocked(blocked)
                     .show(ui)
-                    .clicked()
+                    .clicked();
+                    design::blocked_reason(ui, blocked);
+                    pressed
                 })
                 .inner;
             if pressed || save_key {
@@ -608,40 +723,6 @@ impl CampaignContent {
                 }
             }
         });
-        if !self.repairs.is_empty() {
-            ui.label(
-                Type::Small
-                    .rich(ui, "Repair invalid notes before saving selections.")
-                    .color(c.muted),
-            );
-        }
-        let chosen = closure
-            .direct
-            .iter()
-            .filter(|id| catalogue.selectable(**id))
-            .count();
-        let required = closure
-            .required
-            .keys()
-            .filter(|id| catalogue.selectable(**id))
-            .count();
-        ui.add(
-            egui::Label::new(
-                Type::Small
-                    .rich(
-                        ui,
-                        if document.baseline.is_none() {
-                            format!(
-                                "{chosen} entries chosen · {required} more needed by them. Saving creates Campaign.md with this selection."
-                            )
-                        } else {
-                            format!("{chosen} entries chosen · {required} more needed by them")
-                        },
-                    )
-                    .color(c.muted),
-            )
-            .wrap(),
-        );
         let errors: Vec<_> = catalogue
             .errors
             .iter()
@@ -703,28 +784,6 @@ impl CampaignContent {
             document.selections.remove(i);
         }
         design::rule(ui);
-        let dependencies_open = egui::collapsing_header::CollapsingState::load_with_default_open(
-            ui.ctx(),
-            ui.make_persistent_id("campaign_dependencies_open"),
-            self.module
-                .is_none_or(|id| id == crate::content_workspace::builtin_manifest().id),
-        )
-        .is_open();
-        let dependencies_height = if self.repairs.is_empty() {
-            160.0
-        } else {
-            design::XL * 3.0
-        };
-        let footer_height = Density::Read.control()
-            + if dependencies_open {
-                dependencies_height
-            } else {
-                0.0
-            };
-        let package_height =
-            (ui.available_height() - footer_height - design::S).max(Density::Read.control() * 2.0);
-        ui.scope(|ui| {
-            ui.set_max_height(package_height);
         design::Column::left("campaign_modules", 236.0, 180.0..=420.0)
             .frame(egui::Frame::new().inner_margin(egui::Margin {
                 left: 0,
@@ -802,33 +861,55 @@ impl CampaignContent {
                                     if design::two_line_row(
                                         ui,
                                         Density::Glance.row() + design::XS,
-                                        self.module == Some(module.id),
+                                        !self.dependencies && self.module == Some(module.id),
                                         &module.name,
                                         &if required > 0 {
                                             format!(
-                                                "{} of {total} · {required} required",
-                                                count + required
+                                                "{} of {} · {} required",
+                                                design::count(count + required, "", "").trim(),
+                                                design::count(total, "", "").trim(),
+                                                design::count(required, "", "").trim()
                                             )
                                         } else {
                                             format!(
-                                                "{} · {total} entries",
+                                                "{} · {}",
                                                 if partial {
-                                                    format!("{count} selected")
+                                                    design::count(count, "selected", "selected")
                                                 } else if enabled {
                                                     "All".into()
                                                 } else {
                                                     "None".into()
                                                 },
+                                                design::count(total, "entry", "entries"),
                                             )
                                         },
                                     )
                                     .clicked()
                                     {
                                         self.module = Some(module.id);
+                                        self.dependencies = false;
                                         self.search.clear();
                                     }
                                 });
                             });
+                        }
+                        design::rule(ui);
+                        let needed_count = if closure.required.is_empty() {
+                            String::new()
+                        } else {
+                            design::count(closure.required.len(), "entry", "entries")
+                        };
+                        if design::two_line_row(
+                            ui,
+                            Density::Glance.row() + design::XS,
+                            self.dependencies,
+                            "Needed by your entries",
+                            &needed_count,
+                        )
+                        .clicked()
+                        {
+                            self.dependencies = true;
+                            self.search.clear();
                         }
                     });
             });
@@ -840,6 +921,22 @@ impl CampaignContent {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
+                if self.dependencies {
+                    design::group_heading(ui, "Needed by your entries", closure.required.len());
+                    design::search_field(ui, "Find a needed entry", &mut self.search, "Find an entry…", ui.available_width());
+                    let query = self.search.to_lowercase();
+                    let mut required: Vec<_> = closure.required.iter().filter(|(id, _)| catalogue.entries[id].entry.name.to_lowercase().contains(&query)).collect();
+                    required.sort_by_key(|(id, _)| catalogue.entries[id].entry.name.to_lowercase());
+                    egui::ScrollArea::vertical().id_salt("required_entries").auto_shrink([false, true]).show(ui, |ui| {
+                        for (id, reasons) in required {
+                            let entry = &catalogue.entries[id];
+                            let owner = if entry.private { "Campaign".to_owned() } else { catalogue.package_name(entry.owner) };
+                            let detail = format!("{} · {owner} · needed by {}", crate::design::reader::human_label(&entry.entry.kind), reasons.iter().cloned().collect::<Vec<_>>().join(", "));
+                            if design::two_line_row(ui, Density::Glance.row() + design::XS, false, &entry.entry.name, &detail).clicked() { self.open_lookup = Some(*id); }
+                        }
+                    });
+                    return;
+                }
                 let Some(module) = catalogue
                     .modules
                     .iter()
@@ -934,7 +1031,7 @@ impl CampaignContent {
                 let mut toggled = None;
                 egui::ScrollArea::vertical()
                     .id_salt(("package_entries", module.id, &query))
-                    .auto_shrink([false, false])
+                    .auto_shrink([false, true])
                     .show_rows(ui, 30.0, ids.len(), |ui, range| {
                         for index in range {
                             let id = ids[index];
@@ -1017,57 +1114,6 @@ impl CampaignContent {
                     }
                 }
             });
-        });
-        let required_label = format!("Needed by your entries ({})", closure.required.len());
-        egui::CollapsingHeader::new(&required_label)
-            .id_salt("campaign_dependencies_open")
-            .icon(design::section_icon)
-            .default_open(
-                self.module
-                    .is_none_or(|id| id == crate::content_workspace::builtin_manifest().id),
-            )
-            .show(ui, |ui| {
-                let mut required: Vec<_> = closure.required.iter().collect();
-                required.sort_by_key(|(id, _)| catalogue.entries[*id].entry.name.to_lowercase());
-                egui::ScrollArea::vertical()
-                    .id_salt("required_entries")
-                    .max_height(if self.repairs.is_empty() {
-                        160.0
-                    } else {
-                        design::XL * 3.0
-                    })
-                    .show_rows(
-                        ui,
-                        Density::Glance.row() + design::XS,
-                        required.len(),
-                        |ui, range| {
-                            for (id, reasons) in &required[range] {
-                                let entry = &catalogue.entries[id];
-                                let owner = if entry.private {
-                                    "this campaign".to_owned()
-                                } else {
-                                    catalogue.package_name(entry.owner)
-                                };
-                                let detail = format!(
-                                    "{} · from {owner} · needed by {}",
-                                    crate::design::reader::human_label(&entry.entry.kind),
-                                    reasons.iter().cloned().collect::<Vec<_>>().join(", ")
-                                );
-                                if design::two_line_row(
-                                    ui,
-                                    Density::Scan.row(),
-                                    false,
-                                    &entry.entry.name,
-                                    &detail,
-                                )
-                                .clicked()
-                                {
-                                    self.open_lookup = Some(**id);
-                                }
-                            }
-                        },
-                    );
-            });
         if reload {
             self.reload(ui.ctx(), campaigns, active.clone());
         }
@@ -1093,6 +1139,17 @@ mod tests {
         content.reconcile.pending = Some(rx);
         tx.send(checked).unwrap();
         content.finish_check();
+    }
+
+    #[test]
+    fn an_unclosed_list_names_and_marks_its_opening_line() {
+        let text = "---\nsplat_schema: 1\nsplat_kind: [\n---\n";
+        let (problem, line) = repair_problem("Notes/Broken.md", text);
+        assert_eq!(line, Some(3));
+        assert_eq!(
+            problem.as_deref(),
+            Some("line 3 opens a list with `[` that never closes")
+        );
     }
 
     #[test]

@@ -549,7 +549,7 @@ impl Splat {
                             .show(ui)
                             .clicked();
                     } else if items.len() == 1 && self.library.can_save_and_close() {
-                        save_close = Action::secondary("Save and close").show(ui).clicked();
+                        save_close = Action::primary("Save and close").show(ui).clicked();
                     } else if !loses {
                         discard = Action::secondary(discard_label).show(ui).clicked();
                     }
@@ -1379,13 +1379,9 @@ impl Splat {
                 design::page_header(
                     ui,
                     "Campaign",
-                    Some(
-                        if self.campaign_content.dirty() || self.encounters.settings_unsaved() {
-                            "Unsaved changes"
-                        } else {
-                            "Saved"
-                        },
-                    ),
+                    (self.campaign_tab == CampaignTab::Packages)
+                        .then(|| self.campaign_content.context())
+                        .as_deref(),
                     |ui| {
                         open_entries = Action::quiet("Campaign entries")
                             .icon(icons::DOCUMENT)
@@ -1424,12 +1420,13 @@ impl Splat {
                             .id_salt("campaign_link")
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
-                                if let Some(reason) = blocked {
-                                    ui.add_space(design::S);
-                                    design::message(ui, Tone::Info, reason);
-                                }
+                                self.campaigns.show_active(
+                                    ui,
+                                    session,
+                                    &mut self.dndbeyond,
+                                    blocked,
+                                );
                                 design::locked(ui, blocked, |ui| {
-                                    self.campaigns.show_active(ui, session, &mut self.dndbeyond);
                                     self.campaigns.show_form_if_editing(ui);
                                     design::rule(ui);
                                     self.sessions.folder_view(ui, &self.timeline);
